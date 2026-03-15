@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 build_command="${AUTORESEARCH_BUILD_COMMAND:-npm run build}"
-install_command="${AUTORESEARCH_INSTALL_COMMAND:-npm ci --no-audit --no-fund}"
+install_command="${AUTORESEARCH_INSTALL_COMMAND:-npm ci --include=dev --no-audit --no-fund}"
 dependency_marker_dir="${AUTORESEARCH_DEPENDENCY_MARKER_DIR:-node_modules}"
 
 cd "$repo_root"
@@ -26,7 +26,7 @@ ensure_dependencies() {
   fi
 
   if [ -f "$repo_root/package.json" ]; then
-    bash -lc "npm install --no-audit --no-fund"
+    bash -lc "npm install --include=dev --no-audit --no-fund"
   fi
 }
 
