@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 const repoRoot = process.cwd();
@@ -72,6 +73,25 @@ test("autoresearch.sh exits non-zero when the build command fails", async () => 
 
   assert.notEqual(result.exitCode, 0);
   assert.equal(result.stdout.includes("METRIC "), false, result.stdout);
+});
+
+test("autoresearch.sh installs dependencies when the dependency marker is missing", async () => {
+  const markerDir = ".tmp-autoresearch-deps";
+  await rm(path.join(repoRoot, markerDir), { recursive: true, force: true });
+
+  const result = await runBashScript(benchmarkScriptPath, {
+    AUTORESEARCH_DEPENDENCY_MARKER_DIR: markerDir,
+    AUTORESEARCH_INSTALL_COMMAND: shellNodeCommand(
+      "require('node:fs').mkdirSync('.tmp-autoresearch-deps', { recursive: true })",
+    ),
+    AUTORESEARCH_BUILD_COMMAND: shellNodeCommand(
+      "const fs = require('node:fs'); process.exit(fs.existsSync('.tmp-autoresearch-deps') ? 0 : 11)",
+    ),
+  });
+
+  assert.equal(result.exitCode, 0, result.stderr);
+  await stat(path.join(repoRoot, markerDir));
+  await rm(path.join(repoRoot, markerDir), { recursive: true, force: true });
 });
 
 test("autoresearch.checks.sh exits zero when checks pass", async () => {

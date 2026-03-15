@@ -4,6 +4,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 build_command="${AUTORESEARCH_BUILD_COMMAND:-npm run build}"
+install_command="${AUTORESEARCH_INSTALL_COMMAND:-npm ci --no-audit --no-fund}"
+dependency_marker_dir="${AUTORESEARCH_DEPENDENCY_MARKER_DIR:-node_modules}"
 
 cd "$repo_root"
 
@@ -13,7 +15,24 @@ cleanup() {
 }
 trap cleanup EXIT
 
+ensure_dependencies() {
+  if [ -d "$repo_root/$dependency_marker_dir" ]; then
+    return
+  fi
+
+  if [ -f "$repo_root/package-lock.json" ]; then
+    bash -lc "$install_command"
+    return
+  fi
+
+  if [ -f "$repo_root/package.json" ]; then
+    bash -lc "npm install --no-audit --no-fund"
+  fi
+}
+
 start_ms="$(node -e 'console.log(Date.now())')"
+
+ensure_dependencies
 
 if bash -lc "$build_command" >"$log_file" 2>&1; then
   end_ms="$(node -e 'console.log(Date.now())')"
