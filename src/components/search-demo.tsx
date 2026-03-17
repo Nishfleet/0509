@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 import {
   countries,
@@ -81,6 +82,9 @@ type SearchResult = {
   source: "meta" | "demo" | null;
 };
 
+// bookmark row id keyed by ad.id
+type BookmarkMap = Record<string, string>;
+
 export function SearchDemo() {
   const [mode, setMode] = useState<SearchMode>("advertiser");
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
@@ -93,6 +97,41 @@ export function SearchDemo() {
     nextCursor: null,
     source: "demo",
   });
+
+  // Auth state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsLoggedIn(!!user);
+    });
+  }, []);
+
+  // Save search state
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Bookmark state: ad.id → bookmark row id
+  const [bookmarkMap, setBookmarkMap] = useState<BookmarkMap>({});
+  const [bookmarkingId, setBookmarkingId] = useState<string | null>(null);
+
+  // Load existing bookmarks on mount (when logged in)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    fetch("/api/bookmarks")
+      .then((r) => r.json())
+      .then((data: { bookmarks?: Array<{ id: string; ad_data: AdRecord }> }) => {
+        if (!data.bookmarks) return;
+        const map: BookmarkMap = {};
+        for (const b of data.bookmarks) {
+          if (b.ad_data?.id) map[b.ad_data.id] = b.id;
+        }
+        setBookmarkMap(map);
+      })
+      .catch(() => {/* silently ignore — bookmarks are enhancement, not core */});
+  }, [isLoggedIn]);
 
   // Debounce query input (300ms) — other filter changes apply immediately
   const [debouncedQuery, setDebouncedQuery] = useState(filters.query);
@@ -212,6 +251,77 @@ export function SearchDemo() {
         result.nextCursor,
         true,
       );
+    }
+  };
+
+  const handleSaveSearch = async () => {
+    if (!saveName.trim()) return;
+    setSaving(true);
+    try {
+      const queryParams: Record<string, string> = {
+        q: debouncedQuery,
+        mode,
+        country: filters.country,
+        platform: filters.platform,
+        status: filters.status,
+        creativeType: filters.creativeType,
+      };
+      const res = await fetch("/api/saved-searches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: saveName.trim(), query_params: queryParams }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        if (res.status === 401) {
+          window.location.href = "/auth/login";
+          return;
+        }
+        throw new Error(body.error ?? "Failed to save");
+      }
+      setSaveSuccess(true);
+      setShowSaveForm(false);
+      setSaveName("");
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch {
+      // silently ignore — user can retry
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBookmark = async (ad: AdRecord) => {
+    if (!isLoggedIn) {
+      window.location.href = "/auth/login";
+      return;
+    }
+    setBookmarkingId(ad.id);
+    const existing = bookmarkMap[ad.id];
+    try {
+      if (existing) {
+        // Unbookmark
+        await fetch(`/api/bookmarks/${existing}`, { method: "DELETE" });
+        setBookmarkMap((prev) => {
+          const next = { ...prev };
+          delete next[ad.id];
+          return next;
+        });
+      } else {
+        // Bookmark
+        const res = await fetch("/api/bookmarks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ad_data: ad }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { bookmark: { id: string } };
+          setBookmarkMap((prev) => ({ ...prev, [ad.id]: data.bookmark.id }));
+        }
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setBookmarkingId(null);
     }
   };
 
@@ -350,14 +460,58 @@ export function SearchDemo() {
                 : "No filters applied yet"}
             </span>
           </div>
-          <button
-            className="filter-pill"
-            onClick={() => setFilters(defaultFilters)}
-            type="button"
-          >
-            Reset filters
-          </button>
+          <div className="results-actions">
+            <button
+              className="filter-pill"
+              onClick={() => setFilters(defaultFilters)}
+              type="button"
+            >
+              Reset filters
+            </button>
+            {saveSuccess ? (
+              <span className="save-success-pill">Saved!</span>
+            ) : (
+              <button
+                className="filter-pill save-search-btn"
+                onClick={() => {
+                  if (!isLoggedIn) {
+                    window.location.href = "/auth/login";
+                    return;
+                  }
+                  setShowSaveForm((v) => !v);
+                  setSaveName(debouncedQuery || "My search");
+                }}
+                type="button"
+              >
+                {showSaveForm ? "Cancel" : "Save search"}
+              </button>
+            )}
+          </div>
         </div>
+
+        {showSaveForm ? (
+          <div className="save-search-form">
+            <input
+              autoFocus
+              className="search-input save-name-input"
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSaveSearch();
+                if (e.key === "Escape") setShowSaveForm(false);
+              }}
+              placeholder="Name this search…"
+              value={saveName}
+            />
+            <button
+              className="button button-primary"
+              disabled={saving || !saveName.trim()}
+              onClick={() => void handleSaveSearch()}
+              type="button"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="error-banner" role="alert">
@@ -388,8 +542,11 @@ export function SearchDemo() {
               {ads.map((ad) => (
                 <AdCard
                   ad={ad}
+                  bookmarkRowId={bookmarkMap[ad.id]}
+                  isBookmarking={bookmarkingId === ad.id}
                   isSelected={selectedAd?.id === ad.id}
                   key={ad.id}
+                  onBookmark={() => void handleBookmark(ad)}
                   onSelect={() => setSelectedId(ad.id)}
                 />
               ))}
@@ -480,13 +637,21 @@ export function SearchDemo() {
 
 function AdCard({
   ad,
+  bookmarkRowId,
+  isBookmarking,
   isSelected,
+  onBookmark,
   onSelect,
 }: {
   ad: AdRecord;
+  bookmarkRowId: string | undefined;
+  isBookmarking: boolean;
   isSelected: boolean;
+  onBookmark: () => void;
   onSelect: () => void;
 }) {
+  const isBookmarked = !!bookmarkRowId;
+
   return (
     <article className={`search-card${isSelected ? " is-selected" : ""}`}>
       <button onClick={onSelect} type="button">
@@ -516,6 +681,19 @@ function AdCard({
           </span>
           <span className="search-meta">{ad.countries.join(", ")}</span>
         </div>
+      </button>
+      <button
+        aria-label={isBookmarked ? "Remove bookmark" : "Bookmark this ad"}
+        className={`bookmark-btn${isBookmarked ? " is-bookmarked" : ""}`}
+        disabled={isBookmarking}
+        onClick={(e) => {
+          e.stopPropagation();
+          onBookmark();
+        }}
+        title={isBookmarked ? "Remove bookmark" : "Save this ad"}
+        type="button"
+      >
+        {isBookmarked ? "★" : "☆"}
       </button>
     </article>
   );
