@@ -509,9 +509,60 @@ h3 {
 }
 
 .signal-section,
+.testimonial-section,
 .workflow-section,
 .cta-section {
   padding: 26px 0 0;
+}
+
+.testimonial-section .card-grid {
+  margin-top: 0;
+}
+
+.testimonial-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.testimonial-quote {
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.65;
+  color: var(--text);
+  font-style: normal;
+  quotes: "\201C" "\201D";
+}
+
+.testimonial-quote::before {
+  content: open-quote;
+  font-size: 2rem;
+  line-height: 0;
+  vertical-align: -0.55rem;
+  margin-right: 2px;
+  color: var(--accent);
+  opacity: 0.45;
+  font-family: Georgia, serif;
+}
+
+.testimonial-author {
+  margin: 0;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+  padding-top: 16px;
+}
+
+.testimonial-name {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.testimonial-role {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .section-grid {
