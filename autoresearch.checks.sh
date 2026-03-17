@@ -9,12 +9,16 @@ dependency_marker_dir="${AUTORESEARCH_DEPENDENCY_MARKER_DIR:-node_modules}"
 
 cd "$repo_root"
 
+run_clean_command() {
+  env -u NODE_ENV bash -lc "$1"
+}
+
 if [ ! -d "$repo_root/$dependency_marker_dir" ]; then
   if [ -f "$repo_root/package-lock.json" ]; then
-    bash -lc "$install_command"
+    run_clean_command "$install_command"
   elif [ -f "$repo_root/package.json" ]; then
-    bash -lc "npm install --include=dev --no-audit --no-fund"
+    run_clean_command "npm install --include=dev --no-audit --no-fund"
   fi
 fi
 
-exec bash -lc "$checks_command"
+exec env -u NODE_ENV bash -lc "$checks_command"

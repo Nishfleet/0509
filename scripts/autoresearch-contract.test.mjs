@@ -75,6 +75,17 @@ test("autoresearch.sh exits non-zero when the build command fails", async () => 
   assert.equal(result.stdout.includes("METRIC "), false, result.stdout);
 });
 
+test("autoresearch.sh strips inherited NODE_ENV before running the build command", async () => {
+  const result = await runBashScript(benchmarkScriptPath, {
+    NODE_ENV: "development",
+    AUTORESEARCH_BUILD_COMMAND: shellNodeCommand(
+      "process.exit(process.env.NODE_ENV ? 13 : 0)",
+    ),
+  });
+
+  assert.equal(result.exitCode, 0, result.stderr);
+});
+
 test("autoresearch.sh installs dependencies when the dependency marker is missing", async () => {
   const markerDir = ".tmp-autoresearch-deps";
   await rm(path.join(repoRoot, markerDir), { recursive: true, force: true });
@@ -108,4 +119,15 @@ test("autoresearch.checks.sh exits non-zero when checks fail", async () => {
   });
 
   assert.notEqual(result.exitCode, 0);
+});
+
+test("autoresearch.checks.sh strips inherited NODE_ENV before running checks", async () => {
+  const result = await runBashScript(checksScriptPath, {
+    NODE_ENV: "development",
+    AUTORESEARCH_CHECKS_COMMAND: shellNodeCommand(
+      "process.exit(process.env.NODE_ENV ? 17 : 0)",
+    ),
+  });
+
+  assert.equal(result.exitCode, 0, result.stderr);
 });

@@ -15,18 +15,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
+run_clean_command() {
+  env -u NODE_ENV bash -lc "$1"
+}
+
 ensure_dependencies() {
   if [ -d "$repo_root/$dependency_marker_dir" ]; then
     return
   fi
 
   if [ -f "$repo_root/package-lock.json" ]; then
-    bash -lc "$install_command"
+    run_clean_command "$install_command"
     return
   fi
 
   if [ -f "$repo_root/package.json" ]; then
-    bash -lc "npm install --include=dev --no-audit --no-fund"
+    run_clean_command "npm install --include=dev --no-audit --no-fund"
   fi
 }
 
@@ -34,7 +38,7 @@ start_ms="$(node -e 'console.log(Date.now())')"
 
 ensure_dependencies
 
-if bash -lc "$build_command" >"$log_file" 2>&1; then
+if run_clean_command "$build_command" >"$log_file" 2>&1; then
   end_ms="$(node -e 'console.log(Date.now())')"
   duration_sec="$(node -e 'const [startMs, endMs] = process.argv.slice(1).map(Number); console.log(((endMs - startMs) / 1000).toFixed(3));' "$start_ms" "$end_ms")"
 
