@@ -1,7 +1,7 @@
 {
   "project": "0509",
   "lastUpdated": "2026-03-17",
-  "lastAgentNote": "BACKLOG AUDIT: Added real product tasks (Z-BE-001 to Z-BE-005) — backlog was 100% marketing polish, 0% product features. 0509 is a competitor ad research tool, not a marketing site.",
+  "lastAgentNote": "Completed Z-BE-001 on 2026-03-17",
   "tasks": [
     {
       "id": "Z-001",
@@ -36,15 +36,15 @@
       "status": "done",
       "dependencies": [],
       "files_to_modify": [
-        "package.json (modify — add @supabase/supabase-js, @supabase/ssr)",
-        "src/lib/supabase.ts (create — client + server helpers)",
-        "src/app/auth/login/page.tsx (create — login form)",
-        "src/app/auth/signup/page.tsx (create — signup form)",
-        "src/app/auth/callback/route.ts (create — OAuth callback)",
-        "src/middleware.ts (create — protect /dashboard routes)",
-        "src/components/auth-provider.tsx (create — auth context)",
-        "src/app/layout.tsx (modify — wrap with auth provider)",
-        ".env.local.example (create — document required env vars)"
+        "package.json (modify \u2014 add @supabase/supabase-js, @supabase/ssr)",
+        "src/lib/supabase.ts (create \u2014 client + server helpers)",
+        "src/app/auth/login/page.tsx (create \u2014 login form)",
+        "src/app/auth/signup/page.tsx (create \u2014 signup form)",
+        "src/app/auth/callback/route.ts (create \u2014 OAuth callback)",
+        "src/middleware.ts (create \u2014 protect /dashboard routes)",
+        "src/components/auth-provider.tsx (create \u2014 auth context)",
+        "src/app/layout.tsx (modify \u2014 wrap with auth provider)",
+        ".env.local.example (create \u2014 document required env vars)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/supabase-auth",
@@ -61,10 +61,10 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/api/ads/search/route.ts (create — Meta Ad Library API proxy)",
-        "src/lib/meta-api.ts (create — Meta API client, auth, response parsing)",
-        "src/lib/demo-data.ts (modify — export AdRecord type separately for reuse)",
-        ".env.local.example (modify — add META_ACCESS_TOKEN)"
+        "src/app/api/ads/search/route.ts (create \u2014 Meta Ad Library API proxy)",
+        "src/lib/meta-api.ts (create \u2014 Meta API client, auth, response parsing)",
+        "src/lib/demo-data.ts (modify \u2014 export AdRecord type separately for reuse)",
+        ".env.local.example (modify \u2014 add META_ACCESS_TOKEN)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/meta-api",
@@ -75,14 +75,16 @@
     {
       "id": "Z-BE-003",
       "title": "Replace demo data with real API search in SearchDemo",
-      "description": "Update the SearchDemo component to call /api/ads/search instead of filtering local demo-data.ts. Add real loading states (not instant filter), error states for API failures, empty states for no results. Support pagination (load more button or infinite scroll). Keep demo mode as fallback — if API returns error or no META_ACCESS_TOKEN, fall back to demo-data filtering. Add debounced search (300ms) for keyword input. Show result count.",
+      "description": "Update the SearchDemo component to call /api/ads/search instead of filtering local demo-data.ts. Add real loading states (not instant filter), error states for API failures, empty states for no results. Support pagination (load more button or infinite scroll). Keep demo mode as fallback \u2014 if API returns error or no META_ACCESS_TOKEN, fall back to demo-data filtering. Add debounced search (300ms) for keyword input. Show result count.",
       "priority": 0,
       "complexity": "medium",
       "status": "pending",
-      "dependencies": ["Z-BE-002"],
+      "dependencies": [
+        "Z-BE-002"
+      ],
       "files_to_modify": [
-        "src/components/search-demo.tsx (modify — call API instead of local filter, add loading/error/pagination)",
-        "src/app/globals.css (modify — loading skeleton, error state, pagination styles)"
+        "src/components/search-demo.tsx (modify \u2014 call API instead of local filter, add loading/error/pagination)",
+        "src/app/globals.css (modify \u2014 loading skeleton, error state, pagination styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/real-search",
@@ -97,20 +99,22 @@
       "priority": 1,
       "complexity": "medium",
       "status": "pending",
-      "dependencies": ["Z-BE-001"],
+      "dependencies": [
+        "Z-BE-001"
+      ],
       "files_to_modify": [
-        "src/app/api/saved-searches/route.ts (create — CRUD for saved searches)",
-        "src/app/api/bookmarks/route.ts (create — CRUD for bookmarked ads)",
-        "src/app/dashboard/page.tsx (create — user dashboard with saved searches)",
-        "src/app/dashboard/bookmarks/page.tsx (create — bookmarked ads view)",
-        "src/components/search-demo.tsx (modify — add save search + bookmark buttons)",
-        "src/app/globals.css (modify — dashboard styles)"
+        "src/app/api/saved-searches/route.ts (create \u2014 CRUD for saved searches)",
+        "src/app/api/bookmarks/route.ts (create \u2014 CRUD for bookmarked ads)",
+        "src/app/dashboard/page.tsx (create \u2014 user dashboard with saved searches)",
+        "src/app/dashboard/bookmarks/page.tsx (create \u2014 bookmarked ads view)",
+        "src/components/search-demo.tsx (modify \u2014 add save search + bookmark buttons)",
+        "src/app/globals.css (modify \u2014 dashboard styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/saved-searches",
       "created": "2026-03-17",
       "completed": null,
-      "notes": "This is what makes 0509 sticky — users save searches to track competitors over time. Each saved search stores the full query params so it can be re-run. Bookmarked ads store the full ad data as JSONB so they persist even if the ad is pulled from Meta."
+      "notes": "This is what makes 0509 sticky \u2014 users save searches to track competitors over time. Each saved search stores the full query params so it can be re-run. Bookmarked ads store the full ad data as JSONB so they persist even if the ad is pulled from Meta."
     },
     {
       "id": "Z-BE-005",
@@ -119,17 +123,19 @@
       "priority": 1,
       "complexity": "medium",
       "status": "pending",
-      "dependencies": ["Z-BE-002"],
+      "dependencies": [
+        "Z-BE-002"
+      ],
       "files_to_modify": [
-        "src/components/ad-detail-panel.tsx (create — expanded ad detail view)",
-        "src/components/search-demo.tsx (modify — wire click on ad card to detail panel)",
-        "src/app/globals.css (modify — detail panel/modal styles)"
+        "src/components/ad-detail-panel.tsx (create \u2014 expanded ad detail view)",
+        "src/components/search-demo.tsx (modify \u2014 wire click on ad card to detail panel)",
+        "src/app/globals.css (modify \u2014 detail panel/modal styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/ad-detail",
       "created": "2026-03-17",
       "completed": null,
-      "notes": "The current search results show minimal info per card. The detail panel is where users do real research — copy ad text, analyze creative, check landing pages. Make it a slide-out panel (not a separate page) so users can quickly browse between ads."
+      "notes": "The current search results show minimal info per card. The detail panel is where users do real research \u2014 copy ad text, analyze creative, check landing pages. Make it a slide-out panel (not a separate page) so users can quickly browse between ads."
     },
     {
       "id": "Z-003",
@@ -140,8 +146,8 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/page.tsx (modify — add testimonials section)",
-        "src/app/globals.css (modify — testimonial styles)"
+        "src/app/page.tsx (modify \u2014 add testimonials section)",
+        "src/app/globals.css (modify \u2014 testimonial styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/testimonials",
@@ -158,8 +164,8 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/page.tsx (modify — add FAQ section)",
-        "src/app/globals.css (modify — FAQ accordion styles)"
+        "src/app/page.tsx (modify \u2014 add FAQ section)",
+        "src/app/globals.css (modify \u2014 FAQ accordion styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/faq",
@@ -177,8 +183,8 @@
       "dependencies": [],
       "files_to_modify": [
         "src/components/footer.tsx (create)",
-        "src/app/layout.tsx (modify — include footer)",
-        "src/app/globals.css (modify — footer styles)"
+        "src/app/layout.tsx (modify \u2014 include footer)",
+        "src/app/globals.css (modify \u2014 footer styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/footer",
@@ -212,8 +218,8 @@
       "dependencies": [],
       "files_to_modify": [
         "src/components/scroll-animate.tsx (create)",
-        "src/app/page.tsx (modify — wrap sections)",
-        "src/app/globals.css (modify — animation keyframes)"
+        "src/app/page.tsx (modify \u2014 wrap sections)",
+        "src/app/globals.css (modify \u2014 animation keyframes)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/animations",
@@ -229,9 +235,9 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/globals.css (modify — responsive breakpoints)",
+        "src/app/globals.css (modify \u2014 responsive breakpoints)",
         "src/components/mobile-nav.tsx (create)",
-        "src/app/layout.tsx (modify — include mobile nav)"
+        "src/app/layout.tsx (modify \u2014 include mobile nav)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/mobile-responsive",
@@ -264,9 +270,9 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/layout.tsx (modify — font preloading)",
+        "src/app/layout.tsx (modify \u2014 font preloading)",
         "src/app/not-found.tsx (create)",
-        "src/components/search-demo.tsx (modify — loading skeletons)"
+        "src/components/search-demo.tsx (modify \u2014 loading skeletons)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/performance",
