@@ -171,6 +171,115 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="pricing-section">
+        <input type="checkbox" id="annual-toggle" className="sr-only" />
+        <div className="container">
+          <div className="pricing-section-header">
+            <p className="eyebrow">Pricing</p>
+            <h2>Simple, transparent pricing.</h2>
+            <div className="pricing-toggle-wrap">
+              <span className="pricing-billing-label">Monthly</span>
+              <label
+                htmlFor="annual-toggle"
+                className="pricing-toggle-label"
+                aria-label="Switch to annual billing"
+              >
+                <span className="toggle-track">
+                  <span className="toggle-thumb" />
+                </span>
+              </label>
+              <span className="pricing-billing-label">
+                Annual{" "}
+                <span className="savings-pill">Save 20%</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="pricing-grid">
+            <article className="pricing-card">
+              <p className="pricing-tier">Free</p>
+              <div className="pricing-price">
+                <span className="price-main">$0</span>
+                <span className="price-per">/mo</span>
+              </div>
+              <p className="pricing-tagline">
+                For individuals getting started with ad research.
+              </p>
+              <ul className="pricing-features">
+                <li>10 searches per month</li>
+                <li>Basic filters (platform, status)</li>
+                <li>Single advertiser search</li>
+                <li>Ad preview</li>
+              </ul>
+              <a
+                className="button button-secondary pricing-cta"
+                href={WAITLIST_URL}
+                {...secondaryCtaProps}
+              >
+                Get started free
+              </a>
+            </article>
+
+            <article className="pricing-card pricing-card-pro">
+              <p className="pricing-recommended">Recommended</p>
+              <p className="pricing-tier">Pro</p>
+              <div className="pricing-price">
+                <span className="price-main price-monthly">$29</span>
+                <span className="price-main price-annual">$23</span>
+                <span className="price-per">/mo</span>
+              </div>
+              <p className="price-billed">Billed $276/yr</p>
+              <p className="pricing-tagline">
+                For growth teams doing serious competitor research.
+              </p>
+              <ul className="pricing-features">
+                <li>Unlimited searches</li>
+                <li>All filters (country, platform, status, type)</li>
+                <li>Keyword + advertiser search</li>
+                <li>Saved searches</li>
+                <li>Export to CSV</li>
+                <li>Ad detail panel</li>
+              </ul>
+              <a
+                className="button button-primary pricing-cta"
+                href={WAITLIST_URL}
+                {...secondaryCtaProps}
+              >
+                Join waitlist
+              </a>
+            </article>
+
+            <article className="pricing-card">
+              <p className="pricing-tier">Team</p>
+              <div className="pricing-price">
+                <span className="price-main price-monthly">$79</span>
+                <span className="price-main price-annual">$63</span>
+                <span className="price-per">/mo</span>
+              </div>
+              <p className="price-billed">Billed $756/yr</p>
+              <p className="pricing-tagline">
+                For teams sharing intelligence across campaigns.
+              </p>
+              <ul className="pricing-features">
+                <li>Everything in Pro</li>
+                <li>Shared workspace</li>
+                <li>Team notes and annotations</li>
+                <li>Slack integration</li>
+                <li>Up to 10 members</li>
+                <li>Priority support</li>
+              </ul>
+              <a
+                className="button button-secondary pricing-cta"
+                href={WAITLIST_URL}
+                {...secondaryCtaProps}
+              >
+                Join waitlist
+              </a>
+            </article>
+          </div>
+        </div>
+      </section>
+
       <section className="cta-section">
         <div className="container cta-panel">
           <div>

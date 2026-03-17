@@ -1,7 +1,7 @@
 {
   "project": "0509",
   "lastUpdated": "2026-03-17",
-  "lastAgentNote": "Completed Z-001 on 2026-03-17",
+  "lastAgentNote": "Completed Z-002 on 2026-03-17",
   "tasks": [
     {
       "id": "Z-001",
@@ -28,7 +28,7 @@
       "description": "Add a pricing section between the workflow section and CTA section on the homepage. Show 3 tiers: Free (limited searches/month, basic filters), Pro ($29/mo \u2014 unlimited searches, all filters, saved searches, export), Team ($79/mo \u2014 everything in Pro + shared workspace, team notes, Slack integration). Use the existing card-grid pattern. Each tier card: name, price, feature list, CTA button. Pro card should be visually highlighted as recommended.",
       "priority": 1,
       "complexity": "medium",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "files_to_modify": [
         "src/app/page.tsx (modify \u2014 add pricing section)",
@@ -37,7 +37,7 @@
       "verification": "npm run build",
       "branch_prefix": "feature/pricing",
       "created": "2026-03-17",
-      "completed": null,
+      "completed": "2026-03-17",
       "notes": "Match existing design language. Pro tier gets a subtle accent border/glow. Annual toggle showing 20% savings. Keep it clean and scannable."
     },
     {
