@@ -1,7 +1,7 @@
 {
   "project": "0509",
   "lastUpdated": "2026-03-17",
-  "lastAgentNote": "Initial backlog — take marketing site from demo to complete product.",
+  "lastAgentNote": "Completed Z-001 on 2026-03-17",
   "tasks": [
     {
       "id": "Z-001",
@@ -9,30 +9,30 @@
       "description": "Create a static OG image (1200x630) using Next.js opengraph-image generation or a static PNG. Add comprehensive Open Graph and Twitter Card metadata to layout.tsx. Include og:title, og:description, og:image, twitter:card, twitter:site. Each route should have its own metadata export.",
       "priority": 1,
       "complexity": "small",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/layout.tsx (modify — add default OG metadata)",
-        "src/app/opengraph-image.tsx (create — dynamic OG image)",
-        "src/app/search/page.tsx (modify — route-specific metadata)"
+        "src/app/layout.tsx (modify \u2014 add default OG metadata)",
+        "src/app/opengraph-image.tsx (create \u2014 dynamic OG image)",
+        "src/app/search/page.tsx (modify \u2014 route-specific metadata)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/og-metadata",
       "created": "2026-03-17",
-      "completed": null,
+      "completed": "2026-03-17",
       "notes": "Use Next.js ImageResponse for dynamic OG. Brand colors: deep navy background, white text, 0509 logo. Critical for social sharing and link previews."
     },
     {
       "id": "Z-002",
       "title": "Add pricing section to homepage",
-      "description": "Add a pricing section between the workflow section and CTA section on the homepage. Show 3 tiers: Free (limited searches/month, basic filters), Pro ($29/mo — unlimited searches, all filters, saved searches, export), Team ($79/mo — everything in Pro + shared workspace, team notes, Slack integration). Use the existing card-grid pattern. Each tier card: name, price, feature list, CTA button. Pro card should be visually highlighted as recommended.",
+      "description": "Add a pricing section between the workflow section and CTA section on the homepage. Show 3 tiers: Free (limited searches/month, basic filters), Pro ($29/mo \u2014 unlimited searches, all filters, saved searches, export), Team ($79/mo \u2014 everything in Pro + shared workspace, team notes, Slack integration). Use the existing card-grid pattern. Each tier card: name, price, feature list, CTA button. Pro card should be visually highlighted as recommended.",
       "priority": 1,
       "complexity": "medium",
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/page.tsx (modify — add pricing section)",
-        "src/app/globals.css (modify — pricing card styles)"
+        "src/app/page.tsx (modify \u2014 add pricing section)",
+        "src/app/globals.css (modify \u2014 pricing card styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/pricing",
@@ -49,8 +49,8 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/page.tsx (modify — add testimonials section)",
-        "src/app/globals.css (modify — testimonial styles)"
+        "src/app/page.tsx (modify \u2014 add testimonials section)",
+        "src/app/globals.css (modify \u2014 testimonial styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/testimonials",
@@ -67,8 +67,8 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/page.tsx (modify — add FAQ section)",
-        "src/app/globals.css (modify — FAQ accordion styles)"
+        "src/app/page.tsx (modify \u2014 add FAQ section)",
+        "src/app/globals.css (modify \u2014 FAQ accordion styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/faq",
@@ -86,8 +86,8 @@
       "dependencies": [],
       "files_to_modify": [
         "src/components/footer.tsx (create)",
-        "src/app/layout.tsx (modify — include footer)",
-        "src/app/globals.css (modify — footer styles)"
+        "src/app/layout.tsx (modify \u2014 include footer)",
+        "src/app/globals.css (modify \u2014 footer styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/footer",
@@ -106,7 +106,7 @@
       "files_to_modify": [
         "src/app/privacy/page.tsx (create)",
         "src/app/terms/page.tsx (create)",
-        "src/app/globals.css (modify — legal page styles if needed)"
+        "src/app/globals.css (modify \u2014 legal page styles if needed)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/legal-pages",
@@ -117,15 +117,15 @@
     {
       "id": "Z-007",
       "title": "Add smooth scroll animations and micro-interactions",
-      "description": "Add subtle entrance animations to homepage sections as they scroll into view. Use Intersection Observer (no libraries). Feature cards fade-up on enter. Hero preview cards stagger in. Pricing cards scale up slightly. Testimonials slide in from sides. Keep animations fast (200-400ms) and subtle — no bouncing or over-the-top effects. Add hover micro-interactions to buttons (subtle scale) and cards (shadow lift).",
+      "description": "Add subtle entrance animations to homepage sections as they scroll into view. Use Intersection Observer (no libraries). Feature cards fade-up on enter. Hero preview cards stagger in. Pricing cards scale up slightly. Testimonials slide in from sides. Keep animations fast (200-400ms) and subtle \u2014 no bouncing or over-the-top effects. Add hover micro-interactions to buttons (subtle scale) and cards (shadow lift).",
       "priority": 2,
       "complexity": "medium",
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/components/scroll-animate.tsx (create — reusable wrapper)",
-        "src/app/page.tsx (modify — wrap sections)",
-        "src/app/globals.css (modify — animation keyframes and hover states)"
+        "src/components/scroll-animate.tsx (create \u2014 reusable wrapper)",
+        "src/app/page.tsx (modify \u2014 wrap sections)",
+        "src/app/globals.css (modify \u2014 animation keyframes and hover states)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/animations",
@@ -142,9 +142,9 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/globals.css (modify — responsive breakpoints)",
-        "src/components/mobile-nav.tsx (create — hamburger menu)",
-        "src/app/layout.tsx (modify — include mobile nav)"
+        "src/app/globals.css (modify \u2014 responsive breakpoints)",
+        "src/components/mobile-nav.tsx (create \u2014 hamburger menu)",
+        "src/app/layout.tsx (modify \u2014 include mobile nav)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/mobile-responsive",
@@ -162,7 +162,7 @@
       "dependencies": [],
       "files_to_modify": [
         "src/app/changelog/page.tsx (create)",
-        "src/app/globals.css (modify — changelog styles)"
+        "src/app/globals.css (modify \u2014 changelog styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/changelog",
@@ -179,10 +179,10 @@
       "status": "pending",
       "dependencies": [],
       "files_to_modify": [
-        "src/app/layout.tsx (modify — font preloading)",
-        "src/app/not-found.tsx (create — custom 404)",
-        "src/components/search-demo.tsx (modify — loading skeletons)",
-        "src/app/globals.css (modify — skeleton styles)"
+        "src/app/layout.tsx (modify \u2014 font preloading)",
+        "src/app/not-found.tsx (create \u2014 custom 404)",
+        "src/components/search-demo.tsx (modify \u2014 loading skeletons)",
+        "src/app/globals.css (modify \u2014 skeleton styles)"
       ],
       "verification": "npm run build",
       "branch_prefix": "feature/performance",
