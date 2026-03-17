@@ -2699,3 +2699,184 @@ code {
   width: 100%;
   text-align: center;
 }
+
+/* ── Changelog page ─────────────────────────────────────────────────────── */
+
+.changelog-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  position: relative;
+}
+
+.changelog-list::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.changelog-entry {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 0 20px;
+  margin-bottom: 48px;
+  position: relative;
+}
+
+.changelog-entry:last-child {
+  margin-bottom: 0;
+}
+
+.changelog-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 3px;
+  position: relative;
+}
+
+.changelog-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 2px var(--accent);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.changelog-entry:last-child .changelog-dot {
+  background: var(--bg);
+  border-color: var(--border);
+  box-shadow: 0 0 0 2px var(--border);
+}
+
+.changelog-content {
+  padding-bottom: 0;
+}
+
+.changelog-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.changelog-date {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.changelog-version {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg-strong);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  line-height: 1.5;
+}
+
+.changelog-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 10px;
+  line-height: 1.5;
+}
+
+.changelog-badge--new {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-strong);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.changelog-badge--improved {
+  background: color-mix(in srgb, #6366f1 10%, transparent);
+  color: #4338ca;
+  border: 1px solid color-mix(in srgb, #6366f1 22%, transparent);
+}
+
+.changelog-badge--fixed {
+  background: color-mix(in srgb, #f59e0b 10%, transparent);
+  color: #b45309;
+  border: 1px solid color-mix(in srgb, #f59e0b 22%, transparent);
+}
+
+.changelog-badge--coming-soon {
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.changelog-title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+}
+
+.changelog-desc {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.changelog-desc:last-child {
+  margin-bottom: 0;
+}
+
+.changelog-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.changelog-items li {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--muted);
+  padding-left: 16px;
+  position: relative;
+}
+
+.changelog-items li::before {
+  content: "–";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+/* Fade the "coming soon" entries slightly */
+.changelog-entry:has(.changelog-badge--coming-soon) .changelog-title,
+.changelog-entry:has(.changelog-badge--coming-soon) .changelog-desc {
+  opacity: 0.65;
+}
+
+@media (max-width: 480px) {
+  .changelog-entry {
+    grid-template-columns: 20px 1fr;
+    gap: 0 14px;
+    margin-bottom: 36px;
+  }
+
+  .changelog-title {
+    font-size: 1rem;
+  }
+}
