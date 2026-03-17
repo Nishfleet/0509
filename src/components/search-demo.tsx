@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+import { AdDetailPanel } from "@/components/ad-detail-panel";
 import {
   countries,
   creativeTypes,
@@ -89,6 +90,7 @@ export function SearchDemo() {
   const [mode, setMode] = useState<SearchMode>("advertiser");
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [selectedId, setSelectedId] = useState(demoAds[0]?.id ?? "");
+  const [panelAdId, setPanelAdId] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [result, setResult] = useState<SearchResult>({
     ads: demoAds,
@@ -327,6 +329,9 @@ export function SearchDemo() {
 
   const { ads, loading, error, nextCursor, source } = result;
   const selectedAd = ads.find((ad) => ad.id === selectedId) ?? ads[0] ?? null;
+  const panelAd = panelAdId
+    ? (ads.find((ad) => ad.id === panelAdId) ?? null)
+    : null;
   const advertiserCount = new Set(ads.map((ad) => ad.advertiser)).size;
   const activeFilterCount =
     [
@@ -547,7 +552,10 @@ export function SearchDemo() {
                   isSelected={selectedAd?.id === ad.id}
                   key={ad.id}
                   onBookmark={() => void handleBookmark(ad)}
-                  onSelect={() => setSelectedId(ad.id)}
+                  onSelect={() => {
+                    setSelectedId(ad.id);
+                    setPanelAdId(ad.id);
+                  }}
                 />
               ))}
             </div>
@@ -623,6 +631,14 @@ export function SearchDemo() {
                 </span>
               ))}
             </div>
+
+            <button
+              className="detail-open-panel-btn"
+              onClick={() => setPanelAdId(selectedAd.id)}
+              type="button"
+            >
+              View full details →
+            </button>
           </>
         ) : (
           <div className="empty-state">
@@ -631,6 +647,19 @@ export function SearchDemo() {
           </div>
         )}
       </aside>
+
+      {/* Slide-out detail panel */}
+      {panelAd && (
+        <AdDetailPanel
+          ad={panelAd}
+          allAds={ads}
+          onClose={() => setPanelAdId(null)}
+          onSelectAd={(id) => {
+            setSelectedId(id);
+            setPanelAdId(id);
+          }}
+        />
+      )}
     </section>
   );
 }
