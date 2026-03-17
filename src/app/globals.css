@@ -2441,3 +2441,104 @@ code {
 .legal-footer a:hover {
   text-decoration: underline;
 }
+
+/* ── Scroll animations ── */
+
+@keyframes sa-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sa-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes sa-fade-left {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes sa-fade-right {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.scroll-animate {
+  opacity: 0;
+}
+
+.scroll-animate--fade-up {
+  transform: translateY(28px);
+  transition:
+    opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-animate--fade-in {
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-animate--fade-left {
+  transform: translateX(28px);
+  transition:
+    opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-animate--fade-right {
+  transform: translateX(-28px);
+  transition:
+    opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-animate.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Cards and panels that are direct children of scroll-animate wrappers
+   need to fill the full height when the wrapper is a grid item */
+.card-grid .scroll-animate,
+.pricing-grid .scroll-animate,
+.workflow-list .scroll-animate,
+.faq-list .scroll-animate {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-grid .scroll-animate > *,
+.pricing-grid .scroll-animate > *,
+.workflow-list .scroll-animate > *,
+.faq-list .scroll-animate > * {
+  flex: 1;
+}
+
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .scroll-animate,
+  .scroll-animate.is-visible {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
