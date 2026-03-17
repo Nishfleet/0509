@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   countries,
@@ -26,6 +26,7 @@ const defaultFilters: SearchFilters = {
   status: "all",
 };
 
+// Used for client-side demo fallback filtering
 function matchesAd(ad: AdRecord, mode: SearchMode, filters: SearchFilters) {
   const normalizedQuery = filters.query.trim().toLowerCase();
 
@@ -72,26 +73,158 @@ function matchesAd(ad: AdRecord, mode: SearchMode, filters: SearchFilters) {
   );
 }
 
+type SearchResult = {
+  ads: AdRecord[];
+  loading: boolean;
+  error: string | null;
+  nextCursor: string | null;
+  source: "meta" | "demo" | null;
+};
+
 export function SearchDemo() {
   const [mode, setMode] = useState<SearchMode>("advertiser");
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [selectedId, setSelectedId] = useState(demoAds[0]?.id ?? "");
-  const [isPending, startTransition] = useTransition();
-  const deferredQuery = useDeferredValue(filters.query);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [result, setResult] = useState<SearchResult>({
+    ads: demoAds,
+    loading: false,
+    error: null,
+    nextCursor: null,
+    source: "demo",
+  });
 
-  const activeFilters = { ...filters, query: deferredQuery };
-  const filteredAds = demoAds.filter((ad) => matchesAd(ad, mode, activeFilters));
-  const selectedAd =
-    filteredAds.find((ad) => ad.id === selectedId) ?? filteredAds[0] ?? null;
-  const isLoading = isPending || deferredQuery !== filters.query;
+  // Debounce query input (300ms) — other filter changes apply immediately
+  const [debouncedQuery, setDebouncedQuery] = useState(filters.query);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const advertiserCount = new Set(filteredAds.map((ad) => ad.advertiser)).size;
-  const activeFilterCount = [
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(filters.query);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [filters.query]);
+
+  const fetchAds = useCallback(
+    async (
+      activeFilters: SearchFilters,
+      activeMode: SearchMode,
+      cursor?: string,
+      append = false,
+    ) => {
+      const params = new URLSearchParams();
+      params.set("q", activeFilters.query);
+      params.set("mode", activeMode);
+      if (activeFilters.country !== "all")
+        params.set("country", activeFilters.country);
+      if (activeFilters.platform !== "all")
+        params.set("platform", activeFilters.platform);
+      if (activeFilters.status !== "all")
+        params.set("status", activeFilters.status);
+      if (activeFilters.creativeType !== "all")
+        params.set("creativeType", activeFilters.creativeType);
+      if (cursor) params.set("after", cursor);
+
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setResult((prev) => ({ ...prev, loading: true, error: null }));
+      }
+
+      try {
+        const res = await fetch(`/api/ads/search?${params.toString()}`);
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+        const data = (await res.json()) as {
+          ads: AdRecord[];
+          nextCursor: string | null;
+          source: "meta" | "demo";
+        };
+
+        // When the API returns unfiltered demo data, filter client-side
+        const ads =
+          data.source === "demo"
+            ? data.ads.filter((ad) => matchesAd(ad, activeMode, activeFilters))
+            : data.ads;
+
+        setResult((prev) => ({
+          ads: append ? [...prev.ads, ...ads] : ads,
+          loading: false,
+          error: null,
+          nextCursor: data.nextCursor,
+          source: data.source,
+        }));
+      } catch (err) {
+        // Graceful fallback: filter demo data locally
+        const fallback = demoAds.filter((ad) =>
+          matchesAd(ad, activeMode, activeFilters),
+        );
+        setResult((prev) => ({
+          ads: append ? prev.ads : fallback,
+          loading: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : "Search failed. Showing demo data.",
+          nextCursor: null,
+          source: "demo",
+        }));
+      } finally {
+        if (append) setIsLoadingMore(false);
+      }
+    },
+    [],
+  );
+
+  // Re-fetch when debounced query or other filter values change
+  useEffect(() => {
+    fetchAds({ ...filters, query: debouncedQuery }, mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    debouncedQuery,
     filters.country,
-    filters.creativeType,
     filters.platform,
     filters.status,
-  ].filter((value) => value !== "all").length + (filters.query.trim() ? 1 : 0);
+    filters.creativeType,
+    mode,
+    fetchAds,
+  ]);
+
+  // Keep selection pointing at a valid ad after results change
+  useEffect(() => {
+    if (result.ads.length > 0 && !result.ads.find((ad) => ad.id === selectedId)) {
+      setSelectedId(result.ads[0].id);
+    }
+  }, [result.ads, selectedId]);
+
+  const handleLoadMore = () => {
+    if (result.nextCursor && !isLoadingMore) {
+      fetchAds(
+        { ...filters, query: debouncedQuery },
+        mode,
+        result.nextCursor,
+        true,
+      );
+    }
+  };
+
+  const { ads, loading, error, nextCursor, source } = result;
+  const selectedAd = ads.find((ad) => ad.id === selectedId) ?? ads[0] ?? null;
+  const advertiserCount = new Set(ads.map((ad) => ad.advertiser)).size;
+  const activeFilterCount =
+    [
+      filters.country,
+      filters.creativeType,
+      filters.platform,
+      filters.status,
+    ].filter((v) => v !== "all").length + (filters.query.trim() ? 1 : 0);
 
   return (
     <section className="container search-layout">
@@ -108,9 +241,7 @@ export function SearchDemo() {
                   aria-selected={searchMode === mode}
                   className={searchMode === mode ? "is-current" : undefined}
                   key={searchMode}
-                  onClick={() => {
-                    startTransition(() => setMode(searchMode));
-                  }}
+                  onClick={() => setMode(searchMode)}
                   role="tab"
                   type="button"
                 >
@@ -118,8 +249,10 @@ export function SearchDemo() {
                 </button>
               ))}
             </div>
-            <span className="stat-pill">
-              {demoAds.length} example ads in the demo
+            <span
+              className={`stat-pill${source === "meta" ? " source-live" : ""}`}
+            >
+              {source === "meta" ? "Live data" : "Demo data"}
             </span>
           </div>
         </div>
@@ -133,13 +266,7 @@ export function SearchDemo() {
             id="search-query"
             onChange={(event) => {
               const nextQuery = event.target.value;
-
-              startTransition(() => {
-                setFilters((current) => ({
-                  ...current,
-                  query: nextQuery,
-                }));
-              });
+              setFilters((current) => ({ ...current, query: nextQuery }));
             }}
             placeholder={
               mode === "advertiser"
@@ -152,34 +279,28 @@ export function SearchDemo() {
           <div className="filter-row">
             <SelectField
               label="Country"
-              onChange={(value) => {
-                startTransition(() => {
-                  setFilters((current) => ({ ...current, country: value }));
-                });
-              }}
+              onChange={(value) =>
+                setFilters((current) => ({ ...current, country: value }))
+              }
               options={countries}
               value={filters.country}
             />
             <SelectField
               label="Platform"
-              onChange={(value) => {
-                startTransition(() => {
-                  setFilters((current) => ({ ...current, platform: value }));
-                });
-              }}
+              onChange={(value) =>
+                setFilters((current) => ({ ...current, platform: value }))
+              }
               options={platforms}
               value={filters.platform}
             />
             <SelectField
               label="Status"
-              onChange={(value) => {
-                startTransition(() => {
-                  setFilters((current) => ({
-                    ...current,
-                    status: value as SearchFilters["status"],
-                  }));
-                });
-              }}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  status: value as SearchFilters["status"],
+                }))
+              }
               options={[
                 { label: "All statuses", value: "all" },
                 { label: "Active", value: "active" },
@@ -189,14 +310,12 @@ export function SearchDemo() {
             />
             <SelectField
               label="Creative"
-              onChange={(value) => {
-                startTransition(() => {
-                  setFilters((current) => ({
-                    ...current,
-                    creativeType: value as SearchFilters["creativeType"],
-                  }));
-                });
-              }}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  creativeType: value as SearchFilters["creativeType"],
+                }))
+              }
               options={creativeTypes}
               value={filters.creativeType}
             />
@@ -207,14 +326,9 @@ export function SearchDemo() {
               <button
                 className="sample-pill"
                 key={query}
-                onClick={() => {
-                  startTransition(() => {
-                    setFilters((current) => ({
-                      ...current,
-                      query,
-                    }));
-                  });
-                }}
+                onClick={() =>
+                  setFilters((current) => ({ ...current, query }))
+                }
                 type="button"
               >
                 {query}
@@ -226,35 +340,40 @@ export function SearchDemo() {
         <div className="results-header">
           <div className="results-summary">
             <strong>
-              {filteredAds.length} ads across {advertiserCount} advertisers
+              {loading
+                ? "Searching\u2026"
+                : `${ads.length} ad${ads.length !== 1 ? "s" : ""} across ${advertiserCount} advertiser${advertiserCount !== 1 ? "s" : ""}`}
             </strong>
             <span>
               {activeFilterCount > 0
-                ? `${activeFilterCount} active filters shaping the view`
+                ? `${activeFilterCount} active filter${activeFilterCount > 1 ? "s" : ""} shaping the view`
                 : "No filters applied yet"}
             </span>
           </div>
           <button
             className="filter-pill"
-            onClick={() => {
-              startTransition(() => {
-                setFilters(defaultFilters);
-              });
-            }}
+            onClick={() => setFilters(defaultFilters)}
             type="button"
           >
             Reset filters
           </button>
         </div>
 
-        {isLoading ? (
+        {error ? (
+          <div className="error-banner" role="alert">
+            <span>Showing demo data.</span>
+            <span className="error-detail">{error}</span>
+          </div>
+        ) : null}
+
+        {loading ? (
           <div className="skeleton-grid" aria-hidden="true">
             <div className="skeleton-card" />
             <div className="skeleton-card" />
             <div className="skeleton-card" />
             <div className="skeleton-card" />
           </div>
-        ) : filteredAds.length === 0 ? (
+        ) : ads.length === 0 ? (
           <div className="empty-state">
             <p className="eyebrow">No results</p>
             <h3>No ads match that combination yet.</h3>
@@ -264,16 +383,28 @@ export function SearchDemo() {
             </p>
           </div>
         ) : (
-          <div className="result-grid">
-            {filteredAds.map((ad) => (
-              <AdCard
-                ad={ad}
-                isSelected={selectedAd?.id === ad.id}
-                key={ad.id}
-                onSelect={() => setSelectedId(ad.id)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="result-grid">
+              {ads.map((ad) => (
+                <AdCard
+                  ad={ad}
+                  isSelected={selectedAd?.id === ad.id}
+                  key={ad.id}
+                  onSelect={() => setSelectedId(ad.id)}
+                />
+              ))}
+            </div>
+            {nextCursor ? (
+              <button
+                className="load-more-btn"
+                disabled={isLoadingMore}
+                onClick={handleLoadMore}
+                type="button"
+              >
+                {isLoadingMore ? "Loading\u2026" : "Load more ads"}
+              </button>
+            ) : null}
+          </>
         )}
       </div>
 

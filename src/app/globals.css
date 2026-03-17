@@ -776,6 +776,54 @@ h3 {
   animation: shimmer 1.2s linear infinite;
 }
 
+.source-live {
+  background: rgba(15, 139, 127, 0.14);
+  color: var(--accent-strong);
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(220, 100, 60, 0.08);
+  border: 1px solid rgba(220, 100, 60, 0.18);
+  font-size: 0.875rem;
+  color: #b04020;
+}
+
+.error-detail {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.load-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: var(--surface-solid);
+  color: var(--accent-strong);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.load-more-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+
+.load-more-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .fallback-shell {
   min-height: 100vh;
   display: grid;
