@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import Footer from "@/components/footer";
 
 import "./globals.css";
 
@@ -51,6 +52,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${sans.variable} ${display.variable}`}>
           <AuthProvider>{children}</AuthProvider>
+          <Footer />
         </body>
     </html>
   );
