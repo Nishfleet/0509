@@ -1,0 +1,194 @@
+{
+  "project": "0509",
+  "lastUpdated": "2026-03-17",
+  "lastAgentNote": "Initial backlog — take marketing site from demo to complete product.",
+  "tasks": [
+    {
+      "id": "Z-001",
+      "title": "Add OG image and social sharing metadata",
+      "description": "Create a static OG image (1200x630) using Next.js opengraph-image generation or a static PNG. Add comprehensive Open Graph and Twitter Card metadata to layout.tsx. Include og:title, og:description, og:image, twitter:card, twitter:site. Each route should have its own metadata export.",
+      "priority": 1,
+      "complexity": "small",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/app/layout.tsx (modify — add default OG metadata)",
+        "src/app/opengraph-image.tsx (create — dynamic OG image)",
+        "src/app/search/page.tsx (modify — route-specific metadata)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/og-metadata",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Use Next.js ImageResponse for dynamic OG. Brand colors: deep navy background, white text, 0509 logo. Critical for social sharing and link previews."
+    },
+    {
+      "id": "Z-002",
+      "title": "Add pricing section to homepage",
+      "description": "Add a pricing section between the workflow section and CTA section on the homepage. Show 3 tiers: Free (limited searches/month, basic filters), Pro ($29/mo — unlimited searches, all filters, saved searches, export), Team ($79/mo — everything in Pro + shared workspace, team notes, Slack integration). Use the existing card-grid pattern. Each tier card: name, price, feature list, CTA button. Pro card should be visually highlighted as recommended.",
+      "priority": 1,
+      "complexity": "medium",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/app/page.tsx (modify — add pricing section)",
+        "src/app/globals.css (modify — pricing card styles)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/pricing",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Match existing design language. Pro tier gets a subtle accent border/glow. Annual toggle showing 20% savings. Keep it clean and scannable."
+    },
+    {
+      "id": "Z-003",
+      "title": "Add testimonials/social proof section",
+      "description": "Add a social proof section after the signal section on the homepage. Show 3 testimonial cards with: quote text, person name, role, company. Use realistic but fictional growth team personas (Head of Growth at DTC brand, Performance Marketing Lead at SaaS, Growth Engineer at fintech). Cards should use the existing feature-card pattern with quote styling.",
+      "priority": 1,
+      "complexity": "small",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/app/page.tsx (modify — add testimonials section)",
+        "src/app/globals.css (modify — testimonial styles)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/testimonials",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Keep quotes focused on workflow improvement, time saved, competitive advantage gained. Not generic praise."
+    },
+    {
+      "id": "Z-004",
+      "title": "Add FAQ section to homepage",
+      "description": "Add an FAQ accordion section before the final CTA. 6-8 questions covering: What data sources does 0509 use? How is this different from just using Meta Ad Library? Can I track competitors over time? What platforms are supported? Is there an API? How does pricing work? Use details/summary HTML elements for native accordion behavior, styled to match the design system.",
+      "priority": 2,
+      "complexity": "small",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/app/page.tsx (modify — add FAQ section)",
+        "src/app/globals.css (modify — FAQ accordion styles)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/faq",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Use native HTML details/summary for zero-JS accordion. Style the marker/arrow. Smooth open/close transition."
+    },
+    {
+      "id": "Z-005",
+      "title": "Add footer with links, legal, and newsletter signup",
+      "description": "Create a site footer component used across all pages. Sections: Product (features, pricing, demo, changelog), Company (about, blog, contact), Legal (privacy policy, terms of service). Bottom bar: copyright, social links (Twitter/X, LinkedIn). Newsletter email capture input with 'Subscribe' button (client-side only for now, stores to localStorage as proof of concept). Dark background matching brand.",
+      "priority": 1,
+      "complexity": "medium",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/components/footer.tsx (create)",
+        "src/app/layout.tsx (modify — include footer)",
+        "src/app/globals.css (modify — footer styles)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/footer",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Footer should appear on all pages. Dark navy background. Clean grid layout. Newsletter is localStorage-only for now."
+    },
+    {
+      "id": "Z-006",
+      "title": "Add privacy policy and terms of service pages",
+      "description": "Create /privacy and /terms routes with properly formatted legal pages. Privacy policy covers: data collected (email for waitlist, no tracking pixels, no third-party analytics currently), data usage, data retention, contact info. Terms covers: service description, acceptable use, intellectual property, limitation of liability, governing law. Use clean typography, no legalese walls of text.",
+      "priority": 2,
+      "complexity": "small",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/app/privacy/page.tsx (create)",
+        "src/app/terms/page.tsx (create)",
+        "src/app/globals.css (modify — legal page styles if needed)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/legal-pages",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Keep it human-readable. Short paragraphs, clear headings. Not 10,000 words of boilerplate."
+    },
+    {
+      "id": "Z-007",
+      "title": "Add smooth scroll animations and micro-interactions",
+      "description": "Add subtle entrance animations to homepage sections as they scroll into view. Use Intersection Observer (no libraries). Feature cards fade-up on enter. Hero preview cards stagger in. Pricing cards scale up slightly. Testimonials slide in from sides. Keep animations fast (200-400ms) and subtle — no bouncing or over-the-top effects. Add hover micro-interactions to buttons (subtle scale) and cards (shadow lift).",
+      "priority": 2,
+      "complexity": "medium",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/components/scroll-animate.tsx (create — reusable wrapper)",
+        "src/app/page.tsx (modify — wrap sections)",
+        "src/app/globals.css (modify — animation keyframes and hover states)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/animations",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Use CSS animations triggered by Intersection Observer adding a class. Respect prefers-reduced-motion. Keep it classy."
+    },
+    {
+      "id": "Z-008",
+      "title": "Mobile responsive polish pass",
+      "description": "Audit and fix all responsive breakpoints. Homepage: hero grid stacks vertically on mobile, preview cards become horizontal scroll, pricing cards stack, feature cards stack to single column. Search page: filters collapse into a toggleable panel on mobile, results stack vertically. Navigation: hamburger menu on mobile with slide-out drawer. Test at 375px (iPhone SE), 390px (iPhone 15), 768px (iPad).",
+      "priority": 1,
+      "complexity": "medium",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/app/globals.css (modify — responsive breakpoints)",
+        "src/components/mobile-nav.tsx (create — hamburger menu)",
+        "src/app/layout.tsx (modify — include mobile nav)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/mobile-responsive",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "CSS-first approach. Use existing container class. Mobile nav should be a client component with useState for open/close."
+    },
+    {
+      "id": "Z-009",
+      "title": "Add changelog/updates page",
+      "description": "Create /changelog route showing product updates in reverse chronological order. Seed with 3-4 fictional but realistic entries: 'Launch: 0509 search demo goes live', 'Added keyword search mode', 'Filter by creative type and platform', 'Improved ad detail panel with landing page preview'. Each entry: date, title, description, optional badge (new/improved/fix). Clean timeline layout.",
+      "priority": 3,
+      "complexity": "small",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/app/changelog/page.tsx (create)",
+        "src/app/globals.css (modify — changelog styles)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/changelog",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Timeline layout with date badges. Shows the product is actively developed. Keep entries concise."
+    },
+    {
+      "id": "Z-010",
+      "title": "Performance optimization: fonts, images, loading",
+      "description": "Optimize Core Web Vitals. Preload critical fonts in layout.tsx. Add loading skeletons to search demo (shimmer cards while filtering). Lazy load below-fold homepage sections. Ensure all images use next/image with proper sizing. Add a lightweight 404 page. Check and fix any layout shifts (CLS).",
+      "priority": 2,
+      "complexity": "medium",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/app/layout.tsx (modify — font preloading)",
+        "src/app/not-found.tsx (create — custom 404)",
+        "src/components/search-demo.tsx (modify — loading skeletons)",
+        "src/app/globals.css (modify — skeleton styles)"
+      ],
+      "verification": "npm run build",
+      "branch_prefix": "feature/performance",
+      "created": "2026-03-17",
+      "completed": null,
+      "notes": "Focus on LCP, CLS, FID. next/font for Google Fonts. Skeleton shimmer animation for search results."
+    }
+  ]
+}
