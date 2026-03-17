@@ -17,7 +17,7 @@ const display = Instrument_Serif({
 export const metadata: Metadata = {
   metadataBase: new URL("https://0509.in"),
   title: {
-    default: "0509",
+    default: "0509 — Competitor Ad Research",
     template: "%s | 0509",
   },
   description:
@@ -25,8 +25,9 @@ export const metadata: Metadata = {
   openGraph: {
     description:
       "Search competitor ads, compare angles, and review Meta Ad Library signal with less noise.",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "0509 — Competitor Ad Research" }],
     siteName: "0509",
-    title: "0509",
+    title: "0509 — Competitor Ad Research",
     type: "website",
     url: "https://0509.in",
   },
@@ -34,7 +35,9 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     description:
       "Search competitor ads, compare angles, and review Meta Ad Library signal with less noise.",
-    title: "0509",
+    images: ["/opengraph-image"],
+    site: "@0509in",
+    title: "0509 — Competitor Ad Research",
   },
 };
 

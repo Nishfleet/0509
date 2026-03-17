@@ -8,6 +8,19 @@ export const metadata: Metadata = {
   title: "Meta Ad Library search demo",
   description:
     "Explore the 0509 search workflow for competitor ad research across advertisers, keywords, platforms, and creative types.",
+  openGraph: {
+    title: "Meta Ad Library search demo | 0509",
+    description:
+      "Explore the 0509 search workflow for competitor ad research across advertisers, keywords, platforms, and creative types.",
+    url: "https://0509.in/search",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Meta Ad Library search demo | 0509",
+    description:
+      "Explore the 0509 search workflow for competitor ad research across advertisers, keywords, platforms, and creative types.",
+  },
 };
 
 const waitlistProps = hasExternalWaitlist
