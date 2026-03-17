@@ -896,6 +896,76 @@ code {
   }
 }
 
+/* ── FAQ ── */
+
+.faq-section {
+  padding: 26px 0 0;
+}
+
+.faq-header {
+  margin-bottom: 32px;
+}
+
+.faq-header h2 {
+  margin-top: 6px;
+}
+
+.faq-list {
+  max-width: 720px;
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.faq-item:first-child {
+  border-top: 1px solid var(--border);
+}
+
+.faq-question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.faq-question::-webkit-details-marker {
+  display: none;
+}
+
+.faq-question::after {
+  content: "+";
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--muted);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.faq-item[open] > .faq-question::after {
+  content: "+";
+  transform: rotate(45deg);
+  color: var(--accent);
+}
+
+.faq-answer {
+  padding: 0 0 18px;
+}
+
+.faq-answer p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
 /* ── Pricing ── */
 
 .pricing-section {

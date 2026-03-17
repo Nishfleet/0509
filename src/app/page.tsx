@@ -145,6 +145,54 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="testimonial-section">
+        <div className="container">
+          <div className="card-grid">
+            <article className="feature-card testimonial-card">
+              <blockquote className="testimonial-quote">
+                We used to spend 40 minutes pulling together a competitor brief
+                before any creative sprint. Now that&rsquo;s 5 minutes. The
+                advertiser search alone paid for itself the first week.
+              </blockquote>
+              <footer className="testimonial-author">
+                <p className="testimonial-name">Maya Chen</p>
+                <p className="testimonial-role">
+                  Head of Growth &middot; Italic
+                </p>
+              </footer>
+            </article>
+
+            <article className="feature-card testimonial-card">
+              <blockquote className="testimonial-quote">
+                The keyword search is the part I didn&rsquo;t know I needed.
+                Seeing who&rsquo;s pushing the same claims as us changed how we
+                think about differentiation&mdash;before we even write a brief.
+              </blockquote>
+              <footer className="testimonial-author">
+                <p className="testimonial-name">Jordan Reyes</p>
+                <p className="testimonial-role">
+                  Performance Marketing Lead &middot; Luma
+                </p>
+              </footer>
+            </article>
+
+            <article className="feature-card testimonial-card">
+              <blockquote className="testimonial-quote">
+                I hook this into our weekly review so the team walks in already
+                knowing what the competition ran last week. No more catching up
+                from screenshots in a Slack thread.
+              </blockquote>
+              <footer className="testimonial-author">
+                <p className="testimonial-name">Alex Tran</p>
+                <p className="testimonial-role">
+                  Growth Engineer &middot; Branch
+                </p>
+              </footer>
+            </article>
+          </div>
+        </div>
+      </section>
+
       <section className="workflow-section">
         <div className="container workflow-panel">
           <div>
@@ -276,6 +324,116 @@ export default function Home() {
                 Join waitlist
               </a>
             </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="faq-section">
+        <div className="container">
+          <div className="faq-header">
+            <p className="eyebrow">FAQ</p>
+            <h2>Common questions.</h2>
+          </div>
+          <div className="faq-list">
+            <details className="faq-item">
+              <summary className="faq-question">
+                What data sources does 0509 use?
+              </summary>
+              <div className="faq-answer">
+                <p>
+                  0509 pulls from the Meta Ad Library — the same publicly
+                  available data you can access directly. The difference is how
+                  we structure and surface it. We make the search faster,
+                  results more readable, and the workflow tighter so you spend
+                  time on analysis, not navigation.
+                </p>
+              </div>
+            </details>
+
+            <details className="faq-item">
+              <summary className="faq-question">
+                How is this different from just using Meta Ad Library directly?
+              </summary>
+              <div className="faq-answer">
+                <p>
+                  The native Ad Library is designed for transparency
+                  compliance, not research workflows. 0509 adds a cleaner
+                  search interface, side-by-side ad comparison, keyword search
+                  across creative copy, quick-read summaries of angle and
+                  offer, and saved searches — none of which exist natively. It
+                  turns a 40-minute manual pull into a 5-minute review.
+                </p>
+              </div>
+            </details>
+
+            <details className="faq-item">
+              <summary className="faq-question">
+                Can I track competitors over time?
+              </summary>
+              <div className="faq-answer">
+                <p>
+                  Yes, on Pro and Team plans. Saved searches let you re-run the
+                  same advertiser or keyword query to see what changed. We&rsquo;re
+                  building scheduled digests so you can get a weekly diff
+                  without having to remember to check.
+                </p>
+              </div>
+            </details>
+
+            <details className="faq-item">
+              <summary className="faq-question">
+                What platforms are supported?
+              </summary>
+              <div className="faq-answer">
+                <p>
+                  Right now 0509 focuses on Meta (Facebook and Instagram ads).
+                  Google and TikTok ad intelligence are on the roadmap. Join
+                  the waitlist and you&rsquo;ll hear when each platform ships.
+                </p>
+              </div>
+            </details>
+
+            <details className="faq-item">
+              <summary className="faq-question">Is there an API?</summary>
+              <div className="faq-answer">
+                <p>
+                  Not yet. An API for programmatic access to search results and
+                  ad data is planned for a future release. If you have a
+                  specific integration use case, mention it when you join the
+                  waitlist — that feedback shapes the roadmap.
+                </p>
+              </div>
+            </details>
+
+            <details className="faq-item">
+              <summary className="faq-question">
+                How does pricing work?
+              </summary>
+              <div className="faq-answer">
+                <p>
+                  There&rsquo;s a free tier with 10 searches per month and basic
+                  filters — enough to evaluate whether 0509 fits your workflow.
+                  Pro ($29/mo or $23/mo billed annually) adds unlimited searches,
+                  all filters, saved searches, and export. Team ($79/mo) layers
+                  shared workspaces and Slack integration on top of Pro. No
+                  contracts, cancel any time.
+                </p>
+              </div>
+            </details>
+
+            <details className="faq-item">
+              <summary className="faq-question">
+                When does full access launch?
+              </summary>
+              <div className="faq-answer">
+                <p>
+                  The search demo is live now — you can use it without signing
+                  up. Full access with live data, saved searches, and exports is
+                  rolling out to the waitlist in batches. Add your email to get
+                  an invite when your spot opens.
+                </p>
+              </div>
+            </details>
           </div>
         </div>
       </section>
