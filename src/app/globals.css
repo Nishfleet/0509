@@ -817,15 +817,66 @@ h3 {
   min-height: 256px;
   border-radius: var(--radius-md);
   border: 1px solid rgba(17, 24, 39, 0.08);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface-solid);
+}
+
+/* Shared shimmer mixin for all skeleton child elements */
+.skeleton-badges-row,
+.skeleton-badge,
+.skeleton-swatch,
+.skeleton-title,
+.skeleton-line {
   background:
     linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.62) 0%,
-      rgba(240, 237, 232, 0.92) 40%,
-      rgba(255, 255, 255, 0.62) 100%
+      rgba(240, 237, 232, 0.7) 0%,
+      rgba(220, 216, 210, 0.95) 40%,
+      rgba(240, 237, 232, 0.7) 100%
     );
   background-size: 220% 100%;
-  animation: shimmer 1.2s linear infinite;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.skeleton-badges-row {
+  display: flex;
+  gap: 6px;
+  background: none;
+  animation: none;
+}
+
+.skeleton-badge {
+  height: 22px;
+  width: 56px;
+  border-radius: 20px;
+}
+
+.skeleton-badge--short {
+  width: 44px;
+}
+
+.skeleton-swatch {
+  height: 80px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.skeleton-title {
+  height: 18px;
+  width: 70%;
+}
+
+.skeleton-line {
+  height: 13px;
+  width: 90%;
+}
+
+.skeleton-line--short {
+  width: 55%;
 }
 
 .source-live {
@@ -2879,4 +2930,52 @@ code {
   .changelog-title {
     font-size: 1rem;
   }
+}
+
+/* ── 404 page ── */
+
+.not-found-page {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+}
+
+.not-found-container {
+  padding: 80px 0 120px;
+  max-width: 480px;
+}
+
+.not-found-container h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  margin: 8px 0 16px;
+  line-height: 1.1;
+}
+
+.not-found-desc {
+  color: var(--muted);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.not-found-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ── Performance: skeleton status wrapper ── */
+
+.skeleton-results {
+  display: contents;
+}
+
+/* ── Performance: content-visibility for below-fold sections ── */
+/* Defers rendering of off-screen sections, improving LCP for above-fold content */
+
+.faq-section,
+.pricing-section,
+.changelog-list {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 600px;
 }

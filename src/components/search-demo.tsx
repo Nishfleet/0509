@@ -526,11 +526,22 @@ export function SearchDemo() {
         ) : null}
 
         {loading ? (
-          <div className="skeleton-grid" aria-hidden="true">
-            <div className="skeleton-card" />
-            <div className="skeleton-card" />
-            <div className="skeleton-card" />
-            <div className="skeleton-card" />
+          <div className="skeleton-results" role="status" aria-label="Loading results">
+            <span className="sr-only">Loading results…</span>
+            <div className="skeleton-grid" aria-hidden="true">
+              {[0, 1, 2, 3].map((i) => (
+                <div className="skeleton-card" key={i}>
+                  <div className="skeleton-badges-row">
+                    <div className="skeleton-badge" />
+                    <div className="skeleton-badge skeleton-badge--short" />
+                  </div>
+                  <div className="skeleton-swatch" />
+                  <div className="skeleton-title" />
+                  <div className="skeleton-line" />
+                  <div className="skeleton-line skeleton-line--short" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : ads.length === 0 ? (
           <div className="empty-state">

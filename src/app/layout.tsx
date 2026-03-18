@@ -9,12 +9,18 @@ import "./globals.css";
 const sans = Manrope({
   subsets: ["latin"],
   variable: "--font-sans",
+  display: "swap",
+  preload: true,
+  adjustFontFallback: true,
 });
 
 const display = Instrument_Serif({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-display",
+  display: "swap",
+  preload: true,
+  adjustFontFallback: true,
 });
 
 export const metadata: Metadata = {
