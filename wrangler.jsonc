@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "0509",
+  "compatibility_date": "2026-03-29",
+  "main": "./workers/app.ts",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "triggers": {
+    "crons": ["0 4 * * *", "0 5 * * MON"]
+  },
+  "vars": {
+    "APP_NAME": "0509",
+    "APP_REGION_DEFAULT": "rest_of_world"
+  },
+  // Configure these bindings after creating the Cloudflare resources:
+  // "d1_databases": [
+  //   {
+  //     "binding": "DB",
+  //     "database_name": "0509",
+  //     "database_id": "replace-with-d1-database-id"
+  //   }
+  // ],
+  // "r2_buckets": [
+  //   {
+  //     "binding": "LANDING_PAGE_ARTIFACTS",
+  //     "bucket_name": "0509-landing-page-artifacts"
+  //   }
+  // ],
+  // Add Browser Rendering and any workflows/queues bindings here when provisioned.
+}
