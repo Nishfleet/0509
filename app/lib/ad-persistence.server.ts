@@ -50,6 +50,25 @@ function jsonValue(value: unknown) {
   return JSON.stringify(value ?? null);
 }
 
+function findTranslatedAnalysisField(fields: AnalysisFieldInput[]) {
+  return fields.find((field) => field.fieldKey === "translated_text" && field.fieldValue.trim()) ?? null;
+}
+
+function mergePersistedTranslatedField(
+  fields: AnalysisFieldInput[],
+  storedFields: AnalysisFieldInput[],
+) {
+  const translatedField = findTranslatedAnalysisField(fields) ?? findTranslatedAnalysisField(storedFields);
+
+  if (!translatedField) {
+    return fields;
+  }
+
+  const remaining = fields.filter((field) => field.fieldKey !== "translated_text");
+
+  return [...remaining, translatedField];
+}
+
 export async function listAdsByIds(env: AppEnv, adIds: string[]) {
   const uniqueIds = [...new Set(adIds.filter(Boolean))];
 
@@ -94,13 +113,16 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
 
   return ads.map((ad) => {
     const storedAd = storedAdsById.get(ad.metaAdId);
+    const storedTranslatedField = storedAd
+      ? findTranslatedAnalysisField(storedAd.analysisFields)
+      : null;
     const hasStoredCreative = Boolean(
       storedAd?.creativeText
       ?? storedAd?.creativeTextCaptureMethod
       ?? storedAd?.creativeTextMetadata,
     );
 
-    if (!storedAd || !hasStoredCreative) {
+    if (!storedAd || (!hasStoredCreative && !storedTranslatedField)) {
       return ad;
     }
 
@@ -111,6 +133,7 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
         ad.creativeTextCaptureMethod ?? storedAd.creativeTextCaptureMethod ?? null,
       creativeTextMetadata:
         ad.creativeTextMetadata ?? storedAd.creativeTextMetadata ?? null,
+      analysisFields: mergePersistedTranslatedField(ad.analysisFields, storedAd.analysisFields),
     };
   });
 }
