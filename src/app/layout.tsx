@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, Manrope } from "next/font/google";
+import { Syne, Outfit } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
 import Footer from "@/components/footer";
 import MobileNav from "@/components/mobile-nav";
 
 import "./globals.css";
 
-const sans = Manrope({
+const sans = Outfit({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
@@ -14,9 +14,8 @@ const sans = Manrope({
   adjustFontFallback: true,
 });
 
-const display = Instrument_Serif({
+const display = Syne({
   subsets: ["latin"],
-  weight: "400",
   variable: "--font-display",
   display: "swap",
   preload: true,
@@ -30,10 +29,10 @@ export const metadata: Metadata = {
     template: "%s | 0509",
   },
   description:
-    "0509 helps growth teams scan competitor ads, compare angles, and spot patterns faster.",
+    "Search competitor ads on Meta Ad Library by advertiser or keyword. Filter by country, platform, and creative type.",
   openGraph: {
     description:
-      "Search competitor ads, compare angles, and review Meta Ad Library signal with less noise.",
+      "Search competitor ads on Meta. Filter, compare, and research — faster than the native Ad Library.",
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "0509 — Competitor Ad Research" }],
     siteName: "0509",
     title: "0509 — Competitor Ad Research",
@@ -43,7 +42,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     description:
-      "Search competitor ads, compare angles, and review Meta Ad Library signal with less noise.",
+      "Search competitor ads on Meta. Filter, compare, and research — faster than the native Ad Library.",
     images: ["/opengraph-image"],
     site: "@0509in",
     title: "0509 — Competitor Ad Research",

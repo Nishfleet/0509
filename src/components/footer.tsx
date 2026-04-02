@@ -10,11 +10,6 @@ const NAV = {
     { label: "Demo", href: "/search" },
     { label: "Changelog", href: "/changelog" },
   ],
-  Company: [
-    { label: "About", href: "/about" },
-    { label: "Blog", href: "/blog" },
-    { label: "Contact", href: "/contact" },
-  ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },
     { label: "Terms of Service", href: "/terms" },
@@ -74,7 +69,7 @@ export default function Footer() {
               <span className="footer-brand-name">0509</span>
             </Link>
             <p className="footer-tagline">
-              Competitor ad research for growth teams that move fast.
+              Search competitor ads on Meta. Fast.
             </p>
           </div>
 

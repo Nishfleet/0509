@@ -1,0 +1,292 @@
+import { demoAds } from "~/lib/demo-data";
+import { deriveHook, deriveOffer, inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
+import type { AppEnv } from "~/lib/env.server";
+import type { AdRecord, NormalizedSavedQuery, SearchMode, SearchResponse } from "~/lib/types";
+
+const DEFAULT_PAGE_LIMIT = 24;
+
+interface MetaRawAd {
+  id: string;
+  page_name?: string;
+  ad_creative_bodies?: string[];
+  ad_creative_link_titles?: string[];
+  ad_creative_link_descriptions?: string[];
+  ad_creative_link_captions?: string[];
+  ad_snapshot_url?: string;
+  ad_delivery_start_time?: string;
+  ad_delivery_stop_time?: string;
+  ad_active_status?: string;
+  ad_reached_countries?: string[];
+  publisher_platforms?: string[];
+  media_type?: string;
+}
+
+interface MetaApiResponse {
+  data?: MetaRawAd[];
+  paging?: {
+    cursors?: {
+      after?: string;
+    };
+  };
+  error?: {
+    code: number;
+    message: string;
+  };
+}
+
+interface SearchAdsOptions {
+  allowDemoFallback?: boolean;
+}
+
+export class MetaApiError extends Error {
+  constructor(
+    message: string,
+    public readonly code: number,
+    public readonly isAuthError: boolean,
+    public readonly isRateLimit: boolean,
+  ) {
+    super(message);
+    this.name = "MetaApiError";
+  }
+}
+
+export async function searchAds(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+  cursor?: string | null,
+  options: SearchAdsOptions = {},
+): Promise<SearchResponse> {
+  if (!env.META_AD_LIBRARY_TOKEN) {
+    return demoSearch(query, cursor);
+  }
+
+  try {
+    return await liveSearch(env, query, cursor);
+  } catch (error) {
+    if (options.allowDemoFallback === false) {
+      throw error;
+    }
+    return demoSearch(query, cursor);
+  }
+}
+
+export function demoSearch(
+  query: NormalizedSavedQuery,
+  cursor?: string | null,
+): SearchResponse {
+  const matchingAds = demoAds.filter((ad) => matchesAd(ad, query.mode, query.filters));
+  const startIndex = cursor ? Number.parseInt(cursor, 10) : 0;
+  const nextSlice = matchingAds.slice(startIndex, startIndex + DEFAULT_PAGE_LIMIT);
+  const nextCursor =
+    startIndex + DEFAULT_PAGE_LIMIT < matchingAds.length
+      ? String(startIndex + DEFAULT_PAGE_LIMIT)
+      : null;
+
+  return {
+    ads: nextSlice.map((ad) => withStructuredAnalysis(ad)),
+    nextCursor,
+    source: "demo",
+  };
+}
+
+async function liveSearch(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+  cursor?: string | null,
+): Promise<SearchResponse> {
+  const version = env.META_AD_LIBRARY_API_VERSION ?? "v23.0";
+  const params = new URLSearchParams();
+  params.set("access_token", env.META_AD_LIBRARY_TOKEN ?? "");
+  params.set(
+    "fields",
+    [
+      "id",
+      "page_name",
+      "ad_creative_bodies",
+      "ad_creative_link_titles",
+      "ad_creative_link_descriptions",
+      "ad_creative_link_captions",
+      "ad_snapshot_url",
+      "ad_delivery_start_time",
+      "ad_delivery_stop_time",
+      "ad_active_status",
+      "ad_reached_countries",
+      "publisher_platforms",
+      "media_type",
+    ].join(","),
+  );
+  params.set("limit", String(DEFAULT_PAGE_LIMIT));
+  params.set("search_terms", query.filters.query || " ");
+  params.set(
+    "search_type",
+    query.mode === "advertiser" ? "KEYWORD_EXACT_PHRASE" : "KEYWORD_UNORDERED",
+  );
+  params.set("ad_type", "ALL");
+  params.set("country", countryCode(query.filters.country));
+
+  if (cursor) {
+    params.set("after", cursor);
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/${version}/ads_archive?${params.toString()}`,
+  );
+  const payload = (await response.json()) as MetaApiResponse;
+
+  if (!response.ok || payload.error) {
+    const code = payload.error?.code ?? response.status;
+    throw new MetaApiError(
+      payload.error?.message ?? `Meta Ad Library request failed with status ${response.status}.`,
+      code,
+      code === 190 || code === 102,
+      code === 613 || response.status === 429,
+    );
+  }
+
+  const ads = (payload.data ?? [])
+    .map((item) => parseMetaAd(item))
+    .filter((ad) => matchesAd(ad, query.mode, query.filters))
+    .map((ad) => withStructuredAnalysis(ad));
+
+  return {
+    ads,
+    nextCursor: payload.paging?.cursors?.after ?? null,
+    source: "meta",
+  };
+}
+
+function parseMetaAd(raw: MetaRawAd): AdRecord {
+  const bodies = raw.ad_creative_bodies ?? [];
+  const titles = raw.ad_creative_link_titles ?? [];
+  const descriptions = raw.ad_creative_link_descriptions ?? [];
+  const captions = raw.ad_creative_link_captions ?? [];
+  const advertiser = raw.page_name ?? "Unknown advertiser";
+  const body = bodies[0] ?? titles[0] ?? descriptions[0] ?? "";
+  const previewHeadline = titles[0] ?? advertiser;
+  const previewSubhead = descriptions[0] ?? body.slice(0, 120);
+  const format = detectCreativeType(raw, bodies, titles);
+  const landingPageUrl = extractDestinationUrl(raw.ad_snapshot_url);
+  const cta = captions[0] ?? "Learn more";
+
+  return {
+    metaAdId: raw.id,
+    advertiser,
+    body,
+    bodySecondary: bodies[1],
+    previewHeadline,
+    previewSubhead,
+    hook: deriveHook(body, previewHeadline),
+    offer: deriveOffer(body, cta),
+    cta,
+    format,
+    languageLabel: inferLanguageLabel(`${previewHeadline} ${body}`),
+    destinationType: inferDestinationType(landingPageUrl),
+    landingPageUrl,
+    adSnapshotUrl: raw.ad_snapshot_url ?? null,
+    countries: (raw.ad_reached_countries ?? []).map(countryNameFromCode),
+    platforms: (raw.publisher_platforms ?? []).map(displayPlatform),
+    firstSeenAt: raw.ad_delivery_start_time ?? null,
+    lastSeenAt: raw.ad_delivery_stop_time ?? raw.ad_delivery_start_time ?? null,
+    active: raw.ad_active_status === "ACTIVE",
+    researchSummary: "Pulled from the Meta Ad Library API and normalized into 0509’s analysis schema.",
+    source: "meta",
+    tags: [],
+    landingPage: null,
+    analysisFields: [],
+  };
+}
+
+function detectCreativeType(
+  raw: MetaRawAd,
+  bodies: string[],
+  titles: string[],
+): "image" | "video" | "carousel" {
+  if (bodies.length > 1 || titles.length > 1) {
+    return "carousel";
+  }
+
+  if (raw.media_type?.toUpperCase() === "VIDEO") {
+    return "video";
+  }
+
+  return "image";
+}
+
+function matchesAd(ad: AdRecord, mode: SearchMode, filters: NormalizedSavedQuery["filters"]) {
+  const query = filters.query.toLowerCase();
+  const searchable =
+    `${ad.advertiser} ${ad.body} ${ad.previewHeadline} ${ad.previewSubhead} ${ad.hook} ${ad.offer} ${ad.cta}`.toLowerCase();
+
+  const queryMatch = !query
+    ? true
+    : mode === "advertiser"
+      ? ad.advertiser.toLowerCase().includes(query)
+      : searchable.includes(query);
+
+  const countryMatch =
+    filters.country === "all" || filters.country === "India"
+      ? true
+      : ad.countries.includes(filters.country);
+  const platformMatch = filters.platform === "all" || ad.platforms.includes(filters.platform);
+  const creativeMatch = filters.creativeType === "all" || ad.format === filters.creativeType;
+  const statusMatch =
+    filters.status === "all" ||
+    (filters.status === "active" ? ad.active : !ad.active);
+  const firstSeenMatch =
+    !filters.firstSeenFrom || !ad.firstSeenAt || ad.firstSeenAt >= filters.firstSeenFrom;
+  const lastSeenMatch =
+    !filters.lastSeenFrom || !ad.lastSeenAt || ad.lastSeenAt >= filters.lastSeenFrom;
+
+  return (
+    queryMatch &&
+    countryMatch &&
+    platformMatch &&
+    creativeMatch &&
+    statusMatch &&
+    firstSeenMatch &&
+    lastSeenMatch
+  );
+}
+
+function extractDestinationUrl(snapshotUrl?: string) {
+  if (!snapshotUrl) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(snapshotUrl);
+    const candidate =
+      parsed.searchParams.get("u") ??
+      parsed.searchParams.get("url") ??
+      parsed.searchParams.get("target_url");
+
+    return candidate ? decodeURIComponent(candidate) : snapshotUrl;
+  } catch {
+    return snapshotUrl;
+  }
+}
+
+function displayPlatform(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized === "facebook") return "Facebook";
+  if (normalized === "instagram") return "Instagram";
+  if (normalized === "messenger") return "Messenger";
+  return value;
+}
+
+function countryCode(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized === "india") return "IN";
+  if (normalized === "united states") return "US";
+  if (normalized === "united kingdom") return "GB";
+  if (normalized === "all") return "ALL";
+  return value.toUpperCase();
+}
+
+function countryNameFromCode(value: string) {
+  const normalized = value.toUpperCase();
+  if (normalized === "IN") return "India";
+  if (normalized === "US") return "United States";
+  if (normalized === "GB") return "United Kingdom";
+  return value;
+}

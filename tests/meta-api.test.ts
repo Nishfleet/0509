@@ -1,0 +1,76 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { MetaApiError, searchAds } from "~/lib/meta-api.server";
+import { normalizeSavedQuery } from "~/lib/normalize";
+
+const query = normalizeSavedQuery("keyword", {
+  query: "cod",
+  country: "India",
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("searchAds", () => {
+  it("uses demo data when no Meta token is configured", async () => {
+    const result = await searchAds({} as never, query, null, {
+      allowDemoFallback: false,
+    });
+
+    expect(result.source).toBe("demo");
+  });
+
+  it("throws the live Meta error when fallback is disabled", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 190,
+            message: "Bad token",
+          },
+        }),
+        {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    await expect(
+      searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null, {
+        allowDemoFallback: false,
+      }),
+    ).rejects.toBeInstanceOf(MetaApiError);
+  });
+
+  it("falls back to demo data for public search when fallback is enabled", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 613,
+            message: "Rate limited",
+          },
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const result = await searchAds(
+      { META_AD_LIBRARY_TOKEN: "token" } as never,
+      query,
+      null,
+      { allowDemoFallback: true },
+    );
+
+    expect(result.source).toBe("demo");
+  });
+});

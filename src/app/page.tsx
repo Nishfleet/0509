@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { WAITLIST_URL, hasExternalWaitlist } from "@/lib/config";
-import { demoAds } from "@/lib/demo-data";
 import ScrollAnimate from "@/components/scroll-animate";
 
 const secondaryCtaProps = hasExternalWaitlist
@@ -9,8 +8,6 @@ const secondaryCtaProps = hasExternalWaitlist
   : {};
 
 export default function Home() {
-  const spotlightAds = demoAds.slice(0, 3);
-
   return (
     <main className="site-shell">
       <header className="site-header">
@@ -21,233 +18,268 @@ export default function Home() {
             </span>
             <span>
               <strong>0509</strong>
-              <span>Competitor ad research</span>
             </span>
           </Link>
           <nav className="site-nav" aria-label="Primary">
-            <Link href="/search">Open demo</Link>
-            <a href={WAITLIST_URL} {...secondaryCtaProps}>
-              Join waitlist
+            <Link href="/search">Demo</Link>
+            <Link href="/#pricing">Pricing</Link>
+            <a
+              className="nav-cta"
+              href={WAITLIST_URL}
+              {...secondaryCtaProps}
+            >
+              Get early access
             </a>
           </nav>
         </div>
       </header>
 
-      {/* Hero — above the fold, no scroll animation */}
+      {/* ─── HERO ─── */}
       <section className="hero-section">
         <div className="container hero-grid">
           <div className="hero-copy">
-            <p className="eyebrow">Growth teams first</p>
-            <h1>Scan competitor ads before the angle gets stale.</h1>
+            <h1>
+              See every ad your competitors are running.
+            </h1>
             <p className="hero-lead">
-              0509 is a sharper way to review Meta Ad Library signal. Search by
-              advertiser or keyword, compare creative angles, and move from ad
-              discovery to research faster.
+              0509 makes the Meta Ad Library actually usable. Search by
+              advertiser or keyword, filter by country and platform, and read
+              the creative without the clutter.
             </p>
             <div className="cta-row">
-              <a className="button button-primary" href={WAITLIST_URL} {...secondaryCtaProps}>
-                Join waitlist
+              <a
+                className="button button-primary"
+                href={WAITLIST_URL}
+                {...secondaryCtaProps}
+              >
+                Get early access
               </a>
               <Link className="button button-secondary" href="/search">
-                Open demo
+                Try the demo
               </Link>
             </div>
-            <ul className="hero-metrics" aria-label="Product focus">
-              <li>
-                <strong>2</strong>
-                <span>Ways to start a search</span>
-              </li>
-              <li>
-                <strong>4</strong>
-                <span>Filters to narrow the view</span>
-              </li>
-              <li>
-                <strong>{demoAds.length}</strong>
-                <span>Example ads to inspect</span>
-              </li>
-            </ul>
           </div>
 
-          <aside className="hero-preview">
-            <div className="preview-toolbar">
-              <span className="preview-badge">Advertiser search</span>
-              <span className="preview-status">Interactive demo</span>
-            </div>
-            <div className="preview-search">
-              <span className="preview-query">motiondesk</span>
-              <span className="preview-chip">Instagram</span>
-              <span className="preview-chip">Video</span>
-            </div>
-            <div className="preview-stack">
-              {spotlightAds.map((ad) => (
-                <article className="preview-card" key={ad.id}>
-                  <div
-                    className="creative-swatch"
-                    style={
-                      {
-                        "--swatch-accent": ad.preview.accent,
-                      } as React.CSSProperties
-                    }
-                  >
-                    <span>{ad.preview.badge}</span>
-                    <strong>{ad.preview.headline}</strong>
-                    <small>{ad.preview.subhead}</small>
+          <aside className="hero-preview" aria-hidden="true">
+            <div className="mock-window">
+              <div className="mock-titlebar">
+                <span className="mock-dot" />
+                <span className="mock-dot" />
+                <span className="mock-dot" />
+                <span className="mock-url">0509.in/search</span>
+              </div>
+              <div className="mock-body">
+                <div className="mock-searchbar">
+                  <span className="mock-mode">Advertiser</span>
+                  <span className="mock-query">nike</span>
+                  <span className="mock-cursor" />
+                </div>
+                <div className="mock-filters">
+                  <span className="mock-chip">US</span>
+                  <span className="mock-chip">Instagram</span>
+                  <span className="mock-chip">Active</span>
+                  <span className="mock-chip">Video</span>
+                </div>
+                <div className="mock-results">
+                  <div className="mock-card">
+                    <div className="mock-card-badge">Video</div>
+                    <div className="mock-card-title">Nike Running</div>
+                    <div className="mock-card-hook">
+                      Just Do It. Your next PR starts here.
+                    </div>
+                    <div className="mock-card-meta">US, GB &middot; Active since Mar 2</div>
                   </div>
-                  <div className="preview-copy">
-                    <p>{ad.advertiser}</p>
-                    <span>{ad.hook}</span>
+                  <div className="mock-card">
+                    <div className="mock-card-badge">Image</div>
+                    <div className="mock-card-title">Nike Training</div>
+                    <div className="mock-card-hook">
+                      Free 30-day training plan inside.
+                    </div>
+                    <div className="mock-card-meta">US &middot; Active since Feb 18</div>
                   </div>
-                </article>
-              ))}
+                  <div className="mock-card mock-card-fade">
+                    <div className="mock-card-badge">Carousel</div>
+                    <div className="mock-card-title">Nike Jordan</div>
+                    <div className="mock-card-hook">
+                      Limited drop. Don&rsquo;t sleep on it.
+                    </div>
+                    <div className="mock-card-meta">US, CA &middot; Active since Mar 8</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </aside>
         </div>
       </section>
 
-      {/* Signal / Features — first section below fold */}
-      <section className="signal-section">
+      {/* ─── TRUST BAR ─── */}
+      <section className="trust-section">
+        <div className="container trust-row">
+          <div className="trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Built on Meta Ad Library API</span>
+          </div>
+          <div className="trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Facebook + Instagram ads</span>
+          </div>
+          <div className="trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span>Real-time data</span>
+          </div>
+          <div className="trust-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>No login required for demo</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── WHY NOT JUST USE AD LIBRARY ─── */}
+      <section className="compare-section">
         <ScrollAnimate animation="fade-up">
-          <div className="container section-grid">
-            <div>
-              <p className="eyebrow">Product overview</p>
-              <h2>A calm interface for noisy ad research.</h2>
+          <div className="container compare-grid">
+            <div className="compare-col compare-before">
+              <p className="compare-label">Meta Ad Library</p>
+              <ul>
+                <li>One search mode, no keyword search</li>
+                <li>No filters for creative type</li>
+                <li>Results are a wall of text</li>
+                <li>No way to save or compare</li>
+                <li>Built for compliance, not research</li>
+              </ul>
             </div>
-            <p className="section-copy">
-              0509 stays focused on one workflow: finding competitor ads, reading
-              the creative fast, and understanding the offer without getting
-              buried in a bloated dashboard.
-            </p>
+            <div className="compare-col compare-after">
+              <p className="compare-label">0509</p>
+              <ul>
+                <li>Advertiser + keyword search</li>
+                <li>Filter by country, platform, type, status</li>
+                <li>Creative preview with angle + offer</li>
+                <li>Save searches, bookmark ads</li>
+                <li>Built for growth teams</li>
+              </ul>
+            </div>
           </div>
         </ScrollAnimate>
-
-        <div className="container card-grid">
-          <ScrollAnimate animation="fade-up" delay={0}>
-            <article className="feature-card">
-              <p className="feature-label">Search</p>
-              <h3>Start from advertisers or keywords.</h3>
-              <p>
-                Swap between known competitors and broader category terms without
-                changing the overall flow.
-              </p>
-            </article>
-          </ScrollAnimate>
-
-          <ScrollAnimate animation="fade-up" delay={100}>
-            <article className="feature-card">
-              <p className="feature-label">Read</p>
-              <h3>See angles, offers, and CTAs quickly.</h3>
-              <p>
-                Every result brings the creative preview, landing page, and a
-                lightweight interpretation into the same view.
-              </p>
-            </article>
-          </ScrollAnimate>
-
-          <ScrollAnimate animation="fade-up" delay={200}>
-            <article className="feature-card">
-              <p className="feature-label">Filter</p>
-              <h3>Keep the signal clean.</h3>
-              <p>
-                Use country, platform, status, and creative type filters to make
-                the review feel precise instead of noisy.
-              </p>
-            </article>
-          </ScrollAnimate>
-        </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="testimonial-section">
+      {/* ─── FEATURES ─── */}
+      <section className="features-section" id="features">
         <div className="container">
-          <div className="card-grid">
+          <ScrollAnimate animation="fade-up">
+            <p className="section-label">How it works</p>
+            <h2 className="section-heading">
+              From search to insight in 30 seconds.
+            </h2>
+          </ScrollAnimate>
+
+          <div className="feature-grid">
             <ScrollAnimate animation="fade-up" delay={0}>
-              <article className="feature-card testimonial-card">
-                <blockquote className="testimonial-quote">
-                  We used to spend 40 minutes pulling together a competitor brief
-                  before any creative sprint. Now that&rsquo;s 5 minutes. The
-                  advertiser search alone paid for itself the first week.
-                </blockquote>
-                <footer className="testimonial-author">
-                  <p className="testimonial-name">Maya Chen</p>
-                  <p className="testimonial-role">
-                    Head of Growth &middot; Italic
-                  </p>
-                </footer>
-              </article>
-            </ScrollAnimate>
-
-            <ScrollAnimate animation="fade-up" delay={100}>
-              <article className="feature-card testimonial-card">
-                <blockquote className="testimonial-quote">
-                  The keyword search is the part I didn&rsquo;t know I needed.
-                  Seeing who&rsquo;s pushing the same claims as us changed how we
-                  think about differentiation&mdash;before we even write a brief.
-                </blockquote>
-                <footer className="testimonial-author">
-                  <p className="testimonial-name">Jordan Reyes</p>
-                  <p className="testimonial-role">
-                    Performance Marketing Lead &middot; Luma
-                  </p>
-                </footer>
-              </article>
-            </ScrollAnimate>
-
-            <ScrollAnimate animation="fade-up" delay={200}>
-              <article className="feature-card testimonial-card">
-                <blockquote className="testimonial-quote">
-                  I hook this into our weekly review so the team walks in already
-                  knowing what the competition ran last week. No more catching up
-                  from screenshots in a Slack thread.
-                </blockquote>
-                <footer className="testimonial-author">
-                  <p className="testimonial-name">Alex Tran</p>
-                  <p className="testimonial-role">
-                    Growth Engineer &middot; Branch
-                  </p>
-                </footer>
-              </article>
-            </ScrollAnimate>
-          </div>
-        </div>
-      </section>
-
-      {/* Workflow */}
-      <section className="workflow-section">
-        <ScrollAnimate animation="fade-up">
-          <div className="container workflow-panel">
-            <div>
-              <p className="eyebrow">For growth teams</p>
-              <h2>Built for the research loop that happens before campaigns move.</h2>
-            </div>
-            <div className="workflow-list">
-              <article>
-                <strong>Find the competitor set</strong>
-                <p>Use advertiser search when you already know the brand.</p>
-              </article>
-              <article>
-                <strong>Expand to category language</strong>
-                <p>Switch to keyword mode to see who is pushing similar claims.</p>
-              </article>
-              <article>
-                <strong>Review the funnel context</strong>
+              <article className="feature-card">
+                <span className="feature-number">01</span>
+                <h3>Search by advertiser or keyword</h3>
                 <p>
-                  Open the ad detail, check the CTA, and follow the landing page
-                  before the next strategy call.
+                  Know the brand? Search by name. Exploring a category? Switch
+                  to keyword mode and search by offer language, claims, or
+                  product terms. Same filters, same view.
                 </p>
               </article>
-            </div>
+            </ScrollAnimate>
+
+            <ScrollAnimate animation="fade-up" delay={80}>
+              <article className="feature-card">
+                <span className="feature-number">02</span>
+                <h3>Read the creative, not just the metadata</h3>
+                <p>
+                  Every result shows the headline, hook, offer snapshot, CTA,
+                  and landing page URL. You get the full picture without
+                  clicking through to each ad individually.
+                </p>
+              </article>
+            </ScrollAnimate>
+
+            <ScrollAnimate animation="fade-up" delay={160}>
+              <article className="feature-card">
+                <span className="feature-number">03</span>
+                <h3>Save what matters, skip the rest</h3>
+                <p>
+                  Bookmark ads for later. Save search configurations so you
+                  can re-run them weekly. Export to CSV when you need to share
+                  with the team before a strategy session.
+                </p>
+              </article>
+            </ScrollAnimate>
           </div>
-        </ScrollAnimate>
+        </div>
       </section>
 
-      {/* Pricing */}
-      <section className="pricing-section">
+      {/* ─── USE CASES ─── */}
+      <section className="usecases-section">
+        <div className="container">
+          <ScrollAnimate animation="fade-up">
+            <p className="section-label">Built for</p>
+            <h2 className="section-heading">
+              The research that happens before campaigns ship.
+            </h2>
+          </ScrollAnimate>
+
+          <div className="usecase-grid">
+            <ScrollAnimate animation="fade-up" delay={0}>
+              <article className="usecase-card">
+                <h3>Pre-sprint competitor pulls</h3>
+                <p>
+                  Your creative team needs a brief before the sprint. Pull
+                  every active ad from 3 competitors in 5 minutes instead
+                  of 40.
+                </p>
+              </article>
+            </ScrollAnimate>
+
+            <ScrollAnimate animation="fade-up" delay={80}>
+              <article className="usecase-card">
+                <h3>Keyword-level category scans</h3>
+                <p>
+                  Who else is saying &ldquo;free trial&rdquo; or
+                  &ldquo;limited drop&rdquo;? Search by keyword to see every
+                  advertiser pushing similar language.
+                </p>
+              </article>
+            </ScrollAnimate>
+
+            <ScrollAnimate animation="fade-up" delay={160}>
+              <article className="usecase-card">
+                <h3>Weekly competitor monitoring</h3>
+                <p>
+                  Save your competitor searches and re-run them every Monday.
+                  See what changed, what launched, and what got pulled.
+                </p>
+              </article>
+            </ScrollAnimate>
+
+            <ScrollAnimate animation="fade-up" delay={240}>
+              <article className="usecase-card">
+                <h3>Landing page + funnel research</h3>
+                <p>
+                  Every ad links to a landing page. Open it directly from the
+                  result. See how competitors structure the click-through from
+                  ad to conversion.
+                </p>
+              </article>
+            </ScrollAnimate>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── PRICING ─── */}
+      <section className="pricing-section" id="pricing">
         <input type="checkbox" id="annual-toggle" className="sr-only" />
         <ScrollAnimate animation="fade-up">
           <div className="container">
             <div className="pricing-section-header">
-              <p className="eyebrow">Pricing</p>
-              <h2>Simple, transparent pricing.</h2>
+              <p className="section-label">Pricing</p>
+              <h2 className="section-heading">Straightforward pricing. No surprises.</h2>
+              <p className="section-sub">
+                AdSpy charges $149/mo for Facebook only. We think you deserve better.
+              </p>
               <div className="pricing-toggle-wrap">
                 <span className="pricing-billing-label">Monthly</span>
                 <label
@@ -278,42 +310,42 @@ export default function Home() {
                   <span className="price-per">/mo</span>
                 </div>
                 <p className="pricing-tagline">
-                  For individuals getting started with ad research.
+                  Try the search. No account needed.
                 </p>
                 <ul className="pricing-features">
                   <li>10 searches per month</li>
-                  <li>Basic filters (platform, status)</li>
-                  <li>Single advertiser search</li>
+                  <li>Advertiser search</li>
+                  <li>Basic filters</li>
                   <li>Ad preview</li>
                 </ul>
-                <a
+                <Link
                   className="button button-secondary pricing-cta"
-                  href={WAITLIST_URL}
-                  {...secondaryCtaProps}
+                  href="/search"
                 >
-                  Get started free
-                </a>
+                  Try the demo
+                </Link>
               </article>
             </ScrollAnimate>
 
-            <ScrollAnimate animation="fade-up" delay={100}>
+            <ScrollAnimate animation="fade-up" delay={80}>
               <article className="pricing-card pricing-card-pro">
-                <p className="pricing-recommended">Recommended</p>
+                <p className="pricing-recommended">Most popular</p>
                 <p className="pricing-tier">Pro</p>
                 <div className="pricing-price">
                   <span className="price-main price-monthly">$29</span>
                   <span className="price-main price-annual">$23</span>
                   <span className="price-per">/mo</span>
                 </div>
-                <p className="price-billed">Billed $276/yr</p>
+                <p className="price-billed">Billed $276/yr on annual</p>
                 <p className="pricing-tagline">
-                  For growth teams doing serious competitor research.
+                  For growth teams doing real competitor research.
                 </p>
                 <ul className="pricing-features">
                   <li>Unlimited searches</li>
-                  <li>All filters (country, platform, status, type)</li>
-                  <li>Keyword + advertiser search</li>
+                  <li>Advertiser + keyword search</li>
+                  <li>All filters</li>
                   <li>Saved searches</li>
+                  <li>Ad bookmarks</li>
                   <li>Export to CSV</li>
                   <li>Ad detail panel</li>
                 </ul>
@@ -322,12 +354,12 @@ export default function Home() {
                   href={WAITLIST_URL}
                   {...secondaryCtaProps}
                 >
-                  Join waitlist
+                  Get early access
                 </a>
               </article>
             </ScrollAnimate>
 
-            <ScrollAnimate animation="fade-up" delay={200}>
+            <ScrollAnimate animation="fade-up" delay={160}>
               <article className="pricing-card">
                 <p className="pricing-tier">Team</p>
                 <div className="pricing-price">
@@ -335,16 +367,16 @@ export default function Home() {
                   <span className="price-main price-annual">$63</span>
                   <span className="price-per">/mo</span>
                 </div>
-                <p className="price-billed">Billed $756/yr</p>
+                <p className="price-billed">Billed $756/yr on annual</p>
                 <p className="pricing-tagline">
-                  For teams sharing intelligence across campaigns.
+                  Shared workspace for the whole growth org.
                 </p>
                 <ul className="pricing-features">
                   <li>Everything in Pro</li>
                   <li>Shared workspace</li>
-                  <li>Team notes and annotations</li>
+                  <li>Team annotations</li>
                   <li>Slack integration</li>
-                  <li>Up to 10 members</li>
+                  <li>Up to 10 seats</li>
                   <li>Priority support</li>
                 </ul>
                 <a
@@ -352,7 +384,7 @@ export default function Home() {
                   href={WAITLIST_URL}
                   {...secondaryCtaProps}
                 >
-                  Join waitlist
+                  Get early access
                 </a>
               </article>
             </ScrollAnimate>
@@ -360,125 +392,87 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FAQ */}
+      {/* ─── FAQ ─── */}
       <section className="faq-section">
         <div className="container">
           <ScrollAnimate animation="fade-up">
             <div className="faq-header">
-              <p className="eyebrow">FAQ</p>
-              <h2>Common questions.</h2>
+              <p className="section-label">FAQ</p>
+              <h2 className="section-heading">Common questions.</h2>
             </div>
           </ScrollAnimate>
           <div className="faq-list">
             <ScrollAnimate animation="fade-up" delay={0}>
               <details className="faq-item">
                 <summary className="faq-question">
-                  What data sources does 0509 use?
+                  What data does 0509 use?
                 </summary>
                 <div className="faq-answer">
                   <p>
-                    0509 pulls from the Meta Ad Library — the same publicly
-                    available data you can access directly. The difference is how
-                    we structure and surface it. We make the search faster,
-                    results more readable, and the workflow tighter so you spend
-                    time on analysis, not navigation.
+                    The Meta Ad Library API. The same publicly available data
+                    you can access directly. 0509 makes the search faster, the
+                    results more structured, and the workflow tighter.
                   </p>
                 </div>
               </details>
             </ScrollAnimate>
 
-            <ScrollAnimate animation="fade-up" delay={60}>
+            <ScrollAnimate animation="fade-up" delay={50}>
               <details className="faq-item">
                 <summary className="faq-question">
-                  How is this different from just using Meta Ad Library directly?
+                  Why not just use Meta Ad Library directly?
                 </summary>
                 <div className="faq-answer">
                   <p>
-                    The native Ad Library is designed for transparency
-                    compliance, not research workflows. 0509 adds a cleaner
-                    search interface, side-by-side ad comparison, keyword search
-                    across creative copy, quick-read summaries of angle and
-                    offer, and saved searches — none of which exist natively. It
-                    turns a 40-minute manual pull into a 5-minute review.
+                    The native Ad Library was built for transparency compliance,
+                    not research. It has no keyword search, no creative type
+                    filters, no way to save results, and no side-by-side
+                    comparison. 0509 adds all of that.
                   </p>
                 </div>
               </details>
             </ScrollAnimate>
 
-            <ScrollAnimate animation="fade-up" delay={120}>
+            <ScrollAnimate animation="fade-up" delay={100}>
               <details className="faq-item">
                 <summary className="faq-question">
                   Can I track competitors over time?
                 </summary>
                 <div className="faq-answer">
                   <p>
-                    Yes, on Pro and Team plans. Saved searches let you re-run the
-                    same advertiser or keyword query to see what changed. We&rsquo;re
-                    building scheduled digests so you can get a weekly diff
-                    without having to remember to check.
+                    Yes. On Pro and Team plans, saved searches let you re-run
+                    the same query to see what changed. Scheduled weekly digests
+                    are on the roadmap.
                   </p>
                 </div>
               </details>
             </ScrollAnimate>
 
-            <ScrollAnimate animation="fade-up" delay={180}>
+            <ScrollAnimate animation="fade-up" delay={150}>
               <details className="faq-item">
                 <summary className="faq-question">
-                  What platforms are supported?
+                  What platforms are covered?
                 </summary>
                 <div className="faq-answer">
                   <p>
-                    Right now 0509 focuses on Meta (Facebook and Instagram ads).
-                    Google and TikTok ad intelligence are on the roadmap. Join
-                    the waitlist and you&rsquo;ll hear when each platform ships.
+                    Facebook and Instagram (Meta) today. Google and TikTok
+                    are on the roadmap. Join the waitlist to hear when each
+                    ships.
                   </p>
                 </div>
               </details>
             </ScrollAnimate>
 
-            <ScrollAnimate animation="fade-up" delay={240}>
-              <details className="faq-item">
-                <summary className="faq-question">Is there an API?</summary>
-                <div className="faq-answer">
-                  <p>
-                    Not yet. An API for programmatic access to search results and
-                    ad data is planned for a future release. If you have a
-                    specific integration use case, mention it when you join the
-                    waitlist — that feedback shapes the roadmap.
-                  </p>
-                </div>
-              </details>
-            </ScrollAnimate>
-
-            <ScrollAnimate animation="fade-up" delay={300}>
+            <ScrollAnimate animation="fade-up" delay={200}>
               <details className="faq-item">
                 <summary className="faq-question">
-                  How does pricing work?
+                  Is there a free tier?
                 </summary>
                 <div className="faq-answer">
                   <p>
-                    There&rsquo;s a free tier with 10 searches per month and basic
-                    filters — enough to evaluate whether 0509 fits your workflow.
-                    Pro ($29/mo or $23/mo billed annually) adds unlimited searches,
-                    all filters, saved searches, and export. Team ($79/mo) layers
-                    shared workspaces and Slack integration on top of Pro. No
-                    contracts, cancel any time.
-                  </p>
-                </div>
-              </details>
-            </ScrollAnimate>
-
-            <ScrollAnimate animation="fade-up" delay={360}>
-              <details className="faq-item">
-                <summary className="faq-question">
-                  When does full access launch?
-                </summary>
-                <div className="faq-answer">
-                  <p>
-                    The search demo is live now — you can use it without signing
-                    up. Full access with live data, saved searches, and exports is
-                    rolling out to the waitlist in batches. Add your email to get
-                    an invite when your spot opens.
+                    Yes. 10 searches per month with basic filters. The demo
+                    is open right now with no account required. Pro is $29/mo
+                    for unlimited everything.
                   </p>
                 </div>
               </details>
@@ -487,25 +481,25 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* ─── FINAL CTA ─── */}
       <section className="cta-section">
         <ScrollAnimate animation="fade-up">
           <div className="container cta-panel">
-            <div>
-              <p className="eyebrow">Early access</p>
-              <h2>See the search workflow now. Join the list for what comes next.</h2>
-              <p>
-                The demo stays open so the product is easy to evaluate right
-                away. Join the early list if you want product updates and first
-                access when invites open.
-              </p>
-            </div>
+            <h2>Stop spending 40 minutes on competitor pulls.</h2>
+            <p>
+              The demo is live. Try it now. Join the waitlist if you want
+              full access with live data, saved searches, and CSV export.
+            </p>
             <div className="cta-row">
-              <a className="button button-primary" href={WAITLIST_URL} {...secondaryCtaProps}>
-                Join waitlist
+              <a
+                className="button button-primary"
+                href={WAITLIST_URL}
+                {...secondaryCtaProps}
+              >
+                Get early access
               </a>
               <Link className="button button-secondary" href="/search">
-                Open search demo
+                Try the demo
               </Link>
             </div>
           </div>

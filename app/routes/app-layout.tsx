@@ -1,0 +1,73 @@
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLoaderData,
+} from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
+
+import { SignOutButton } from "~/components/sign-out-button";
+
+export async function loader({ context, request }: LoaderFunctionArgs) {
+  const { requireSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const env = getEnv(context);
+  const session = await requireSession(env, request);
+
+  return {
+    session,
+  };
+}
+
+export default function AppLayoutRoute() {
+  const { session } = useLoaderData<typeof loader>();
+
+  return (
+    <main className="workspace-shell">
+      <aside className="workspace-sidebar">
+        <Link className="brand-mark" to="/app">
+          <span className="brand-pill" aria-hidden="true">
+            09
+          </span>
+          <span>
+            <strong>0509</strong>
+            <small>Workspace</small>
+          </span>
+        </Link>
+
+        <div className="workspace-user">
+          <p>{session.user.name}</p>
+          <small>{session.user.email}</small>
+        </div>
+
+        <nav className="workspace-nav" aria-label="Workspace">
+          <NavLink end to="/app">
+            Dashboard
+          </NavLink>
+          <NavLink to="/app/collections">Collections</NavLink>
+          <NavLink to="/app/watchlists">Watchlists</NavLink>
+          <NavLink to="/app/digests">Digests</NavLink>
+          <NavLink to="/search">Search</NavLink>
+        </nav>
+
+        <div className="workspace-sidebar-footer">
+          <SignOutButton />
+        </div>
+      </aside>
+
+      <div className="workspace-main">
+        <header className="workspace-topbar">
+          <div>
+            <p className="eyebrow">0509 workspace</p>
+            <h1>Track competitor changes without losing the context.</h1>
+          </div>
+          <Link className="button button-primary" to="/search">
+            New search
+          </Link>
+        </header>
+
+        <Outlet />
+      </div>
+    </main>
+  );
+}
