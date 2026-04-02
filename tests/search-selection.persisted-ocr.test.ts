@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AdRecord } from "~/lib/types";
 
@@ -25,6 +25,10 @@ const baseAd: AdRecord = {
   source: "meta",
   analysisFields: [],
 };
+
+beforeEach(() => {
+  vi.resetModules();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -63,6 +67,11 @@ describe("search selection persisted OCR reuse", () => {
     });
     vi.doMock("~/lib/landing-pages.server", () => ({
       captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: AdRecord[]) => fields),
     }));
 
     const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
