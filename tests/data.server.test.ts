@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
-import { createLandingPageSnapshot, upsertAd } from "~/lib/data.server";
+import { createLandingPageSnapshot, listAdsByIds, upsertAd } from "~/lib/data.server";
 
 function createMockDb() {
   const statements: Array<{ sql: string; bindings: unknown[] }> = [];
@@ -128,5 +128,66 @@ describe("upsertAd", () => {
     expect(analysisInserts.some((statement) => statement.bindings.includes("ocr_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("ad_snapshot_fetch"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes(CREATIVE_TEXT_EXTRACTOR_VERSION))).toBe(true);
+  });
+});
+
+describe("listAdsByIds", () => {
+  it("returns parsed ad records for the requested ids", async () => {
+    const ad = {
+      metaAdId: "meta-boat-1",
+      advertiser: "boAt",
+      body: "Bass bhi, battery bhi.",
+      previewHeadline: "Bass bhi. Battery bhi.",
+      previewSubhead: "Launch pricing",
+      hook: "Bass bhi. Battery bhi.",
+      offer: "Launch pricing",
+      cta: "Buy now",
+      format: "video",
+      languageLabel: "Hinglish",
+      destinationType: "website",
+      landingPageUrl: "https://boat.example.com/rockerz-neckband",
+      adSnapshotUrl: "https://cdn.example.com/boat.png",
+      countries: ["India"],
+      platforms: ["Instagram"],
+      firstSeenAt: null,
+      lastSeenAt: null,
+      active: true,
+      researchSummary: "Summary",
+      source: "demo",
+      analysisFields: [],
+    };
+
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              return {
+                async all<T>() {
+                  if (sql.includes("FROM ad")) {
+                    expect(bindings).toEqual(["meta-boat-1"]);
+                    return {
+                      results: [{
+                        id: "meta-boat-1",
+                        raw_json: JSON.stringify(ad),
+                      }] as T[],
+                    };
+                  }
+
+                  return { results: [] as T[] };
+                },
+                async run() {
+                  return { success: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    const result = await listAdsByIds({ DB: mock.db } as never, ["meta-boat-1"]);
+
+    expect(result).toEqual([ad]);
   });
 });

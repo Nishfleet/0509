@@ -58,6 +58,11 @@ interface CollectionItemRow {
   updated_at: string;
 }
 
+interface AdLookupRow {
+  id: string;
+  raw_json: string;
+}
+
 interface WatchlistRow {
   id: string;
   user_id: string;
@@ -531,6 +536,37 @@ export async function listCollectionItems(env: AppEnv, collectionId: string) {
     ad: parseJson<AdRecord>(row.ad_snapshot_json, {} as AdRecord),
     tags: tagsByItemId.get(row.id) ?? [],
   }));
+}
+
+export async function listAdsByIds(env: AppEnv, adIds: string[]) {
+  const uniqueIds = [...new Set(adIds.filter(Boolean))];
+
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = uniqueIds.map(() => "?").join(", ");
+  const rows = await many<AdLookupRow>(
+    env,
+    `
+      SELECT id, raw_json
+      FROM ad
+      WHERE id IN (${placeholders})
+    `,
+    ...uniqueIds,
+  );
+  const adsById = new Map<string, AdRecord>();
+
+  for (const row of rows) {
+    const ad = parseJson<AdRecord | null>(row.raw_json, null);
+    if (ad) {
+      adsById.set(row.id, ad);
+    }
+  }
+
+  return uniqueIds
+    .map((adId) => adsById.get(adId))
+    .filter((ad): ad is AdRecord => Boolean(ad));
 }
 
 export async function updateCollectionItem(
