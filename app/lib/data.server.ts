@@ -1,9 +1,9 @@
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
 import {
-  hydrateAdsWithPersistedCreatives,
+  hydrateAdsWithPersistedCreatives as hydrateAdsWithPersistedCreativesImpl,
   listAdsByIds,
   replaceAnalysisFields,
-  upsertAd,
+  upsertAd as upsertAdImpl,
 } from "~/lib/ad-persistence.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
@@ -176,12 +176,23 @@ export function createId() {
   return crypto.randomUUID();
 }
 
-export {
-  hydrateAdsWithPersistedCreatives,
-  listAdsByIds,
-  replaceAnalysisFields,
-  upsertAd,
-} from "~/lib/ad-persistence.server";
+export { listAdsByIds, replaceAnalysisFields } from "~/lib/ad-persistence.server";
+
+export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecord[]) {
+  if (!env.DB) {
+    return ads;
+  }
+
+  return hydrateAdsWithPersistedCreativesImpl(env, ads);
+}
+
+export async function upsertAd(env: AppEnv, ad: AdRecord) {
+  if (!env.DB) {
+    return;
+  }
+
+  await upsertAdImpl(env, ad);
+}
 
 function ensureDb(env: AppEnv) {
   if (!env.DB) {

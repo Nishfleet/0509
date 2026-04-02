@@ -6,6 +6,11 @@ import {
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
+import {
+  buildTranslatedAnalysisField,
+  translateAdText,
+  withTranslatedAnalysisField,
+} from "~/lib/translation.server";
 import type { AdRecord, SearchResponse } from "~/lib/types";
 
 export async function prepareSearchResultSelection(
@@ -28,20 +33,42 @@ export async function prepareSearchResultSelection(
         : Promise.resolve(null),
     ]);
 
-    if (snapshot || creativeText) {
-      selectedAd = withStructuredAnalysis({
-        ...selectedAdBase,
-        landingPage: snapshot ?? selectedAdBase.landingPage ?? null,
-        creativeText: creativeText?.text ?? selectedAdBase.creativeText ?? null,
-        creativeTextCaptureMethod:
-          creativeText?.captureMethod ?? selectedAdBase.creativeTextCaptureMethod ?? null,
-        creativeTextMetadata:
-          creativeText?.metadata ?? selectedAdBase.creativeTextMetadata ?? null,
-      });
+    const nextSelectedAdBase = {
+      ...selectedAdBase,
+      landingPage: snapshot ?? selectedAdBase.landingPage ?? null,
+      creativeText: creativeText?.text ?? selectedAdBase.creativeText ?? null,
+      creativeTextCaptureMethod:
+        creativeText?.captureMethod ?? selectedAdBase.creativeTextCaptureMethod ?? null,
+      creativeTextMetadata:
+        creativeText?.metadata ?? selectedAdBase.creativeTextMetadata ?? null,
+    };
+    const rebuiltSelectedAd = withStructuredAnalysis(nextSelectedAdBase);
+    const rebuiltFieldKeys = new Set(
+      rebuiltSelectedAd.analysisFields.map((field) => `${field.scopeType}:${field.fieldKey}`),
+    );
 
-      if (creativeText && selectedAd.source === "meta") {
-        await upsertAd(env, selectedAd);
-      }
+    selectedAd = {
+      ...rebuiltSelectedAd,
+      analysisFields: [
+        ...rebuiltSelectedAd.analysisFields,
+        ...selectedAdBase.analysisFields.filter(
+          (field) => !rebuiltFieldKeys.has(`${field.scopeType}:${field.fieldKey}`),
+        ),
+      ],
+    };
+
+    if (creativeText && selectedAd.source === "meta") {
+      await upsertAd(env, selectedAd);
+    }
+
+    const translationResult = await translateAdText(env, selectedAd);
+    if (translationResult) {
+      const translatedField = buildTranslatedAnalysisField(translationResult);
+      selectedAd = {
+        ...selectedAd,
+        analysisFields: withTranslatedAnalysisField(selectedAd.analysisFields, translatedField),
+      };
+      await upsertAd(env, selectedAd);
     }
   }
 
