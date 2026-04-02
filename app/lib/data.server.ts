@@ -1,4 +1,10 @@
-import { buildAnalysisFields, buildLandingPageAnalysisFields } from "~/lib/analysis.server";
+import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
+import {
+  hydrateAdsWithPersistedCreatives,
+  listAdsByIds,
+  replaceAnalysisFields,
+  upsertAd,
+} from "~/lib/ad-persistence.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import type {
@@ -56,11 +62,6 @@ interface CollectionItemRow {
   ad_snapshot_json: string;
   created_at: string;
   updated_at: string;
-}
-
-interface AdLookupRow {
-  id: string;
-  raw_json: string;
 }
 
 interface WatchlistRow {
@@ -174,6 +175,13 @@ export function nowIso() {
 export function createId() {
   return crypto.randomUUID();
 }
+
+export {
+  hydrateAdsWithPersistedCreatives,
+  listAdsByIds,
+  replaceAnalysisFields,
+  upsertAd,
+} from "~/lib/ad-persistence.server";
 
 function ensureDb(env: AppEnv) {
   if (!env.DB) {
@@ -536,37 +544,6 @@ export async function listCollectionItems(env: AppEnv, collectionId: string) {
     ad: parseJson<AdRecord>(row.ad_snapshot_json, {} as AdRecord),
     tags: tagsByItemId.get(row.id) ?? [],
   }));
-}
-
-export async function listAdsByIds(env: AppEnv, adIds: string[]) {
-  const uniqueIds = [...new Set(adIds.filter(Boolean))];
-
-  if (uniqueIds.length === 0) {
-    return [];
-  }
-
-  const placeholders = uniqueIds.map(() => "?").join(", ");
-  const rows = await many<AdLookupRow>(
-    env,
-    `
-      SELECT id, raw_json
-      FROM ad
-      WHERE id IN (${placeholders})
-    `,
-    ...uniqueIds,
-  );
-  const adsById = new Map<string, AdRecord>();
-
-  for (const row of rows) {
-    const ad = parseJson<AdRecord | null>(row.raw_json, null);
-    if (ad) {
-      adsById.set(row.id, ad);
-    }
-  }
-
-  return uniqueIds
-    .map((adId) => adsById.get(adId))
-    .filter((ad): ad is AdRecord => Boolean(ad));
 }
 
 export async function updateCollectionItem(
@@ -1061,148 +1038,6 @@ export async function createWatchEvent(
     jsonValue(input.metadata),
     timestamp,
   );
-}
-
-export async function upsertAd(env: AppEnv, ad: AdRecord) {
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO ad (
-        id,
-        advertiser,
-        body,
-        body_secondary,
-        preview_headline,
-        preview_subhead,
-        hook,
-        offer_text,
-        cta,
-        creative_format,
-        language_label,
-        destination_type,
-        landing_page_url,
-        ad_snapshot_url,
-        countries_json,
-        platforms_json,
-        first_seen_at,
-        last_seen_at,
-        is_active,
-        source,
-        research_summary,
-        creative_text,
-        creative_text_capture_method,
-        creative_text_metadata_json,
-        raw_json,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id)
-      DO UPDATE SET advertiser = excluded.advertiser,
-                    body = excluded.body,
-                    body_secondary = excluded.body_secondary,
-                    preview_headline = excluded.preview_headline,
-                    preview_subhead = excluded.preview_subhead,
-                    hook = excluded.hook,
-                    offer_text = excluded.offer_text,
-                    cta = excluded.cta,
-                    creative_format = excluded.creative_format,
-                    language_label = excluded.language_label,
-                    destination_type = excluded.destination_type,
-                    landing_page_url = excluded.landing_page_url,
-                    ad_snapshot_url = excluded.ad_snapshot_url,
-                    countries_json = excluded.countries_json,
-                    platforms_json = excluded.platforms_json,
-                    first_seen_at = excluded.first_seen_at,
-                    last_seen_at = excluded.last_seen_at,
-                    is_active = excluded.is_active,
-                    source = excluded.source,
-                    research_summary = excluded.research_summary,
-                    creative_text = excluded.creative_text,
-                    creative_text_capture_method = excluded.creative_text_capture_method,
-                    creative_text_metadata_json = excluded.creative_text_metadata_json,
-                    raw_json = excluded.raw_json,
-                    updated_at = excluded.updated_at
-    `,
-    ad.metaAdId,
-    ad.advertiser,
-    ad.body,
-    ad.bodySecondary ?? null,
-    ad.previewHeadline,
-    ad.previewSubhead,
-    ad.hook,
-    ad.offer,
-    ad.cta,
-    ad.format,
-    ad.languageLabel,
-    ad.destinationType,
-    ad.landingPageUrl,
-    ad.adSnapshotUrl,
-    jsonValue(ad.countries),
-    jsonValue(ad.platforms),
-    ad.firstSeenAt,
-    ad.lastSeenAt,
-    ad.active ? 1 : 0,
-    ad.source,
-    ad.researchSummary,
-    ad.creativeText ?? null,
-    ad.creativeTextCaptureMethod ?? null,
-    jsonValue(ad.creativeTextMetadata ?? null),
-    jsonValue(ad),
-    timestamp,
-    timestamp,
-  );
-
-  await replaceAnalysisFields(env, "ad", ad.metaAdId, ad.analysisFields.length > 0 ? ad.analysisFields : buildAnalysisFields(ad, ad.source === "meta" ? "meta_api" : "user"));
-}
-
-export async function replaceAnalysisFields(
-  env: AppEnv,
-  scopeType: "ad" | "observation" | "landing_page",
-  scopeId: string,
-  fields: AnalysisFieldInput[],
-) {
-  await run(
-    env,
-    "DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?",
-    scopeType,
-    scopeId,
-  );
-
-  for (const field of fields) {
-    const timestamp = nowIso();
-    await run(
-      env,
-      `
-        INSERT INTO analysis_field (
-          id,
-          scope_type,
-          scope_id,
-          field_key,
-          field_value,
-          provenance_source,
-          extractor_version,
-          confidence,
-          metadata_json,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      createId(),
-      scopeType,
-      scopeId,
-      field.fieldKey,
-      field.fieldValue,
-      field.provenanceSource,
-      field.extractorVersion,
-      field.confidence ?? null,
-      jsonValue(field.metadata ?? null),
-      timestamp,
-      timestamp,
-    );
-  }
 }
 
 export async function createLandingPageSnapshot(

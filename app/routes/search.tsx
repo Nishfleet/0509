@@ -34,12 +34,10 @@ export const meta: MetaFunction = () => [
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
-  const { withStructuredAnalysis } = await import("~/lib/analysis.server");
   const { getEnv } = await import("~/lib/context.server");
   const { listCollections } = await import("~/lib/data.server");
-  const { captureCreativeText } = await import("~/lib/creative-text.server");
-  const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
   const { searchAds } = await import("~/lib/meta-api.server");
+  const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
@@ -50,32 +48,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     url.searchParams.get("after"),
     { allowDemoFallback: true },
   );
-  const selectedId = url.searchParams.get("selected") ?? result.ads[0]?.metaAdId ?? null;
-  const selectedAdBase = result.ads.find((ad) => ad.metaAdId === selectedId) ?? result.ads[0] ?? null;
-
-  let selectedAd: AdRecord | null = selectedAdBase;
-  if (selectedAdBase) {
-    const [snapshot, creativeText] = await Promise.all([
-      selectedAdBase.landingPageUrl
-        ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl)
-        : Promise.resolve(null),
-      selectedAdBase.source === "meta" && selectedAdBase.adSnapshotUrl && !selectedAdBase.creativeText
-        ? captureCreativeText(env, selectedAdBase.adSnapshotUrl, selectedAdBase)
-        : Promise.resolve(null),
-    ]);
-
-    if (snapshot || creativeText) {
-      selectedAd = withStructuredAnalysis({
-        ...selectedAdBase,
-        landingPage: snapshot ?? selectedAdBase.landingPage ?? null,
-        creativeText: creativeText?.text ?? selectedAdBase.creativeText ?? null,
-        creativeTextCaptureMethod:
-          creativeText?.captureMethod ?? selectedAdBase.creativeTextCaptureMethod ?? null,
-        creativeTextMetadata:
-          creativeText?.metadata ?? selectedAdBase.creativeTextMetadata ?? null,
-      });
-    }
-  }
+  const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
+    env,
+    result,
+    url.searchParams.get("selected"),
+  );
 
   const collections = session ? await listCollections(env, session.user.id) : [];
 
@@ -83,7 +60,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     mode: parsed.mode,
     filters: parsed.filters,
     fingerprint: parsed.fingerprint,
-    result,
+    result: hydratedResult,
     selectedAd,
     collections,
     session,

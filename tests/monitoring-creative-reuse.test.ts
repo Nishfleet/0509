@@ -1,0 +1,116 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { AdRecord, WatchlistRecord } from "~/lib/types";
+
+const watchlist: WatchlistRecord = {
+  id: "watch-1",
+  userId: "user-1",
+  name: "boAt watch",
+  targetType: "advertiser",
+  targetId: "boAt",
+  targetFingerprint: "fp-boat",
+  targetLabel: "boAt",
+  isActive: true,
+  lastScannedAt: null,
+  createdAt: "2026-03-01T00:00:00.000Z",
+  updatedAt: "2026-03-01T00:00:00.000Z",
+};
+
+const baseAd: AdRecord = {
+  metaAdId: "meta-boat-1",
+  advertiser: "boAt",
+  body: "Bass bhi, battery bhi.",
+  previewHeadline: "Bass bhi. Battery bhi.",
+  previewSubhead: "Launch pricing",
+  hook: "Bass bhi. Battery bhi.",
+  offer: "Launch pricing",
+  cta: "Buy now",
+  format: "image",
+  languageLabel: "Hinglish",
+  destinationType: "website",
+  landingPageUrl: null,
+  adSnapshotUrl: "https://cdn.example.com/meta-boat-1.png",
+  countries: ["India"],
+  platforms: ["Instagram"],
+  firstSeenAt: null,
+  lastSeenAt: null,
+  active: true,
+  researchSummary: "Summary",
+  source: "meta",
+  analysisFields: [],
+};
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+});
+
+describe("runWatchlistManual OCR reuse", () => {
+  it("hydrates stored creative text before deciding whether to capture OCR", async () => {
+    const env = {
+      META_AD_LIBRARY_TOKEN: "token",
+    };
+    const hydratedAd: AdRecord = {
+      ...baseAd,
+      creativeText: "60 Hours Playback\nOnly ₹999",
+      creativeTextCaptureMethod: "ad_snapshot_fetch",
+      creativeTextMetadata: {
+        source: "stored",
+      },
+    };
+    const captureCreativeText = vi.fn().mockResolvedValue({
+      text: "Fresh OCR",
+      captureMethod: "ad_snapshot_fetch",
+      metadata: {
+        source: "fresh",
+      },
+    });
+    const hydrateAdsWithPersistedCreatives = vi.fn().mockResolvedValue([hydratedAd]);
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildAnalysisFields: vi.fn(() => []),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn(),
+      clearDigestItems: vi.fn(),
+      createAdObservation: vi.fn(),
+      createDigestRun: vi.fn(),
+      createLandingPageSnapshot: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn(),
+      getDigestByPeriod: vi.fn(),
+      getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+      getSavedQuery: vi.fn(),
+      hydrateAdsWithPersistedCreatives,
+      listActiveWatchlists: vi.fn(),
+      listObservationsForRun: vi.fn().mockResolvedValue([]),
+      listWatchEventsBetween: vi.fn(),
+      listWatchlists: vi.fn(),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertAd: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      MetaApiError: class MetaApiError extends Error {},
+      searchAds: vi.fn().mockResolvedValue({
+        ads: [baseAd],
+        nextCursor: null,
+        source: "meta",
+      }),
+    }));
+
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+    await runWatchlistManual(env as never, watchlist);
+
+    expect(hydrateAdsWithPersistedCreatives).toHaveBeenCalledWith(env, [baseAd]);
+    expect(captureCreativeText).not.toHaveBeenCalled();
+  });
+});

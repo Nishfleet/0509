@@ -13,6 +13,7 @@ import {
   getDigestByPeriod,
   getRecentSuccessfulRuns,
   getSavedQuery,
+  hydrateAdsWithPersistedCreatives,
   listActiveWatchlists,
   listObservationsForRun,
   listWatchEventsBetween,
@@ -500,8 +501,10 @@ async function performBoundedScan(
     pagesScanned += 1;
   } while (cursor && pagesScanned < pageBudget);
 
+  const hydratedAds = await hydrateAdsWithPersistedCreatives(env, dedupeAds(ads));
+
   return {
-    ads: dedupeAds(ads),
+    ads: hydratedAds,
     pagesScanned,
   };
 }
