@@ -13,12 +13,14 @@
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "better-auth": "^1.5.6",
     "isbot": "^5.1.36",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router": "^7.13.2",
-    "resend": "^6.9.4"
+    "resend": "^6.9.4",
+    "stripe": "^22.0.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.30.2",

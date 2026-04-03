@@ -11,6 +11,8 @@ export default [
   route("auth/login", "routes/auth.login.tsx"),
   route("auth/signup", "routes/auth.signup.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
+  route("api/checkout", "routes/api.checkout.ts"),
+  route("api/webhooks/stripe", "routes/api.webhooks.stripe.ts"),
   route("app/onboard", "routes/app.onboard.tsx"),
   route("share/:token", "routes/share.$token.tsx"),
   route("export/:resourceType/:resourceId", "routes/export.$resourceType.$resourceId.tsx"),
