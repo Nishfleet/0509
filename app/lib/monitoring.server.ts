@@ -28,6 +28,7 @@ import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { MetaApiError, searchAds } from "~/lib/meta-api.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import type {
   AdRecord,
   NormalizedSavedQuery,
@@ -343,6 +344,11 @@ export async function runWeeklyDigests(env: AppEnv) {
   let digestsSent = 0;
 
   for (const user of users) {
+    const plan = await getUserPlan(env, user.id);
+    if (!PLAN_LIMITS[plan].digests) {
+      continue;
+    }
+
     const watchlists = await listWatchlists(env, user.id);
     const digestItems: Array<{
       watchlistId: string;

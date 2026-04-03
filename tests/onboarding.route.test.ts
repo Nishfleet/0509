@@ -146,6 +146,14 @@ describe("onboarding route", () => {
       createSavedQuery: vi.fn(),
       createWatchlist,
     }));
+    vi.doMock("~/lib/plan.server", () => ({
+      PLAN_UPGRADE_URL: "/#pricing",
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 0,
+        limit: 3,
+      }),
+    }));
 
     const { action } = await import("~/routes/app.onboard");
     const formData = new FormData();

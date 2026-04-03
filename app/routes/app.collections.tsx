@@ -33,6 +33,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { PLAN_UPGRADE_URL, checkPlanLimit } = await import("~/lib/plan.server");
   const { createCollection, createShareLink, getCollection, updateCollectionItem } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
@@ -45,6 +46,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     if (!name) {
       return { ok: false, message: "Collection name is required." };
+    }
+
+    const collectionLimit = await checkPlanLimit(env, session.user.id, "collections");
+    if (!collectionLimit.allowed) {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded",
+        limit: collectionLimit.limit,
+        current: collectionLimit.current,
+        upgradeUrl: PLAN_UPGRADE_URL,
+        message: "You have reached the free collection limit.",
+      };
     }
 
     const collection = await createCollection(env, session.user.id, {
@@ -109,15 +122,22 @@ export default function CollectionsRoute() {
   return (
     <section className="workspace-section-stack">
       {actionData?.message ? (
-        <p className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
-          {actionData.ok && actionData.message.startsWith("http") ? (
-            <a href={actionData.message} rel="noreferrer" target="_blank">
-              {actionData.message}
-            </a>
-          ) : (
-            actionData.message
-          )}
-        </p>
+        <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+          <p>
+            {actionData.ok && actionData.message.startsWith("http") ? (
+              <a href={actionData.message} rel="noreferrer" target="_blank">
+                {actionData.message}
+              </a>
+            ) : (
+              actionData.message
+            )}
+          </p>
+          {actionData.error === "plan_limit_exceeded" ? (
+            <Link className="button button-secondary" to={actionData.upgradeUrl}>
+              View pricing
+            </Link>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="workspace-panels">

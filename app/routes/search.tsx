@@ -70,6 +70,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { PLAN_UPGRADE_URL, checkPlanLimit } = await import("~/lib/plan.server");
   const { addAdToCollection, createSavedQuery, createWatchlist } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
@@ -106,6 +107,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "create-watchlist") {
     const queryName = String(formData.get("name") ?? "").trim() || `${normalizedQuery.filters.query || "Untitled"} watch`;
     const shouldUseAdvertiserMode = canCreateAdvertiserWatchlist(normalizedQuery);
+    const watchlistLimit = await checkPlanLimit(env, session.user.id, "watchlists");
+
+    if (!watchlistLimit.allowed) {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded",
+        limit: watchlistLimit.limit,
+        current: watchlistLimit.current,
+        upgradeUrl: PLAN_UPGRADE_URL,
+        message: "You have reached the free watchlist limit.",
+      };
+    }
 
     if (shouldUseAdvertiserMode) {
       await createWatchlist(env, session.user.id, {
@@ -214,9 +227,14 @@ export default function SearchRoute() {
           </div>
 
           {actionData?.message ? (
-            <p className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
-              {actionData.message}
-            </p>
+            <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+              <p>{actionData.message}</p>
+              {actionData.error === "plan_limit_exceeded" ? (
+                <Link className="button button-secondary" to={actionData.upgradeUrl}>
+                  View pricing
+                </Link>
+              ) : null}
+            </div>
           ) : null}
 
           <div className="search-layout">
