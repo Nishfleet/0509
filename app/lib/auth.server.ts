@@ -21,6 +21,15 @@ export function createAuth(env: AppEnv, request: Request) {
     trustedOrigins: [origin],
     secret: env.BETTER_AUTH_SECRET ?? fallbackSecret(),
     database: env.DB,
+    user: {
+      additionalFields: {
+        onboardedAt: {
+          type: "string",
+          required: false,
+          input: false,
+        },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,

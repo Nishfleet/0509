@@ -2,6 +2,7 @@ import {
   Link,
   NavLink,
   Outlet,
+  redirect,
   useLoaderData,
 } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
@@ -13,6 +14,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
+
+  if (!session.user.onboardedAt) {
+    throw redirect("/app/onboard");
+  }
 
   return {
     session,

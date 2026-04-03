@@ -366,6 +366,18 @@ export async function upsertPricingRegionPreference(
   );
 }
 
+export async function completeUserOnboarding(env: AppEnv, userId: string) {
+  await run(
+    env,
+    `
+      UPDATE user
+      SET onboardedAt = datetime('now')
+      WHERE id = ?
+    `,
+    userId,
+  );
+}
+
 export async function listSavedQueries(env: AppEnv, userId: string) {
   const rows = await many<SavedQueryRow>(
     env,

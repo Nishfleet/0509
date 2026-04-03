@@ -11,6 +11,7 @@ export default [
   route("auth/login", "routes/auth.login.tsx"),
   route("auth/signup", "routes/auth.signup.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
+  route("app/onboard", "routes/app.onboard.tsx"),
   route("share/:token", "routes/share.$token.tsx"),
   route("export/:resourceType/:resourceId", "routes/export.$resourceType.$resourceId.tsx"),
   route("app", "routes/app-layout.tsx", [

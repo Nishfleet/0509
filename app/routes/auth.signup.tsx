@@ -17,7 +17,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
-  const redirectTo = url.searchParams.get("redirectTo") || "/app";
+  const redirectTo = url.searchParams.get("redirectTo") || "/app/onboard";
 
   if (session) {
     throw redirect(redirectTo);

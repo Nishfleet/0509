@@ -43,6 +43,7 @@ export interface AppUser {
   email: string;
   name: string;
   image?: string | null;
+  onboardedAt?: string | null;
 }
 
 export interface AppSessionRecord {
