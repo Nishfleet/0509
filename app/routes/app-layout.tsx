@@ -12,7 +12,6 @@ import { SignOutButton } from "~/components/sign-out-button";
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
 
@@ -21,13 +20,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   return {
-    plan: await getUserPlan(env, session.user.id),
     session,
   };
 }
 
 export default function AppLayoutRoute() {
-  const { plan, session } = useLoaderData<typeof loader>();
+  const { session } = useLoaderData<typeof loader>();
 
   return (
     <main className="workspace-shell">
@@ -58,11 +56,6 @@ export default function AppLayoutRoute() {
         </nav>
 
         <div className="workspace-sidebar-footer">
-          {plan === "free" ? (
-            <Link className="button button-secondary" to="/#pricing">
-              Upgrade
-            </Link>
-          ) : null}
           <SignOutButton />
         </div>
       </aside>

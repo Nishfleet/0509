@@ -224,13 +224,9 @@ export default function MarketingRoute() {
                 <p className="muted-text">{plan.yearlyLabel}</p>
                 <p>{plan.detail}</p>
                 {rootData.session ? (
-                  <Form action="/api/checkout" method="post">
-                    <input name="plan" type="hidden" value={plan.name.toLowerCase()} />
-                    <input name="interval" type="hidden" value="monthly" />
-                    <button className="button button-primary" type="submit">
-                      Upgrade to {plan.name}
-                    </button>
-                  </Form>
+                  <Link className="button button-primary" to={primaryCta}>
+                    Open workspace
+                  </Link>
                 ) : (
                   <Link className="button button-primary" to={primaryCta}>
                     Start with email

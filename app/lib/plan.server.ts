@@ -50,15 +50,6 @@ async function one<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
   return rows[0] ?? null;
 }
 
-async function run(env: AppEnv, sql: string, ...bindings: unknown[]) {
-  const db = ensureDb(env);
-  await db.prepare(sql).bind(...bindings).run();
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
 function parseUserPlan(value: string | null | undefined): UserPlan {
   if (value === "starter" || value === "agency") {
     return value;
@@ -122,55 +113,4 @@ export async function checkPlanLimit(env: AppEnv, userId: string, resource: Plan
     limit,
     current,
   };
-}
-
-export async function upsertUserPlan(
-  env: AppEnv,
-  input: {
-    userId: string;
-    plan: UserPlan;
-    stripeCustomerId: string | null;
-    stripeSubscriptionId: string | null;
-  },
-) {
-  const updatedAt = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO user_plan (
-        user_id,
-        plan,
-        stripe_customer_id,
-        stripe_subscription_id,
-        plan_updated_at
-      )
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
-        plan = excluded.plan,
-        stripe_customer_id = excluded.stripe_customer_id,
-        stripe_subscription_id = excluded.stripe_subscription_id,
-        plan_updated_at = excluded.plan_updated_at
-    `,
-    input.userId,
-    input.plan,
-    input.stripeCustomerId,
-    input.stripeSubscriptionId,
-    updatedAt,
-  );
-}
-
-export async function downgradeUserPlan(env: AppEnv, stripeSubscriptionId: string) {
-  await run(
-    env,
-    `
-      UPDATE user_plan
-      SET
-        plan = 'free',
-        plan_updated_at = ?,
-        stripe_subscription_id = NULL
-      WHERE stripe_subscription_id = ?
-    `,
-    nowIso(),
-    stripeSubscriptionId,
-  );
 }

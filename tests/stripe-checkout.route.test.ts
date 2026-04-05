@@ -1,27 +1,22 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-function createContext(env: Record<string, unknown> = {}) {
+import routes from "~/routes";
+
+function createContext() {
   return {
     cloudflare: {
-      env,
+      env: {},
     },
   };
 }
 
-async function expectRedirect(
-  callback: () => Promise<unknown>,
-  location: string,
-) {
-  try {
-    await callback();
-  } catch (error) {
-    expect(error).toBeInstanceOf(Response);
-    expect((error as Response).status).toBe(302);
-    expect((error as Response).headers.get("Location")).toBe(location);
-    return;
-  }
-
-  throw new Error(`Expected redirect to ${location}`);
+function flattenRoutePaths(entries: Array<{ path?: string; children?: unknown[] }>) {
+  return entries.flatMap((entry) => [
+    entry.path,
+    ...flattenRoutePaths((entry.children as Array<{ path?: string; children?: unknown[] }> | undefined) ?? []),
+  ].filter((value): value is string => Boolean(value)));
 }
 
 beforeEach(() => {
@@ -47,80 +42,17 @@ const session = {
   },
 };
 
-describe("stripe checkout route", () => {
-  it("creates a checkout session and redirects to Stripe Checkout", async () => {
-    const createCheckoutSession = vi.fn().mockResolvedValue({
-      url: "https://checkout.stripe.com/pay/cs_test_123",
-    });
-    const resolveCheckoutPriceId = vi.fn().mockReturnValue("price_starter_monthly");
+describe("billing route exposure", () => {
+  it("does not expose checkout or Stripe webhook endpoints", () => {
+    const paths = flattenRoutePaths(routes as Array<{ path?: string; children?: unknown[] }>);
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(session),
-    }));
-    vi.doMock("~/lib/stripe.server", () => ({
-      createStripeClient: vi.fn().mockReturnValue({
-        checkout: {
-          sessions: {
-            create: createCheckoutSession,
-          },
-        },
-      }),
-      parseBillingInterval: vi.fn().mockImplementation((value) => value),
-      parseBillingPlan: vi.fn().mockImplementation((value) => value),
-      resolveCheckoutPriceId,
-    }));
-
-    const { action } = await import("~/routes/api.checkout");
-    const formData = new FormData();
-    formData.set("plan", "starter");
-    formData.set("interval", "monthly");
-
-    await expectRedirect(
-      () =>
-        action({
-          context: createContext({
-            STRIPE_SECRET_KEY: "sk_test_123",
-            STRIPE_STARTER_PRICE_ID: "price_starter_monthly",
-          }),
-          request: new Request("http://localhost/api/checkout", {
-            method: "POST",
-            body: formData,
-          }),
-        } as never),
-      "https://checkout.stripe.com/pay/cs_test_123",
-    );
-
-    expect(resolveCheckoutPriceId).toHaveBeenCalledWith(
-      expect.objectContaining({
-        STRIPE_STARTER_PRICE_ID: "price_starter_monthly",
-      }),
-      "starter",
-      "monthly",
-    );
-    expect(createCheckoutSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mode: "subscription",
-        client_reference_id: "user-1",
-        customer_email: "owner@example.com",
-        success_url: "http://localhost/app?upgraded=1",
-        cancel_url: "http://localhost/#pricing",
-        line_items: [
-          {
-            price: "price_starter_monthly",
-            quantity: 1,
-          },
-        ],
-        metadata: {
-          interval: "monthly",
-          plan: "starter",
-        },
-      }),
-    );
+    expect(paths).not.toContain("api/checkout");
+    expect(paths).not.toContain("api/webhooks/stripe");
   });
 });
 
 describe("app layout loader", () => {
-  it("returns the current user plan for workspace chrome", async () => {
+  it("returns only session data for workspace chrome", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
     }));
@@ -134,9 +66,44 @@ describe("app layout loader", () => {
       request: new Request("http://localhost/app"),
     } as never);
 
-    expect(result).toMatchObject({
-      plan: "free",
+    expect(result).toEqual({
       session,
     });
+  });
+});
+
+describe("marketing route", () => {
+  it("does not render purchase forms for signed-in users", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: to }, children),
+        useRouteLoaderData: vi.fn().mockReturnValue({
+          pricingPlans: [
+            {
+              name: "Starter",
+              monthlyLabel: "Rs 2,500 / month",
+              yearlyLabel: "Rs 24,000 / year",
+              detail: "Solo or small team.",
+            },
+          ],
+          pricingRegion: "india",
+          session,
+        }),
+      };
+    });
+
+    const { default: MarketingRoute } = await import("~/routes/marketing");
+    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+
+    expect(markup).not.toContain("/api/checkout");
+    expect(markup).not.toContain("Upgrade to Starter");
+    expect(markup).toContain("Open workspace");
   });
 });
