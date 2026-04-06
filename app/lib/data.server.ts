@@ -188,6 +188,10 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
 
 export async function upsertAd(env: AppEnv, ad: AdRecord) {
   if (!env.DB) {
+    console.warn(
+      `[data.server] upsertAd called without a D1 binding; ad ${ad.metaAdId} was NOT persisted. ` +
+        `Check wrangler.jsonc and the deploy environment.`,
+    );
     return;
   }
 

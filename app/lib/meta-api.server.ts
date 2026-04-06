@@ -4,6 +4,17 @@ import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord, NormalizedSavedQuery, SearchMode, SearchResponse } from "~/lib/types";
 
 const DEFAULT_PAGE_LIMIT = 24;
+const META_FETCH_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(url: string, timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 interface MetaRawAd {
   id: string;
@@ -128,9 +139,27 @@ async function liveSearch(
     params.set("after", cursor);
   }
 
-  const response = await fetch(
-    `https://graph.facebook.com/${version}/ads_archive?${params.toString()}`,
-  );
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `https://graph.facebook.com/${version}/ads_archive?${params.toString()}`,
+      META_FETCH_TIMEOUT_MS,
+    );
+  } catch (error) {
+    // AbortError comes through as a DOMException in Workers and as a
+    // DOMException-like Error in Node test runners. Compare by .name so the
+    // check is portable across both without relying on the DOMException
+    // constructor identity.
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new MetaApiError(
+        `Meta Ad Library request timed out after ${META_FETCH_TIMEOUT_MS / 1000}s.`,
+        408,
+        false,
+        false,
+      );
+    }
+    throw error;
+  }
   const payload = (await response.json()) as MetaApiResponse;
 
   if (!response.ok || payload.error) {
