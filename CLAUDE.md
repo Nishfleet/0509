@@ -102,3 +102,11 @@ This project is managed by Paperclip under company Swish.
 - Immutability: create new objects, never mutate existing ones.
 - File organization: 200-400 lines typical, 800 max.
 - D1 queries: always use parameterized `.bind()` — never string interpolation.
+
+## Design System
+
+See `DESIGN.md` in the repo root for the canonical design reference. The picked aesthetic is **Vercel** (from the awesome-design-md collection). Read `DESIGN.md` before any UI work and align styling decisions with the documented patterns: color palette, typography, spacing, shadows, radii, component shapes.
+
+Per Nish's "delightmaxxing >>>>>" preference (2026-04-06): do not ship generic AI-default styling. If a UI change can be more delightful, more polished, or more consistent with Vercel's aesthetic, take the extra time to do it.
+
+Source: https://github.com/VoltAgent/awesome-design-md
