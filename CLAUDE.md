@@ -29,7 +29,7 @@ npm run dev
 - `workers/app.ts` — Cloudflare Worker entry with scheduled event handler
 - `migrations/` — D1 schema migrations (sequential numbered SQL)
 - `tests/` — Vitest coverage for search, monitoring, analysis, onboarding, plan limits, reporting, and route exposure
-- `src/` — legacy Next.js prototype (historical reference only)
+- `legacy/` — pre-Cloudflare reference material (`legacy/src/` Next.js prototype, `legacy/supabase/` old backend config). Historical reference only — not part of the live build. See `legacy/README.md`.
 
 ## Key Files
 
