@@ -4,8 +4,31 @@ import { redirect } from "react-router";
 import { appOrigin, type AppEnv } from "~/lib/env.server";
 import type { AppSession } from "~/lib/types";
 
-function fallbackSecret() {
-  return "0509-dev-secret-that-is-at-least-32-characters";
+const DEV_FALLBACK_SECRET = "0509-dev-secret-that-is-at-least-32-characters";
+
+function isDevelopment() {
+  // `nodejs_compat` surfaces process.env.NODE_ENV in Workers; in Vitest it's
+  // "test". In production Cloudflare deploys it is "production".
+  const mode = (typeof process !== "undefined" ? process.env?.NODE_ENV : undefined) ?? "production";
+  return mode === "development" || mode === "test";
+}
+
+function resolveAuthSecret(env: AppEnv) {
+  if (env.BETTER_AUTH_SECRET && env.BETTER_AUTH_SECRET.length >= 32) {
+    return env.BETTER_AUTH_SECRET;
+  }
+
+  if (!isDevelopment()) {
+    // Fail loudly in production rather than silently signing sessions with a
+    // hardcoded dev secret. If this throws, it means the secret was never
+    // uploaded to the Worker (`wrangler secret put BETTER_AUTH_SECRET`).
+    throw new Error(
+      "BETTER_AUTH_SECRET is missing or too short in a non-development environment. " +
+        "Upload a 32+ char secret to the Worker before serving traffic.",
+    );
+  }
+
+  return DEV_FALLBACK_SECRET;
 }
 
 export function createAuth(env: AppEnv, request: Request) {
@@ -19,7 +42,7 @@ export function createAuth(env: AppEnv, request: Request) {
     appName: env.APP_NAME ?? "0509",
     baseURL: origin,
     trustedOrigins: [origin],
-    secret: env.BETTER_AUTH_SECRET ?? fallbackSecret(),
+    secret: resolveAuthSecret(env),
     database: env.DB,
     user: {
       additionalFields: {
