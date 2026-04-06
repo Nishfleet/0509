@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function createContext() {
@@ -147,7 +149,6 @@ describe("onboarding route", () => {
       createWatchlist,
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      PLAN_UPGRADE_URL: "/#pricing",
       checkPlanLimit: vi.fn().mockResolvedValue({
         allowed: true,
         current: 0,
@@ -183,6 +184,61 @@ describe("onboarding route", () => {
       }),
     );
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
+  });
+
+  it("returns a structured limit prompt without a pricing link when onboarding watchlists are capped", async () => {
+    const completeUserOnboarding = vi.fn();
+    const createWatchlist = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlist,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: false,
+        current: 3,
+        limit: 3,
+      }),
+    }));
+
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("query", "boAt");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      current: 3,
+      error: "plan_limit_exceeded",
+      limit: 3,
+      message: "You have reached the free watchlist limit.",
+      ok: false,
+    });
+    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
   });
 
   it("marks the user onboarded when they skip setup", async () => {
@@ -226,5 +282,31 @@ describe("onboarding route", () => {
     );
 
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
+  });
+
+  it("does not render a pricing CTA on onboarding plan-limit errors", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: to }, children),
+        useActionData: vi.fn().mockReturnValue({
+          ok: false,
+          error: "plan_limit_exceeded",
+          message: "You have reached the free watchlist limit.",
+        }),
+      };
+    });
+
+    const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
+    const markup = renderToStaticMarkup(createElement(AppOnboardRoute));
+
+    expect(markup).toContain("You have reached the free watchlist limit.");
+    expect(markup).not.toContain("View pricing");
   });
 });

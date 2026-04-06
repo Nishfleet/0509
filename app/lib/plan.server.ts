@@ -18,8 +18,6 @@ export const PLAN_LIMITS = {
   },
 } as const;
 
-export const PLAN_UPGRADE_URL = "/#pricing";
-
 export type UserPlan = keyof typeof PLAN_LIMITS;
 export type PlanResource = "watchlists" | "collections";
 

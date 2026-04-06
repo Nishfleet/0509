@@ -70,7 +70,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { PLAN_UPGRADE_URL, checkPlanLimit } = await import("~/lib/plan.server");
+  const { checkPlanLimit } = await import("~/lib/plan.server");
   const { addAdToCollection, createSavedQuery, createWatchlist } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
@@ -115,7 +115,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        upgradeUrl: PLAN_UPGRADE_URL,
         message: "You have reached the free watchlist limit.",
       };
     }
@@ -229,11 +228,6 @@ export default function SearchRoute() {
           {actionData?.message ? (
             <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
               <p>{actionData.message}</p>
-              {actionData.error === "plan_limit_exceeded" ? (
-                <Link className="button button-secondary" to={actionData.upgradeUrl}>
-                  View pricing
-                </Link>
-              ) : null}
             </div>
           ) : null}
 

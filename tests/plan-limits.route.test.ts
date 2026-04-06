@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function createContext() {
@@ -32,14 +34,13 @@ const session = {
 };
 
 describe("search watchlist limit", () => {
-  it("returns a structured upgrade prompt when the watchlist plan limit is reached", async () => {
+  it("returns a structured limit prompt when the watchlist plan limit is reached", async () => {
     const createWatchlist = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      PLAN_UPGRADE_URL: "/#pricing",
       checkPlanLimit: vi.fn().mockResolvedValue({
         allowed: false,
         current: 3,
@@ -76,21 +77,19 @@ describe("search watchlist limit", () => {
       limit: 3,
       message: "You have reached the free watchlist limit.",
       ok: false,
-      upgradeUrl: "/#pricing",
     });
     expect(createWatchlist).not.toHaveBeenCalled();
   });
 });
 
 describe("collection limit", () => {
-  it("returns a structured upgrade prompt when the collection plan limit is reached", async () => {
+  it("returns a structured limit prompt when the collection plan limit is reached", async () => {
     const createCollection = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      PLAN_UPGRADE_URL: "/#pricing",
       checkPlanLimit: vi.fn().mockResolvedValue({
         allowed: false,
         current: 3,
@@ -127,7 +126,6 @@ describe("collection limit", () => {
       limit: 3,
       message: "You have reached the free collection limit.",
       ok: false,
-      upgradeUrl: "/#pricing",
     });
     expect(createCollection).not.toHaveBeenCalled();
   });
@@ -141,7 +139,6 @@ describe("digest access", () => {
       requireSession: vi.fn().mockResolvedValue(session),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      PLAN_UPGRADE_URL: "/#pricing",
       getUserPlan: vi.fn().mockResolvedValue("free"),
       PLAN_LIMITS: {
         free: { digests: false },
@@ -164,8 +161,185 @@ describe("digest access", () => {
       canAccessDigests: false,
       digests: [],
       selectedDigest: null,
-      upgradeUrl: "/#pricing",
     });
     expect(listDigests).not.toHaveBeenCalled();
+  });
+});
+
+describe("dashboard watchlist limit", () => {
+  it("returns a structured limit prompt when the dashboard watchlist limit is reached", async () => {
+    const createWatchlist = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: false,
+        current: 3,
+        limit: 3,
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlist,
+      getSavedQuery: vi.fn().mockResolvedValue({
+        id: "saved-query-1",
+        name: "boAt",
+        fingerprint: "fp-1",
+      }),
+      touchSavedQueryRun: vi.fn(),
+    }));
+
+    const { action } = await import("~/routes/app.dashboard");
+    const formData = new FormData();
+    formData.set("intent", "track-saved-query");
+    formData.set("savedQueryId", "saved-query-1");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      current: 3,
+      error: "plan_limit_exceeded",
+      limit: 3,
+      message: "You have reached the free watchlist limit.",
+      ok: false,
+    });
+    expect(createWatchlist).not.toHaveBeenCalled();
+  });
+});
+
+describe("pricing CTA rendering", () => {
+  async function mockRouter(overrides: {
+    actionData?: unknown;
+    loaderData?: unknown;
+    rootData?: unknown;
+  }) {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: to }, children),
+        useActionData: vi.fn().mockReturnValue(overrides.actionData),
+        useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
+        useRouteLoaderData: vi.fn().mockReturnValue(overrides.rootData),
+        useSearchParams: vi.fn().mockReturnValue([new URLSearchParams(), vi.fn()]),
+      };
+    });
+  }
+
+  it("does not render a pricing CTA on the digests route", async () => {
+    await mockRouter({
+      actionData: undefined,
+      loaderData: {
+        canAccessDigests: false,
+        digests: [],
+        selectedDigest: null,
+      },
+    });
+
+    const { default: DigestsRoute } = await import("~/routes/app.digests");
+    const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+    expect(markup).not.toContain("View pricing");
+    expect(markup).toContain("Weekly digests are not available in the current workspace.");
+  });
+
+  it("does not render a pricing CTA on dashboard plan-limit errors", async () => {
+    await mockRouter({
+      actionData: {
+        ok: false,
+        error: "plan_limit_exceeded",
+        message: "You have reached the free watchlist limit.",
+      },
+      loaderData: {
+        savedQueries: [],
+        collections: [],
+        watchlists: [],
+        digests: [],
+        metaStatus: {
+          status: "healthy",
+          summary: "Healthy",
+          lastCheckedAt: null,
+        },
+      },
+    });
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("You have reached the free watchlist limit.");
+    expect(markup).not.toContain("View pricing");
+  });
+
+  it("does not render a pricing CTA on collections plan-limit errors", async () => {
+    await mockRouter({
+      actionData: {
+        ok: false,
+        error: "plan_limit_exceeded",
+        message: "You have reached the free collection limit.",
+      },
+      loaderData: {
+        collections: [],
+        selectedCollection: null,
+        items: [],
+      },
+    });
+
+    const { default: CollectionsRoute } = await import("~/routes/app.collections");
+    const markup = renderToStaticMarkup(createElement(CollectionsRoute));
+
+    expect(markup).toContain("You have reached the free collection limit.");
+    expect(markup).not.toContain("View pricing");
+  });
+
+  it("does not render a pricing CTA on search plan-limit errors", async () => {
+    await mockRouter({
+      actionData: {
+        ok: false,
+        error: "plan_limit_exceeded",
+        message: "You have reached the free watchlist limit.",
+      },
+      loaderData: {
+        mode: "advertiser",
+        filters: {
+          query: "boAt",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+        fingerprint: "fp-1",
+        result: {
+          ads: [],
+          nextCursor: null,
+          source: "meta",
+        },
+        selectedAd: null,
+        collections: [],
+        session: null,
+      },
+      rootData: {
+        session: null,
+      },
+    });
+
+    const { default: SearchRoute } = await import("~/routes/search");
+    const markup = renderToStaticMarkup(createElement(SearchRoute));
+
+    expect(markup).toContain("You have reached the free watchlist limit.");
+    expect(markup).not.toContain("View pricing");
   });
 });

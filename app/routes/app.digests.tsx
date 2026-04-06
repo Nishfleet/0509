@@ -10,7 +10,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { PLAN_LIMITS, PLAN_UPGRADE_URL, getUserPlan } = await import("~/lib/plan.server");
+  const { PLAN_LIMITS, getUserPlan } = await import("~/lib/plan.server");
   const { getDigest, listDigests } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
@@ -21,7 +21,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       digests: [],
       selectedDigest: null,
       canAccessDigests: false,
-      upgradeUrl: PLAN_UPGRADE_URL,
     };
   }
 
@@ -36,14 +35,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     digests,
     selectedDigest,
     canAccessDigests: true,
-    upgradeUrl: PLAN_UPGRADE_URL,
   };
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { PLAN_LIMITS, PLAN_UPGRADE_URL, getUserPlan } = await import("~/lib/plan.server");
+  const { PLAN_LIMITS, getUserPlan } = await import("~/lib/plan.server");
   const { createShareLink, getDigest } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
@@ -55,8 +53,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: false,
       error: "plan_limit_exceeded",
-      upgradeUrl: PLAN_UPGRADE_URL,
-      message: "Weekly digests are available on paid plans.",
+      message: "Weekly digests are not available in the current workspace.",
     };
   }
 
@@ -104,28 +101,20 @@ export default function DigestsRoute() {
               <a href={actionData.message} rel="noreferrer" target="_blank">
                 {actionData.message}
               </a>
-            ) : (
+          ) : (
               actionData.message
             )}
           </p>
-          {actionData.error === "plan_limit_exceeded" ? (
-            <Link className="button button-secondary" to={actionData.upgradeUrl}>
-              View pricing
-            </Link>
-          ) : null}
         </div>
       ) : null}
 
       {!data.canAccessDigests ? (
         <article className="content-card empty-state">
           <p className="section-label">Weekly digests</p>
-          <h2>Upgrade to unlock digest delivery.</h2>
+          <h2>Weekly digests are not available in the current workspace.</h2>
           <p>
-            Starter and Agency plans include weekly competitor summaries and digest sharing.
+            Use search, watchlists, and collections to keep competitor research organized.
           </p>
-          <Link className="button button-primary" to={data.upgradeUrl}>
-            View pricing
-          </Link>
         </article>
       ) : (
         <div className="workspace-panels">
