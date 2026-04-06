@@ -27,6 +27,32 @@ export interface CloudflareRuntimeContext {
   requestCf?: Record<string, unknown>;
 }
 
+function forwardedOrigin(request: Request) {
+  const forwarded = request.headers.get("forwarded");
+  if (forwarded) {
+    const firstHop = forwarded.split(",")[0]?.trim();
+    const protoMatch = firstHop?.match(/(?:^|;)proto=([^;]+)/i);
+    const hostMatch = firstHop?.match(/(?:^|;)host=([^;]+)/i);
+    const proto = protoMatch?.[1]?.trim().replace(/^"|"$/g, "");
+    const host = hostMatch?.[1]?.trim().replace(/^"|"$/g, "");
+
+    if (proto && host) {
+      return `${proto}://${host}`;
+    }
+  }
+
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  if (!forwardedHost) {
+    return null;
+  }
+
+  const forwardedProto =
+    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    new URL(request.url).protocol.replace(/:$/, "");
+
+  return `${forwardedProto}://${forwardedHost}`;
+}
+
 export function appOrigin(env: AppEnv, request: Request) {
-  return env.BETTER_AUTH_URL ?? new URL(request.url).origin;
+  return env.BETTER_AUTH_URL ?? forwardedOrigin(request) ?? new URL(request.url).origin;
 }
