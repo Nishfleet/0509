@@ -1,6 +1,6 @@
 import { extractLandingPageSignals } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
-import type { CaptureMethod, LandingPageSnapshotData } from "~/lib/types";
+import type { LandingPageSnapshotData } from "~/lib/types";
 
 type AppEnv = {
   LANDING_PAGE_ARTIFACTS?: R2Bucket;

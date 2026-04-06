@@ -7,6 +7,20 @@
   "observability": {
     "enabled": true
   },
+  "routes": [
+    {
+      "pattern": "0509.in",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.0509.in",
+      "custom_domain": true
+    },
+    {
+      "pattern": "api.0509.in",
+      "custom_domain": true
+    }
+  ],
   "ai": {
     "binding": "AI"
   },
@@ -17,19 +31,18 @@
     "APP_NAME": "0509",
     "APP_REGION_DEFAULT": "rest_of_world"
   },
-  // Configure these bindings after creating the Cloudflare resources:
-  // "d1_databases": [
-  //   {
-  //     "binding": "DB",
-  //     "database_name": "0509",
-  //     "database_id": "replace-with-d1-database-id"
-  //   }
-  // ],
-  // "r2_buckets": [
-  //   {
-  //     "binding": "LANDING_PAGE_ARTIFACTS",
-  //     "bucket_name": "0509-landing-page-artifacts"
-  //   }
-  // ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509",
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "LANDING_PAGE_ARTIFACTS",
+      "bucket_name": "0509-landing-page-artifacts"
+    }
+  ],
   // Add Browser Rendering and any workflows/queues bindings here when provisioned.
 }
