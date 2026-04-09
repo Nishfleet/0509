@@ -3,9 +3,9 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-checks_command="${AUTORESEARCH_CHECKS_COMMAND:-npm run lint}"
 install_command="${AUTORESEARCH_INSTALL_COMMAND:-npm ci --include=dev --no-audit --no-fund}"
 dependency_marker_dir="${AUTORESEARCH_DEPENDENCY_MARKER_DIR:-node_modules}"
+checks_command="${AUTORESEARCH_CHECKS_COMMAND:-npm run lint}"
 
 cd "$repo_root"
 

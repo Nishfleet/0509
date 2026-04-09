@@ -1,6 +1,9 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+type MockFormProps = Record<string, unknown> & { children?: ReactNode };
+type MockLinkProps = Record<string, unknown> & { children?: ReactNode; to?: string };
 
 function createContext() {
   return {
@@ -27,16 +30,27 @@ async function expectRedirect(
 }
 
 beforeEach(() => {
+  vi.doUnmock("~/components/auth-form");
+  vi.doUnmock("~/lib/auth.server");
   vi.resetModules();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.doUnmock("~/components/auth-form");
+  vi.doUnmock("~/lib/auth.server");
   vi.resetModules();
 });
 
 describe("auth signup loader", () => {
   it("defaults new signups to the onboarding flow", async () => {
+    vi.doMock("~/components/auth-form", () => ({
+      AuthForm: () => null,
+    }));
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+
     const { loader } = await import("~/routes/auth.signup");
 
     const result = await loader({
@@ -291,9 +305,9 @@ describe("onboarding route", () => {
 
       return {
         ...actual,
-        Form: ({ children, ...props }: Record<string, unknown>) =>
+        Form: ({ children, ...props }: MockFormProps) =>
           React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: Record<string, unknown>) =>
+        Link: ({ children, to, ...props }: MockLinkProps) =>
           React.createElement("a", { ...props, href: to }, children),
         useActionData: vi.fn().mockReturnValue({
           ok: false,

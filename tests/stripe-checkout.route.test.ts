@@ -1,8 +1,16 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import routes from "~/routes";
+
+type RouteTreeEntry = {
+  path?: string;
+  children?: RouteTreeEntry[];
+};
+
+type MockFormProps = Record<string, unknown> & { children?: ReactNode };
+type MockLinkProps = Record<string, unknown> & { children?: ReactNode; to?: string };
 
 function createContext() {
   return {
@@ -12,10 +20,10 @@ function createContext() {
   };
 }
 
-function flattenRoutePaths(entries: Array<{ path?: string; children?: unknown[] }>) {
+function flattenRoutePaths(entries: RouteTreeEntry[]): string[] {
   return entries.flatMap((entry) => [
     entry.path,
-    ...flattenRoutePaths((entry.children as Array<{ path?: string; children?: unknown[] }> | undefined) ?? []),
+    ...flattenRoutePaths(entry.children ?? []),
   ].filter((value): value is string => Boolean(value)));
 }
 
@@ -44,7 +52,7 @@ const session = {
 
 describe("billing route exposure", () => {
   it("does not expose checkout or Stripe webhook endpoints", () => {
-    const paths = flattenRoutePaths(routes as Array<{ path?: string; children?: unknown[] }>);
+    const paths = flattenRoutePaths(routes as RouteTreeEntry[]);
 
     expect(paths).not.toContain("api/checkout");
     expect(paths).not.toContain("api/webhooks/stripe");
@@ -80,9 +88,9 @@ describe("marketing route", () => {
 
       return {
         ...actual,
-        Form: ({ children, ...props }: Record<string, unknown>) =>
+        Form: ({ children, ...props }: MockFormProps) =>
           React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: Record<string, unknown>) =>
+        Link: ({ children, to, ...props }: MockLinkProps) =>
           React.createElement("a", { ...props, href: to }, children),
         useRouteLoaderData: vi.fn().mockReturnValue({
           pricingPlans: [

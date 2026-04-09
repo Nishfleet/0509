@@ -1,0 +1,36 @@
+# TRACKED ON PURPOSE. KEEP IN SYNC WITH THE CODEX APP SETTINGS PANE.
+version = 1
+name = "0509"
+
+[setup]
+script = "./scripts/codex/setup-worktree.sh"
+
+[[actions]]
+name = "Start Task Worktree"
+icon = "run"
+command = "./scripts/codex/start-task-worktree.sh"
+
+[[actions]]
+name = "Dev Server"
+icon = "run"
+command = "npm run dev"
+
+[[actions]]
+name = "Typecheck"
+icon = "run"
+command = "npm run typecheck"
+
+[[actions]]
+name = "Test"
+icon = "run"
+command = "npm run test"
+
+[[actions]]
+name = "Build"
+icon = "run"
+command = "npm run build"
+
+[[actions]]
+name = "Autoresearch Build"
+icon = "run"
+command = "./autoresearch.sh"
