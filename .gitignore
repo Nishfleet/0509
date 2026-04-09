@@ -21,3 +21,9 @@ yarn-error.log*
 .vercel
 *.tsbuildinfo
 worker-configuration.d.ts
+
+# Track only the shared Codex local-environment surface.
+.codex/*
+!.codex/environments/
+.codex/environments/*
+!.codex/environments/environment.toml
