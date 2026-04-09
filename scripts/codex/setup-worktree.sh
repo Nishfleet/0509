@@ -25,8 +25,24 @@ EOF
 
 warn_if_dirty_main
 
+bootstrap_shared_hooks() {
+  local primary_worktree shared_root bootstrap_script
+
+  primary_worktree="$(git worktree list --porcelain | awk '$1 == "worktree" { print substr($0, 10); exit }')"
+  if [ -z "$primary_worktree" ]; then
+    return
+  fi
+
+  shared_root="$(cd "$(dirname "$primary_worktree")" && pwd)"
+  bootstrap_script="$shared_root/scripts/bootstrap-shared-hooks.sh"
+  if [ -x "$bootstrap_script" ]; then
+    "$bootstrap_script" "$primary_worktree" >/dev/null
+  fi
+}
+
 configure_git_defaults() {
   git config worktree.guessRemote true
+  bootstrap_shared_hooks
 }
 
 configure_git_defaults
