@@ -11,6 +11,12 @@ icon = "run"
 command = "./scripts/codex/start-task-worktree.sh"
 
 [[actions]]
+name = "Normalize Base Checkout"
+icon = "run"
+command = "./scripts/codex/normalize-base-checkout.sh"
+
+
+[[actions]]
 name = "Dev Server"
 icon = "run"
 command = "npm run dev"

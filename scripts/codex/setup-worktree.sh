@@ -15,7 +15,8 @@ warn_if_dirty_main() {
         cat <<'EOF'
 Warning: this checkout is dirty on main/master.
 Create an isolated task workspace with ./scripts/codex/start-task-worktree.sh
-or move the current changes to a work/* branch before doing more write work here.
+or run ./scripts/codex/normalize-base-checkout.sh to move the current state into a linked worktree
+before doing more write work here.
 EOF
       fi
       ;;
@@ -24,14 +25,25 @@ EOF
 
 warn_if_dirty_main
 
+configure_git_defaults() {
+  git config worktree.guessRemote true
+}
+
+configure_git_defaults
+
 if ! command -v npm >/dev/null 2>&1; then
   echo "npm is required for 0509 worktrees." >&2
   exit 1
 fi
 
 if [ ! -d node_modules ]; then
-  echo "Installing npm dependencies..."
-  npm install
+  if [ -f package-lock.json ]; then
+    echo "Installing npm dependencies from package-lock.json..."
+    npm ci
+  else
+    echo "Installing npm dependencies..."
+    npm install
+  fi
 else
   echo "node_modules already present; skipping npm install."
 fi
