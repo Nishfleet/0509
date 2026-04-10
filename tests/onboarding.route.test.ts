@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function createContext() {
@@ -291,10 +292,10 @@ describe("onboarding route", () => {
 
       return {
         ...actual,
-        Form: ({ children, ...props }: Record<string, unknown>) =>
-          React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: Record<string, unknown>) =>
-          React.createElement("a", { ...props, href: to }, children),
+        Form: ({ children, ...props }: Record<string, unknown> & { children?: ReactNode }) =>
+          React.createElement("form", props, children as ReactNode),
+        Link: ({ children, to, ...props }: Record<string, unknown> & { children?: ReactNode; to?: string }) =>
+          React.createElement("a", { ...props, href: to }, children as ReactNode),
         useActionData: vi.fn().mockReturnValue({
           ok: false,
           error: "plan_limit_exceeded",

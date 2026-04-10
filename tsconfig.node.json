@@ -4,12 +4,15 @@
     "vite.config.ts",
     "tests/**/*",
     "app/lib/**/*",
+    "app/routes.ts",
+    "app/routes/**/*",
     "worker-configuration.d.ts"
   ],
   "compilerOptions": {
     "composite": true,
     "strict": true,
-    "ignoreDeprecations": "6.0",
+    "ignoreDeprecations": "5.0",
+    "jsx": "react-jsx",
     "types": ["node"],
     "lib": ["ES2022"],
     "target": "ES2022",

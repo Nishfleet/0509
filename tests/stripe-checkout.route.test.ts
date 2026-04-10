@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import routes from "~/routes";
@@ -12,7 +13,7 @@ function createContext() {
   };
 }
 
-function flattenRoutePaths(entries: Array<{ path?: string; children?: unknown[] }>) {
+function flattenRoutePaths(entries: Array<{ path?: string; children?: unknown[] }>): string[] {
   return entries.flatMap((entry) => [
     entry.path,
     ...flattenRoutePaths((entry.children as Array<{ path?: string; children?: unknown[] }> | undefined) ?? []),
@@ -80,10 +81,10 @@ describe("marketing route", () => {
 
       return {
         ...actual,
-        Form: ({ children, ...props }: Record<string, unknown>) =>
-          React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: Record<string, unknown>) =>
-          React.createElement("a", { ...props, href: to }, children),
+        Form: ({ children, ...props }: Record<string, unknown> & { children?: ReactNode }) =>
+          React.createElement("form", props, children as ReactNode),
+        Link: ({ children, to, ...props }: Record<string, unknown> & { children?: ReactNode; to?: string }) =>
+          React.createElement("a", { ...props, href: to }, children as ReactNode),
         useRouteLoaderData: vi.fn().mockReturnValue({
           pricingPlans: [
             {
