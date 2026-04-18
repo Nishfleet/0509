@@ -85,6 +85,7 @@ describe("runWatchlistManual OCR reuse", () => {
       getDigestByPeriod: vi.fn(),
       getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
       getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
       hydrateAdsWithPersistedCreatives,
       listActiveWatchlists: vi.fn(),
       listObservationsForRun: vi.fn().mockResolvedValue([]),

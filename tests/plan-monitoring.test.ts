@@ -30,6 +30,7 @@ describe("runWeeklyDigests", () => {
       getDigestByPeriod: vi.fn(),
       getRecentSuccessfulRuns: vi.fn(),
       getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
       hydrateAdsWithPersistedCreatives: vi.fn(),
       listActiveWatchlists: vi.fn(),
       listObservationsForRun: vi.fn(),

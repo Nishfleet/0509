@@ -5,6 +5,7 @@
     "vite.config.ts",
     "tests/**/*",
     "app/**/*",
+    "workers/**/*",
     "worker-configuration.d.ts"
   ],
   "compilerOptions": {

@@ -13,6 +13,7 @@ import {
   getDigestByPeriod,
   getRecentSuccessfulRuns,
   getSavedQuery,
+  getWatchlist,
   hydrateAdsWithPersistedCreatives,
   listActiveWatchlists,
   listObservationsForRun,
@@ -57,37 +58,94 @@ interface ScanPayload {
   pagesScanned: number;
 }
 
+export interface MonitoringWorkflowParams {
+  watchlistId: string;
+  triggerType: WatchlistRunRecord["triggerType"];
+  executionKey: string;
+  proofCaptureRequestKeyPrefix: string;
+  queuedAt: string;
+}
+
+interface RunScheduledMonitoringOptions {
+  includeDigests?: boolean;
+  cron?: string;
+  scheduledTime?: number;
+}
+
 export async function runScheduledMonitoring(
   env: AppEnv,
-  options: { includeDigests?: boolean } = {},
+  options: RunScheduledMonitoringOptions = {},
 ) {
   if (!env.DB) {
-    return { scanned: 0, digests: 0 };
+    return { queued: 0, duplicates: 0, inlineRuns: 0, digests: 0 };
   }
 
   const watchlists = await listActiveWatchlists(env);
-  const scanCache = new Map<string, Promise<ScanPayload>>();
+  let queued = 0;
+  let duplicates = 0;
+  let inlineRuns = 0;
 
-  for (const watchlist of watchlists) {
-    const query = await resolveWatchlistQuery(env, watchlist);
-    if (!query) {
-      continue;
+  const workflowBinding = getMonitoringWorkflowBinding(env);
+
+  if (workflowBinding) {
+    const scheduledTime = options.scheduledTime ?? Date.now();
+
+    for (const watchlist of watchlists) {
+      const executionKey = buildWatchlistExecutionIdempotencyKey({
+        watchlistId: watchlist.id,
+        triggerType: "scheduled",
+        scheduledTime,
+        cron: options.cron,
+      });
+
+      try {
+        await workflowBinding.create({
+          id: executionKey,
+          params: {
+            watchlistId: watchlist.id,
+            triggerType: "scheduled",
+            executionKey,
+            proofCaptureRequestKeyPrefix: `proof:${executionKey}`,
+            queuedAt: new Date(scheduledTime).toISOString(),
+          },
+        });
+        queued += 1;
+      } catch (error) {
+        if (isDuplicateWorkflowCreateError(error)) {
+          duplicates += 1;
+          continue;
+        }
+
+        throw error;
+      }
     }
+  } else {
+    const scanCache = new Map<string, Promise<ScanPayload>>();
 
-    if (!scanCache.has(watchlist.targetFingerprint)) {
-      scanCache.set(
-        watchlist.targetFingerprint,
-        performBoundedScan(env, query, DEFAULT_PAGE_BUDGET),
-      );
+    for (const watchlist of watchlists) {
+      const query = await resolveWatchlistQuery(env, watchlist);
+      if (!query) {
+        continue;
+      }
+
+      if (!scanCache.has(watchlist.targetFingerprint)) {
+        scanCache.set(
+          watchlist.targetFingerprint,
+          performBoundedScan(env, query, DEFAULT_PAGE_BUDGET),
+        );
+      }
+
+      await runWatchlist(env, watchlist, "scheduled", scanCache.get(watchlist.targetFingerprint)!);
+      inlineRuns += 1;
     }
-
-    await runWatchlist(env, watchlist, "scheduled", scanCache.get(watchlist.targetFingerprint)!);
   }
 
   const digests = options.includeDigests ? await runWeeklyDigests(env) : 0;
 
   return {
-    scanned: watchlists.length,
+    queued,
+    duplicates,
+    inlineRuns,
     digests,
   };
 }
@@ -112,6 +170,45 @@ export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord
       return performBoundedScan(env, query, DEFAULT_PAGE_BUDGET);
     })(),
   );
+}
+
+export async function runWatchlistWorkflowJob(
+  env: AppEnv,
+  params: MonitoringWorkflowParams,
+) {
+  const watchlist = await getWatchlist(env, params.watchlistId);
+  if (!watchlist || !watchlist.isActive) {
+    return {
+      status: "skipped" as const,
+      reason: "watchlist_unavailable",
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+    };
+  }
+
+  const query = await resolveWatchlistQuery(env, watchlist);
+  if (!query) {
+    return {
+      status: "skipped" as const,
+      reason: "watchlist_target_unresolved",
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+    };
+  }
+
+  const result = await runWatchlist(
+    env,
+    watchlist,
+    params.triggerType,
+    performBoundedScan(env, query, DEFAULT_PAGE_BUDGET),
+  );
+
+  return {
+    status: "completed" as const,
+    executionKey: params.executionKey,
+    proofCaptureRequestKeyPrefix: params.proofCaptureRequestKeyPrefix,
+    ...result,
+  };
 }
 
 export async function runWatchlist(
@@ -513,6 +610,66 @@ async function performBoundedScan(
     ads: hydratedAds,
     pagesScanned,
   };
+}
+
+export function buildWatchlistExecutionIdempotencyKey(input: {
+  watchlistId: string;
+  triggerType: WatchlistRunRecord["triggerType"];
+  scheduledTime?: number;
+  cron?: string | null;
+}) {
+  const slot = new Date(input.scheduledTime ?? Date.now())
+    .toISOString()
+    .replace(/[:.]/g, "-");
+  const cronFragment = normalizeIdempotencySegment(input.cron ?? "adhoc");
+  return `watchlist-run:${input.triggerType}:${input.watchlistId}:${cronFragment}:${slot}`;
+}
+
+export function buildProofCaptureRequestIdempotencyKey(input: {
+  watchlistId: string;
+  adId: string | null;
+  landingPageUrl: string | null;
+  eventType: WatchEventType;
+}) {
+  return [
+    "proof-request",
+    normalizeIdempotencySegment(input.watchlistId),
+    normalizeIdempotencySegment(input.eventType),
+    normalizeIdempotencySegment(input.adId ?? "none"),
+    normalizeIdempotencySegment(normalizeIdempotencyUrl(input.landingPageUrl) ?? "none"),
+  ].join(":");
+}
+
+function getMonitoringWorkflowBinding(env: AppEnv) {
+  return env.MONITORING_WORKFLOW as Workflow<MonitoringWorkflowParams> | undefined;
+}
+
+function isDuplicateWorkflowCreateError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /already exists|already been created|instance .* exists|duplicate/i.test(
+    error.message.toLowerCase(),
+  );
+}
+
+function normalizeIdempotencyUrl(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return value.trim().toLowerCase();
+  }
+}
+
+function normalizeIdempotencySegment(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 async function enrichAdForObservation(env: AppEnv, ad: AdRecord) {
