@@ -5,7 +5,6 @@ import { captureCreativeText } from "~/lib/creative-text.server";
 import {
   createAdObservation,
   createDigestRun,
-  createLandingPageSnapshot,
   createWatchEvent,
   createWatchlistRun,
   clearDigestItems,
@@ -26,7 +25,6 @@ import {
   addDigestItem,
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
-import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { MetaApiError, searchAds } from "~/lib/meta-api.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
@@ -230,28 +228,7 @@ export async function runWatchlist(
 
   try {
     const { ads, pagesScanned } = await scanPromise;
-
-    for (const ad of ads) {
-      const enrichedAd = await enrichAdForObservation(env, ad);
-      await upsertAd(env, enrichedAd);
-      const landingPageSnapshotId = enrichedAd.landingPage
-        ? await createLandingPageSnapshot(env, enrichedAd.landingPage)
-        : null;
-
-      await createAdObservation(env, {
-        adId: enrichedAd.metaAdId,
-        watchlistRunId: runId,
-        landingPageSnapshotId,
-        landingPageUrl: enrichedAd.landingPage?.canonicalUrl ?? enrichedAd.landingPageUrl,
-        seenAt: new Date().toISOString(),
-        isActive: enrichedAd.active,
-        metadata: {
-          advertiser: enrichedAd.advertiser,
-          hook: enrichedAd.hook,
-          offer: enrichedAd.offer,
-        },
-      });
-    }
+    await persistCheapScanObservations(env, runId, ads);
 
     const [currentObservations, baselineObservations, priorObservations] = await Promise.all([
       listObservationsForRun(env, runId),
@@ -259,25 +236,14 @@ export async function runWatchlist(
       priorRun ? listObservationsForRun(env, priorRun.id) : Promise.resolve([]),
     ]);
 
-    const eventDrafts = diffWatchlistObservations(
+    const eventDrafts = buildScanNativeEventDrafts(
       watchlist,
       currentObservations,
       baselineObservations,
       priorObservations,
     );
 
-    for (const draft of eventDrafts) {
-      await createWatchEvent(env, {
-        watchlistId: watchlist.id,
-        runId,
-        eventType: draft.eventType,
-        adId: draft.adId,
-        baselineFromRunId: baselineRun?.id ?? null,
-        title: draft.title,
-        summary: draft.summary,
-        metadata: draft.metadata,
-      });
-    }
+    await persistScanNativeEvents(env, watchlist.id, runId, baselineRun?.id ?? null, eventDrafts);
 
     await finishWatchlistRun(env, runId, {
       status: "succeeded",
@@ -373,23 +339,6 @@ export function diffWatchlistObservations(
         metadata: {
           from: baselineObservation.landing_page_url,
           to: observation.landing_page_url,
-        },
-      });
-    }
-
-    if (
-      observation.normalized_headline_hash &&
-      baselineObservation.normalized_headline_hash &&
-      observation.normalized_headline_hash !== baselineObservation.normalized_headline_hash
-    ) {
-      drafts.push({
-        eventType: "landing_page_headline_changed",
-        adId,
-        title: "Landing page headline changed",
-        summary: "The landing-page headline changed after normalization.",
-        metadata: {
-          from: baselineObservation.raw_headline,
-          to: observation.raw_headline,
         },
       });
     }
@@ -612,6 +561,61 @@ async function performBoundedScan(
   };
 }
 
+function buildScanNativeEventDrafts(
+  watchlist: WatchlistRecord,
+  current: ObservationRecord[],
+  baseline: ObservationRecord[],
+  prior: ObservationRecord[],
+) {
+  return diffWatchlistObservations(watchlist, current, baseline, prior);
+}
+
+async function persistCheapScanObservations(
+  env: AppEnv,
+  runId: string,
+  ads: AdRecord[],
+) {
+  for (const ad of ads) {
+    const enrichedAd = await enrichAdForCheapScan(env, ad);
+    await upsertAd(env, enrichedAd);
+
+    await createAdObservation(env, {
+      adId: enrichedAd.metaAdId,
+      watchlistRunId: runId,
+      landingPageSnapshotId: null,
+      landingPageUrl: enrichedAd.landingPageUrl,
+      seenAt: new Date().toISOString(),
+      isActive: enrichedAd.active,
+      metadata: {
+        advertiser: enrichedAd.advertiser,
+        hook: enrichedAd.hook,
+        offer: enrichedAd.offer,
+      },
+    });
+  }
+}
+
+async function persistScanNativeEvents(
+  env: AppEnv,
+  watchlistId: string,
+  runId: string,
+  baselineFromRunId: string | null,
+  drafts: WatchEventDraft[],
+) {
+  for (const draft of drafts) {
+    await createWatchEvent(env, {
+      watchlistId,
+      runId,
+      eventType: draft.eventType,
+      adId: draft.adId,
+      baselineFromRunId,
+      title: draft.title,
+      summary: draft.summary,
+      metadata: draft.metadata,
+    });
+  }
+}
+
 export function buildWatchlistExecutionIdempotencyKey(input: {
   watchlistId: string;
   triggerType: WatchlistRunRecord["triggerType"];
@@ -672,17 +676,14 @@ function normalizeIdempotencySegment(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-async function enrichAdForObservation(env: AppEnv, ad: AdRecord) {
-  const [capturedLandingPage, capturedCreativeText] = await Promise.all([
-    ad.landingPageUrl ? captureLandingPageSnapshot(env, ad.landingPageUrl) : Promise.resolve(null),
+async function enrichAdForCheapScan(env: AppEnv, ad: AdRecord) {
+  const capturedCreativeText =
     ad.source === "meta" && ad.adSnapshotUrl && !ad.creativeText
-      ? captureCreativeText(env, ad.adSnapshotUrl, ad)
-      : Promise.resolve(null),
-  ]);
+      ? await captureCreativeText(env, ad.adSnapshotUrl, ad)
+      : null;
 
   const nextAd = {
     ...ad,
-    landingPage: capturedLandingPage ?? ad.landingPage ?? null,
     creativeText: capturedCreativeText?.text ?? ad.creativeText ?? null,
     creativeTextCaptureMethod:
       capturedCreativeText?.captureMethod ?? ad.creativeTextCaptureMethod ?? null,

@@ -40,7 +40,7 @@ function createObservation(
 }
 
 describe("diffWatchlistObservations", () => {
-  it("emits ad_new and headline/url change events against the baseline", () => {
+  it("emits only scan-native ad_new and url change events against the baseline", () => {
     const events = diffWatchlistObservations(
       baseWatchlist,
       [
@@ -62,9 +62,24 @@ describe("diffWatchlistObservations", () => {
 
     expect(events.map((event) => event.eventType)).toEqual([
       "landing_page_url_changed",
-      "landing_page_headline_changed",
       "ad_new",
     ]);
+  });
+
+  it("does not emit headline-only changes during the cheap scan", () => {
+    const events = diffWatchlistObservations(
+      baseWatchlist,
+      [
+        observation({
+          normalized_headline_hash: "hash-b",
+          raw_headline: "New headline",
+        }),
+      ],
+      [observation()],
+      [],
+    );
+
+    expect(events).toEqual([]);
   });
 
   it("marks an ad inactive only after two consecutive missed runs", () => {
