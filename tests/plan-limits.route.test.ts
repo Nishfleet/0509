@@ -1,6 +1,9 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
 function createContext() {
   return {
@@ -226,10 +229,10 @@ describe("pricing CTA rendering", () => {
 
       return {
         ...actual,
-        Form: ({ children, ...props }: Record<string, unknown>) =>
+        Form: ({ children, ...props }: MockFormProps) =>
           React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: Record<string, unknown>) =>
-          React.createElement("a", { ...props, href: to }, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
         useActionData: vi.fn().mockReturnValue(overrides.actionData),
         useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
         useRouteLoaderData: vi.fn().mockReturnValue(overrides.rootData),

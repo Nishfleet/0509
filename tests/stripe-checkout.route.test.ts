@@ -1,8 +1,12 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import routes from "~/routes";
+
+type RouteEntry = { path?: string; children?: RouteEntry[] };
+type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
 function createContext() {
   return {
@@ -12,10 +16,10 @@ function createContext() {
   };
 }
 
-function flattenRoutePaths(entries: Array<{ path?: string; children?: unknown[] }>) {
+function flattenRoutePaths(entries: RouteEntry[]): string[] {
   return entries.flatMap((entry) => [
     entry.path,
-    ...flattenRoutePaths((entry.children as Array<{ path?: string; children?: unknown[] }> | undefined) ?? []),
+    ...flattenRoutePaths(entry.children ?? []),
   ].filter((value): value is string => Boolean(value)));
 }
 
@@ -44,7 +48,7 @@ const session = {
 
 describe("billing route exposure", () => {
   it("does not expose checkout or Stripe webhook endpoints", () => {
-    const paths = flattenRoutePaths(routes as Array<{ path?: string; children?: unknown[] }>);
+    const paths = flattenRoutePaths(routes as RouteEntry[]);
 
     expect(paths).not.toContain("api/checkout");
     expect(paths).not.toContain("api/webhooks/stripe");
@@ -80,10 +84,10 @@ describe("marketing route", () => {
 
       return {
         ...actual,
-        Form: ({ children, ...props }: Record<string, unknown>) =>
+        Form: ({ children, ...props }: MockFormProps) =>
           React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: Record<string, unknown>) =>
-          React.createElement("a", { ...props, href: to }, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
         useRouteLoaderData: vi.fn().mockReturnValue({
           pricingPlans: [
             {
