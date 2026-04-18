@@ -96,6 +96,7 @@ export type DeliveryAttemptStatus = (typeof DELIVERY_ATTEMPT_STATUSES)[number];
 export type DeliveryTargetValidationStatus = (typeof DELIVERY_TARGET_VALIDATION_STATUSES)[number];
 export type ProofRenderMode = (typeof PROOF_RENDER_MODES)[number];
 export type ProofDeviceProfile = (typeof PROOF_DEVICE_PROFILES)[number];
+export type NormalizedSensitivityMode = Exclude<SensitivityMode, "auto">;
 export type CaptureMethod = "landing_page_fetch" | "browser_render" | "manual";
 export type CreativeTextCaptureMethod = "ad_snapshot_fetch" | "browser_render" | "manual";
 export type DestinationType =
@@ -342,6 +343,11 @@ export interface ProofCaptureRecord {
   updatedAt: string;
 }
 
+export interface DeliveryQuietHours {
+  startHour: number;
+  endHour: number;
+}
+
 export interface WorkspaceDeliveryConfigRecord {
   id: string;
   userId: string;
@@ -350,7 +356,7 @@ export interface WorkspaceDeliveryConfigRecord {
   digestEnabled: boolean;
   emailEnabled: boolean;
   whatsappEnabled: boolean;
-  quietHours: Record<string, unknown> | null;
+  quietHours: DeliveryQuietHours | null;
   timezone: string | null;
   createdAt: string;
   updatedAt: string;
@@ -365,10 +371,20 @@ export interface WatchlistDeliveryConfigRecord {
   digestEnabled: boolean;
   emailEnabled: boolean;
   whatsappEnabled: boolean;
-  quietHours: Record<string, unknown> | null;
+  quietHours: DeliveryQuietHours | null;
   timezone: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EffectiveDeliveryConfig {
+  sensitivityMode: NormalizedSensitivityMode;
+  instantEnabled: boolean;
+  digestEnabled: boolean;
+  emailEnabled: boolean;
+  whatsappEnabled: boolean;
+  quietHours: DeliveryQuietHours | null;
+  timezone: string | null;
 }
 
 export interface DeliveryTargetRecord {

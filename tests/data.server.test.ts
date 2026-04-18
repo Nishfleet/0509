@@ -10,7 +10,9 @@ import {
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
   upsertAd,
+  upsertDeliveryTarget,
   upsertProofTarget,
+  upsertWatchlistDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
 } from "~/lib/data.server";
 
@@ -352,6 +354,92 @@ describe("upsertWorkspaceDeliveryConfig", () => {
       statement?.bindings.some(
         (binding) =>
           typeof binding === "string" && binding.includes("\"startHour\":22"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("upsertWatchlistDeliveryConfig", () => {
+  it("persists watchlist-specific delivery overrides", async () => {
+    const mock = createMockDb();
+
+    await upsertWatchlistDeliveryConfig(
+      { DB: mock.db } as never,
+      {
+        watchlistId: "watch-1",
+        userId: "user-1",
+        sensitivityMode: "quiet",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: true,
+        quietHours: {
+          startHour: 23,
+          endHour: 7,
+        },
+        timezone: "UTC",
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO watchlist_delivery_config"),
+    );
+
+    expect(statement?.bindings).toContain("watch-1");
+    expect(statement?.bindings).toContain("user-1");
+    expect(statement?.bindings).toContain("quiet");
+    expect(statement?.bindings).toContain(0);
+    expect(statement?.bindings).toContain(1);
+    expect(statement?.bindings).toContain("UTC");
+    expect(
+      statement?.bindings.some(
+        (binding) =>
+          typeof binding === "string" && binding.includes("\"startHour\":23"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("upsertDeliveryTarget", () => {
+  it("persists channel-specific validation and opt-in state", async () => {
+    const mock = createMockDb();
+
+    await upsertDeliveryTarget(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        watchlistId: "watch-1",
+        channel: "whatsapp",
+        targetValue: "+919999999999",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "manual_import",
+        optedInAt: "2026-04-18T10:00:00.000Z",
+        templateEligible: true,
+        providerIdentifier: "wa_123",
+        metadata: {
+          label: "Founder WhatsApp",
+        },
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO delivery_target"),
+    );
+
+    expect(statement?.bindings).toContain("user-1");
+    expect(statement?.bindings).toContain("watch-1");
+    expect(statement?.bindings).toContain("whatsapp");
+    expect(statement?.bindings).toContain("+919999999999");
+    expect(statement?.bindings).toContain("validated");
+    expect(statement?.bindings).toContain(1);
+    expect(statement?.bindings).toContain("manual_import");
+    expect(statement?.bindings).toContain("wa_123");
+    expect(
+      statement?.bindings.some(
+        (binding) =>
+          typeof binding === "string" && binding.includes("\"label\":\"Founder WhatsApp\""),
       ),
     ).toBe(true);
   });

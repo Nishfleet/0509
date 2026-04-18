@@ -16,6 +16,7 @@ import type {
   DeliveryAttemptRecord,
   DeliveryAttemptStatus,
   DeliveryChannel,
+  DeliveryQuietHours,
   DigestDeliveryRecord,
   DigestItemRecord,
   DigestRecord,
@@ -591,7 +592,7 @@ function toWorkspaceDeliveryConfigRecord(
     digestEnabled: row.digest_enabled === 1,
     emailEnabled: row.email_enabled === 1,
     whatsappEnabled: row.whatsapp_enabled === 1,
-    quietHours: parseJson<Record<string, unknown> | null>(row.quiet_hours_json, null),
+    quietHours: parseJson<DeliveryQuietHours | null>(row.quiet_hours_json, null),
     timezone: row.timezone,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -610,7 +611,7 @@ function toWatchlistDeliveryConfigRecord(
     digestEnabled: row.digest_enabled === 1,
     emailEnabled: row.email_enabled === 1,
     whatsappEnabled: row.whatsapp_enabled === 1,
-    quietHours: parseJson<Record<string, unknown> | null>(row.quiet_hours_json, null),
+    quietHours: parseJson<DeliveryQuietHours | null>(row.quiet_hours_json, null),
     timezone: row.timezone,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1829,7 +1830,7 @@ export async function upsertWorkspaceDeliveryConfig(
     digestEnabled: boolean;
     emailEnabled: boolean;
     whatsappEnabled: boolean;
-    quietHours?: Record<string, unknown> | null;
+    quietHours?: DeliveryQuietHours | null;
     timezone?: string | null;
   },
 ) {
@@ -1903,7 +1904,7 @@ export async function upsertWatchlistDeliveryConfig(
     digestEnabled: boolean;
     emailEnabled: boolean;
     whatsappEnabled: boolean;
-    quietHours?: Record<string, unknown> | null;
+    quietHours?: DeliveryQuietHours | null;
     timezone?: string | null;
   },
 ) {
