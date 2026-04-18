@@ -191,6 +191,10 @@ interface ProofCaptureRow {
   updated_at: string;
 }
 
+interface CountRow {
+  total: number;
+}
+
 interface WorkspaceDeliveryConfigRow {
   id: string;
   user_id: string;
@@ -1626,6 +1630,99 @@ export async function listProofCapturesForTarget(
       LIMIT ?
     `,
     proofTargetId,
+    limit,
+  );
+
+  return rows.map(toProofCaptureRecord);
+}
+
+export async function listSuccessfulProofCapturesForAd(
+  env: AppEnv,
+  watchlistId: string,
+  adId: string,
+  limit = 5,
+) {
+  const rows = await many<ProofCaptureRow>(
+    env,
+    `
+      SELECT proof_capture.*
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      WHERE proof_target.watchlist_id = ?
+        AND proof_target.ad_id = ?
+        AND proof_capture.status = 'succeeded'
+        AND proof_capture.succeeded_at IS NOT NULL
+      ORDER BY proof_capture.succeeded_at DESC
+      LIMIT ?
+    `,
+    watchlistId,
+    adId,
+    limit,
+  );
+
+  return rows.map(toProofCaptureRecord);
+}
+
+export async function countProofCapturesForWatchlistSince(
+  env: AppEnv,
+  watchlistId: string,
+  attemptedSince: string,
+) {
+  const row = await one<CountRow>(
+    env,
+    `
+      SELECT COUNT(*) AS total
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      WHERE proof_target.watchlist_id = ?
+        AND proof_capture.attempted_at >= ?
+    `,
+    watchlistId,
+    attemptedSince,
+  );
+
+  return row?.total ?? 0;
+}
+
+export async function countProofCapturesForWorkspaceSince(
+  env: AppEnv,
+  userId: string,
+  attemptedSince: string,
+) {
+  const row = await one<CountRow>(
+    env,
+    `
+      SELECT COUNT(*) AS total
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
+      WHERE watchlist.user_id = ?
+        AND proof_capture.attempted_at >= ?
+    `,
+    userId,
+    attemptedSince,
+  );
+
+  return row?.total ?? 0;
+}
+
+export async function listRecentWorkspaceProofCaptures(
+  env: AppEnv,
+  userId: string,
+  limit = 20,
+) {
+  const rows = await many<ProofCaptureRow>(
+    env,
+    `
+      SELECT proof_capture.*
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
+      WHERE watchlist.user_id = ?
+      ORDER BY proof_capture.attempted_at DESC
+      LIMIT ?
+    `,
+    userId,
     limit,
   );
 

@@ -4,10 +4,14 @@ import { buildAnalysisFields } from "~/lib/analysis.server";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import {
   createAdObservation,
+  createEventCandidate,
   createDigestRun,
+  createProofCapture,
   createWatchEvent,
   createWatchlistRun,
   clearDigestItems,
+  countProofCapturesForWatchlistSince,
+  countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
   getDigestByPeriod,
   getRecentSuccessfulRuns,
@@ -15,26 +19,45 @@ import {
   getWatchlist,
   hydrateAdsWithPersistedCreatives,
   listActiveWatchlists,
+  listProofCapturesForTarget,
+  listRecentWorkspaceProofCaptures,
+  listSuccessfulProofCapturesForAd,
   listObservationsForRun,
+  listWatchEvents,
   listWatchEventsBetween,
   listWatchlists,
   logMetaIntegrationStatus,
   touchWatchlistScanned,
+  upsertProofTarget,
   upsertAd,
   upsertDigestDelivery,
   addDigestItem,
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
+import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
+import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import { MetaApiError, searchAds } from "~/lib/meta-api.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
+import {
+  buildCanonicalPageIdentity,
+  buildProofTargetIdentity,
+  evaluateProofPolicy,
+} from "~/lib/proof-policy.server";
 import type {
   AdRecord,
   NormalizedSavedQuery,
+  ProofCaptureRecord,
   WatchEventType,
+  WatchEventRecord,
   WatchlistRecord,
   WatchlistRunRecord,
 } from "~/lib/types";
+import {
+  evaluateProofBackedEvents,
+  scoreWatchEventImportance,
+  selectLastSuccessfulProofCapture,
+} from "~/lib/watch-event-evaluator.server";
 
 const DEFAULT_PAGE_BUDGET = 2;
 const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
@@ -243,15 +266,23 @@ export async function runWatchlist(
       priorObservations,
     );
 
+    const recentWatchEvents = await listWatchEvents(env, watchlist.id, 80);
     await persistScanNativeEvents(env, watchlist.id, runId, baselineRun?.id ?? null, eventDrafts);
+    const proofEvents = await evaluateSelectiveProofCandidates(env, {
+      watchlist,
+      runId,
+      currentObservations,
+      scanNativeDrafts: eventDrafts,
+      recentWatchEvents,
+    });
 
     await finishWatchlistRun(env, runId, {
       status: "succeeded",
       pagesScanned,
       summary: {
         adsSeen: currentObservations.length,
-        events: eventDrafts.length,
-        eventTypes: summarizeEventTypes(eventDrafts),
+        events: eventDrafts.length + proofEvents.length,
+        eventTypes: summarizeEventTypes([...eventDrafts, ...proofEvents]),
       },
     });
     await touchWatchlistScanned(env, watchlist.id);
@@ -266,7 +297,7 @@ export async function runWatchlist(
       },
     });
 
-    return { runId, events: eventDrafts.length };
+    return { runId, events: eventDrafts.length + proofEvents.length };
   } catch (error) {
     const details = error instanceof Error ? error.message : "Unknown monitoring error.";
     const errorCode =
@@ -603,17 +634,305 @@ async function persistScanNativeEvents(
   drafts: WatchEventDraft[],
 ) {
   for (const draft of drafts) {
+    const importanceScore = getScanNativeImportanceScore(draft.eventType);
+    const candidateId = await createEventCandidate(env, {
+      watchlistId,
+      runId,
+      eventType: draft.eventType,
+      status: "confirmed",
+      importanceScore,
+      adId: draft.adId,
+      title: draft.title,
+      summary: draft.summary,
+      metadata: draft.metadata,
+      proofRequired: false,
+      lastEvaluatedAt: new Date().toISOString(),
+    });
+
     await createWatchEvent(env, {
       watchlistId,
       runId,
       eventType: draft.eventType,
       adId: draft.adId,
       baselineFromRunId,
+      candidateId,
+      importanceScore,
       title: draft.title,
       summary: draft.summary,
       metadata: draft.metadata,
     });
   }
+}
+
+async function evaluateSelectiveProofCandidates(
+  env: AppEnv,
+  input: {
+    watchlist: WatchlistRecord;
+    runId: string;
+    currentObservations: ObservationRecord[];
+    scanNativeDrafts: WatchEventDraft[];
+    recentWatchEvents: WatchEventRecord[];
+  },
+) {
+  const proofEvents: WatchEventDraft[] = [];
+  const eventTypesByAd = mapEventTypesByAdId(input.scanNativeDrafts);
+  const todayStart = startOfUtcDayIso();
+  const watchlistDailyAttempts = await countProofCapturesForWatchlistSince(
+    env,
+    input.watchlist.id,
+    todayStart,
+  );
+  const workspaceDailyAttempts = await countProofCapturesForWorkspaceSince(
+    env,
+    input.watchlist.userId,
+    todayStart,
+  );
+  const workspaceRecentAttempts = await listRecentWorkspaceProofCaptures(env, input.watchlist.userId, 20);
+  const proofAwareRecentEvents = [...input.recentWatchEvents];
+  let watchlistRunAttemptCount = 0;
+  let watchlistDailyAttemptCount = watchlistDailyAttempts;
+  let workspaceDailyAttemptCount = workspaceDailyAttempts;
+
+  for (const observation of input.currentObservations) {
+    if (!observation.landing_page_url || !observation.ad_id) {
+      continue;
+    }
+
+    const canonicalPageIdentity = buildCanonicalPageIdentity(observation.landing_page_url);
+    if (!canonicalPageIdentity) {
+      continue;
+    }
+
+    const proofTargetIdentity = buildProofTargetIdentity({
+      watchlistId: input.watchlist.id,
+      adId: observation.ad_id,
+      canonicalPageIdentity,
+    });
+    const proofTarget = await upsertProofTarget(env, {
+      watchlistId: input.watchlist.id,
+      adId: observation.ad_id,
+      landingPageUrl: observation.landing_page_url,
+      canonicalPageIdentity,
+      proofTargetIdentity,
+    });
+
+    if (!proofTarget) {
+      continue;
+    }
+
+    const targetCaptures = await listProofCapturesForTarget(env, proofTarget.id, 20);
+    const lastSuccessfulProof =
+      selectLastSuccessfulProofCapture(targetCaptures) ??
+      (await getLastSuccessfulProofForAd(env, input.watchlist.id, observation.ad_id));
+    const primaryTriggerEventType =
+      eventTypesByAd.get(observation.ad_id)?.[0] ?? "landing_page_headline_changed";
+    const proofRequestKey = buildProofCaptureRequestIdempotencyKey({
+      watchlistId: input.watchlist.id,
+      adId: observation.ad_id,
+      landingPageUrl: observation.landing_page_url,
+      eventType: primaryTriggerEventType,
+    });
+    const proofRequestDuplicate = targetCaptures.some((capture) => {
+      if (!capture.idempotencyKey || capture.idempotencyKey !== proofRequestKey) {
+        return false;
+      }
+
+      return (
+        Date.now() - new Date(capture.attemptedAt).getTime() <
+        6 * 60 * 60 * 1000
+      );
+    });
+    const recentFailureCountForTarget = targetCaptures.filter(
+      (capture) => capture.status === "failed",
+    ).length;
+    const proofDecision = evaluateProofPolicy({
+      sensitivityMode: "balanced",
+      triggerEventTypes: eventTypesByAd.get(observation.ad_id) ?? [],
+      lastSuccessfulProofAt: lastSuccessfulProof?.succeededAt ?? proofTarget.lastSuccessfulProofAt,
+      watchlistRunAttemptCount,
+      watchlistDailyAttemptCount,
+      workspaceDailyAttemptCount,
+      workspaceRecentAttempts,
+      activeCaptureCount: 0,
+      burstCount: input.currentObservations.length,
+      proofRequestDuplicate,
+      recentFailureCountForTarget,
+    });
+
+    if (!proofDecision.shouldCapture) {
+      if (proofDecision.skipReason) {
+        await createProofCapture(env, {
+          proofTargetId: proofTarget.id,
+          status: proofDecision.skipReason,
+          skipReason: proofDecision.skipReason,
+          failureReason: "Proof policy skipped the attempt.",
+          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+        });
+      }
+      continue;
+    }
+
+    watchlistRunAttemptCount += 1;
+    watchlistDailyAttemptCount += 1;
+    workspaceDailyAttemptCount += 1;
+    const snapshot = await captureLandingPageSnapshot(env, observation.landing_page_url);
+
+    if (!snapshot) {
+      await createProofCapture(env, {
+        proofTargetId: proofTarget.id,
+        status: "failed",
+        failureCode: "proof_capture_failed",
+        failureReason: "Landing page proof capture failed.",
+        extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+        idempotencyKey: proofRequestKey,
+      });
+      await upsertProofTarget(env, {
+        watchlistId: input.watchlist.id,
+        adId: observation.ad_id,
+        landingPageUrl: observation.landing_page_url,
+        canonicalPageIdentity,
+        proofTargetIdentity,
+        lastCaptureAttemptAt: new Date().toISOString(),
+        lastSuccessfulProofAt: proofTarget.lastSuccessfulProofAt,
+        lastSuccessfulCaptureId: proofTarget.lastSuccessfulCaptureId,
+      });
+      continue;
+    }
+
+    const extractedFields = snapshotToExtractedFields(snapshot);
+    const fieldConfidence = readSnapshotConfidence(snapshot);
+    const extractionWarnings = readSnapshotWarnings(snapshot);
+    const finalCanonicalPageIdentity =
+      buildCanonicalPageIdentity(snapshot.canonicalUrl) ?? canonicalPageIdentity;
+    const finalProofTargetIdentity = buildProofTargetIdentity({
+      watchlistId: input.watchlist.id,
+      adId: observation.ad_id,
+      canonicalPageIdentity: finalCanonicalPageIdentity,
+    });
+    const persistedProofTarget =
+      (await upsertProofTarget(env, {
+        watchlistId: input.watchlist.id,
+        adId: observation.ad_id,
+        landingPageUrl: snapshot.canonicalUrl,
+        canonicalPageIdentity: finalCanonicalPageIdentity,
+        proofTargetIdentity: finalProofTargetIdentity,
+      })) ?? proofTarget;
+    const proofCaptureId = await createProofCapture(env, {
+      proofTargetId: persistedProofTarget.id,
+      status: "succeeded",
+      screenshotArtifactKey: readSnapshotString(snapshot.metadata, "screenshotArtifactKey"),
+      htmlArtifactKey:
+        readSnapshotString(snapshot.metadata, "htmlArtifactKey") ?? snapshot.artifactKey ?? null,
+      extractedFields,
+      fieldConfidence,
+      extractionWarnings,
+      captureMetadata: snapshot.metadata ?? {},
+      renderMode: readSnapshotRenderMode(snapshot),
+      deviceProfile: readSnapshotDeviceProfile(snapshot),
+      extractorVersion:
+        readSnapshotString(snapshot.metadata, "extractorVersion") ??
+        LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      idempotencyKey: proofRequestKey,
+      attemptedAt: snapshot.capturedAt,
+      succeededAt: snapshot.capturedAt,
+    });
+    await upsertProofTarget(env, {
+      watchlistId: input.watchlist.id,
+      adId: observation.ad_id,
+      landingPageUrl: snapshot.canonicalUrl,
+      canonicalPageIdentity: finalCanonicalPageIdentity,
+      proofTargetIdentity: finalProofTargetIdentity,
+      lastCaptureAttemptAt: snapshot.capturedAt,
+      lastSuccessfulProofAt: snapshot.capturedAt,
+      lastSuccessfulCaptureId: proofCaptureId,
+    });
+
+    const evaluated = evaluateProofBackedEvents({
+      proofTargetIdentity: finalProofTargetIdentity,
+      currentProof: {
+        rawHeadline: snapshot.rawHeadline,
+        normalizedHeadline: snapshot.normalizedHeadline,
+        normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+        ctaText: snapshot.ctaText ?? null,
+        priceText: snapshot.priceText ?? null,
+        formPresent: snapshot.formPresent ?? null,
+      },
+      lastSuccessfulProof,
+      recentWatchEvents: proofAwareRecentEvents,
+      sensitivityMode: "balanced",
+      burstCount: input.currentObservations.length,
+    });
+
+    for (const event of evaluated.events) {
+      const candidateId = await createEventCandidate(env, {
+        watchlistId: input.watchlist.id,
+        runId: input.runId,
+        eventType: event.eventType,
+        status: event.status,
+        importanceScore: event.importanceScore,
+        adId: observation.ad_id,
+        proofTargetId: persistedProofTarget.id,
+        title: event.title,
+        summary: event.summary,
+        metadata: event.metadata,
+        proofRequired: true,
+        dedupeReason: event.dedupeReason,
+        lastEvaluatedAt: snapshot.capturedAt,
+      });
+
+      if (event.status !== "confirmed") {
+        continue;
+      }
+
+      await createWatchEvent(env, {
+        watchlistId: input.watchlist.id,
+        runId: input.runId,
+        eventType: event.eventType,
+        status: "confirmed",
+        importanceScore: event.importanceScore,
+        adId: observation.ad_id,
+        baselineFromRunId: null,
+        candidateId,
+        proofCaptureId,
+        title: event.title,
+        summary: event.summary,
+        metadata: event.metadata,
+        confirmedAt: snapshot.capturedAt,
+        lastEvaluatedAt: snapshot.capturedAt,
+      });
+
+      const createdEvent = {
+        id: `generated:${candidateId}`,
+        watchlistId: input.watchlist.id,
+        runId: input.runId,
+        eventType: event.eventType,
+        status: "confirmed" as const,
+        importanceScore: event.importanceScore,
+        adId: observation.ad_id,
+        baselineFromRunId: null,
+        candidateId,
+        proofCaptureId,
+        title: event.title,
+        summary: event.summary,
+        metadata: event.metadata,
+        confirmedAt: snapshot.capturedAt,
+        suppressedAt: null,
+        invalidatedAt: null,
+        lastEvaluatedAt: snapshot.capturedAt,
+        createdAt: snapshot.capturedAt,
+      };
+      proofAwareRecentEvents.push(createdEvent);
+      proofEvents.push({
+        eventType: event.eventType,
+        adId: observation.ad_id,
+        title: event.title,
+        summary: event.summary,
+        metadata: event.metadata,
+      });
+    }
+  }
+
+  return proofEvents;
 }
 
 export function buildWatchlistExecutionIdempotencyKey(input: {
@@ -733,6 +1052,120 @@ function summarizeEventTypes(drafts: WatchEventDraft[]) {
     accumulator[draft.eventType] = (accumulator[draft.eventType] ?? 0) + 1;
     return accumulator;
   }, {});
+}
+
+function mapEventTypesByAdId(drafts: WatchEventDraft[]) {
+  return drafts.reduce<Map<string, WatchEventType[]>>((accumulator, draft) => {
+    if (!draft.adId) {
+      return accumulator;
+    }
+
+    const next = accumulator.get(draft.adId) ?? [];
+    next.push(draft.eventType);
+    accumulator.set(draft.adId, next);
+    return accumulator;
+  }, new Map());
+}
+
+function getScanNativeImportanceScore(eventType: WatchEventType) {
+  switch (eventType) {
+    case "landing_page_url_changed":
+      return 85;
+    case "landing_page_headline_changed":
+      return 75;
+    case "ad_new":
+      return 65;
+    case "ad_inactive":
+      return 60;
+    case "landing_page_offer_changed":
+      return scoreWatchEventImportance({
+        eventType,
+        proofPresent: true,
+        sensitivityMode: "balanced",
+        burstCount: 1,
+        indiaSignals: false,
+      });
+    case "landing_page_cta_changed":
+    case "landing_page_form_changed":
+      return scoreWatchEventImportance({
+        eventType,
+        proofPresent: true,
+        sensitivityMode: "balanced",
+        burstCount: 1,
+        indiaSignals: false,
+      });
+    default:
+      return 50;
+  }
+}
+
+async function getLastSuccessfulProofForAd(
+  env: AppEnv,
+  watchlistId: string,
+  adId: string,
+): Promise<ProofCaptureRecord | null> {
+  const captures = await listSuccessfulProofCapturesForAd(env, watchlistId, adId, 5);
+  return selectLastSuccessfulProofCapture(captures);
+}
+
+function startOfUtcDayIso() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+}
+
+function snapshotToExtractedFields(snapshot: {
+  rawHeadline: string;
+  normalizedHeadline: string;
+  normalizedHeadlineHash: string;
+  ctaText?: string | null;
+  priceText?: string | null;
+  formPresent?: boolean | null;
+  canonicalUrl: string;
+}) {
+  return {
+    rawHeadline: snapshot.rawHeadline,
+    normalizedHeadline: snapshot.normalizedHeadline,
+    normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+    ctaText: snapshot.ctaText ?? null,
+    priceText: snapshot.priceText ?? null,
+    formPresent: snapshot.formPresent ?? null,
+    canonicalUrl: snapshot.canonicalUrl,
+  };
+}
+
+function readSnapshotString(metadata: Record<string, unknown> | undefined, key: string) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function readSnapshotConfidence(snapshot: { metadata?: Record<string, unknown> }) {
+  const confidence = snapshot.metadata?.extractedFieldConfidence;
+  if (!confidence || typeof confidence !== "object" || Array.isArray(confidence)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(confidence).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+  );
+}
+
+function readSnapshotWarnings(snapshot: { metadata?: Record<string, unknown> }) {
+  const warnings = snapshot.metadata?.extractionWarnings;
+  if (!Array.isArray(warnings)) {
+    return [];
+  }
+
+  return warnings.filter((warning): warning is string => typeof warning === "string");
+}
+
+function readSnapshotRenderMode(snapshot: { metadata?: Record<string, unknown> }) {
+  return readSnapshotString(snapshot.metadata, "renderMode") === "desktop" ? "desktop" : "mobile";
+}
+
+function readSnapshotDeviceProfile(snapshot: { metadata?: Record<string, unknown> }) {
+  return readSnapshotString(snapshot.metadata, "deviceProfile") === "desktop_default"
+    ? "desktop_default"
+    : "mobile_default";
 }
 
 function renderDigestHtml(input: {
