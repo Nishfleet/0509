@@ -22,6 +22,7 @@
     "resend": "^6.9.4"
   },
   "devDependencies": {
+    "@cloudflare/puppeteer": "1.1.0",
     "@cloudflare/vite-plugin": "^1.30.2",
     "@react-router/dev": "^7.13.2",
     "@types/node": "^24.6.1",
