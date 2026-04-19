@@ -256,7 +256,7 @@ describe("pricing CTA rendering", () => {
     const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
     expect(markup).not.toContain("View pricing");
-    expect(markup).toContain("Weekly digests are not available in the current workspace.");
+    expect(markup).toContain("Proof-backed digests are not available in the current workspace.");
   });
 
   it("does not render a pricing CTA on dashboard plan-limit errors", async () => {

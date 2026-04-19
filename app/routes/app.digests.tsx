@@ -70,7 +70,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: false,
       error: "plan_limit_exceeded",
-      message: "Weekly digests are not available in the current workspace.",
+      message: "Proof-backed digests are not available in the current workspace.",
     };
   }
 
@@ -144,10 +144,10 @@ export default function DigestsRoute() {
 
       {!data.canAccessDigests ? (
         <article className="content-card empty-state">
-          <p className="section-label">Weekly digests</p>
-          <h2>Weekly digests are not available in the current workspace.</h2>
+          <p className="section-label">Digest history</p>
+          <h2>Proof-backed digests are not available in the current workspace.</h2>
           <p>
-            Use search, watchlists, and collections to keep competitor research organized.
+            Use watchlists and collections to keep competitor monitoring organized until digests are unlocked.
           </p>
         </article>
       ) : (
@@ -156,7 +156,7 @@ export default function DigestsRoute() {
             <div className="card-header">
               <div>
                 <p className="section-label">Digests</p>
-                <h2>Weekly summaries</h2>
+                <h2>Digest history</h2>
               </div>
             </div>
 
@@ -170,7 +170,7 @@ export default function DigestsRoute() {
                   <div>
                     <h3>{new Date(digest.periodEnd).toLocaleDateString("en-IN")}</h3>
                     <p className="muted-text">
-                      {digest.items.length} changes across weekly monitoring
+                      {digest.items.length} proof-backed changes ready for review
                     </p>
                     <p className="muted-text">
                       {formatDigestSidebarStatus(
@@ -182,7 +182,7 @@ export default function DigestsRoute() {
                 </a>
               ))}
               {data.digests.length === 0 ? (
-                <p className="muted-text">Weekly digests will appear after your watchlists start generating events.</p>
+                <p className="muted-text">Digest history will appear after your watchlists start generating confirmed events.</p>
               ) : null}
             </div>
           </article>
@@ -264,7 +264,7 @@ export default function DigestsRoute() {
             ) : (
               <div className="empty-state">
                 <h2>No digest selected</h2>
-                <p>Once weekly delivery runs, the generated snapshots show up here.</p>
+                <p>Once proof-backed delivery runs, the generated snapshots show up here.</p>
               </div>
             )}
           </article>
@@ -306,7 +306,7 @@ function formatDigestSidebarStatus(
     if (legacyStatus === "failed") {
       return "Delivery failed";
     }
-    return "Pending delivery";
+    return "Waiting for delivery activity";
   }
 
   return attempts

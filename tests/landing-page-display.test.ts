@@ -3,8 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   formatAnalysisSourceLabel,
   formatCaptureMethodLabel,
+  formatConfidenceBandLabel,
+  formatDeliveryAttemptStatusLabel,
+  formatImportanceBandLabel,
   formatLandingPageSignalValue,
   formatLandingPageFormValue,
+  formatProofAgeLabel,
+  formatWhyAlertedLabel,
 } from "~/lib/landing-page-display";
 
 describe("formatCaptureMethodLabel", () => {
@@ -40,5 +45,71 @@ describe("formatAnalysisSourceLabel", () => {
     expect(formatAnalysisSourceLabel("browser_render")).toBe("Browser-rendered");
     expect(formatAnalysisSourceLabel("landing_page_fetch")).toBe("Fetch capture");
     expect(formatAnalysisSourceLabel("user")).toBe("Manual");
+  });
+});
+
+describe("formatImportanceBandLabel", () => {
+  it("maps scores to user-facing importance bands", () => {
+    expect(formatImportanceBandLabel(92)).toBe("High priority");
+    expect(formatImportanceBandLabel(74)).toBe("Medium priority");
+    expect(formatImportanceBandLabel(42)).toBe("Low priority");
+  });
+});
+
+describe("formatConfidenceBandLabel", () => {
+  it("maps proof field confidence into clear trust labels", () => {
+    expect(formatConfidenceBandLabel({ headline: 0.92, ctaText: 0.88 })).toBe("High confidence");
+    expect(formatConfidenceBandLabel({ headline: 0.72 })).toBe("Medium confidence");
+    expect(formatConfidenceBandLabel({ headline: 0.4 })).toBe("Low confidence");
+    expect(formatConfidenceBandLabel({})).toBe("Confidence pending");
+  });
+});
+
+describe("formatProofAgeLabel", () => {
+  it("shows relative proof freshness", () => {
+    expect(
+      formatProofAgeLabel("2026-04-18T11:00:00.000Z", {
+        now: "2026-04-18T12:00:00.000Z",
+      }),
+    ).toBe("1h ago");
+    expect(
+      formatProofAgeLabel("2026-04-16T12:00:00.000Z", {
+        now: "2026-04-18T12:00:00.000Z",
+      }),
+    ).toBe("2d ago");
+    expect(formatProofAgeLabel(null)).toBe("No proof yet");
+  });
+});
+
+describe("formatWhyAlertedLabel", () => {
+  it("explains why a confirmed proof-backed change surfaced", () => {
+    expect(
+      formatWhyAlertedLabel({
+        eventType: "landing_page_offer_changed",
+        status: "confirmed",
+        metadata: {
+          from: "Starting at ₹499",
+          to: "Starting at ₹799",
+        },
+      }),
+    ).toBe("Offer moved from Starting at ₹499 to Starting at ₹799.");
+  });
+
+  it("keeps provisional events clearly provisional", () => {
+    expect(
+      formatWhyAlertedLabel({
+        eventType: "landing_page_headline_changed",
+        status: "proof_pending",
+        metadata: {},
+      }),
+    ).toBe("Possible change detected. Proof is still running.");
+  });
+});
+
+describe("formatDeliveryAttemptStatusLabel", () => {
+  it("maps delivery statuses to concise trust wording", () => {
+    expect(formatDeliveryAttemptStatusLabel("sent", "email")).toBe("Delivered by email");
+    expect(formatDeliveryAttemptStatusLabel("failed", "whatsapp")).toBe("WhatsApp failed");
+    expect(formatDeliveryAttemptStatusLabel("skipped_due_to_quiet_hours", "email")).toBe("Deferred by quiet hours");
   });
 });

@@ -265,19 +265,24 @@ export async function runWatchlist(
 
     const recentWatchEvents = await listWatchEvents(env, watchlist.id, 80);
     await persistScanNativeEvents(env, watchlist.id, runId, baselineRun?.id ?? null, eventDrafts);
-    const proofEvents = await evaluateSelectiveProofCandidates(env, {
+    const proofEvaluation = await evaluateSelectiveProofCandidates(env, {
       watchlist,
       runId,
       currentObservations,
       scanNativeDrafts: eventDrafts,
       recentWatchEvents,
     });
+    const proofEvents = proofEvaluation.events;
 
     await finishWatchlistRun(env, runId, {
       status: "succeeded",
       pagesScanned,
       summary: {
         adsSeen: currentObservations.length,
+        candidatesDetected: eventDrafts.length + proofEvaluation.candidateCount,
+        proofsAttempted: proofEvaluation.proofAttemptCount,
+        eventsConfirmed: eventDrafts.length + proofEvaluation.confirmedEventCount,
+        sendsTriggered: 0,
         events: eventDrafts.length + proofEvents.length,
         eventTypes: summarizeEventTypes([...eventDrafts, ...proofEvents]),
       },
@@ -643,6 +648,9 @@ async function evaluateSelectiveProofCandidates(
   let watchlistRunAttemptCount = 0;
   let watchlistDailyAttemptCount = watchlistDailyAttempts;
   let workspaceDailyAttemptCount = workspaceDailyAttempts;
+  let candidateCount = 0;
+  let proofAttemptCount = 0;
+  let confirmedEventCount = 0;
 
   for (const observation of input.currentObservations) {
     if (!observation.landing_page_url || !observation.ad_id) {
@@ -726,6 +734,7 @@ async function evaluateSelectiveProofCandidates(
     watchlistRunAttemptCount += 1;
     watchlistDailyAttemptCount += 1;
     workspaceDailyAttemptCount += 1;
+    proofAttemptCount += 1;
     const snapshot = await captureLandingPageSnapshot(env, observation.landing_page_url);
 
     if (!snapshot) {
@@ -830,6 +839,7 @@ async function evaluateSelectiveProofCandidates(
         dedupeReason: event.dedupeReason,
         lastEvaluatedAt: snapshot.capturedAt,
       });
+      candidateCount += 1;
 
       if (event.status !== "confirmed") {
         continue;
@@ -851,6 +861,7 @@ async function evaluateSelectiveProofCandidates(
         confirmedAt: snapshot.capturedAt,
         lastEvaluatedAt: snapshot.capturedAt,
       });
+      confirmedEventCount += 1;
 
       const createdEvent = {
         id: `generated:${candidateId}`,
@@ -883,7 +894,12 @@ async function evaluateSelectiveProofCandidates(
     }
   }
 
-  return proofEvents;
+  return {
+    events: proofEvents,
+    candidateCount,
+    proofAttemptCount,
+    confirmedEventCount,
+  };
 }
 
 export function buildWatchlistExecutionIdempotencyKey(input: {

@@ -1664,6 +1664,28 @@ export async function listSuccessfulProofCapturesForAd(
   return rows.map(toProofCaptureRecord);
 }
 
+export async function listRecentProofCapturesForWatchlist(
+  env: AppEnv,
+  watchlistId: string,
+  limit = 12,
+) {
+  const rows = await many<ProofCaptureRow>(
+    env,
+    `
+      SELECT proof_capture.*
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      WHERE proof_target.watchlist_id = ?
+      ORDER BY proof_capture.attempted_at DESC
+      LIMIT ?
+    `,
+    watchlistId,
+    limit,
+  );
+
+  return rows.map(toProofCaptureRecord);
+}
+
 export async function countProofCapturesForWatchlistSince(
   env: AppEnv,
   watchlistId: string,

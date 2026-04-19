@@ -343,6 +343,22 @@ export interface ProofCaptureRecord {
   updatedAt: string;
 }
 
+export interface WatchlistProofSummary {
+  totalAttempts: number;
+  successfulAttempts: number;
+  failedAttempts: number;
+  skippedAttempts: number;
+  lastAttemptAt: string | null;
+  lastSuccessfulProofAt: string | null;
+}
+
+export interface WatchlistRunSummaryCounts {
+  candidatesDetected: number | null;
+  proofsAttempted: number | null;
+  eventsConfirmed: number | null;
+  sendsTriggered: number | null;
+}
+
 export interface DeliveryQuietHours {
   startHour: number;
   endHour: number;
