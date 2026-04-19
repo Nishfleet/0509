@@ -7,6 +7,16 @@
   "observability": {
     "enabled": true
   },
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "workflows": [
+    {
+      "name": "0509-monitoring",
+      "binding": "MONITORING_WORKFLOW",
+      "class_name": "MonitoringWorkflow"
+    }
+  ],
   "routes": [
     {
       "pattern": "0509.in",
@@ -31,6 +41,12 @@
     "APP_NAME": "0509",
     "APP_REGION_DEFAULT": "rest_of_world"
   },
+  // Secrets configured outside this file via `wrangler secret put`:
+  // - WHATSAPP_ACCESS_TOKEN
+  // - WHATSAPP_APP_SECRET
+  // - WHATSAPP_PHONE_NUMBER_ID
+  // - WHATSAPP_TEMPLATE_NAMESPACE
+  // - WHATSAPP_WEBHOOK_VERIFY_TOKEN
   "d1_databases": [
     {
       "binding": "DB",
@@ -43,6 +59,5 @@
       "binding": "LANDING_PAGE_ARTIFACTS",
       "bucket_name": "0509-landing-page-artifacts"
     }
-  ],
-  // Add Browser Rendering and any workflows/queues bindings here when provisioned.
+  ]
 }

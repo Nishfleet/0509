@@ -5,13 +5,23 @@ export interface AppEnv {
   APP_NAME?: string;
   APP_REGION_DEFAULT?: PricingRegion | string;
   BETTER_AUTH_SECRET?: string;
+  BROWSER?: Fetcher;
   BETTER_AUTH_URL?: string;
   DB?: D1Database;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   META_AD_LIBRARY_TOKEN?: string;
   META_AD_LIBRARY_API_VERSION?: string;
+  MONITORING_WORKFLOW?: Workflow;
+  OPS_ALLOWLIST_EMAILS?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
+  WHATSAPP_ACCESS_TOKEN?: string;
+  WHATSAPP_APP_SECRET?: string;
+  WHATSAPP_DELIVERY_ENABLED?: string;
+  WHATSAPP_GRAPH_API_VERSION?: string;
+  WHATSAPP_PHONE_NUMBER_ID?: string;
+  WHATSAPP_TEMPLATE_NAMESPACE?: string;
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN?: string;
 }
 
 export interface CloudflareRuntimeContext {
@@ -49,4 +59,48 @@ function forwardedOrigin(request: Request) {
 
 export function appOrigin(env: AppEnv, request: Request) {
   return env.BETTER_AUTH_URL ?? forwardedOrigin(request) ?? new URL(request.url).origin;
+}
+
+function parseEnvFlag(value: string | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+export function isResendConfigured(env: AppEnv) {
+  return Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL);
+}
+
+export function isWhatsAppProviderConfigured(env: AppEnv) {
+  return Boolean(env.WHATSAPP_ACCESS_TOKEN && env.WHATSAPP_PHONE_NUMBER_ID);
+}
+
+export function isCustomerWhatsAppReady(env: AppEnv) {
+  return isWhatsAppProviderConfigured(env) && parseEnvFlag(env.WHATSAPP_DELIVERY_ENABLED);
+}
+
+export function whatsappGraphApiVersion(env: AppEnv) {
+  return env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v23.0";
+}
+
+export function operatorAllowlistEmails(env: AppEnv) {
+  return (env.OPS_ALLOWLIST_EMAILS ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isOpsUserAllowed(env: AppEnv, email: string | null | undefined) {
+  if (!email) {
+    return false;
+  }
+
+  const allowlist = operatorAllowlistEmails(env);
+  if (allowlist.length === 0) {
+    return false;
+  }
+
+  return allowlist.includes(email.trim().toLowerCase());
 }

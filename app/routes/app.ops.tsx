@@ -1,0 +1,183 @@
+import type { ReactNode } from "react";
+import { useLoaderData } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
+
+export async function loader({ context, request }: LoaderFunctionArgs) {
+  const { requireSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const { isOpsUserAllowed } = await import("~/lib/env.server");
+  const env = getEnv(context);
+  const session = await requireSession(env, request);
+
+  if (!isOpsUserAllowed(env, session.user.email)) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+
+  const { getOperatorSnapshot } = await import("~/lib/data.server");
+  const snapshot = await getOperatorSnapshot(env);
+
+  return {
+    snapshot,
+  };
+}
+
+export default function OpsRoute() {
+  const { snapshot } = useLoaderData<typeof loader>();
+
+  return (
+    <section className="workspace-section-stack">
+      <div className="card-header">
+        <div>
+          <p className="section-label">Ops</p>
+          <h2>Proof-first delivery health</h2>
+        </div>
+      </div>
+
+      <div className="workspace-panels">
+        <article className="content-card narrow-card">
+          <div className="stack-list compact-list">
+            <MetricCard label="Failing runs" value={snapshot.summary.failingRuns} />
+            <MetricCard label="Stuck runs" value={snapshot.summary.stuckRuns} />
+            <MetricCard label="Failed proofs" value={snapshot.summary.failedProofs} />
+            <MetricCard label="Budget-blocked proofs" value={snapshot.summary.budgetBlockedProofs} />
+            <MetricCard label="Blocked targets" value={snapshot.summary.blockedTargets} />
+            <MetricCard label="Delivery failures" value={snapshot.summary.deliveryFailures} />
+            <MetricCard label="Degraded watchlists" value={snapshot.summary.degradedWatchlists} />
+          </div>
+        </article>
+
+        <article className="content-card">
+          <OpsSection
+            empty="No failed watchlist runs in the recent window."
+            items={snapshot.failingRuns}
+            title="What is failing"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">{item.watchlist_name}</p>
+                <h3>Run failed</h3>
+                <p>{item.error_message ?? item.error_code ?? "Unknown run failure."}</p>
+                <p className="muted-text">{formatTimestamp(item.started_at)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No stuck runs right now."
+            items={snapshot.stuckRuns}
+            title="What is stuck"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">{item.watchlist_name}</p>
+                <h3>{item.status === "running" ? "Run still running" : "Run still pending"}</h3>
+                <p className="muted-text">{formatTimestamp(item.started_at)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No proofs are currently paused by budget or rate limits."
+            items={snapshot.budgetBlockedProofs}
+            title="What is paused by budget"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">{item.watchlist_name}</p>
+                <h3>{item.status === "skipped_due_to_rate_limit" ? "Rate-limited proof" : "Budget-skipped proof"}</h3>
+                <p className="muted-text">{formatTimestamp(item.attempted_at)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No provider or template blockers found."
+            items={snapshot.blockedTargets}
+            title="What is blocked by provider or template state"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">{item.watchlist_name ?? "Workspace default"}</p>
+                <h3>{item.target_value}</h3>
+                <p>{describeBlockedTarget(item)}</p>
+                <p className="muted-text">{formatTimestamp(item.updated_at)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No degraded watchlists in the recent window."
+            items={snapshot.degradedWatchlists}
+            title="Which watchlists are degraded right now"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">{item.watchlist_name}</p>
+                <h3>{item.failed_runs + item.failed_proofs + item.failed_deliveries} recent issues</h3>
+                <p>
+                  {item.failed_runs} failed runs · {item.failed_proofs} failed proofs · {item.failed_deliveries} failed deliveries
+                </p>
+                <p className="muted-text">
+                  {item.last_seen_at ? formatTimestamp(item.last_seen_at) : "No recent timestamp"}
+                </p>
+              </>
+            )}
+          />
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function MetricCard(props: { label: string; value: number }) {
+  return (
+    <div className="list-card">
+      <p className="section-label">{props.label}</p>
+      <h3>{props.value}</h3>
+    </div>
+  );
+}
+
+function OpsSection<T>(props: {
+  title: string;
+  items: T[];
+  empty: string;
+  renderItem: (item: T) => ReactNode;
+}) {
+  return (
+    <section style={{ marginBottom: "1.5rem" }}>
+      <p className="section-label">{props.title}</p>
+      {props.items.length === 0 ? (
+        <p className="muted-text">{props.empty}</p>
+      ) : (
+        <ul className="event-list">
+          {props.items.map((item, index) => (
+            <li className="event-card" key={index}>
+              {props.renderItem(item)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function describeBlockedTarget(item: {
+  is_opted_in: number;
+  is_validated: number;
+  is_paused: number;
+  template_eligible: number;
+}) {
+  if (item.is_opted_in === 0) {
+    return "WhatsApp target is not opted in.";
+  }
+  if (item.is_validated === 0) {
+    return "WhatsApp target is not validated.";
+  }
+  if (item.is_paused === 1) {
+    return "WhatsApp target is paused.";
+  }
+  if (item.template_eligible === 0) {
+    return "WhatsApp target is not template-eligible.";
+  }
+  return "WhatsApp target is blocked for an operational reason.";
+}
+
+function formatTimestamp(value: string) {
+  return new Date(value).toLocaleString("en-IN");
+}

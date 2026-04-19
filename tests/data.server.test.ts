@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
-import { createLandingPageSnapshot, listAdsByIds, upsertAd } from "~/lib/data.server";
+import {
+  createDeliveryAttempt,
+  createLandingPageSnapshot,
+  createProofCapture,
+  createWatchEvent,
+  legacyWatchEventImportanceScore,
+  legacyWorkspaceDeliveryDefaults,
+  listAdsByIds,
+  upsertAd,
+  upsertDeliveryTarget,
+  upsertProofTarget,
+  upsertWatchlistDeliveryConfig,
+  upsertWorkspaceDeliveryConfig,
+} from "~/lib/data.server";
 
 function createMockDb() {
   const statements: Array<{ sql: string; bindings: unknown[] }> = [];
@@ -189,5 +202,391 @@ describe("listAdsByIds", () => {
     const result = await listAdsByIds({ DB: mock.db } as never, ["meta-boat-1"]);
 
     expect(result).toEqual([ad]);
+  });
+});
+
+describe("createWatchEvent", () => {
+  it("persists proof-first defaults alongside the existing watch-event fields", async () => {
+    const mock = createMockDb();
+
+    await createWatchEvent(
+      { DB: mock.db } as never,
+      {
+        watchlistId: "watch-1",
+        runId: "run-1",
+        eventType: "ad_new",
+        adId: "meta-boat-1",
+        baselineFromRunId: null,
+        title: "New ad detected",
+        summary: "A new ad entered the watchlist.",
+        metadata: {
+          advertiser: "boAt",
+        },
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO watch_event"),
+    );
+
+    expect(statement?.sql).toContain("status");
+    expect(statement?.sql).toContain("importance_score");
+    expect(statement?.sql).toContain("candidate_id");
+    expect(statement?.sql).toContain("proof_capture_id");
+    expect(statement?.sql).toContain("confirmed_at");
+    expect(statement?.sql).toContain("last_evaluated_at");
+    expect(statement?.bindings).toContain("confirmed");
+    expect(statement?.bindings).toContain(0);
+  });
+});
+
+describe("upsertProofTarget", () => {
+  it("persists canonical page identity separately from proof-target identity", async () => {
+    const mock = createMockDb();
+
+    await upsertProofTarget(
+      { DB: mock.db } as never,
+      {
+        watchlistId: "watch-1",
+        adId: "meta-boat-1",
+        landingPageUrl: "https://example.com/glow?utm_source=meta",
+        canonicalPageIdentity: "example.com/glow",
+        proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO proof_target"),
+    );
+
+    expect(statement?.bindings).toContain("example.com/glow");
+    expect(statement?.bindings).toContain("watch-1:meta-boat-1:example.com/glow");
+    expect(statement?.sql).toContain("canonical_page_identity");
+    expect(statement?.sql).toContain("proof_target_identity");
+  });
+});
+
+describe("createProofCapture", () => {
+  it("persists extractor metadata, render metadata, and idempotency fields", async () => {
+    const mock = createMockDb();
+
+    await createProofCapture(
+      { DB: mock.db } as never,
+      {
+        proofTargetId: "proof-target-1",
+        status: "succeeded",
+        screenshotArtifactKey: "proof/shot.webp",
+        htmlArtifactKey: "proof/page.html",
+        extractedFields: {
+          headline: "Glow Serum Sale",
+        },
+        fieldConfidence: {
+          headline: 0.97,
+        },
+        extractionWarnings: ["cookie_banner_present"],
+        captureMetadata: {
+          browser: "browser_run",
+        },
+        renderMode: "mobile",
+        deviceProfile: "mobile_default",
+        extractorVersion: "proof-extractor-v1",
+        idempotencyKey: "capture:watch-1:meta-boat-1",
+        attemptedAt: "2026-04-18T16:00:00.000Z",
+        succeededAt: "2026-04-18T16:00:05.000Z",
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO proof_capture"),
+    );
+
+    expect(statement?.sql).toContain("field_confidence_json");
+    expect(statement?.sql).toContain("extraction_warnings_json");
+    expect(statement?.sql).toContain("render_mode");
+    expect(statement?.sql).toContain("device_profile");
+    expect(statement?.sql).toContain("idempotency_key");
+    expect(
+      statement?.bindings.some(
+        (binding) =>
+          typeof binding === "string" && binding.includes("\"headline\":0.97"),
+      ),
+    ).toBe(true);
+    expect(
+      statement?.bindings.some(
+        (binding) =>
+          typeof binding === "string" && binding.includes("cookie_banner_present"),
+      ),
+    ).toBe(true);
+    expect(statement?.bindings).toContain("capture:watch-1:meta-boat-1");
+  });
+});
+
+describe("upsertWorkspaceDeliveryConfig", () => {
+  it("persists delivery sensitivity and channel toggles for a workspace", async () => {
+    const mock = createMockDb();
+
+    await upsertWorkspaceDeliveryConfig(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        quietHours: {
+          startHour: 22,
+          endHour: 8,
+        },
+        timezone: "Asia/Kolkata",
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO workspace_delivery_config"),
+    );
+
+    expect(statement?.bindings).toContain("user-1");
+    expect(statement?.bindings).toContain("balanced");
+    expect(statement?.bindings).toContain(0);
+    expect(statement?.bindings).toContain(1);
+    expect(
+      statement?.bindings.some(
+        (binding) =>
+          typeof binding === "string" && binding.includes("\"startHour\":22"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("upsertWatchlistDeliveryConfig", () => {
+  it("persists watchlist-specific delivery overrides", async () => {
+    const mock = createMockDb();
+
+    await upsertWatchlistDeliveryConfig(
+      { DB: mock.db } as never,
+      {
+        watchlistId: "watch-1",
+        userId: "user-1",
+        sensitivityMode: "quiet",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: true,
+        quietHours: {
+          startHour: 23,
+          endHour: 7,
+        },
+        timezone: "UTC",
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO watchlist_delivery_config"),
+    );
+
+    expect(statement?.bindings).toContain("watch-1");
+    expect(statement?.bindings).toContain("user-1");
+    expect(statement?.bindings).toContain("quiet");
+    expect(statement?.bindings).toContain(0);
+    expect(statement?.bindings).toContain(1);
+    expect(statement?.bindings).toContain("UTC");
+    expect(
+      statement?.bindings.some(
+        (binding) =>
+          typeof binding === "string" && binding.includes("\"startHour\":23"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("upsertDeliveryTarget", () => {
+  it("persists channel-specific validation and opt-in state", async () => {
+    const mock = createMockDb();
+
+    await upsertDeliveryTarget(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        watchlistId: "watch-1",
+        channel: "whatsapp",
+        targetValue: "+919999999999",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "manual_import",
+        optedInAt: "2026-04-18T10:00:00.000Z",
+        templateEligible: true,
+        providerIdentifier: "wa_123",
+        metadata: {
+          label: "Founder WhatsApp",
+        },
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO delivery_target"),
+    );
+
+    expect(statement?.bindings).toContain("user-1");
+    expect(statement?.bindings).toContain("watch-1");
+    expect(statement?.bindings).toContain("whatsapp");
+    expect(statement?.bindings).toContain("+919999999999");
+    expect(statement?.bindings).toContain("validated");
+    expect(statement?.bindings).toContain(1);
+    expect(statement?.bindings).toContain("manual_import");
+    expect(statement?.bindings).toContain("wa_123");
+    expect(
+      statement?.bindings.some(
+        (binding) =>
+          typeof binding === "string" && binding.includes("\"label\":\"Founder WhatsApp\""),
+      ),
+    ).toBe(true);
+  });
+
+  it("updates an existing workspace-level target instead of inserting duplicates", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  if (sql.includes("FROM delivery_target")) {
+                    return {
+                      results: [
+                        {
+                          id: "target-existing",
+                          user_id: "user-1",
+                          watchlist_id: null,
+                          channel: "email",
+                          target_value: "owner@example.com",
+                          validation_status: "validated",
+                          is_validated: 1,
+                          is_opted_in: 1,
+                          opt_in_source: "account_email",
+                          opted_in_at: "2026-04-18T00:00:00.000Z",
+                          is_paused: 0,
+                          paused_at: null,
+                          opted_out_at: null,
+                          template_eligible: 0,
+                          last_successful_delivery_at: null,
+                          last_successful_attempt_id: null,
+                          provider_identifier: null,
+                          metadata_json: "{}",
+                          created_at: "2026-04-18T00:00:00.000Z",
+                          updated_at: "2026-04-18T00:00:00.000Z",
+                        },
+                      ] as T[],
+                    };
+                  }
+
+                  return { results: [] as T[] };
+                },
+                async run() {
+                  return { success: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await upsertDeliveryTarget(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        watchlistId: null,
+        channel: "email",
+        targetValue: "owner@example.com",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+      },
+    );
+
+    expect(
+      statements.some(
+        (statement) =>
+          statement.sql.includes("FROM delivery_target") &&
+          statement.sql.includes("watchlist_id IS NULL"),
+      ),
+    ).toBe(true);
+    expect(
+      statements.some((statement) => statement.sql.includes("UPDATE delivery_target")),
+    ).toBe(true);
+    expect(
+      statements.some((statement) => statement.sql.includes("INSERT INTO delivery_target")),
+    ).toBe(false);
+  });
+});
+
+describe("createDeliveryAttempt", () => {
+  it("persists payload snapshots and webhook status on delivery attempts", async () => {
+    const mock = createMockDb();
+
+    await createDeliveryAttempt(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        watchlistId: "watch-1",
+        digestRunId: null,
+        deliveryTargetId: "target-1",
+        lane: "customer",
+        channel: "email",
+        provider: "resend",
+        status: "sent",
+        webhookStatus: "legacy_unknown",
+        targetValue: "owner@example.com",
+        providerMessageId: "msg_123",
+        providerStatusLastSeenAt: "2026-04-18T16:30:00.000Z",
+        eventIds: ["event-1", "event-2"],
+        payloadSnapshot: {
+          subject: "3 changes this week",
+        },
+        idempotencyKey: "delivery:user-1:digest-2026-04-18",
+        sentAt: "2026-04-18T16:29:00.000Z",
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO delivery_attempt"),
+    );
+
+    expect(statement?.sql).toContain("webhook_status");
+    expect(statement?.sql).toContain("payload_snapshot_json");
+    expect(statement?.sql).toContain("idempotency_key");
+    expect(statement?.bindings).toContain("legacy_unknown");
+    expect(statement?.bindings).toContain("delivery:user-1:digest-2026-04-18");
+    expect(
+      statement?.bindings.some(
+        (binding) =>
+          typeof binding === "string" && binding.includes("\"subject\":\"3 changes this week\""),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("legacy proof-first defaults", () => {
+  it("keeps legacy users digest-first and maps legacy event importance explicitly", () => {
+    expect(legacyWatchEventImportanceScore("landing_page_url_changed")).toBe(85);
+    expect(legacyWatchEventImportanceScore("landing_page_headline_changed")).toBe(75);
+    expect(legacyWatchEventImportanceScore("ad_new")).toBe(65);
+    expect(legacyWatchEventImportanceScore("ad_inactive")).toBe(60);
+
+    expect(
+      legacyWorkspaceDeliveryDefaults({
+        hasEmail: true,
+      }),
+    ).toEqual({
+      sensitivityMode: "balanced",
+      instantEnabled: false,
+      digestEnabled: true,
+      emailEnabled: true,
+      whatsappEnabled: false,
+    });
   });
 });

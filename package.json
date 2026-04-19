@@ -22,12 +22,13 @@
     "resend": "^6.9.4"
   },
   "devDependencies": {
+    "@cloudflare/puppeteer": "1.1.0",
     "@cloudflare/vite-plugin": "^1.30.2",
     "@react-router/dev": "^7.13.2",
     "@types/node": "^24.6.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "typescript": "^6.0.2",
+    "typescript": "5.9.2",
     "vite": "^7.1.7",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4",

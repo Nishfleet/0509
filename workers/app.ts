@@ -3,6 +3,7 @@
 import { createRequestHandler } from "react-router";
 
 import { runScheduledMonitoring } from "../app/lib/monitoring.server";
+export { MonitoringWorkflow } from "./monitoring-workflow";
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -70,6 +71,12 @@ export default {
   },
   async scheduled(controller, env, ctx) {
     const includeDigests = controller.cron.includes("MON");
-    ctx.waitUntil(runScheduledMonitoring(env, { includeDigests }));
+    ctx.waitUntil(
+      runScheduledMonitoring(env, {
+        includeDigests,
+        cron: controller.cron,
+        scheduledTime: controller.scheduledTime,
+      }),
+    );
   },
 } satisfies ExportedHandler<Env>;

@@ -1,10 +1,8 @@
+import { captureBrowserRunSnapshot } from "~/lib/browser-run.server";
+import type { AppEnv } from "~/lib/env.server";
 import { extractLandingPageSignals } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
 import type { LandingPageSnapshotData } from "~/lib/types";
-
-type AppEnv = {
-  LANDING_PAGE_ARTIFACTS?: R2Bucket;
-};
 
 const TITLE_REGEX = /<title[^>]*>([^<]+)<\/title>/i;
 const OG_TITLE_REGEX =
@@ -28,7 +26,7 @@ export async function captureLandingPageSnapshot(
     });
 
     if (!response.ok) {
-      return null;
+      return captureBrowserRunSnapshot(env, url);
     }
 
     const html = await response.text();
@@ -62,40 +60,8 @@ export async function captureLandingPageSnapshot(
       },
     };
   } catch {
-    const fallback = await maybeCaptureWithBrowserRender(url);
-    if (fallback) {
-      return fallback;
-    }
-
-    return null;
+    return captureBrowserRunSnapshot(env, url);
   }
-}
-
-async function maybeCaptureWithBrowserRender(url: string): Promise<LandingPageSnapshotData | null> {
-  const normalized = normalizeHeadline("Browser rendering required");
-  const metadata = {
-    reason: "fallback_not_configured",
-    url,
-  };
-
-  if (!url.includes("://")) {
-    return null;
-  }
-
-  return {
-    rawUrl: url,
-    canonicalUrl: url,
-    rawHeadline: normalized.raw,
-    normalizedHeadline: normalized.normalized,
-    normalizedHeadlineHash: normalized.hash,
-    ctaText: null,
-    priceText: null,
-    formPresent: null,
-    captureMethod: "browser_render",
-    capturedAt: new Date().toISOString(),
-    artifactKey: null,
-    metadata,
-  };
 }
 
 async function persistArtifact(bucket: R2Bucket, url: string, html: string) {

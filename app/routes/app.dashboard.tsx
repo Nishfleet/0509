@@ -119,11 +119,11 @@ export default function AppDashboardRoute() {
     <section className="workspace-section-stack">
       <div className="stats-grid">
         <article className="metric-card">
-          <span>Saved queries</span>
+          <span>Monitoring inputs</span>
           <strong>{data.savedQueries.length}</strong>
         </article>
         <article className="metric-card">
-          <span>Collections</span>
+          <span>Saved proof</span>
           <strong>{data.collections.length}</strong>
         </article>
         <article className="metric-card">
@@ -131,14 +131,14 @@ export default function AppDashboardRoute() {
           <strong>{data.watchlists.length}</strong>
         </article>
         <article className="metric-card">
-          <span>Weekly digests</span>
+          <span>Digest history</span>
           <strong>{data.digests.length}</strong>
         </article>
       </div>
 
       <article className="content-card status-card">
         <div>
-          <p className="section-label">Meta integration</p>
+          <p className="section-label">Monitoring status</p>
           <h2>{metaHeading}</h2>
         </div>
         <p>{data.metaStatus.summary}</p>
@@ -158,7 +158,7 @@ export default function AppDashboardRoute() {
           <div className="card-header">
             <div>
               <p className="section-label">Saved queries</p>
-              <h2>Reusable research inputs</h2>
+              <h2>Turn searches into monitoring inputs</h2>
             </div>
             <Link className="button button-secondary" to="/search">
               Save another search
@@ -167,7 +167,7 @@ export default function AppDashboardRoute() {
 
           {data.savedQueries.length === 0 ? (
             <p className="muted-text">
-              Save a search from the search flow to start building a repeatable monitoring loop.
+              Save a search from the search flow, then turn it into a watchlist that tells you what changed next.
             </p>
           ) : (
             <div className="stack-list">
@@ -195,7 +195,7 @@ export default function AppDashboardRoute() {
                       <input name="intent" type="hidden" value="track-saved-query" />
                       <input name="savedQueryId" type="hidden" value={query.id} />
                       <button className="button button-primary" type="submit">
-                        Track changes
+                        Watch for changes
                       </button>
                     </Form>
                   </div>
@@ -209,7 +209,7 @@ export default function AppDashboardRoute() {
           <div className="card-header">
             <div>
               <p className="section-label">Collections</p>
-              <h2>Saved findings</h2>
+              <h2>Keep the proof that matters</h2>
             </div>
             <Link className="button button-secondary" to="/app/collections">
               Open collections
@@ -225,7 +225,7 @@ export default function AppDashboardRoute() {
               </div>
             ))}
             {data.collections.length === 0 ? (
-              <p className="muted-text">Collections appear here as soon as you start saving ads.</p>
+              <p className="muted-text">Collections appear here as soon as you start saving proof, ads, and notes.</p>
             ) : null}
           </div>
         </article>
