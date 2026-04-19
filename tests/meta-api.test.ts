@@ -73,4 +73,29 @@ describe("searchAds", () => {
 
     expect(result.source).toBe("demo");
   });
+
+  it("uses ad_reached_countries for live Meta queries", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    await searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null, {
+      allowDemoFallback: false,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const requestUrl = new URL(String(fetchSpy.mock.calls[0]?.[0]));
+    expect(requestUrl.searchParams.get("ad_reached_countries")).toBe("IN");
+    expect(requestUrl.searchParams.get("country")).toBeNull();
+  });
 });

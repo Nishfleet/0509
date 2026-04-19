@@ -133,7 +133,7 @@ async function liveSearch(
     query.mode === "advertiser" ? "KEYWORD_EXACT_PHRASE" : "KEYWORD_UNORDERED",
   );
   params.set("ad_type", "ALL");
-  params.set("country", countryCode(query.filters.country));
+  params.set("ad_reached_countries", countryCode(query.filters.country));
 
   if (cursor) {
     params.set("after", cursor);
