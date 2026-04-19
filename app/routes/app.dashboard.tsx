@@ -110,9 +110,13 @@ export default function AppDashboardRoute() {
   const actionData = useActionData<typeof action>();
   const metaHeading =
     data.metaStatus.status === "healthy"
-      ? "Live and healthy"
+      ? "Commercial discovery live"
+      : data.metaStatus.status === "cache_only"
+        ? "Cache only"
       : data.metaStatus.status === "demo"
         ? "Demo mode"
+        : data.metaStatus.status === "disabled"
+          ? "Disabled"
         : "Needs attention";
 
   return (

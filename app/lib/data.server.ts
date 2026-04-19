@@ -1,4 +1,5 @@
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
+import { resolveCommercialAdSourceStatus } from "~/lib/ad-source.server";
 import {
   hydrateAdsWithPersistedCreatives as hydrateAdsWithPersistedCreativesImpl,
   listAdsByIds,
@@ -3111,13 +3112,13 @@ export async function getMetaIntegrationStatus(env: AppEnv) {
     `,
   );
 
+  const sourceStatus = await resolveCommercialAdSourceStatus(env);
+
   return {
-    status: row?.status ?? (env.META_AD_LIBRARY_TOKEN ? "healthy" : "demo"),
-    summary:
-      row?.summary ??
-      (env.META_AD_LIBRARY_TOKEN
-        ? "Meta Ad Library secret detected and ready for live searches."
-        : "No Meta Ad Library token is configured. The app is running in explicit demo mode."),
+    status: row?.status ?? sourceStatus.status,
+    provider: sourceStatus.provider,
+    mode: sourceStatus.mode,
+    summary: row?.summary ?? sourceStatus.summary,
     lastCheckedAt: row?.created_at ?? null,
     lastErrorCode: row?.error_code ?? null,
     lastErrorMessage: row?.error_message ?? null,
