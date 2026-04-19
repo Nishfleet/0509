@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
   createDeliveryAttempt,
+  createDiscoveryFetchLog,
   createLandingPageSnapshot,
   createProofCapture,
   createWatchEvent,
+  upsertDiscoveryCacheEntry,
+  upsertDiscoveryProviderState,
   legacyWatchEventImportanceScore,
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
@@ -237,6 +240,91 @@ describe("createWatchEvent", () => {
     expect(statement?.sql).toContain("last_evaluated_at");
     expect(statement?.bindings).toContain("confirmed");
     expect(statement?.bindings).toContain(0);
+  });
+});
+
+describe("discovery state persistence", () => {
+  it("persists discovery cache entries separately from meta integration logs", async () => {
+    const mock = createMockDb();
+
+    await upsertDiscoveryCacheEntry(
+      { DB: mock.db } as never,
+      {
+        cacheKey: "meta_library_browser:fp-nykaa:india",
+        provider: "meta_library_browser",
+        routeContext: "public_search",
+        queryFingerprint: "fp-nykaa",
+        country: "India",
+        cursor: null,
+        payload: {
+          ads: [],
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "miss",
+        },
+        fetchedAt: "2026-04-19T00:00:00.000Z",
+        expiresAt: "2026-04-19T00:15:00.000Z",
+        browserMsUsed: 2500,
+      },
+    );
+
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO discovery_cache_entry"),
+    );
+
+    expect(statement?.bindings).toContain("meta_library_browser:fp-nykaa:india");
+    expect(statement?.bindings).toContain("meta_library_browser");
+    expect(statement?.bindings).toContain("public_search");
+    expect(statement?.bindings).toContain(2500);
+  });
+
+  it("persists provider health and fetch logs for discovery runs", async () => {
+    const mock = createMockDb();
+
+    await createDiscoveryFetchLog(
+      { DB: mock.db } as never,
+      {
+        provider: "meta_library_browser",
+        routeContext: "watchlist_scan",
+        queryFingerprint: "fp-nykaa",
+        country: "India",
+        status: "failed",
+        cacheStatus: "miss",
+        failureClass: "selector_drift",
+        browserMsUsed: 0,
+        metadata: {
+          watchlistId: "watch-1",
+        },
+      },
+    );
+    await upsertDiscoveryProviderState(
+      { DB: mock.db } as never,
+      {
+        provider: "meta_library_browser",
+        status: "degraded",
+        failureClass: "selector_drift",
+        summary: "Commercial discovery degraded; serving cached results.",
+        lastSuccessAt: null,
+        lastFailureAt: "2026-04-19T00:00:00.000Z",
+        metadata: {
+          sampleSize: 20,
+        },
+      },
+    );
+
+    const fetchLogStatement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO discovery_fetch_log"),
+    );
+    const providerStateStatement = mock.statements.find((entry) =>
+      entry.sql.includes("INSERT INTO discovery_provider_state"),
+    );
+
+    expect(fetchLogStatement?.bindings).toContain("selector_drift");
+    expect(providerStateStatement?.bindings).toContain("degraded");
+    expect(providerStateStatement?.bindings).toContain(
+      "Commercial discovery degraded; serving cached results.",
+    );
   });
 });
 
