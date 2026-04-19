@@ -67,6 +67,24 @@ function watchEvent(overrides: Partial<WatchEventRecord> = {}): WatchEventRecord
   };
 }
 
+function launchGate(input: {
+  proofSuccessRate: number;
+  falsePositiveRate: number;
+  provisionalCustomerSendShare: number;
+  duplicateSendRate: number;
+  webhookLagP95Minutes: number;
+  reconciliationSuccessRate: number;
+}) {
+  return (
+    input.proofSuccessRate >= 0.8 &&
+    input.falsePositiveRate <= 0.05 &&
+    input.provisionalCustomerSendShare <= 0.02 &&
+    input.duplicateSendRate <= 0.001 &&
+    input.webhookLagP95Minutes <= 5 &&
+    input.reconciliationSuccessRate >= 0.98
+  );
+}
+
 describe("watch event evaluator", () => {
   it("selects the last successful proof instead of a newer failed attempt", () => {
     const selected = selectLastSuccessfulProofCapture([
@@ -124,6 +142,28 @@ describe("watch event evaluator", () => {
       proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
       currentProof: {
         rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+      },
+      lastSuccessfulProof: proofCapture(),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("invalidates low-confidence headline noise when the normalized proof is unchanged", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow   Serum Sale",
         normalizedHeadline: "glow serum sale",
         normalizedHeadlineHash: "hash-a",
         ctaText: "Shop now",
@@ -202,5 +242,29 @@ describe("watch event evaluator", () => {
       }),
     ]);
     expect(result.events[0]?.importanceScore).toBeGreaterThan(74);
+  });
+
+  it("keeps the customer rollout gate numeric and explicit", () => {
+    expect(
+      launchGate({
+        proofSuccessRate: 0.82,
+        falsePositiveRate: 0.04,
+        provisionalCustomerSendShare: 0.01,
+        duplicateSendRate: 0.0005,
+        webhookLagP95Minutes: 3,
+        reconciliationSuccessRate: 0.99,
+      }),
+    ).toBe(true);
+
+    expect(
+      launchGate({
+        proofSuccessRate: 0.79,
+        falsePositiveRate: 0.04,
+        provisionalCustomerSendShare: 0.01,
+        duplicateSendRate: 0.0005,
+        webhookLagP95Minutes: 3,
+        reconciliationSuccessRate: 0.99,
+      }),
+    ).toBe(false);
   });
 });

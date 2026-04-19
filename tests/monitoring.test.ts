@@ -82,6 +82,24 @@ describe("diffWatchlistObservations", () => {
     expect(events).toEqual([]);
   });
 
+  it("stays quiet for unchanged low-signal ads", () => {
+    const events = diffWatchlistObservations(
+      baseWatchlist,
+      [
+        observation({
+          ad_id: "ad-1",
+          landing_page_url: "https://example.com/landing",
+          normalized_headline_hash: "hash-a",
+          raw_headline: "Landing headline",
+        }),
+      ],
+      [observation()],
+      [observation()],
+    );
+
+    expect(events).toEqual([]);
+  });
+
   it("marks an ad inactive only after two consecutive missed runs", () => {
     const events = diffWatchlistObservations(
       baseWatchlist,
