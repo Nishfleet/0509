@@ -2131,6 +2131,19 @@ export async function listDeliveryAttempts(
   return rows.map(toDeliveryAttemptRecord);
 }
 
+export async function getDeliveryAttemptByIdempotencyKey(
+  env: AppEnv,
+  idempotencyKey: string,
+) {
+  const row = await one<DeliveryAttemptRow>(
+    env,
+    "SELECT * FROM delivery_attempt WHERE idempotency_key = ?",
+    idempotencyKey,
+  );
+
+  return row ? toDeliveryAttemptRecord(row) : null;
+}
+
 export async function createDeliveryAttempt(
   env: AppEnv,
   input: {

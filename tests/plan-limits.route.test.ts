@@ -151,6 +151,7 @@ describe("digest access", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       getDigest: vi.fn(),
+      listDeliveryAttempts: vi.fn(),
       listDigests,
     }));
 

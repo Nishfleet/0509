@@ -155,6 +155,133 @@ describe("runWeeklyDigests", () => {
     expect(result).toBe(0);
     expect(listWatchlists).not.toHaveBeenCalled();
   });
+
+  it("delegates digest delivery to the delivery module after building the digest run", async () => {
+    const addDigestItem = vi.fn();
+    const createDigestRun = vi.fn().mockResolvedValue("digest-1");
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem,
+      clearDigestItems: vi.fn(),
+      createAdObservation: vi.fn(),
+      createDigestRun,
+      createEventCandidate: vi.fn(),
+      createLandingPageSnapshot: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createWatchlistRun: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn(),
+      countProofCapturesForWorkspaceSince: vi.fn(),
+      finishWatchlistRun: vi.fn(),
+      getDigestByPeriod: vi.fn().mockResolvedValue(null),
+      getRecentSuccessfulRuns: vi.fn(),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn(),
+      listActiveWatchlists: vi.fn(),
+      listProofCapturesForTarget: vi.fn(),
+      listRecentWorkspaceProofCaptures: vi.fn(),
+      listSuccessfulProofCapturesForAd: vi.fn(),
+      listObservationsForRun: vi.fn(),
+      listWatchEvents: vi.fn(),
+      listWatchEventsBetween: vi.fn().mockResolvedValue([
+        {
+          id: "event-1",
+          eventType: "landing_page_offer_changed",
+          title: "Landing page offer changed",
+          summary: "Offer changed on the landing page.",
+        },
+      ]),
+      listWatchlists: vi.fn().mockResolvedValue([
+        {
+          id: "watch-1",
+          name: "boAt watch",
+        },
+      ]),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertProofTarget: vi.fn(),
+      upsertAd: vi.fn(),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      PLAN_LIMITS: {
+        free: { digests: false },
+        starter: { digests: true },
+        agency: { digests: true },
+      },
+    }));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+
+    const result = await runWeeklyDigests({
+      DB: {
+        prepare() {
+          return {
+            async all<T>() {
+              return {
+                results: [
+                  {
+                    id: "user-1",
+                    email: "owner@example.com",
+                    name: "Owner",
+                  },
+                ] as T[],
+              };
+            },
+            bind() {
+              return {
+                async all<T>() {
+                  return {
+                    results: [
+                      {
+                        id: "user-1",
+                        email: "owner@example.com",
+                        name: "Owner",
+                      },
+                    ] as T[],
+                  };
+                },
+              };
+            },
+          };
+        },
+      },
+    } as never);
+
+    expect(result).toBe(1);
+    expect(createDigestRun).toHaveBeenCalled();
+    expect(addDigestItem).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        watchlistId: "watch-1",
+        eventType: "landing_page_offer_changed",
+      }),
+    );
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        accountEmail: "owner@example.com",
+        digestRunId: "digest-1",
+        items: [
+          expect.objectContaining({
+            eventId: "event-1",
+            watchlistName: "boAt watch",
+          }),
+        ],
+      }),
+    );
+  });
 });
 
 describe("runWatchlistManual cheap scan path", () => {

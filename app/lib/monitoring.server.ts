@@ -1,5 +1,3 @@
-import { Resend } from "resend";
-
 import { buildAnalysisFields } from "~/lib/analysis.server";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import {
@@ -30,7 +28,6 @@ import {
   touchWatchlistScanned,
   upsertProofTarget,
   upsertAd,
-  upsertDigestDelivery,
   addDigestItem,
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -428,6 +425,7 @@ export async function runWeeklyDigests(env: AppEnv) {
 
     const watchlists = await listWatchlists(env, user.id);
     const digestItems: Array<{
+      eventId: string;
       watchlistId: string;
       watchlistName: string;
       eventType: WatchEventType;
@@ -445,6 +443,7 @@ export async function runWeeklyDigests(env: AppEnv) {
 
       for (const event of events) {
         digestItems.push({
+          eventId: event.id,
           watchlistId: watchlist.id,
           watchlistName: watchlist.name,
           eventType: event.eventType,
@@ -475,80 +474,32 @@ export async function runWeeklyDigests(env: AppEnv) {
     }
 
     for (const item of digestItems) {
-      await addDigestItem(env, digestRunId, item);
+      await addDigestItem(env, digestRunId, {
+        watchlistId: item.watchlistId,
+        watchlistName: item.watchlistName,
+        eventType: item.eventType,
+        title: item.title,
+        summary: item.summary,
+      });
     }
 
-    const delivery = await sendDigestEmail(env, {
-      email: user.email,
-      name: user.name,
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const delivery = await deliverWeeklyDigest(env, {
+      userId: user.id,
+      userName: user.name,
+      accountEmail: user.email,
+      digestRunId,
       periodStart: periodStartIso,
       periodEnd: periodEndIso,
       items: digestItems,
+      lane: "customer",
     });
-
-    await upsertDigestDelivery(env, digestRunId, delivery);
-    digestsSent += 1;
+    if (delivery.attempts > 0) {
+      digestsSent += 1;
+    }
   }
 
   return digestsSent;
-}
-
-async function sendDigestEmail(
-  env: AppEnv,
-  input: {
-    email: string;
-    name: string;
-    periodStart: string;
-    periodEnd: string;
-    items: Array<{
-      watchlistId: string;
-      watchlistName: string;
-      eventType: WatchEventType;
-      title: string;
-      summary: string;
-    }>;
-  },
-) {
-  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) {
-    return {
-      provider: "resend" as const,
-      status: "failed" as const,
-      recipientEmail: input.email,
-      externalMessageId: null,
-      errorMessage: "Resend is not configured for this environment.",
-      deliveredAt: null,
-    };
-  }
-
-  const resend = new Resend(env.RESEND_API_KEY);
-  const html = renderDigestHtml(input);
-  const response = await resend.emails.send({
-    from: env.RESEND_FROM_EMAIL,
-    to: input.email,
-    subject: `0509 weekly digest: ${input.items.length} competitor changes`,
-    html,
-    text: stripHtml(html),
-  });
-
-  if (response.error) {
-    return {
-      provider: "resend" as const,
-      status: "failed" as const,
-      recipientEmail: input.email,
-      externalMessageId: null,
-      errorMessage: response.error.message,
-      deliveredAt: null,
-    };
-  }
-
-  return {
-    provider: "resend" as const,
-    status: "sent" as const,
-    recipientEmail: input.email,
-    externalMessageId: response.data?.id ?? null,
-    errorMessage: null,
-    deliveredAt: new Date().toISOString(),
-  };
 }
 
 async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {
@@ -1166,74 +1117,6 @@ function readSnapshotDeviceProfile(snapshot: { metadata?: Record<string, unknown
   return readSnapshotString(snapshot.metadata, "deviceProfile") === "desktop_default"
     ? "desktop_default"
     : "mobile_default";
-}
-
-function renderDigestHtml(input: {
-  name: string;
-  periodStart: string;
-  periodEnd: string;
-  items: Array<{
-    watchlistId: string;
-    watchlistName: string;
-    eventType: WatchEventType;
-    title: string;
-    summary: string;
-  }>;
-}) {
-  const groups = input.items.reduce<Record<string, typeof input.items>>((accumulator, item) => {
-    accumulator[item.watchlistName] = accumulator[item.watchlistName] ?? [];
-    accumulator[item.watchlistName].push(item);
-    return accumulator;
-  }, {});
-
-  return `
-    <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">0509 weekly digest</p>
-      <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, here’s what changed on Meta.</h1>
-      <p style="margin: 0 0 24px; color: #475467;">
-        ${formatDate(input.periodStart)} to ${formatDate(input.periodEnd)} · ${input.items.length} tracked changes
-      </p>
-      ${Object.entries(groups)
-        .map(
-          ([watchlistName, items]) => `
-            <section style="margin-bottom: 24px; padding: 18px; border: 1px solid #d7dce5; border-radius: 18px;">
-              <h2 style="margin: 0 0 12px; font-size: 18px;">${escapeHtml(watchlistName)}</h2>
-              <ul style="margin: 0; padding-left: 18px;">
-                ${items
-                  .map(
-                    (item) => `
-                      <li style="margin-bottom: 10px;">
-                        <strong>${escapeHtml(item.title)}</strong><br />
-                        <span style="color: #475467;">${escapeHtml(item.summary)}</span>
-                      </li>
-                    `,
-                  )
-                  .join("")}
-              </ul>
-            </section>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-IN", {
-    dateStyle: "medium",
-  }).format(new Date(value));
-}
-
-function stripHtml(value: string) {
-  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function safeMetadata(observation: ObservationRecord) {

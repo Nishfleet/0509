@@ -15,6 +15,8 @@ export interface AppEnv {
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   WHATSAPP_ACCESS_TOKEN?: string;
+  WHATSAPP_DELIVERY_ENABLED?: string;
+  WHATSAPP_GRAPH_API_VERSION?: string;
   WHATSAPP_PHONE_NUMBER_ID?: string;
   WHATSAPP_TEMPLATE_NAMESPACE?: string;
   WHATSAPP_WEBHOOK_VERIFY_TOKEN?: string;
@@ -55,4 +57,28 @@ function forwardedOrigin(request: Request) {
 
 export function appOrigin(env: AppEnv, request: Request) {
   return env.BETTER_AUTH_URL ?? forwardedOrigin(request) ?? new URL(request.url).origin;
+}
+
+function parseEnvFlag(value: string | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+export function isResendConfigured(env: AppEnv) {
+  return Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL);
+}
+
+export function isWhatsAppProviderConfigured(env: AppEnv) {
+  return Boolean(env.WHATSAPP_ACCESS_TOKEN && env.WHATSAPP_PHONE_NUMBER_ID);
+}
+
+export function isCustomerWhatsAppReady(env: AppEnv) {
+  return isWhatsAppProviderConfigured(env) && parseEnvFlag(env.WHATSAPP_DELIVERY_ENABLED);
+}
+
+export function whatsappGraphApiVersion(env: AppEnv) {
+  return env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v23.0";
 }
