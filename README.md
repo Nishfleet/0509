@@ -47,7 +47,7 @@ Important bindings and secrets:
 ## Notes
 
 - For the current Cloudflare Worker app, use `.dev.vars` for local secrets. A starter template now lives at `.dev.vars.example`.
-- `.env.local` and `.env.local.example` are legacy Next.js/Vercel env files for the old `src/` runtime and should not be treated as the source of truth for the Worker app.
+- `.env.local` and `.env.local.example` are legacy Next.js env files for the old `src/` runtime and should not be treated as the source of truth for the Worker app.
 - If `META_AD_LIBRARY_TOKEN` is missing, the public search flow can still operate in explicit demo mode.
 - Cloudflare cost policy: stay on the included/free tier by default. Do not enable usage-billed add-ons just because they exist; enable them when the missing capability is materially hampering product quality, operations, or launch.
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
