@@ -25,6 +25,10 @@ export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
 }
 
+type GlobalEnvCarrier = typeof globalThis & {
+  __APP_REQUEST_ENV__?: AppEnv;
+};
+
 let runtimeWorkerEnvPromise: Promise<AppEnv | null> | null = null;
 
 function normalizeSearchResponse(
@@ -85,6 +89,19 @@ async function getRuntimeWorkerEnv(): Promise<AppEnv | null> {
 async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
   if (hasBrowserBinding(env.BROWSER)) {
     return env;
+  }
+
+  const requestEnv = (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ ?? null;
+  if (hasBrowserBinding(requestEnv?.BROWSER)) {
+    return {
+      ...requestEnv,
+      ...env,
+      AI: env.AI ?? requestEnv.AI,
+      BROWSER: requestEnv.BROWSER,
+      DB: env.DB ?? requestEnv.DB,
+      LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? requestEnv.LANDING_PAGE_ARTIFACTS,
+      MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? requestEnv.MONITORING_WORKFLOW,
+    };
   }
 
   const runtimeEnv = await getRuntimeWorkerEnv();

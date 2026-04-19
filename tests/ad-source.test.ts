@@ -9,6 +9,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unmock("cloudflare:workers");
+  delete (globalThis as { __APP_REQUEST_ENV__?: unknown }).__APP_REQUEST_ENV__;
   vi.resetModules();
 });
 
@@ -69,6 +70,22 @@ describe("resolveCommercialAdSourceStatus", () => {
       mode: "live",
     });
     expect(status.summary).toContain("Browser Run");
+  });
+
+  it("prefers the per-request worker env when the route context drops Browser Run", async () => {
+    (globalThis as { __APP_REQUEST_ENV__?: unknown }).__APP_REQUEST_ENV__ = {
+      BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+    };
+
+    const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
+
+    const status = await resolveCommercialAdSourceStatus({} as never);
+
+    expect(status).toMatchObject({
+      status: "degraded",
+      provider: "meta_library_browser",
+      mode: "live",
+    });
   });
 });
 
@@ -185,6 +202,55 @@ describe("searchAdsViaSourceResolver", () => {
         },
       }),
     );
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: vi.fn(),
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {} as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(result.provider).toBe("meta_library_browser");
+    expect(result.source).toBe("meta_library_browser");
+  });
+
+  it("uses Browser Run from the per-request worker env when route context omits it", async () => {
+    const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+    });
+
+    (globalThis as { __APP_REQUEST_ENV__?: unknown }).__APP_REQUEST_ENV__ = {
+      BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+    };
     vi.doMock("~/lib/meta-library-browser.server", () => ({
       searchMetaLibraryByBrowser: browserSearch,
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
