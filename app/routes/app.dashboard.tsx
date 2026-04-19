@@ -11,9 +11,9 @@ import { buildSearchParams } from "~/lib/normalize";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
+  const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
-    getMetaIntegrationStatus,
     listCollections,
     listDigests,
     listSavedQueries,
@@ -26,7 +26,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listCollections(env, session.user.id),
     listWatchlists(env, session.user.id),
     listDigests(env, session.user.id),
-    getMetaIntegrationStatus(env),
+    resolveCommercialAdSourceStatus(env),
   ]);
 
   return {

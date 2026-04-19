@@ -1,5 +1,4 @@
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
-import { resolveCommercialAdSourceStatus } from "~/lib/ad-source.server";
 import {
   hydrateAdsWithPersistedCreatives as hydrateAdsWithPersistedCreativesImpl,
   listAdsByIds,
@@ -366,6 +365,19 @@ interface DiscoveryProviderStateRow {
   last_failure_at: string | null;
   metadata_json: string | null;
   updated_at: string;
+}
+
+interface DiscoveryFetchLogRow {
+  id: string;
+  provider: AdDiscoveryProvider;
+  route_context: DiscoveryRouteContext;
+  country: string;
+  status: DiscoveryFetchStatus;
+  cache_status: DiscoveryCacheStatus;
+  failure_class: DiscoveryFailureClass | null;
+  browser_ms_used: number | null;
+  metadata_json: string | null;
+  created_at: string;
 }
 
 export function nowIso() {
@@ -2297,6 +2309,8 @@ export async function getOperatorSnapshot(env: AppEnv) {
     blockedTargets,
     deliveryFailures,
     degradedWatchlists,
+    discoveryFailures,
+    discoveryProviders,
   ] = await Promise.all([
     many<{
       run_id: string;
@@ -2521,6 +2535,57 @@ export async function getOperatorSnapshot(env: AppEnv) {
       recentWindowIso,
       recentWindowIso,
     ),
+    many<{
+      fetchId: string;
+      provider: AdDiscoveryProvider;
+      routeContext: DiscoveryRouteContext;
+      country: string;
+      cacheStatus: DiscoveryCacheStatus;
+      failureClass: DiscoveryFailureClass | null;
+      browserMsUsed: number | null;
+      createdAt: string;
+    }>(
+      env,
+      `
+        SELECT
+          discovery_fetch_log.id AS fetchId,
+          discovery_fetch_log.provider,
+          discovery_fetch_log.route_context AS routeContext,
+          discovery_fetch_log.country,
+          discovery_fetch_log.cache_status AS cacheStatus,
+          discovery_fetch_log.failure_class AS failureClass,
+          discovery_fetch_log.browser_ms_used AS browserMsUsed,
+          discovery_fetch_log.created_at AS createdAt
+        FROM discovery_fetch_log
+        WHERE discovery_fetch_log.status = 'failed'
+        ORDER BY discovery_fetch_log.created_at DESC
+        LIMIT 8
+      `,
+    ),
+    many<{
+      provider: AdDiscoveryProvider;
+      status: MetaIntegrationStatus["status"];
+      failureClass: DiscoveryFailureClass | null;
+      summary: string;
+      lastSuccessAt: string | null;
+      lastFailureAt: string | null;
+      updatedAt: string;
+    }>(
+      env,
+      `
+        SELECT
+          provider,
+          status,
+          failure_class AS failureClass,
+          summary,
+          last_success_at AS lastSuccessAt,
+          last_failure_at AS lastFailureAt,
+          updated_at AS updatedAt
+        FROM discovery_provider_state
+        ORDER BY updated_at DESC
+        LIMIT 4
+      `,
+    ),
   ]);
 
   return {
@@ -2532,6 +2597,10 @@ export async function getOperatorSnapshot(env: AppEnv) {
       blockedTargets: blockedTargets.length,
       deliveryFailures: deliveryFailures.length,
       degradedWatchlists: degradedWatchlists.length,
+      discoveryFailures: discoveryFailures.length,
+      discoveryProvidersNeedingAttention: discoveryProviders.filter(
+        (provider) => provider.status !== "healthy",
+      ).length,
     },
     failingRuns,
     stuckRuns,
@@ -2540,6 +2609,8 @@ export async function getOperatorSnapshot(env: AppEnv) {
     blockedTargets,
     deliveryFailures,
     degradedWatchlists,
+    discoveryFailures,
+    discoveryProviders,
   };
 }
 
@@ -3144,13 +3215,15 @@ export async function getMetaIntegrationStatus(env: AppEnv) {
     `,
   );
 
-  const sourceStatus = await resolveCommercialAdSourceStatus(env);
-
   return {
-    status: row?.status ?? sourceStatus.status,
-    provider: sourceStatus.provider,
-    mode: sourceStatus.mode,
-    summary: row?.summary ?? sourceStatus.summary,
+    status: row?.status ?? (env.META_AD_LIBRARY_TOKEN ? "degraded" : "demo"),
+    provider: env.META_AD_LIBRARY_TOKEN ? "meta_api" : "demo",
+    mode: env.META_AD_LIBRARY_TOKEN ? "diagnostic" : "demo",
+    summary:
+      row?.summary ??
+      (env.META_AD_LIBRARY_TOKEN
+        ? "Official Meta API is configured for limited diagnostic use."
+        : "No live commercial discovery provider is configured. The app is running in explicit demo mode."),
     lastCheckedAt: row?.created_at ?? null,
     lastErrorCode: row?.error_code ?? null,
     lastErrorMessage: row?.error_message ?? null,

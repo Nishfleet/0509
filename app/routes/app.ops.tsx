@@ -29,7 +29,7 @@ export default function OpsRoute() {
       <div className="card-header">
         <div>
           <p className="section-label">Ops</p>
-          <h2>Proof-first delivery health</h2>
+          <h2>Proof-first monitoring health</h2>
         </div>
       </div>
 
@@ -43,6 +43,11 @@ export default function OpsRoute() {
             <MetricCard label="Blocked targets" value={snapshot.summary.blockedTargets} />
             <MetricCard label="Delivery failures" value={snapshot.summary.deliveryFailures} />
             <MetricCard label="Degraded watchlists" value={snapshot.summary.degradedWatchlists} />
+            <MetricCard label="Discovery failures" value={snapshot.summary.discoveryFailures} />
+            <MetricCard
+              label="Discovery providers needing attention"
+              value={snapshot.summary.discoveryProvidersNeedingAttention}
+            />
           </div>
         </article>
 
@@ -75,6 +80,19 @@ export default function OpsRoute() {
           />
 
           <OpsSection
+            empty="No failed proofs in the recent window."
+            items={snapshot.failedProofs}
+            title="Recent proof failures"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">{item.watchlist_name}</p>
+                <h3>{item.failure_reason ?? item.failure_code ?? "Proof capture failed"}</h3>
+                <p className="muted-text">{formatTimestamp(item.attempted_at)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
             empty="No proofs are currently paused by budget or rate limits."
             items={snapshot.budgetBlockedProofs}
             title="What is paused by budget"
@@ -83,6 +101,22 @@ export default function OpsRoute() {
                 <p className="section-label">{item.watchlist_name}</p>
                 <h3>{item.status === "skipped_due_to_rate_limit" ? "Rate-limited proof" : "Budget-skipped proof"}</h3>
                 <p className="muted-text">{formatTimestamp(item.attempted_at)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No recent delivery failures."
+            items={snapshot.deliveryFailures}
+            title="Recent delivery failures"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">{item.watchlist_name ?? "Workspace default"}</p>
+                <h3>
+                  {item.channel === "email" ? "Email" : "WhatsApp"} to {item.target_value}
+                </h3>
+                <p>{item.error_message ?? "Delivery failed for an operational reason."}</p>
+                <p className="muted-text">{formatTimestamp(item.created_at)}</p>
               </>
             )}
           />
@@ -97,6 +131,46 @@ export default function OpsRoute() {
                 <h3>{item.target_value}</h3>
                 <p>{describeBlockedTarget(item)}</p>
                 <p className="muted-text">{formatTimestamp(item.updated_at)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No recent discovery failures."
+            items={snapshot.discoveryFailures}
+            title="Recent discovery failures"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">
+                  {formatDiscoveryProvider(item.provider)} · {formatRouteContext(item.routeContext)}
+                </p>
+                <h3>{item.failureClass ?? "Discovery failure"}</h3>
+                <p>
+                  {item.country}
+                  {item.cacheStatus === "stale" ? " · stale cache served" : " · no fresh cache"}
+                </p>
+                <p className="muted-text">{formatTimestamp(item.createdAt)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No discovery provider state recorded yet."
+            items={snapshot.discoveryProviders}
+            title="Commercial discovery provider state"
+            renderItem={(item) => (
+              <>
+                <p className="section-label">{formatDiscoveryProvider(item.provider)}</p>
+                <h3>{formatDiscoveryStatus(item.status)}</h3>
+                <p>{item.summary}</p>
+                <p className="muted-text">
+                  {item.lastFailureAt
+                    ? `Last failure ${formatTimestamp(item.lastFailureAt)}`
+                    : item.lastSuccessAt
+                      ? `Last success ${formatTimestamp(item.lastSuccessAt)}`
+                      : `Last updated ${formatTimestamp(item.updatedAt)}`}
+                  {item.failureClass ? ` · ${item.failureClass}` : ""}
+                </p>
               </>
             )}
           />
@@ -180,4 +254,25 @@ function describeBlockedTarget(item: {
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("en-IN");
+}
+
+function formatDiscoveryProvider(provider: string) {
+  if (provider === "meta_library_browser") {
+    return "Browser Run";
+  }
+  if (provider === "meta_api") {
+    return "Meta API";
+  }
+  if (provider === "demo") {
+    return "Demo";
+  }
+  return provider;
+}
+
+function formatRouteContext(routeContext: string) {
+  return routeContext === "watchlist_scan" ? "Watchlist scan" : "Public search";
+}
+
+function formatDiscoveryStatus(status: string) {
+  return status.replaceAll("_", " ");
 }
