@@ -222,7 +222,7 @@ export default function SearchRoute() {
             </div>
             <div className="source-pill">
               Source:{" "}
-              {data.result.cacheStatus && data.result.cacheStatus !== "none"
+              {data.result.cacheStatus === "hit" || data.result.cacheStatus === "stale"
                 ? "Cached live results"
                 : data.result.source === "meta_library_browser"
                   ? "Live Ad Library capture"
