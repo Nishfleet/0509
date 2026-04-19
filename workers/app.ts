@@ -5,6 +5,10 @@ import { createRequestHandler } from "react-router";
 import { runScheduledMonitoring } from "../app/lib/monitoring.server";
 export { MonitoringWorkflow } from "./monitoring-workflow";
 
+type GlobalEnvCarrier = typeof globalThis & {
+  __APP_REQUEST_ENV__?: Env;
+};
+
 declare module "react-router" {
   export interface AppLoadContext {
     cloudflare: {
@@ -60,6 +64,7 @@ function withSecurityHeaders(response: Response): Response {
 
 export default {
   async fetch(request, env, ctx) {
+    (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
     const response = await requestHandler(request, {
       cloudflare: {
         env,
