@@ -43,6 +43,7 @@
   },
   // Secrets configured outside this file via `wrangler secret put`:
   // - WHATSAPP_ACCESS_TOKEN
+  // - WHATSAPP_APP_SECRET
   // - WHATSAPP_PHONE_NUMBER_ID
   // - WHATSAPP_TEMPLATE_NAMESPACE
   // - WHATSAPP_WEBHOOK_VERIFY_TOKEN

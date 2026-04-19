@@ -87,6 +87,11 @@ describe("runWatchlistManual OCR reuse", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
       getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
       getSavedQuery: vi.fn(),
       getWatchlist: vi.fn(),
@@ -107,6 +112,12 @@ describe("runWatchlistManual OCR reuse", () => {
     }));
     vi.doMock("~/lib/landing-pages.server", () => ({
       captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        attempts: 0,
+        channels: [],
+      }),
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
       MetaApiError: class MetaApiError extends Error {},

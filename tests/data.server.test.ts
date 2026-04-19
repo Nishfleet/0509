@@ -443,6 +443,85 @@ describe("upsertDeliveryTarget", () => {
       ),
     ).toBe(true);
   });
+
+  it("updates an existing workspace-level target instead of inserting duplicates", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  if (sql.includes("FROM delivery_target")) {
+                    return {
+                      results: [
+                        {
+                          id: "target-existing",
+                          user_id: "user-1",
+                          watchlist_id: null,
+                          channel: "email",
+                          target_value: "owner@example.com",
+                          validation_status: "validated",
+                          is_validated: 1,
+                          is_opted_in: 1,
+                          opt_in_source: "account_email",
+                          opted_in_at: "2026-04-18T00:00:00.000Z",
+                          is_paused: 0,
+                          paused_at: null,
+                          opted_out_at: null,
+                          template_eligible: 0,
+                          last_successful_delivery_at: null,
+                          last_successful_attempt_id: null,
+                          provider_identifier: null,
+                          metadata_json: "{}",
+                          created_at: "2026-04-18T00:00:00.000Z",
+                          updated_at: "2026-04-18T00:00:00.000Z",
+                        },
+                      ] as T[],
+                    };
+                  }
+
+                  return { results: [] as T[] };
+                },
+                async run() {
+                  return { success: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await upsertDeliveryTarget(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        watchlistId: null,
+        channel: "email",
+        targetValue: "owner@example.com",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+      },
+    );
+
+    expect(
+      statements.some(
+        (statement) =>
+          statement.sql.includes("FROM delivery_target") &&
+          statement.sql.includes("watchlist_id IS NULL"),
+      ),
+    ).toBe(true);
+    expect(
+      statements.some((statement) => statement.sql.includes("UPDATE delivery_target")),
+    ).toBe(true);
+    expect(
+      statements.some((statement) => statement.sql.includes("INSERT INTO delivery_target")),
+    ).toBe(false);
+  });
 });
 
 describe("createDeliveryAttempt", () => {

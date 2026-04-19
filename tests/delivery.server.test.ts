@@ -393,3 +393,137 @@ describe("deliverWeeklyDigest", () => {
     expect(resendSend).not.toHaveBeenCalled();
   });
 });
+
+describe("deliverWatchlistAlerts", () => {
+  it("sends instant alerts for confirmed watch events that clear delivery policy", async () => {
+    const resendSend = vi.fn().mockResolvedValue({
+      data: {
+        id: "msg_instant_1",
+      },
+      error: null,
+    });
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-instant-1");
+    const upsertDeliveryTarget = vi.fn().mockResolvedValue({
+      id: "email-target-1",
+      userId: "user-1",
+      watchlistId: null,
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-04-19T00:00:00.000Z",
+    });
+
+    vi.doMock("resend", () => ({
+      Resend: vi.fn(() => ({
+        emails: {
+          send: resendSend,
+        },
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: true,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+    const result = await deliverWatchlistAlerts(
+      {
+        RESEND_API_KEY: "re_123",
+        RESEND_FROM_EMAIL: "alerts@0509.in",
+        BETTER_AUTH_URL: "https://0509.in",
+      } as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        watchlist: {
+          id: "watch-1",
+          userId: "user-1",
+          name: "Nykaa watch",
+        },
+        events: [
+          {
+            id: "event-1",
+            watchlistId: "watch-1",
+            runId: "run-1",
+            eventType: "landing_page_url_changed",
+            status: "confirmed",
+            importanceScore: 90,
+            adId: "meta-1",
+            baselineFromRunId: null,
+            candidateId: "candidate-1",
+            proofCaptureId: "proof-1",
+            title: "Landing page URL changed",
+            summary: "The landing page URL changed.",
+            metadata: {
+              advertiser: "Nykaa",
+            },
+            confirmedAt: "2026-04-19T00:00:00.000Z",
+            suppressedAt: null,
+            invalidatedAt: null,
+            lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+            createdAt: "2026-04-19T00:00:00.000Z",
+          },
+        ],
+      },
+    );
+
+    expect(result).toEqual({
+      attempts: 1,
+      channels: ["email"],
+    });
+    expect(resendSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "owner@example.com",
+        subject: "Landing page URL changed: Nykaa",
+      }),
+    );
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        channel: "email",
+        lane: "customer",
+        watchlistId: "watch-1",
+        targetValue: "owner@example.com",
+        eventIds: ["event-1"],
+      }),
+    );
+  });
+});

@@ -14,6 +14,7 @@ import {
   getDigestByPeriod,
   getRecentSuccessfulRuns,
   getSavedQuery,
+  getUserDeliveryProfile,
   getWatchlist,
   hydrateAdsWithPersistedCreatives,
   listActiveWatchlists,
@@ -264,7 +265,13 @@ export async function runWatchlist(
     );
 
     const recentWatchEvents = await listWatchEvents(env, watchlist.id, 80);
-    await persistScanNativeEvents(env, watchlist.id, runId, baselineRun?.id ?? null, eventDrafts);
+    const scanNativeEvents = await persistScanNativeEvents(
+      env,
+      watchlist.id,
+      runId,
+      baselineRun?.id ?? null,
+      eventDrafts,
+    );
     const proofEvaluation = await evaluateSelectiveProofCandidates(env, {
       watchlist,
       runId,
@@ -272,7 +279,20 @@ export async function runWatchlist(
       scanNativeDrafts: eventDrafts,
       recentWatchEvents,
     });
-    const proofEvents = proofEvaluation.events;
+    const allEvents = [...scanNativeEvents, ...proofEvaluation.events];
+    const userDeliveryProfile = await getUserDeliveryProfile(env, watchlist.userId);
+    const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+    const alertDelivery =
+      allEvents.length > 0
+        ? await deliverWatchlistAlerts(env, {
+            userId: watchlist.userId,
+            userName: userDeliveryProfile?.name ?? watchlist.name,
+            accountEmail: userDeliveryProfile?.email ?? null,
+            watchlist,
+            events: allEvents,
+            lane: "customer",
+          })
+        : { attempts: 0, channels: [] };
 
     await finishWatchlistRun(env, runId, {
       status: "succeeded",
@@ -281,10 +301,10 @@ export async function runWatchlist(
         adsSeen: currentObservations.length,
         candidatesDetected: eventDrafts.length + proofEvaluation.candidateCount,
         proofsAttempted: proofEvaluation.proofAttemptCount,
-        eventsConfirmed: eventDrafts.length + proofEvaluation.confirmedEventCount,
-        sendsTriggered: 0,
-        events: eventDrafts.length + proofEvents.length,
-        eventTypes: summarizeEventTypes([...eventDrafts, ...proofEvents]),
+        eventsConfirmed: scanNativeEvents.length + proofEvaluation.confirmedEventCount,
+        sendsTriggered: alertDelivery.attempts,
+        events: allEvents.length,
+        eventTypes: summarizeEventTypes(allEvents),
       },
     });
     await touchWatchlistScanned(env, watchlist.id);
@@ -299,7 +319,7 @@ export async function runWatchlist(
       },
     });
 
-    return { runId, events: eventDrafts.length + proofEvents.length };
+    return { runId, events: allEvents.length };
   } catch (error) {
     const details = error instanceof Error ? error.message : "Unknown monitoring error.";
     const errorCode =
@@ -589,6 +609,8 @@ async function persistScanNativeEvents(
   baselineFromRunId: string | null,
   drafts: WatchEventDraft[],
 ) {
+  const createdEvents: WatchEventRecord[] = [];
+
   for (const draft of drafts) {
     const importanceScore = getScanNativeImportanceScore(draft.eventType);
     const candidateId = await createEventCandidate(env, {
@@ -605,7 +627,7 @@ async function persistScanNativeEvents(
       lastEvaluatedAt: new Date().toISOString(),
     });
 
-    await createWatchEvent(env, {
+    const eventId = await createWatchEvent(env, {
       watchlistId,
       runId,
       eventType: draft.eventType,
@@ -617,7 +639,29 @@ async function persistScanNativeEvents(
       summary: draft.summary,
       metadata: draft.metadata,
     });
+    createdEvents.push({
+      id: eventId,
+      watchlistId,
+      runId,
+      eventType: draft.eventType,
+      status: "confirmed",
+      importanceScore,
+      adId: draft.adId,
+      baselineFromRunId,
+      candidateId,
+      proofCaptureId: null,
+      title: draft.title,
+      summary: draft.summary,
+      metadata: draft.metadata,
+      confirmedAt: null,
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: null,
+      createdAt: new Date().toISOString(),
+    });
   }
+
+  return createdEvents;
 }
 
 async function evaluateSelectiveProofCandidates(
@@ -630,7 +674,7 @@ async function evaluateSelectiveProofCandidates(
     recentWatchEvents: WatchEventRecord[];
   },
 ) {
-  const proofEvents: WatchEventDraft[] = [];
+  const proofEvents: WatchEventRecord[] = [];
   const eventTypesByAd = mapEventTypesByAdId(input.scanNativeDrafts);
   const todayStart = startOfUtcDayIso();
   const watchlistDailyAttempts = await countProofCapturesForWatchlistSince(
@@ -845,7 +889,7 @@ async function evaluateSelectiveProofCandidates(
         continue;
       }
 
-      await createWatchEvent(env, {
+      const eventId = await createWatchEvent(env, {
         watchlistId: input.watchlist.id,
         runId: input.runId,
         eventType: event.eventType,
@@ -864,7 +908,7 @@ async function evaluateSelectiveProofCandidates(
       confirmedEventCount += 1;
 
       const createdEvent = {
-        id: `generated:${candidateId}`,
+        id: eventId,
         watchlistId: input.watchlist.id,
         runId: input.runId,
         eventType: event.eventType,
@@ -884,13 +928,7 @@ async function evaluateSelectiveProofCandidates(
         createdAt: snapshot.capturedAt,
       };
       proofAwareRecentEvents.push(createdEvent);
-      proofEvents.push({
-        eventType: event.eventType,
-        adId: observation.ad_id,
-        title: event.title,
-        summary: event.summary,
-        metadata: event.metadata,
-      });
+      proofEvents.push(createdEvent);
     }
   }
 

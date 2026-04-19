@@ -26,14 +26,19 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 export async function action({ context, params, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { reconcileDeliveryStatus } = await import("~/lib/delivery.server");
-  const { extractWhatsAppWebhookStatusUpdates } = await import("~/lib/whatsapp.server");
+  const {
+    extractWhatsAppWebhookStatusUpdates,
+    verifyWhatsAppWebhookSignature,
+  } = await import("~/lib/whatsapp.server");
   const env = getEnv(context);
 
   if (params.provider !== "whatsapp") {
     throw new Response("Not found", { status: 404 });
   }
 
-  const payload = await request.json().catch(() => null);
+  const rawBody = await request.text();
+  await verifyWhatsAppWebhookSignature(env, request, rawBody);
+  const payload = rawBody ? JSON.parse(rawBody) : null;
   const updates = extractWhatsAppWebhookStatusUpdates(payload);
   const reconciled = [];
 

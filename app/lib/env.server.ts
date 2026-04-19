@@ -16,6 +16,7 @@ export interface AppEnv {
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   WHATSAPP_ACCESS_TOKEN?: string;
+  WHATSAPP_APP_SECRET?: string;
   WHATSAPP_DELIVERY_ENABLED?: string;
   WHATSAPP_GRAPH_API_VERSION?: string;
   WHATSAPP_PHONE_NUMBER_ID?: string;

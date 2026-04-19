@@ -1422,6 +1422,7 @@ export async function createWatchEvent(
     lastEvaluatedAt?: string | null;
   },
 ) {
+  const id = createId();
   const timestamp = nowIso();
   const status = input.status ?? "confirmed";
   await run(
@@ -1449,7 +1450,7 @@ export async function createWatchEvent(
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    createId(),
+    id,
     input.watchlistId,
     input.runId,
     input.eventType,
@@ -1468,6 +1469,8 @@ export async function createWatchEvent(
     input.lastEvaluatedAt ?? timestamp,
     timestamp,
   );
+
+  return id;
 }
 
 export async function createEventCandidate(
@@ -2034,71 +2037,100 @@ export async function upsertDeliveryTarget(
     metadata?: JsonRecord;
   },
 ) {
-  const id = createId();
+  const existingTarget = await getDeliveryTargetByUniqueFields(env, {
+    userId: input.userId,
+    watchlistId: input.watchlistId ?? null,
+    channel: input.channel,
+    targetValue: input.targetValue,
+  });
   const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO delivery_target (
-        id,
-        user_id,
-        watchlist_id,
-        channel,
-        target_value,
-        validation_status,
-        is_validated,
-        is_opted_in,
-        opt_in_source,
-        opted_in_at,
-        is_paused,
-        paused_at,
-        opted_out_at,
-        template_eligible,
-        last_successful_delivery_at,
-        last_successful_attempt_id,
-        provider_identifier,
-        metadata_json,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, watchlist_id, channel, target_value)
-      DO UPDATE SET validation_status = excluded.validation_status,
-                    is_validated = excluded.is_validated,
-                    is_opted_in = excluded.is_opted_in,
-                    opt_in_source = excluded.opt_in_source,
-                    opted_in_at = excluded.opted_in_at,
-                    is_paused = excluded.is_paused,
-                    paused_at = excluded.paused_at,
-                    opted_out_at = excluded.opted_out_at,
-                    template_eligible = excluded.template_eligible,
-                    last_successful_delivery_at = excluded.last_successful_delivery_at,
-                    last_successful_attempt_id = excluded.last_successful_attempt_id,
-                    provider_identifier = excluded.provider_identifier,
-                    metadata_json = excluded.metadata_json,
-                    updated_at = excluded.updated_at
-    `,
-    id,
-    input.userId,
-    input.watchlistId ?? null,
-    input.channel,
-    input.targetValue,
-    input.validationStatus ?? "pending",
-    boolToInt(input.isValidated ?? false),
-    boolToInt(input.isOptedIn ?? false),
-    input.optInSource ?? null,
-    input.optedInAt ?? null,
-    boolToInt(input.isPaused ?? false),
-    input.pausedAt ?? null,
-    input.optedOutAt ?? null,
-    boolToInt(input.templateEligible ?? false),
-    input.lastSuccessfulDeliveryAt ?? null,
-    input.lastSuccessfulAttemptId ?? null,
-    input.providerIdentifier ?? null,
-    jsonValue(input.metadata ?? {}),
-    timestamp,
-    timestamp,
-  );
+  if (existingTarget) {
+    await run(
+      env,
+      `
+        UPDATE delivery_target
+        SET validation_status = ?,
+            is_validated = ?,
+            is_opted_in = ?,
+            opt_in_source = ?,
+            opted_in_at = ?,
+            is_paused = ?,
+            paused_at = ?,
+            opted_out_at = ?,
+            template_eligible = ?,
+            last_successful_delivery_at = ?,
+            last_successful_attempt_id = ?,
+            provider_identifier = ?,
+            metadata_json = ?,
+            updated_at = ?
+        WHERE id = ?
+      `,
+      input.validationStatus ?? "pending",
+      boolToInt(input.isValidated ?? false),
+      boolToInt(input.isOptedIn ?? false),
+      input.optInSource ?? null,
+      input.optedInAt ?? null,
+      boolToInt(input.isPaused ?? false),
+      input.pausedAt ?? null,
+      input.optedOutAt ?? null,
+      boolToInt(input.templateEligible ?? false),
+      input.lastSuccessfulDeliveryAt ?? null,
+      input.lastSuccessfulAttemptId ?? null,
+      input.providerIdentifier ?? null,
+      jsonValue(input.metadata ?? {}),
+      timestamp,
+      existingTarget.id,
+    );
+  } else {
+    await run(
+      env,
+      `
+        INSERT INTO delivery_target (
+          id,
+          user_id,
+          watchlist_id,
+          channel,
+          target_value,
+          validation_status,
+          is_validated,
+          is_opted_in,
+          opt_in_source,
+          opted_in_at,
+          is_paused,
+          paused_at,
+          opted_out_at,
+          template_eligible,
+          last_successful_delivery_at,
+          last_successful_attempt_id,
+          provider_identifier,
+          metadata_json,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      createId(),
+      input.userId,
+      input.watchlistId ?? null,
+      input.channel,
+      input.targetValue,
+      input.validationStatus ?? "pending",
+      boolToInt(input.isValidated ?? false),
+      boolToInt(input.isOptedIn ?? false),
+      input.optInSource ?? null,
+      input.optedInAt ?? null,
+      boolToInt(input.isPaused ?? false),
+      input.pausedAt ?? null,
+      input.optedOutAt ?? null,
+      boolToInt(input.templateEligible ?? false),
+      input.lastSuccessfulDeliveryAt ?? null,
+      input.lastSuccessfulAttemptId ?? null,
+      input.providerIdentifier ?? null,
+      jsonValue(input.metadata ?? {}),
+      timestamp,
+      timestamp,
+    );
+  }
 
   const [target] = await listDeliveryTargets(env, input.userId, {
     watchlistId: input.watchlistId ?? null,
@@ -2106,6 +2138,60 @@ export async function upsertDeliveryTarget(
     limit: 1,
   });
   return target ?? null;
+}
+
+async function getDeliveryTargetByUniqueFields(
+  env: AppEnv,
+  input: {
+    userId: string;
+    watchlistId: string | null;
+    channel: DeliveryChannel;
+    targetValue: string;
+  },
+) {
+  const row = await one<DeliveryTargetRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_target
+      WHERE user_id = ?
+        AND ${input.watchlistId === null ? "watchlist_id IS NULL" : "watchlist_id = ?"}
+        AND channel = ?
+        AND target_value = ?
+      LIMIT 1
+    `,
+    ...[
+      input.userId,
+      ...(input.watchlistId === null ? [] : [input.watchlistId]),
+      input.channel,
+      input.targetValue,
+    ],
+  );
+
+  return row ? toDeliveryTargetRecord(row) : null;
+}
+
+export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
+  const row = await one<{ id: string; email: string | null; name: string | null }>(
+    env,
+    `
+      SELECT id, email, name
+      FROM user
+      WHERE id = ?
+      LIMIT 1
+    `,
+    userId,
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name ?? "",
+  };
 }
 
 export async function listDeliveryAttempts(

@@ -201,8 +201,12 @@ CREATE INDEX IF NOT EXISTS idx_delivery_target_user_watchlist_channel
   ON delivery_target(user_id, watchlist_id, channel, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_delivery_target_channel_value
   ON delivery_target(channel, target_value);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_target_unique
-  ON delivery_target(user_id, watchlist_id, channel, target_value);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_target_unique_workspace
+  ON delivery_target(user_id, channel, target_value)
+  WHERE watchlist_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_target_unique_watchlist
+  ON delivery_target(user_id, watchlist_id, channel, target_value)
+  WHERE watchlist_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS delivery_attempt (
   id TEXT PRIMARY KEY NOT NULL,

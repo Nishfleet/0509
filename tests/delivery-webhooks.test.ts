@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
 
 function createContext(env: Record<string, unknown> = {}) {
   return {
@@ -48,8 +49,36 @@ describe("delivery webhooks", () => {
 
     const { action } = await import("~/routes/api.delivery-status.$provider");
 
+    const body = JSON.stringify({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [
+                  {
+                    id: "wamid-1",
+                    status: "delivered",
+                    timestamp: "1713490000",
+                  },
+                  {
+                    id: "wamid-1",
+                    status: "delivered",
+                    timestamp: "1713490000",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const signature = `sha256=${createHmac("sha256", "whatsapp-app-secret").update(body).digest("hex")}`;
+
     const response = await action({
-      context: createContext(),
+      context: createContext({
+        WHATSAPP_APP_SECRET: "whatsapp-app-secret",
+      }),
       params: {
         provider: "whatsapp",
       },
@@ -57,31 +86,9 @@ describe("delivery webhooks", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          "x-hub-signature-256": signature,
         },
-        body: JSON.stringify({
-          entry: [
-            {
-              changes: [
-                {
-                  value: {
-                    statuses: [
-                      {
-                        id: "wamid-1",
-                        status: "delivered",
-                        timestamp: "1713490000",
-                      },
-                      {
-                        id: "wamid-1",
-                        status: "delivered",
-                        timestamp: "1713490000",
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          ],
-        }),
+        body,
       }),
     } as never);
 
@@ -96,6 +103,41 @@ describe("delivery webhooks", () => {
       }),
     );
     await expect(response.text()).resolves.toContain("\"processed\":1");
+  });
+
+  it("rejects WhatsApp status updates with an invalid signature", async () => {
+    const reconcileDeliveryStatus = vi.fn();
+
+    vi.doMock("~/lib/delivery.server", () => ({
+      reconcileDeliveryStatus,
+    }));
+
+    const { action } = await import("~/routes/api.delivery-status.$provider");
+
+    await expect(
+      action({
+        context: createContext({
+          WHATSAPP_APP_SECRET: "whatsapp-app-secret",
+        }),
+        params: {
+          provider: "whatsapp",
+        },
+        request: new Request("http://localhost/api/delivery-status/whatsapp", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-hub-signature-256": "sha256=not-valid",
+          },
+          body: JSON.stringify({
+            entry: [],
+          }),
+        }),
+      } as never),
+    ).rejects.toMatchObject({
+      status: 401,
+    });
+
+    expect(reconcileDeliveryStatus).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported providers", async () => {

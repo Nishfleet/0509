@@ -88,6 +88,11 @@ describe("runWeeklyDigests", () => {
       countProofCapturesForWorkspaceSince: vi.fn(),
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
       getRecentSuccessfulRuns: vi.fn(),
       getSavedQuery: vi.fn(),
       getWatchlist: vi.fn(),
@@ -179,6 +184,11 @@ describe("runWeeklyDigests", () => {
       countProofCapturesForWorkspaceSince: vi.fn(),
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn().mockResolvedValue(null),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
       getRecentSuccessfulRuns: vi.fn(),
       getSavedQuery: vi.fn(),
       getWatchlist: vi.fn(),
@@ -335,6 +345,11 @@ describe("runWatchlistManual cheap scan path", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
       getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-0" }]),
       getSavedQuery: vi.fn(),
       getWatchlist: vi.fn(),
@@ -367,6 +382,12 @@ describe("runWatchlistManual cheap scan path", () => {
     }));
     vi.doMock("~/lib/landing-pages.server", () => ({
       captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        attempts: 0,
+        channels: [],
+      }),
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
       MetaApiError: class MetaApiError extends Error {},
@@ -467,6 +488,11 @@ describe("runWatchlistManual cheap scan path", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
       getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-0" }]),
       getSavedQuery: vi.fn(),
       getWatchlist: vi.fn(),
@@ -531,6 +557,12 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/landing-pages.server", () => ({
       captureLandingPageSnapshot,
     }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        attempts: 0,
+        channels: [],
+      }),
+    }));
     vi.doMock("~/lib/meta-api.server", () => ({
       MetaApiError: class MetaApiError extends Error {},
       searchAds: vi.fn().mockResolvedValue({
@@ -577,6 +609,134 @@ describe("runWatchlistManual cheap scan path", () => {
         eventType: "landing_page_cta_changed",
         proofCaptureId: "proof-capture-1",
         candidateId: "candidate-proof-1",
+      }),
+    );
+  });
+
+  it("delegates confirmed watchlist events to the instant-delivery module", async () => {
+    const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+    });
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildAnalysisFields: vi.fn(() => []),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn(),
+      clearDigestItems: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
+      countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
+      createAdObservation: vi.fn(),
+      createDigestRun: vi.fn(),
+      createEventCandidate: vi.fn().mockResolvedValue("candidate-scan-1"),
+      createLandingPageSnapshot: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn(),
+      getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+      getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-0" }]),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([baseAd]),
+      listActiveWatchlists: vi.fn(),
+      listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
+      listObservationsForRun: vi.fn(async (env: unknown, runId: string) => {
+        if (runId === "run-1") {
+          return [
+            observation({
+              landing_page_url: "https://example.com/new-url",
+            }),
+          ];
+        }
+
+        if (runId === "run-0") {
+          return [
+            observation({
+              watchlist_run_id: "run-0",
+              landing_page_url: "https://example.com/old-url",
+            }),
+          ];
+        }
+
+        return [];
+      }),
+      listWatchEvents: vi.fn().mockResolvedValue([]),
+      listWatchEventsBetween: vi.fn(),
+      listWatchlists: vi.fn(),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertProofTarget: vi.fn().mockResolvedValue({
+        id: "target-1",
+        watchlistId: "watch-1",
+        adId: "meta-nykaa-1",
+        landingPageUrl: "https://example.com/new-url",
+        canonicalPageIdentity: "example.com/new-url",
+        proofTargetIdentity: "watch-1:meta-nykaa-1:example.com/new-url",
+        lastCaptureAttemptAt: null,
+        lastSuccessfulProofAt: null,
+        lastSuccessfulCaptureId: null,
+        createdAt: "2026-04-10T00:00:01.000Z",
+        updatedAt: "2026-04-10T00:00:01.000Z",
+      }),
+      upsertAd: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts,
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      MetaApiError: class MetaApiError extends Error {},
+      searchAds: vi.fn().mockResolvedValue({
+        ads: [baseAd],
+        nextCursor: null,
+        source: "demo",
+      }),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn(),
+      PLAN_LIMITS: {
+        free: { digests: false },
+        starter: { digests: true },
+        agency: { digests: true },
+      },
+    }));
+
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+
+    await runWatchlistManual(
+      {
+        META_AD_LIBRARY_TOKEN: "token",
+      } as never,
+      watchlist,
+    );
+
+    expect(deliverWatchlistAlerts).toHaveBeenCalledWith(
+      { META_AD_LIBRARY_TOKEN: "token" },
+      expect.objectContaining({
+        userId: "user-1",
+        watchlist: expect.objectContaining({
+          id: "watch-1",
+        }),
+        events: [
+          expect.objectContaining({
+            eventType: "landing_page_url_changed",
+          }),
+        ],
       }),
     );
   });

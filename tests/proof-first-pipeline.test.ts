@@ -197,6 +197,10 @@ function installSharedMocks(input: {
     }),
   }));
   vi.doMock("~/lib/delivery.server", () => ({
+    deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+    }),
     deliverWeeklyDigest: vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
@@ -224,6 +228,11 @@ function installSharedMocks(input: {
     createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
     finishWatchlistRun: input.finishWatchlistRun,
     getDigestByPeriod: vi.fn().mockResolvedValue(null),
+    getUserDeliveryProfile: vi.fn().mockResolvedValue({
+      id: "user-1",
+      email: "owner@example.com",
+      name: "Owner",
+    }),
     getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-0" }]),
     getSavedQuery: vi.fn(),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -300,7 +309,7 @@ describe("proof-first pipeline", () => {
           candidatesDetected: 1,
           proofsAttempted: 1,
           eventsConfirmed: 1,
-          sendsTriggered: 0,
+          sendsTriggered: 1,
           events: 1,
         }),
       }),
