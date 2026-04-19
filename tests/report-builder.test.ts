@@ -126,13 +126,21 @@ const watchEvent: WatchEventRecord = {
   watchlistId: "watch-1",
   runId: "run-1",
   eventType: "ad_new",
+  status: "confirmed",
+  importanceScore: 65,
   adId: "meta-boat-1",
   baselineFromRunId: null,
+  candidateId: null,
+  proofCaptureId: null,
   title: "New ad detected",
   summary: "A new ad entered Audio competitors.",
   metadata: {
     advertiser: "boAt",
   },
+  confirmedAt: "2026-03-31T00:00:00.000Z",
+  suppressedAt: null,
+  invalidatedAt: null,
+  lastEvaluatedAt: "2026-03-31T00:00:00.000Z",
   createdAt: "2026-03-31T00:00:00.000Z",
 };
 

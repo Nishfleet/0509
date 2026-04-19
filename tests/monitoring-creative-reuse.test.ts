@@ -76,27 +76,48 @@ describe("runWatchlistManual OCR reuse", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn(),
       clearDigestItems: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
+      countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
       createAdObservation: vi.fn(),
       createDigestRun: vi.fn(),
+      createEventCandidate: vi.fn().mockResolvedValue("candidate-scan-1"),
       createLandingPageSnapshot: vi.fn(),
+      createProofCapture: vi.fn(),
       createWatchEvent: vi.fn(),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
       getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
       getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
       hydrateAdsWithPersistedCreatives,
       listActiveWatchlists: vi.fn(),
+      listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
       listObservationsForRun: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi.fn().mockResolvedValue([]),
       listWatchEventsBetween: vi.fn(),
       listWatchlists: vi.fn(),
       logMetaIntegrationStatus: vi.fn(),
       touchWatchlistScanned: vi.fn(),
+      upsertProofTarget: vi.fn().mockResolvedValue(null),
       upsertAd: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
     vi.doMock("~/lib/landing-pages.server", () => ({
       captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        attempts: 0,
+        channels: [],
+      }),
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
       MetaApiError: class MetaApiError extends Error {},

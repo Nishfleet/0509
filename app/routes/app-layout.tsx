@@ -12,6 +12,7 @@ import { SignOutButton } from "~/components/sign-out-button";
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { isOpsUserAllowed } = await import("~/lib/env.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
 
@@ -21,11 +22,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     session,
+    showOpsNav: isOpsUserAllowed(env, session.user.email),
   };
 }
 
 export default function AppLayoutRoute() {
-  const { session } = useLoaderData<typeof loader>();
+  const { session, showOpsNav } = useLoaderData<typeof loader>();
 
   return (
     <main className="workspace-shell">
@@ -52,6 +54,7 @@ export default function AppLayoutRoute() {
           <NavLink to="/app/collections">Collections</NavLink>
           <NavLink to="/app/watchlists">Watchlists</NavLink>
           <NavLink to="/app/digests">Digests</NavLink>
+          {showOpsNav ? <NavLink to="/app/ops">Ops</NavLink> : null}
           <NavLink to="/search">Search</NavLink>
         </nav>
 

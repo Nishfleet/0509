@@ -1,6 +1,9 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
 function createContext() {
   return {
@@ -148,6 +151,7 @@ describe("digest access", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       getDigest: vi.fn(),
+      listDeliveryAttempts: vi.fn(),
       listDigests,
     }));
 
@@ -226,10 +230,10 @@ describe("pricing CTA rendering", () => {
 
       return {
         ...actual,
-        Form: ({ children, ...props }: Record<string, unknown>) =>
+        Form: ({ children, ...props }: MockFormProps) =>
           React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: Record<string, unknown>) =>
-          React.createElement("a", { ...props, href: to }, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
         useActionData: vi.fn().mockReturnValue(overrides.actionData),
         useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
         useRouteLoaderData: vi.fn().mockReturnValue(overrides.rootData),
@@ -252,7 +256,7 @@ describe("pricing CTA rendering", () => {
     const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
     expect(markup).not.toContain("View pricing");
-    expect(markup).toContain("Weekly digests are not available in the current workspace.");
+    expect(markup).toContain("Proof-backed digests are not available in the current workspace.");
   });
 
   it("does not render a pricing CTA on dashboard plan-limit errors", async () => {
