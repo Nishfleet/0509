@@ -2,8 +2,7 @@ PRAGMA foreign_keys = OFF;
 
 -- Before applying this migration on the live D1 database, take a backup/export first.
 -- Roll-forward is preferred. The paired rollback file exists only for emergency/manual recovery.
-
-BEGIN TRANSACTION;
+-- D1 applies migrations without explicit BEGIN/COMMIT statements here.
 
 CREATE TABLE IF NOT EXISTS event_candidate (
   id TEXT PRIMARY KEY NOT NULL,
@@ -449,5 +448,4 @@ WHERE NOT EXISTS (
   WHERE delivery_attempt.idempotency_key = 'legacy-digest:' || digest_delivery.digest_run_id
 );
 
-COMMIT;
 PRAGMA foreign_keys = ON;
