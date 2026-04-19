@@ -8,11 +8,19 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unmock("cloudflare:workers");
   vi.resetModules();
 });
 
 describe("resolveCommercialAdSourceStatus", () => {
   it("treats the official Meta API as diagnostic-only even when a token exists", async () => {
+    vi.doMock(
+      "cloudflare:workers",
+      () => ({
+        env: {},
+      }),
+    );
+
     const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
 
     const status = await resolveCommercialAdSourceStatus({
@@ -40,6 +48,28 @@ describe("resolveCommercialAdSourceStatus", () => {
     });
     expect(status.summary).toContain("explicit demo mode");
   });
+
+  it("falls back to the runtime worker env when Browser Run is missing from route context", async () => {
+    vi.doMock(
+      "cloudflare:workers",
+      () => ({
+        env: {
+          BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        },
+      }),
+    );
+
+    const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
+
+    const status = await resolveCommercialAdSourceStatus({} as never);
+
+    expect(status).toMatchObject({
+      status: "degraded",
+      provider: "meta_library_browser",
+      mode: "live",
+    });
+    expect(status.summary).toContain("Browser Run");
+  });
 });
 
 describe("searchAdsViaSourceResolver", () => {
@@ -52,6 +82,12 @@ describe("searchAdsViaSourceResolver", () => {
       cacheStatus: "miss",
     });
 
+    vi.doMock(
+      "cloudflare:workers",
+      () => ({
+        env: {},
+      }),
+    );
     vi.doMock("~/lib/meta-api.server", () => ({
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
@@ -107,8 +143,62 @@ describe("searchAdsViaSourceResolver", () => {
 
     const result = await searchAdsViaSourceResolver(
       {
-        BROWSER: {} as Fetcher,
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
       } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(result.provider).toBe("meta_library_browser");
+    expect(result.source).toBe("meta_library_browser");
+  });
+
+  it("uses Browser Run from the runtime worker env when route context omits it", async () => {
+    const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+    });
+
+    vi.doMock(
+      "cloudflare:workers",
+      () => ({
+        env: {
+          BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        },
+      }),
+    );
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: vi.fn(),
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {} as never,
       {
         mode: "keyword",
         filters: {
@@ -173,7 +263,7 @@ describe("searchAdsViaSourceResolver", () => {
 
     const result = await searchAdsViaSourceResolver(
       {
-        BROWSER: {} as Fetcher,
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
         DB: {} as D1Database,
       } as never,
       {
@@ -194,8 +284,8 @@ describe("searchAdsViaSourceResolver", () => {
       },
     );
 
-    expect(getDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
-    expect(result.cacheStatus).toBe("stale");
+    expect(browserSearch).toHaveBeenCalledTimes(1);
     expect(result.provider).toBe("meta_library_browser");
+    expect(result.source).toBe("meta_library_browser");
   });
 });
