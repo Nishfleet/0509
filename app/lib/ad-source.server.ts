@@ -25,6 +25,8 @@ export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
 }
 
+let runtimeWorkerEnvPromise: Promise<AppEnv | null> | null = null;
+
 function normalizeSearchResponse(
   result: SearchResponse,
   provider: AdDiscoveryProvider,
@@ -55,7 +57,7 @@ function normalizeSearchResponse(
 }
 
 export function resolveCommercialDiscoveryProvider(env: AppEnv): AdDiscoveryProvider {
-  if (env.BROWSER) {
+  if (hasBrowserBinding(env.BROWSER)) {
     return "meta_library_browser";
   }
 
@@ -66,12 +68,50 @@ export function resolveCommercialDiscoveryProvider(env: AppEnv): AdDiscoveryProv
   return "demo";
 }
 
+function hasBrowserBinding(binding: AppEnv["BROWSER"] | undefined): binding is Fetcher {
+  return Boolean(binding && typeof binding.fetch === "function");
+}
+
+async function getRuntimeWorkerEnv(): Promise<AppEnv | null> {
+  if (!runtimeWorkerEnvPromise) {
+    runtimeWorkerEnvPromise = import("cloudflare:workers")
+      .then((runtimeModule) => ((runtimeModule as { env?: AppEnv }).env ?? null))
+      .catch(() => null);
+  }
+
+  return runtimeWorkerEnvPromise;
+}
+
+async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
+  if (hasBrowserBinding(env.BROWSER)) {
+    return env;
+  }
+
+  const runtimeEnv = await getRuntimeWorkerEnv();
+  if (!hasBrowserBinding(runtimeEnv?.BROWSER)) {
+    return env;
+  }
+
+  return {
+    ...runtimeEnv,
+    ...env,
+    AI: env.AI ?? runtimeEnv.AI,
+    BROWSER: hasBrowserBinding(env.BROWSER) ? env.BROWSER : runtimeEnv.BROWSER,
+    DB: env.DB ?? runtimeEnv.DB,
+    LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? runtimeEnv.LANDING_PAGE_ARTIFACTS,
+    MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? runtimeEnv.MONITORING_WORKFLOW,
+  };
+}
+
 export async function resolveCommercialAdSourceStatus(
   env: AppEnv,
 ): Promise<MetaIntegrationStatus> {
-  const provider = resolveCommercialDiscoveryProvider(env);
+  const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
+  const provider = resolveCommercialDiscoveryProvider(effectiveEnv);
   const providerState =
-    provider !== "demo" && env.DB ? await getDiscoveryProviderState(env, provider) : null;
+    provider !== "demo" && effectiveEnv.DB
+      ? await getDiscoveryProviderState(effectiveEnv, provider)
+      : null;
 
   if (providerState) {
     return {
@@ -134,7 +174,8 @@ export async function searchAdsViaSourceResolver(
   cursor?: string | null,
   options: SearchAdsViaSourceOptions = {},
 ): Promise<SearchResponse> {
-  const provider = resolveCommercialDiscoveryProvider(env);
+  const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
+  const provider = resolveCommercialDiscoveryProvider(effectiveEnv);
   const routeContext = options.purpose ?? "public_search";
 
   if (provider === "demo") {
@@ -147,7 +188,7 @@ export async function searchAdsViaSourceResolver(
     country: query.filters.country || "India",
     cursor,
   });
-  const cached = env.DB ? await getDiscoveryCacheEntry(env, cacheKey) : null;
+  const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   if (cached && new Date(cached.expiresAt).getTime() > Date.now()) {
     return {
       ...cached.payload,
@@ -161,9 +202,9 @@ export async function searchAdsViaSourceResolver(
     const startedAt = Date.now();
     const result =
       provider === "meta_library_browser"
-        ? await searchMetaLibraryByBrowser(env, query)
+        ? await searchMetaLibraryByBrowser(effectiveEnv, query)
         : normalizeSearchResponse(
-            await searchMetaApiAds(env, query, cursor, {
+            await searchMetaApiAds(effectiveEnv, query, cursor, {
               allowDemoFallback: false,
             }),
             provider,
@@ -171,8 +212,8 @@ export async function searchAdsViaSourceResolver(
     const browserMsUsed = Date.now() - startedAt;
     const timestamp = new Date().toISOString();
 
-    if (env.DB) {
-      await upsertDiscoveryCacheEntry(env, {
+    if (effectiveEnv.DB) {
+      await upsertDiscoveryCacheEntry(effectiveEnv, {
         cacheKey,
         provider,
         routeContext,
@@ -188,7 +229,7 @@ export async function searchAdsViaSourceResolver(
         expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
         browserMsUsed,
       });
-      await createDiscoveryFetchLog(env, {
+      await createDiscoveryFetchLog(effectiveEnv, {
         provider,
         routeContext,
         queryFingerprint: fingerprintSavedQuery(query),
@@ -201,7 +242,7 @@ export async function searchAdsViaSourceResolver(
           cursor: cursor ?? null,
         },
       });
-      await upsertDiscoveryProviderState(env, {
+      await upsertDiscoveryProviderState(effectiveEnv, {
         provider,
         status: "healthy",
         failureClass: null,
@@ -233,8 +274,8 @@ export async function searchAdsViaSourceResolver(
           : "Official Meta API diagnostic fetch failed.";
     const timestamp = new Date().toISOString();
 
-    if (env.DB) {
-      await createDiscoveryFetchLog(env, {
+    if (effectiveEnv.DB) {
+      await createDiscoveryFetchLog(effectiveEnv, {
         provider,
         routeContext,
         queryFingerprint: fingerprintSavedQuery(query),
@@ -248,7 +289,7 @@ export async function searchAdsViaSourceResolver(
           errorMessage: error instanceof Error ? error.message : "Unknown discovery error.",
         },
       });
-      await upsertDiscoveryProviderState(env, {
+      await upsertDiscoveryProviderState(effectiveEnv, {
         provider,
         status: cached ? "cache_only" : "degraded",
         failureClass,
