@@ -2144,6 +2144,264 @@ export async function getDeliveryAttemptByIdempotencyKey(
   return row ? toDeliveryAttemptRecord(row) : null;
 }
 
+export async function getOperatorSnapshot(env: AppEnv) {
+  const stuckThresholdIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const recentWindowIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [
+    failingRuns,
+    stuckRuns,
+    failedProofs,
+    budgetBlockedProofs,
+    blockedTargets,
+    deliveryFailures,
+    degradedWatchlists,
+  ] = await Promise.all([
+    many<{
+      run_id: string;
+      watchlist_id: string;
+      watchlist_name: string;
+      started_at: string;
+      error_code: string | null;
+      error_message: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          watchlist_run.id AS run_id,
+          watchlist.id AS watchlist_id,
+          watchlist.name AS watchlist_name,
+          watchlist_run.started_at,
+          watchlist_run.error_code,
+          watchlist_run.error_message
+        FROM watchlist_run
+        INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
+        WHERE watchlist_run.status = 'failed'
+        ORDER BY watchlist_run.started_at DESC
+        LIMIT 8
+      `,
+    ),
+    many<{
+      run_id: string;
+      watchlist_id: string;
+      watchlist_name: string;
+      status: string;
+      started_at: string;
+    }>(
+      env,
+      `
+        SELECT
+          watchlist_run.id AS run_id,
+          watchlist.id AS watchlist_id,
+          watchlist.name AS watchlist_name,
+          watchlist_run.status,
+          watchlist_run.started_at
+        FROM watchlist_run
+        INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
+        WHERE watchlist_run.status IN ('pending', 'running')
+          AND watchlist_run.started_at <= ?
+        ORDER BY watchlist_run.started_at ASC
+        LIMIT 8
+      `,
+      stuckThresholdIso,
+    ),
+    many<{
+      proof_capture_id: string;
+      watchlist_id: string;
+      watchlist_name: string;
+      attempted_at: string;
+      failure_code: string | null;
+      failure_reason: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          proof_capture.id AS proof_capture_id,
+          watchlist.id AS watchlist_id,
+          watchlist.name AS watchlist_name,
+          proof_capture.attempted_at,
+          proof_capture.failure_code,
+          proof_capture.failure_reason
+        FROM proof_capture
+        INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+        INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
+        WHERE proof_capture.status = 'failed'
+        ORDER BY proof_capture.attempted_at DESC
+        LIMIT 8
+      `,
+    ),
+    many<{
+      proof_capture_id: string;
+      watchlist_id: string;
+      watchlist_name: string;
+      status: ProofStatus;
+      attempted_at: string;
+    }>(
+      env,
+      `
+        SELECT
+          proof_capture.id AS proof_capture_id,
+          watchlist.id AS watchlist_id,
+          watchlist.name AS watchlist_name,
+          proof_capture.status,
+          proof_capture.attempted_at
+        FROM proof_capture
+        INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+        INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
+        WHERE proof_capture.status IN ('skipped_due_to_budget', 'skipped_due_to_rate_limit')
+        ORDER BY proof_capture.attempted_at DESC
+        LIMIT 8
+      `,
+    ),
+    many<{
+      delivery_target_id: string;
+      watchlist_id: string | null;
+      watchlist_name: string | null;
+      channel: DeliveryChannel;
+      target_value: string;
+      is_opted_in: number;
+      is_validated: number;
+      is_paused: number;
+      template_eligible: number;
+      updated_at: string;
+    }>(
+      env,
+      `
+        SELECT
+          delivery_target.id AS delivery_target_id,
+          delivery_target.watchlist_id,
+          watchlist.name AS watchlist_name,
+          delivery_target.channel,
+          delivery_target.target_value,
+          delivery_target.is_opted_in,
+          delivery_target.is_validated,
+          delivery_target.is_paused,
+          delivery_target.template_eligible,
+          delivery_target.updated_at
+        FROM delivery_target
+        LEFT JOIN watchlist ON watchlist.id = delivery_target.watchlist_id
+        WHERE delivery_target.channel = 'whatsapp'
+          AND (
+            delivery_target.is_opted_in = 0 OR
+            delivery_target.is_validated = 0 OR
+            delivery_target.is_paused = 1 OR
+            delivery_target.template_eligible = 0 OR
+            delivery_target.opted_out_at IS NOT NULL
+          )
+        ORDER BY delivery_target.updated_at DESC
+        LIMIT 8
+      `,
+    ),
+    many<{
+      attempt_id: string;
+      watchlist_id: string | null;
+      watchlist_name: string | null;
+      channel: DeliveryChannel;
+      target_value: string;
+      error_message: string | null;
+      created_at: string;
+    }>(
+      env,
+      `
+        SELECT
+          delivery_attempt.id AS attempt_id,
+          delivery_attempt.watchlist_id,
+          watchlist.name AS watchlist_name,
+          delivery_attempt.channel,
+          delivery_attempt.target_value,
+          delivery_attempt.error_message,
+          delivery_attempt.created_at
+        FROM delivery_attempt
+        LEFT JOIN watchlist ON watchlist.id = delivery_attempt.watchlist_id
+        WHERE delivery_attempt.status = 'failed'
+        ORDER BY delivery_attempt.created_at DESC
+        LIMIT 8
+      `,
+    ),
+    many<{
+      watchlist_id: string;
+      watchlist_name: string;
+      failed_runs: number;
+      failed_proofs: number;
+      failed_deliveries: number;
+      last_seen_at: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          watchlist.id AS watchlist_id,
+          watchlist.name AS watchlist_name,
+          (
+            SELECT COUNT(*)
+            FROM watchlist_run
+            WHERE watchlist_run.watchlist_id = watchlist.id
+              AND watchlist_run.status = 'failed'
+              AND watchlist_run.started_at >= ?
+          ) AS failed_runs,
+          (
+            SELECT COUNT(*)
+            FROM proof_target
+            INNER JOIN proof_capture ON proof_capture.proof_target_id = proof_target.id
+            WHERE proof_target.watchlist_id = watchlist.id
+              AND proof_capture.status = 'failed'
+              AND proof_capture.attempted_at >= ?
+          ) AS failed_proofs,
+          (
+            SELECT COUNT(*)
+            FROM delivery_attempt
+            WHERE delivery_attempt.watchlist_id = watchlist.id
+              AND delivery_attempt.status = 'failed'
+              AND delivery_attempt.created_at >= ?
+          ) AS failed_deliveries,
+          (
+            SELECT MAX(ts) FROM (
+              SELECT watchlist_run.started_at AS ts
+              FROM watchlist_run
+              WHERE watchlist_run.watchlist_id = watchlist.id
+              UNION ALL
+              SELECT proof_capture.attempted_at AS ts
+              FROM proof_target
+              INNER JOIN proof_capture ON proof_capture.proof_target_id = proof_target.id
+              WHERE proof_target.watchlist_id = watchlist.id
+              UNION ALL
+              SELECT delivery_attempt.created_at AS ts
+              FROM delivery_attempt
+              WHERE delivery_attempt.watchlist_id = watchlist.id
+            )
+          ) AS last_seen_at
+        FROM watchlist
+        WHERE watchlist.is_active = 1
+        GROUP BY watchlist.id
+        HAVING failed_runs > 0 OR failed_proofs > 0 OR failed_deliveries > 0
+        ORDER BY (failed_runs + failed_proofs + failed_deliveries) DESC, last_seen_at DESC
+        LIMIT 8
+      `,
+      recentWindowIso,
+      recentWindowIso,
+      recentWindowIso,
+    ),
+  ]);
+
+  return {
+    summary: {
+      failingRuns: failingRuns.length,
+      stuckRuns: stuckRuns.length,
+      failedProofs: failedProofs.length,
+      budgetBlockedProofs: budgetBlockedProofs.length,
+      blockedTargets: blockedTargets.length,
+      deliveryFailures: deliveryFailures.length,
+      degradedWatchlists: degradedWatchlists.length,
+    },
+    failingRuns,
+    stuckRuns,
+    failedProofs,
+    budgetBlockedProofs,
+    blockedTargets,
+    deliveryFailures,
+    degradedWatchlists,
+  };
+}
+
 export async function createDeliveryAttempt(
   env: AppEnv,
   input: {

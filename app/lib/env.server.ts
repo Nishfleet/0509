@@ -12,6 +12,7 @@ export interface AppEnv {
   META_AD_LIBRARY_TOKEN?: string;
   META_AD_LIBRARY_API_VERSION?: string;
   MONITORING_WORKFLOW?: Workflow;
+  OPS_ALLOWLIST_EMAILS?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   WHATSAPP_ACCESS_TOKEN?: string;
@@ -81,4 +82,24 @@ export function isCustomerWhatsAppReady(env: AppEnv) {
 
 export function whatsappGraphApiVersion(env: AppEnv) {
   return env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v23.0";
+}
+
+export function operatorAllowlistEmails(env: AppEnv) {
+  return (env.OPS_ALLOWLIST_EMAILS ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isOpsUserAllowed(env: AppEnv, email: string | null | undefined) {
+  if (!email) {
+    return false;
+  }
+
+  const allowlist = operatorAllowlistEmails(env);
+  if (allowlist.length === 0) {
+    return false;
+  }
+
+  return allowlist.includes(email.trim().toLowerCase());
 }
