@@ -180,7 +180,7 @@
 ### Create
 
 - `migrations/0007_proof_first_change_alerts.sql`
-- `migrations/0007_proof_first_change_alerts.rollback.sql`
+- `docs/superpowers/artifacts/0007_proof_first_change_alerts.rollback.sql`
 - `workers/monitoring-workflow.ts`
 - `app/lib/browser-run.server.ts`
 - `app/lib/proof-policy.server.ts`
@@ -275,7 +275,7 @@
 
 **Files:**
 - Create: `migrations/0007_proof_first_change_alerts.sql`
-- Create: `migrations/0007_proof_first_change_alerts.rollback.sql`
+- Create: `docs/superpowers/artifacts/0007_proof_first_change_alerts.rollback.sql`
 
 - [ ] Use the real next migration number from the live repo: `0007`.
 - [ ] Do not reuse the missing `0004` gap.
@@ -326,7 +326,7 @@
   - delivery-attempt recent-by-target/channel index
   - workspace-delivery-config by `user_id`
   - unique idempotency-key indexes
-- [ ] Write the inverse DDL in `migrations/0007_proof_first_change_alerts.rollback.sql`.
+- [ ] Write the inverse DDL in `docs/superpowers/artifacts/0007_proof_first_change_alerts.rollback.sql`.
 - [ ] Treat D1 rollback as backup plus roll-forward first:
   - document the backup step before apply
   - keep the rollback SQL for emergency/manual recovery
