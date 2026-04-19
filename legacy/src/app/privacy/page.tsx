@@ -58,9 +58,9 @@ export default function PrivacyPage() {
           <section>
             <h2>Third-party services</h2>
             <p>
-              0509 is hosted on Vercel. Vercel may collect standard server logs (IP
-              addresses, request timestamps) as part of operating the infrastructure. See
-              Vercel&apos;s privacy policy for details.
+              0509 is hosted on Cloudflare. Cloudflare may collect standard server logs
+              such as IP addresses and request timestamps as part of operating the
+              infrastructure.
             </p>
           </section>
 
