@@ -34,19 +34,19 @@ export const meta: MetaFunction = () => [
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
+  const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
   const { listCollections } = await import("~/lib/data.server");
-  const { searchAds } = await import("~/lib/meta-api.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
   const parsed = parseSearchParams(url.searchParams);
-  const result = await searchAds(
+  const result = await searchAdsViaSourceResolver(
     env,
     normalizeSavedQuery(parsed.mode, parsed.filters),
     url.searchParams.get("after"),
-    { allowDemoFallback: true },
+    { purpose: "public_search" },
   );
   const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
     env,
@@ -221,7 +221,16 @@ export default function SearchRoute() {
               <h1>Search competitor Meta ads and turn useful queries into reusable monitoring.</h1>
             </div>
             <div className="source-pill">
-              Source: {data.result.source === "meta" ? "Meta Ad Library" : "Demo dataset"}
+              Source:{" "}
+              {data.result.cacheStatus && data.result.cacheStatus !== "none"
+                ? "Cached live results"
+                : data.result.source === "meta_library_browser"
+                  ? "Live Ad Library capture"
+                  : data.result.source === "meta_api"
+                    ? "API diagnostic"
+                    : data.result.source === "meta"
+                      ? "Meta Ad Library"
+                      : "Demo dataset"}
             </div>
           </div>
 

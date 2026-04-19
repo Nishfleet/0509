@@ -34,7 +34,7 @@ import {
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
-import { MetaApiError, searchAds } from "~/lib/meta-api.server";
+import { CommercialDiscoveryError, searchAdsViaSourceResolver } from "~/lib/ad-source.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import {
@@ -309,10 +309,12 @@ export async function runWatchlist(
     });
     await touchWatchlistScanned(env, watchlist.id);
     await logMetaIntegrationStatus(env, {
-      status: env.META_AD_LIBRARY_TOKEN ? "healthy" : "demo",
-      summary: env.META_AD_LIBRARY_TOKEN
-        ? "Scheduled watchlist scan completed successfully."
-        : "Watchlist scan completed in explicit demo mode because no Meta token is configured.",
+      status: env.BROWSER ? "healthy" : env.META_AD_LIBRARY_TOKEN ? "degraded" : "demo",
+      summary: env.BROWSER
+        ? "Scheduled watchlist scan completed through the commercial discovery resolver."
+        : env.META_AD_LIBRARY_TOKEN
+          ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
+          : "Watchlist scan completed in explicit demo mode because no live commercial provider is configured.",
       metadata: {
         watchlistId: watchlist.id,
         runId,
@@ -323,7 +325,9 @@ export async function runWatchlist(
   } catch (error) {
     const details = error instanceof Error ? error.message : "Unknown monitoring error.";
     const errorCode =
-      error instanceof MetaApiError ? String(error.code) : "monitoring_failed";
+      error instanceof CommercialDiscoveryError
+        ? error.failureClass
+        : "monitoring_failed";
 
     await finishWatchlistRun(env, runId, {
       status: "failed",
@@ -338,8 +342,8 @@ export async function runWatchlist(
     await logMetaIntegrationStatus(env, {
       status: "degraded",
       summary:
-        error instanceof MetaApiError && error.isAuthError
-          ? "Meta Ad Library authentication failed during monitoring."
+        error instanceof CommercialDiscoveryError
+          ? "Commercial discovery failed during monitoring."
           : "A monitoring run failed and needs attention.",
       errorCode,
       errorMessage: details,
@@ -549,11 +553,11 @@ async function performBoundedScan(
   const ads: AdRecord[] = [];
 
   do {
-    const response = await searchAds(
+    const response = await searchAdsViaSourceResolver(
       env,
       query,
       cursor ?? null,
-      { allowDemoFallback: !env.META_AD_LIBRARY_TOKEN },
+      { purpose: "watchlist_scan" },
     );
     ads.push(...response.ads);
     cursor = response.nextCursor;
