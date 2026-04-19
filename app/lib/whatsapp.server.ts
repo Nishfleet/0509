@@ -5,6 +5,7 @@ import {
   whatsappGraphApiVersion,
 } from "~/lib/env.server";
 import type {
+  DeliveryAttemptStatus,
   DeliveryLane,
   DeliveryTargetRecord,
   WebhookReconciliationStatus,
@@ -31,6 +32,15 @@ interface SendDigestWhatsAppInput {
   itemCount: number;
   periodStart: string;
   periodEnd: string;
+}
+
+export interface WhatsAppWebhookStatusUpdate {
+  provider: "whatsapp_cloud_api";
+  providerMessageId: string;
+  webhookStatus: WebhookReconciliationStatus;
+  status: DeliveryAttemptStatus | null;
+  providerStatusLastSeenAt: string;
+  errorMessage: string | null;
 }
 
 export async function sendDigestWhatsApp(
@@ -166,4 +176,106 @@ function formatPeriodRange(periodStart: string, periodEnd: string) {
   });
 
   return `${formatter.format(new Date(periodStart))} to ${formatter.format(new Date(periodEnd))}`;
+}
+
+export function verifyWhatsAppWebhookChallenge(env: AppEnv, url: URL) {
+  const mode = url.searchParams.get("hub.mode");
+  const verifyToken = url.searchParams.get("hub.verify_token");
+  const challenge = url.searchParams.get("hub.challenge");
+
+  if (mode !== "subscribe" || !challenge) {
+    return null;
+  }
+
+  if (!env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || verifyToken !== env.WHATSAPP_WEBHOOK_VERIFY_TOKEN) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+
+  return challenge;
+}
+
+export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppWebhookStatusUpdate[] {
+  const entries =
+    (payload as {
+      entry?: Array<{
+        changes?: Array<{
+          value?: {
+            statuses?: Array<{
+              id?: string;
+              status?: string;
+              timestamp?: string;
+              errors?: Array<{ message?: string }>;
+            }>;
+          };
+        }>;
+      }>;
+    })?.entry ?? [];
+
+  const deduped = new Map<string, WhatsAppWebhookStatusUpdate>();
+
+  for (const entry of entries) {
+    for (const change of entry.changes ?? []) {
+      for (const status of change.value?.statuses ?? []) {
+        if (!status.id) {
+          continue;
+        }
+
+        const mapped = mapWhatsAppStatus(status.status, status.errors?.[0]?.message ?? null);
+        const providerStatusLastSeenAt = status.timestamp
+          ? new Date(Number(status.timestamp) * 1000).toISOString()
+          : new Date().toISOString();
+        const candidate: WhatsAppWebhookStatusUpdate = {
+          provider: "whatsapp_cloud_api",
+          providerMessageId: status.id,
+          webhookStatus: mapped.webhookStatus,
+          status: mapped.status,
+          providerStatusLastSeenAt,
+          errorMessage: mapped.errorMessage,
+        };
+        const existing = deduped.get(status.id);
+
+        if (!existing || statusPriority(candidate) >= statusPriority(existing)) {
+          deduped.set(status.id, candidate);
+        }
+      }
+    }
+  }
+
+  return [...deduped.values()];
+}
+
+function mapWhatsAppStatus(rawStatus: string | undefined, providerError: string | null) {
+  switch ((rawStatus ?? "").toLowerCase()) {
+    case "sent":
+    case "delivered":
+    case "read":
+      return {
+        webhookStatus: "delivered" as const,
+        status: "sent" as const,
+        errorMessage: null,
+      };
+    case "failed":
+    case "undelivered":
+      return {
+        webhookStatus: "failed" as const,
+        status: "failed" as const,
+        errorMessage: providerError ?? "WhatsApp delivery failed.",
+      };
+    default:
+      return {
+        webhookStatus: "pending" as const,
+        status: null,
+        errorMessage: providerError,
+      };
+  }
+}
+
+function statusPriority(candidate: WhatsAppWebhookStatusUpdate) {
+  if (candidate.webhookStatus === "failed") {
+    return 3;
+  }
+  if (candidate.webhookStatus === "delivered") {
+    return 2;
+  }
+  return 1;
 }

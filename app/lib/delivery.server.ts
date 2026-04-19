@@ -6,6 +6,7 @@ import {
   getWorkspaceDeliveryConfig,
   legacyWorkspaceDeliveryDefaults,
   listDeliveryTargets,
+  reconcileDeliveryAttemptByProviderMessageId,
   upsertDeliveryTarget,
   upsertDigestDelivery,
 } from "~/lib/data.server";
@@ -101,6 +102,20 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
     attempts: attempts.length,
     channels: [...new Set(attempts.map((attempt) => attempt.channel))],
   };
+}
+
+export async function reconcileDeliveryStatus(
+  env: AppEnv,
+  input: {
+    provider: string;
+    providerMessageId: string;
+    webhookStatus: "pending" | "delivered" | "failed" | "legacy_unknown" | "provider_unknown";
+    status?: "pending" | "sent" | "failed" | "skipped_due_to_quiet_hours" | "skipped_due_to_dedupe" | null;
+    providerStatusLastSeenAt: string;
+    errorMessage?: string | null;
+  },
+) {
+  return reconcileDeliveryAttemptByProviderMessageId(env, input);
 }
 
 async function deliverDigestToEmailTarget(

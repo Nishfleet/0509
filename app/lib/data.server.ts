@@ -2402,6 +2402,75 @@ export async function getOperatorSnapshot(env: AppEnv) {
   };
 }
 
+export async function reconcileDeliveryAttemptByProviderMessageId(
+  env: AppEnv,
+  input: {
+    provider: string;
+    providerMessageId: string;
+    webhookStatus: WebhookReconciliationStatus;
+    status?: DeliveryAttemptStatus | null;
+    providerStatusLastSeenAt: string;
+    errorMessage?: string | null;
+  },
+) {
+  const existing = await one<DeliveryAttemptRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_attempt
+      WHERE provider = ?
+        AND provider_message_id = ?
+    `,
+    input.provider,
+    input.providerMessageId,
+  );
+
+  if (!existing) {
+    return null;
+  }
+
+  const nextStatus = input.status ?? existing.status;
+  const nextFailedAt =
+    nextStatus === "failed" && !existing.failed_at
+      ? input.providerStatusLastSeenAt
+      : existing.failed_at;
+  const nextSentAt =
+    nextStatus === "sent" && !existing.sent_at
+      ? input.providerStatusLastSeenAt
+      : existing.sent_at;
+
+  await run(
+    env,
+    `
+      UPDATE delivery_attempt
+      SET status = ?,
+          webhook_status = ?,
+          provider_status_last_seen_at = ?,
+          error_message = COALESCE(?, error_message),
+          sent_at = ?,
+          failed_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `,
+    nextStatus,
+    input.webhookStatus,
+    input.providerStatusLastSeenAt,
+    input.errorMessage ?? null,
+    nextSentAt,
+    nextFailedAt,
+    nowIso(),
+    existing.id,
+  );
+
+  const updated = await one<DeliveryAttemptRow>(
+    env,
+    "SELECT * FROM delivery_attempt WHERE id = ?",
+    existing.id,
+  );
+
+  return updated ? toDeliveryAttemptRecord(updated) : null;
+}
+
 export async function createDeliveryAttempt(
   env: AppEnv,
   input: {
