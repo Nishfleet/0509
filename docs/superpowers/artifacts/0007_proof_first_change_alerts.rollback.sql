@@ -2,8 +2,7 @@ PRAGMA foreign_keys = OFF;
 
 -- Emergency/manual rollback only.
 -- Restore from a D1 backup/export first when possible. Roll-forward is preferred.
-
-BEGIN TRANSACTION;
+-- Keep this artifact free of explicit BEGIN/COMMIT statements for D1 compatibility.
 
 CREATE TABLE watch_event_previous (
   id TEXT PRIMARY KEY NOT NULL,
@@ -74,5 +73,4 @@ DROP TABLE IF EXISTS proof_capture;
 DROP TABLE IF EXISTS proof_target;
 DROP TABLE IF EXISTS event_candidate;
 
-COMMIT;
 PRAGMA foreign_keys = ON;
