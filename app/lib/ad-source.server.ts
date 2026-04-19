@@ -61,7 +61,7 @@ function normalizeSearchResponse(
 }
 
 export function resolveCommercialDiscoveryProvider(env: AppEnv): AdDiscoveryProvider {
-  if (hasBrowserBinding(env.BROWSER)) {
+  if (env.BROWSER) {
     return "meta_library_browser";
   }
 
@@ -87,12 +87,12 @@ async function getRuntimeWorkerEnv(): Promise<AppEnv | null> {
 }
 
 async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
-  if (hasBrowserBinding(env.BROWSER)) {
+  if (env.BROWSER) {
     return env;
   }
 
   const requestEnv = (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ ?? null;
-  if (hasBrowserBinding(requestEnv?.BROWSER)) {
+  if (requestEnv?.BROWSER) {
     return {
       ...requestEnv,
       ...env,
