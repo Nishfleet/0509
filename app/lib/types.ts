@@ -195,10 +195,26 @@ export interface AdRecord {
   tags?: string[];
 }
 
+export type AdDiscoveryProvider = "meta_api" | "meta_library_browser" | "demo";
+export type AdDiscoverySource = "meta" | "meta_api" | "meta_library_browser" | "demo";
+export type DiscoveryCacheStatus = "miss" | "hit" | "stale" | "none";
+export type DiscoveryRouteContext = "public_search" | "watchlist_scan";
+export type DiscoveryFetchStatus = "succeeded" | "failed";
+export type DiscoveryFailureClass =
+  | "browser_unavailable"
+  | "browser_launch_failed"
+  | "timeout"
+  | "login_wall"
+  | "rate_limited"
+  | "selector_drift"
+  | "empty_result";
+
 export interface SearchResponse {
   ads: AdRecord[];
   nextCursor: string | null;
-  source: "meta" | "demo";
+  source: AdDiscoverySource;
+  provider?: AdDiscoveryProvider;
+  cacheStatus?: DiscoveryCacheStatus;
 }
 
 export interface SavedQueryRecord {
@@ -502,7 +518,9 @@ export interface PricingPlan {
 }
 
 export interface MetaIntegrationStatus {
-  status: "healthy" | "demo" | "degraded";
+  status: "healthy" | "demo" | "degraded" | "cache_only" | "disabled";
+  provider?: AdDiscoveryProvider;
+  mode?: "live" | "diagnostic" | "demo" | "cache";
   summary: string;
   lastCheckedAt: string | null;
   lastErrorCode: string | null;

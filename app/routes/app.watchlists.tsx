@@ -20,6 +20,7 @@ import type {
   DeliveryAttemptRecord,
   DeliveryTargetRecord,
   EventCandidateRecord,
+  MetaIntegrationStatus,
   ProofCaptureRecord,
   WatchEventRecord,
   WatchlistProofSummary,
@@ -29,6 +30,7 @@ import type {
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
+  const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
     getWatchlist,
@@ -45,7 +47,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const watchlists = await listWatchlists(env, session.user.id);
+  const [watchlists, discoveryStatus] = await Promise.all([
+    listWatchlists(env, session.user.id),
+    resolveCommercialAdSourceStatus(env),
+  ]);
   const url = new URL(request.url);
   const selectedWatchlistId = url.searchParams.get("watchlist") ?? watchlists[0]?.id ?? null;
   const selectedWatchlist = selectedWatchlistId
@@ -67,6 +72,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       recentDeliveryAttempts: [] as DeliveryAttemptRecord[],
       recentProofCaptures: [] as ProofCaptureRecord[],
       proofSummary: emptyProofSummary(),
+      discoveryStatus,
     };
   }
 
@@ -123,6 +129,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     recentDeliveryAttempts,
     recentProofCaptures,
     proofSummary: buildProofSummary(recentProofCaptures),
+    discoveryStatus,
   };
 }
 
@@ -406,6 +413,50 @@ export default function WatchlistsRoute() {
               </div>
 
               <div className="stack-list">
+                <section>
+                  <p className="section-label">Commercial discovery</p>
+                  <div className="workspace-panels">
+                    <article className="content-card">
+                      <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
+                      <p className="muted-text">{data.discoveryStatus.summary}</p>
+                      {data.discoveryStatus.lastErrorCode ? (
+                        <p className="muted-text">
+                          Last issue: {data.discoveryStatus.lastErrorCode}
+                          {data.discoveryStatus.lastErrorMessage
+                            ? ` · ${data.discoveryStatus.lastErrorMessage}`
+                            : ""}
+                        </p>
+                      ) : null}
+
+                      <div className="stack-list compact-list" style={{ marginTop: "0.75rem" }}>
+                        <div className="list-card">
+                          <p className="section-label">Source</p>
+                          <p className="muted-text">
+                            {formatDiscoveryProviderLabel(
+                              data.discoveryStatus.provider,
+                              data.discoveryStatus.mode,
+                            )}
+                          </p>
+                        </div>
+                        <div className="list-card">
+                          <p className="section-label">Current state</p>
+                          <p className="muted-text">
+                            {formatDiscoveryStatusLabel(data.discoveryStatus.status)}
+                          </p>
+                        </div>
+                        <div className="list-card">
+                          <p className="section-label">Last check</p>
+                          <p className="muted-text">
+                            {data.discoveryStatus.lastCheckedAt
+                              ? new Date(data.discoveryStatus.lastCheckedAt).toLocaleString("en-IN")
+                              : "No live check recorded yet"}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+
                 <section>
                   <p className="section-label">See what changed</p>
                   {data.events.length === 0 ? (
@@ -868,6 +919,45 @@ function formatRunEventTypes(summary: Record<string, unknown>) {
     .map(([eventType, count]) => `${count} ${eventType.replaceAll("_", " ")}`);
 
   return parts.join(" · ");
+}
+
+function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
+  if (status.status === "healthy") {
+    return "Live commercial discovery is healthy";
+  }
+  if (status.status === "cache_only") {
+    return "Commercial discovery is running from cache";
+  }
+  if (status.status === "demo") {
+    return "Watchlists are still in demo mode";
+  }
+  if (status.status === "disabled") {
+    return "Commercial discovery is disabled";
+  }
+  return "Commercial discovery needs attention";
+}
+
+function formatDiscoveryProviderLabel(
+  provider?: MetaIntegrationStatus["provider"],
+  mode?: MetaIntegrationStatus["mode"],
+) {
+  if (provider === "meta_library_browser") {
+    return mode === "cache" ? "Browser Run with cached live results" : "Browser Run live capture";
+  }
+  if (provider === "meta_api") {
+    return "Official Meta API diagnostic path";
+  }
+  if (provider === "demo") {
+    return "Demo dataset";
+  }
+  return "Unknown source";
+}
+
+function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status"]) {
+  if (status === "cache_only") {
+    return "Cache only";
+  }
+  return status.replaceAll("_", " ");
 }
 
 function formatNumericSummaryPart(

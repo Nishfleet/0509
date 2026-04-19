@@ -244,6 +244,16 @@ const recentDeliveryAttempts: DeliveryAttemptRecord[] = [
   },
 ];
 
+const discoveryStatus = {
+  status: "healthy",
+  provider: "meta_library_browser",
+  mode: "live",
+  summary: "Live commercial discovery running through Browser Run.",
+  lastCheckedAt: "2026-04-18T10:06:00.000Z",
+  lastErrorCode: null,
+  lastErrorMessage: null,
+} as const;
+
 function createContext() {
   return {
     cloudflare: {
@@ -291,6 +301,9 @@ describe("watchlists route loader", () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
     }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
+    }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
       getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(watchlistDeliveryConfig),
@@ -327,6 +340,7 @@ describe("watchlists route loader", () => {
         emailEnabled: true,
         whatsappEnabled: true,
       },
+      discoveryStatus,
       proofSummary: {
         totalAttempts: 1,
         successfulAttempts: 1,
@@ -493,6 +507,7 @@ describe("watchlists route rendering", () => {
         runs: recentRuns,
         workspaceDeliveryConfig,
         watchlistDeliveryConfig,
+        discoveryStatus,
         effectiveDeliveryConfig: {
           sensitivityMode: "quiet",
           instantEnabled: true,
@@ -524,6 +539,8 @@ describe("watchlists route rendering", () => {
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
     expect(markup).toContain("See what changed");
+    expect(markup).toContain("Commercial discovery");
+    expect(markup).toContain("Browser Run live capture");
     expect(markup).toContain("Proof and delivery");
     expect(markup).toContain("High confidence");
     expect(markup).toContain("Why this alerted");
