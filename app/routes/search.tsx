@@ -21,7 +21,7 @@ import {
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
 import type { RootLoaderData } from "~/root";
-import type { AdRecord, SearchFilters } from "~/lib/types";
+import type { AdRecord, SearchFilters, SearchResponse } from "~/lib/types";
 
 export const meta: MetaFunction = () => [
   { title: "Search | 0509" },
@@ -220,23 +220,22 @@ export default function SearchRoute() {
               <p className="eyebrow">Public search flow</p>
               <h1>Search competitor Meta ads and turn useful queries into reusable monitoring.</h1>
             </div>
-            <div className="source-pill">
-              Source:{" "}
-              {data.result.cacheStatus === "hit" || data.result.cacheStatus === "stale"
-                ? "Cached live results"
-                : data.result.source === "meta_library_browser"
-                  ? "Live Ad Library capture"
-                  : data.result.source === "meta_api"
-                    ? "API diagnostic"
-                    : data.result.source === "meta"
-                      ? "Meta Ad Library"
-                      : "Demo dataset"}
-            </div>
+            <div className="source-pill">Source: {formatSearchSourceLabel(data.result)}</div>
           </div>
 
           {actionData?.message ? (
             <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
               <p>{actionData.message}</p>
+            </div>
+          ) : null}
+
+          {data.result.discoverySummary ? (
+            <div className="callout-card">
+              <p className="section-label">Commercial discovery status</p>
+              <p>{data.result.discoverySummary}</p>
+              {data.result.discoveryFailureClass ? (
+                <p className="muted-text">Failure class: {formatFailureClass(data.result.discoveryFailureClass)}</p>
+              ) : null}
             </div>
           ) : null}
 
@@ -410,31 +409,45 @@ export default function SearchRoute() {
               </div>
 
               <div className="results-grid">
-                {data.result.ads.map((ad) => (
-                  <Link
-                    className={`result-card ${data.selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
-                    key={ad.metaAdId}
-                    to={`/search?${withSelected(
-                      buildSearchParams({
-                        mode: data.mode,
-                        filters: data.filters,
-                      }),
-                      ad.metaAdId,
-                    ).toString()}`}
-                  >
-                    <div className="card-header">
-                      <div>
-                        <p className="section-label">{ad.advertiser}</p>
-                        <h3>{ad.previewHeadline}</h3>
+                {data.result.ads.length > 0 ? (
+                  data.result.ads.map((ad) => (
+                    <Link
+                      className={`result-card ${data.selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
+                      key={ad.metaAdId}
+                      to={`/search?${withSelected(
+                        buildSearchParams({
+                          mode: data.mode,
+                          filters: data.filters,
+                        }),
+                        ad.metaAdId,
+                      ).toString()}`}
+                    >
+                      <div className="card-header">
+                        <div>
+                          <p className="section-label">{ad.advertiser}</p>
+                          <h3>{ad.previewHeadline}</h3>
+                        </div>
+                        <span className="badge">{ad.format}</span>
                       </div>
-                      <span className="badge">{ad.format}</span>
-                    </div>
-                    <p>{ad.hook}</p>
-                    <p className="muted-text">
-                      {ad.offer} · {ad.destinationType} · {ad.languageLabel}
+                      <p>{ad.hook}</p>
+                      <p className="muted-text">
+                        {ad.offer} · {ad.destinationType} · {ad.languageLabel}
+                      </p>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="empty-state">
+                    <h3>
+                      {data.result.discoveryStatus === "degraded"
+                        ? "Live search is temporarily unavailable"
+                        : "No ads found for this query"}
+                    </h3>
+                    <p>
+                      {data.result.discoverySummary ??
+                        "Try a broader query or switch between advertiser and keyword mode."}
                     </p>
-                  </Link>
-                ))}
+                  </div>
+                )}
               </div>
             </section>
 
@@ -599,6 +612,38 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function formatSearchSourceLabel(result: SearchResponse) {
+  if (result.discoveryStatus === "degraded" && result.ads.length === 0) {
+    return "Commercial discovery degraded";
+  }
+
+  if (
+    result.discoveryStatus === "cache_only" ||
+    result.cacheStatus === "hit" ||
+    result.cacheStatus === "stale"
+  ) {
+    return "Cached live results";
+  }
+
+  if (result.source === "meta_library_browser") {
+    return "Live Ad Library capture";
+  }
+
+  if (result.source === "meta_api") {
+    return "API diagnostic";
+  }
+
+  if (result.source === "meta") {
+    return "Meta Ad Library";
+  }
+
+  return "Demo dataset";
+}
+
+function formatFailureClass(failureClass: string) {
+  return failureClass.replaceAll("_", " ");
 }
 
 function canCreateAdvertiserWatchlist(query: ReturnType<typeof normalizeSavedQuery>) {

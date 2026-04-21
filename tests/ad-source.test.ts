@@ -354,4 +354,112 @@ describe("searchAdsViaSourceResolver", () => {
     expect(result.provider).toBe("meta_library_browser");
     expect(result.source).toBe("meta_library_browser");
   });
+
+  it("returns an honest degraded empty state for public search when live discovery fails without cache", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      failureClass = "selector_drift";
+    }
+    const browserSearch = vi
+      .fn()
+      .mockRejectedValue(new MockCommercialDiscoveryError("selector drift"));
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "selector_drift",
+    });
+    expect(result.discoverySummary).toContain("no cached results are available");
+  });
+
+  it("still throws for watchlist scans when live discovery fails without cache", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      failureClass = "selector_drift";
+    }
+    const browserSearch = vi
+      .fn()
+      .mockRejectedValue(new MockCommercialDiscoveryError("selector drift"));
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    await expect(
+      searchAdsViaSourceResolver(
+        {
+          BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+          DB: {} as D1Database,
+        } as never,
+        {
+          mode: "keyword",
+          filters: {
+            query: "nykaa",
+            country: "India",
+            platform: "all",
+            creativeType: "all",
+            status: "all",
+            firstSeenFrom: "",
+            lastSeenFrom: "",
+          },
+        },
+        null,
+        {
+          purpose: "watchlist_scan",
+        },
+      ),
+    ).rejects.toThrow("selector drift");
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+  });
 });

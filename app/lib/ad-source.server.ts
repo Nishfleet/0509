@@ -196,7 +196,12 @@ export async function searchAdsViaSourceResolver(
   const routeContext = options.purpose ?? "public_search";
 
   if (provider === "demo") {
-    return normalizeSearchResponse(demoSearch(query, cursor), "demo");
+    return {
+      ...normalizeSearchResponse(demoSearch(query, cursor), "demo"),
+      discoveryStatus: "demo",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
   }
 
   const cacheKey = buildDiscoveryCacheKey({
@@ -212,6 +217,9 @@ export async function searchAdsViaSourceResolver(
       source: provider,
       provider,
       cacheStatus: "hit",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
     };
   }
 
@@ -280,6 +288,9 @@ export async function searchAdsViaSourceResolver(
       source: provider,
       provider,
       cacheStatus: cached ? "stale" : "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
     };
   } catch (error) {
     const failureClass = resolveFailureClass(error);
@@ -325,6 +336,22 @@ export async function searchAdsViaSourceResolver(
         source: provider,
         provider,
         cacheStatus: "stale",
+        discoveryStatus: "cache_only",
+        discoverySummary: summary,
+        discoveryFailureClass: failureClass,
+      };
+    }
+
+    if (routeContext === "public_search") {
+      return {
+        ads: [],
+        nextCursor: null,
+        source: provider,
+        provider,
+        cacheStatus: "miss",
+        discoveryStatus: "degraded",
+        discoverySummary: summary,
+        discoveryFailureClass: failureClass,
       };
     }
 
