@@ -462,4 +462,186 @@ describe("searchAdsViaSourceResolver", () => {
 
     expect(browserSearch).toHaveBeenCalledTimes(1);
   });
+
+  it("classifies Browser Run 429 launch errors as rate limited", async () => {
+    const browserSearch = vi
+      .fn()
+      .mockRejectedValue(new Error("Unable to create new browser: code: 429: message: Rate limit exceeded"));
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(result.discoveryFailureClass).toBe("rate_limited");
+  });
+
+  it("serves stale cached results without a fresh browser fetch during public-search cooldown", async () => {
+    const browserSearch = vi.fn();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: {
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      fetchedAt: "2026-04-21T18:00:00.000Z",
+      expiresAt: "2026-04-21T18:01:00.000Z",
+      browserMsUsed: 2500,
+      createdAt: "2026-04-21T18:00:00.000Z",
+      updatedAt: "2026-04-21T18:00:00.000Z",
+    });
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "cache_only",
+      failureClass: "rate_limited",
+      summary: "Commercial discovery degraded; serving cached results.",
+      lastSuccessAt: "2026-04-21T18:00:00.000Z",
+      lastFailureAt: new Date().toISOString(),
+      metadata: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoveryFailureClass: "rate_limited",
+    });
+  });
+
+  it("returns a degraded empty state without a fresh browser fetch during public-search cooldown when no cache exists", async () => {
+    const browserSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "rate_limited",
+      summary: "Commercial discovery degraded and no cached results are available.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date().toISOString(),
+      metadata: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "adspy",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      ads: [],
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "rate_limited",
+    });
+  });
 });

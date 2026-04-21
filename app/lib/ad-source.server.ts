@@ -25,6 +25,8 @@ export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
 }
 
+const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
+
 type GlobalEnvCarrier = typeof globalThis & {
   __APP_REQUEST_ENV__?: AppEnv;
 };
@@ -194,6 +196,10 @@ export async function searchAdsViaSourceResolver(
   const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
   const provider = resolveCommercialDiscoveryProvider(effectiveEnv);
   const routeContext = options.purpose ?? "public_search";
+  const providerState =
+    provider !== "demo" && effectiveEnv.DB
+      ? await getDiscoveryProviderState(effectiveEnv, provider)
+      : null;
 
   if (provider === "demo") {
     return {
@@ -220,6 +226,35 @@ export async function searchAdsViaSourceResolver(
       discoveryStatus: "healthy",
       discoverySummary: null,
       discoveryFailureClass: null,
+    };
+  }
+
+  if (
+    routeContext === "public_search" &&
+    providerState &&
+    shouldUsePublicSearchCooldown(providerState)
+  ) {
+    if (cached) {
+      return {
+        ...cached.payload,
+        source: provider,
+        provider,
+        cacheStatus: "stale",
+        discoveryStatus: "cache_only",
+        discoverySummary: providerState.summary,
+        discoveryFailureClass: providerState.failureClass,
+      };
+    }
+
+    return {
+      ads: [],
+      nextCursor: null,
+      source: provider,
+      provider,
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoverySummary: providerState.summary,
+      discoveryFailureClass: providerState.failureClass,
     };
   }
 
@@ -374,9 +409,31 @@ function resolveFailureClass(error: unknown): DiscoveryFailureClass {
   }
 
   const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("rate limit") || message.includes("429")) {
+    return "rate_limited";
+  }
   if (message.includes("timeout")) {
     return "timeout";
   }
 
   return "browser_launch_failed";
+}
+
+function shouldUsePublicSearchCooldown(
+  providerState: Awaited<ReturnType<typeof getDiscoveryProviderState>>,
+) {
+  if (!providerState?.updatedAt) {
+    return false;
+  }
+
+  if (!providerState.failureClass || providerState.status === "healthy") {
+    return false;
+  }
+
+  const updatedAtMs = Date.parse(providerState.updatedAt);
+  if (Number.isNaN(updatedAtMs)) {
+    return false;
+  }
+
+  return Date.now() - updatedAtMs < PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS;
 }
