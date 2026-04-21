@@ -200,6 +200,7 @@ export type AdDiscoverySource = "meta" | "meta_api" | "meta_library_browser" | "
 export type DiscoveryCacheStatus = "miss" | "hit" | "stale" | "none";
 export type DiscoveryRouteContext = "public_search" | "watchlist_scan";
 export type DiscoveryFetchStatus = "succeeded" | "failed";
+export type CommercialDiscoveryStatus = "healthy" | "demo" | "degraded" | "cache_only" | "disabled";
 export type DiscoveryFailureClass =
   | "browser_unavailable"
   | "browser_launch_failed"
@@ -215,6 +216,9 @@ export interface SearchResponse {
   source: AdDiscoverySource;
   provider?: AdDiscoveryProvider;
   cacheStatus?: DiscoveryCacheStatus;
+  discoveryStatus?: CommercialDiscoveryStatus;
+  discoverySummary?: string | null;
+  discoveryFailureClass?: DiscoveryFailureClass | null;
 }
 
 export interface SavedQueryRecord {
@@ -518,7 +522,7 @@ export interface PricingPlan {
 }
 
 export interface MetaIntegrationStatus {
-  status: "healthy" | "demo" | "degraded" | "cache_only" | "disabled";
+  status: CommercialDiscoveryStatus;
   provider?: AdDiscoveryProvider;
   mode?: "live" | "diagnostic" | "demo" | "cache";
   summary: string;
