@@ -34,7 +34,11 @@ import {
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
-import { CommercialDiscoveryError, searchAdsViaSourceResolver } from "~/lib/ad-source.server";
+import {
+  CommercialDiscoveryError,
+  resolveCommercialDiscoveryProvider,
+  searchAdsViaSourceResolver,
+} from "~/lib/ad-source.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import {
@@ -105,9 +109,11 @@ export async function runScheduledMonitoring(
   let inlineRuns = 0;
 
   const workflowBinding = getMonitoringWorkflowBinding(env);
+  const shouldBypassWorkflow = shouldRunScheduledMonitoringInline(env);
 
-  if (workflowBinding) {
+  if (workflowBinding && !shouldBypassWorkflow) {
     const scheduledTime = options.scheduledTime ?? Date.now();
+    const scanCache = new Map<string, Promise<ScanPayload>>();
 
     for (const watchlist of watchlists) {
       const executionKey = buildWatchlistExecutionIdempotencyKey({
@@ -135,28 +141,12 @@ export async function runScheduledMonitoring(
           continue;
         }
 
-        throw error;
+        const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
+        inlineRuns += ranInline ? 1 : 0;
       }
     }
   } else {
-    const scanCache = new Map<string, Promise<ScanPayload>>();
-
-    for (const watchlist of watchlists) {
-      const query = await resolveWatchlistQuery(env, watchlist);
-      if (!query) {
-        continue;
-      }
-
-      if (!scanCache.has(watchlist.targetFingerprint)) {
-        scanCache.set(
-          watchlist.targetFingerprint,
-          performBoundedScan(env, query, DEFAULT_PAGE_BUDGET),
-        );
-      }
-
-      await runWatchlist(env, watchlist, "scheduled", scanCache.get(watchlist.targetFingerprint)!);
-      inlineRuns += 1;
-    }
+    inlineRuns = await runScheduledMonitoringInline(env, watchlists);
   }
 
   const digests = options.includeDigests ? await runWeeklyDigests(env) : 0;
@@ -541,6 +531,48 @@ async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {
 
   const savedQuery = await getSavedQuery(env, watchlist.targetId);
   return savedQuery?.normalizedQuery ?? null;
+}
+
+function shouldRunScheduledMonitoringInline(env: AppEnv) {
+  // Browser-backed discovery currently needs the main Worker runtime so the
+  // Browser binding stays available during the scheduled scan.
+  return resolveCommercialDiscoveryProvider(env) === "meta_library_browser";
+}
+
+async function runScheduledMonitoringInline(
+  env: AppEnv,
+  watchlists: WatchlistRecord[],
+) {
+  const scanCache = new Map<string, Promise<ScanPayload>>();
+  let inlineRuns = 0;
+
+  for (const watchlist of watchlists) {
+    const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
+    inlineRuns += ranInline ? 1 : 0;
+  }
+
+  return inlineRuns;
+}
+
+async function runScheduledWatchlistInline(
+  env: AppEnv,
+  watchlist: WatchlistRecord,
+  scanCache: Map<string, Promise<ScanPayload>>,
+) {
+  const query = await resolveWatchlistQuery(env, watchlist);
+  if (!query) {
+    return false;
+  }
+
+  if (!scanCache.has(watchlist.targetFingerprint)) {
+    scanCache.set(
+      watchlist.targetFingerprint,
+      performBoundedScan(env, query, DEFAULT_PAGE_BUDGET),
+    );
+  }
+
+  await runWatchlist(env, watchlist, "scheduled", scanCache.get(watchlist.targetFingerprint)!);
+  return true;
 }
 
 async function performBoundedScan(
