@@ -163,8 +163,13 @@ export async function searchMetaLibraryByBrowser(
     }
 
     const message = error instanceof Error ? error.message : "Browser discovery failed.";
-    const failureClass: DiscoveryFailureClass =
-      message.toLowerCase().includes("timeout") ? "timeout" : "browser_launch_failed";
+    const normalizedMessage = message.toLowerCase();
+    const failureClass: DiscoveryFailureClass = normalizedMessage.includes("rate limit") ||
+      normalizedMessage.includes("429")
+      ? "rate_limited"
+      : normalizedMessage.includes("timeout")
+        ? "timeout"
+        : "browser_launch_failed";
     throw new CommercialDiscoveryError(message, failureClass);
   } finally {
     await browser?.close().catch(() => undefined);

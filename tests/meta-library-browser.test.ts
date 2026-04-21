@@ -112,4 +112,41 @@ describe("searchMetaLibraryByBrowser", () => {
       failureClass: "browser_unavailable",
     });
   });
+
+  it("classifies Browser Run 429 launch failures as rate limited", async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValue(new Error("Unable to create new browser: code: 429: message: Rate limit exceeded"));
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch },
+    }));
+
+    const { searchMetaLibraryByBrowser, CommercialDiscoveryError } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    await expect(
+      searchMetaLibraryByBrowser(
+        {
+          BROWSER: {} as Fetcher,
+        },
+        {
+          mode: "advertiser",
+          filters: {
+            query: "nykaa",
+            country: "India",
+            platform: "all",
+            creativeType: "all",
+            status: "all",
+            firstSeenFrom: "",
+            lastSeenFrom: "",
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: CommercialDiscoveryError.name,
+      failureClass: "rate_limited",
+    });
+  });
 });

@@ -322,7 +322,7 @@ export async function searchAdsViaSourceResolver(
       ...result,
       source: provider,
       provider,
-      cacheStatus: cached ? "stale" : "miss",
+      cacheStatus: "miss",
       discoveryStatus: "healthy",
       discoverySummary: null,
       discoveryFailureClass: null,
