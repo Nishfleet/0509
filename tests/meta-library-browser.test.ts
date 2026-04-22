@@ -236,6 +236,7 @@ describe("searchMetaLibraryByBrowser", () => {
       name: CommercialDiscoveryError.name,
       failureClass: "rate_limited",
       message: "Browser Run rate limited this request. Retry after about 15s.",
+      retryAfterSeconds: 15,
     });
     expect(launch).not.toHaveBeenCalled();
     expect(connect).not.toHaveBeenCalled();
@@ -413,6 +414,7 @@ describe("searchMetaLibraryByBrowser", () => {
     ).rejects.toMatchObject({
       name: CommercialDiscoveryError.name,
       failureClass: "rate_limited",
+      retryAfterSeconds: 10,
     });
   });
 });

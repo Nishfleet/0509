@@ -66,12 +66,18 @@ type BrowserContext = Awaited<ReturnType<BrowserInstance["createBrowserContext"]
 type BrowserPage = Awaited<ReturnType<BrowserContext["newPage"]>>;
 
 export class CommercialDiscoveryError extends Error {
+  public readonly retryAfterSeconds: number | null;
+
   constructor(
     message: string,
     public readonly failureClass: DiscoveryFailureClass,
+    options: {
+      retryAfterSeconds?: number | null;
+    } = {},
   ) {
     super(message);
     this.name = "CommercialDiscoveryError";
+    this.retryAfterSeconds = options.retryAfterSeconds ?? null;
   }
 }
 
@@ -329,9 +335,15 @@ async function acquireBrowser(browserBinding: Fetcher) {
 
   const limits = await readBrowserLimits(browserBinding);
   if (limits && limits.allowedBrowserAcquisitions < 1) {
+    const retryAfterSeconds = normalizeRetryAfterSeconds(
+      limits.timeUntilNextAllowedBrowserAcquisition,
+    );
     throw new CommercialDiscoveryError(
       buildRateLimitMessage(limits.timeUntilNextAllowedBrowserAcquisition),
       "rate_limited",
+      {
+        retryAfterSeconds,
+      },
     );
   }
 
@@ -405,7 +417,9 @@ function normalizeCommercialDiscoveryError(error: unknown) {
 
   if (error instanceof BrowserRunQuickActionError) {
     if (error.status === 429) {
-      return new CommercialDiscoveryError(error.message, "rate_limited");
+      return new CommercialDiscoveryError(error.message, "rate_limited", {
+        retryAfterSeconds: error.retryAfterSeconds,
+      });
     }
     if (error.status === 401 || error.status === 403) {
       return new CommercialDiscoveryError(
@@ -555,15 +569,20 @@ function parseQuickActionExtractionPayload(content: string): QuickActionExtracti
 }
 
 function buildRateLimitMessage(timeUntilNextAllowedBrowserAcquisition: number) {
-  if (timeUntilNextAllowedBrowserAcquisition > 0) {
-    const retryAfterSeconds = Math.max(
-      1,
-      Math.ceil(timeUntilNextAllowedBrowserAcquisition / 1000),
-    );
+  const retryAfterSeconds = normalizeRetryAfterSeconds(timeUntilNextAllowedBrowserAcquisition);
+  if (retryAfterSeconds) {
     return `Browser Run rate limited this request. Retry after about ${retryAfterSeconds}s.`;
   }
 
   return "Browser Run rate limited this request.";
+}
+
+function normalizeRetryAfterSeconds(value: number | null | undefined) {
+  if (!Number.isFinite(value) || !value || value <= 0) {
+    return null;
+  }
+
+  return Math.max(1, Math.ceil(value / 1000));
 }
 
 function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQuery): AdRecord {

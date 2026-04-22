@@ -159,7 +159,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       if (error instanceof CommercialDiscoveryError) {
         return {
           ok: false,
-          message: formatWatchlistRefreshFailure(error.failureClass),
+          message: formatWatchlistRefreshFailure(error.failureClass, error.retryAfterSeconds),
         };
       }
 
@@ -836,10 +836,17 @@ function emptyProofSummary(): WatchlistProofSummary {
   };
 }
 
-function formatWatchlistRefreshFailure(failureClass: DiscoveryFailureClass) {
+function formatWatchlistRefreshFailure(
+  failureClass: DiscoveryFailureClass,
+  retryAfterSeconds: number | null = null,
+) {
   switch (failureClass) {
     case "rate_limited":
-      return "Commercial discovery is temporarily rate limited. Scheduled warmups will keep retrying.";
+      return retryAfterSeconds && retryAfterSeconds > 0
+        ? `Commercial discovery is temporarily rate limited. Retry after about ${formatRetryAfterLabel(
+            retryAfterSeconds,
+          )}. Scheduled warmups will keep retrying.`
+        : "Commercial discovery is temporarily rate limited. Scheduled warmups will keep retrying.";
     case "timeout":
       return "Commercial discovery timed out. Try again in a few minutes.";
     case "login_wall":
@@ -847,6 +854,21 @@ function formatWatchlistRefreshFailure(failureClass: DiscoveryFailureClass) {
     default:
       return "Commercial discovery is temporarily unavailable. Try again in a few minutes.";
   }
+}
+
+function formatRetryAfterLabel(retryAfterSeconds: number) {
+  if (retryAfterSeconds < 60) {
+    return `${retryAfterSeconds}s`;
+  }
+
+  const minutes = Math.ceil(retryAfterSeconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
 function buildProofSummary(captures: ProofCaptureRecord[]): WatchlistProofSummary {
