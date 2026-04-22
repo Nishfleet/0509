@@ -229,11 +229,7 @@ export async function searchAdsViaSourceResolver(
     };
   }
 
-  if (
-    routeContext === "public_search" &&
-    providerState &&
-    shouldUsePublicSearchCooldown(providerState)
-  ) {
+  if (providerState && shouldUseProviderCooldown(providerState)) {
     if (cached) {
       return {
         ...cached.payload,
@@ -246,16 +242,23 @@ export async function searchAdsViaSourceResolver(
       };
     }
 
-    return {
-      ads: [],
-      nextCursor: null,
-      source: provider,
-      provider,
-      cacheStatus: "miss",
-      discoveryStatus: "degraded",
-      discoverySummary: providerState.summary,
-      discoveryFailureClass: providerState.failureClass,
-    };
+    if (routeContext === "public_search") {
+      return {
+        ads: [],
+        nextCursor: null,
+        source: provider,
+        provider,
+        cacheStatus: "miss",
+        discoveryStatus: "degraded",
+        discoverySummary: providerState.summary,
+        discoveryFailureClass: providerState.failureClass,
+      };
+    }
+
+    throw new CommercialDiscoveryError(
+      providerState.summary,
+      providerState.failureClass ?? "browser_launch_failed",
+    );
   }
 
   try {
@@ -419,7 +422,7 @@ function resolveFailureClass(error: unknown): DiscoveryFailureClass {
   return "browser_launch_failed";
 }
 
-function shouldUsePublicSearchCooldown(
+function shouldUseProviderCooldown(
   providerState: Awaited<ReturnType<typeof getDiscoveryProviderState>>,
 ) {
   if (!providerState?.updatedAt) {

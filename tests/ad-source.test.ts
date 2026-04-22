@@ -715,4 +715,158 @@ describe("searchAdsViaSourceResolver", () => {
       discoveryFailureClass: "rate_limited",
     });
   });
+
+  it("serves stale cached results without a fresh browser fetch during watchlist-scan cooldown", async () => {
+    const browserSearch = vi.fn();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "watchlist_scan",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: {
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      fetchedAt: "2026-04-21T18:00:00.000Z",
+      expiresAt: "2026-04-21T18:01:00.000Z",
+      browserMsUsed: 2500,
+      createdAt: "2026-04-21T18:00:00.000Z",
+      updatedAt: "2026-04-21T18:00:00.000Z",
+    });
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "cache_only",
+      failureClass: "rate_limited",
+      summary: "Commercial discovery degraded; serving cached results.",
+      lastSuccessAt: "2026-04-21T18:00:00.000Z",
+      lastFailureAt: new Date().toISOString(),
+      metadata: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+        constructor(
+          message: string,
+          public readonly failureClass: string,
+        ) {
+          super(message);
+          this.name = "CommercialDiscoveryError";
+        }
+      },
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoveryFailureClass: "rate_limited",
+    });
+  });
+
+  it("fails fast during watchlist-scan cooldown when no cache exists", async () => {
+    const browserSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "rate_limited",
+      summary: "Commercial discovery degraded and no cached results are available.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date().toISOString(),
+      metadata: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+        constructor(
+          message: string,
+          public readonly failureClass: string,
+        ) {
+          super(message);
+          this.name = "CommercialDiscoveryError";
+        }
+      },
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver, CommercialDiscoveryError } = await import(
+      "~/lib/ad-source.server"
+    );
+
+    await expect(
+      searchAdsViaSourceResolver(
+        {
+          BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+          DB: {} as D1Database,
+        } as never,
+        {
+          mode: "keyword",
+          filters: {
+            query: "adspy",
+            country: "India",
+            platform: "all",
+            creativeType: "all",
+            status: "all",
+            firstSeenFrom: "",
+            lastSeenFrom: "",
+          },
+        },
+        null,
+        {
+          purpose: "watchlist_scan",
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: CommercialDiscoveryError.name,
+      failureClass: "rate_limited",
+      message: "Commercial discovery degraded and no cached results are available.",
+    });
+    expect(browserSearch).not.toHaveBeenCalled();
+  });
 });

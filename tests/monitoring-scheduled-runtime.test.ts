@@ -43,6 +43,7 @@ afterEach(() => {
 function mockMonitoringDependencies(input: {
   provider: "meta_api" | "meta_library_browser";
   workflowCreate?: ReturnType<typeof vi.fn>;
+  searchResponse?: Record<string, unknown>;
 }) {
   const createWatchlistRun = vi
     .fn()
@@ -59,6 +60,7 @@ function mockMonitoringDependencies(input: {
     discoveryStatus: "healthy",
     discoverySummary: null,
     discoveryFailureClass: null,
+    ...input.searchResponse,
   });
 
   vi.doMock("~/lib/analysis.server", () => ({
@@ -155,6 +157,36 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       },
     );
     expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
+  });
+
+  it("treats cache-only warmup responses as skipped instead of refreshed", async () => {
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      searchResponse: {
+        cacheStatus: "stale",
+        discoveryStatus: "cache_only",
+        discoveryFailureClass: "rate_limited",
+      },
+    });
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: {},
+    };
+
+    const { runScheduledDiscoveryWarmup } = await import("~/lib/monitoring.server");
+
+    const result = await runScheduledDiscoveryWarmup(env as never);
+
+    expect(result).toMatchObject({
+      attempted: 2,
+      succeeded: 0,
+      failed: 0,
+      skipped: 2,
+    });
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
   });
 
   it("runs browser-backed scheduled scans inline even when a workflow binding exists", async () => {
