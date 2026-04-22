@@ -40,6 +40,7 @@ interface DiscoveryCooldownState {
 
 type GlobalEnvCarrier = typeof globalThis & {
   __APP_REQUEST_ENV__?: AppEnv;
+  __0509InFlightDiscovery__?: Map<string, Promise<SearchResponse>>;
 };
 
 let runtimeWorkerEnvPromise: Promise<AppEnv | null> | null = null;
@@ -290,64 +291,68 @@ export async function searchAdsViaSourceResolver(
   }
 
   try {
-    const startedAt = Date.now();
-    const result =
-      provider === "meta_library_browser"
-        ? await searchMetaLibraryByBrowser(effectiveEnv, query)
-        : normalizeSearchResponse(
-            await searchMetaApiAds(effectiveEnv, query, cursor, {
-              allowDemoFallback: false,
-            }),
-            provider,
-          );
-    const browserMsUsed = Date.now() - startedAt;
-    const timestamp = new Date().toISOString();
+    const result = await runWithSharedDiscoveryRequest(cacheKey, async () => {
+      const startedAt = Date.now();
+      const liveResult =
+        provider === "meta_library_browser"
+          ? await searchMetaLibraryByBrowser(effectiveEnv, query)
+          : normalizeSearchResponse(
+              await searchMetaApiAds(effectiveEnv, query, cursor, {
+                allowDemoFallback: false,
+              }),
+              provider,
+            );
+      const browserMsUsed = Date.now() - startedAt;
+      const timestamp = new Date().toISOString();
 
-    if (effectiveEnv.DB) {
-      await upsertDiscoveryCacheEntry(effectiveEnv, {
-        cacheKey,
-        provider,
-        routeContext,
-        queryFingerprint: fingerprintSavedQuery(query),
-        country: query.filters.country || "India",
-        cursor: cursor ?? null,
-        payload: {
-          ...result,
-          source: provider,
+      if (effectiveEnv.DB) {
+        await upsertDiscoveryCacheEntry(effectiveEnv, {
+          cacheKey,
           provider,
-        },
-        fetchedAt: timestamp,
-        expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
-        browserMsUsed,
-      });
-      await createDiscoveryFetchLog(effectiveEnv, {
-        provider,
-        routeContext,
-        queryFingerprint: fingerprintSavedQuery(query),
-        country: query.filters.country || "India",
-        status: "succeeded",
-        cacheStatus: cached ? "stale" : "miss",
-        failureClass: null,
-        browserMsUsed,
-        metadata: {
-          cursor: cursor ?? null,
-        },
-      });
-      await upsertDiscoveryProviderState(effectiveEnv, {
-        provider,
-        status: "healthy",
-        failureClass: null,
-        summary:
-          provider === "meta_library_browser"
-            ? "Live commercial discovery running through Browser Run."
-            : "Official Meta API is available for limited diagnostic use.",
-        lastSuccessAt: timestamp,
-        lastFailureAt: null,
-        metadata: {
           routeContext,
-        },
-      });
-    }
+          queryFingerprint: fingerprintSavedQuery(query),
+          country: query.filters.country || "India",
+          cursor: cursor ?? null,
+          payload: {
+            ...liveResult,
+            source: provider,
+            provider,
+          },
+          fetchedAt: timestamp,
+          expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
+          browserMsUsed,
+        });
+        await createDiscoveryFetchLog(effectiveEnv, {
+          provider,
+          routeContext,
+          queryFingerprint: fingerprintSavedQuery(query),
+          country: query.filters.country || "India",
+          status: "succeeded",
+          cacheStatus: cached ? "stale" : "miss",
+          failureClass: null,
+          browserMsUsed,
+          metadata: {
+            cursor: cursor ?? null,
+          },
+        });
+        await upsertDiscoveryProviderState(effectiveEnv, {
+          provider,
+          status: "healthy",
+          failureClass: null,
+          summary:
+            provider === "meta_library_browser"
+              ? "Live commercial discovery running through Browser Run."
+              : "Official Meta API is available for limited diagnostic use.",
+          lastSuccessAt: timestamp,
+          lastFailureAt: null,
+          metadata: {
+            routeContext,
+          },
+        });
+      }
+
+      return liveResult;
+    });
 
     return {
       ...result,
@@ -428,6 +433,34 @@ export async function searchAdsViaSourceResolver(
 
     throw error;
   }
+}
+
+function getInFlightDiscoveryMap() {
+  const carrier = globalThis as GlobalEnvCarrier;
+  if (!carrier.__0509InFlightDiscovery__) {
+    carrier.__0509InFlightDiscovery__ = new Map<string, Promise<SearchResponse>>();
+  }
+
+  return carrier.__0509InFlightDiscovery__;
+}
+
+async function runWithSharedDiscoveryRequest(
+  cacheKey: string,
+  fn: () => Promise<SearchResponse>,
+) {
+  const inFlightDiscovery = getInFlightDiscoveryMap();
+  const existing = inFlightDiscovery.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+
+  const pending = fn().finally(() => {
+    if (inFlightDiscovery.get(cacheKey) === pending) {
+      inFlightDiscovery.delete(cacheKey);
+    }
+  });
+  inFlightDiscovery.set(cacheKey, pending);
+  return pending;
 }
 
 function resolveFailureClass(error: unknown): DiscoveryFailureClass {

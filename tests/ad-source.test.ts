@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SearchResponse } from "~/lib/types";
+import type { NormalizedSavedQuery, SearchResponse } from "~/lib/types";
 
 beforeEach(() => {
   vi.resetModules();
@@ -10,6 +10,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unmock("cloudflare:workers");
   delete (globalThis as { __APP_REQUEST_ENV__?: unknown }).__APP_REQUEST_ENV__;
+  delete (globalThis as { __0509InFlightDiscovery__?: unknown }).__0509InFlightDiscovery__;
   vi.resetModules();
 });
 
@@ -740,6 +741,96 @@ describe("searchAdsViaSourceResolver", () => {
     const providerStateInput = upsertDiscoveryProviderState.mock.calls[0]?.[1];
     const cooldownUntilMs = Date.parse(providerStateInput.metadata.cooldownUntil);
     expect(cooldownUntilMs).toBeGreaterThan(before + 41_215_000);
+  });
+
+  it("coalesces concurrent cold misses for the same query into one live fetch", async () => {
+    let resolveSearch!: (value: SearchResponse) => void;
+    const browserSearch = vi.fn().mockImplementation(
+      () =>
+        new Promise<SearchResponse>((resolve) => {
+          resolveSearch = resolve;
+        }),
+    );
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const query: NormalizedSavedQuery = {
+      mode: "keyword" as const,
+      filters: {
+        query: "burst-test",
+        country: "India",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    };
+
+    const first = searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      query,
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+    const second = searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      query,
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    await vi.waitFor(() => {
+      expect(browserSearch).toHaveBeenCalledTimes(1);
+    });
+
+    resolveSearch({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+    });
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult).toMatchObject({
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    expect(secondResult).toMatchObject({
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    expect(upsertDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
+    expect(createDiscoveryFetchLog).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
   });
 
   it("honors stored provider cooldown metadata beyond the default cooldown window", async () => {
