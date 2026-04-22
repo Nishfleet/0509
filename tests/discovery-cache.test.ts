@@ -25,5 +25,6 @@ describe("resolveDiscoveryCacheTtlMs", () => {
   it("uses shorter TTLs for public search than watchlist scans", () => {
     expect(resolveDiscoveryCacheTtlMs("public_search")).toBe(15 * 60 * 1000);
     expect(resolveDiscoveryCacheTtlMs("watchlist_scan")).toBe(24 * 60 * 60 * 1000);
+    expect(resolveDiscoveryCacheTtlMs("scheduled_warmup")).toBe(24 * 60 * 60 * 1000);
   });
 });

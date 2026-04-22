@@ -9,6 +9,11 @@ import type {
   SearchResponse,
 } from "~/lib/types";
 
+const AD_LIBRARY_RESULT_SELECTOR =
+  'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]';
+const BROWSER_SESSION_KEEP_ALIVE_MS = 3 * 60 * 1000;
+const NAVIGATION_TIMEOUT_MS = 20_000;
+const PAGE_READY_TIMEOUT_MS = 8_000;
 const MOBILE_VIEWPORT = {
   width: 390,
   height: 844,
@@ -32,6 +37,21 @@ interface ExtractedAdCard {
   active: boolean;
 }
 
+interface BrowserRunSession {
+  sessionId: string;
+  startTime: number;
+  connectionId?: string;
+}
+
+interface BrowserRunLimits {
+  allowedBrowserAcquisitions: number;
+  timeUntilNextAllowedBrowserAcquisition: number;
+}
+
+type BrowserInstance = Awaited<ReturnType<typeof puppeteer.launch>>;
+type BrowserContext = Awaited<ReturnType<BrowserInstance["createBrowserContext"]>>;
+type BrowserPage = Awaited<ReturnType<BrowserContext["newPage"]>>;
+
 export class CommercialDiscoveryError extends Error {
   constructor(
     message: string,
@@ -53,17 +73,21 @@ export async function searchMetaLibraryByBrowser(
     );
   }
 
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+  let browser: BrowserInstance | null = null;
+  let browserContext: BrowserContext | null = null;
+  let page: BrowserPage | null = null;
 
   try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
+    browser = await acquireBrowser(env.BROWSER);
+    browserContext = await browser.createBrowserContext();
+    page = await browserContext.newPage();
     await page.setUserAgent(MOBILE_USER_AGENT);
     await page.setViewport(MOBILE_VIEWPORT);
     await page.goto(buildSearchUrl(query), {
-      waitUntil: "networkidle2",
-      timeout: 30_000,
+      waitUntil: "domcontentloaded",
+      timeout: NAVIGATION_TIMEOUT_MS,
     });
+    await waitForLibrarySurface(page);
 
     const extractedCards = await page.evaluate(() => {
       const normalizeText = (value: string | null | undefined) =>
@@ -146,6 +170,34 @@ export async function searchMetaLibraryByBrowser(
         .filter(Boolean);
     });
 
+    if ((extractedCards as ExtractedAdCard[]).length === 0) {
+      const pageSignals = await page.evaluate(() => {
+        const text = (document.body?.innerText ?? "").toLowerCase();
+        return {
+          loginWall:
+            /log in|login|sign in|sign into/.test(text) && text.includes("facebook"),
+          rateLimited:
+            text.includes("rate limit") ||
+            text.includes("too many requests") ||
+            text.includes("try again later"),
+        };
+      });
+
+      if (pageSignals.loginWall) {
+        throw new CommercialDiscoveryError(
+          "Meta Ad Library returned a login wall.",
+          "login_wall",
+        );
+      }
+
+      if (pageSignals.rateLimited) {
+        throw new CommercialDiscoveryError(
+          "Meta Ad Library is temporarily rate limited.",
+          "rate_limited",
+        );
+      }
+    }
+
     const ads = (extractedCards as ExtractedAdCard[]).map((card) =>
       normalizeExtractedCard(card, query),
     );
@@ -172,8 +224,86 @@ export async function searchMetaLibraryByBrowser(
         : "browser_launch_failed";
     throw new CommercialDiscoveryError(message, failureClass);
   } finally {
-    await browser?.close().catch(() => undefined);
+    await page?.close().catch(() => undefined);
+    await browserContext?.close().catch(() => undefined);
+    await browser?.disconnect().catch(() => undefined);
   }
+}
+
+async function acquireBrowser(browserBinding: Fetcher) {
+  const reusableBrowser = await connectToReusableBrowser(browserBinding);
+  if (reusableBrowser) {
+    return reusableBrowser;
+  }
+
+  const limits = await readBrowserLimits(browserBinding);
+  if (limits && limits.allowedBrowserAcquisitions < 1) {
+    throw new CommercialDiscoveryError(
+      buildRateLimitMessage(limits.timeUntilNextAllowedBrowserAcquisition),
+      "rate_limited",
+    );
+  }
+
+  return puppeteer.launch(browserBinding, {
+    keep_alive: BROWSER_SESSION_KEEP_ALIVE_MS,
+  });
+}
+
+async function connectToReusableBrowser(browserBinding: Fetcher) {
+  const sessions = await listReusableSessions(browserBinding);
+
+  for (const session of sessions) {
+    try {
+      return await puppeteer.connect(browserBinding, session.sessionId);
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function listReusableSessions(browserBinding: Fetcher) {
+  try {
+    const sessions = await puppeteer.sessions(browserBinding);
+    return [...(sessions as BrowserRunSession[])]
+      .filter((session) => !session.connectionId)
+      .sort((left, right) => right.startTime - left.startTime);
+  } catch {
+    return [];
+  }
+}
+
+async function readBrowserLimits(browserBinding: Fetcher) {
+  try {
+    return (await puppeteer.limits(browserBinding)) as BrowserRunLimits;
+  } catch {
+    return null;
+  }
+}
+
+async function waitForLibrarySurface(page: BrowserPage) {
+  await page
+    .waitForFunction(
+      (selector) => Boolean(document.querySelector(selector)) || document.readyState === "complete",
+      {
+        timeout: PAGE_READY_TIMEOUT_MS,
+      },
+      AD_LIBRARY_RESULT_SELECTOR,
+    )
+    .catch(() => undefined);
+}
+
+function buildRateLimitMessage(timeUntilNextAllowedBrowserAcquisition: number) {
+  if (timeUntilNextAllowedBrowserAcquisition > 0) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil(timeUntilNextAllowedBrowserAcquisition / 1000),
+    );
+    return `Browser Run rate limited this request. Retry after about ${retryAfterSeconds}s.`;
+  }
+
+  return "Browser Run rate limited this request.";
 }
 
 function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQuery): AdRecord {

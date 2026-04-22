@@ -35,7 +35,7 @@
     "binding": "AI"
   },
   "triggers": {
-    "crons": ["0 4 * * *", "0 5 * * MON"]
+    "crons": ["*/30 * * * *", "0 4 * * *", "0 5 * * MON"]
   },
   "vars": {
     "APP_NAME": "0509",

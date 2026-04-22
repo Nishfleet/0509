@@ -352,6 +352,51 @@ describe("watchlists route loader", () => {
 });
 
 describe("watchlists route actions", () => {
+  it("returns a friendly message when manual refresh is rate limited", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      failureClass = "rate_limited" as const;
+
+      constructor(message: string) {
+        super(message);
+        this.name = "CommercialDiscoveryError";
+      }
+    }
+
+    vi.doMock("~/lib/ad-source.server", () => ({
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      runWatchlistManual: vi
+        .fn()
+        .mockRejectedValue(new MockCommercialDiscoveryError("Rate limit exceeded")),
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "refresh-watchlist");
+    formData.set("watchlistId", "watch-1");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message:
+        "Commercial discovery is temporarily rate limited. Scheduled warmups will keep retrying.",
+      ok: false,
+    });
+  });
+
   it("saves watchlist delivery settings with parsed quiet hours and timezone", async () => {
     const upsertWatchlistDeliveryConfig = vi.fn().mockResolvedValue(watchlistDeliveryConfig);
 
