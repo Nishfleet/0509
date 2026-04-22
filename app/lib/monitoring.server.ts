@@ -213,9 +213,14 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
     attempted += 1;
 
     try {
-      await searchAdsViaSourceResolver(env, target.query, null, {
+      const response = await searchAdsViaSourceResolver(env, target.query, null, {
         purpose: "scheduled_warmup",
       });
+      if (response.discoveryStatus === "cache_only" || response.cacheStatus === "stale") {
+        skipped += 1;
+        continue;
+      }
+
       succeeded += 1;
     } catch (error) {
       failed += 1;
