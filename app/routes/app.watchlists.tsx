@@ -19,6 +19,7 @@ import { createReportId } from "~/lib/report";
 import type {
   DeliveryAttemptRecord,
   DeliveryTargetRecord,
+  DiscoveryFailureClass,
   EventCandidateRecord,
   MetaIntegrationStatus,
   ProofCaptureRecord,
@@ -142,6 +143,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "refresh-watchlist") {
+    const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
     const { getWatchlist } = await import("~/lib/data.server");
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
@@ -151,7 +153,30 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Watchlist not found." };
     }
 
-    await runWatchlistManual(env, watchlist);
+    try {
+      await runWatchlistManual(env, watchlist);
+    } catch (error) {
+      if (error instanceof CommercialDiscoveryError) {
+        return {
+          ok: false,
+          message: formatWatchlistRefreshFailure(error.failureClass),
+        };
+      }
+
+      if (
+        error instanceof Error &&
+        (error.message.includes("refreshed recently") ||
+          error.message.includes("could not be resolved"))
+      ) {
+        return {
+          ok: false,
+          message: error.message,
+        };
+      }
+
+      throw error;
+    }
+
     return {
       ok: true,
       message: `${watchlist.name} refreshed successfully.`,
@@ -809,6 +834,19 @@ function emptyProofSummary(): WatchlistProofSummary {
     lastAttemptAt: null,
     lastSuccessfulProofAt: null,
   };
+}
+
+function formatWatchlistRefreshFailure(failureClass: DiscoveryFailureClass) {
+  switch (failureClass) {
+    case "rate_limited":
+      return "Commercial discovery is temporarily rate limited. Scheduled warmups will keep retrying.";
+    case "timeout":
+      return "Commercial discovery timed out. Try again in a few minutes.";
+    case "login_wall":
+      return "Meta Ad Library blocked live capture just now. Try again in a few minutes.";
+    default:
+      return "Commercial discovery is temporarily unavailable. Try again in a few minutes.";
+  }
 }
 
 function buildProofSummary(captures: ProofCaptureRecord[]): WatchlistProofSummary {

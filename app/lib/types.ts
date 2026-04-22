@@ -198,7 +198,7 @@ export interface AdRecord {
 export type AdDiscoveryProvider = "meta_api" | "meta_library_browser" | "demo";
 export type AdDiscoverySource = "meta" | "meta_api" | "meta_library_browser" | "demo";
 export type DiscoveryCacheStatus = "miss" | "hit" | "stale" | "none";
-export type DiscoveryRouteContext = "public_search" | "watchlist_scan";
+export type DiscoveryRouteContext = "public_search" | "watchlist_scan" | "scheduled_warmup";
 export type DiscoveryFetchStatus = "succeeded" | "failed";
 export type CommercialDiscoveryStatus = "healthy" | "demo" | "degraded" | "cache_only" | "disabled";
 export type DiscoveryFailureClass =

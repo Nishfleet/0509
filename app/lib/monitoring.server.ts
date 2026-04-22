@@ -65,6 +65,7 @@ const DEFAULT_PAGE_BUDGET = 2;
 const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
 const DIGEST_LOOKBACK_DAYS = 7;
+const DISCOVERY_WARMUP_QUERY_LIMIT = 20;
 
 type ObservationRecord = Awaited<ReturnType<typeof listObservationsForRun>>[number];
 
@@ -156,6 +157,82 @@ export async function runScheduledMonitoring(
     duplicates,
     inlineRuns,
     digests,
+  };
+}
+
+export async function runScheduledDiscoveryWarmup(env: AppEnv) {
+  if (!env.DB) {
+    return {
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+    };
+  }
+
+  const watchlists = await listActiveWatchlists(env);
+  const seenFingerprints = new Set<string>();
+  const warmupTargets: Array<{
+    watchlist: WatchlistRecord;
+    query: NormalizedSavedQuery;
+  }> = [];
+  let skipped = 0;
+
+  const sortedWatchlists = [...watchlists].sort((left, right) => {
+    const leftTs = left.lastScannedAt ? new Date(left.lastScannedAt).getTime() : 0;
+    const rightTs = right.lastScannedAt ? new Date(right.lastScannedAt).getTime() : 0;
+    return leftTs - rightTs;
+  });
+
+  for (const watchlist of sortedWatchlists) {
+    if (warmupTargets.length >= DISCOVERY_WARMUP_QUERY_LIMIT) {
+      skipped += 1;
+      continue;
+    }
+
+    if (seenFingerprints.has(watchlist.targetFingerprint)) {
+      skipped += 1;
+      continue;
+    }
+
+    const query = await resolveWatchlistQuery(env, watchlist);
+    if (!query) {
+      skipped += 1;
+      continue;
+    }
+
+    seenFingerprints.add(watchlist.targetFingerprint);
+    warmupTargets.push({ watchlist, query });
+  }
+
+  let attempted = 0;
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const target of warmupTargets) {
+    attempted += 1;
+
+    try {
+      await searchAdsViaSourceResolver(env, target.query, null, {
+        purpose: "scheduled_warmup",
+      });
+      succeeded += 1;
+    } catch (error) {
+      failed += 1;
+
+      if (error instanceof CommercialDiscoveryError) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  return {
+    attempted,
+    succeeded,
+    failed,
+    skipped,
   };
 }
 

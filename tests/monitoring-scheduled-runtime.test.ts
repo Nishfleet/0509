@@ -120,6 +120,43 @@ function mockMonitoringDependencies(input: {
 }
 
 describe("runScheduledMonitoring scheduled runtime selection", () => {
+  it("warms discovery cache for active watchlists without creating watchlist runs", async () => {
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+    });
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: {},
+    };
+
+    const { runScheduledDiscoveryWarmup } = await import("~/lib/monitoring.server");
+
+    const result = await runScheduledDiscoveryWarmup(env as never);
+
+    expect(result).toMatchObject({
+      attempted: 2,
+      succeeded: 2,
+      failed: 0,
+      skipped: 0,
+    });
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenNthCalledWith(
+      1,
+      env,
+      expect.objectContaining({
+        mode: "advertiser",
+      }),
+      null,
+      {
+        purpose: "scheduled_warmup",
+      },
+    );
+    expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
+  });
+
   it("runs browser-backed scheduled scans inline even when a workflow binding exists", async () => {
     const workflowCreate = vi.fn();
     const mocks = mockMonitoringDependencies({

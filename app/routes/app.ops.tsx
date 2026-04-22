@@ -270,7 +270,13 @@ function formatDiscoveryProvider(provider: string) {
 }
 
 function formatRouteContext(routeContext: string) {
-  return routeContext === "watchlist_scan" ? "Watchlist scan" : "Public search";
+  if (routeContext === "watchlist_scan") {
+    return "Watchlist scan";
+  }
+  if (routeContext === "scheduled_warmup") {
+    return "Scheduled warmup";
+  }
+  return "Public search";
 }
 
 function formatDiscoveryStatus(status: string) {
