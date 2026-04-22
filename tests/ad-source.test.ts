@@ -651,6 +651,160 @@ describe("searchAdsViaSourceResolver", () => {
     expect(result.discoveryFailureClass).toBe("rate_limited");
   });
 
+  it("stores upstream retry-after cooldown windows after rate limits", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      constructor(
+        message: string,
+        public readonly failureClass: string,
+        public readonly retryAfterSeconds: number | null,
+      ) {
+        super(message);
+        this.name = "CommercialDiscoveryError";
+      }
+    }
+
+    const browserSearch = vi
+      .fn()
+      .mockRejectedValue(
+        new MockCommercialDiscoveryError(
+          "Browser Run Quick Actions rate limited this request. Retry after about 41216s.",
+          "rate_limited",
+          41_216,
+        ),
+      );
+    const createDiscoveryFetchLog = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const before = Date.now();
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "bigspy",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(result.discoveryStatus).toBe("degraded");
+    expect(result.discoveryFailureClass).toBe("rate_limited");
+    expect(result.discoverySummary).toContain("Retrying after about 11h 27m.");
+    expect(createDiscoveryFetchLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          retryAfterSeconds: 41_216,
+          cooldownUntil: expect.any(String),
+        }),
+      }),
+    );
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        failureClass: "rate_limited",
+        metadata: expect.objectContaining({
+          retryAfterSeconds: 41_216,
+          cooldownUntil: expect.any(String),
+        }),
+        summary: expect.stringContaining("Retrying after about 11h 27m."),
+      }),
+    );
+
+    const providerStateInput = upsertDiscoveryProviderState.mock.calls[0]?.[1];
+    const cooldownUntilMs = Date.parse(providerStateInput.metadata.cooldownUntil);
+    expect(cooldownUntilMs).toBeGreaterThan(before + 41_215_000);
+  });
+
+  it("honors stored provider cooldown metadata beyond the default cooldown window", async () => {
+    const browserSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "rate_limited",
+      summary: "Commercial discovery rate limited and no cached results are available. Retrying after about 30m.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      metadata: {
+        cooldownUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        retryAfterSeconds: 1800,
+      },
+      updatedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "adflex",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      ads: [],
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "rate_limited",
+    });
+    expect(result.discoverySummary).toContain("Retrying after about 30m.");
+  });
+
   it("serves stale cached results without a fresh browser fetch during public-search cooldown", async () => {
     const browserSearch = vi.fn();
     const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({

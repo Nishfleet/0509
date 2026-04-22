@@ -27,6 +27,16 @@ export interface SearchAdsViaSourceOptions {
 }
 
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
+const RATE_LIMIT_PROVIDER_COOLDOWN_MS = 15 * 60 * 1000;
+const TIMEOUT_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
+const BROWSER_FAILURE_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
+const LOGIN_WALL_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
+const EXTRACTION_FAILURE_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
+
+interface DiscoveryCooldownState {
+  cooldownUntil: string;
+  retryAfterSeconds: number | null;
+}
 
 type GlobalEnvCarrier = typeof globalThis & {
   __APP_REQUEST_ENV__?: AppEnv;
@@ -350,13 +360,14 @@ export async function searchAdsViaSourceResolver(
     };
   } catch (error) {
     const failureClass = resolveFailureClass(error);
-    const summary =
-      cached
-        ? "Commercial discovery degraded; serving cached results."
-        : provider === "meta_library_browser"
-          ? "Commercial discovery degraded and no cached results are available."
-          : "Official Meta API diagnostic fetch failed.";
     const timestamp = new Date().toISOString();
+    const cooldownState = buildDiscoveryCooldownState(error, failureClass);
+    const summary = buildDiscoveryFailureSummary({
+      cached: Boolean(cached),
+      cooldownState,
+      failureClass,
+      provider,
+    });
 
     if (effectiveEnv.DB) {
       await createDiscoveryFetchLog(effectiveEnv, {
@@ -369,8 +380,10 @@ export async function searchAdsViaSourceResolver(
         failureClass,
         browserMsUsed: null,
         metadata: {
+          cooldownUntil: cooldownState?.cooldownUntil ?? null,
           cursor: cursor ?? null,
           errorMessage: error instanceof Error ? error.message : "Unknown discovery error.",
+          retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
         },
       });
       await upsertDiscoveryProviderState(effectiveEnv, {
@@ -381,6 +394,8 @@ export async function searchAdsViaSourceResolver(
         lastSuccessAt: cached?.fetchedAt ?? null,
         lastFailureAt: timestamp,
         metadata: {
+          cooldownUntil: cooldownState?.cooldownUntil ?? null,
+          retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
           routeContext,
         },
       });
@@ -451,10 +466,118 @@ function shouldUseProviderCooldown(
     return false;
   }
 
+  const cooldownUntil = resolveProviderCooldownUntil(providerState);
+  if (cooldownUntil) {
+    return Date.now() < cooldownUntil.getTime();
+  }
+
   const updatedAtMs = Date.parse(providerState.updatedAt);
   if (Number.isNaN(updatedAtMs)) {
     return false;
   }
 
   return Date.now() - updatedAtMs < PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS;
+}
+
+function buildDiscoveryCooldownState(
+  error: unknown,
+  failureClass: DiscoveryFailureClass,
+): DiscoveryCooldownState | null {
+  const cooldownMs = resolveDiscoveryCooldownMs(failureClass, error);
+  if (!cooldownMs) {
+    return null;
+  }
+
+  return {
+    cooldownUntil: new Date(Date.now() + cooldownMs).toISOString(),
+    retryAfterSeconds: resolveRetryAfterSeconds(error),
+  };
+}
+
+function buildDiscoveryFailureSummary(input: {
+  cached: boolean;
+  cooldownState: DiscoveryCooldownState | null;
+  failureClass: DiscoveryFailureClass;
+  provider: AdDiscoveryProvider;
+}) {
+  if (input.provider === "meta_api") {
+    return "Official Meta API diagnostic fetch failed.";
+  }
+
+  const retryLabel = formatRetryAfterLabel(input.cooldownState?.retryAfterSeconds ?? null);
+  const retryClause = retryLabel ? ` Retrying after about ${retryLabel}.` : "";
+
+  if (input.failureClass === "rate_limited") {
+    return input.cached
+      ? `Commercial discovery rate limited; serving cached results.${retryClause}`
+      : `Commercial discovery rate limited and no cached results are available.${retryClause}`;
+  }
+
+  return input.cached
+    ? `Commercial discovery degraded; serving cached results.${retryClause}`
+    : `Commercial discovery degraded and no cached results are available.${retryClause}`;
+}
+
+function formatRetryAfterLabel(retryAfterSeconds: number | null) {
+  if (!retryAfterSeconds || retryAfterSeconds <= 0) {
+    return null;
+  }
+
+  if (retryAfterSeconds < 60) {
+    return `${retryAfterSeconds}s`;
+  }
+
+  const minutes = Math.ceil(retryAfterSeconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
+function resolveDiscoveryCooldownMs(
+  failureClass: DiscoveryFailureClass,
+  error: unknown,
+) {
+  const retryAfterSeconds = resolveRetryAfterSeconds(error);
+  if (retryAfterSeconds && retryAfterSeconds > 0) {
+    return retryAfterSeconds * 1000;
+  }
+
+  switch (failureClass) {
+    case "rate_limited":
+      return RATE_LIMIT_PROVIDER_COOLDOWN_MS;
+    case "timeout":
+      return TIMEOUT_PROVIDER_COOLDOWN_MS;
+    case "login_wall":
+      return LOGIN_WALL_PROVIDER_COOLDOWN_MS;
+    case "selector_drift":
+    case "empty_result":
+      return EXTRACTION_FAILURE_PROVIDER_COOLDOWN_MS;
+    case "browser_unavailable":
+    case "browser_launch_failed":
+      return BROWSER_FAILURE_PROVIDER_COOLDOWN_MS;
+    default:
+      return PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS;
+  }
+}
+
+function resolveProviderCooldownUntil(
+  providerState: Awaited<ReturnType<typeof getDiscoveryProviderState>>,
+) {
+  const rawCooldownUntil = providerState?.metadata?.cooldownUntil;
+  if (typeof rawCooldownUntil !== "string" || !rawCooldownUntil.trim()) {
+    return null;
+  }
+
+  const cooldownUntil = new Date(rawCooldownUntil);
+  return Number.isNaN(cooldownUntil.getTime()) ? null : cooldownUntil;
+}
+
+function resolveRetryAfterSeconds(error: unknown) {
+  return error instanceof CommercialDiscoveryError && error.retryAfterSeconds && error.retryAfterSeconds > 0
+    ? error.retryAfterSeconds
+    : null;
 }
