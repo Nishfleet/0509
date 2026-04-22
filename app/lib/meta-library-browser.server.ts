@@ -1,6 +1,11 @@
 import puppeteer from "@cloudflare/puppeteer";
 
 import { inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
+import {
+  BrowserRunQuickActionError,
+  captureBrowserRunQuickActionContent,
+  hasBrowserRunQuickActions,
+} from "~/lib/browser-run.server";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   AdRecord,
@@ -23,6 +28,8 @@ const MOBILE_VIEWPORT = {
 };
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+const QUICK_ACTION_EXTRACTION_SCRIPT_ID = "__0509_ad_library_payload";
+const QUICK_ACTION_WAIT_FOR_TIMEOUT_MS = 1_000;
 
 interface ExtractedAdCard {
   libraryId: string;
@@ -48,6 +55,12 @@ interface BrowserRunLimits {
   timeUntilNextAllowedBrowserAcquisition: number;
 }
 
+interface QuickActionExtractionPayload {
+  cards: ExtractedAdCard[];
+  loginWall: boolean;
+  rateLimited: boolean;
+}
+
 type BrowserInstance = Awaited<ReturnType<typeof puppeteer.launch>>;
 type BrowserContext = Awaited<ReturnType<BrowserInstance["createBrowserContext"]>>;
 type BrowserPage = Awaited<ReturnType<BrowserContext["newPage"]>>;
@@ -66,19 +79,41 @@ export async function searchMetaLibraryByBrowser(
   env: AppEnv,
   query: NormalizedSavedQuery,
 ): Promise<SearchResponse> {
-  if (!env.BROWSER) {
+  const browserBinding = env.BROWSER;
+
+  if (!browserBinding && !hasBrowserRunQuickActions(env)) {
     throw new CommercialDiscoveryError(
       "Browser Run is not configured for commercial discovery.",
       "browser_unavailable",
     );
   }
 
+  if (!browserBinding) {
+    return searchMetaLibraryByQuickActions(env, query);
+  }
+
+  try {
+    return await searchMetaLibraryViaSessions(browserBinding, query);
+  } catch (error) {
+    const normalizedError = normalizeCommercialDiscoveryError(error);
+    if (!shouldUseQuickActionsFallback(env, normalizedError)) {
+      throw normalizedError;
+    }
+
+    return searchMetaLibraryByQuickActions(env, query);
+  }
+}
+
+async function searchMetaLibraryViaSessions(
+  browserBinding: Fetcher,
+  query: NormalizedSavedQuery,
+): Promise<SearchResponse> {
   let browser: BrowserInstance | null = null;
   let browserContext: BrowserContext | null = null;
   let page: BrowserPage | null = null;
 
   try {
-    browser = await acquireBrowser(env.BROWSER);
+    browser = await acquireBrowser(browserBinding);
     browserContext = await browser.createBrowserContext();
     page = await browserContext.newPage();
     await page.setUserAgent(MOBILE_USER_AGENT);
@@ -209,24 +244,80 @@ export async function searchMetaLibraryByBrowser(
       provider: "meta_library_browser",
       cacheStatus: "miss",
     };
-  } catch (error) {
-    if (error instanceof CommercialDiscoveryError) {
-      throw error;
-    }
-
-    const message = error instanceof Error ? error.message : "Browser discovery failed.";
-    const normalizedMessage = message.toLowerCase();
-    const failureClass: DiscoveryFailureClass = normalizedMessage.includes("rate limit") ||
-      normalizedMessage.includes("429")
-      ? "rate_limited"
-      : normalizedMessage.includes("timeout")
-        ? "timeout"
-        : "browser_launch_failed";
-    throw new CommercialDiscoveryError(message, failureClass);
   } finally {
     await page?.close().catch(() => undefined);
     await browserContext?.close().catch(() => undefined);
     await browser?.disconnect().catch(() => undefined);
+  }
+}
+
+async function searchMetaLibraryByQuickActions(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+): Promise<SearchResponse> {
+  try {
+    const quickActionContent = await captureBrowserRunQuickActionContent(env, {
+      url: buildSearchUrl(query),
+      actionTimeout: NAVIGATION_TIMEOUT_MS,
+      addScriptTag: [
+        {
+          id: QUICK_ACTION_EXTRACTION_SCRIPT_ID,
+          type: "application/javascript",
+          content: buildQuickActionExtractionScript(),
+        },
+      ],
+      bestAttempt: true,
+      gotoOptions: {
+        timeout: NAVIGATION_TIMEOUT_MS,
+        waitUntil: "networkidle2",
+      },
+      userAgent: MOBILE_USER_AGENT,
+      viewport: MOBILE_VIEWPORT,
+      waitForSelector: {
+        selector: AD_LIBRARY_RESULT_SELECTOR,
+        timeout: PAGE_READY_TIMEOUT_MS,
+      },
+      waitForTimeout: QUICK_ACTION_WAIT_FOR_TIMEOUT_MS,
+    });
+
+    if (!quickActionContent) {
+      throw new CommercialDiscoveryError(
+        "Browser Run Quick Actions are not configured for commercial discovery.",
+        "browser_unavailable",
+      );
+    }
+
+    const extracted = parseQuickActionExtractionPayload(quickActionContent.content);
+    if (extracted.cards.length === 0) {
+      if (extracted.loginWall) {
+        throw new CommercialDiscoveryError(
+          "Meta Ad Library returned a login wall.",
+          "login_wall",
+        );
+      }
+
+      if (extracted.rateLimited) {
+        throw new CommercialDiscoveryError(
+          "Meta Ad Library is temporarily rate limited.",
+          "rate_limited",
+        );
+      }
+
+      throw new CommercialDiscoveryError(
+        "Meta Ad Library returned no extractable ad cards.",
+        "empty_result",
+      );
+    }
+
+    return {
+      ads: extracted.cards.map((card) => normalizeExtractedCard(card, query)),
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+    };
+  } catch (error) {
+    throw normalizeCommercialDiscoveryError(error);
   }
 }
 
@@ -292,6 +383,175 @@ async function waitForLibrarySurface(page: BrowserPage) {
       AD_LIBRARY_RESULT_SELECTOR,
     )
     .catch(() => undefined);
+}
+
+function shouldUseQuickActionsFallback(
+  env: AppEnv,
+  error: CommercialDiscoveryError,
+) {
+  if (!hasBrowserRunQuickActions(env)) {
+    return false;
+  }
+
+  return ["browser_unavailable", "browser_launch_failed", "rate_limited", "timeout"].includes(
+    error.failureClass,
+  );
+}
+
+function normalizeCommercialDiscoveryError(error: unknown) {
+  if (error instanceof CommercialDiscoveryError) {
+    return error;
+  }
+
+  if (error instanceof BrowserRunQuickActionError) {
+    if (error.status === 429) {
+      return new CommercialDiscoveryError(error.message, "rate_limited");
+    }
+    if (error.status === 401 || error.status === 403) {
+      return new CommercialDiscoveryError(
+        "Browser Run Quick Actions are not authorized for commercial discovery.",
+        "browser_unavailable",
+      );
+    }
+  }
+
+  const message = error instanceof Error ? error.message : "Browser discovery failed.";
+  const normalizedMessage = message.toLowerCase();
+  const failureClass: DiscoveryFailureClass = normalizedMessage.includes("rate limit") ||
+    normalizedMessage.includes("429")
+    ? "rate_limited"
+    : normalizedMessage.includes("timeout")
+      ? "timeout"
+      : "browser_launch_failed";
+  return new CommercialDiscoveryError(message, failureClass);
+}
+
+function buildQuickActionExtractionScript() {
+  return `
+(() => {
+  const normalizeText = (value) =>
+    (value ?? "")
+      .replace(/\\u00a0/g, " ")
+      .split("\\n")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join("\\n")
+      .trim();
+
+  const seen = new Set();
+  const anchors = Array.from(document.querySelectorAll(${JSON.stringify(AD_LIBRARY_RESULT_SELECTOR)}));
+  const cards = anchors
+    .map((anchor) => {
+      if (!(anchor instanceof HTMLAnchorElement)) {
+        return null;
+      }
+
+      const href = anchor.href || anchor.getAttribute("href") || "";
+      const idMatch = href.match(/[?&]id=(\\d+)/);
+      const libraryId = idMatch?.[1];
+      if (!libraryId || seen.has(libraryId)) {
+        return null;
+      }
+      seen.add(libraryId);
+
+      const card =
+        anchor.closest('[role="article"]') ||
+        anchor.closest("article") ||
+        anchor.closest("[data-ad-preview]") ||
+        anchor.parentElement;
+      const links = Array.from(card?.querySelectorAll('a[href]') ?? []);
+      const externalLink =
+        links
+          .map((link) => (link instanceof HTMLAnchorElement ? link.href : link.getAttribute("href") || ""))
+          .find(
+            (candidate) =>
+              /^https?:/i.test(candidate) &&
+              !/facebook\\.com/i.test(candidate) &&
+              !/l\\.facebook\\.com/i.test(candidate),
+          ) ?? null;
+      const advertiser = card?.querySelector("strong, h3, h4, [data-advertiser-name]")?.textContent ?? null;
+      const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
+      const text = normalizeText(card?.textContent ?? anchor.textContent);
+      const cta =
+        card
+          ?.querySelector(
+            'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
+          )
+          ?.textContent ?? null;
+      const platformTokens = [
+        "Instagram",
+        "Facebook",
+        "Messenger",
+        "WhatsApp",
+        "Audience Network",
+        "Threads",
+      ];
+      const platforms = platformTokens.filter((token) => text.includes(token));
+
+      return {
+        libraryId,
+        advertiser: normalizeText(advertiser),
+        body: text,
+        previewHeadline: normalizeText(headline),
+        previewSubhead: null,
+        cta: normalizeText(cta),
+        adSnapshotUrl: new URL(href, location.origin).toString(),
+        landingPageUrl: externalLink,
+        platforms,
+        active: !/inactive/i.test(text),
+      };
+    })
+    .filter(Boolean);
+  const pageText = (document.body?.innerText ?? "").toLowerCase();
+  const payload = {
+    cards,
+    loginWall: /log in|login|sign in|sign into/.test(pageText) && pageText.includes("facebook"),
+    rateLimited:
+      pageText.includes("rate limit") ||
+      pageText.includes("too many requests") ||
+      pageText.includes("try again later"),
+  };
+  let payloadScript = document.getElementById(${JSON.stringify(QUICK_ACTION_EXTRACTION_SCRIPT_ID)});
+  if (!(payloadScript instanceof HTMLScriptElement)) {
+    payloadScript = document.createElement("script");
+    payloadScript.id = ${JSON.stringify(QUICK_ACTION_EXTRACTION_SCRIPT_ID)};
+    payloadScript.type = "application/json";
+    document.documentElement.appendChild(payloadScript);
+  }
+  payloadScript.textContent = JSON.stringify(payload).replace(/<\\//g, "<\\\\/");
+})();
+`;
+}
+
+function parseQuickActionExtractionPayload(content: string): QuickActionExtractionPayload {
+  const markerIndex = [
+    `id="${QUICK_ACTION_EXTRACTION_SCRIPT_ID}"`,
+    `id='${QUICK_ACTION_EXTRACTION_SCRIPT_ID}'`,
+  ]
+    .map((marker) => content.indexOf(marker))
+    .find((index) => index >= 0);
+  const scriptStart = markerIndex !== undefined ? content.indexOf(">", markerIndex) : -1;
+  const scriptEnd = scriptStart >= 0 ? content.indexOf("</script>", scriptStart) : -1;
+  const payloadText =
+    scriptStart >= 0 && scriptEnd > scriptStart
+      ? content.slice(scriptStart + 1, scriptEnd).trim()
+      : null;
+
+  if (!payloadText) {
+    throw new CommercialDiscoveryError(
+      "Browser Run Quick Actions returned no extraction payload.",
+      "selector_drift",
+    );
+  }
+
+  try {
+    return JSON.parse(payloadText.replace(/<\\\//g, "</")) as QuickActionExtractionPayload;
+  } catch {
+    throw new CommercialDiscoveryError(
+      "Browser Run Quick Actions returned invalid extraction payload.",
+      "selector_drift",
+    );
+  }
 }
 
 function buildRateLimitMessage(timeUntilNextAllowedBrowserAcquisition: number) {

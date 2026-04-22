@@ -25,6 +25,69 @@ const MOBILE_VIEWPORT = {
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 
+interface BrowserRunQuickActionEnvelope<T> {
+  success?: boolean;
+  result?: T;
+  errors?: Array<{
+    message?: string;
+  }>;
+}
+
+interface BrowserRunQuickActionWaitForSelector {
+  selector: string;
+  hidden?: true;
+  timeout?: number;
+  visible?: true;
+}
+
+export interface BrowserRunQuickActionContentOptions {
+  url: string;
+  actionTimeout?: number;
+  addScriptTag?: Array<{
+    content?: string;
+    id?: string;
+    type?: string;
+    url?: string;
+  }>;
+  bestAttempt?: boolean;
+  gotoOptions?: {
+    timeout?: number;
+    waitUntil?: "load" | "domcontentloaded" | "networkidle0" | "networkidle2";
+  };
+  userAgent?: string;
+  viewport?: {
+    deviceScaleFactor?: number;
+    hasTouch?: boolean;
+    height: number;
+    isMobile?: boolean;
+    width: number;
+  };
+  waitForSelector?: BrowserRunQuickActionWaitForSelector;
+  waitForTimeout?: number;
+}
+
+export class BrowserRunQuickActionError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly retryAfterSeconds: number | null = null,
+  ) {
+    super(message);
+    this.name = "BrowserRunQuickActionError";
+  }
+}
+
+export function hasBrowserRunQuickActions<
+  T extends Pick<AppEnv, "BROWSER_RUN_ACCOUNT_ID" | "BROWSER_RUN_API_TOKEN"> | null | undefined,
+>(
+  env: T,
+): env is T & {
+  BROWSER_RUN_ACCOUNT_ID: string;
+  BROWSER_RUN_API_TOKEN: string;
+} {
+  return Boolean(env?.BROWSER_RUN_ACCOUNT_ID?.trim() && env?.BROWSER_RUN_API_TOKEN?.trim());
+}
+
 export async function captureBrowserRunSnapshot(
   env: AppEnv,
   url: string,
@@ -64,6 +127,40 @@ export async function captureBrowserRunSnapshot(
   } finally {
     await browser?.close().catch(() => undefined);
   }
+}
+
+export async function captureBrowserRunQuickActionContent(
+  env: AppEnv,
+  options: BrowserRunQuickActionContentOptions,
+): Promise<{
+  browserMsUsed: number | null;
+  content: string;
+} | null> {
+  if (!hasBrowserRunQuickActions(env) || !options.url || !/^https?:\/\//i.test(options.url)) {
+    return null;
+  }
+
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/content?cacheTTL=0`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(options),
+    },
+  );
+  const payload = (await response.json().catch(() => null)) as BrowserRunQuickActionEnvelope<string> | null;
+
+  if (!response.ok || !payload?.success || typeof payload.result !== "string") {
+    throw buildBrowserRunQuickActionError(response, payload);
+  }
+
+  return {
+    browserMsUsed: parseBrowserMsUsedHeader(response.headers.get("X-Browser-Ms-Used")),
+    content: payload.result,
+  };
 }
 
 function buildBrowserRenderedSnapshot(
@@ -217,4 +314,40 @@ function decodeHtml(value: string) {
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
+}
+
+function buildBrowserRunQuickActionError(
+  response: Response,
+  payload: BrowserRunQuickActionEnvelope<string> | null,
+) {
+  const retryAfterSeconds = parseRetryAfterHeader(response.headers.get("Retry-After"));
+  const apiMessage = payload?.errors?.[0]?.message?.trim() || null;
+
+  if (response.status === 429) {
+    const message =
+      retryAfterSeconds && retryAfterSeconds > 0
+        ? `Browser Run Quick Actions rate limited this request. Retry after about ${retryAfterSeconds}s.`
+        : "Browser Run Quick Actions rate limited this request.";
+    return new BrowserRunQuickActionError(message, response.status, retryAfterSeconds);
+  }
+
+  return new BrowserRunQuickActionError(
+    apiMessage || `Browser Run Quick Actions request failed with status ${response.status}.`,
+    response.status,
+    retryAfterSeconds,
+  );
+}
+
+function parseBrowserMsUsedHeader(value: string | null) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseRetryAfterHeader(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
 }

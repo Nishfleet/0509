@@ -87,6 +87,29 @@ describe("resolveCommercialAdSourceStatus", () => {
       mode: "live",
     });
   });
+
+  it("treats Quick Actions config as a live Browser Run provider even without the browser binding", async () => {
+    vi.doMock(
+      "cloudflare:workers",
+      () => ({
+        env: {},
+      }),
+    );
+
+    const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
+
+    const status = await resolveCommercialAdSourceStatus({
+      BROWSER_RUN_ACCOUNT_ID: "acct-123",
+      BROWSER_RUN_API_TOKEN: "token-123",
+    } as never);
+
+    expect(status).toMatchObject({
+      status: "degraded",
+      provider: "meta_library_browser",
+      mode: "live",
+    });
+    expect(status.summary).toContain("Browser Run");
+  });
 });
 
 describe("searchAdsViaSourceResolver", () => {
@@ -161,6 +184,55 @@ describe("searchAdsViaSourceResolver", () => {
     const result = await searchAdsViaSourceResolver(
       {
         BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(result.provider).toBe("meta_library_browser");
+    expect(result.source).toBe("meta_library_browser");
+  });
+
+  it("routes through the browser-backed provider when Quick Actions are configured", async () => {
+    const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: vi.fn(),
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
       } as never,
       {
         mode: "keyword",

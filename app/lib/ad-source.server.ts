@@ -5,6 +5,7 @@ import {
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
 } from "~/lib/data.server";
+import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discovery-cache.server";
 import type { AppEnv } from "~/lib/env.server";
 import { searchMetaLibraryByBrowser, CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
@@ -63,7 +64,7 @@ function normalizeSearchResponse(
 }
 
 export function resolveCommercialDiscoveryProvider(env: AppEnv): AdDiscoveryProvider {
-  if (env.BROWSER) {
+  if (env.BROWSER || hasBrowserRunQuickActions(env)) {
     return "meta_library_browser";
   }
 
@@ -100,6 +101,21 @@ async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
       ...env,
       AI: env.AI ?? requestEnv.AI,
       BROWSER: requestEnv.BROWSER,
+      BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? requestEnv.BROWSER_RUN_ACCOUNT_ID,
+      BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? requestEnv.BROWSER_RUN_API_TOKEN,
+      DB: env.DB ?? requestEnv.DB,
+      LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? requestEnv.LANDING_PAGE_ARTIFACTS,
+      MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? requestEnv.MONITORING_WORKFLOW,
+    };
+  }
+
+  if (hasBrowserRunQuickActions(requestEnv)) {
+    return {
+      ...requestEnv,
+      ...env,
+      AI: env.AI ?? requestEnv.AI,
+      BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? requestEnv.BROWSER_RUN_ACCOUNT_ID,
+      BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? requestEnv.BROWSER_RUN_API_TOKEN,
       DB: env.DB ?? requestEnv.DB,
       LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? requestEnv.LANDING_PAGE_ARTIFACTS,
       MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? requestEnv.MONITORING_WORKFLOW,
@@ -107,7 +123,7 @@ async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
   }
 
   const runtimeEnv = await getRuntimeWorkerEnv();
-  if (!hasBrowserBinding(runtimeEnv?.BROWSER)) {
+  if (!hasBrowserBinding(runtimeEnv?.BROWSER) && !hasBrowserRunQuickActions(runtimeEnv)) {
     return env;
   }
 
@@ -116,6 +132,8 @@ async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
     ...env,
     AI: env.AI ?? runtimeEnv.AI,
     BROWSER: hasBrowserBinding(env.BROWSER) ? env.BROWSER : runtimeEnv.BROWSER,
+    BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? runtimeEnv.BROWSER_RUN_ACCOUNT_ID,
+    BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? runtimeEnv.BROWSER_RUN_API_TOKEN,
     DB: env.DB ?? runtimeEnv.DB,
     LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? runtimeEnv.LANDING_PAGE_ARTIFACTS,
     MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? runtimeEnv.MONITORING_WORKFLOW,

@@ -380,13 +380,20 @@ export async function runWatchlist(
       },
     });
     await touchWatchlistScanned(env, watchlist.id);
+    const commercialProvider = resolveCommercialDiscoveryProvider(env);
     await logMetaIntegrationStatus(env, {
-      status: env.BROWSER ? "healthy" : env.META_AD_LIBRARY_TOKEN ? "degraded" : "demo",
-      summary: env.BROWSER
-        ? "Scheduled watchlist scan completed through the commercial discovery resolver."
-        : env.META_AD_LIBRARY_TOKEN
-          ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
-          : "Watchlist scan completed in explicit demo mode because no live commercial provider is configured.",
+      status:
+        commercialProvider === "meta_library_browser"
+          ? "healthy"
+          : commercialProvider === "meta_api"
+            ? "degraded"
+            : "demo",
+      summary:
+        commercialProvider === "meta_library_browser"
+          ? "Scheduled watchlist scan completed through the commercial discovery resolver."
+          : commercialProvider === "meta_api"
+            ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
+            : "Watchlist scan completed in explicit demo mode because no live commercial provider is configured.",
       metadata: {
         watchlistId: watchlist.id,
         runId,

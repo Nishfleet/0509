@@ -54,6 +54,37 @@ function createBrowserHarness() {
   };
 }
 
+function buildQuickActionContent(
+  input: {
+    cards?: Array<Record<string, unknown>>;
+    loginWall?: boolean;
+    rateLimited?: boolean;
+  } = {},
+) {
+  const payload = {
+    cards:
+      input.cards ??
+      [
+        {
+          libraryId: "1234567890",
+          advertiser: "Nykaa",
+          body: "Flat 30% off on serums",
+          previewHeadline: "Glow sale",
+          previewSubhead: null,
+          cta: "Shop now",
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+          landingPageUrl: "https://www.nykaa.com/glow-sale",
+          platforms: ["Instagram", "Facebook"],
+          active: true,
+        },
+      ],
+    loginWall: input.loginWall ?? false,
+    rateLimited: input.rateLimited ?? false,
+  };
+
+  return `<html><body><script id="__0509_ad_library_payload" type="application/json">${JSON.stringify(payload).replace(/<\//g, "<\\/")}</script></body></html>`;
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -235,6 +266,147 @@ describe("searchMetaLibraryByBrowser", () => {
       searchMetaLibraryByBrowser(
         {
           BROWSER: {} as Fetcher,
+        },
+        buildQuery(),
+      ),
+    ).rejects.toMatchObject({
+      name: CommercialDiscoveryError.name,
+      failureClass: "rate_limited",
+    });
+  });
+
+  it("falls back to Quick Actions when Browser Run session launch is rate limited", async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValue(new Error("Unable to create new browser: code: 429: message: Rate limit exceeded"));
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: buildQuickActionContent(),
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Browser-Ms-Used": "1234",
+          },
+        },
+      ),
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+      },
+      buildQuery(),
+    );
+
+    expect(launch).toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      ads: [
+        expect.objectContaining({
+          metaAdId: "1234567890",
+          advertiser: "Nykaa",
+          source: "meta",
+        }),
+      ],
+    });
+  });
+
+  it("uses Quick Actions directly when the browser binding is unavailable", async () => {
+    const launch = vi.fn();
+    const sessions = vi.fn();
+    const limits = vi.fn();
+    const connect = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: buildQuickActionContent(),
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Browser-Ms-Used": "1234",
+          },
+        },
+      ),
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+      },
+      buildQuery(),
+    );
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(launch).not.toHaveBeenCalled();
+    expect(result.ads).toHaveLength(1);
+  });
+
+  it("classifies Quick Actions 429 errors as rate limited", async () => {
+    const launch = vi.fn();
+    const sessions = vi.fn();
+    const limits = vi.fn();
+    const connect = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [{ message: "Too many requests" }],
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "10",
+          },
+        },
+      ),
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser, CommercialDiscoveryError } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    await expect(
+      searchMetaLibraryByBrowser(
+        {
+          BROWSER_RUN_ACCOUNT_ID: "acct-123",
+          BROWSER_RUN_API_TOKEN: "token-123",
         },
         buildQuery(),
       ),

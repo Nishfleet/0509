@@ -6,6 +6,8 @@ export interface AppEnv {
   APP_REGION_DEFAULT?: PricingRegion | string;
   BETTER_AUTH_SECRET?: string;
   BROWSER?: Fetcher;
+  BROWSER_RUN_ACCOUNT_ID?: string;
+  BROWSER_RUN_API_TOKEN?: string;
   BETTER_AUTH_URL?: string;
   DB?: D1Database;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;

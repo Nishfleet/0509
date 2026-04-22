@@ -39,11 +39,13 @@
   },
   "vars": {
     "APP_NAME": "0509",
-    "APP_REGION_DEFAULT": "rest_of_world"
+    "APP_REGION_DEFAULT": "rest_of_world",
+    "BROWSER_RUN_ACCOUNT_ID": "f670a698e17bf160c8e4679823e68916"
   },
   // Secrets configured outside this file via `wrangler secret put`:
   // - WHATSAPP_ACCESS_TOKEN
   // - WHATSAPP_APP_SECRET
+  // - BROWSER_RUN_API_TOKEN
   // - WHATSAPP_PHONE_NUMBER_ID
   // - WHATSAPP_TEMPLATE_NAMESPACE
   // - WHATSAPP_WEBHOOK_VERIFY_TOKEN
