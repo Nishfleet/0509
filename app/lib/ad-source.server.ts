@@ -32,10 +32,20 @@ const TIMEOUT_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
 const BROWSER_FAILURE_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
 const LOGIN_WALL_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
 const EXTRACTION_FAILURE_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
+const DISCOVERY_QUERY_LEASE_TTL_MS = 30 * 1000;
+const PUBLIC_SEARCH_LEASE_WAIT_MS = 12 * 1000;
+const BACKGROUND_LEASE_WAIT_MS = 25 * 1000;
+const DISCOVERY_QUERY_LEASE_POLL_MS = 250;
 
 interface DiscoveryCooldownState {
   cooldownUntil: string;
   retryAfterSeconds: number | null;
+}
+
+interface DiscoveryQueryLease {
+  acquired: boolean;
+  holderId: string;
+  leaseExpiresAt: string;
 }
 
 type GlobalEnvCarrier = typeof globalThis & {
@@ -290,6 +300,47 @@ export async function searchAdsViaSourceResolver(
     );
   }
 
+  const discoveryLease =
+    canUseDistributedDiscoveryLease(effectiveEnv.DB)
+      ? await acquireDiscoveryQueryLease(effectiveEnv, {
+          cacheKey,
+          provider,
+          routeContext,
+        })
+      : null;
+
+  if (discoveryLease && !discoveryLease.acquired) {
+    const settledResponse = await waitForDiscoveryLeaseResolution(effectiveEnv, {
+      cacheKey,
+      provider,
+      routeContext,
+      waitMs: resolveDiscoveryLeaseWaitMs(routeContext),
+    });
+
+    if (settledResponse) {
+      return settledResponse;
+    }
+
+    if (routeContext === "public_search") {
+      return {
+        ads: [],
+        nextCursor: null,
+        source: provider,
+        provider,
+        cacheStatus: "miss",
+        discoveryStatus: "degraded",
+        discoverySummary:
+          "Commercial discovery is already warming this query. Cached results should appear shortly.",
+        discoveryFailureClass: null,
+      };
+    }
+
+    throw new CommercialDiscoveryError(
+      "Commercial discovery is already warming this query. Try again in a few seconds.",
+      "timeout",
+    );
+  }
+
   try {
     const result = await runWithSharedDiscoveryRequest(cacheKey, async () => {
       const startedAt = Date.now();
@@ -432,6 +483,13 @@ export async function searchAdsViaSourceResolver(
     }
 
     throw error;
+  } finally {
+    if (discoveryLease?.acquired) {
+      await releaseDiscoveryQueryLease(effectiveEnv, {
+        cacheKey,
+        holderId: discoveryLease.holderId,
+      }).catch(() => undefined);
+    }
   }
 }
 
@@ -461,6 +519,167 @@ async function runWithSharedDiscoveryRequest(
   });
   inFlightDiscovery.set(cacheKey, pending);
   return pending;
+}
+
+async function acquireDiscoveryQueryLease(
+  env: AppEnv,
+  input: {
+    cacheKey: string;
+    provider: AdDiscoveryProvider;
+    routeContext: DiscoveryRouteContext;
+  },
+): Promise<DiscoveryQueryLease> {
+  const db = env.DB;
+  if (!db) {
+    throw new Error("Cloudflare D1 binding `DB` is not configured.");
+  }
+
+  const holderId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const leaseExpiresAt = new Date(Date.now() + DISCOVERY_QUERY_LEASE_TTL_MS).toISOString();
+  await db
+    .prepare("DELETE FROM discovery_query_lease WHERE cache_key = ? AND lease_expires_at <= ?")
+    .bind(input.cacheKey, now)
+    .run();
+  await db
+    .prepare(
+      `
+        INSERT OR IGNORE INTO discovery_query_lease (
+          cache_key,
+          provider,
+          route_context,
+          holder_id,
+          lease_expires_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+    )
+    .bind(
+      input.cacheKey,
+      input.provider,
+      input.routeContext,
+      holderId,
+      leaseExpiresAt,
+      now,
+      now,
+    )
+    .run();
+
+  const leaseRow = await db
+    .prepare(
+      `
+        SELECT holder_id, lease_expires_at
+        FROM discovery_query_lease
+        WHERE cache_key = ?
+        LIMIT 1
+      `,
+    )
+    .bind(input.cacheKey)
+    .first<{ holder_id: string; lease_expires_at: string }>();
+
+  return {
+    acquired: leaseRow?.holder_id === holderId,
+    holderId: leaseRow?.holder_id ?? holderId,
+    leaseExpiresAt: leaseRow?.lease_expires_at ?? leaseExpiresAt,
+  };
+}
+
+async function releaseDiscoveryQueryLease(
+  env: AppEnv,
+  input: {
+    cacheKey: string;
+    holderId: string;
+  },
+) {
+  const db = env.DB;
+  if (!db) {
+    return;
+  }
+
+  await db
+    .prepare("DELETE FROM discovery_query_lease WHERE cache_key = ? AND holder_id = ?")
+    .bind(input.cacheKey, input.holderId)
+    .run();
+}
+
+function canUseDistributedDiscoveryLease(db: AppEnv["DB"] | undefined): db is D1Database {
+  return Boolean(db && typeof db.prepare === "function");
+}
+
+async function waitForDiscoveryLeaseResolution(
+  env: AppEnv,
+  input: {
+    cacheKey: string;
+    provider: AdDiscoveryProvider;
+    routeContext: DiscoveryRouteContext;
+    waitMs: number;
+  },
+): Promise<SearchResponse | null> {
+  const deadline = Date.now() + input.waitMs;
+
+  while (Date.now() < deadline) {
+    const cached = await getDiscoveryCacheEntry(env, input.cacheKey);
+    if (cached && new Date(cached.expiresAt).getTime() > Date.now()) {
+      return {
+        ...cached.payload,
+        source: input.provider,
+        provider: input.provider,
+        cacheStatus: "hit",
+        discoveryStatus: "healthy",
+        discoverySummary: null,
+        discoveryFailureClass: null,
+      };
+    }
+
+    const providerState = await getDiscoveryProviderState(env, input.provider);
+    if (providerState && shouldUseProviderCooldown(providerState)) {
+      if (cached) {
+        return {
+          ...cached.payload,
+          source: input.provider,
+          provider: input.provider,
+          cacheStatus: "stale",
+          discoveryStatus: "cache_only",
+          discoverySummary: providerState.summary,
+          discoveryFailureClass: providerState.failureClass,
+        };
+      }
+
+      if (input.routeContext === "public_search") {
+        return {
+          ads: [],
+          nextCursor: null,
+          source: input.provider,
+          provider: input.provider,
+          cacheStatus: "miss",
+          discoveryStatus: "degraded",
+          discoverySummary: providerState.summary,
+          discoveryFailureClass: providerState.failureClass,
+        };
+      }
+
+      throw new CommercialDiscoveryError(
+        providerState.summary,
+        providerState.failureClass ?? "browser_launch_failed",
+      );
+    }
+
+    await sleep(DISCOVERY_QUERY_LEASE_POLL_MS);
+  }
+
+  return null;
+}
+
+function resolveDiscoveryLeaseWaitMs(routeContext: DiscoveryRouteContext) {
+  return routeContext === "public_search"
+    ? PUBLIC_SEARCH_LEASE_WAIT_MS
+    : BACKGROUND_LEASE_WAIT_MS;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function resolveFailureClass(error: unknown): DiscoveryFailureClass {
