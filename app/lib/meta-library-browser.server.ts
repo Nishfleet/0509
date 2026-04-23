@@ -582,7 +582,16 @@ function parseQuickActionExtractionPayload(content: string): QuickActionExtracti
       ? content.slice(scriptStart + 1, scriptEnd).trim()
       : null;
 
+  const renderedHtmlPayload = extractQuickActionPayloadFromRenderedHtml(content);
   if (!payloadText) {
+    if (
+      renderedHtmlPayload.cards.length > 0 ||
+      renderedHtmlPayload.loginWall ||
+      renderedHtmlPayload.rateLimited
+    ) {
+      return renderedHtmlPayload;
+    }
+
     throw new CommercialDiscoveryError(
       "Browser Run Quick Actions returned no extraction payload.",
       "selector_drift",
@@ -592,11 +601,130 @@ function parseQuickActionExtractionPayload(content: string): QuickActionExtracti
   try {
     return JSON.parse(payloadText.replace(/<\\\//g, "</")) as QuickActionExtractionPayload;
   } catch {
+    if (
+      renderedHtmlPayload.cards.length > 0 ||
+      renderedHtmlPayload.loginWall ||
+      renderedHtmlPayload.rateLimited
+    ) {
+      return renderedHtmlPayload;
+    }
+
     throw new CommercialDiscoveryError(
       "Browser Run Quick Actions returned invalid extraction payload.",
       "selector_drift",
     );
   }
+}
+
+function extractQuickActionPayloadFromRenderedHtml(content: string): QuickActionExtractionPayload {
+  const text = stripHtml(content).toLowerCase();
+  const cards: ExtractedAdCard[] = [];
+  const seen = new Set<string>();
+  const anchorRegex = /<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
+
+  for (const match of content.matchAll(anchorRegex)) {
+    const href = decodeHtmlEntity(match[2] ?? "");
+    if (!/\/ads\/library\/\?/.test(href) && !/facebook\.com\/ads\/library\/\?/.test(href)) {
+      continue;
+    }
+
+    const idMatch = href.match(/[?&](?:amp;)?id=(\d+)/);
+    const libraryId = idMatch?.[1];
+    if (!libraryId || seen.has(libraryId)) {
+      continue;
+    }
+    seen.add(libraryId);
+
+    const contextStart = Math.max(0, (match.index ?? 0) - 1200);
+    const contextEnd = Math.min(content.length, (match.index ?? 0) + match[0].length + 1800);
+    const contextHtml = content.slice(contextStart, contextEnd);
+    const body = stripHtml(contextHtml) || stripHtml(match[3] ?? "");
+    const landingPageUrl = extractExternalLink(contextHtml);
+
+    cards.push({
+      libraryId,
+      advertiser: null,
+      body,
+      previewHeadline: stripHtml(match[3] ?? "") || null,
+      previewSubhead: null,
+      cta: inferCta(body),
+      adSnapshotUrl: absolutizeMetaAdUrl(href),
+      landingPageUrl,
+      platforms: inferPlatforms(body),
+      active: !/inactive/i.test(body),
+    });
+  }
+
+  return {
+    cards,
+    loginWall:
+      /log in|login|sign in|sign into/.test(text) && text.includes("facebook"),
+    rateLimited:
+      text.includes("rate limit") ||
+      text.includes("too many requests") ||
+      text.includes("try again later"),
+  };
+}
+
+function stripHtml(value: string) {
+  return decodeHtmlEntity(
+    value
+      .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+}
+
+function decodeHtmlEntity(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, " ")
+    .trim();
+}
+
+function extractExternalLink(html: string) {
+  const hrefRegex = /\bhref=(["'])(.*?)\1/gi;
+  for (const match of html.matchAll(hrefRegex)) {
+    const href = decodeHtmlEntity(match[2] ?? "");
+    if (
+      /^https?:/i.test(href) &&
+      !/facebook\.com/i.test(href) &&
+      !/l\.facebook\.com/i.test(href)
+    ) {
+      return href;
+    }
+  }
+
+  return null;
+}
+
+function absolutizeMetaAdUrl(href: string) {
+  try {
+    return new URL(href, "https://www.facebook.com").toString();
+  } catch {
+    return `https://www.facebook.com/ads/library/?id=${href}`;
+  }
+}
+
+function inferCta(text: string | null) {
+  if (!text) {
+    return null;
+  }
+
+  const match = text.match(/\b(Shop now|Learn more|Sign up|Apply now|Book now|Contact us)\b/i);
+  return match?.[1] ?? null;
+}
+
+function inferPlatforms(text: string | null) {
+  const value = text ?? "";
+  return ["Instagram", "Facebook", "Messenger", "WhatsApp", "Audience Network", "Threads"].filter(
+    (token) => value.includes(token),
+  );
 }
 
 function buildRateLimitMessage(timeUntilNextAllowedBrowserAcquisition: number) {
