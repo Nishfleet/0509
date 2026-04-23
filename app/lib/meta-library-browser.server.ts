@@ -237,6 +237,11 @@ async function searchMetaLibraryViaSessions(
           "rate_limited",
         );
       }
+
+      throw new CommercialDiscoveryError(
+        "Meta Ad Library returned no extractable ad cards.",
+        "empty_result",
+      );
     }
 
     const ads = (extractedCards as ExtractedAdCard[]).map((card) =>
@@ -405,9 +410,14 @@ function shouldUseQuickActionsFallback(
     return false;
   }
 
-  return ["browser_unavailable", "browser_launch_failed", "rate_limited", "timeout"].includes(
-    error.failureClass,
-  );
+  return [
+    "browser_unavailable",
+    "browser_launch_failed",
+    "rate_limited",
+    "timeout",
+    "selector_drift",
+    "empty_result",
+  ].includes(error.failureClass);
 }
 
 function normalizeCommercialDiscoveryError(error: unknown) {

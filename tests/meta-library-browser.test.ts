@@ -276,6 +276,46 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("fails honestly when a Browser Run session returns no extractable cards", async () => {
+    const { browser, page } = createBrowserHarness();
+    page.evaluate = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        loginWall: false,
+        rateLimited: false,
+      });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser, CommercialDiscoveryError } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    await expect(
+      searchMetaLibraryByBrowser(
+        {
+          BROWSER: {} as Fetcher,
+        },
+        buildQuery(),
+      ),
+    ).rejects.toMatchObject({
+      name: CommercialDiscoveryError.name,
+      failureClass: "empty_result",
+    });
+  });
+
   it("falls back to Quick Actions when Browser Run session launch is rate limited", async () => {
     const launch = vi
       .fn()
@@ -332,6 +372,59 @@ describe("searchMetaLibraryByBrowser", () => {
         }),
       ],
     });
+  });
+
+  it("falls back to Quick Actions when Browser Run session extraction is empty", async () => {
+    const { browser, page } = createBrowserHarness();
+    page.evaluate = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        loginWall: false,
+        rateLimited: false,
+      });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: buildQuickActionContent(),
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Browser-Ms-Used": "1234",
+          },
+        },
+      ),
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+      },
+      buildQuery(),
+    );
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.ads).toHaveLength(1);
   });
 
   it("uses Quick Actions directly when the browser binding is unavailable", async () => {
