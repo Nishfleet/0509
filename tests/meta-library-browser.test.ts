@@ -91,6 +91,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.resetModules();
 });
 
@@ -140,6 +141,21 @@ describe("searchMetaLibraryByBrowser", () => {
       expect.any(Object),
     );
     expect(page.waitForFunction).toHaveBeenCalled();
+    const waitPredicate = page.waitForFunction.mock.calls[0][0] as (selector: string) => boolean;
+    vi.stubGlobal("document", {
+      querySelector: vi.fn().mockReturnValue(null),
+      body: {
+        innerText: "Ad Library finished loading shell content",
+      },
+    });
+    expect(waitPredicate("a[href]")).toBe(false);
+    vi.stubGlobal("document", {
+      querySelector: vi.fn().mockReturnValue(null),
+      body: {
+        innerText: "No ads found for this query",
+      },
+    });
+    expect(waitPredicate("a[href]")).toBe(true);
     expect(result).toMatchObject({
       source: "meta_library_browser",
       provider: "meta_library_browser",
