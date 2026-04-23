@@ -112,3 +112,76 @@ describe("marketing route", () => {
     expect(markup).toContain("Open workspace");
   });
 });
+
+describe("pricing region route", () => {
+  it("redirects direct GET requests instead of throwing a route error", async () => {
+    const { loader } = await import("~/routes/pricing-region");
+
+    const response = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/pricing-region?redirectTo=/search"),
+    } as never);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/search");
+  });
+
+  it("sanitizes invalid pricing region and redirect values", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      upsertPricingRegionPreference: vi.fn(),
+    }));
+
+    const formData = new FormData();
+    formData.set("region", "invalid");
+    formData.set("redirectTo", "https://evil.example");
+
+    const { action } = await import("~/routes/pricing-region");
+    const response = await action({
+      context: createContext(),
+      request: new Request("http://localhost/pricing-region", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/");
+    expect(response.headers.get("set-cookie")).toContain("pricing_region=rest_of_world");
+  });
+
+  it("persists the selected region for signed-in users", async () => {
+    const upsertPricingRegionPreference = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      upsertPricingRegionPreference,
+    }));
+
+    const formData = new FormData();
+    formData.set("region", "india");
+    formData.set("redirectTo", "/");
+
+    const { action } = await import("~/routes/pricing-region");
+    const response = await action({
+      context: createContext(),
+      request: new Request("http://localhost/pricing-region", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("set-cookie")).toContain("pricing_region=india");
+    expect(upsertPricingRegionPreference).toHaveBeenCalledWith({ DB: {} }, "user-1", "india");
+  });
+});
