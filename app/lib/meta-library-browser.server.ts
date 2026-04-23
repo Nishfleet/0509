@@ -393,7 +393,27 @@ async function readBrowserLimits(browserBinding: Fetcher) {
 async function waitForLibrarySurface(page: BrowserPage) {
   await page
     .waitForFunction(
-      (selector) => Boolean(document.querySelector(selector)) || document.readyState === "complete",
+      (selector) => {
+        const bodyText = (document.body?.innerText ?? "").toLowerCase();
+        const hasTerminalEmptyState =
+          bodyText.includes("no ads found") ||
+          bodyText.includes("no ads match") ||
+          bodyText.includes("no results") ||
+          bodyText.includes("couldn't find any ads");
+        const hasLoginWall =
+          /log in|login|sign in|sign into/.test(bodyText) && bodyText.includes("facebook");
+        const hasRateLimit =
+          bodyText.includes("rate limit") ||
+          bodyText.includes("too many requests") ||
+          bodyText.includes("try again later");
+
+        return (
+          Boolean(document.querySelector(selector)) ||
+          hasTerminalEmptyState ||
+          hasLoginWall ||
+          hasRateLimit
+        );
+      },
       {
         timeout: PAGE_READY_TIMEOUT_MS,
       },
