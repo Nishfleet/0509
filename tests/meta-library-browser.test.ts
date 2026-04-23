@@ -59,6 +59,7 @@ function buildQuickActionContent(
     cards?: Array<Record<string, unknown>>;
     loginWall?: boolean;
     rateLimited?: boolean;
+    withRunnerScript?: boolean;
   } = {},
 ) {
   const payload = {
@@ -82,7 +83,10 @@ function buildQuickActionContent(
     rateLimited: input.rateLimited ?? false,
   };
 
-  return `<html><body><script id="__0509_ad_library_payload" type="application/json">${JSON.stringify(payload).replace(/<\//g, "<\\/")}</script></body></html>`;
+  const runnerScript = input.withRunnerScript
+    ? `<script id="__0509_ad_library_extractor" type="application/javascript">(() => { throw new Error("not payload"); })();</script>`
+    : "";
+  return `<html><body>${runnerScript}<script id="__0509_ad_library_payload" type="application/json">${JSON.stringify(payload).replace(/<\//g, "<\\/")}</script></body></html>`;
 }
 
 beforeEach(() => {
@@ -480,6 +484,52 @@ describe("searchMetaLibraryByBrowser", () => {
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(launch).not.toHaveBeenCalled();
+    expect(result.ads).toHaveLength(1);
+  });
+
+  it("keeps the Quick Actions runner separate from the extraction payload", async () => {
+    const launch = vi.fn();
+    const sessions = vi.fn();
+    const limits = vi.fn();
+    const connect = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: buildQuickActionContent({
+            withRunnerScript: true,
+          }),
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Browser-Ms-Used": "1234",
+          },
+        },
+      ),
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+      },
+      buildQuery(),
+    );
+    const requestBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"));
+
+    expect(requestBody.addScriptTag[0]).toMatchObject({
+      id: "__0509_ad_library_extractor",
+      type: "application/javascript",
+    });
+    expect(requestBody.addScriptTag[0].id).not.toBe("__0509_ad_library_payload");
     expect(result.ads).toHaveLength(1);
   });
 

@@ -28,6 +28,7 @@ const MOBILE_VIEWPORT = {
 };
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+const QUICK_ACTION_RUNNER_SCRIPT_ID = "__0509_ad_library_extractor";
 const QUICK_ACTION_EXTRACTION_SCRIPT_ID = "__0509_ad_library_payload";
 const QUICK_ACTION_WAIT_FOR_TIMEOUT_MS = 1_000;
 
@@ -272,7 +273,7 @@ async function searchMetaLibraryByQuickActions(
       actionTimeout: NAVIGATION_TIMEOUT_MS,
       addScriptTag: [
         {
-          id: QUICK_ACTION_EXTRACTION_SCRIPT_ID,
+          id: QUICK_ACTION_RUNNER_SCRIPT_ID,
           type: "application/javascript",
           content: buildQuickActionExtractionScript(),
         },
