@@ -16,6 +16,7 @@ export const DEFAULT_PROVIDERS = Object.freeze([
 export const DOGFOOD_QUERIES = Object.freeze(["adspy", "bigspy", "adflex", "nykaa", "boat", "cod"]);
 export const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+export const CURRENT_0509_PROBE_TIMEOUT_MS = 10_000;
 
 const MOBILE_VIEWPORT = Object.freeze({
   width: 390,
@@ -414,11 +415,12 @@ function classifyCurrent0509Outcome(analysis, ok) {
 
 /**
  * @param {ProbeTarget} target
- * @param {{ fetchImpl?: typeof fetch, baseUrl?: string }} [options]
+ * @param {{ fetchImpl?: typeof fetch, baseUrl?: string, timeoutMs?: number }} [options]
  * @returns {Promise<ProbeResult>}
  */
 export async function runCurrent0509Probe(target, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = options.timeoutMs ?? CURRENT_0509_PROBE_TIMEOUT_MS;
   const url = buildCurrent0509SearchUrl({
     query: target.query,
     country: target.country,
@@ -432,6 +434,7 @@ export async function runCurrent0509Probe(target, options = {}) {
       headers: {
         "user-agent": "0509-provider-bakeoff/1.0",
       },
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const html = await response.text();
     const analysis = analyzeMetaLibraryHtml(html);
