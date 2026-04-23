@@ -217,7 +217,7 @@ function parseMetaAd(raw: MetaRawAd): AdRecord {
     firstSeenAt: raw.ad_delivery_start_time ?? null,
     lastSeenAt: raw.ad_delivery_stop_time ?? raw.ad_delivery_start_time ?? null,
     active: raw.ad_active_status === "ACTIVE",
-    researchSummary: "Pulled from the Meta Ad Library API and normalized into 0509’s analysis schema.",
+    researchSummary: "Pulled from the Meta Ad Library API and normalized into Five to Nine’s analysis schema.",
     source: "meta",
     tags: [],
     landingPage: null,

@@ -6,11 +6,11 @@ import { PRICING_COPY } from "~/lib/pricing";
 import type { RootLoaderData } from "~/root";
 
 export const meta: MetaFunction = () => [
-  { title: "0509 | See what changed, with proof" },
+  { title: "Five to Nine | See what changed, with proof" },
   {
     name: "description",
     content:
-      "0509 helps growth teams see what competitors changed on Meta, verify it with proof, and receive trusted alerts by email and WhatsApp.",
+      "Five to Nine helps growth teams catch competitor changes on Meta before the next workday, verify them with proof, and receive trusted alerts by email and WhatsApp.",
   },
 ];
 
@@ -27,8 +27,8 @@ export default function MarketingRoute() {
               09
             </span>
             <span>
-              <strong>0509</strong>
-              <small>Proof-first competitor monitoring</small>
+              <strong>Five to Nine</strong>
+              <small>Proof-backed competitor monitoring</small>
             </span>
           </Link>
 
@@ -46,10 +46,11 @@ export default function MarketingRoute() {
         <div className="container hero-grid">
           <div className="hero-copy">
             <p className="eyebrow">See what changed, with proof.</p>
-            <h1>Track competitor changes on Meta without rechecking everything by hand.</h1>
+            <h1>See what changed before your next standup.</h1>
             <p className="hero-lead">
-              0509 scans competitor ads cheaply, captures proof only where it matters, confirms the real changes,
-              and sends trusted updates to email and WhatsApp.
+              Five to Nine closes the gap between when your team stops checking and when the next decision gets made.
+              It watches competitor ads and landing pages on Meta, confirms the real changes, and sends proof-backed
+              alerts by email and WhatsApp.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" to={primaryCta}>
@@ -117,11 +118,11 @@ export default function MarketingRoute() {
         <div className="container section-grid two-column">
           <article className="content-card">
             <p className="section-label">Why now</p>
-            <h2>Search is commodity. Trusted change detection is the product.</h2>
+            <h2>Most teams do competitor research. They still find changes too late.</h2>
             <p>
-              Most teams still open the Ad Library, take screenshots, paste them into chats,
-              and repeat the same checking next week. 0509 is built around the part that compounds:
-              cheap monitoring, selective proof, and alerts teams can trust.
+              Between end-of-day and the next standup, competitors launch new ads, change offers,
+              and swap landing pages. Five to Nine is built for that gap: cheap monitoring,
+              selective proof, and alerts teams can trust.
             </p>
           </article>
           <article className="content-card">
@@ -152,7 +153,7 @@ export default function MarketingRoute() {
               <span className="feature-number">02</span>
               <h3>Capture proof only when it matters</h3>
               <p>
-                0509 does not recapture every landing page on every run. It spends proof budget selectively,
+                Five to Nine does not recapture every landing page on every run. It spends proof budget selectively,
                 then stores screenshot, HTML, extracted fields, and capture time together.
               </p>
             </article>
@@ -172,9 +173,9 @@ export default function MarketingRoute() {
         <div className="container section-grid two-column">
           <article className="content-card">
             <p className="section-label">The hook</p>
-            <h2>0509 tells growth teams what changed, proves it, and shows what got sent.</h2>
+            <h2>Five to Nine tells growth teams what changed, proves it, and shows what got sent.</h2>
             <p>
-              The app is the control panel. The product is the monitoring loop behind it:
+              The app is the control panel. The product closes the gap between checking now and finding out too late:
               scan cheaply, prove selectively, confirm carefully, and deliver conservatively.
             </p>
           </article>

@@ -62,7 +62,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
   return (
     <div className="auth-card">
       <p className="eyebrow">{isSignup ? "Create your workspace" : "Welcome back"}</p>
-      <h1>{isSignup ? "Start tracking competitor shifts." : "Sign in to 0509."}</h1>
+      <h1>{isSignup ? "Start tracking competitor shifts." : "Sign in to Five to Nine."}</h1>
       <p className="auth-copy">
         {isSignup
           ? "Saved searches, watchlists, and weekly digests all live behind your account."

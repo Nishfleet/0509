@@ -231,7 +231,7 @@ async function deliverDigestToEmailTarget(
     };
   }
 
-  const subject = `0509 weekly digest: ${input.items.length} competitor changes`;
+  const subject = `Five to Nine weekly digest: ${input.items.length} competitor changes`;
   const providerResult = await sendDigestEmail(env, {
     email: target.targetValue,
     name: input.userName,
@@ -923,7 +923,7 @@ function renderDigestHtml(input: {
 
   return `
     <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">0509 weekly digest</p>
+      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine weekly digest</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, here’s what changed on Meta.</h1>
       <p style="margin: 0 0 24px; color: #475467;">
         ${formatDate(input.periodStart)} to ${formatDate(input.periodEnd)} · ${input.items.length} tracked changes
@@ -1031,7 +1031,7 @@ function buildInstantAlertContent(
       watchlistUrl,
       html: `
         <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
-          <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">0509 alert</p>
+          <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
           <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
           <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
           ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}">View watchlist</a></p>` : ""}
@@ -1051,7 +1051,7 @@ function buildInstantAlertContent(
     watchlistUrl,
     html: `
       <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
-        <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">0509 alert</p>
+        <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
         <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
         <ul style="padding-left: 18px;">
           ${events

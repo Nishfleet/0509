@@ -5,6 +5,7 @@ import { appOrigin, type AppEnv } from "~/lib/env.server";
 import type { AppSession } from "~/lib/types";
 
 const DEV_FALLBACK_SECRET = "0509-dev-secret-that-is-at-least-32-characters";
+const CUSTOMER_APP_NAME = "Five to Nine";
 
 function isDevelopment() {
   // `nodejs_compat` surfaces process.env.NODE_ENV in Workers; in Vitest it's
@@ -39,7 +40,7 @@ export function createAuth(env: AppEnv, request: Request) {
   const origin = appOrigin(env, request);
 
   return betterAuth({
-    appName: env.APP_NAME ?? "0509",
+    appName: env.APP_NAME && env.APP_NAME !== "0509" ? env.APP_NAME : CUSTOMER_APP_NAME,
     baseURL: origin,
     trustedOrigins: [origin],
     secret: resolveAuthSecret(env),

@@ -4,10 +4,10 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { AuthForm } from "~/components/auth-form";
 
 export const meta: MetaFunction = () => [
-  { title: "Create account | 0509" },
+  { title: "Create account | Five to Nine" },
   {
     name: "description",
-    content: "Create a 0509 account to save research, build collections, and monitor competitor changes on Meta.",
+    content: "Create a Five to Nine account to save research, build collections, and monitor competitor changes on Meta.",
   },
 ];
 
@@ -40,8 +40,8 @@ export default function SignupRoute() {
               09
             </span>
             <span>
-              <strong>0509</strong>
-              <small>India-first Meta intelligence</small>
+              <strong>Five to Nine</strong>
+              <small>India-first proof-backed monitoring</small>
             </span>
           </Link>
           <div className="auth-points">

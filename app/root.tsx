@@ -109,7 +109,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
   return (
     <main className="error-shell">
       <div className="container error-card">
-        <p className="eyebrow">0509</p>
+        <p className="eyebrow">Five to Nine</p>
         <h1>{message}</h1>
         <p>{details}</p>
       </div>

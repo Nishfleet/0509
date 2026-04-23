@@ -24,11 +24,11 @@ import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse } from "~/lib/types";
 
 export const meta: MetaFunction = () => [
-  { title: "Search | 0509" },
+  { title: "Search | Five to Nine" },
   {
     name: "description",
     content:
-      "Search competitor Meta ads, inspect the hook and offer, save the best examples, and turn useful queries into watchlists.",
+      "Search competitor Meta ads, inspect the hook and offer, save the best examples, and turn useful queries into proof-backed watchlists.",
   },
 ];
 
@@ -193,8 +193,8 @@ export default function SearchRoute() {
               09
             </span>
             <span>
-              <strong>0509</strong>
-              <small>Search + analysis</small>
+              <strong>Five to Nine</strong>
+              <small>Search + proof</small>
             </span>
           </Link>
 
