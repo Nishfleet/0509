@@ -3,6 +3,7 @@
   "include": [
     ".react-router/types/**/*",
     "vite.config.ts",
+    "scripts/prod-canary*.mjs",
     "scripts/provider-bakeoff*.mjs",
     "tests/**/*",
     "app/**/*",
