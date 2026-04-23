@@ -88,7 +88,7 @@ export default function ShareRoute() {
               09
             </span>
             <span>
-              <strong>0509</strong>
+              <strong>Five to Nine</strong>
               <small>Shared view</small>
             </span>
           </Link>

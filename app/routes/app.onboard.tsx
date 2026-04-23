@@ -5,10 +5,10 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { buildSearchParams, fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 
 export const meta: MetaFunction = () => [
-  { title: "Set up your workspace | 0509" },
+  { title: "Set up your workspace | Five to Nine" },
   {
     name: "description",
-    content: "Choose a competitor to track so your 0509 workspace starts with a concrete next step.",
+    content: "Choose a competitor to track so your Five to Nine workspace starts with a concrete next step.",
   },
 ];
 

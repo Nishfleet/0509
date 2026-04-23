@@ -642,7 +642,7 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
     lastSeenAt: null,
     active: card.active,
     researchSummary:
-      "Captured from the public Meta Ad Library via Browser Run and normalized into 0509’s analysis schema.",
+      "Captured from the public Meta Ad Library via Browser Run and normalized into Five to Nine’s analysis schema.",
     source: "meta",
   });
 }

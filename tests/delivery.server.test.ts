@@ -108,7 +108,8 @@ describe("deliverWeeklyDigest", () => {
     expect(resendSend).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "owner@example.com",
-        subject: "0509 weekly digest: 1 competitor changes",
+        subject: "Five to Nine weekly digest: 1 competitor changes",
+        html: expect.stringContaining("Five to Nine weekly digest"),
       }),
     );
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
@@ -513,6 +514,7 @@ describe("deliverWatchlistAlerts", () => {
       expect.objectContaining({
         to: "owner@example.com",
         subject: "Landing page URL changed: Nykaa",
+        html: expect.stringContaining("Five to Nine alert"),
       }),
     );
     expect(createDeliveryAttempt).toHaveBeenCalledWith(

@@ -1,10 +1,13 @@
 # 0509 Memory
 
-Last updated: 2026-04-06
+Last updated: 2026-04-22
 
 ## Product
 
-- `0509.in` is a Meta competitor analysis workspace for growth teams, India-first.
+- `0509` is the internal repo and domain handle for `Five to Nine`.
+- `Five to Nine` is the customer-facing product name: a proof-backed Meta competitor monitoring product for growth teams, India-first.
+- The north-star promise is: `See what changed, with proof.`
+- The core story is the gap between when a team stops checking and when the next decision gets made. `Five to Nine` closes that gap with trusted alerts.
 - Three layers: public `analysis` → retained `monitoring` → reusable `workspace memory`.
 - Region-aware pricing: India vs rest of world.
 

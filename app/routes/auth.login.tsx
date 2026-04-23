@@ -4,10 +4,10 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { AuthForm } from "~/components/auth-form";
 
 export const meta: MetaFunction = () => [
-  { title: "Sign in | 0509" },
+  { title: "Sign in | Five to Nine" },
   {
     name: "description",
-    content: "Sign in to access saved searches, watchlists, collections, and weekly competitor digests.",
+    content: "Sign in to access saved searches, watchlists, collections, and weekly competitor digests in Five to Nine.",
   },
 ];
 
@@ -40,8 +40,8 @@ export default function LoginRoute() {
               09
             </span>
             <span>
-              <strong>0509</strong>
-              <small>Meta analysis workspace</small>
+              <strong>Five to Nine</strong>
+              <small>Proof-backed competitor monitoring</small>
             </span>
           </Link>
           <div className="auth-points">

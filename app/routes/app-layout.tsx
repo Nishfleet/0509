@@ -37,7 +37,7 @@ export default function AppLayoutRoute() {
             09
           </span>
           <span>
-            <strong>0509</strong>
+            <strong>Five to Nine</strong>
             <small>Workspace</small>
           </span>
         </Link>
@@ -66,7 +66,7 @@ export default function AppLayoutRoute() {
       <div className="workspace-main">
         <header className="workspace-topbar">
           <div>
-            <p className="eyebrow">0509 workspace</p>
+            <p className="eyebrow">Five to Nine workspace</p>
             <h1>Track competitor changes without losing the context.</h1>
           </div>
           <Link className="button button-primary" to="/search">

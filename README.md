@@ -1,6 +1,17 @@
 # 0509
 
-0509 is a Meta competitor analysis workspace for growth teams.
+`0509` is the internal repo and domain handle for `Five to Nine`.
+
+`Five to Nine` is the customer-facing product name: proof-backed competitor monitoring for growth teams.
+
+## North Star
+
+- Promise: `See what changed, with proof.`
+- Story: `Five to Nine` closes the gap between when a team stops checking and when the next decision gets made.
+- Positioning: lead with proof-backed competitor monitoring, not a generic competitor-analysis workspace.
+- Product shape: search is the hook, monitoring is the product, workspace memory is the compounding layer.
+
+Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-north-star.md`
 
 ## Product shape
 
