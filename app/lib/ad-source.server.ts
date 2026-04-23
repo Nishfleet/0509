@@ -256,9 +256,10 @@ export async function searchAdsViaSourceResolver(
     cursor,
   });
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
-  if (cached && new Date(cached.expiresAt).getTime() > Date.now()) {
+  const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
+  if (usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
     return {
-      ...cached.payload,
+      ...usableCached.payload,
       source: provider,
       provider,
       cacheStatus: "hit",
@@ -269,9 +270,9 @@ export async function searchAdsViaSourceResolver(
   }
 
   if (providerState && shouldUseProviderCooldown(providerState)) {
-    if (cached) {
+    if (usableCached) {
       return {
-        ...cached.payload,
+        ...usableCached.payload,
         source: provider,
         provider,
         cacheStatus: "stale",
@@ -353,6 +354,12 @@ export async function searchAdsViaSourceResolver(
               }),
               provider,
             );
+      if (!isUsableLiveDiscoveryResult(provider, liveResult)) {
+        throw new CommercialDiscoveryError(
+          "Live commercial discovery returned no extractable ad cards.",
+          "empty_result",
+        );
+      }
       const browserMsUsed = Date.now() - startedAt;
       const timestamp = new Date().toISOString();
 
@@ -379,7 +386,7 @@ export async function searchAdsViaSourceResolver(
           queryFingerprint: fingerprintSavedQuery(query),
           country: query.filters.country || "India",
           status: "succeeded",
-          cacheStatus: cached ? "stale" : "miss",
+          cacheStatus: usableCached ? "stale" : "miss",
           failureClass: null,
           browserMsUsed,
           metadata: {
@@ -419,7 +426,7 @@ export async function searchAdsViaSourceResolver(
     const timestamp = new Date().toISOString();
     const cooldownState = buildDiscoveryCooldownState(error, failureClass);
     const summary = buildDiscoveryFailureSummary({
-      cached: Boolean(cached),
+      cached: Boolean(usableCached),
       cooldownState,
       failureClass,
       provider,
@@ -432,7 +439,7 @@ export async function searchAdsViaSourceResolver(
         queryFingerprint: fingerprintSavedQuery(query),
         country: query.filters.country || "India",
         status: "failed",
-        cacheStatus: cached ? "stale" : "miss",
+        cacheStatus: usableCached ? "stale" : "miss",
         failureClass,
         browserMsUsed: null,
         metadata: {
@@ -444,10 +451,10 @@ export async function searchAdsViaSourceResolver(
       });
       await upsertDiscoveryProviderState(effectiveEnv, {
         provider,
-        status: cached ? "cache_only" : "degraded",
+        status: usableCached ? "cache_only" : "degraded",
         failureClass,
         summary,
-        lastSuccessAt: cached?.fetchedAt ?? null,
+        lastSuccessAt: usableCached?.fetchedAt ?? null,
         lastFailureAt: timestamp,
         metadata: {
           cooldownUntil: cooldownState?.cooldownUntil ?? null,
@@ -457,9 +464,9 @@ export async function searchAdsViaSourceResolver(
       });
     }
 
-    if (cached) {
+    if (usableCached) {
       return {
-        ...cached.payload,
+        ...usableCached.payload,
         source: provider,
         provider,
         cacheStatus: "stale",
@@ -621,9 +628,10 @@ async function waitForDiscoveryLeaseResolution(
 
   while (Date.now() < deadline) {
     const cached = await getDiscoveryCacheEntry(env, input.cacheKey);
-    if (cached && new Date(cached.expiresAt).getTime() > Date.now()) {
+    const usableCached = isUsableDiscoveryCache(input.provider, cached) ? cached : null;
+    if (usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
       return {
-        ...cached.payload,
+        ...usableCached.payload,
         source: input.provider,
         provider: input.provider,
         cacheStatus: "hit",
@@ -635,9 +643,9 @@ async function waitForDiscoveryLeaseResolution(
 
     const providerState = await getDiscoveryProviderState(env, input.provider);
     if (providerState && shouldUseProviderCooldown(providerState)) {
-      if (cached) {
+      if (usableCached) {
         return {
-          ...cached.payload,
+          ...usableCached.payload,
           source: input.provider,
           provider: input.provider,
           cacheStatus: "stale",
@@ -680,6 +688,28 @@ function resolveDiscoveryLeaseWaitMs(routeContext: DiscoveryRouteContext) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isUsableDiscoveryCache(
+  provider: AdDiscoveryProvider,
+  cached: Awaited<ReturnType<typeof getDiscoveryCacheEntry>>,
+) {
+  if (!cached) {
+    return false;
+  }
+
+  return isUsableLiveDiscoveryResult(provider, cached.payload);
+}
+
+function isUsableLiveDiscoveryResult(
+  provider: AdDiscoveryProvider,
+  result: Pick<SearchResponse, "ads">,
+) {
+  if (provider !== "meta_library_browser") {
+    return true;
+  }
+
+  return result.ads.length > 0;
 }
 
 function resolveFailureClass(error: unknown): DiscoveryFailureClass {

@@ -14,6 +14,42 @@ afterEach(() => {
   vi.resetModules();
 });
 
+function buildLiveBrowserResult(overrides: Partial<SearchResponse> = {}): SearchResponse {
+  return {
+    ads: [
+      {
+        metaAdId: "meta-nykaa-1",
+        advertiser: "Nykaa",
+        body: "Flat 30% off on serums.",
+        previewHeadline: "Glow sale",
+        previewSubhead: "Weekend only",
+        hook: "Glow sale",
+        offer: "Flat 30% off",
+        cta: "Shop now",
+        format: "image",
+        languageLabel: "English",
+        destinationType: "website",
+        landingPageUrl: "https://www.nykaa.com/glow-sale",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=meta-nykaa-1",
+        countries: ["India"],
+        platforms: ["Instagram"],
+        firstSeenAt: null,
+        lastSeenAt: null,
+        active: true,
+        researchSummary: "Live Browser Run fixture",
+        source: "meta",
+        analysisFields: [],
+        tags: [],
+      },
+    ],
+    nextCursor: null,
+    source: "meta_library_browser",
+    provider: "meta_library_browser",
+    cacheStatus: "miss",
+    ...overrides,
+  };
+}
+
 describe("resolveCommercialAdSourceStatus", () => {
   it("treats the official Meta API as diagnostic-only even when a token exists", async () => {
     vi.doMock(
@@ -370,13 +406,7 @@ describe("searchAdsViaSourceResolver", () => {
       queryFingerprint: "fp-nykaa",
       country: "India",
       cursor: null,
-      payload: {
-        ads: [],
-        nextCursor: null,
-        source: "meta_library_browser",
-        provider: "meta_library_browser",
-        cacheStatus: "miss",
-      },
+      payload: buildLiveBrowserResult(),
       fetchedAt: "2026-04-19T00:00:00.000Z",
       expiresAt: "2026-04-19T00:15:00.000Z",
       browserMsUsed: 2500,
@@ -426,16 +456,14 @@ describe("searchAdsViaSourceResolver", () => {
     expect(browserSearch).toHaveBeenCalledTimes(1);
     expect(result.provider).toBe("meta_library_browser");
     expect(result.source).toBe("meta_library_browser");
+    expect(result.cacheStatus).toBe("stale");
+    expect(result.discoveryStatus).toBe("cache_only");
   });
 
   it("labels a successful refresh after stale cache as a live fetch", async () => {
-    const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
-      ads: [],
-      nextCursor: null,
-      source: "meta_library_browser",
-      provider: "meta_library_browser",
-      cacheStatus: "miss",
-    });
+    const browserSearch = vi
+      .fn<(...args: unknown[]) => Promise<SearchResponse>>()
+      .mockResolvedValue(buildLiveBrowserResult());
     const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
       cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
       provider: "meta_library_browser",
@@ -443,13 +471,7 @@ describe("searchAdsViaSourceResolver", () => {
       queryFingerprint: "fp-nykaa",
       country: "India",
       cursor: null,
-      payload: {
-        ads: [],
-        nextCursor: null,
-        source: "meta_library_browser",
-        provider: "meta_library_browser",
-        cacheStatus: "miss",
-      },
+      payload: buildLiveBrowserResult(),
       fetchedAt: "2026-04-21T18:00:00.000Z",
       expiresAt: "2026-04-21T18:01:00.000Z",
       browserMsUsed: 2500,
@@ -497,6 +519,144 @@ describe("searchAdsViaSourceResolver", () => {
     expect(browserSearch).toHaveBeenCalledTimes(1);
     expect(result.cacheStatus).toBe("miss");
     expect(result.discoveryStatus).toBe("healthy");
+  });
+
+  it("does not serve fresh zero-ad Browser Run cache as healthy", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      failureClass = "empty_result";
+    }
+    const browserSearch = vi
+      .fn()
+      .mockRejectedValue(new MockCommercialDiscoveryError("empty result"));
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: {
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      fetchedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      browserMsUsed: 2500,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      ads: [],
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "empty_result",
+    });
+  });
+
+  it("downgrades live Browser Run zero-ad results instead of caching them as success", async () => {
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+        constructor(
+          message: string,
+          public readonly failureClass: string,
+        ) {
+          super(message);
+          this.name = "CommercialDiscoveryError";
+        }
+      },
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "boat",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      ads: [],
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "empty_result",
+    });
   });
 
   it("returns an honest degraded empty state for public search when live discovery fails without cache", async () => {
@@ -808,13 +968,7 @@ describe("searchAdsViaSourceResolver", () => {
       expect(browserSearch).toHaveBeenCalledTimes(1);
     });
 
-    resolveSearch({
-      ads: [],
-      nextCursor: null,
-      source: "meta_library_browser",
-      provider: "meta_library_browser",
-      cacheStatus: "miss",
-    });
+    resolveSearch(buildLiveBrowserResult());
 
     const [firstResult, secondResult] = await Promise.all([first, second]);
 
@@ -905,13 +1059,7 @@ describe("searchAdsViaSourceResolver", () => {
       queryFingerprint: "fp-nykaa",
       country: "India",
       cursor: null,
-      payload: {
-        ads: [],
-        nextCursor: null,
-        source: "meta_library_browser",
-        provider: "meta_library_browser",
-        cacheStatus: "miss",
-      },
+      payload: buildLiveBrowserResult(),
       fetchedAt: "2026-04-21T18:00:00.000Z",
       expiresAt: "2026-04-21T18:01:00.000Z",
       browserMsUsed: 2500,
@@ -1042,13 +1190,7 @@ describe("searchAdsViaSourceResolver", () => {
       queryFingerprint: "fp-nykaa",
       country: "India",
       cursor: null,
-      payload: {
-        ads: [],
-        nextCursor: null,
-        source: "meta_library_browser",
-        provider: "meta_library_browser",
-        cacheStatus: "miss",
-      },
+      payload: buildLiveBrowserResult(),
       fetchedAt: "2026-04-21T18:00:00.000Z",
       expiresAt: "2026-04-21T18:01:00.000Z",
       browserMsUsed: 2500,
