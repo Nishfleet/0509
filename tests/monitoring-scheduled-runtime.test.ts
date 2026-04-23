@@ -42,6 +42,7 @@ afterEach(() => {
 
 function mockMonitoringDependencies(input: {
   provider: "meta_api" | "meta_library_browser";
+  watchlists?: WatchlistRecord[];
   workflowCreate?: ReturnType<typeof vi.fn>;
   searchResponse?: Record<string, unknown>;
 }) {
@@ -94,7 +95,7 @@ function mockMonitoringDependencies(input: {
     getUserDeliveryProfile: vi.fn().mockResolvedValue(null),
     getWatchlist: vi.fn(),
     hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: unknown[]) => ads),
-    listActiveWatchlists: vi.fn().mockResolvedValue(activeWatchlists),
+    listActiveWatchlists: vi.fn().mockResolvedValue(input.watchlists ?? activeWatchlists),
     listObservationsForRun: vi.fn().mockResolvedValue([]),
     listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
@@ -118,6 +119,22 @@ function mockMonitoringDependencies(input: {
     createWatchlistRun,
     finishWatchlistRun,
     searchAdsViaSourceResolver,
+  };
+}
+
+function buildWatchlist(index: number): WatchlistRecord {
+  return {
+    id: `watch-${index}`,
+    userId: "user-1",
+    name: `watch ${index}`,
+    targetType: "advertiser",
+    targetId: `brand-${index}`,
+    targetFingerprint: `fp-brand-${index}`,
+    targetLabel: `brand-${index}`,
+    isActive: true,
+    lastScannedAt: null,
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
   };
 }
 
@@ -187,6 +204,32 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       skipped: 2,
     });
     expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps scheduled discovery warmups to a bounded batch", async () => {
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      watchlists: Array.from({ length: 7 }, (_value, index) => buildWatchlist(index + 1)),
+    });
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: {},
+    };
+
+    const { runScheduledDiscoveryWarmup } = await import("~/lib/monitoring.server");
+
+    const result = await runScheduledDiscoveryWarmup(env as never);
+
+    expect(result).toMatchObject({
+      attempted: 5,
+      succeeded: 5,
+      failed: 0,
+      skipped: 2,
+    });
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(5);
   });
 
   it("runs browser-backed scheduled scans inline even when a workflow binding exists", async () => {

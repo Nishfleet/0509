@@ -65,7 +65,7 @@ const DEFAULT_PAGE_BUDGET = 2;
 const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
 const DIGEST_LOOKBACK_DAYS = 7;
-const DISCOVERY_WARMUP_QUERY_LIMIT = 20;
+const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 
 type ObservationRecord = Awaited<ReturnType<typeof listObservationsForRun>>[number];
 
