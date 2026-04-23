@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   analyzeMetaLibraryHtml,
@@ -17,6 +17,10 @@ import {
   runCurrent0509Probe,
   runZyteProbe,
 } from "../scripts/provider-bakeoff.lib.mjs";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("provider bakeoff helpers", () => {
   it("keeps known failing production search samples in the default gate", () => {
@@ -499,6 +503,44 @@ describe("zyte probe", () => {
 });
 
 describe("current 0509 probe", () => {
+  it("bounds production search probes with an abort timeout", async () => {
+    const controller = new AbortController();
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div>Source: Live Ad Library capture</div>
+            <h2>1 ads on this page</h2>
+          </body>
+        </html>
+      `,
+    });
+
+    await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+        timeoutMs: 1234,
+      },
+    );
+
+    expect(timeoutSpy).toHaveBeenCalledWith(1234);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        signal: controller.signal,
+      }),
+    );
+  });
+
   it("captures the live source label from rendered HTML", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
