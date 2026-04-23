@@ -533,6 +533,63 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.ads).toHaveLength(1);
   });
 
+  it("falls back to rendered HTML links when Quick Actions payload script is missing", async () => {
+    const launch = vi.fn();
+    const sessions = vi.fn();
+    const limits = vi.fn();
+    const connect = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: `
+            <html>
+              <body>
+                <article>
+                  <strong>Nykaa</strong>
+                  <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
+                  <a href="/ads/library/?id=1234567890">View ad details</a>
+                  <a href="https://www.nykaa.com/glow-sale">Shop now</a>
+                </article>
+              </body>
+            </html>
+          `,
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Browser-Ms-Used": "1234",
+          },
+        },
+      ),
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+      },
+      buildQuery(),
+    );
+
+    expect(result.ads).toEqual([
+      expect.objectContaining({
+        metaAdId: "1234567890",
+        advertiser: "nykaa",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+        landingPageUrl: "https://www.nykaa.com/glow-sale",
+        platforms: expect.arrayContaining(["Instagram", "Facebook"]),
+      }),
+    ]);
+  });
+
   it("classifies Quick Actions 429 errors as rate limited", async () => {
     const launch = vi.fn();
     const sessions = vi.fn();
