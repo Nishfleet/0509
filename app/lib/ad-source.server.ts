@@ -327,6 +327,29 @@ export async function searchAdsViaSourceResolver(
     if (apiFallback) {
       return apiFallback;
     }
+
+    if (usableCached) {
+      return {
+        ...usableCached.payload,
+        source: provider,
+        provider,
+        cacheStatus: "stale",
+        discoveryStatus: "cache_only",
+        discoverySummary: providerState.summary,
+        discoveryFailureClass: providerState.failureClass,
+      };
+    }
+
+    return {
+      ads: [],
+      nextCursor: null,
+      source: provider,
+      provider,
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoverySummary: providerState.summary,
+      discoveryFailureClass: providerState.failureClass,
+    };
   }
 
   const discoveryLease =
