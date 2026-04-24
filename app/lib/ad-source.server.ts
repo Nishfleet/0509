@@ -36,6 +36,7 @@ const DISCOVERY_QUERY_LEASE_TTL_MS = 30 * 1000;
 const PUBLIC_SEARCH_LEASE_WAIT_MS = 12 * 1000;
 const BACKGROUND_LEASE_WAIT_MS = 25 * 1000;
 const DISCOVERY_QUERY_LEASE_POLL_MS = 250;
+const PUBLIC_SEARCH_BROWSER_FAILURE_FALLBACK_WINDOW_MS = 6 * 60 * 60 * 1000;
 const META_API_FALLBACK_SUMMARY =
   "Browser capture is unavailable right now; showing API fallback results.";
 
@@ -310,6 +311,22 @@ export async function searchAdsViaSourceResolver(
       providerState.summary,
       providerState.failureClass ?? "browser_launch_failed",
     );
+  }
+
+  if (
+    provider === "meta_library_browser" &&
+    routeContext === "public_search" &&
+    providerState &&
+    shouldPreferMetaApiFallbackForPublicSearch(providerState)
+  ) {
+    const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
+      browserFailureClass: providerState.failureClass,
+      browserSummary: providerState.summary,
+      routeContext,
+    });
+    if (apiFallback) {
+      return apiFallback;
+    }
   }
 
   const discoveryLease =
@@ -885,6 +902,21 @@ function shouldUseProviderCooldown(
   }
 
   return Date.now() - updatedAtMs < PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS;
+}
+
+function shouldPreferMetaApiFallbackForPublicSearch(
+  providerState: Awaited<ReturnType<typeof getDiscoveryProviderState>>,
+) {
+  if (!providerState?.updatedAt || !providerState.failureClass || providerState.status === "healthy") {
+    return false;
+  }
+
+  const updatedAtMs = Date.parse(providerState.updatedAt);
+  if (Number.isNaN(updatedAtMs)) {
+    return false;
+  }
+
+  return Date.now() - updatedAtMs < PUBLIC_SEARCH_BROWSER_FAILURE_FALLBACK_WINDOW_MS;
 }
 
 function buildDiscoveryCooldownState(

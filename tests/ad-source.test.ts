@@ -461,6 +461,79 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
+  it("uses Meta API fallback before retrying recently failed browser capture for public search", async () => {
+    const browserSearch = vi.fn();
+    const apiSearch = vi.fn().mockResolvedValue(
+      buildLiveBrowserResult({
+        source: "meta",
+        provider: undefined,
+      }),
+    );
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "login_wall",
+      summary: "Commercial discovery degraded and no cached results are available.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date().toISOString(),
+      metadata: {
+        cooldownUntil: new Date(Date.now() - 60 * 1000).toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "live-token",
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "adspy",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(apiSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      source: "meta_api",
+      provider: "meta_api",
+      discoveryStatus: "healthy",
+    });
+  });
+
   it("uses Browser Run from the runtime worker env when route context omits it", async () => {
     const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
       ads: [],
