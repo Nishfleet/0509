@@ -187,7 +187,7 @@ export async function resolveCommercialAdSourceStatus(
       summary: providerState.summary,
       lastCheckedAt: providerState.updatedAt,
       lastErrorCode: providerState.failureClass,
-      lastErrorMessage: null,
+      lastErrorMessage: extractProviderStateErrorMessage(providerState.metadata),
     };
   }
 
@@ -553,6 +553,10 @@ async function tryMetaApiFallback(
 
   const queryFingerprint = fingerprintSavedQuery(query);
   const country = query.filters.country || "India";
+  const providerState = env.DB ? await getDiscoveryProviderState(env, "meta_api") : null;
+  if (providerState && shouldUseProviderCooldown(providerState)) {
+    return null;
+  }
 
   try {
     const apiResult = normalizeSearchResponse(
@@ -606,6 +610,8 @@ async function tryMetaApiFallback(
   } catch (error) {
     const failureClass = resolveFailureClass(error);
     const timestamp = new Date().toISOString();
+    const cooldownState = buildDiscoveryCooldownState(error, failureClass);
+    const errorMessage = error instanceof Error ? error.message : "Unknown API fallback error.";
 
     if (env.DB) {
       await createDiscoveryFetchLog(env, {
@@ -620,9 +626,11 @@ async function tryMetaApiFallback(
         metadata: {
           browserFailureClass: input.browserFailureClass ?? null,
           browserSummary: input.browserSummary ?? null,
+          cooldownUntil: cooldownState?.cooldownUntil ?? null,
           cursor: cursor ?? null,
-          errorMessage: error instanceof Error ? error.message : "Unknown API fallback error.",
+          errorMessage,
           fallbackFor: "meta_library_browser",
+          retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
         },
       });
       await upsertDiscoveryProviderState(env, {
@@ -633,7 +641,10 @@ async function tryMetaApiFallback(
         lastSuccessAt: null,
         lastFailureAt: timestamp,
         metadata: {
+          cooldownUntil: cooldownState?.cooldownUntil ?? null,
+          errorMessage,
           fallbackFor: "meta_library_browser",
+          retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
           routeContext: input.routeContext,
         },
       });
@@ -641,6 +652,11 @@ async function tryMetaApiFallback(
 
     return null;
   }
+}
+
+function extractProviderStateErrorMessage(metadata: Record<string, unknown> | null | undefined) {
+  const errorMessage = metadata?.errorMessage;
+  return typeof errorMessage === "string" && errorMessage.trim() ? errorMessage : null;
 }
 
 function getInFlightDiscoveryMap() {

@@ -434,6 +434,7 @@ function shouldUseQuickActionsFallback(
   return [
     "browser_unavailable",
     "browser_launch_failed",
+    "login_wall",
     "rate_limited",
     "timeout",
     "selector_drift",

@@ -87,6 +87,37 @@ describe("resolveCommercialAdSourceStatus", () => {
     expect(status.summary).toContain("explicit demo mode");
   });
 
+  it("surfaces provider-state error messages for operator status", async () => {
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryProviderState: vi.fn().mockResolvedValue({
+        provider: "meta_api",
+        status: "degraded",
+        failureClass: "login_wall",
+        summary: "Meta Ad Library API fallback failed while browser capture is unavailable.",
+        lastSuccessAt: null,
+        lastFailureAt: new Date().toISOString(),
+        metadata: {
+          errorMessage: "Error validating access token: Session has expired.",
+        },
+        updatedAt: new Date().toISOString(),
+      }),
+    }));
+
+    const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
+
+    const status = await resolveCommercialAdSourceStatus({
+      META_AD_LIBRARY_TOKEN: "expired-token",
+      DB: {} as D1Database,
+    } as never);
+
+    expect(status).toMatchObject({
+      status: "degraded",
+      provider: "meta_api",
+      lastErrorCode: "login_wall",
+      lastErrorMessage: "Error validating access token: Session has expired.",
+    });
+  });
+
   it("falls back to the runtime worker env when Browser Run is missing from route context", async () => {
     vi.doMock(
       "cloudflare:workers",
@@ -388,6 +419,94 @@ describe("searchAdsViaSourceResolver", () => {
     );
   });
 
+  it("puts failed Meta API fallback auth errors into provider cooldown", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      constructor(
+        message: string,
+        public readonly failureClass: string,
+      ) {
+        super(message);
+        this.name = "CommercialDiscoveryError";
+      }
+    }
+    class MockMetaApiError extends Error {
+      isAuthError = true;
+      isRateLimit = false;
+    }
+
+    const browserSearch = vi
+      .fn()
+      .mockRejectedValue(
+        new MockCommercialDiscoveryError("Meta Ad Library returned a login wall.", "login_wall"),
+      );
+    const apiSearch = vi
+      .fn()
+      .mockRejectedValue(new MockMetaApiError("Error validating access token: Session has expired."));
+    const upsertDiscoveryProviderState = vi.fn();
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: MockMetaApiError,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "expired-token",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(apiSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "login_wall",
+    });
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_api",
+        status: "degraded",
+        failureClass: "login_wall",
+        metadata: expect.objectContaining({
+          cooldownUntil: expect.any(String),
+          errorMessage: "Error validating access token: Session has expired.",
+          fallbackFor: "meta_library_browser",
+        }),
+      }),
+    );
+  });
+
   it("uses Meta API fallback during browser cooldown when no cache exists", async () => {
     const browserSearch = vi.fn();
     const apiSearch = vi.fn().mockResolvedValue(
@@ -396,18 +515,22 @@ describe("searchAdsViaSourceResolver", () => {
         provider: undefined,
       }),
     );
-    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
-      provider: "meta_library_browser",
-      status: "degraded",
-      failureClass: "login_wall",
-      summary: "Commercial discovery degraded and no cached results are available.",
-      lastSuccessAt: null,
-      lastFailureAt: new Date().toISOString(),
-      metadata: {
-        cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-      },
-      updatedAt: new Date().toISOString(),
-    });
+    const getDiscoveryProviderState = vi.fn(async (_env, provider) =>
+      provider === "meta_library_browser"
+        ? {
+            provider: "meta_library_browser",
+            status: "degraded",
+            failureClass: "login_wall",
+            summary: "Commercial discovery degraded and no cached results are available.",
+            lastSuccessAt: null,
+            lastFailureAt: new Date().toISOString(),
+            metadata: {
+              cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+            },
+            updatedAt: new Date().toISOString(),
+          }
+        : null,
+    );
 
     vi.doMock("~/lib/meta-library-browser.server", () => ({
       searchMetaLibraryByBrowser: browserSearch,
@@ -458,6 +581,93 @@ describe("searchAdsViaSourceResolver", () => {
       source: "meta_api",
       provider: "meta_api",
       discoveryStatus: "healthy",
+    });
+  });
+
+  it("skips Meta API fallback while the diagnostic token is in cooldown", async () => {
+    const browserSearch = vi.fn();
+    const apiSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn(async (_env, provider) => {
+      if (provider === "meta_library_browser") {
+        return {
+          provider: "meta_library_browser",
+          status: "degraded",
+          failureClass: "login_wall",
+          summary: "Commercial discovery degraded and no cached results are available.",
+          lastSuccessAt: null,
+          lastFailureAt: new Date().toISOString(),
+          metadata: {
+            cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          },
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      return {
+        provider: "meta_api",
+        status: "degraded",
+        failureClass: "login_wall",
+        summary: "Meta Ad Library API fallback failed while browser capture is unavailable.",
+        lastSuccessAt: null,
+        lastFailureAt: new Date().toISOString(),
+        metadata: {
+          cooldownUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          errorMessage: "Error validating access token: Session has expired.",
+        },
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "expired-token",
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "adspy",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(apiSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "login_wall",
     });
   });
 
