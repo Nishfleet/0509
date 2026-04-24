@@ -27,3 +27,4 @@ worker-configuration.d.ts
 !.codex/environments/
 .codex/environments/*
 !.codex/environments/environment.toml
+.gstack/
