@@ -31,15 +31,21 @@ async function expectRedirect(
 
 beforeEach(() => {
   vi.resetModules();
+  vi.doUnmock("~/lib/auth.server");
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.doUnmock("~/lib/auth.server");
   vi.resetModules();
 });
 
 describe("auth signup loader", () => {
   it("defaults new signups to the onboarding flow", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+
     const { loader } = await import("~/routes/auth.signup");
 
     const result = await loader({
@@ -55,6 +61,17 @@ describe("auth signup loader", () => {
 
 describe("onboarding route", () => {
   it("redirects unauthenticated users to login", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockImplementation(() => {
+        throw new Response(null, {
+          headers: {
+            Location: "/auth/login?redirectTo=%2Fapp%2Fonboard",
+          },
+          status: 302,
+        });
+      }),
+    }));
+
     const { loader } = await import("~/routes/app.onboard");
 
     await expectRedirect(
