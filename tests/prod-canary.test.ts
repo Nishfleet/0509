@@ -47,6 +47,7 @@ describe("production canary", () => {
       ok: true,
       status: 200,
       app: "0509",
+      expectedApp: "0509",
       url: "https://0509.in/api/health",
     });
     expect(fetchImpl).toHaveBeenCalledWith(
@@ -57,6 +58,30 @@ describe("production canary", () => {
         }),
       }),
     );
+  });
+
+  it("fails when the health endpoint belongs to the wrong app", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "other-worker",
+      }),
+    });
+
+    const health = await checkHealthEndpoint({
+      baseUrl: "https://0509.in",
+      fetchImpl,
+    });
+
+    expect(health).toMatchObject({
+      ok: false,
+      status: 200,
+      app: "other-worker",
+      expectedApp: "0509",
+    });
+    expect(health.message).toContain("app mismatch");
   });
 
   it("fails when current 0509 search returns a blocking empty result", async () => {
