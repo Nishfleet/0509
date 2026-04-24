@@ -205,7 +205,9 @@ export function analyzeMetaLibraryHtml(html) {
   const text = stripHtml(html).toLowerCase();
   const hasLogin = /(log in|login|sign in|sign into)/.test(text);
   const mentionsFacebook = text.includes("facebook") || text.includes("meta ad library");
-  const sourceMatch = stripHtml(html).match(/source:\s*(cached live results|live ad library capture|demo dataset)/i);
+  const sourceMatch = stripHtml(html).match(
+    /source:\s*(cached live results|live ad library capture|api fallback|demo dataset)/i,
+  );
   const resultCountMatch = stripHtml(html).match(/\b(\d+)\s+ads?\s+on\s+this\s+page\b/i);
 
   return {
@@ -405,6 +407,7 @@ function classifyCurrent0509Outcome(analysis, ok) {
   }
   if (
     (analysis.sourceLabel === "Cached live results" ||
+      analysis.sourceLabel === "API fallback" ||
       analysis.sourceLabel === "Live Ad Library capture") &&
     ((analysis.resultCount ?? 0) > 0 || analysis.matchCount > 0)
   ) {

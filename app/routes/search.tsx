@@ -632,7 +632,7 @@ function formatSearchSourceLabel(result: SearchResponse) {
   }
 
   if (result.source === "meta_api") {
-    return "API diagnostic";
+    return "API fallback";
   }
 
   if (result.source === "meta") {

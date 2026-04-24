@@ -294,6 +294,173 @@ describe("searchAdsViaSourceResolver", () => {
     expect(result.source).toBe("meta_library_browser");
   });
 
+  it("uses Meta API fallback when browser capture hits a login wall and no cache exists", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      constructor(
+        message: string,
+        public readonly failureClass: string,
+      ) {
+        super(message);
+        this.name = "CommercialDiscoveryError";
+      }
+    }
+
+    const browserSearch = vi
+      .fn()
+      .mockRejectedValue(
+        new MockCommercialDiscoveryError("Meta Ad Library returned a login wall.", "login_wall"),
+      );
+    const apiSearch = vi.fn().mockResolvedValue(
+      buildLiveBrowserResult({
+        source: "meta",
+        provider: undefined,
+      }),
+    );
+    const createDiscoveryFetchLog = vi.fn();
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "live-token",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(apiSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      source: "meta_api",
+      provider: "meta_api",
+      discoveryStatus: "healthy",
+      discoveryFailureClass: null,
+    });
+    expect(result.discoverySummary).toContain("API fallback");
+    expect(createDiscoveryFetchLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_library_browser",
+        status: "failed",
+        failureClass: "login_wall",
+      }),
+    );
+    expect(createDiscoveryFetchLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_api",
+        status: "succeeded",
+        failureClass: null,
+      }),
+    );
+  });
+
+  it("uses Meta API fallback during browser cooldown when no cache exists", async () => {
+    const browserSearch = vi.fn();
+    const apiSearch = vi.fn().mockResolvedValue(
+      buildLiveBrowserResult({
+        source: "meta",
+        provider: undefined,
+      }),
+    );
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "login_wall",
+      summary: "Commercial discovery degraded and no cached results are available.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date().toISOString(),
+      metadata: {
+        cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "live-token",
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "adspy",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(apiSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      source: "meta_api",
+      provider: "meta_api",
+      discoveryStatus: "healthy",
+    });
+  });
+
   it("uses Browser Run from the runtime worker env when route context omits it", async () => {
     const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
       ads: [],

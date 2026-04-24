@@ -572,6 +572,37 @@ describe("current 0509 probe", () => {
     expect(result.matchCount).toBe(3);
   });
 
+  it("treats API fallback pages with rendered results as healthy", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div>Source: API fallback</div>
+            <h2>2 ads on this page</h2>
+          </body>
+        </html>
+      `,
+    });
+
+    const result = await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+      },
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.sourceLabel).toBe("API fallback");
+    expect(result.matchCount).toBe(2);
+  });
+
   it("treats cached live zero-result pages as empty instead of success", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
