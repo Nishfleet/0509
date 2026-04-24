@@ -2,6 +2,7 @@
 
 import {
   DEFAULT_CANARY_BASE_URL,
+  DEFAULT_CANARY_EXPECTED_APP,
   formatProductionCanaryReport,
   runProductionCanary,
 } from "./prod-canary.lib.mjs";
@@ -10,9 +11,10 @@ import {
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ baseUrl: string, queries: string[], json: boolean }} */
+  /** @type {{ baseUrl: string, expectedApp: string | null, queries: string[], json: boolean }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || DEFAULT_CANARY_BASE_URL,
+    expectedApp: process.env.CANARY_EXPECTED_APP || DEFAULT_CANARY_EXPECTED_APP,
     queries: [],
     json: false,
   };
@@ -29,6 +31,11 @@ function parseArgs(args) {
       index += 1;
       continue;
     }
+    if (arg === "--expected-app" && args[index + 1]) {
+      parsed.expectedApp = args[index + 1];
+      index += 1;
+      continue;
+    }
     if (arg === "--json") {
       parsed.json = true;
     }
@@ -40,6 +47,7 @@ function parseArgs(args) {
 const config = parseArgs(process.argv.slice(2));
 const report = await runProductionCanary({
   baseUrl: config.baseUrl,
+  expectedApp: config.expectedApp,
   queries: config.queries,
 });
 

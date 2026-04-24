@@ -7,12 +7,14 @@ import {
 } from "./provider-bakeoff.lib.mjs";
 
 export const DEFAULT_CANARY_BASE_URL = "https://0509.in";
+export const DEFAULT_CANARY_EXPECTED_APP = "0509";
 
 /**
  * @typedef {{
  *   ok: boolean,
  *   status: number | null,
  *   app: string | null,
+ *   expectedApp: string | null,
  *   message: string | null,
  *   url: string
  * }} HealthCheckResult
@@ -21,6 +23,7 @@ export const DEFAULT_CANARY_BASE_URL = "https://0509.in";
 /**
  * @typedef {{
  *   baseUrl?: string,
+ *   expectedApp?: string | null,
  *   queries?: string[],
  *   country?: string,
  *   mode?: "advertiser" | "keyword",
@@ -30,11 +33,12 @@ export const DEFAULT_CANARY_BASE_URL = "https://0509.in";
  */
 
 /**
- * @param {{ baseUrl?: string, fetchImpl?: typeof fetch }} [options]
+ * @param {{ baseUrl?: string, expectedApp?: string | null, fetchImpl?: typeof fetch }} [options]
  * @returns {Promise<HealthCheckResult>}
  */
 export async function checkHealthEndpoint(options = {}) {
   const baseUrl = options.baseUrl ?? DEFAULT_CANARY_BASE_URL;
+  const expectedApp = options.expectedApp ?? DEFAULT_CANARY_EXPECTED_APP;
   const fetchImpl = options.fetchImpl ?? fetch;
   const url = new URL("/api/health", baseUrl).toString();
 
@@ -47,13 +51,21 @@ export async function checkHealthEndpoint(options = {}) {
     });
     const payload = await response.json().catch(() => ({}));
     const app = typeof payload?.app === "string" ? payload.app : null;
-    const healthy = response.ok && payload?.status === "ok";
+    const appMatches = expectedApp ? app === expectedApp : true;
+    const healthy = response.ok && payload?.status === "ok" && appMatches;
+    const message =
+      healthy
+        ? null
+        : !response.ok || payload?.status !== "ok"
+          ? `Health endpoint returned ${response.status}.`
+          : `Health endpoint app mismatch: expected ${expectedApp}, got ${app ?? "unknown"}.`;
 
     return {
       ok: healthy,
       status: response.status,
       app,
-      message: healthy ? null : `Health endpoint returned ${response.status}.`,
+      expectedApp,
+      message,
       url,
     };
   } catch (error) {
@@ -61,6 +73,7 @@ export async function checkHealthEndpoint(options = {}) {
       ok: false,
       status: null,
       app: null,
+      expectedApp,
       message: error instanceof Error ? error.message : "Unknown health check failure.",
       url,
     };
@@ -72,12 +85,14 @@ export async function checkHealthEndpoint(options = {}) {
  */
 export async function runProductionCanary(options = {}) {
   const baseUrl = options.baseUrl ?? DEFAULT_CANARY_BASE_URL;
+  const expectedApp = options.expectedApp ?? DEFAULT_CANARY_EXPECTED_APP;
   const queries = options.queries?.length ? options.queries : [...DOGFOOD_QUERIES];
   const country = options.country ?? DEFAULT_COUNTRY;
   const mode = options.mode ?? DEFAULT_MODE;
   const benchmarkImpl = options.benchmarkImpl ?? benchmarkProviders;
   const health = await checkHealthEndpoint({
     baseUrl,
+    expectedApp,
     fetchImpl: options.fetchImpl,
   });
   const results = await benchmarkImpl({
