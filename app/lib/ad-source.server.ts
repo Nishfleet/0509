@@ -36,6 +36,8 @@ const DISCOVERY_QUERY_LEASE_TTL_MS = 30 * 1000;
 const PUBLIC_SEARCH_LEASE_WAIT_MS = 12 * 1000;
 const BACKGROUND_LEASE_WAIT_MS = 25 * 1000;
 const DISCOVERY_QUERY_LEASE_POLL_MS = 250;
+const META_API_FALLBACK_SUMMARY =
+  "Browser capture is unavailable right now; showing API fallback results.";
 
 interface DiscoveryCooldownState {
   cooldownUntil: string;
@@ -283,6 +285,15 @@ export async function searchAdsViaSourceResolver(
     }
 
     if (routeContext === "public_search") {
+      const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
+        browserFailureClass: providerState.failureClass,
+        browserSummary: providerState.summary,
+        routeContext,
+      });
+      if (apiFallback) {
+        return apiFallback;
+      }
+
       return {
         ads: [],
         nextCursor: null,
@@ -464,6 +475,15 @@ export async function searchAdsViaSourceResolver(
       });
     }
 
+    const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
+      browserFailureClass: failureClass,
+      browserSummary: summary,
+      routeContext,
+    });
+    if (apiFallback) {
+      return apiFallback;
+    }
+
     if (usableCached) {
       return {
         ...usableCached.payload,
@@ -497,6 +517,112 @@ export async function searchAdsViaSourceResolver(
         holderId: discoveryLease.holderId,
       }).catch(() => undefined);
     }
+  }
+}
+
+async function tryMetaApiFallback(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+  cursor: string | null | undefined,
+  input: {
+    browserFailureClass: DiscoveryFailureClass | null | undefined;
+    browserSummary: string | null | undefined;
+    routeContext: DiscoveryRouteContext;
+  },
+): Promise<SearchResponse | null> {
+  if (!env.META_AD_LIBRARY_TOKEN) {
+    return null;
+  }
+
+  const queryFingerprint = fingerprintSavedQuery(query);
+  const country = query.filters.country || "India";
+
+  try {
+    const apiResult = normalizeSearchResponse(
+      await searchMetaApiAds(env, query, cursor, {
+        allowDemoFallback: false,
+      }),
+      "meta_api",
+    );
+    const timestamp = new Date().toISOString();
+
+    if (env.DB) {
+      await createDiscoveryFetchLog(env, {
+        provider: "meta_api",
+        routeContext: input.routeContext,
+        queryFingerprint,
+        country,
+        status: "succeeded",
+        cacheStatus: "miss",
+        failureClass: null,
+        browserMsUsed: null,
+        metadata: {
+          browserFailureClass: input.browserFailureClass ?? null,
+          browserSummary: input.browserSummary ?? null,
+          cursor: cursor ?? null,
+          fallbackFor: "meta_library_browser",
+        },
+      });
+      await upsertDiscoveryProviderState(env, {
+        provider: "meta_api",
+        status: "healthy",
+        failureClass: null,
+        summary: "Meta Ad Library API fallback is available while browser capture is unavailable.",
+        lastSuccessAt: timestamp,
+        lastFailureAt: null,
+        metadata: {
+          fallbackFor: "meta_library_browser",
+          routeContext: input.routeContext,
+        },
+      });
+    }
+
+    return {
+      ...apiResult,
+      source: "meta_api",
+      provider: "meta_api",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: META_API_FALLBACK_SUMMARY,
+      discoveryFailureClass: null,
+    };
+  } catch (error) {
+    const failureClass = resolveFailureClass(error);
+    const timestamp = new Date().toISOString();
+
+    if (env.DB) {
+      await createDiscoveryFetchLog(env, {
+        provider: "meta_api",
+        routeContext: input.routeContext,
+        queryFingerprint,
+        country,
+        status: "failed",
+        cacheStatus: "miss",
+        failureClass,
+        browserMsUsed: null,
+        metadata: {
+          browserFailureClass: input.browserFailureClass ?? null,
+          browserSummary: input.browserSummary ?? null,
+          cursor: cursor ?? null,
+          errorMessage: error instanceof Error ? error.message : "Unknown API fallback error.",
+          fallbackFor: "meta_library_browser",
+        },
+      });
+      await upsertDiscoveryProviderState(env, {
+        provider: "meta_api",
+        status: "degraded",
+        failureClass,
+        summary: "Meta Ad Library API fallback failed while browser capture is unavailable.",
+        lastSuccessAt: null,
+        lastFailureAt: timestamp,
+        metadata: {
+          fallbackFor: "meta_library_browser",
+          routeContext: input.routeContext,
+        },
+      });
+    }
+
+    return null;
   }
 }
 
