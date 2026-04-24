@@ -744,6 +744,94 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
+  it("returns degraded public search quickly when recent browser failure has no working API fallback", async () => {
+    const browserSearch = vi.fn();
+    const apiSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn(async (_env, provider) => {
+      if (provider === "meta_library_browser") {
+        return {
+          provider: "meta_library_browser",
+          status: "degraded",
+          failureClass: "login_wall",
+          summary: "Commercial discovery degraded and no cached results are available.",
+          lastSuccessAt: null,
+          lastFailureAt: new Date().toISOString(),
+          metadata: {
+            cooldownUntil: new Date(Date.now() - 60 * 1000).toISOString(),
+          },
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      return {
+        provider: "meta_api",
+        status: "degraded",
+        failureClass: "login_wall",
+        summary: "Meta Ad Library API fallback failed while browser capture is unavailable.",
+        lastSuccessAt: null,
+        lastFailureAt: new Date().toISOString(),
+        metadata: {
+          cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          errorMessage: "Error validating access token: Session has expired.",
+        },
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "expired-token",
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "adspy",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(apiSearch).not.toHaveBeenCalled();
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "login_wall",
+    });
+  });
+
   it("uses Browser Run from the runtime worker env when route context omits it", async () => {
     const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
       ads: [],
