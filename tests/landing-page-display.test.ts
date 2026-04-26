@@ -44,6 +44,7 @@ describe("formatAnalysisSourceLabel", () => {
     expect(formatAnalysisSourceLabel("ad_snapshot_fetch")).toBe("Ad snapshot fetch");
     expect(formatAnalysisSourceLabel("browser_render")).toBe("Browser-rendered");
     expect(formatAnalysisSourceLabel("landing_page_fetch")).toBe("Fetch capture");
+    expect(formatAnalysisSourceLabel("meta_library_browser")).toBe("Browser Run capture");
     expect(formatAnalysisSourceLabel("user")).toBe("Manual");
   });
 });

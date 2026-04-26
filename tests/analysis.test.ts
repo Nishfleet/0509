@@ -99,4 +99,15 @@ describe("withStructuredAnalysis", () => {
 
     expect(nextAd.languageLabel).toBe("Hindi");
   });
+
+  it("keeps Browser Run discovery provenance distinct from Meta API provenance", () => {
+    const { analysisFields: _analysisFields, ...inputAd } = baseAd;
+    const nextAd = withStructuredAnalysis({
+      ...inputAd,
+      source: "meta_library_browser",
+    });
+    const hookField = nextAd.analysisFields.find((field) => field.fieldKey === "hook");
+
+    expect(hookField?.provenanceSource).toBe("meta_library_browser");
+  });
 });

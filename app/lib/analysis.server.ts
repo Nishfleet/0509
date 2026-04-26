@@ -1,3 +1,4 @@
+import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import { classifyLanguage } from "~/lib/language-classifier";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
@@ -99,7 +100,7 @@ export function buildAnalysisFields(ad: AdRecord, source: AnalysisSource): Analy
 }
 
 export function withStructuredAnalysis(ad: Omit<AdRecord, "analysisFields">): AdRecord {
-  const source = ad.source === "meta" ? "meta_api" : "user";
+  const source = mapAdSourceToAnalysisSource(ad.source);
   const language = classifyAdLanguage(ad);
   const nextAd = {
     ...ad,

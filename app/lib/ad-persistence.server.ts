@@ -1,4 +1,5 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
+import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
 
@@ -235,7 +236,7 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
     ad.metaAdId,
     ad.analysisFields.length > 0
       ? ad.analysisFields
-      : buildAnalysisFields(ad, ad.source === "meta" ? "meta_api" : "user"),
+      : buildAnalysisFields(ad, mapAdSourceToAnalysisSource(ad.source)),
   );
 }
 

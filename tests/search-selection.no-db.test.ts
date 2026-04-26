@@ -80,4 +80,56 @@ describe("search selection without D1", () => {
       }),
     );
   });
+
+  it("captures creative text for Browser Run Ad Library results", async () => {
+    const browserAd = {
+      ...baseAd,
+      source: "meta_library_browser" as const,
+    };
+    const captureCreativeText = vi.fn().mockResolvedValue({
+      text: "Fresh Browser Run OCR",
+      captureMethod: "ad_snapshot_fetch",
+      metadata: {
+        source: "fresh",
+      },
+    });
+
+    vi.doMock("~/lib/analysis.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/analysis.server")>();
+
+      return {
+        ...actual,
+        withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+      };
+    });
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    const result = await prepareSearchResultSelection(
+      {} as never,
+      {
+        ads: [browserAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+      },
+      "meta-boat-1",
+    );
+
+    expect(captureCreativeText).toHaveBeenCalledWith(
+      {},
+      "https://cdn.example.com/meta-boat-1.png",
+      browserAd,
+    );
+    expect(result.selectedAd).toEqual(
+      expect.objectContaining({
+        source: "meta_library_browser",
+        creativeText: "Fresh Browser Run OCR",
+      }),
+    );
+  });
 });

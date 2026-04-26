@@ -173,7 +173,7 @@ describe("searchMetaLibraryByBrowser", () => {
           landingPageUrl: "https://www.nykaa.com/glow-sale",
           adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
           active: true,
-          source: "meta",
+          source: "meta_library_browser",
         }),
       ],
     });
@@ -388,7 +388,7 @@ describe("searchMetaLibraryByBrowser", () => {
         expect.objectContaining({
           metaAdId: "1234567890",
           advertiser: "Nykaa",
-          source: "meta",
+          source: "meta_library_browser",
         }),
       ],
     });
