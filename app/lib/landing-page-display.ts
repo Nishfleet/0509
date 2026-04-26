@@ -52,6 +52,10 @@ export function formatAnalysisSourceLabel(source: AnalysisSource | null | undefi
     return "Meta API";
   }
 
+  if (source === "meta_library_browser") {
+    return "Browser Run capture";
+  }
+
   if (source === "ai_summary") {
     return "AI summary";
   }

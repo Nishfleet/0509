@@ -1,5 +1,6 @@
 export const ANALYSIS_SOURCES = [
   "meta_api",
+  "meta_library_browser",
   "ad_snapshot_fetch",
   "landing_page_fetch",
   "browser_render",
@@ -186,7 +187,7 @@ export interface AdRecord {
   lastSeenAt: string | null;
   active: boolean;
   researchSummary: string;
-  source: "meta" | "demo";
+  source: AdDiscoverySource;
   analysisFields: AnalysisFieldInput[];
   creativeText?: string | null;
   creativeTextCaptureMethod?: CreativeTextCaptureMethod | null;
