@@ -1,4 +1,5 @@
 import { withStructuredAnalysis } from "~/lib/analysis.server";
+import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import {
   hydrateAdsWithPersistedCreatives,
@@ -28,7 +29,7 @@ export async function prepareSearchResultSelection(
       selectedAdBase.landingPageUrl
         ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl)
         : Promise.resolve(null),
-      selectedAdBase.source === "meta" && selectedAdBase.adSnapshotUrl && !selectedAdBase.creativeText
+      isAdLibraryBackedAd(selectedAdBase) && selectedAdBase.adSnapshotUrl && !selectedAdBase.creativeText
         ? captureCreativeText(env, selectedAdBase.adSnapshotUrl, selectedAdBase)
         : Promise.resolve(null),
     ]);
@@ -57,7 +58,7 @@ export async function prepareSearchResultSelection(
       ],
     };
 
-    if (creativeText && selectedAd.source === "meta") {
+    if (creativeText && isAdLibraryBackedAd(selectedAd)) {
       await upsertAd(env, selectedAd);
     }
 

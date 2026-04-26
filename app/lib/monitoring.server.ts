@@ -1,4 +1,5 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
+import { isAdLibraryBackedAd, mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import {
   createAdObservation,
@@ -1127,7 +1128,7 @@ function normalizeIdempotencySegment(value: string) {
 
 async function enrichAdForCheapScan(env: AppEnv, ad: AdRecord) {
   const capturedCreativeText =
-    ad.source === "meta" && ad.adSnapshotUrl && !ad.creativeText
+    isAdLibraryBackedAd(ad) && ad.adSnapshotUrl && !ad.creativeText
       ? await captureCreativeText(env, ad.adSnapshotUrl, ad)
       : null;
 
@@ -1146,10 +1147,7 @@ async function enrichAdForCheapScan(env: AppEnv, ad: AdRecord) {
 function ensureAnalysisFields(ad: AdRecord): AdRecord {
   return {
     ...ad,
-    analysisFields: buildAnalysisFields(
-      ad,
-      ad.source === "meta" ? "meta_api" : "user",
-    ),
+    analysisFields: buildAnalysisFields(ad, mapAdSourceToAnalysisSource(ad.source)),
   };
 }
 
