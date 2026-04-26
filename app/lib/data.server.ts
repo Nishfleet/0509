@@ -2332,9 +2332,11 @@ export async function getOperatorSnapshot(env: AppEnv) {
         FROM watchlist_run
         INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
         WHERE watchlist_run.status = 'failed'
+          AND watchlist_run.started_at >= ?
         ORDER BY watchlist_run.started_at DESC
         LIMIT 8
       `,
+      recentWindowIso,
     ),
     many<{
       run_id: string;
@@ -2381,9 +2383,11 @@ export async function getOperatorSnapshot(env: AppEnv) {
         INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
         INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
         WHERE proof_capture.status = 'failed'
+          AND proof_capture.attempted_at >= ?
         ORDER BY proof_capture.attempted_at DESC
         LIMIT 8
       `,
+      recentWindowIso,
     ),
     many<{
       proof_capture_id: string;
@@ -2404,9 +2408,11 @@ export async function getOperatorSnapshot(env: AppEnv) {
         INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
         INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
         WHERE proof_capture.status IN ('skipped_due_to_budget', 'skipped_due_to_rate_limit')
+          AND proof_capture.attempted_at >= ?
         ORDER BY proof_capture.attempted_at DESC
         LIMIT 8
       `,
+      recentWindowIso,
     ),
     many<{
       delivery_target_id: string;
@@ -2469,9 +2475,11 @@ export async function getOperatorSnapshot(env: AppEnv) {
         FROM delivery_attempt
         LEFT JOIN watchlist ON watchlist.id = delivery_attempt.watchlist_id
         WHERE delivery_attempt.status = 'failed'
+          AND delivery_attempt.created_at >= ?
         ORDER BY delivery_attempt.created_at DESC
         LIMIT 8
       `,
+      recentWindowIso,
     ),
     many<{
       watchlist_id: string;
@@ -2558,9 +2566,11 @@ export async function getOperatorSnapshot(env: AppEnv) {
           discovery_fetch_log.created_at AS createdAt
         FROM discovery_fetch_log
         WHERE discovery_fetch_log.status = 'failed'
+          AND discovery_fetch_log.created_at >= ?
         ORDER BY discovery_fetch_log.created_at DESC
         LIMIT 8
       `,
+      recentWindowIso,
     ),
     many<{
       provider: AdDiscoveryProvider;
