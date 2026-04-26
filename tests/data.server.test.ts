@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
@@ -7,6 +7,7 @@ import {
   createLandingPageSnapshot,
   createProofCapture,
   createWatchEvent,
+  getOperatorSnapshot,
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
   legacyWatchEventImportanceScore,
@@ -42,6 +43,15 @@ function createMockDb() {
       },
     },
   };
+}
+
+function findStatement(
+  statements: Array<{ sql: string; bindings: unknown[] }>,
+  ...needles: string[]
+) {
+  return statements.find((statement) =>
+    needles.every((needle) => statement.sql.includes(needle)),
+  );
 }
 
 describe("createLandingPageSnapshot", () => {
@@ -325,6 +335,54 @@ describe("discovery state persistence", () => {
     expect(providerStateStatement?.bindings).toContain(
       "Commercial discovery degraded; serving cached results.",
     );
+  });
+});
+
+describe("getOperatorSnapshot", () => {
+  it("limits stale failure rows to the recent ops window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-26T10:00:00.000Z"));
+
+    try {
+      const mock = createMockDb();
+
+      await getOperatorSnapshot({ DB: mock.db } as never);
+
+      const recentWindowIso = "2026-04-19T10:00:00.000Z";
+      const failingRuns = findStatement(
+        mock.statements,
+        "FROM watchlist_run",
+        "watchlist_run.status = 'failed'",
+      );
+      const failedProofs = findStatement(
+        mock.statements,
+        "FROM proof_capture",
+        "proof_capture.status = 'failed'",
+      );
+      const budgetBlockedProofs = findStatement(
+        mock.statements,
+        "FROM proof_capture",
+        "skipped_due_to_budget",
+      );
+      const deliveryFailures = findStatement(
+        mock.statements,
+        "FROM delivery_attempt",
+        "delivery_attempt.status = 'failed'",
+      );
+      const discoveryFailures = findStatement(
+        mock.statements,
+        "FROM discovery_fetch_log",
+        "discovery_fetch_log.status = 'failed'",
+      );
+
+      expect(failingRuns?.bindings).toContain(recentWindowIso);
+      expect(failedProofs?.bindings).toContain(recentWindowIso);
+      expect(budgetBlockedProofs?.bindings).toContain(recentWindowIso);
+      expect(deliveryFailures?.bindings).toContain(recentWindowIso);
+      expect(discoveryFailures?.bindings).toContain(recentWindowIso);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
