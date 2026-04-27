@@ -203,6 +203,8 @@ describe("runWeeklyDigests", () => {
         {
           id: "event-1",
           eventType: "landing_page_offer_changed",
+          status: "confirmed",
+          importanceScore: 79,
           title: "Landing page offer changed",
           summary: "Offer changed on the landing page.",
         },
@@ -288,6 +290,160 @@ describe("runWeeklyDigests", () => {
             eventId: "event-1",
             watchlistName: "boAt watch",
           }),
+        ],
+      }),
+    );
+  });
+
+  it("keeps customer digests limited to trusted or exceptional provisional events", async () => {
+    const addDigestItem = vi.fn();
+    const createDigestRun = vi.fn().mockResolvedValue("digest-1");
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem,
+      clearDigestItems: vi.fn(),
+      createAdObservation: vi.fn(),
+      createDigestRun,
+      createEventCandidate: vi.fn(),
+      createLandingPageSnapshot: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createWatchlistRun: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn(),
+      countProofCapturesForWorkspaceSince: vi.fn(),
+      finishWatchlistRun: vi.fn(),
+      getDigestByPeriod: vi.fn().mockResolvedValue(null),
+      getUserDeliveryProfile: vi.fn(),
+      getRecentSuccessfulRuns: vi.fn(),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn(),
+      listActiveWatchlists: vi.fn(),
+      listProofCapturesForTarget: vi.fn(),
+      listRecentWorkspaceProofCaptures: vi.fn(),
+      listSuccessfulProofCapturesForAd: vi.fn(),
+      listObservationsForRun: vi.fn(),
+      listWatchEvents: vi.fn(),
+      listWatchEventsBetween: vi.fn().mockResolvedValue([
+        {
+          id: "event-confirmed",
+          eventType: "landing_page_offer_changed",
+          status: "confirmed",
+          importanceScore: 72,
+          title: "Landing page offer changed",
+          summary: "Offer changed on the landing page.",
+        },
+        {
+          id: "event-provisional-strong",
+          eventType: "landing_page_cta_changed",
+          status: "proof_pending",
+          importanceScore: 90,
+          title: "Possible CTA change",
+          summary: "A high-priority CTA change is waiting on proof.",
+        },
+        {
+          id: "event-provisional-low",
+          eventType: "landing_page_form_changed",
+          status: "proof_pending",
+          importanceScore: 84,
+          title: "Possible form change",
+          summary: "A low-priority form change is waiting on proof.",
+        },
+        {
+          id: "event-proof-failed",
+          eventType: "landing_page_cta_changed",
+          status: "proof_failed",
+          importanceScore: 99,
+          title: "Proof failed",
+          summary: "Proof capture failed.",
+        },
+        {
+          id: "event-suppressed",
+          eventType: "landing_page_cta_changed",
+          status: "suppressed",
+          importanceScore: 99,
+          title: "Suppressed duplicate",
+          summary: "Duplicate proof diff.",
+        },
+        {
+          id: "event-invalidated",
+          eventType: "landing_page_headline_changed",
+          status: "invalidated",
+          importanceScore: 99,
+          title: "Invalidated change",
+          summary: "No material proof diff.",
+        },
+      ]),
+      listWatchlists: vi.fn().mockResolvedValue([
+        {
+          id: "watch-1",
+          name: "Nykaa watch",
+        },
+      ]),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertProofTarget: vi.fn(),
+      upsertAd: vi.fn(),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      PLAN_LIMITS: {
+        free: { digests: false },
+        starter: { digests: true },
+        agency: { digests: true },
+      },
+    }));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+
+    const result = await runWeeklyDigests({
+      DB: {
+        prepare() {
+          return {
+            async all<T>() {
+              return {
+                results: [
+                  {
+                    id: "user-1",
+                    email: "owner@example.com",
+                    name: "Owner",
+                  },
+                ] as T[],
+              };
+            },
+          };
+        },
+      },
+    } as never);
+
+    expect(result).toBe(1);
+    expect(createDigestRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({
+        totalEvents: 2,
+      }),
+    );
+    expect(addDigestItem.mock.calls.map((call) => call[2].title)).toEqual([
+      "Landing page offer changed",
+      "Possible CTA change",
+    ]);
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({ eventId: "event-confirmed" }),
+          expect.objectContaining({ eventId: "event-provisional-strong" }),
         ],
       }),
     );
