@@ -16,7 +16,7 @@ const INSTANT_THRESHOLDS: Record<NormalizedSensitivityMode, number> = {
 };
 
 const PROVISIONAL_CUSTOMER_THRESHOLD = 95;
-const DIGEST_PENDING_THRESHOLD = 85;
+export const CUSTOMER_DIGEST_PROVISIONAL_IMPORTANCE_THRESHOLD = 85;
 const BATCH_WINDOW_MS = 15 * 60 * 1000;
 
 export interface DeliveryPolicyDecision {
@@ -193,15 +193,7 @@ function clearsInstantRule(
 
 function clearsDigestRule(lane: DeliveryLane, event: WatchEventRecord) {
   if (lane === "customer") {
-    if (event.status === "confirmed") {
-      return true;
-    }
-
-    if (event.status === "detected" || event.status === "proof_pending") {
-      return event.importanceScore >= DIGEST_PENDING_THRESHOLD;
-    }
-
-    return false;
+    return isCustomerDigestEligibleEvent(event);
   }
 
   return (
@@ -209,6 +201,20 @@ function clearsDigestRule(lane: DeliveryLane, event: WatchEventRecord) {
     event.status === "proof_pending" ||
     event.status === "proof_failed"
   );
+}
+
+export function isCustomerDigestEligibleEvent(
+  event: Pick<WatchEventRecord, "status" | "importanceScore">,
+) {
+  if (event.status === "confirmed") {
+    return true;
+  }
+
+  if (event.status === "detected" || event.status === "proof_pending") {
+    return event.importanceScore >= CUSTOMER_DIGEST_PROVISIONAL_IMPORTANCE_THRESHOLD;
+  }
+
+  return false;
 }
 
 function isBlockedCustomerStatus(status: WatchEventRecord["status"]) {

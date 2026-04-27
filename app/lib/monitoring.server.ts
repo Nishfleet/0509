@@ -1,6 +1,7 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
 import { isAdLibraryBackedAd, mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { captureCreativeText } from "~/lib/creative-text.server";
+import { isCustomerDigestEligibleEvent } from "~/lib/delivery-policy.server";
 import {
   createAdObservation,
   createEventCandidate,
@@ -550,7 +551,7 @@ export async function runWeeklyDigests(env: AppEnv) {
         periodEndIso,
       );
 
-      for (const event of events) {
+      for (const event of events.filter(isCustomerDigestEligibleEvent)) {
         digestItems.push({
           eventId: event.id,
           watchlistId: watchlist.id,
