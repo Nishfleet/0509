@@ -34,14 +34,28 @@ export const meta: MetaFunction = () => [
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
-  const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
   const { listCollections } = await import("~/lib/data.server");
-  const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
   const parsed = parseSearchParams(url.searchParams);
+  const collections = session ? await listCollections(env, session.user.id) : [];
+
+  if (!parsed.filters.query) {
+    return {
+      mode: parsed.mode,
+      filters: parsed.filters,
+      fingerprint: parsed.fingerprint,
+      result: buildIdleSearchResult(),
+      selectedAd: null,
+      collections,
+      session,
+    };
+  }
+
+  const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+  const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
   const result = await searchAdsViaSourceResolver(
     env,
     normalizeSavedQuery(parsed.mode, parsed.filters),
@@ -53,8 +67,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     result,
     url.searchParams.get("selected"),
   );
-
-  const collections = session ? await listCollections(env, session.user.id) : [];
 
   return {
     mode: parsed.mode,
@@ -88,6 +100,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
       lastSeenFrom: String(formData.get("lastSeenFrom") ?? ""),
     },
   );
+
+  if ((intent === "save-query" || intent === "create-watchlist") && !normalizedQuery.filters.query) {
+    return { ok: false, message: "Run a search before saving or tracking it." };
+  }
 
   if (intent === "save-query") {
     const name = String(formData.get("name") ?? "").trim();
@@ -348,29 +364,35 @@ export default function SearchRoute() {
               </div>
 
               {data.session ? (
-                <div className="stack-list">
-                  <Form className="inline-form" method="post">
-                    <input name="intent" type="hidden" value="save-query" />
-                    <SearchStateFields filters={data.filters} mode={data.mode} />
-                    <input name="name" placeholder="Save this search as..." required />
-                    <button className="button button-secondary" type="submit">
-                      Save search
-                    </button>
-                  </Form>
+                data.filters.query ? (
+                  <div className="stack-list">
+                    <Form className="inline-form" method="post">
+                      <input name="intent" type="hidden" value="save-query" />
+                      <SearchStateFields filters={data.filters} mode={data.mode} />
+                      <input name="name" placeholder="Save this search as..." required />
+                      <button className="button button-secondary" type="submit">
+                        Save search
+                      </button>
+                    </Form>
 
-                  <Form className="inline-form" method="post">
-                    <input name="intent" type="hidden" value="create-watchlist" />
-                    <SearchStateFields filters={data.filters} mode={data.mode} />
-                    <input
-                      defaultValue={`${data.filters.query || "Search"} watch`}
-                      name="name"
-                      placeholder="Watchlist name"
-                    />
-                    <button className="button button-primary" type="submit">
-                      Track this query
-                    </button>
-                  </Form>
-                </div>
+                    <Form className="inline-form" method="post">
+                      <input name="intent" type="hidden" value="create-watchlist" />
+                      <SearchStateFields filters={data.filters} mode={data.mode} />
+                      <input
+                        defaultValue={`${data.filters.query} watch`}
+                        name="name"
+                        placeholder="Watchlist name"
+                      />
+                      <button className="button button-primary" type="submit">
+                        Track this query
+                      </button>
+                    </Form>
+                  </div>
+                ) : (
+                  <div className="callout-card">
+                    <p>Run a search, then save it or turn it into a watchlist.</p>
+                  </div>
+                )
               ) : (
                 <div className="callout-card">
                   <p className="section-label">Why create an account?</p>
@@ -438,9 +460,7 @@ export default function SearchRoute() {
                 ) : (
                   <div className="empty-state">
                     <h3>
-                      {data.result.discoveryStatus === "degraded"
-                        ? "Live search is temporarily unavailable"
-                        : "No ads found for this query"}
+                      {formatEmptyResultHeadline(data.result)}
                     </h3>
                     <p>
                       {data.result.discoverySummary ??
@@ -584,6 +604,18 @@ export default function SearchRoute() {
   );
 }
 
+function buildIdleSearchResult(): SearchResponse {
+  return {
+    ads: [],
+    nextCursor: null,
+    source: "demo",
+    cacheStatus: "none",
+    discoveryStatus: "disabled",
+    discoverySummary: null,
+    discoveryFailureClass: null,
+  };
+}
+
 function SearchStateFields({
   mode,
   filters,
@@ -615,6 +647,10 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 function formatSearchSourceLabel(result: SearchResponse) {
+  if (result.discoveryStatus === "disabled") {
+    return "Ready to search";
+  }
+
   if (result.discoveryStatus === "degraded" && result.ads.length === 0) {
     return "Commercial discovery degraded";
   }
@@ -640,6 +676,18 @@ function formatSearchSourceLabel(result: SearchResponse) {
   }
 
   return "Demo dataset";
+}
+
+function formatEmptyResultHeadline(result: SearchResponse) {
+  if (result.discoveryStatus === "disabled") {
+    return "Enter a competitor or keyword";
+  }
+
+  if (result.discoveryStatus === "degraded") {
+    return "Live search is temporarily unavailable";
+  }
+
+  return "No ads found for this query";
 }
 
 function formatFailureClass(failureClass: string) {

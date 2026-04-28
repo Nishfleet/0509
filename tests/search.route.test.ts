@@ -26,13 +26,207 @@ const baseAd: AdRecord = {
   analysisFields: [],
 };
 
+function createContext(env = {}) {
+  return {
+    cloudflare: {
+      env,
+    },
+  };
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
 
 afterEach(() => {
+  vi.doUnmock("~/lib/ad-source.server");
+  vi.doUnmock("~/lib/auth.server");
+  vi.doUnmock("~/lib/context.server");
+  vi.doUnmock("~/lib/creative-text.server");
+  vi.doUnmock("~/lib/data.server");
+  vi.doUnmock("~/lib/landing-pages.server");
+  vi.doUnmock("~/lib/plan.server");
+  vi.doUnmock("~/lib/search-selection.server");
+  vi.doUnmock("~/lib/translation.server");
+  vi.doUnmock("~/lib/analysis.server");
   vi.restoreAllMocks();
   vi.resetModules();
+});
+
+describe("search loader", () => {
+  it("does not call live discovery before a visitor submits a query", async () => {
+    const env = { DB: {} };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search"),
+    } as never);
+
+    expect(getOptionalSession).toHaveBeenCalledWith(env, expect.any(Request));
+    expect(listCollections).not.toHaveBeenCalled();
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      filters: {
+        query: "",
+        country: "India",
+      },
+      result: {
+        ads: [],
+        nextCursor: null,
+        source: "demo",
+        cacheStatus: "none",
+        discoveryStatus: "disabled",
+      },
+      selectedAd: null,
+    });
+  });
+
+  it("runs live discovery after a visitor submits a query", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const hydratedResult = {
+      ...sourceResult,
+      cacheStatus: "miss",
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: hydratedResult,
+      selectedAd: null,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        mode: "advertiser",
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "India",
+        }),
+      }),
+      null,
+      { purpose: "public_search" },
+    );
+    expect(prepareSearchResultSelection).toHaveBeenCalledWith(env, sourceResult, null);
+    expect(result.result).toBe(hydratedResult);
+  });
+});
+
+describe("search actions", () => {
+  it.each(["save-query", "create-watchlist"])(
+    "refuses to %s when the query is blank",
+    async (intent) => {
+      const env = { DB: {} };
+      const checkPlanLimit = vi.fn();
+      const createSavedQuery = vi.fn();
+      const createWatchlist = vi.fn();
+
+      vi.doMock("~/lib/auth.server", () => ({
+        requireSession: vi.fn().mockResolvedValue({
+          user: {
+            id: "user-1",
+            email: "owner@example.com",
+            name: "Owner",
+          },
+          session: {
+            id: "session-1",
+            userId: "user-1",
+            expiresAt: "2026-04-03T00:00:00.000Z",
+          },
+        }),
+      }));
+      vi.doMock("~/lib/context.server", () => ({
+        getEnv: vi.fn(() => env),
+      }));
+      vi.doMock("~/lib/plan.server", () => ({
+        checkPlanLimit,
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        addAdToCollection: vi.fn(),
+        createSavedQuery,
+        createWatchlist,
+      }));
+
+      const { action } = await import("~/routes/search");
+      const formData = new FormData();
+      formData.set("intent", intent);
+      formData.set("mode", "advertiser");
+      formData.set("query", "");
+      formData.set("country", "India");
+      formData.set("platform", "all");
+      formData.set("creativeType", "all");
+      formData.set("status", "all");
+      formData.set("name", "Blank query");
+
+      const result = await action({
+        context: createContext(env),
+        request: new Request("http://localhost/search", {
+          method: "POST",
+          body: formData,
+        }),
+      } as never);
+
+      expect(result).toEqual({
+        ok: false,
+        message: "Run a search before saving or tracking it.",
+      });
+      expect(checkPlanLimit).not.toHaveBeenCalled();
+      expect(createSavedQuery).not.toHaveBeenCalled();
+      expect(createWatchlist).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("search loader OCR reuse", () => {
