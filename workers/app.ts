@@ -6,6 +6,7 @@ import {
   runScheduledDiscoveryWarmup,
   runScheduledMonitoring,
 } from "../app/lib/monitoring.server";
+import { resolveScheduledTask } from "./schedule";
 export { MonitoringWorkflow } from "./monitoring-workflow";
 
 type GlobalEnvCarrier = typeof globalThis & {
@@ -26,7 +27,6 @@ const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   process.env.NODE_ENV === "development" ? "development" : "production"
 );
-const DISCOVERY_WARMUP_CRON = "17 */6 * * *";
 
 // Baseline security headers applied to every response. CSP allows Google Fonts
 // (used in app/root.tsx) and inline <script>/<style> emitted by React Router's
@@ -79,15 +79,16 @@ export default {
     return withSecurityHeaders(response);
   },
   async scheduled(controller, env, ctx) {
-    if (controller.cron === DISCOVERY_WARMUP_CRON) {
+    const scheduledTask = resolveScheduledTask(controller.cron);
+
+    if (scheduledTask.kind === "discovery_warmup") {
       ctx.waitUntil(runScheduledDiscoveryWarmup(env));
       return;
     }
 
-    const includeDigests = controller.cron.includes("MON");
     ctx.waitUntil(
       runScheduledMonitoring(env, {
-        includeDigests,
+        includeDigests: scheduledTask.includeDigests,
         cron: controller.cron,
         scheduledTime: controller.scheduledTime,
       }),
