@@ -16,6 +16,7 @@ import type { AppEnv } from "~/lib/env.server";
 import { isResendConfigured } from "~/lib/env.server";
 import type {
   DeliveryChannel,
+  DeliveryAttemptRecord,
   DeliveryTargetRecord,
   WatchEventRecord,
   WatchlistRecord,
@@ -295,23 +296,16 @@ async function deliverInstantEmailBatch(
     content: InstantAlertContent;
   },
 ): Promise<DigestAttemptSummary> {
-  const idempotencyKey = buildInstantDeliveryAttemptIdempotencyKey({
+  const attemptDedupe = await resolveInstantAttemptDedupe(env, {
     watchlistId: input.watchlistId,
     lane: input.lane,
     channel: "email",
     targetValue: input.deliveryTarget.targetValue,
     batchKey: input.batch.batchKey,
+    deferredByQuietHours: input.batch.deferredByQuietHours,
   });
-  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-  if (duplicate) {
-    return {
-      channel: "email",
-      status: duplicate.status === "sent" ? "sent" : "failed",
-      targetValue: duplicate.targetValue,
-      providerMessageId: duplicate.providerMessageId,
-      errorMessage: duplicate.errorMessage,
-      deliveredAt: duplicate.sentAt,
-    };
+  if (attemptDedupe.duplicate) {
+    return summarizeDeliveryAttempt(attemptDedupe.duplicate);
   }
 
   if (input.batch.deferredByQuietHours) {
@@ -337,7 +331,7 @@ async function deliverInstantEmailBatch(
         subject: input.content.subject,
         provisional: input.batch.provisional,
       },
-      idempotencyKey,
+      idempotencyKey: attemptDedupe.idempotencyKey,
       errorMessage: null,
       sentAt: null,
       failedAt: null,
@@ -382,7 +376,7 @@ async function deliverInstantEmailBatch(
       provisional: input.batch.provisional,
       watchlistUrl: input.content.watchlistUrl,
     },
-    idempotencyKey,
+    idempotencyKey: attemptDedupe.idempotencyKey,
     errorMessage: providerResult.errorMessage,
     sentAt: providerResult.deliveredAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
@@ -413,23 +407,16 @@ async function deliverInstantWhatsAppBatch(
     content: InstantAlertContent;
   },
 ): Promise<DigestAttemptSummary> {
-  const idempotencyKey = buildInstantDeliveryAttemptIdempotencyKey({
+  const attemptDedupe = await resolveInstantAttemptDedupe(env, {
     watchlistId: input.watchlistId,
     lane: input.lane,
     channel: "whatsapp",
     targetValue: input.deliveryTarget.targetValue,
     batchKey: input.batch.batchKey,
+    deferredByQuietHours: input.batch.deferredByQuietHours,
   });
-  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-  if (duplicate) {
-    return {
-      channel: "whatsapp",
-      status: duplicate.status === "sent" ? "sent" : "failed",
-      targetValue: duplicate.targetValue,
-      providerMessageId: duplicate.providerMessageId,
-      errorMessage: duplicate.errorMessage,
-      deliveredAt: duplicate.sentAt,
-    };
+  if (attemptDedupe.duplicate) {
+    return summarizeDeliveryAttempt(attemptDedupe.duplicate);
   }
 
   if (input.batch.deferredByQuietHours) {
@@ -454,7 +441,7 @@ async function deliverInstantWhatsAppBatch(
         batchKey: input.batch.batchKey,
         provisional: input.batch.provisional,
       },
-      idempotencyKey,
+      idempotencyKey: attemptDedupe.idempotencyKey,
       errorMessage: null,
       sentAt: null,
       failedAt: null,
@@ -503,7 +490,7 @@ async function deliverInstantWhatsAppBatch(
       shortChange: input.content.shortChange,
       watchlistUrl: input.content.watchlistUrl,
     },
-    idempotencyKey,
+    idempotencyKey: attemptDedupe.idempotencyKey,
     errorMessage: providerResult.errorMessage,
     sentAt: deliveredAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
@@ -892,7 +879,7 @@ function buildDeliveryAttemptIdempotencyKey(input: {
   ].join(":");
 }
 
-function buildInstantDeliveryAttemptIdempotencyKey(input: {
+function buildLegacyInstantDeliveryAttemptIdempotencyKey(input: {
   watchlistId: string;
   lane: DeliveryLane;
   channel: DeliveryChannel;
@@ -907,6 +894,62 @@ function buildInstantDeliveryAttemptIdempotencyKey(input: {
     input.targetValue.trim().toLowerCase(),
     input.batchKey,
   ].join(":");
+}
+
+function buildInstantDeliveryAttemptIdempotencyKey(input: {
+  watchlistId: string;
+  lane: DeliveryLane;
+  channel: DeliveryChannel;
+  targetValue: string;
+  batchKey: string;
+  attemptKind: "send" | "quiet-hours";
+}) {
+  return `${buildLegacyInstantDeliveryAttemptIdempotencyKey(input)}:${input.attemptKind}`;
+}
+
+async function resolveInstantAttemptDedupe(
+  env: AppEnv,
+  input: {
+    watchlistId: string;
+    lane: DeliveryLane;
+    channel: DeliveryChannel;
+    targetValue: string;
+    batchKey: string;
+    deferredByQuietHours: boolean;
+  },
+): Promise<{ idempotencyKey: string; duplicate: DeliveryAttemptRecord | null }> {
+  const attemptKind = input.deferredByQuietHours ? "quiet-hours" : "send";
+  const idempotencyKey = buildInstantDeliveryAttemptIdempotencyKey({
+    ...input,
+    attemptKind,
+  });
+  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+  if (duplicate) {
+    return { idempotencyKey, duplicate };
+  }
+
+  const legacyIdempotencyKey = buildLegacyInstantDeliveryAttemptIdempotencyKey(input);
+  const legacyDuplicate = await getDeliveryAttemptByIdempotencyKey(env, legacyIdempotencyKey);
+  if (!legacyDuplicate) {
+    return { idempotencyKey, duplicate: null };
+  }
+
+  if (!input.deferredByQuietHours && legacyDuplicate.status === "skipped_due_to_quiet_hours") {
+    return { idempotencyKey, duplicate: null };
+  }
+
+  return { idempotencyKey, duplicate: legacyDuplicate };
+}
+
+function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttemptSummary {
+  return {
+    channel: attempt.channel,
+    status: attempt.status === "sent" ? "sent" : "failed",
+    targetValue: attempt.targetValue,
+    providerMessageId: attempt.providerMessageId,
+    errorMessage: attempt.errorMessage,
+    deliveredAt: attempt.sentAt,
+  };
 }
 
 function renderDigestHtml(input: {
