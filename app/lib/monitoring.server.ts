@@ -98,6 +98,10 @@ interface RunScheduledMonitoringOptions {
   scheduledTime?: number;
 }
 
+interface RunWeeklyDigestsOptions {
+  periodEnd?: number | string | Date;
+}
+
 export async function runScheduledMonitoring(
   env: AppEnv,
   options: RunScheduledMonitoringOptions = {},
@@ -152,7 +156,9 @@ export async function runScheduledMonitoring(
     inlineRuns = await runScheduledMonitoringInline(env, watchlists);
   }
 
-  const digests = options.includeDigests ? await runWeeklyDigests(env) : 0;
+  const digests = options.includeDigests
+    ? await runWeeklyDigests(env, { periodEnd: options.scheduledTime })
+    : 0;
 
   return {
     queued,
@@ -502,13 +508,17 @@ export function diffWatchlistObservations(
   return dedupeEventDrafts(drafts);
 }
 
-export async function runWeeklyDigests(env: AppEnv) {
+export async function runWeeklyDigests(
+  env: AppEnv,
+  options: RunWeeklyDigestsOptions = {},
+) {
   if (!env.DB) {
     return 0;
   }
 
   const db = env.DB;
-  const periodEnd = new Date();
+  const periodEnd =
+    options.periodEnd === undefined ? new Date() : new Date(options.periodEnd);
   const periodStart = new Date(periodEnd.getTime() - DIGEST_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const periodStartIso = periodStart.toISOString();
   const periodEndIso = periodEnd.toISOString();
