@@ -11,9 +11,9 @@ import {
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ baseUrl: string, expectedApp: string | null, queries: string[], json: boolean }} */
+  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], json: boolean }} */
   const parsed = {
-    baseUrl: process.env.CANARY_BASE_URL || DEFAULT_CANARY_BASE_URL,
+    baseUrl: process.env.CANARY_BASE_URL || undefined,
     expectedApp: process.env.CANARY_EXPECTED_APP || DEFAULT_CANARY_EXPECTED_APP,
     queries: [],
     json: false,

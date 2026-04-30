@@ -7,6 +7,13 @@ import {
 } from "./provider-bakeoff.lib.mjs";
 
 export const DEFAULT_CANARY_BASE_URL = "https://0509.in";
+export const DEFAULT_CANARY_WWW_BASE_URL = "https://www.0509.in";
+export const DEFAULT_CANARY_API_BASE_URL = "https://api.0509.in";
+export const DEFAULT_CANARY_HEALTH_BASE_URLS = Object.freeze([
+  DEFAULT_CANARY_BASE_URL,
+  DEFAULT_CANARY_WWW_BASE_URL,
+  DEFAULT_CANARY_API_BASE_URL,
+]);
 export const DEFAULT_CANARY_EXPECTED_APP = "0509";
 
 /**
@@ -23,6 +30,7 @@ export const DEFAULT_CANARY_EXPECTED_APP = "0509";
 /**
  * @typedef {{
  *   baseUrl?: string,
+ *   healthBaseUrls?: string[],
  *   expectedApp?: string | null,
  *   queries?: string[],
  *   country?: string,
@@ -31,6 +39,20 @@ export const DEFAULT_CANARY_EXPECTED_APP = "0509";
  *   benchmarkImpl?: typeof benchmarkProviders
  * }} ProductionCanaryOptions
  */
+
+/**
+ * @param {ProductionCanaryOptions} options
+ * @param {string} baseUrl
+ */
+function resolveHealthBaseUrls(options, baseUrl) {
+  if (options.healthBaseUrls?.length) {
+    return [...new Set(options.healthBaseUrls)];
+  }
+  if (options.baseUrl) {
+    return [baseUrl];
+  }
+  return [...DEFAULT_CANARY_HEALTH_BASE_URLS];
+}
 
 /**
  * @param {{ baseUrl?: string, expectedApp?: string | null, fetchImpl?: typeof fetch }} [options]
@@ -90,11 +112,24 @@ export async function runProductionCanary(options = {}) {
   const country = options.country ?? DEFAULT_COUNTRY;
   const mode = options.mode ?? DEFAULT_MODE;
   const benchmarkImpl = options.benchmarkImpl ?? benchmarkProviders;
-  const health = await checkHealthEndpoint({
-    baseUrl,
+  const healthChecks = [];
+  for (const healthBaseUrl of resolveHealthBaseUrls(options, baseUrl)) {
+    healthChecks.push(
+      await checkHealthEndpoint({
+        baseUrl: healthBaseUrl,
+        expectedApp,
+        fetchImpl: options.fetchImpl,
+      }),
+    );
+  }
+  const health = healthChecks[0] ?? {
+    ok: false,
+    status: null,
+    app: null,
     expectedApp,
-    fetchImpl: options.fetchImpl,
-  });
+    message: "No health endpoints configured.",
+    url: new URL("/api/health", baseUrl).toString(),
+  };
   const results = await benchmarkImpl({
     providers: ["current_0509"],
     queries,
@@ -105,10 +140,11 @@ export async function runProductionCanary(options = {}) {
   const blockingFailures = findBlockingCurrent0509Failures(results);
 
   return {
-    passed: health.ok && blockingFailures.length === 0,
+    passed: healthChecks.every((check) => check.ok) && blockingFailures.length === 0,
     generatedAt: new Date().toISOString(),
     baseUrl,
     health,
+    healthChecks,
     queries,
     country,
     mode,
@@ -121,12 +157,15 @@ export async function runProductionCanary(options = {}) {
  * @param {Awaited<ReturnType<typeof runProductionCanary>>} report
  */
 export function formatProductionCanaryReport(report) {
-  const lines = [
-    `health: ${report.health.ok ? "ok" : "failed"} (${report.health.status ?? "no response"}) ${report.health.url}`,
-  ];
+  const healthChecks = report.healthChecks?.length ? report.healthChecks : [report.health];
+  const lines = healthChecks.map(
+    (health) => `health: ${health.ok ? "ok" : "failed"} (${health.status ?? "no response"}) ${health.url}`,
+  );
 
-  if (report.health.message) {
-    lines.push(`health note: ${report.health.message}`);
+  for (const health of healthChecks) {
+    if (health.message) {
+      lines.push(`health note: ${health.url} ${health.message}`);
+    }
   }
 
   if (report.blockingFailures.length === 0) {
