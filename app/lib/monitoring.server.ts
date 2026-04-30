@@ -107,13 +107,14 @@ export async function runScheduledMonitoring(
   options: RunScheduledMonitoringOptions = {},
 ) {
   if (!env.DB) {
-    return { queued: 0, duplicates: 0, inlineRuns: 0, digests: 0 };
+    return { queued: 0, duplicates: 0, inlineRuns: 0, inlineFailures: 0, digests: 0 };
   }
 
   const watchlists = await listActiveWatchlists(env);
   let queued = 0;
   let duplicates = 0;
   let inlineRuns = 0;
+  let inlineFailures = 0;
 
   const workflowBinding = getMonitoringWorkflowBinding(env);
   const shouldBypassWorkflow = shouldRunScheduledMonitoringInline(env);
@@ -148,12 +149,18 @@ export async function runScheduledMonitoring(
           continue;
         }
 
-        const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
-        inlineRuns += ranInline ? 1 : 0;
+        try {
+          const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
+          inlineRuns += ranInline ? 1 : 0;
+        } catch {
+          inlineFailures += 1;
+        }
       }
     }
   } else {
-    inlineRuns = await runScheduledMonitoringInline(env, watchlists);
+    const inlineResult = await runScheduledMonitoringInline(env, watchlists);
+    inlineRuns = inlineResult.inlineRuns;
+    inlineFailures = inlineResult.inlineFailures;
   }
 
   const digests = options.includeDigests
@@ -164,6 +171,7 @@ export async function runScheduledMonitoring(
     queued,
     duplicates,
     inlineRuns,
+    inlineFailures,
     digests,
   };
 }
@@ -646,13 +654,18 @@ async function runScheduledMonitoringInline(
 ) {
   const scanCache = new Map<string, Promise<ScanPayload>>();
   let inlineRuns = 0;
+  let inlineFailures = 0;
 
   for (const watchlist of watchlists) {
-    const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
-    inlineRuns += ranInline ? 1 : 0;
+    try {
+      const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
+      inlineRuns += ranInline ? 1 : 0;
+    } catch {
+      inlineFailures += 1;
+    }
   }
 
-  return inlineRuns;
+  return { inlineRuns, inlineFailures };
 }
 
 async function runScheduledWatchlistInline(

@@ -269,6 +269,55 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(mocks.createWatchlistRun.mock.calls[1]?.[2]).toBe("scheduled");
   });
 
+  it("continues browser-backed inline scans after one watchlist fails", async () => {
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+    });
+    mocks.searchAdsViaSourceResolver
+      .mockRejectedValueOnce(new Error("Browser discovery failed"))
+      .mockResolvedValue({
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+        discoveryStatus: "healthy",
+        discoverySummary: null,
+        discoveryFailureClass: null,
+      });
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: {},
+    };
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+
+    const result = await runScheduledMonitoring(env as never, {
+      includeDigests: false,
+    });
+
+    expect(result).toMatchObject({
+      queued: 0,
+      duplicates: 0,
+      inlineRuns: 1,
+      inlineFailures: 1,
+      digests: 0,
+    });
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
+    expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(2);
+    expect(mocks.finishWatchlistRun).toHaveBeenCalledTimes(2);
+    expect(mocks.finishWatchlistRun.mock.calls[0]?.[2]).toMatchObject({
+      status: "failed",
+      errorMessage: "Browser discovery failed",
+    });
+    expect(mocks.finishWatchlistRun.mock.calls[1]?.[2]).toMatchObject({
+      status: "succeeded",
+    });
+  });
+
   it("falls back to inline scans when workflow queueing fails", async () => {
     const workflowCreate = vi
       .fn()
