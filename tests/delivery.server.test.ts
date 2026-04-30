@@ -7,6 +7,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  vi.useRealTimers();
 });
 
 describe("deliverWeeklyDigest", () => {
@@ -525,6 +526,194 @@ describe("deliverWatchlistAlerts", () => {
         watchlistId: "watch-1",
         targetValue: "owner@example.com",
         eventIds: ["event-1"],
+      }),
+    );
+  });
+
+  it("sends after quiet hours when the earlier deferral used the same alert batch", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-18T18:30:00.000Z"));
+
+    const resendSend = vi.fn().mockResolvedValue({
+      data: {
+        id: "msg_after_quiet_hours",
+      },
+      error: null,
+    });
+    const attemptsByKey = new Map<string, { status: string; idempotencyKey: string }>();
+    const createDeliveryAttempt = vi.fn().mockImplementation(async (_env, attempt) => {
+      attemptsByKey.set(attempt.idempotencyKey, {
+        status: attempt.status,
+        idempotencyKey: attempt.idempotencyKey,
+      });
+      return `attempt-${attemptsByKey.size}`;
+    });
+    const getDeliveryAttemptByIdempotencyKey = vi
+      .fn()
+      .mockImplementation(async (_env, key: string) => {
+        const attempt = attemptsByKey.get(key);
+        if (!attempt) {
+          return null;
+        }
+
+        return {
+          id: attempt.idempotencyKey,
+          userId: "user-1",
+          watchlistId: "watch-1",
+          digestRunId: null,
+          deliveryTargetId: "email-target-1",
+          lane: "customer",
+          channel: "email",
+          provider: "resend",
+          status: attempt.status,
+          webhookStatus: "provider_unknown",
+          targetValue: "owner@example.com",
+          providerMessageId: null,
+          providerStatusLastSeenAt: null,
+          templateName: null,
+          eventIds: ["event-1"],
+          payloadSnapshot: {},
+          idempotencyKey: attempt.idempotencyKey,
+          errorMessage: null,
+          sentAt: null,
+          failedAt: null,
+          createdAt: "2026-04-18T18:30:00.000Z",
+          updatedAt: "2026-04-18T18:30:00.000Z",
+        };
+      });
+    const upsertDeliveryTarget = vi.fn().mockResolvedValue({
+      id: "email-target-1",
+      userId: "user-1",
+      watchlistId: null,
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-04-19T00:00:00.000Z",
+    });
+
+    vi.doMock("resend", () => ({
+      Resend: vi.fn(() => ({
+        emails: {
+          send: resendSend,
+        },
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey,
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: true,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        quietHours: {
+          startHour: 22,
+          endHour: 8,
+        },
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+    const input = {
+      userId: "user-1",
+      userName: "Owner",
+      accountEmail: "owner@example.com",
+      watchlist: {
+        id: "watch-1",
+        userId: "user-1",
+        name: "Nykaa watch",
+      },
+      events: [
+        {
+          id: "event-1",
+          watchlistId: "watch-1",
+          runId: "run-1",
+          eventType: "landing_page_url_changed" as const,
+          status: "confirmed" as const,
+          importanceScore: 90,
+          adId: "meta-1",
+          baselineFromRunId: null,
+          candidateId: "candidate-1",
+          proofCaptureId: "proof-1",
+          title: "Landing page URL changed",
+          summary: "The landing page URL changed.",
+          metadata: {
+            advertiser: "Nykaa",
+          },
+          confirmedAt: "2026-04-19T00:00:00.000Z",
+          suppressedAt: null,
+          invalidatedAt: null,
+          lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+          createdAt: "2026-04-19T00:00:00.000Z",
+        },
+      ],
+    };
+
+    await deliverWatchlistAlerts(
+      {
+        RESEND_API_KEY: "re_123",
+        RESEND_FROM_EMAIL: "alerts@0509.in",
+        BETTER_AUTH_URL: "https://0509.in",
+      } as never,
+      input,
+    );
+
+    vi.setSystemTime(new Date("2026-04-18T06:30:00.000Z"));
+    const result = await deliverWatchlistAlerts(
+      {
+        RESEND_API_KEY: "re_123",
+        RESEND_FROM_EMAIL: "alerts@0509.in",
+        BETTER_AUTH_URL: "https://0509.in",
+      } as never,
+      input,
+    );
+
+    expect(result).toEqual({
+      attempts: 1,
+      channels: ["email"],
+    });
+    expect(resendSend).toHaveBeenCalledTimes(1);
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "skipped_due_to_quiet_hours",
+        idempotencyKey: expect.stringMatching(/:quiet-hours$/),
+      }),
+    );
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "sent",
+        idempotencyKey: expect.stringMatching(/:send$/),
       }),
     );
   });
