@@ -107,6 +107,57 @@ describe("production canary", () => {
     expect(formatProductionCanaryReport(report)).toContain("search: failed");
   });
 
+  it("checks every production health hostname by default", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
+
+    const report = await runProductionCanary({
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+    });
+
+    expect(report.passed).toBe(true);
+    expect(report.healthChecks.map((check) => check.url)).toEqual([
+      "https://0509.in/api/health",
+      "https://www.0509.in/api/health",
+      "https://api.0509.in/api/health",
+    ]);
+    expect(formatProductionCanaryReport(report)).toContain("https://www.0509.in/api/health");
+    expect(formatProductionCanaryReport(report)).toContain("https://api.0509.in/api/health");
+  });
+
+  it("keeps custom base-url canaries scoped to that hostname", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
+
+    const report = await runProductionCanary({
+      baseUrl: "https://preview.example.com",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+    });
+
+    expect(report.passed).toBe(true);
+    expect(report.healthChecks.map((check) => check.url)).toEqual([
+      "https://preview.example.com/api/health",
+    ]);
+  });
+
   it("passes only when health and current 0509 search both pass", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
