@@ -67,8 +67,8 @@ const DEFAULT_PAGE_BUDGET = 2;
 const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
 const DIGEST_LOOKBACK_DAYS = 7;
-const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
-const PUBLIC_DISCOVERY_WARMUP_QUERIES = ["adspy", "bigspy", "mamaearth", "nykaa", "cod"];
+const DISCOVERY_WARMUP_QUERY_LIMIT = 6;
+const PUBLIC_DISCOVERY_WARMUP_QUERIES = ["adspy", "bigspy", "adflex", "nykaa", "boat", "cod"];
 
 type ObservationRecord = Awaited<ReturnType<typeof listObservationsForRun>>[number];
 
@@ -190,6 +190,7 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
   const watchlists = await listActiveWatchlists(env);
   const seenFingerprints = new Set<string>();
   const seenQueryFingerprints = new Set<string>();
+  const seenQueryLabels = new Set<string>();
   const warmupTargets: Array<{
     query: NormalizedSavedQuery;
   }> = [];
@@ -220,6 +221,7 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
 
     seenFingerprints.add(watchlist.targetFingerprint);
     seenQueryFingerprints.add(fingerprintSavedQuery(query));
+    seenQueryLabels.add(normalizeWarmupQueryLabel(query.filters.query));
     warmupTargets.push({ query });
   }
 
@@ -233,11 +235,13 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
       country: "India",
     });
     const queryFingerprint = fingerprintSavedQuery(query);
-    if (seenQueryFingerprints.has(queryFingerprint)) {
+    const queryLabel = normalizeWarmupQueryLabel(query.filters.query);
+    if (seenQueryFingerprints.has(queryFingerprint) || seenQueryLabels.has(queryLabel)) {
       continue;
     }
 
     seenQueryFingerprints.add(queryFingerprint);
+    seenQueryLabels.add(queryLabel);
     warmupTargets.push({ query });
   }
 
@@ -275,6 +279,10 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
     failed,
     skipped,
   };
+}
+
+function normalizeWarmupQueryLabel(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord) {
