@@ -139,7 +139,7 @@ function buildWatchlist(index: number): WatchlistRecord {
 }
 
 describe("runScheduledMonitoring scheduled runtime selection", () => {
-  it("warms discovery cache for active watchlists without creating watchlist runs", async () => {
+  it("warms active watchlists and fills unused slots with priority public searches", async () => {
     const mocks = mockMonitoringDependencies({
       provider: "meta_library_browser",
     });
@@ -156,17 +156,32 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     const result = await runScheduledDiscoveryWarmup(env as never);
 
     expect(result).toMatchObject({
-      attempted: 2,
-      succeeded: 2,
+      attempted: 5,
+      succeeded: 5,
       failed: 0,
       skipped: 0,
     });
-    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(5);
     expect(mocks.searchAdsViaSourceResolver).toHaveBeenNthCalledWith(
       1,
       env,
       expect.objectContaining({
         mode: "advertiser",
+      }),
+      null,
+      {
+        purpose: "scheduled_warmup",
+      },
+    );
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenNthCalledWith(
+      3,
+      env,
+      expect.objectContaining({
+        mode: "keyword",
+        filters: expect.objectContaining({
+          query: "adspy",
+          country: "India",
+        }),
       }),
       null,
       {
@@ -198,12 +213,53 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     const result = await runScheduledDiscoveryWarmup(env as never);
 
     expect(result).toMatchObject({
-      attempted: 2,
+      attempted: 5,
       succeeded: 0,
       failed: 0,
-      skipped: 2,
+      skipped: 5,
     });
-    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(5);
+  });
+
+  it("keeps the keyword canary query in the public warmup batch", async () => {
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      watchlists: [],
+    });
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: {},
+    };
+
+    const { runScheduledDiscoveryWarmup } = await import("~/lib/monitoring.server");
+
+    const result = await runScheduledDiscoveryWarmup(env as never);
+
+    expect(result).toMatchObject({
+      attempted: 5,
+      succeeded: 5,
+      failed: 0,
+      skipped: 0,
+    });
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(5);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenNthCalledWith(
+      5,
+      env,
+      expect.objectContaining({
+        mode: "keyword",
+        filters: expect.objectContaining({
+          query: "cod",
+          country: "India",
+        }),
+      }),
+      null,
+      {
+        purpose: "scheduled_warmup",
+      },
+    );
   });
 
   it("caps scheduled discovery warmups to a bounded batch", async () => {

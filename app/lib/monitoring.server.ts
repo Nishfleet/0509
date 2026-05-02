@@ -41,7 +41,7 @@ import {
   resolveCommercialDiscoveryProvider,
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
-import { normalizeSavedQuery } from "~/lib/normalize";
+import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import {
   buildCanonicalPageIdentity,
@@ -68,6 +68,7 @@ const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
 const DIGEST_LOOKBACK_DAYS = 7;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
+const PUBLIC_DISCOVERY_WARMUP_QUERIES = ["adspy", "bigspy", "mamaearth", "nykaa", "cod"];
 
 type ObservationRecord = Awaited<ReturnType<typeof listObservationsForRun>>[number];
 
@@ -188,8 +189,8 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
 
   const watchlists = await listActiveWatchlists(env);
   const seenFingerprints = new Set<string>();
+  const seenQueryFingerprints = new Set<string>();
   const warmupTargets: Array<{
-    watchlist: WatchlistRecord;
     query: NormalizedSavedQuery;
   }> = [];
   let skipped = 0;
@@ -218,7 +219,26 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
     }
 
     seenFingerprints.add(watchlist.targetFingerprint);
-    warmupTargets.push({ watchlist, query });
+    seenQueryFingerprints.add(fingerprintSavedQuery(query));
+    warmupTargets.push({ query });
+  }
+
+  for (const publicWarmupQuery of PUBLIC_DISCOVERY_WARMUP_QUERIES) {
+    if (warmupTargets.length >= DISCOVERY_WARMUP_QUERY_LIMIT) {
+      break;
+    }
+
+    const query = normalizeSavedQuery("keyword", {
+      query: publicWarmupQuery,
+      country: "India",
+    });
+    const queryFingerprint = fingerprintSavedQuery(query);
+    if (seenQueryFingerprints.has(queryFingerprint)) {
+      continue;
+    }
+
+    seenQueryFingerprints.add(queryFingerprint);
+    warmupTargets.push({ query });
   }
 
   let attempted = 0;
