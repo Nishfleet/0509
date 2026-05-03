@@ -319,15 +319,6 @@ export async function searchAdsViaSourceResolver(
     providerState &&
     shouldPreferMetaApiFallbackForPublicSearch(providerState)
   ) {
-    const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
-      browserFailureClass: providerState.failureClass,
-      browserSummary: providerState.summary,
-      routeContext,
-    });
-    if (apiFallback) {
-      return apiFallback;
-    }
-
     if (usableCached) {
       return {
         ...usableCached.payload,
@@ -338,6 +329,15 @@ export async function searchAdsViaSourceResolver(
         discoverySummary: providerState.summary,
         discoveryFailureClass: providerState.failureClass,
       };
+    }
+
+    const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
+      browserFailureClass: providerState.failureClass,
+      browserSummary: providerState.summary,
+      routeContext,
+    });
+    if (apiFallback) {
+      return apiFallback;
     }
 
     return {

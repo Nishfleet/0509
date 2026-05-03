@@ -744,6 +744,92 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
+  it("serves public-search cache before diagnostic fallback when the browser provider recently degraded", async () => {
+    const browserSearch = vi.fn();
+    const apiSearch = vi.fn();
+    const fetchedAt = new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "selector_drift",
+      summary: "Browser Run selectors drifted.",
+      lastSuccessAt: fetchedAt,
+      lastFailureAt: new Date().toISOString(),
+      metadata: {
+        cooldownUntil: new Date(Date.now() - 60 * 1000).toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue({
+        cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
+        provider: "meta_library_browser",
+        routeContext: "public_search",
+        queryFingerprint: "fp-nykaa",
+        country: "India",
+        cursor: null,
+        payload: buildLiveBrowserResult(),
+        fetchedAt,
+        expiresAt,
+        browserMsUsed: 2500,
+        createdAt: fetchedAt,
+        updatedAt: fetchedAt,
+      }),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "live-token",
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(apiSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoverySummary: "Browser Run selectors drifted.",
+      discoveryFailureClass: "selector_drift",
+    });
+  });
+
   it("returns degraded public search quickly when recent browser failure has no working API fallback", async () => {
     const browserSearch = vi.fn();
     const apiSearch = vi.fn();
