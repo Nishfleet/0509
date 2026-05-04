@@ -440,9 +440,7 @@ export async function searchAdsViaSourceResolver(
           cacheStatus: usableCached ? "stale" : "miss",
           failureClass: null,
           browserMsUsed,
-          metadata: {
-            cursor: cursor ?? null,
-          },
+          metadata: buildDiscoveryFetchMetadata(query, cursor),
         });
         await upsertDiscoveryProviderState(effectiveEnv, {
           provider,
@@ -493,12 +491,11 @@ export async function searchAdsViaSourceResolver(
         cacheStatus: usableCached ? "stale" : "miss",
         failureClass,
         browserMsUsed: null,
-        metadata: {
+        metadata: buildDiscoveryFetchMetadata(query, cursor, {
           cooldownUntil: cooldownState?.cooldownUntil ?? null,
-          cursor: cursor ?? null,
           errorMessage: error instanceof Error ? error.message : "Unknown discovery error.",
           retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
-        },
+        }),
       });
       await upsertDiscoveryProviderState(effectiveEnv, {
         provider,
@@ -600,12 +597,11 @@ async function tryMetaApiFallback(
         cacheStatus: "miss",
         failureClass: null,
         browserMsUsed: null,
-        metadata: {
+        metadata: buildDiscoveryFetchMetadata(query, cursor, {
           browserFailureClass: input.browserFailureClass ?? null,
           browserSummary: input.browserSummary ?? null,
-          cursor: cursor ?? null,
           fallbackFor: "meta_library_browser",
-        },
+        }),
       });
       await upsertDiscoveryProviderState(env, {
         provider: "meta_api",
@@ -646,15 +642,14 @@ async function tryMetaApiFallback(
         cacheStatus: "miss",
         failureClass,
         browserMsUsed: null,
-        metadata: {
+        metadata: buildDiscoveryFetchMetadata(query, cursor, {
           browserFailureClass: input.browserFailureClass ?? null,
           browserSummary: input.browserSummary ?? null,
           cooldownUntil: cooldownState?.cooldownUntil ?? null,
-          cursor: cursor ?? null,
           errorMessage,
           fallbackFor: "meta_library_browser",
           retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
-        },
+        }),
       });
       await upsertDiscoveryProviderState(env, {
         provider: "meta_api",
@@ -675,6 +670,19 @@ async function tryMetaApiFallback(
 
     return null;
   }
+}
+
+function buildDiscoveryFetchMetadata(
+  query: NormalizedSavedQuery,
+  cursor: string | null | undefined,
+  metadata: Record<string, unknown> = {},
+) {
+  return {
+    queryLabel: query.filters.query,
+    queryMode: query.mode,
+    cursor: cursor ?? null,
+    ...metadata,
+  };
 }
 
 function extractProviderStateErrorMessage(metadata: Record<string, unknown> | null | undefined) {

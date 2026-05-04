@@ -407,6 +407,11 @@ describe("searchAdsViaSourceResolver", () => {
         provider: "meta_library_browser",
         status: "failed",
         failureClass: "login_wall",
+        metadata: expect.objectContaining({
+          cursor: null,
+          queryLabel: "nykaa",
+          queryMode: "advertiser",
+        }),
       }),
     );
     expect(createDiscoveryFetchLog).toHaveBeenCalledWith(
@@ -415,6 +420,11 @@ describe("searchAdsViaSourceResolver", () => {
         provider: "meta_api",
         status: "succeeded",
         failureClass: null,
+        metadata: expect.objectContaining({
+          fallbackFor: "meta_library_browser",
+          queryLabel: "nykaa",
+          queryMode: "advertiser",
+        }),
       }),
     );
   });
