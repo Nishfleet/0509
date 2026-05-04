@@ -138,6 +138,9 @@ export async function runProductionCanary(options = {}) {
     baseUrl,
   });
   const blockingFailures = findBlockingCurrent0509Failures(results);
+  const degradedWarnings = results.filter(
+    (result) => result.provider === "current_0509" && result.degraded,
+  );
 
   return {
     passed: healthChecks.every((check) => check.ok) && blockingFailures.length === 0,
@@ -149,6 +152,7 @@ export async function runProductionCanary(options = {}) {
     country,
     mode,
     blockingFailures,
+    degradedWarnings,
     results,
   };
 }
@@ -168,8 +172,14 @@ export function formatProductionCanaryReport(report) {
     }
   }
 
-  if (report.blockingFailures.length === 0) {
+  if (report.blockingFailures.length === 0 && !report.degradedWarnings?.length) {
     lines.push("search: ok");
+  } else if (report.blockingFailures.length === 0) {
+    lines.push(
+      `search: warning for ${report.degradedWarnings
+        .map((result) => `${result.query} (degraded)`)
+        .join(", ")}`,
+    );
   } else {
     lines.push(
       `search: failed for ${report.blockingFailures

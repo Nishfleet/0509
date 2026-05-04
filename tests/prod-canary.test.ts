@@ -6,7 +6,29 @@ import {
   runProductionCanary,
 } from "../scripts/prod-canary.lib.mjs";
 
-function current0509Result(status: "ok" | "empty") {
+type Current0509Result = {
+  provider: "current_0509";
+  query: string;
+  country: string;
+  mode: "advertiser";
+  status: "ok" | "empty";
+  latencyMs: number;
+  httpStatus: number;
+  siteStatus: null;
+  matchCount: number;
+  loginWall: boolean;
+  rateLimited: boolean;
+  blockedLikely: boolean;
+  degraded: boolean;
+  sourceLabel: string;
+  url: string;
+  note: string | null;
+};
+
+function current0509Result(
+  status: "ok" | "empty",
+  overrides: Partial<Current0509Result> = {},
+) {
   return {
     provider: "current_0509" as const,
     query: "nykaa",
@@ -24,6 +46,7 @@ function current0509Result(status: "ok" | "empty") {
     sourceLabel: "Live Ad Library capture",
     url: "https://0509.in/search?query=nykaa",
     note: null,
+    ...overrides,
   };
 }
 
@@ -178,5 +201,34 @@ describe("production canary", () => {
 
     expect(report.passed).toBe(true);
     expect(formatProductionCanaryReport(report)).toContain("search: ok");
+  });
+
+  it("reports degraded rendered search states without failing the canary", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([
+      current0509Result("ok", {
+        degraded: true,
+        note: "0509 rendered its degraded commercial discovery state.",
+      }),
+    ]);
+
+    const report = await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+    });
+
+    expect(report.passed).toBe(true);
+    expect(report.blockingFailures).toHaveLength(0);
+    expect(report.degradedWarnings).toHaveLength(1);
+    expect(formatProductionCanaryReport(report)).toContain("search: warning for nykaa (degraded)");
   });
 });
