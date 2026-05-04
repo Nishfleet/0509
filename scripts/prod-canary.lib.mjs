@@ -158,6 +158,21 @@ export async function runProductionCanary(options = {}) {
 }
 
 /**
+ * @param {Awaited<ReturnType<typeof runProductionCanary>>["degradedWarnings"][number]} result
+ */
+function formatDegradedWarning(result) {
+  const details = ["degraded"];
+  if (result.sourceLabel) {
+    details.push(result.sourceLabel);
+  }
+  if (typeof result.matchCount === "number") {
+    details.push(`${result.matchCount} ${result.matchCount === 1 ? "ad" : "ads"}`);
+  }
+
+  return `${result.query} (${details.join(", ")})`;
+}
+
+/**
  * @param {Awaited<ReturnType<typeof runProductionCanary>>} report
  */
 export function formatProductionCanaryReport(report) {
@@ -177,7 +192,7 @@ export function formatProductionCanaryReport(report) {
   } else if (report.blockingFailures.length === 0) {
     lines.push(
       `search: warning for ${report.degradedWarnings
-        .map((result) => `${result.query} (degraded)`)
+        .map((result) => formatDegradedWarning(result))
         .join(", ")}`,
     );
   } else {

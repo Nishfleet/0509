@@ -215,6 +215,8 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([
       current0509Result("ok", {
         degraded: true,
+        matchCount: 7,
+        sourceLabel: "Cached live results",
         note: "0509 rendered its degraded commercial discovery state.",
       }),
     ]);
@@ -229,6 +231,8 @@ describe("production canary", () => {
     expect(report.passed).toBe(true);
     expect(report.blockingFailures).toHaveLength(0);
     expect(report.degradedWarnings).toHaveLength(1);
-    expect(formatProductionCanaryReport(report)).toContain("search: warning for nykaa (degraded)");
+    expect(formatProductionCanaryReport(report)).toContain(
+      "search: warning for nykaa (degraded, Cached live results, 7 ads)",
+    );
   });
 });
