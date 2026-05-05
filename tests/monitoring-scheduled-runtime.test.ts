@@ -139,7 +139,7 @@ function buildWatchlist(index: number): WatchlistRecord {
 }
 
 describe("runScheduledMonitoring scheduled runtime selection", () => {
-  it("warms active watchlists and fills unused slots with priority public searches", async () => {
+  it("warms active watchlists and reserves priority public keyword searches", async () => {
     const mocks = mockMonitoringDependencies({
       provider: "meta_library_browser",
     });
@@ -156,19 +156,26 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     const result = await runScheduledDiscoveryWarmup(env as never);
 
     expect(result).toMatchObject({
-      attempted: 6,
-      succeeded: 6,
+      attempted: 8,
+      succeeded: 8,
       failed: 0,
       skipped: 0,
     });
-    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(6);
-    expect(mocks.searchAdsViaSourceResolver.mock.calls.map((call) => call[1].filters.query)).toEqual([
-      "adspy",
-      "bigspy",
-      "adflex",
-      "nykaa",
-      "boat",
-      "cod",
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(8);
+    expect(
+      mocks.searchAdsViaSourceResolver.mock.calls.map((call) => ({
+        mode: call[1].mode,
+        query: call[1].filters.query,
+      })),
+    ).toEqual([
+      { mode: "advertiser", query: "adspy" },
+      { mode: "advertiser", query: "bigspy" },
+      { mode: "keyword", query: "adspy" },
+      { mode: "keyword", query: "bigspy" },
+      { mode: "keyword", query: "adflex" },
+      { mode: "keyword", query: "nykaa" },
+      { mode: "keyword", query: "boat" },
+      { mode: "keyword", query: "cod" },
     ]);
     expect(mocks.searchAdsViaSourceResolver).toHaveBeenNthCalledWith(
       1,
@@ -182,7 +189,7 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       },
     );
     expect(mocks.searchAdsViaSourceResolver).toHaveBeenNthCalledWith(
-      3,
+      5,
       env,
       expect.objectContaining({
         mode: "keyword",
@@ -221,12 +228,12 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     const result = await runScheduledDiscoveryWarmup(env as never);
 
     expect(result).toMatchObject({
-      attempted: 6,
+      attempted: 8,
       succeeded: 0,
       failed: 0,
-      skipped: 6,
+      skipped: 8,
     });
-    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(6);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(8);
   });
 
   it("keeps the keyword canary query in the public warmup batch", async () => {
@@ -270,7 +277,7 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     );
   });
 
-  it("caps scheduled discovery warmups to a bounded batch", async () => {
+  it("caps active watchlist warmups while still reserving public keyword coverage", async () => {
     const mocks = mockMonitoringDependencies({
       provider: "meta_library_browser",
       watchlists: Array.from({ length: 7 }, (_value, index) => buildWatchlist(index + 1)),
@@ -288,12 +295,12 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     const result = await runScheduledDiscoveryWarmup(env as never);
 
     expect(result).toMatchObject({
-      attempted: 6,
-      succeeded: 6,
+      attempted: 12,
+      succeeded: 12,
       failed: 0,
       skipped: 1,
     });
-    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(6);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(12);
   });
 
   it("runs browser-backed scheduled scans inline even when a workflow binding exists", async () => {
