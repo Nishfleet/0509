@@ -177,6 +177,24 @@ describe("provider bakeoff helpers", () => {
         note: null,
       },
       {
+        provider: "current_0509",
+        query: "adflex",
+        country: "India",
+        mode: "advertiser",
+        status: "blocked",
+        latencyMs: 1,
+        httpStatus: 200,
+        siteStatus: null,
+        matchCount: 11,
+        loginWall: true,
+        rateLimited: false,
+        blockedLikely: false,
+        degraded: true,
+        sourceLabel: "Cached live results",
+        url: "https://0509.in/search?query=adflex",
+        note: "0509 rendered its degraded commercial discovery state.",
+      },
+      {
         provider: "browserbase",
         query: "nykaa",
         country: "India",
@@ -198,6 +216,41 @@ describe("provider bakeoff helpers", () => {
 
     expect(failures).toHaveLength(1);
     expect(failures[0].query).toBe("nykaa");
+  });
+
+  it("treats degraded cached 0509 pages with rendered ads as usable warnings", async () => {
+    const result = await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "adflex",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl: vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: async () => `
+            <html>
+              <body>
+                <p>Meta Ad Library failure class: login wall</p>
+                <p>Source: Cached live results</p>
+                <p>Commercial discovery degraded</p>
+                <p>11 ads on this page</p>
+              </body>
+            </html>
+          `,
+        }),
+      },
+    );
+
+    expect(result).toMatchObject({
+      status: "ok",
+      degraded: true,
+      loginWall: true,
+      sourceLabel: "Cached live results",
+      matchCount: 11,
+    });
   });
 });
 

@@ -245,6 +245,27 @@ function classifyErrorStatus(note) {
 }
 
 /**
+ * @param {string | null} sourceLabel
+ */
+function isUsableCurrent0509Source(sourceLabel) {
+  return (
+    sourceLabel === "Cached live results" ||
+    sourceLabel === "API fallback" ||
+    sourceLabel === "Live Ad Library capture"
+  );
+}
+
+/**
+ * @param {{ sourceLabel: string | null, resultCount?: number | null, matchCount: number }} analysis
+ */
+function hasUsableCurrent0509Results(analysis) {
+  return (
+    isUsableCurrent0509Source(analysis.sourceLabel) &&
+    ((analysis.resultCount ?? 0) > 0 || analysis.matchCount > 0)
+  );
+}
+
+/**
  * @param {ProviderEnv} env
  */
 function encodeBasicAuth(env) {
@@ -393,25 +414,20 @@ function classifyCurrent0509Outcome(analysis, ok) {
   if (!ok) {
     return "error";
   }
+  if (analysis.sourceLabel === "Demo dataset") {
+    return "error";
+  }
+  if (hasUsableCurrent0509Results(analysis)) {
+    return "ok";
+  }
   if (analysis.rateLimited) {
     return "rate_limited";
   }
   if (analysis.loginWall || analysis.blockedLikely) {
     return "blocked";
   }
-  if (analysis.sourceLabel === "Demo dataset") {
-    return "error";
-  }
   if (analysis.resultCount === 0 || analysis.noAdsFound) {
     return "empty";
-  }
-  if (
-    (analysis.sourceLabel === "Cached live results" ||
-      analysis.sourceLabel === "API fallback" ||
-      analysis.sourceLabel === "Live Ad Library capture") &&
-    ((analysis.resultCount ?? 0) > 0 || analysis.matchCount > 0)
-  ) {
-    return "ok";
   }
   return classifyHtmlOutcome(analysis, ok);
 }
@@ -1162,6 +1178,7 @@ export function findBlockingCurrent0509Failures(results) {
   return results.filter(
     (result) =>
       result.provider === "current_0509" &&
-      !["ok", "skipped"].includes(result.status),
+      !["ok", "skipped"].includes(result.status) &&
+      !hasUsableCurrent0509Results(result),
   );
 }
