@@ -20,7 +20,7 @@ import {
   upsertWorkspaceDeliveryConfig,
 } from "~/lib/data.server";
 
-function createMockDb() {
+function createMockDb(resultsFor?: (sql: string, bindings: unknown[]) => unknown[]) {
   const statements: Array<{ sql: string; bindings: unknown[] }> = [];
 
   return {
@@ -35,7 +35,7 @@ function createMockDb() {
                 return { success: true };
               },
               async all<T>() {
-                return { results: [] as T[] };
+                return { results: (resultsFor?.(sql, bindings) ?? []) as T[] };
               },
             };
           },
@@ -383,6 +383,40 @@ describe("getOperatorSnapshot", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("surfaces discovery failure query metadata for operator triage", async () => {
+    const mock = createMockDb((sql) => {
+      if (!sql.includes("FROM discovery_fetch_log")) {
+        return [];
+      }
+
+      return [
+        {
+          fetchId: "fetch-1",
+          provider: "meta_library_browser",
+          routeContext: "public_search",
+          country: "India",
+          cacheStatus: "miss",
+          failureClass: "login_wall",
+          browserMsUsed: 0,
+          metadataJson: JSON.stringify({
+            queryLabel: "adflex",
+            queryMode: "advertiser",
+          }),
+          createdAt: "2026-05-05T06:00:00.000Z",
+        },
+      ];
+    });
+
+    const snapshot = await getOperatorSnapshot({ DB: mock.db } as never);
+
+    expect(snapshot.discoveryFailures[0]).toMatchObject({
+      fetchId: "fetch-1",
+      queryLabel: "adflex",
+      queryMode: "advertiser",
+      failureClass: "login_wall",
+    });
   });
 });
 

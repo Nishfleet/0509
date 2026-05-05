@@ -144,9 +144,9 @@ export default function OpsRoute() {
                 <p className="section-label">
                   {formatDiscoveryProvider(item.provider)} · {formatRouteContext(item.routeContext)}
                 </p>
-                <h3>{item.failureClass ?? "Discovery failure"}</h3>
+                <h3>{formatDiscoveryFailureTitle(item)}</h3>
                 <p>
-                  {item.country}
+                  {item.failureClass ?? "Discovery failure"} · {item.country}
                   {item.cacheStatus === "stale" ? " · stale cache served" : " · no fresh cache"}
                 </p>
                 <p className="muted-text">{formatTimestamp(item.createdAt)}</p>
@@ -277,6 +277,22 @@ function formatRouteContext(routeContext: string) {
     return "Scheduled warmup";
   }
   return "Public search";
+}
+
+function formatDiscoveryFailureTitle(item: {
+  failureClass: string | null;
+  queryLabel?: string | null;
+  queryMode?: string | null;
+}) {
+  if (!item.queryLabel) {
+    return item.failureClass ?? "Discovery failure";
+  }
+
+  return item.queryMode ? `${item.queryLabel} (${formatDiscoveryQueryMode(item.queryMode)})` : item.queryLabel;
+}
+
+function formatDiscoveryQueryMode(queryMode: string) {
+  return queryMode.replaceAll("_", " ");
 }
 
 function formatDiscoveryStatus(status: string) {

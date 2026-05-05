@@ -2551,6 +2551,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
       cacheStatus: DiscoveryCacheStatus;
       failureClass: DiscoveryFailureClass | null;
       browserMsUsed: number | null;
+      metadataJson: string | null;
       createdAt: string;
     }>(
       env,
@@ -2563,6 +2564,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
           discovery_fetch_log.cache_status AS cacheStatus,
           discovery_fetch_log.failure_class AS failureClass,
           discovery_fetch_log.browser_ms_used AS browserMsUsed,
+          discovery_fetch_log.metadata_json AS metadataJson,
           discovery_fetch_log.created_at AS createdAt
         FROM discovery_fetch_log
         WHERE discovery_fetch_log.status = 'failed'
@@ -2619,9 +2621,46 @@ export async function getOperatorSnapshot(env: AppEnv) {
     blockedTargets,
     deliveryFailures,
     degradedWatchlists,
-    discoveryFailures,
+    discoveryFailures: discoveryFailures.map(toOperatorDiscoveryFailure),
     discoveryProviders,
   };
+}
+
+function toOperatorDiscoveryFailure(row: {
+  fetchId: string;
+  provider: AdDiscoveryProvider;
+  routeContext: DiscoveryRouteContext;
+  country: string;
+  cacheStatus: DiscoveryCacheStatus;
+  failureClass: DiscoveryFailureClass | null;
+  browserMsUsed: number | null;
+  metadataJson: string | null;
+  createdAt: string;
+}) {
+  const metadata = parseJson<Record<string, unknown> | null>(row.metadataJson, null);
+
+  return {
+    fetchId: row.fetchId,
+    provider: row.provider,
+    routeContext: row.routeContext,
+    country: row.country,
+    cacheStatus: row.cacheStatus,
+    failureClass: row.failureClass,
+    browserMsUsed: row.browserMsUsed,
+    queryLabel: stringMetadataValue(metadata, "queryLabel"),
+    queryMode: stringMetadataValue(metadata, "queryMode"),
+    createdAt: row.createdAt,
+  };
+}
+
+function stringMetadataValue(metadata: Record<string, unknown> | null, key: string) {
+  const value = metadata?.[key];
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 export async function reconcileDeliveryAttemptByProviderMessageId(
