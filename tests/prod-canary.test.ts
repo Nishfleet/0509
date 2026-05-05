@@ -10,7 +10,7 @@ type Current0509Result = {
   provider: "current_0509";
   query: string;
   country: string;
-  mode: "advertiser";
+  mode: "advertiser" | "keyword";
   status: "ok" | "empty";
   latencyMs: number;
   httpStatus: number;
@@ -121,6 +121,7 @@ describe("production canary", () => {
     const report = await runProductionCanary({
       baseUrl: "https://0509.in",
       queries: ["nykaa"],
+      mode: "advertiser",
       fetchImpl,
       benchmarkImpl,
     });
@@ -128,6 +129,49 @@ describe("production canary", () => {
     expect(report.passed).toBe(false);
     expect(report.blockingFailures).toHaveLength(1);
     expect(formatProductionCanaryReport(report)).toContain("search: failed");
+  });
+
+  it("checks advertiser and keyword launch search modes by default", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockImplementation(({ mode }) =>
+      Promise.resolve([
+        current0509Result(mode === "keyword" ? "empty" : "ok", {
+          mode,
+        }),
+      ]),
+    );
+
+    const report = await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.modes).toEqual(["advertiser", "keyword"]);
+    expect(benchmarkImpl).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        mode: "advertiser",
+      }),
+    );
+    expect(benchmarkImpl).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        mode: "keyword",
+      }),
+    );
+    expect(formatProductionCanaryReport(report)).toContain(
+      "search: failed for nykaa / keyword (empty)",
+    );
   });
 
   it("checks every production health hostname by default", async () => {
@@ -195,6 +239,7 @@ describe("production canary", () => {
     const report = await runProductionCanary({
       baseUrl: "https://0509.in",
       queries: ["nykaa"],
+      mode: "advertiser",
       fetchImpl,
       benchmarkImpl,
     });
@@ -224,6 +269,7 @@ describe("production canary", () => {
     const report = await runProductionCanary({
       baseUrl: "https://0509.in",
       queries: ["nykaa"],
+      mode: "advertiser",
       fetchImpl,
       benchmarkImpl,
     });
@@ -232,7 +278,7 @@ describe("production canary", () => {
     expect(report.blockingFailures).toHaveLength(0);
     expect(report.degradedWarnings).toHaveLength(1);
     expect(formatProductionCanaryReport(report)).toContain(
-      "search: warning for nykaa (degraded, Cached live results, 7 ads)",
+      "search: warning for nykaa / advertiser (degraded, Cached live results, 7 ads)",
     );
   });
 });

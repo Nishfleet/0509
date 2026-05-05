@@ -8,14 +8,29 @@ import {
 } from "./prod-canary.lib.mjs";
 
 /**
+ * @param {string | undefined} value
+ * @returns {"advertiser" | "keyword" | undefined}
+ */
+function parseMode(value) {
+  if (!value) {
+    return undefined;
+  }
+  if (value === "advertiser" || value === "keyword") {
+    return /** @type {"advertiser" | "keyword"} */ (value);
+  }
+  throw new Error(`Unsupported canary mode: ${value}`);
+}
+
+/**
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], json: boolean }} */
+  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], mode: "advertiser" | "keyword" | undefined, json: boolean }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || undefined,
     expectedApp: process.env.CANARY_EXPECTED_APP || DEFAULT_CANARY_EXPECTED_APP,
     queries: [],
+    mode: parseMode(process.env.CANARY_MODE),
     json: false,
   };
 
@@ -28,6 +43,11 @@ function parseArgs(args) {
     }
     if (arg === "--query" && args[index + 1]) {
       parsed.queries.push(args[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (arg === "--mode" && args[index + 1]) {
+      parsed.mode = parseMode(args[index + 1]);
       index += 1;
       continue;
     }
@@ -49,6 +69,7 @@ const report = await runProductionCanary({
   baseUrl: config.baseUrl,
   expectedApp: config.expectedApp,
   queries: config.queries,
+  mode: config.mode,
 });
 
 if (config.json) {

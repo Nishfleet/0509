@@ -1,6 +1,5 @@
 import {
   DEFAULT_COUNTRY,
-  DEFAULT_MODE,
   DOGFOOD_QUERIES,
   benchmarkProviders,
   findBlockingCurrent0509Failures,
@@ -15,6 +14,8 @@ export const DEFAULT_CANARY_HEALTH_BASE_URLS = Object.freeze([
   DEFAULT_CANARY_API_BASE_URL,
 ]);
 export const DEFAULT_CANARY_EXPECTED_APP = "0509";
+/** @type {ReadonlyArray<"advertiser" | "keyword">} */
+export const DEFAULT_CANARY_SEARCH_MODES = Object.freeze(["advertiser", "keyword"]);
 
 /**
  * @typedef {{
@@ -35,6 +36,7 @@ export const DEFAULT_CANARY_EXPECTED_APP = "0509";
  *   queries?: string[],
  *   country?: string,
  *   mode?: "advertiser" | "keyword",
+ *   modes?: Array<"advertiser" | "keyword">,
  *   fetchImpl?: typeof fetch,
  *   benchmarkImpl?: typeof benchmarkProviders
  * }} ProductionCanaryOptions
@@ -52,6 +54,20 @@ function resolveHealthBaseUrls(options, baseUrl) {
     return [baseUrl];
   }
   return [...DEFAULT_CANARY_HEALTH_BASE_URLS];
+}
+
+/**
+ * @param {ProductionCanaryOptions} options
+ * @returns {Array<"advertiser" | "keyword">}
+ */
+function resolveCanarySearchModes(options) {
+  if (options.mode) {
+    return [options.mode];
+  }
+  if (options.modes?.length) {
+    return [...new Set(options.modes)];
+  }
+  return [...DEFAULT_CANARY_SEARCH_MODES];
 }
 
 /**
@@ -110,7 +126,7 @@ export async function runProductionCanary(options = {}) {
   const expectedApp = options.expectedApp ?? DEFAULT_CANARY_EXPECTED_APP;
   const queries = options.queries?.length ? options.queries : [...DOGFOOD_QUERIES];
   const country = options.country ?? DEFAULT_COUNTRY;
-  const mode = options.mode ?? DEFAULT_MODE;
+  const modes = resolveCanarySearchModes(options);
   const benchmarkImpl = options.benchmarkImpl ?? benchmarkProviders;
   const healthChecks = [];
   for (const healthBaseUrl of resolveHealthBaseUrls(options, baseUrl)) {
@@ -130,13 +146,18 @@ export async function runProductionCanary(options = {}) {
     message: "No health endpoints configured.",
     url: new URL("/api/health", baseUrl).toString(),
   };
-  const results = await benchmarkImpl({
-    providers: ["current_0509"],
-    queries,
-    country,
-    mode,
-    baseUrl,
-  });
+  const results = [];
+  for (const mode of modes) {
+    results.push(
+      ...(await benchmarkImpl({
+        providers: ["current_0509"],
+        queries,
+        country,
+        mode,
+        baseUrl,
+      })),
+    );
+  }
   const blockingFailures = findBlockingCurrent0509Failures(results);
   const degradedWarnings = results.filter(
     (result) => result.provider === "current_0509" && result.degraded,
@@ -150,7 +171,7 @@ export async function runProductionCanary(options = {}) {
     healthChecks,
     queries,
     country,
-    mode,
+    modes,
     blockingFailures,
     degradedWarnings,
     results,
@@ -169,7 +190,14 @@ function formatDegradedWarning(result) {
     details.push(`${result.matchCount} ${result.matchCount === 1 ? "ad" : "ads"}`);
   }
 
-  return `${result.query} (${details.join(", ")})`;
+  return `${formatProbeTarget(result)} (${details.join(", ")})`;
+}
+
+/**
+ * @param {{ query: string, mode?: string }} result
+ */
+function formatProbeTarget(result) {
+  return result.mode ? `${result.query} / ${result.mode}` : result.query;
 }
 
 /**
@@ -198,7 +226,7 @@ export function formatProductionCanaryReport(report) {
   } else {
     lines.push(
       `search: failed for ${report.blockingFailures
-        .map((result) => `${result.query} (${result.status})`)
+        .map((result) => `${formatProbeTarget(result)} (${result.status})`)
         .join(", ")}`,
     );
   }
