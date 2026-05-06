@@ -32,6 +32,8 @@ jobs:
             const fullName = `${owner}/${repo}`;
 
             const labelSpecs = [
+              { name: "codex", color: "5319e7", description: "Created or reviewed by Codex automation" },
+              { name: "codex:build", color: "1d76db", description: "Ask Codex to turn this issue into a bounded PR" },
               { name: "codex:auto-merge", color: "0e8a16", description: "Eligible for gated Codex auto-merge" },
               { name: "codex:needs-review", color: "d93f0b", description: "Blocked from auto-merge and needs human/tech-lead review" },
               { name: "codex:merged", color: "0052cc", description: "Merged by the Codex auto-merge gate" },

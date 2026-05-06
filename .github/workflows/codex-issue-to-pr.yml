@@ -2,7 +2,7 @@ name: Codex Issue To PR
 
 on:
   issues:
-    types: [labeled]
+    types: [opened, labeled]
   workflow_dispatch:
     inputs:
       task:
@@ -17,11 +17,11 @@ permissions:
 
 concurrency:
   group: codex-issue-to-pr-${{ github.event.issue.number || github.run_id }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   codex-issue-to-pr:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'codex:build' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'codex:build' || contains(github.event.issue.labels.*.name, 'codex:build') }}
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -129,6 +129,7 @@ jobs:
           script: |
             const labels = [
               { name: "codex", color: "5319e7", description: "Created or reviewed by Codex automation" },
+              { name: "codex:build", color: "1d76db", description: "Ask Codex to turn this issue into a bounded PR" },
               { name: "codex:auto-merge", color: "0e8a16", description: "Eligible for gated Codex auto-merge" },
             ];
 
