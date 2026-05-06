@@ -1,0 +1,271 @@
+name: Codex Auto Merge Gate
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: read
+  statuses: read
+
+concurrency:
+  group: codex-auto-merge-gate
+  cancel-in-progress: false
+
+jobs:
+  merge-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge safe Codex and Dependabot PRs
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const fullName = `${owner}/${repo}`;
+
+            const labelSpecs = [
+              { name: "codex", color: "5319e7", description: "Created or reviewed by Codex automation" },
+              { name: "codex:build", color: "1d76db", description: "Ask Codex to turn this issue into a bounded PR" },
+              { name: "codex:auto-merge", color: "0e8a16", description: "Eligible for gated Codex auto-merge" },
+              { name: "codex:needs-review", color: "d93f0b", description: "Blocked from auto-merge and needs human/tech-lead review" },
+              { name: "codex:merged", color: "0052cc", description: "Merged by the Codex auto-merge gate" },
+            ];
+
+            for (const label of labelSpecs) {
+              try {
+                await github.rest.issues.createLabel({ owner, repo, ...label });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            }
+
+            async function openPullRequests() {
+              if (context.payload.pull_request) {
+                return [context.payload.pull_request];
+              }
+              return await github.paginate(github.rest.pulls.list, {
+                owner,
+                repo,
+                state: "open",
+                base: "main",
+                per_page: 100,
+              });
+            }
+
+            async function changedFiles(pr) {
+              return await github.paginate(github.rest.pulls.listFiles, {
+                owner,
+                repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+            }
+
+            async function latestCheckRuns(sha) {
+              const runs = await github.paginate(github.rest.checks.listForRef, {
+                owner,
+                repo,
+                ref: sha,
+                per_page: 100,
+              });
+              const byName = new Map();
+              for (const run of runs.sort((a, b) => new Date(b.started_at || b.created_at) - new Date(a.started_at || a.created_at))) {
+                if (!byName.has(run.name)) byName.set(run.name, run);
+              }
+              return byName;
+            }
+
+            async function latestCodexReview(pr) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: pr.number,
+                per_page: 100,
+              });
+              return comments.reverse().find((comment) =>
+                comment.user?.login === "github-actions[bot]" &&
+                comment.body?.includes("<!-- codex-pr-review -->")
+              );
+            }
+
+            async function alreadyCommented(pr, marker) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: pr.number,
+                per_page: 100,
+              });
+              return comments.some((comment) => comment.body?.includes(marker));
+            }
+
+            async function markNeedsReview(pr, reason) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: pr.number,
+                labels: ["codex:needs-review"],
+              });
+
+              const marker = "<!-- codex-auto-merge-blocked -->";
+              if (await alreadyCommented(pr, marker)) return;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: `${marker}\nCodex auto-merge is holding this PR.\n\nReason: ${reason}`,
+              });
+            }
+
+            function isDependabot(pr) {
+              return pr.user?.login === "dependabot[bot]";
+            }
+
+            function hasAutoMergeLabel(pr) {
+              return (pr.labels || []).some((label) => label.name === "codex:auto-merge");
+            }
+
+            function hasMajorLabel(pr) {
+              return (pr.labels || []).some((label) => /(^|:)major$/i.test(label.name));
+            }
+
+            function dependabotFilesAreLowRisk(files) {
+              return files.every((file) =>
+                file.filename === "package.json" ||
+                file.filename === "package-lock.json" ||
+                file.filename === ".github/dependabot.yml" ||
+                /^\.github\/workflows\/[^/]+\.(ya?ml)$/.test(file.filename)
+              );
+            }
+
+            function codexFilesAreNotHighRisk(files) {
+              const highRisk = [
+                /^\.github\/workflows\/codex-auto-merge-gate\.ya?ml$/,
+                /^\.github\/workflows\/codex-issue-to-pr\.ya?ml$/,
+                /^\.github\/workflows\/codex-pr-review\.ya?ml$/,
+                /^\.github\/codex\/prompts\//,
+                /^wrangler\.jsonc$/,
+                /^d1_migrations\//,
+                /^migrations\//,
+                /^app\/routes\/auth/,
+                /^app\/routes\/api\.auth/,
+                /^app\/routes\/stripe/,
+                /^app\/lib\/stripe/,
+                /^app\/lib\/delivery/,
+                /^app\/lib\/env/,
+                /^workers\//,
+              ];
+              return files.every((file) => !highRisk.some((pattern) => pattern.test(file.filename)));
+            }
+
+            function codexDiffIsSmallEnough(files) {
+              const changedCount = files.length;
+              const additions = files.reduce((sum, file) => sum + file.additions, 0);
+              const deletions = files.reduce((sum, file) => sum + file.deletions, 0);
+              return changedCount <= 12 && additions <= 500 && deletions <= 500;
+            }
+
+            async function gate(pr) {
+              const labels = (pr.labels || []).map((label) => label.name).join(", ");
+              core.info(`Checking PR #${pr.number}: ${pr.title} [${labels}]`);
+
+              if (pr.base.ref !== "main") return { ok: false, wait: true, reason: "not targeting main" };
+              if (pr.draft) return { ok: false, wait: true, reason: "draft PR" };
+              if (pr.head.repo?.full_name !== fullName) return { ok: false, wait: false, reason: "forked PRs are never auto-merged" };
+
+              const byDependabot = isDependabot(pr);
+              const byCodex = hasAutoMergeLabel(pr);
+              if (!byDependabot && !byCodex) return { ok: false, wait: true, reason: "not a Codex/Dependabot auto-merge candidate" };
+
+              if (hasMajorLabel(pr)) return { ok: false, wait: false, reason: "major-version update label present" };
+
+              const files = await changedFiles(pr);
+              if (byDependabot && !dependabotFilesAreLowRisk(files)) {
+                return { ok: false, wait: false, reason: "Dependabot changed files outside the dependency/workflow allowlist" };
+              }
+              if (byCodex && !codexDiffIsSmallEnough(files)) {
+                return { ok: false, wait: false, reason: "Codex PR is too large for automatic merge" };
+              }
+              if (byCodex && !codexFilesAreNotHighRisk(files)) {
+                return { ok: false, wait: false, reason: "Codex PR touches protected auth/billing/runtime/workflow areas" };
+              }
+
+              const checks = await latestCheckRuns(pr.head.sha);
+              for (const name of ["codex-node-checks", "codex-pr-review"]) {
+                const run = checks.get(name);
+                if (!run) return { ok: false, wait: true, reason: `waiting for ${name}` };
+                if (run.status !== "completed") return { ok: false, wait: true, reason: `${name} is ${run.status}` };
+                if (run.conclusion !== "success") return { ok: false, wait: false, reason: `${name} concluded ${run.conclusion}` };
+              }
+
+              const review = await latestCodexReview(pr);
+              if (!review) return { ok: false, wait: true, reason: "waiting for Codex review comment" };
+              const reviewBody = review.body.toLowerCase();
+              if (reviewBody.includes("merge posture: block") || reviewBody.includes("merge posture: fix first")) {
+                return { ok: false, wait: false, reason: "Codex review blocked the merge" };
+              }
+              const safePosture =
+                reviewBody.includes("merge posture: no concerns found") ||
+                reviewBody.includes("merge posture: safe after checks");
+              if (!safePosture) return { ok: false, wait: false, reason: "Codex review did not give a safe merge posture" };
+
+              const fresh = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+              if (fresh.data.mergeable === false) return { ok: false, wait: false, reason: "GitHub says the PR is not mergeable" };
+              if (fresh.data.mergeable === null) return { ok: false, wait: true, reason: "GitHub mergeability is still being calculated" };
+
+              return { ok: true, files };
+            }
+
+            const prs = await openPullRequests();
+            for (const pr of prs) {
+              const result = await gate(pr);
+              if (!result.ok) {
+                core.info(`PR #${pr.number} not merged: ${result.reason}`);
+                if (!result.wait && (isDependabot(pr) || hasAutoMergeLabel(pr))) {
+                  await markNeedsReview(pr, result.reason);
+                }
+                continue;
+              }
+
+              await github.rest.pulls.merge({
+                owner,
+                repo,
+                pull_number: pr.number,
+                merge_method: "squash",
+                commit_title: `${pr.title} (#${pr.number})`,
+              });
+
+              if (pr.head.ref.startsWith("codex/")) {
+                try {
+                  await github.rest.git.deleteRef({
+                    owner,
+                    repo,
+                    ref: `heads/${pr.head.ref}`,
+                  });
+                } catch (error) {
+                  if (error.status !== 422 && error.status !== 404) throw error;
+                }
+              }
+
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: pr.number,
+                labels: ["codex:merged"],
+              });
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: "<!-- codex-auto-merged -->\nMerged automatically by the Codex Auto Merge Gate after CI and Codex review passed.",
+              });
+            }

@@ -1,0 +1,216 @@
+name: Codex Post Merge Guard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: codex-post-merge-guard-main
+  cancel-in-progress: false
+
+jobs:
+  post-merge-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci --ignore-scripts
+
+      - name: Classify changed files
+        id: scope
+        shell: bash
+        run: |
+          before="${{ github.event.before }}"
+          if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            before="$(git rev-parse HEAD~1)"
+          fi
+
+          git diff --name-only "$before" "$GITHUB_SHA" > codex-post-merge-files.txt
+          if grep -Ev '^(\.github/|README\.md|docs/)' codex-post-merge-files.txt >/dev/null; then
+            echo "deployable_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deployable_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run local post-merge checks
+        id: local_guard
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "[typecheck]"
+            npm run typecheck
+            echo "[test]"
+            npm run test
+            echo "[build]"
+            npm run build
+          } > codex-post-merge-local.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run production canary
+        id: canary_guard
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "[production canary]"
+            npm run canary:prod
+          } > codex-post-merge-canary.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload local failure log
+        if: steps.local_guard.outputs.status != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-post-merge-local
+          path: codex-post-merge-local.log
+
+      - name: Upload canary failure log
+        if: steps.canary_guard.outputs.status != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-post-merge-canary
+          path: codex-post-merge-canary.log
+
+      - name: Create rollback labels
+        if: steps.local_guard.outputs.status != '0' || steps.canary_guard.outputs.status != '0'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const labels = [
+              { name: "codex", color: "5319e7", description: "Created or reviewed by Codex automation" },
+              { name: "codex:auto-merge", color: "0e8a16", description: "Eligible for gated Codex auto-merge" },
+              { name: "codex:rollback", color: "b60205", description: "Rollback PR opened by the post-merge guard" },
+              { name: "codex:prod-canary", color: "d93f0b", description: "Production canary needs review" },
+            ];
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label,
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            }
+
+      - name: Surface production canary failure
+        if: steps.canary_guard.outputs.status != '0'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const marker = "<!-- codex-prod-canary -->";
+            const title = "codex: production canary failing";
+            const body = [
+              marker,
+              "Codex Post Merge Guard found that the live production canary is failing.",
+              "",
+              `Commit: \`${context.sha}\``,
+              `Deployable files changed in this push: \`${{ steps.scope.outputs.deployable_changed }}\``,
+              `Run: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              "",
+              "This is not auto-closed. Codex should diagnose the live search path and close it only after a clean canary run.",
+            ].join("\n");
+
+            const { data: existing } = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${owner}/${repo} is:issue is:open in:title "${title}"`,
+              per_page: 1,
+            });
+
+            if (existing.items.length > 0) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.items[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels: ["codex", "codex:prod-canary"],
+              });
+            }
+
+      - name: Revert bad main commit
+        if: steps.local_guard.outputs.status != '0' || (steps.canary_guard.outputs.status != '0' && steps.scope.outputs.deployable_changed == 'true')
+        shell: bash
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git revert --no-commit "$GITHUB_SHA"
+
+      - name: Open rollback PR
+        id: rollback_pr
+        if: steps.local_guard.outputs.status != '0' || (steps.canary_guard.outputs.status != '0' && steps.scope.outputs.deployable_changed == 'true')
+        uses: peter-evans/create-pull-request@v8
+        continue-on-error: true
+        with:
+          token: ${{ github.token }}
+          branch: codex/rollback-${{ github.sha }}
+          delete-branch: true
+          labels: |
+            codex
+            codex:auto-merge
+            codex:rollback
+          title: "revert: post-merge guard rollback ${{ github.sha }}"
+          body: |
+            Codex Post Merge Guard detected a failing main-branch check after this commit:
+
+            `${{ github.sha }}`
+
+            This rollback PR reverts that commit and is eligible for the normal gated auto-merge loop if CI and Codex review pass.
+
+      - name: Surface rollback PR permission failure
+        if: steps.rollback_pr.outcome == 'failure'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: `codex: rollback PR blocked for ${context.sha.slice(0, 7)}`,
+              body: [
+                "Codex Post Merge Guard prepared a rollback branch but GitHub Actions could not open the PR.",
+                "",
+                `Branch: \`codex/rollback-${context.sha}\``,
+                `Run: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+                "",
+                "Repo setting needed: Settings -> Actions -> General -> Workflow permissions -> allow GitHub Actions to create and approve pull requests.",
+              ].join("\n"),
+              labels: ["codex", "codex:rollback"],
+            });
+
+      - name: Fail when rollback was required
+        if: steps.local_guard.outputs.status != '0' || (steps.canary_guard.outputs.status != '0' && steps.scope.outputs.deployable_changed == 'true')
+        shell: bash
+        run: exit 1
