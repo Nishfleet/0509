@@ -1,0 +1,83 @@
+name: Codex PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: codex-pr-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  codex-pr-review:
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Check OpenAI secret
+        id: openai_secret
+        shell: bash
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "OPENAI_API_KEY is not configured; skipping Codex review."
+          else
+            echo "::add-mask::$OPENAI_API_KEY"
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        if: steps.openai_secret.outputs.has_key == 'true'
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}
+
+      - name: Pre-fetch PR refs
+        if: steps.openai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch --no-tags origin \
+            "${{ github.event.pull_request.base.ref }}" \
+            "+refs/pull/${{ github.event.pull_request.number }}/head"
+
+      - name: Run Codex review
+        id: run_codex
+        if: steps.openai_secret.outputs.has_key == 'true'
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/pr-review.md
+          output-file: codex-output.md
+          safety-strategy: drop-sudo
+          sandbox: read-only
+          model: gpt-5.5
+          effort: high
+
+      - name: Post review comment
+        if: steps.openai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request' && steps.run_codex.outputs.final-message != ''
+        uses: actions/github-script@v8
+        env:
+          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: process.env.CODEX_FINAL_MESSAGE,
+            });
+
+      - name: Upload review artifact
+        if: steps.openai_secret.outputs.has_key == 'true' && hashFiles('codex-output.md') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-pr-review
+          path: codex-output.md
