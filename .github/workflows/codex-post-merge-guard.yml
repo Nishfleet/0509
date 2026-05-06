@@ -1,0 +1,108 @@
+name: Codex Post Merge Guard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: codex-post-merge-guard-main
+  cancel-in-progress: false
+
+jobs:
+  post-merge-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci --ignore-scripts
+
+      - name: Run post-merge checks
+        id: guard
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "[typecheck]"
+            npm run typecheck
+            echo "[test]"
+            npm run test
+            echo "[build]"
+            npm run build
+            echo "[production canary]"
+            npm run canary:prod
+          } > codex-post-merge-guard.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload failure log
+        if: steps.guard.outputs.status != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-post-merge-guard
+          path: codex-post-merge-guard.log
+
+      - name: Create rollback labels
+        if: steps.guard.outputs.status != '0'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const labels = [
+              { name: "codex", color: "5319e7", description: "Created or reviewed by Codex automation" },
+              { name: "codex:auto-merge", color: "0e8a16", description: "Eligible for gated Codex auto-merge" },
+              { name: "codex:rollback", color: "b60205", description: "Rollback PR opened by the post-merge guard" },
+            ];
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label,
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            }
+
+      - name: Revert bad main commit
+        if: steps.guard.outputs.status != '0'
+        shell: bash
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git revert --no-commit "$GITHUB_SHA"
+
+      - name: Open rollback PR
+        if: steps.guard.outputs.status != '0'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ github.token }}
+          branch: codex/rollback-${{ github.sha }}
+          delete-branch: true
+          labels: |
+            codex
+            codex:auto-merge
+            codex:rollback
+          title: "revert: post-merge guard rollback ${{ github.sha }}"
+          body: |
+            Codex Post Merge Guard detected a failing main-branch check after this commit:
+
+            `${{ github.sha }}`
+
+            This rollback PR reverts that commit and is eligible for the normal gated auto-merge loop if CI and Codex review pass.
