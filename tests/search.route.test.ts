@@ -164,7 +164,65 @@ describe("search loader", () => {
   });
 
   it("lets the production canary bypass discovery cache with its signed probe shape", async () => {
-    const env = { DB: {} };
+    const env = { DB: {}, CANARY_BYPASS_TOKEN: "signed-canary-token" };
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&fresh=live", {
+        headers: {
+          "user-agent": "0509-provider-bakeoff/1.0",
+          "x-0509-canary-token": "signed-canary-token",
+        },
+      }),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        mode: "advertiser",
+        filters: expect.objectContaining({
+          query: "nykaa",
+        }),
+      }),
+      null,
+      { purpose: "public_search", cachePolicy: "bypass" },
+    );
+  });
+
+  it("keeps spoofed fresh-live public searches on the default cache policy", async () => {
+    const env = { DB: {}, CANARY_BYPASS_TOKEN: "signed-canary-token" };
     const sourceResult = {
       ads: [],
       nextCursor: null,
@@ -209,14 +267,9 @@ describe("search loader", () => {
 
     expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
       env,
-      expect.objectContaining({
-        mode: "advertiser",
-        filters: expect.objectContaining({
-          query: "nykaa",
-        }),
-      }),
+      expect.any(Object),
       null,
-      { purpose: "public_search", cachePolicy: "bypass" },
+      { purpose: "public_search", cachePolicy: "default" },
     );
   });
 });

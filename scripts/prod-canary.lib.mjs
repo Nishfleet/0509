@@ -37,6 +37,7 @@ export const DEFAULT_CANARY_SEARCH_MODES = Object.freeze(["advertiser", "keyword
  *   country?: string,
  *   mode?: "advertiser" | "keyword",
  *   modes?: Array<"advertiser" | "keyword">,
+ *   canaryBypassToken?: string,
  *   fetchImpl?: typeof fetch,
  *   benchmarkImpl?: typeof benchmarkProviders
  * }} ProductionCanaryOptions
@@ -168,6 +169,7 @@ export async function runProductionCanary(options = {}) {
         mode,
         baseUrl,
         freshLive: true,
+        canaryBypassToken: options.canaryBypassToken,
       })),
     );
   }

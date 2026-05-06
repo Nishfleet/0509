@@ -437,12 +437,16 @@ function classifyCurrent0509Outcome(analysis, ok) {
 
 /**
  * @param {ProbeTarget} target
- * @param {{ fetchImpl?: typeof fetch, baseUrl?: string, timeoutMs?: number, freshLive?: boolean }} [options]
+ * @param {{ fetchImpl?: typeof fetch, baseUrl?: string, timeoutMs?: number, freshLive?: boolean, canaryBypassToken?: string, env?: ProviderEnv }} [options]
  * @returns {Promise<ProbeResult>}
  */
 export async function runCurrent0509Probe(target, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? CURRENT_0509_PROBE_TIMEOUT_MS;
+  const canaryBypassToken =
+    typeof options.canaryBypassToken === "string" && options.canaryBypassToken.trim()
+      ? options.canaryBypassToken.trim()
+      : options.env?.CANARY_BYPASS_TOKEN?.trim();
   const url = buildCurrent0509SearchUrl({
     query: target.query,
     country: target.country,
@@ -456,6 +460,7 @@ export async function runCurrent0509Probe(target, options = {}) {
     const response = await fetchImpl(url, {
       headers: {
         "user-agent": "0509-provider-bakeoff/1.0",
+        ...(canaryBypassToken ? { "x-0509-canary-token": canaryBypassToken } : {}),
       },
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -1061,7 +1066,7 @@ export async function runZyteProbe(target, options = {}) {
 /**
  * @param {ProviderName} provider
  * @param {ProbeTarget} target
- * @param {{ fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, freshLive?: boolean }} [options]
+ * @param {{ fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, freshLive?: boolean, canaryBypassToken?: string }} [options]
  */
 export async function runProviderProbe(provider, target, options = {}) {
   if (provider === "current_0509") {
@@ -1083,7 +1088,7 @@ export async function runProviderProbe(provider, target, options = {}) {
 }
 
 /**
- * @param {{ providers?: ProviderName[], queries?: string[], country?: string, mode?: SearchMode, fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, freshLive?: boolean }} [options]
+ * @param {{ providers?: ProviderName[], queries?: string[], country?: string, mode?: SearchMode, fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, freshLive?: boolean, canaryBypassToken?: string }} [options]
  */
 export async function benchmarkProviders(options = {}) {
   /** @type {ProviderName[]} */

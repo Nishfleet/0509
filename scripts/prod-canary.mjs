@@ -25,12 +25,13 @@ function parseMode(value) {
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], mode: "advertiser" | "keyword" | undefined, json: boolean }} */
+  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], mode: "advertiser" | "keyword" | undefined, canaryBypassToken: string | undefined, json: boolean }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || undefined,
     expectedApp: process.env.CANARY_EXPECTED_APP || DEFAULT_CANARY_EXPECTED_APP,
     queries: [],
     mode: parseMode(process.env.CANARY_MODE),
+    canaryBypassToken: process.env.CANARY_BYPASS_TOKEN || undefined,
     json: false,
   };
 
@@ -70,6 +71,7 @@ const report = await runProductionCanary({
   expectedApp: config.expectedApp,
   queries: config.queries,
   mode: config.mode,
+  canaryBypassToken: config.canaryBypassToken,
 });
 
 if (config.json) {

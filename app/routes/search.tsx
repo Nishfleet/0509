@@ -56,7 +56,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+  const canaryBypassToken = env.CANARY_BYPASS_TOKEN?.trim();
+  const suppliedCanaryToken = request.headers.get("x-0509-canary-token")?.trim();
   const shouldBypassDiscoveryCache =
+    Boolean(canaryBypassToken) &&
+    suppliedCanaryToken === canaryBypassToken &&
     url.searchParams.get("fresh") === "live" &&
     request.headers.get("user-agent")?.startsWith("0509-provider-bakeoff/") === true;
   const result = await searchAdsViaSourceResolver(

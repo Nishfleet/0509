@@ -62,6 +62,45 @@ describe("provider bakeoff helpers", () => {
     ).toBe("https://0509.in/search?query=bigspy&country=India&mode=advertiser&fresh=live");
   });
 
+  it("sends the private canary token when fresh-live probes are configured", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div>Source: Live Ad Library capture</div>
+            <h2>1 ads on this page</h2>
+          </body>
+        </html>
+      `,
+    });
+
+    await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+        freshLive: true,
+        canaryBypassToken: "signed-canary-token",
+      },
+    );
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "user-agent": "0509-provider-bakeoff/1.0",
+          "x-0509-canary-token": "signed-canary-token",
+        }),
+      }),
+    );
+  });
+
   it("builds the Browserbase session request", () => {
     const request = buildBrowserbaseSessionRequest(
       {

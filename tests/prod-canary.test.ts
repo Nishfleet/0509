@@ -176,6 +176,34 @@ describe("production canary", () => {
     );
   });
 
+  it("passes the private canary bypass token to fresh-live probes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
+
+    await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["nykaa"],
+      mode: "advertiser",
+      fetchImpl,
+      benchmarkImpl,
+      canaryBypassToken: "signed-canary-token",
+    });
+
+    expect(benchmarkImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        freshLive: true,
+        canaryBypassToken: "signed-canary-token",
+      }),
+    );
+  });
+
   it("checks every production health hostname by default", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
