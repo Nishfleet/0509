@@ -10,7 +10,7 @@ import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discov
 import type { AppEnv } from "~/lib/env.server";
 import { searchMetaLibraryByBrowser, CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 import { demoSearch, MetaApiError, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
-import { fingerprintSavedQuery } from "~/lib/normalize";
+import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import type {
   AdDiscoveryProvider,
   DiscoveryFailureClass,
@@ -39,6 +39,8 @@ const DISCOVERY_QUERY_LEASE_POLL_MS = 250;
 const PUBLIC_SEARCH_BROWSER_FAILURE_FALLBACK_WINDOW_MS = 6 * 60 * 60 * 1000;
 const META_API_FALLBACK_SUMMARY =
   "Browser capture is unavailable right now; showing API fallback results.";
+const SAME_QUERY_ADVERTISER_CACHE_SUMMARY =
+  "Keyword live discovery is temporarily unavailable; showing cached advertiser results for the same query while the provider recovers.";
 
 interface DiscoveryCooldownState {
   cooldownUntil: string;
@@ -286,6 +288,17 @@ export async function searchAdsViaSourceResolver(
     }
 
     if (routeContext === "public_search") {
+      const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
+        provider,
+        query,
+        cursor,
+        routeContext,
+        failureClass: providerState.failureClass,
+      });
+      if (advertiserCacheFallback) {
+        return advertiserCacheFallback;
+      }
+
       const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
         browserFailureClass: providerState.failureClass,
         browserSummary: providerState.summary,
@@ -329,6 +342,17 @@ export async function searchAdsViaSourceResolver(
         discoverySummary: providerState.summary,
         discoveryFailureClass: providerState.failureClass,
       };
+    }
+
+    const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
+      provider,
+      query,
+      cursor,
+      routeContext,
+      failureClass: providerState.failureClass,
+    });
+    if (advertiserCacheFallback) {
+      return advertiserCacheFallback;
     }
 
     const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
@@ -512,6 +536,17 @@ export async function searchAdsViaSourceResolver(
       });
     }
 
+    const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
+      provider,
+      query,
+      cursor,
+      routeContext,
+      failureClass,
+    });
+    if (advertiserCacheFallback) {
+      return advertiserCacheFallback;
+    }
+
     const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
       browserFailureClass: failureClass,
       browserSummary: summary,
@@ -670,6 +705,62 @@ async function tryMetaApiFallback(
 
     return null;
   }
+}
+
+async function trySameQueryAdvertiserCacheFallback(
+  env: AppEnv,
+  input: {
+    provider: AdDiscoveryProvider;
+    query: NormalizedSavedQuery;
+    cursor: string | null | undefined;
+    routeContext: DiscoveryRouteContext;
+    failureClass: DiscoveryFailureClass | null | undefined;
+  },
+): Promise<SearchResponse | null> {
+  if (
+    input.provider !== "meta_library_browser" ||
+    input.routeContext !== "public_search" ||
+    input.query.mode !== "keyword" ||
+    input.cursor ||
+    !env.DB ||
+    !canUseSameQueryAdvertiserCache(input.query)
+  ) {
+    return null;
+  }
+
+  const advertiserQuery = normalizeSavedQuery("advertiser", input.query.filters);
+  const cacheKey = buildDiscoveryCacheKey({
+    provider: input.provider,
+    fingerprint: fingerprintSavedQuery(advertiserQuery),
+    country: input.query.filters.country || "India",
+    cursor: null,
+  });
+  const cached = await getDiscoveryCacheEntry(env, cacheKey);
+  const usableCached = isUsableDiscoveryCache(input.provider, cached) ? cached : null;
+  if (!usableCached) {
+    return null;
+  }
+
+  return {
+    ...usableCached.payload,
+    source: input.provider,
+    provider: input.provider,
+    cacheStatus: "stale",
+    discoveryStatus: "cache_only",
+    discoverySummary: SAME_QUERY_ADVERTISER_CACHE_SUMMARY,
+    discoveryFailureClass: input.failureClass ?? null,
+  };
+}
+
+function canUseSameQueryAdvertiserCache(query: NormalizedSavedQuery) {
+  return (
+    Boolean(query.filters.query.trim()) &&
+    query.filters.platform === "all" &&
+    query.filters.creativeType === "all" &&
+    query.filters.status === "all" &&
+    !query.filters.firstSeenFrom &&
+    !query.filters.lastSeenFrom
+  );
 }
 
 function buildDiscoveryFetchMetadata(
