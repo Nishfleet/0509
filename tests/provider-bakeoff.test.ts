@@ -195,6 +195,24 @@ describe("provider bakeoff helpers", () => {
         note: "0509 rendered its degraded commercial discovery state.",
       },
       {
+        provider: "current_0509",
+        query: "cod",
+        country: "India",
+        mode: "keyword",
+        status: "error",
+        latencyMs: 1,
+        httpStatus: 500,
+        siteStatus: null,
+        matchCount: 9,
+        loginWall: false,
+        rateLimited: false,
+        blockedLikely: false,
+        degraded: true,
+        sourceLabel: "Cached live results",
+        url: "https://0509.in/search?query=cod",
+        note: "Source: Cached live results",
+      },
+      {
         provider: "browserbase",
         query: "nykaa",
         country: "India",
@@ -214,8 +232,9 @@ describe("provider bakeoff helpers", () => {
       },
     ]);
 
-    expect(failures).toHaveLength(1);
+    expect(failures).toHaveLength(2);
     expect(failures[0].query).toBe("nykaa");
+    expect(failures[1].query).toBe("cod");
   });
 
   it("treats degraded cached 0509 pages with rendered ads as usable warnings", async () => {

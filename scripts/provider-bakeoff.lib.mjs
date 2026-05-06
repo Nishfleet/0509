@@ -1175,10 +1175,15 @@ export function formatResultsTable(results) {
  * @param {ProbeResult[]} results
  */
 export function findBlockingCurrent0509Failures(results) {
-  return results.filter(
-    (result) =>
-      result.provider === "current_0509" &&
-      !["ok", "skipped"].includes(result.status) &&
-      !hasUsableCurrent0509Results(result),
-  );
+  return results.filter((result) => {
+    if (result.provider !== "current_0509" || ["ok", "skipped"].includes(result.status)) {
+      return false;
+    }
+
+    const hasHttpFailure =
+      result.status === "error" ||
+      (typeof result.httpStatus === "number" &&
+        (result.httpStatus < 200 || result.httpStatus >= 300));
+    return hasHttpFailure || !hasUsableCurrent0509Results(result);
+  });
 }
