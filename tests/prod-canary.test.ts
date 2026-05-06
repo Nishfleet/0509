@@ -248,7 +248,7 @@ describe("production canary", () => {
     expect(formatProductionCanaryReport(report)).toContain("search: ok");
   });
 
-  it("reports degraded rendered search states without failing the canary", async () => {
+  it("fails when rendered search is cached-degraded instead of fresh live capture", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -274,11 +274,49 @@ describe("production canary", () => {
       benchmarkImpl,
     });
 
-    expect(report.passed).toBe(true);
+    expect(report.passed).toBe(false);
     expect(report.blockingFailures).toHaveLength(0);
     expect(report.degradedWarnings).toHaveLength(1);
+    expect(report.liveSourceFailures).toHaveLength(1);
     expect(formatProductionCanaryReport(report)).toContain(
-      "search: warning for nykaa / advertiser (degraded, Cached live results, 7 ads)",
+      "search: failed fresh-live check for nykaa / advertiser (Cached live results, degraded, 7 ads)",
+    );
+  });
+
+  it("fails cached live results even when the rendered page omits the degraded banner", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([
+      current0509Result("ok", {
+        query: "adflex",
+        mode: "keyword",
+        degraded: false,
+        matchCount: 11,
+        sourceLabel: "Cached live results",
+        note: "Source: Cached live results",
+      }),
+    ]);
+
+    const report = await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["adflex"],
+      mode: "keyword",
+      fetchImpl,
+      benchmarkImpl,
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.blockingFailures).toHaveLength(0);
+    expect(report.degradedWarnings).toHaveLength(0);
+    expect(report.liveSourceFailures).toHaveLength(1);
+    expect(formatProductionCanaryReport(report)).toContain(
+      "search: failed fresh-live check for adflex / keyword (Cached live results, 11 ads)",
     );
   });
 });

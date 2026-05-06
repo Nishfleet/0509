@@ -71,6 +71,18 @@ function resolveCanarySearchModes(options) {
 }
 
 /**
+ * @param {Awaited<ReturnType<typeof benchmarkProviders>>} results
+ */
+function findNonLiveCurrent0509Results(results) {
+  return results.filter(
+    (result) =>
+      result.provider === "current_0509" &&
+      result.status === "ok" &&
+      (result.degraded || result.sourceLabel !== "Live Ad Library capture"),
+  );
+}
+
+/**
  * @param {{ baseUrl?: string, expectedApp?: string | null, fetchImpl?: typeof fetch }} [options]
  * @returns {Promise<HealthCheckResult>}
  */
@@ -162,9 +174,13 @@ export async function runProductionCanary(options = {}) {
   const degradedWarnings = results.filter(
     (result) => result.provider === "current_0509" && result.degraded,
   );
+  const liveSourceFailures = findNonLiveCurrent0509Results(results);
 
   return {
-    passed: healthChecks.every((check) => check.ok) && blockingFailures.length === 0,
+    passed:
+      healthChecks.every((check) => check.ok) &&
+      blockingFailures.length === 0 &&
+      liveSourceFailures.length === 0,
     generatedAt: new Date().toISOString(),
     baseUrl,
     health,
@@ -174,6 +190,7 @@ export async function runProductionCanary(options = {}) {
     modes,
     blockingFailures,
     degradedWarnings,
+    liveSourceFailures,
     results,
   };
 }
@@ -191,6 +208,24 @@ function formatDegradedWarning(result) {
   }
 
   return `${formatProbeTarget(result)} (${details.join(", ")})`;
+}
+
+/**
+ * @param {Awaited<ReturnType<typeof runProductionCanary>>["liveSourceFailures"][number]} result
+ */
+function formatLiveSourceFailure(result) {
+  const details = [];
+  if (result.sourceLabel) {
+    details.push(result.sourceLabel);
+  }
+  if (result.degraded) {
+    details.push("degraded");
+  }
+  if (typeof result.matchCount === "number") {
+    details.push(`${result.matchCount} ${result.matchCount === 1 ? "ad" : "ads"}`);
+  }
+
+  return `${formatProbeTarget(result)} (${details.join(", ") || "non-live source"})`;
 }
 
 /**
@@ -215,8 +250,18 @@ export function formatProductionCanaryReport(report) {
     }
   }
 
-  if (report.blockingFailures.length === 0 && !report.degradedWarnings?.length) {
+  if (
+    report.blockingFailures.length === 0 &&
+    !report.liveSourceFailures?.length &&
+    !report.degradedWarnings?.length
+  ) {
     lines.push("search: ok");
+  } else if (report.blockingFailures.length === 0 && report.liveSourceFailures?.length) {
+    lines.push(
+      `search: failed fresh-live check for ${report.liveSourceFailures
+        .map((result) => formatLiveSourceFailure(result))
+        .join(", ")}`,
+    );
   } else if (report.blockingFailures.length === 0) {
     lines.push(
       `search: warning for ${report.degradedWarnings
