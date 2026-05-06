@@ -536,6 +536,18 @@ export async function searchAdsViaSourceResolver(
       });
     }
 
+    if (usableCached) {
+      return {
+        ...usableCached.payload,
+        source: provider,
+        provider,
+        cacheStatus: "stale",
+        discoveryStatus: "cache_only",
+        discoverySummary: summary,
+        discoveryFailureClass: failureClass,
+      };
+    }
+
     const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
       provider,
       query,
@@ -554,18 +566,6 @@ export async function searchAdsViaSourceResolver(
     });
     if (apiFallback) {
       return apiFallback;
-    }
-
-    if (usableCached) {
-      return {
-        ...usableCached.payload,
-        source: provider,
-        provider,
-        cacheStatus: "stale",
-        discoveryStatus: "cache_only",
-        discoverySummary: summary,
-        discoveryFailureClass: failureClass,
-      };
     }
 
     if (routeContext === "public_search") {

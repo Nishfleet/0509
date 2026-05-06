@@ -389,6 +389,48 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     });
   });
 
+  it("can reject after inline scan failures so cron alerts see the failure", async () => {
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+    });
+    mocks.searchAdsViaSourceResolver
+      .mockRejectedValueOnce(new Error("Browser discovery failed"))
+      .mockResolvedValue({
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+        discoveryStatus: "healthy",
+        discoverySummary: null,
+        discoveryFailureClass: null,
+      });
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: {},
+    };
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+
+    await expect(
+      runScheduledMonitoring(env as never, {
+        includeDigests: false,
+        throwOnInlineFailures: true,
+      }),
+    ).rejects.toThrow("Scheduled monitoring completed with 1 inline scan failure.");
+
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
+    expect(mocks.finishWatchlistRun.mock.calls[0]?.[2]).toMatchObject({
+      status: "failed",
+    });
+    expect(mocks.finishWatchlistRun.mock.calls[1]?.[2]).toMatchObject({
+      status: "succeeded",
+    });
+  });
+
   it("falls back to inline scans when workflow queueing fails", async () => {
     const workflowCreate = vi
       .fn()

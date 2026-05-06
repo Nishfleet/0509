@@ -97,6 +97,7 @@ interface RunScheduledMonitoringOptions {
   includeDigests?: boolean;
   cron?: string;
   scheduledTime?: number;
+  throwOnInlineFailures?: boolean;
 }
 
 interface RunWeeklyDigestsOptions {
@@ -168,13 +169,23 @@ export async function runScheduledMonitoring(
     ? await runWeeklyDigests(env, { periodEnd: options.scheduledTime })
     : 0;
 
-  return {
+  const result = {
     queued,
     duplicates,
     inlineRuns,
     inlineFailures,
     digests,
   };
+
+  if (options.throwOnInlineFailures && inlineFailures > 0) {
+    throw new Error(
+      `Scheduled monitoring completed with ${inlineFailures} inline scan ${
+        inlineFailures === 1 ? "failure" : "failures"
+      }.`,
+    );
+  }
+
+  return result;
 }
 
 export async function runScheduledDiscoveryWarmup(env: AppEnv) {

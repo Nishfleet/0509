@@ -91,6 +91,7 @@ export default {
         includeDigests: scheduledTask.includeDigests,
         cron: controller.cron,
         scheduledTime: controller.scheduledTime,
+        throwOnInlineFailures: true,
       }),
     );
   },
