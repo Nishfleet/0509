@@ -1,0 +1,182 @@
+name: Codex Issue To PR
+
+on:
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Plain-English task for Codex to turn into a PR
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: codex-issue-to-pr-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  codex-issue-to-pr:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'codex:build' || contains(github.event.issue.labels.*.name, 'codex:build') }}
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Check OpenAI secret
+        id: openai_secret
+        shell: bash
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "OPENAI_API_KEY is not configured; skipping Codex implementation."
+          else
+            echo "::add-mask::$OPENAI_API_KEY"
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        if: steps.openai_secret.outputs.has_key == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        if: steps.openai_secret.outputs.has_key == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.openai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: npm ci --ignore-scripts
+
+      - name: Prepare task brief
+        if: steps.openai_secret.outputs.has_key == 'true'
+        uses: actions/github-script@v8
+        env:
+          DISPATCH_TASK: ${{ github.event.inputs.task }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs");
+            fs.mkdirSync(".codex-runtime", { recursive: true });
+
+            let title = "Manual Codex task";
+            let body = process.env.DISPATCH_TASK || "";
+            let source = `workflow_dispatch run ${context.runId}`;
+
+            if (context.eventName === "issues") {
+              const issue = context.payload.issue;
+              title = issue.title || "";
+              body = issue.body || "";
+              source = `issue #${issue.number} opened by ${issue.user?.login || "unknown"} and labeled by ${context.actor}`;
+            }
+
+            const task = [
+              `# ${title}`,
+              "",
+              `Source: ${source}`,
+              "",
+              "## Task Brief",
+              "",
+              body,
+              "",
+              "## Guardrails",
+              "",
+              "- Make one bounded implementation PR.",
+              "- Do not deploy, merge, approve, close, or touch secrets.",
+              "- If the task is unsafe or too broad, leave a small blocker note instead of broad changes.",
+            ].join("\n");
+
+            fs.writeFileSync(".codex-runtime/issue-task.md", task);
+
+      - name: Run Codex implementation
+        id: run_codex
+        if: steps.openai_secret.outputs.has_key == 'true'
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/issue-to-pr.md
+          output-file: codex-issue-to-pr-output.md
+          safety-strategy: drop-sudo
+          sandbox: workspace-write
+          model: gpt-5.5
+          effort: high
+
+      - name: Upload Codex artifact
+        if: steps.openai_secret.outputs.has_key == 'true' && hashFiles('codex-issue-to-pr-output.md') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-issue-to-pr
+          path: codex-issue-to-pr-output.md
+
+      - name: Remove runtime-only files from PR diff
+        if: steps.openai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: |
+          rm -rf .codex-runtime
+          rm -f codex-issue-to-pr-output.md
+
+      - name: Ensure automation labels exist
+        if: steps.openai_secret.outputs.has_key == 'true'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const labels = [
+              { name: "codex", color: "5319e7", description: "Created or reviewed by Codex automation" },
+              { name: "codex:build", color: "1d76db", description: "Ask Codex to turn this issue into a bounded PR" },
+              { name: "codex:auto-merge", color: "0e8a16", description: "Eligible for gated Codex auto-merge" },
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label,
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            }
+
+      - name: Create pull request
+        id: cpr
+        if: steps.openai_secret.outputs.has_key == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ github.token }}
+          branch: "codex/issue-${{ github.event.issue.number || github.run_id }}"
+          delete-branch: true
+          draft: false
+          labels: |
+            codex
+            codex:auto-merge
+          title: "${{ github.event_name == 'issues' && format('codex: {0}', github.event.issue.title) || 'codex: manual task' }}"
+          body: |
+            Automated PR created by Codex.
+
+            Source: ${{ github.event_name == 'issues' && format('Issue #{0}', github.event.issue.number) || format('Manual workflow run {0}', github.run_id) }}
+
+            Codex result:
+            ${{ steps.run_codex.outputs.final-message }}
+
+      - name: Comment on issue
+        if: steps.cpr.outputs.pull-request-url != '' && github.event_name == 'issues'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: `Codex opened a PR: ${process.env.PR_URL}`,
+            });
+        env:
+          PR_URL: ${{ steps.cpr.outputs.pull-request-url }}

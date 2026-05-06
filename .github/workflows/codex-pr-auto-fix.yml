@@ -1,0 +1,292 @@
+name: Codex PR Auto Fix
+
+on:
+  pull_request_target:
+    types: [labeled, synchronize, reopened]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: read
+  statuses: read
+
+concurrency:
+  group: codex-pr-auto-fix
+  cancel-in-progress: false
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Check OpenAI secret
+        id: openai_secret
+        shell: bash
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "OPENAI_API_KEY is not configured; skipping Codex repair."
+          else
+            echo "::add-mask::$OPENAI_API_KEY"
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pick blocked Codex PR
+        id: pick
+        if: steps.openai_secret.outputs.has_key == 'true'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs");
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const fullName = `${owner}/${repo}`;
+
+            async function listFiles(pr) {
+              return await github.paginate(github.rest.pulls.listFiles, {
+                owner,
+                repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+            }
+
+            async function latestChecks(sha) {
+              const runs = await github.paginate(github.rest.checks.listForRef, {
+                owner,
+                repo,
+                ref: sha,
+                per_page: 100,
+              });
+              const byName = new Map();
+              for (const run of runs.sort((a, b) => new Date(b.started_at || b.created_at) - new Date(a.started_at || a.created_at))) {
+                if (!byName.has(run.name)) byName.set(run.name, run);
+              }
+              return byName;
+            }
+
+            async function comments(pr) {
+              return await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: pr.number,
+                per_page: 100,
+              });
+            }
+
+            function labels(pr) {
+              return new Set((pr.labels || []).map((label) => label.name));
+            }
+
+            function isEligible(pr) {
+              const set = labels(pr);
+              return (
+                pr.base.ref === "main" &&
+                !pr.draft &&
+                pr.head.repo?.full_name === fullName &&
+                pr.head.ref.startsWith("codex/issue-") &&
+                set.has("codex:auto-merge")
+              );
+            }
+
+            function protectedFilesTouched(files) {
+              const protectedPatterns = [
+                /^\.github\/workflows\//,
+                /^\.github\/codex\//,
+                /^wrangler\.jsonc$/,
+                /^d1_migrations\//,
+                /^migrations\//,
+                /^app\/routes\/auth/,
+                /^app\/routes\/api\.auth/,
+                /^app\/routes\/stripe/,
+                /^app\/lib\/stripe/,
+                /^app\/lib\/delivery/,
+                /^app\/lib\/env/,
+                /^workers\//,
+              ];
+              return files.some((file) => protectedPatterns.some((pattern) => pattern.test(file.filename)));
+            }
+
+            async function needsFix(pr) {
+              const set = labels(pr);
+              if (set.has("codex:needs-review")) return "auto-merge gate marked this PR as needing review";
+
+              const checks = await latestChecks(pr.head.sha);
+              const failed = [...checks.values()].filter((run) =>
+                ["codex-node-checks", "codex-pr-review"].includes(run.name) &&
+                run.status === "completed" &&
+                !["success", "skipped", "neutral"].includes(run.conclusion)
+              );
+              if (failed.length) return `failed checks: ${failed.map((run) => `${run.name}=${run.conclusion}`).join(", ")}`;
+
+              const review = (await comments(pr)).reverse().find((comment) =>
+                comment.user?.login === "github-actions[bot]" &&
+                comment.body?.includes("<!-- codex-pr-review -->")
+              );
+              const body = review?.body?.toLowerCase() || "";
+              if (body.includes("merge posture: block") || body.includes("merge posture: fix first")) {
+                return "Codex review requested fixes before merge";
+              }
+              return "";
+            }
+
+            let candidates = [];
+            if (context.payload.pull_request) {
+              candidates = [context.payload.pull_request];
+            } else {
+              candidates = await github.paginate(github.rest.pulls.list, {
+                owner,
+                repo,
+                state: "open",
+                base: "main",
+                per_page: 100,
+              });
+            }
+
+            for (const pr of candidates) {
+              if (!isEligible(pr)) continue;
+              const files = await listFiles(pr);
+              if (protectedFilesTouched(files)) continue;
+              const reason = await needsFix(pr);
+              if (!reason) continue;
+
+              fs.mkdirSync(".codex-runtime", { recursive: true });
+              fs.writeFileSync(".codex-runtime/pr-fix.md", [
+                `# PR #${pr.number}: ${pr.title}`,
+                "",
+                `URL: ${pr.html_url}`,
+                `Branch: ${pr.head.ref}`,
+                `Head SHA: ${pr.head.sha}`,
+                `Reason: ${reason}`,
+                "",
+                "## PR Body",
+                "",
+                pr.body || "",
+                "",
+                "## Changed Files",
+                "",
+                ...files.map((file) => `- ${file.filename} (+${file.additions}/-${file.deletions})`),
+              ].join("\n"));
+
+              core.setOutput("number", String(pr.number));
+              core.setOutput("head_ref", pr.head.ref);
+              core.setOutput("title", pr.title);
+              core.setOutput("reason", reason);
+              return;
+            }
+
+            core.setOutput("number", "");
+
+      - uses: actions/checkout@v6
+        if: steps.pick.outputs.number != ''
+        with:
+          ref: ${{ steps.pick.outputs.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        if: steps.pick.outputs.number != ''
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.pick.outputs.number != ''
+        shell: bash
+        run: npm ci --ignore-scripts
+
+      - name: Restore repair brief
+        if: steps.pick.outputs.number != ''
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs");
+            fs.mkdirSync(".codex-runtime", { recursive: true });
+            fs.writeFileSync(".codex-runtime/pr-fix.md", [
+              `# PR #${process.env.PR_NUMBER}: ${process.env.PR_TITLE}`,
+              "",
+              `Reason: ${process.env.PR_REASON}`,
+              "",
+              "Repair this PR without broadening its scope.",
+            ].join("\n"));
+        env:
+          PR_NUMBER: ${{ steps.pick.outputs.number }}
+          PR_TITLE: ${{ steps.pick.outputs.title }}
+          PR_REASON: ${{ steps.pick.outputs.reason }}
+
+      - name: Run Codex repair
+        id: run_codex
+        if: steps.openai_secret.outputs.has_key == 'true' && steps.pick.outputs.number != ''
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/pr-auto-fix.md
+          output-file: codex-pr-auto-fix-output.md
+          safety-strategy: drop-sudo
+          sandbox: workspace-write
+          model: gpt-5.5
+          effort: high
+
+      - name: Upload repair artifact
+        if: steps.pick.outputs.number != '' && hashFiles('codex-pr-auto-fix-output.md') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-pr-auto-fix
+          path: codex-pr-auto-fix-output.md
+
+      - name: Remove runtime-only files from PR diff
+        if: steps.pick.outputs.number != ''
+        shell: bash
+        run: |
+          rm -rf .codex-runtime
+          rm -f codex-pr-auto-fix-output.md
+
+      - name: Push repair commit
+        id: cpr
+        if: steps.pick.outputs.number != ''
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ github.token }}
+          branch: ${{ steps.pick.outputs.head_ref }}
+          base: main
+          labels: |
+            codex
+            codex:auto-merge
+          title: ${{ steps.pick.outputs.title }}
+          body: |
+            Codex repaired this PR after the merge gate or review found a blocker.
+
+            Repair reason: ${{ steps.pick.outputs.reason }}
+
+            Codex result:
+            ${{ steps.run_codex.outputs.final-message }}
+
+      - name: Reset review label and comment
+        if: steps.pick.outputs.number != '' && steps.cpr.outputs.pull-request-url != ''
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = Number(process.env.PR_NUMBER);
+            try {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number, name: "codex:needs-review" });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: `<!-- codex-auto-fixed -->\nCodex pushed a repair attempt. CI and review will rerun.\n\nReason fixed: ${process.env.PR_REASON}`,
+            });
+        env:
+          PR_NUMBER: ${{ steps.pick.outputs.number }}
+          PR_REASON: ${{ steps.pick.outputs.reason }}
