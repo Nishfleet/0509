@@ -23,6 +23,7 @@ jobs:
   codex-issue-to-pr:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'codex:build' || contains(github.event.issue.labels.*.name, 'codex:build') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
     steps:
@@ -53,8 +54,16 @@ jobs:
         if: steps.ai_secret.outputs.has_key == 'true'
         shell: bash
         run: |
-          npm ci --ignore-scripts
-          npm install -g opencode-ai
+          for attempt in 1 2 3; do
+            npm ci --ignore-scripts && break
+            sleep $((attempt * 10))
+            if [ "$attempt" = "3" ]; then exit 1; fi
+          done
+          for attempt in 1 2 3; do
+            npm install -g opencode-ai && exit 0
+            sleep $((attempt * 10))
+          done
+          exit 1
 
       - name: Configure OpenCode MiniMax
         if: steps.ai_secret.outputs.has_key == 'true'
@@ -72,6 +81,9 @@ jobs:
                   "apiKey": "{env:MINIMAX_API_KEY}"
                 },
                 "models": {
+                  "MiniMax-M2.7-highspeed": {
+                    "name": "MiniMax-M2.7-highspeed"
+                  },
                   "MiniMax-M2.7": {
                     "name": "MiniMax-M2.7"
                   }
@@ -146,25 +158,86 @@ jobs:
       - name: Run MiniMax implementation
         id: run_opencode
         if: steps.ai_secret.outputs.has_key == 'true'
+        timeout-minutes: 12
         shell: bash
         run: |
           prompt="$(cat .github/codex/prompts/issue-to-pr.md)"
-          opencode run \
-            --pure \
-            --model minimax/MiniMax-M2.7 \
-            --dangerously-skip-permissions \
-            "$prompt" > codex-issue-to-pr-output.md
+          models=(
+            "minimax/MiniMax-M2.7-highspeed"
+            "minimax/MiniMax-M2.7"
+          )
+
+          for model in "${models[@]}"; do
+            echo "Trying implementation model: $model"
+            if timeout 330s opencode run \
+              --pure \
+              --model "$model" \
+              --dangerously-skip-permissions \
+              "$prompt" > codex-issue-to-pr-output.md 2>&1; then
+              echo "ok=true" >> "$GITHUB_OUTPUT"
+              echo "model=$model" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            status=$?
+            echo "Implementation model failed: $model status=$status" >> codex-issue-to-pr-failures.log
+          done
+
+          {
+            echo "MiniMax implementation did not complete."
+            echo
+            echo "No PR was created because every configured model attempt failed or timed out."
+            echo
+            echo "Failure log:"
+            cat codex-issue-to-pr-failures.log
+          } > codex-issue-to-pr-output.md
+          echo "ok=false" >> "$GITHUB_OUTPUT"
 
       - name: Upload MiniMax artifact
-        if: steps.ai_secret.outputs.has_key == 'true' && hashFiles('codex-issue-to-pr-output.md') != ''
+        if: ${{ always() && steps.ai_secret.outputs.has_key == 'true' && hashFiles('codex-issue-to-pr-output.md') != '' }}
         uses: actions/upload-artifact@v7
         with:
           name: codex-issue-to-pr
           path: codex-issue-to-pr-output.md
 
+      - name: Surface MiniMax failure
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'false'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs");
+            const output = fs.existsSync("codex-issue-to-pr-output.md")
+              ? fs.readFileSync("codex-issue-to-pr-output.md", "utf8").slice(0, 6000)
+              : "No output file was produced.";
+            const body = [
+              "MiniMax issue-to-PR did not complete.",
+              "",
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              "",
+              "```",
+              output,
+              "```",
+            ].join("\n");
+            if (context.eventName === "issues") {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "codex: MiniMax issue-to-PR failed",
+                body,
+                labels: ["codex", "codex:needs-review"],
+              });
+            }
+
       - name: Prepare PR body
         id: pr_body
-        if: steps.ai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true'
         shell: bash
         run: |
           body_delim="MINIMAX_BODY_$(date +%s%N)"
@@ -191,8 +264,48 @@ jobs:
           rm -rf .codex-runtime
           rm -f codex-issue-to-pr-output.md
 
+      - name: Detect PR diff
+        id: diff
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true'
+        shell: bash
+        run: |
+          git add -N .
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Surface empty MiniMax result
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'false'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const body = [
+              "MiniMax completed but left no repository changes, so no PR was created.",
+              "",
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join("\n");
+            if (context.eventName === "issues") {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "codex: MiniMax issue-to-PR produced no diff",
+                body,
+                labels: ["codex", "codex:needs-review"],
+              });
+            }
+
       - name: Ensure automation labels exist
-        if: steps.ai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'true'
         uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
@@ -217,7 +330,7 @@ jobs:
 
       - name: Create pull request
         id: cpr
-        if: steps.ai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ github.token }}

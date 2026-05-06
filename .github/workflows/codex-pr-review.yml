@@ -18,6 +18,7 @@ jobs:
   codex-pr-review:
     if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
     steps:
@@ -55,7 +56,12 @@ jobs:
       - name: Install OpenCode
         if: steps.ai_secret.outputs.has_key == 'true'
         shell: bash
-        run: npm install -g opencode-ai
+        run: |
+          for attempt in 1 2 3; do
+            npm install -g opencode-ai && exit 0
+            sleep $((attempt * 10))
+          done
+          exit 1
 
       - name: Configure OpenCode reviewer
         if: steps.ai_secret.outputs.has_key == 'true'
@@ -120,15 +126,47 @@ jobs:
       - name: Run OpenCode Go review
         id: run_opencode
         if: steps.ai_secret.outputs.has_key == 'true'
+        timeout-minutes: 8
         shell: bash
         run: |
           prompt="$(cat .github/codex/prompts/pr-review.md)"
-          opencode run \
-            "$prompt" \
-            --pure \
-            --model opencode-go/glm-5.1 \
-            --agent ci-reviewer \
-            --file .codex-runtime/pr-review-context.md > codex-output.md
+          models=(
+            "opencode-go/glm-5.1"
+            "opencode-go/kimi-k2.6"
+            "opencode-go/deepseek-v4-pro"
+          )
+
+          for model in "${models[@]}"; do
+            echo "Trying review model: $model"
+            if timeout 140s opencode run \
+              "$prompt" \
+              --pure \
+              --model "$model" \
+              --agent ci-reviewer \
+              --file .codex-runtime/pr-review-context.md > codex-output.md 2>&1; then
+              echo "ok=true" >> "$GITHUB_OUTPUT"
+              echo "model=$model" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            status=$?
+            echo "Review model failed: $model status=$status" >> codex-review-failures.log
+          done
+
+          {
+            echo "findings"
+            echo
+            echo "- [block] OpenCode Go review could not complete with any configured fallback model."
+            echo
+            echo "open questions"
+            echo
+            echo "- Check the workflow logs/artifact for provider timeout or API failure details."
+            echo
+            echo "merge posture: block"
+            echo
+            echo "Failure log:"
+            cat codex-review-failures.log
+          } > codex-output.md
+          echo "ok=false" >> "$GITHUB_OUTPUT"
 
       - name: Post review comment
         if: steps.ai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target' && hashFiles('codex-output.md') != ''
@@ -146,7 +184,7 @@ jobs:
             });
 
       - name: Upload review artifact
-        if: steps.ai_secret.outputs.has_key == 'true' && hashFiles('codex-output.md') != ''
+        if: ${{ always() && steps.ai_secret.outputs.has_key == 'true' && hashFiles('codex-output.md') != '' }}
         uses: actions/upload-artifact@v7
         with:
           name: codex-pr-review
