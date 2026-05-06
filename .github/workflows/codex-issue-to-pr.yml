@@ -24,38 +24,87 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'codex:build' || contains(github.event.issue.labels.*.name, 'codex:build') }}
     runs-on: ubuntu-latest
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
     steps:
-      - name: Check OpenAI secret
-        id: openai_secret
+      - name: Check MiniMax secret
+        id: ai_secret
         shell: bash
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
+          if [ -z "$MINIMAX_API_KEY" ]; then
             echo "has_key=false" >> "$GITHUB_OUTPUT"
-            echo "OPENAI_API_KEY is not configured; skipping Codex implementation."
+            echo "MINIMAX_API_KEY is not configured; skipping MiniMax implementation."
           else
-            echo "::add-mask::$OPENAI_API_KEY"
+            echo "::add-mask::$MINIMAX_API_KEY"
             echo "has_key=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v6
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         with:
           fetch-depth: 0
 
       - uses: actions/setup-node@v6
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         with:
           node-version: "22"
           cache: npm
 
       - name: Install dependencies
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         shell: bash
-        run: npm ci --ignore-scripts
+        run: |
+          npm ci --ignore-scripts
+          npm install -g opencode-ai
+
+      - name: Configure OpenCode MiniMax
+        if: steps.ai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.config/opencode"
+          cat > "$HOME/.config/opencode/opencode.json" <<'JSON'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "provider": {
+              "minimax": {
+                "npm": "@ai-sdk/anthropic",
+                "options": {
+                  "baseURL": "https://api.minimax.io/anthropic/v1",
+                  "apiKey": "{env:MINIMAX_API_KEY}"
+                },
+                "models": {
+                  "MiniMax-M2.7": {
+                    "name": "MiniMax-M2.7"
+                  }
+                }
+              }
+            },
+            "permission": {
+              "bash": {
+                "git push*": "deny",
+                "git merge*": "deny",
+                "git tag*": "deny",
+                "git rebase*": "deny",
+                "gh pr merge*": "deny",
+                "gh release*": "deny",
+                "wrangler deploy*": "deny",
+                "vercel deploy*": "deny",
+                "supabase deploy*": "deny",
+                "cloudflared tunnel*": "deny",
+                "npm publish*": "deny",
+                "npm run deploy*": "deny",
+                "npx wrangler deploy*": "deny",
+                "npx vercel deploy*": "deny",
+                "pnpm publish*": "deny",
+                "pnpm run deploy*": "deny",
+                "bun publish*": "deny",
+                "bun run deploy*": "deny"
+              }
+            }
+          }
+          JSON
 
       - name: Prepare task brief
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         uses: actions/github-script@v8
         env:
           DISPATCH_TASK: ${{ github.event.inputs.task }}
@@ -94,35 +143,56 @@ jobs:
 
             fs.writeFileSync(".codex-runtime/issue-task.md", task);
 
-      - name: Run Codex implementation
-        id: run_codex
-        if: steps.openai_secret.outputs.has_key == 'true'
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: .github/codex/prompts/issue-to-pr.md
-          output-file: codex-issue-to-pr-output.md
-          safety-strategy: drop-sudo
-          sandbox: workspace-write
-          model: gpt-5.5
-          effort: high
+      - name: Run MiniMax implementation
+        id: run_opencode
+        if: steps.ai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: |
+          prompt="$(cat .github/codex/prompts/issue-to-pr.md)"
+          opencode run \
+            --pure \
+            --model minimax/MiniMax-M2.7 \
+            --dangerously-skip-permissions \
+            "$prompt" > codex-issue-to-pr-output.md
 
-      - name: Upload Codex artifact
-        if: steps.openai_secret.outputs.has_key == 'true' && hashFiles('codex-issue-to-pr-output.md') != ''
+      - name: Upload MiniMax artifact
+        if: steps.ai_secret.outputs.has_key == 'true' && hashFiles('codex-issue-to-pr-output.md') != ''
         uses: actions/upload-artifact@v7
         with:
           name: codex-issue-to-pr
           path: codex-issue-to-pr-output.md
 
+      - name: Prepare PR body
+        id: pr_body
+        if: steps.ai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: |
+          body_delim="MINIMAX_BODY_$(date +%s%N)"
+          source_line="${{ github.event_name == 'issues' && format('Issue #{0}', github.event.issue.number) || format('Manual workflow run {0}', github.run_id) }}"
+          {
+            echo "body<<$body_delim"
+            echo 'Automated PR created by MiniMax through OpenCode.'
+            echo
+            echo "Source: $source_line"
+            echo
+            echo 'MiniMax result:'
+            if [ -f codex-issue-to-pr-output.md ]; then
+              cat codex-issue-to-pr-output.md
+            else
+              echo 'No model output file was produced.'
+            fi
+            echo "$body_delim"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Remove runtime-only files from PR diff
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         shell: bash
         run: |
           rm -rf .codex-runtime
           rm -f codex-issue-to-pr-output.md
 
       - name: Ensure automation labels exist
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
@@ -147,7 +217,7 @@ jobs:
 
       - name: Create pull request
         id: cpr
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ github.token }}
@@ -158,13 +228,7 @@ jobs:
             codex
             codex:auto-merge
           title: "${{ github.event_name == 'issues' && format('codex: {0}', github.event.issue.title) || 'codex: manual task' }}"
-          body: |
-            Automated PR created by Codex.
-
-            Source: ${{ github.event_name == 'issues' && format('Issue #{0}', github.event.issue.number) || format('Manual workflow run {0}', github.run_id) }}
-
-            Codex result:
-            ${{ steps.run_codex.outputs.final-message }}
+          body: ${{ steps.pr_body.outputs.body }}
 
       - name: Comment on issue
         if: steps.cpr.outputs.pull-request-url != '' && github.event_name == 'issues'

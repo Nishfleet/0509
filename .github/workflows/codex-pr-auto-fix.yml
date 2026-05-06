@@ -22,23 +22,23 @@ jobs:
   auto-fix:
     runs-on: ubuntu-latest
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
     steps:
-      - name: Check OpenAI secret
-        id: openai_secret
+      - name: Check MiniMax secret
+        id: ai_secret
         shell: bash
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
+          if [ -z "$MINIMAX_API_KEY" ]; then
             echo "has_key=false" >> "$GITHUB_OUTPUT"
-            echo "OPENAI_API_KEY is not configured; skipping Codex repair."
+            echo "MINIMAX_API_KEY is not configured; skipping MiniMax repair."
           else
-            echo "::add-mask::$OPENAI_API_KEY"
+            echo "::add-mask::$MINIMAX_API_KEY"
             echo "has_key=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Pick blocked Codex PR
         id: pick
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
@@ -198,7 +198,56 @@ jobs:
       - name: Install dependencies
         if: steps.pick.outputs.number != ''
         shell: bash
-        run: npm ci --ignore-scripts
+        run: |
+          npm ci --ignore-scripts
+          npm install -g opencode-ai
+
+      - name: Configure OpenCode MiniMax
+        if: steps.pick.outputs.number != ''
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.config/opencode"
+          cat > "$HOME/.config/opencode/opencode.json" <<'JSON'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "provider": {
+              "minimax": {
+                "npm": "@ai-sdk/anthropic",
+                "options": {
+                  "baseURL": "https://api.minimax.io/anthropic/v1",
+                  "apiKey": "{env:MINIMAX_API_KEY}"
+                },
+                "models": {
+                  "MiniMax-M2.7": {
+                    "name": "MiniMax-M2.7"
+                  }
+                }
+              }
+            },
+            "permission": {
+              "bash": {
+                "git push*": "deny",
+                "git merge*": "deny",
+                "git tag*": "deny",
+                "git rebase*": "deny",
+                "gh pr merge*": "deny",
+                "gh release*": "deny",
+                "wrangler deploy*": "deny",
+                "vercel deploy*": "deny",
+                "supabase deploy*": "deny",
+                "cloudflared tunnel*": "deny",
+                "npm publish*": "deny",
+                "npm run deploy*": "deny",
+                "npx wrangler deploy*": "deny",
+                "npx vercel deploy*": "deny",
+                "pnpm publish*": "deny",
+                "pnpm run deploy*": "deny",
+                "bun publish*": "deny",
+                "bun run deploy*": "deny"
+              }
+            }
+          }
+          JSON
 
       - name: Restore repair brief
         if: steps.pick.outputs.number != ''
@@ -220,18 +269,17 @@ jobs:
           PR_TITLE: ${{ steps.pick.outputs.title }}
           PR_REASON: ${{ steps.pick.outputs.reason }}
 
-      - name: Run Codex repair
-        id: run_codex
-        if: steps.openai_secret.outputs.has_key == 'true' && steps.pick.outputs.number != ''
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: .github/codex/prompts/pr-auto-fix.md
-          output-file: codex-pr-auto-fix-output.md
-          safety-strategy: drop-sudo
-          sandbox: workspace-write
-          model: gpt-5.5
-          effort: high
+      - name: Run MiniMax repair
+        id: run_opencode
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.pick.outputs.number != ''
+        shell: bash
+        run: |
+          prompt="$(cat .github/codex/prompts/pr-auto-fix.md)"
+          opencode run \
+            --pure \
+            --model minimax/MiniMax-M2.7 \
+            --dangerously-skip-permissions \
+            "$prompt" > codex-pr-auto-fix-output.md
 
       - name: Upload repair artifact
         if: steps.pick.outputs.number != '' && hashFiles('codex-pr-auto-fix-output.md') != ''
@@ -239,6 +287,27 @@ jobs:
         with:
           name: codex-pr-auto-fix
           path: codex-pr-auto-fix-output.md
+
+      - name: Prepare repair PR body
+        id: pr_body
+        if: steps.pick.outputs.number != ''
+        shell: bash
+        run: |
+          body_delim="MINIMAX_BODY_$(date +%s%N)"
+          {
+            echo "body<<$body_delim"
+            echo 'MiniMax repaired this PR after the merge gate or review found a blocker.'
+            echo
+            echo 'Repair reason: ${{ steps.pick.outputs.reason }}'
+            echo
+            echo 'MiniMax result:'
+            if [ -f codex-pr-auto-fix-output.md ]; then
+              cat codex-pr-auto-fix-output.md
+            else
+              echo 'No model output file was produced.'
+            fi
+            echo "$body_delim"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Remove runtime-only files from PR diff
         if: steps.pick.outputs.number != ''
@@ -259,13 +328,7 @@ jobs:
             codex
             codex:auto-merge
           title: ${{ steps.pick.outputs.title }}
-          body: |
-            Codex repaired this PR after the merge gate or review found a blocker.
-
-            Repair reason: ${{ steps.pick.outputs.reason }}
-
-            Codex result:
-            ${{ steps.run_codex.outputs.final-message }}
+          body: ${{ steps.pr_body.outputs.body }}
 
       - name: Reset review label and comment
         if: steps.pick.outputs.number != '' && steps.cpr.outputs.pull-request-url != ''
