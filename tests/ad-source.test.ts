@@ -938,6 +938,102 @@ describe("searchAdsViaSourceResolver", () => {
     expect(result.ads).toHaveLength(1);
   });
 
+  it("does not serve advertiser cache fallback for multi-word keyword queries", async () => {
+    const browserSearch = vi.fn();
+    const apiSearch = vi.fn();
+    const fetchedAt = new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        cacheKey: "meta_library_browser:fp-boat-sale-advertiser:india:page-1",
+        provider: "meta_library_browser",
+        routeContext: "scheduled_warmup",
+        queryFingerprint: "fp-boat-sale-advertiser",
+        country: "India",
+        cursor: null,
+        payload: buildLiveBrowserResult({
+          ads: [
+            {
+              ...buildLiveBrowserResult().ads[0],
+              metaAdId: "meta-boat-sale-1",
+              advertiser: "boAt",
+              previewHeadline: "Phrase cache result",
+            },
+          ],
+        }),
+        fetchedAt,
+        expiresAt,
+        browserMsUsed: 2500,
+        createdAt: fetchedAt,
+        updatedAt: fetchedAt,
+      });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue({
+        provider: "meta_library_browser",
+        status: "cache_only",
+        failureClass: "login_wall",
+        summary: "Commercial discovery degraded and no cached results are available.",
+        lastSuccessAt: null,
+        lastFailureAt: new Date().toISOString(),
+        metadata: null,
+        updatedAt: new Date().toISOString(),
+      }),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "boat sale",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(apiSearch).not.toHaveBeenCalled();
+    expect(getDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "login_wall",
+      ads: [],
+    });
+  });
+
   it("keeps exact stale keyword cache ahead of advertiser fallback after a browser failure", async () => {
     const browserSearch = vi.fn().mockRejectedValue(new Error("Browser discovery failed"));
     const apiSearch = vi.fn();

@@ -764,8 +764,10 @@ async function trySameQueryAdvertiserCacheFallback(
 }
 
 function canUseSameQueryAdvertiserCache(query: NormalizedSavedQuery) {
+  const queryText = query.filters.query.trim();
   return (
-    Boolean(query.filters.query.trim()) &&
+    Boolean(queryText) &&
+    !/\s/.test(queryText) &&
     query.filters.platform === "all" &&
     query.filters.creativeType === "all" &&
     query.filters.status === "all" &&
