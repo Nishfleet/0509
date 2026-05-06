@@ -260,6 +260,7 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([
       current0509Result("ok", {
         degraded: true,
+        loginWall: true,
         matchCount: 7,
         sourceLabel: "Cached live results",
         note: "0509 rendered its degraded commercial discovery state.",
@@ -279,7 +280,7 @@ describe("production canary", () => {
     expect(report.degradedWarnings).toHaveLength(1);
     expect(report.liveSourceFailures).toHaveLength(1);
     expect(formatProductionCanaryReport(report)).toContain(
-      "search: failed fresh-live check for nykaa / advertiser (Cached live results, degraded, 7 ads)",
+      "search: failed fresh-live check for nykaa / advertiser (Cached live results, degraded, login wall, 7 ads)",
     );
   });
 

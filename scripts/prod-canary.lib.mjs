@@ -221,6 +221,15 @@ function formatLiveSourceFailure(result) {
   if (result.degraded) {
     details.push("degraded");
   }
+  if (result.loginWall) {
+    details.push("login wall");
+  }
+  if (result.rateLimited) {
+    details.push("rate limited");
+  }
+  if (result.blockedLikely) {
+    details.push("blocked likely");
+  }
   if (typeof result.matchCount === "number") {
     details.push(`${result.matchCount} ${result.matchCount === 1 ? "ad" : "ads"}`);
   }
