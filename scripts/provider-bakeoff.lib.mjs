@@ -166,13 +166,16 @@ export function buildMetaLibraryUrl(target) {
 }
 
 /**
- * @param {{ query: string, country?: string, mode?: SearchMode, baseUrl?: string }} target
+ * @param {{ query: string, country?: string, mode?: SearchMode, baseUrl?: string, freshLive?: boolean }} target
  */
 export function buildCurrent0509SearchUrl(target) {
   const url = new URL("/search", target.baseUrl ?? "https://0509.in");
   url.searchParams.set("query", target.query);
   url.searchParams.set("country", target.country ?? DEFAULT_COUNTRY);
   url.searchParams.set("mode", target.mode ?? DEFAULT_MODE);
+  if (target.freshLive) {
+    url.searchParams.set("fresh", "live");
+  }
   return url.toString();
 }
 
@@ -434,7 +437,7 @@ function classifyCurrent0509Outcome(analysis, ok) {
 
 /**
  * @param {ProbeTarget} target
- * @param {{ fetchImpl?: typeof fetch, baseUrl?: string, timeoutMs?: number }} [options]
+ * @param {{ fetchImpl?: typeof fetch, baseUrl?: string, timeoutMs?: number, freshLive?: boolean }} [options]
  * @returns {Promise<ProbeResult>}
  */
 export async function runCurrent0509Probe(target, options = {}) {
@@ -445,6 +448,7 @@ export async function runCurrent0509Probe(target, options = {}) {
     country: target.country,
     mode: target.mode,
     baseUrl: options.baseUrl,
+    freshLive: options.freshLive === true,
   });
   const startedAt = performance.now();
 
@@ -1057,7 +1061,7 @@ export async function runZyteProbe(target, options = {}) {
 /**
  * @param {ProviderName} provider
  * @param {ProbeTarget} target
- * @param {{ fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl }} [options]
+ * @param {{ fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, freshLive?: boolean }} [options]
  */
 export async function runProviderProbe(provider, target, options = {}) {
   if (provider === "current_0509") {
@@ -1079,7 +1083,7 @@ export async function runProviderProbe(provider, target, options = {}) {
 }
 
 /**
- * @param {{ providers?: ProviderName[], queries?: string[], country?: string, mode?: SearchMode, fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl }} [options]
+ * @param {{ providers?: ProviderName[], queries?: string[], country?: string, mode?: SearchMode, fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, freshLive?: boolean }} [options]
  */
 export async function benchmarkProviders(options = {}) {
   /** @type {ProviderName[]} */

@@ -24,6 +24,7 @@ export { CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 
 export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
+  cachePolicy?: "default" | "bypass";
 }
 
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
@@ -240,6 +241,7 @@ export async function searchAdsViaSourceResolver(
   const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
   const provider = resolveCommercialDiscoveryProvider(effectiveEnv);
   const routeContext = options.purpose ?? "public_search";
+  const bypassCache = options.cachePolicy === "bypass";
   const providerState =
     provider !== "demo" && effectiveEnv.DB
       ? await getDiscoveryProviderState(effectiveEnv, provider)
@@ -260,7 +262,8 @@ export async function searchAdsViaSourceResolver(
     country: query.filters.country || "India",
     cursor,
   });
-  const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
+  const cached =
+    effectiveEnv.DB && !bypassCache ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
   if (usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
     return {
@@ -288,15 +291,17 @@ export async function searchAdsViaSourceResolver(
     }
 
     if (routeContext === "public_search") {
-      const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
-        provider,
-        query,
-        cursor,
-        routeContext,
-        failureClass: providerState.failureClass,
-      });
-      if (advertiserCacheFallback) {
-        return advertiserCacheFallback;
+      if (!bypassCache) {
+        const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
+          provider,
+          query,
+          cursor,
+          routeContext,
+          failureClass: providerState.failureClass,
+        });
+        if (advertiserCacheFallback) {
+          return advertiserCacheFallback;
+        }
       }
 
       const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
@@ -344,15 +349,17 @@ export async function searchAdsViaSourceResolver(
       };
     }
 
-    const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
-      provider,
-      query,
-      cursor,
-      routeContext,
-      failureClass: providerState.failureClass,
-    });
-    if (advertiserCacheFallback) {
-      return advertiserCacheFallback;
+    if (!bypassCache) {
+      const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
+        provider,
+        query,
+        cursor,
+        routeContext,
+        failureClass: providerState.failureClass,
+      });
+      if (advertiserCacheFallback) {
+        return advertiserCacheFallback;
+      }
     }
 
     const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
@@ -377,7 +384,7 @@ export async function searchAdsViaSourceResolver(
   }
 
   const discoveryLease =
-    canUseDistributedDiscoveryLease(effectiveEnv.DB)
+    !bypassCache && canUseDistributedDiscoveryLease(effectiveEnv.DB)
       ? await acquireDiscoveryQueryLease(effectiveEnv, {
           cacheKey,
           provider,
@@ -439,22 +446,24 @@ export async function searchAdsViaSourceResolver(
       const timestamp = new Date().toISOString();
 
       if (effectiveEnv.DB) {
-        await upsertDiscoveryCacheEntry(effectiveEnv, {
-          cacheKey,
-          provider,
-          routeContext,
-          queryFingerprint: fingerprintSavedQuery(query),
-          country: query.filters.country || "India",
-          cursor: cursor ?? null,
-          payload: {
-            ...liveResult,
-            source: provider,
+        if (!bypassCache) {
+          await upsertDiscoveryCacheEntry(effectiveEnv, {
+            cacheKey,
             provider,
-          },
-          fetchedAt: timestamp,
-          expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
-          browserMsUsed,
-        });
+            routeContext,
+            queryFingerprint: fingerprintSavedQuery(query),
+            country: query.filters.country || "India",
+            cursor: cursor ?? null,
+            payload: {
+              ...liveResult,
+              source: provider,
+              provider,
+            },
+            fetchedAt: timestamp,
+            expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
+            browserMsUsed,
+          });
+        }
         await createDiscoveryFetchLog(effectiveEnv, {
           provider,
           routeContext,
@@ -548,15 +557,17 @@ export async function searchAdsViaSourceResolver(
       };
     }
 
-    const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
-      provider,
-      query,
-      cursor,
-      routeContext,
-      failureClass,
-    });
-    if (advertiserCacheFallback) {
-      return advertiserCacheFallback;
+    if (!bypassCache) {
+      const advertiserCacheFallback = await trySameQueryAdvertiserCacheFallback(effectiveEnv, {
+        provider,
+        query,
+        cursor,
+        routeContext,
+        failureClass,
+      });
+      if (advertiserCacheFallback) {
+        return advertiserCacheFallback;
+      }
     }
 
     const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {

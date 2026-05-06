@@ -1804,6 +1804,63 @@ describe("searchAdsViaSourceResolver", () => {
     expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
   });
 
+  it("bypasses shared discovery cache for fresh live probes", async () => {
+    const browserSearch = vi.fn().mockResolvedValue(buildLiveBrowserResult());
+    const getDiscoveryCacheEntry = vi.fn();
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+        cachePolicy: "bypass",
+      },
+    );
+
+    expect(getDiscoveryCacheEntry).not.toHaveBeenCalled();
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
+    expect(createDiscoveryFetchLog).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+  });
+
   it("honors stored provider cooldown metadata beyond the default cooldown window", async () => {
     const browserSearch = vi.fn();
     const getDiscoveryProviderState = vi.fn().mockResolvedValue({

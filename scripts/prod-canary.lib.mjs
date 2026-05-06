@@ -167,6 +167,7 @@ export async function runProductionCanary(options = {}) {
         country,
         mode,
         baseUrl,
+        freshLive: true,
       })),
     );
   }

@@ -56,11 +56,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+  const shouldBypassDiscoveryCache =
+    url.searchParams.get("fresh") === "live" &&
+    request.headers.get("user-agent")?.startsWith("0509-provider-bakeoff/") === true;
   const result = await searchAdsViaSourceResolver(
     env,
     normalizeSavedQuery(parsed.mode, parsed.filters),
     url.searchParams.get("after"),
-    { purpose: "public_search" },
+    {
+      purpose: "public_search",
+      cachePolicy: shouldBypassDiscoveryCache ? "bypass" : "default",
+    },
   );
   const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
     env,

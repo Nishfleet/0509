@@ -51,6 +51,17 @@ describe("provider bakeoff helpers", () => {
     ).toBe("https://0509.in/search?query=bigspy&country=India&mode=advertiser");
   });
 
+  it("marks current 0509 canary probes as fresh live checks", () => {
+    expect(
+      buildCurrent0509SearchUrl({
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+        freshLive: true,
+      }),
+    ).toBe("https://0509.in/search?query=bigspy&country=India&mode=advertiser&fresh=live");
+  });
+
   it("builds the Browserbase session request", () => {
     const request = buildBrowserbaseSessionRequest(
       {

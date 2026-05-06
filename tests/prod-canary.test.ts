@@ -161,12 +161,14 @@ describe("production canary", () => {
       1,
       expect.objectContaining({
         mode: "advertiser",
+        freshLive: true,
       }),
     );
     expect(benchmarkImpl).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         mode: "keyword",
+        freshLive: true,
       }),
     );
     expect(formatProductionCanaryReport(report)).toContain(
