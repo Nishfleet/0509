@@ -39,6 +39,13 @@ jobs:
             echo "has_key=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fail missing MiniMax secret
+        if: steps.ai_secret.outputs.has_key == 'false'
+        shell: bash
+        run: |
+          echo "MINIMAX_API_KEY is required for Codex Issue To PR."
+          exit 1
+
       - uses: actions/checkout@v6
         if: steps.ai_secret.outputs.has_key == 'true'
         with:
@@ -116,6 +123,7 @@ jobs:
           JSON
 
       - name: Prepare task brief
+        id: task_brief
         if: steps.ai_secret.outputs.has_key == 'true'
         uses: actions/github-script@v8
         env:
@@ -129,12 +137,20 @@ jobs:
             let title = "Manual Codex task";
             let body = process.env.DISPATCH_TASK || "";
             let source = `workflow_dispatch run ${context.runId}`;
+            let targetIssueNumber = "";
 
             if (context.eventName === "issues") {
               const issue = context.payload.issue;
               title = issue.title || "";
               body = issue.body || "";
               source = `issue #${issue.number} opened by ${issue.user?.login || "unknown"} and labeled by ${context.actor}`;
+              targetIssueNumber = String(issue.number);
+            } else {
+              const issueMatch =
+                body.match(/(?:^|\b)issue\s+#?(\d+)\b/i) ||
+                body.match(/(?:^|\s)#(\d+)\b/) ||
+                body.match(/\/issues\/(\d+)(?:\b|$)/i);
+              if (issueMatch) targetIssueNumber = issueMatch[1];
             }
 
             const task = [
@@ -154,6 +170,7 @@ jobs:
             ].join("\n");
 
             fs.writeFileSync(".codex-runtime/issue-task.md", task);
+            core.setOutput("issue_number", targetIssueNumber);
 
       - name: Run MiniMax implementation
         id: run_opencode
@@ -169,17 +186,35 @@ jobs:
 
           for model in "${models[@]}"; do
             echo "Trying implementation model: $model"
-            if timeout 330s opencode run \
+            safe_model="${model//\//-}"
+            safe_model="${safe_model//./-}"
+            output_file="codex-issue-to-pr-${safe_model}.md"
+
+            set +e
+            timeout 330s opencode run \
               --pure \
               --model "$model" \
               --dangerously-skip-permissions \
-              "$prompt" > codex-issue-to-pr-output.md 2>&1; then
+              "$prompt" > "$output_file" 2>&1
+            status=$?
+            set -e
+
+            if [ "$status" -eq 0 ]; then
+              mv "$output_file" codex-issue-to-pr-output.md
               echo "ok=true" >> "$GITHUB_OUTPUT"
               echo "model=$model" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            status=$?
-            echo "Implementation model failed: $model status=$status" >> codex-issue-to-pr-failures.log
+
+            {
+              echo "Implementation model failed: $model status=$status"
+              if [ "$status" = "124" ]; then
+                echo "Reason: model attempt timed out."
+              fi
+              echo "--- output tail ($model) ---"
+              tail -n 80 "$output_file" || true
+              echo
+            } >> codex-issue-to-pr-failures.log
           done
 
           {
@@ -202,10 +237,13 @@ jobs:
       - name: Surface MiniMax failure
         if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'false'
         uses: actions/github-script@v8
+        env:
+          TARGET_ISSUE_NUMBER: ${{ steps.task_brief.outputs.issue_number }}
         with:
           github-token: ${{ github.token }}
           script: |
             const fs = require("fs");
+            const targetIssueNumber = Number(process.env.TARGET_ISSUE_NUMBER || 0);
             const output = fs.existsSync("codex-issue-to-pr-output.md")
               ? fs.readFileSync("codex-issue-to-pr-output.md", "utf8").slice(0, 6000)
               : "No output file was produced.";
@@ -218,11 +256,11 @@ jobs:
               output,
               "```",
             ].join("\n");
-            if (context.eventName === "issues") {
+            if (targetIssueNumber) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.issue.number,
+                issue_number: targetIssueNumber,
                 body,
               });
             } else {
@@ -234,6 +272,13 @@ jobs:
                 labels: ["codex", "codex:needs-review"],
               });
             }
+
+      - name: Fail MiniMax implementation failure
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'false'
+        shell: bash
+        run: |
+          echo "MiniMax issue-to-PR did not complete with any configured fallback model."
+          exit 1
 
       - name: Prepare PR body
         id: pr_body
@@ -279,19 +324,22 @@ jobs:
       - name: Surface empty MiniMax result
         if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'false'
         uses: actions/github-script@v8
+        env:
+          TARGET_ISSUE_NUMBER: ${{ steps.task_brief.outputs.issue_number }}
         with:
           github-token: ${{ github.token }}
           script: |
+            const targetIssueNumber = Number(process.env.TARGET_ISSUE_NUMBER || 0);
             const body = [
               "MiniMax completed but left no repository changes, so no PR was created.",
               "",
               `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             ].join("\n");
-            if (context.eventName === "issues") {
+            if (targetIssueNumber) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.issue.number,
+                issue_number: targetIssueNumber,
                 body,
               });
             } else {
@@ -303,6 +351,13 @@ jobs:
                 labels: ["codex", "codex:needs-review"],
               });
             }
+
+      - name: Fail empty MiniMax result
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'false'
+        shell: bash
+        run: |
+          echo "MiniMax completed but left no repository changes."
+          exit 1
 
       - name: Ensure automation labels exist
         if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'true'
@@ -334,7 +389,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ github.token }}
-          branch: "codex/issue-${{ github.event.issue.number || github.run_id }}"
+          branch: "codex/issue-${{ steps.task_brief.outputs.issue_number || github.run_id }}"
           delete-branch: true
           draft: false
           labels: |
@@ -344,7 +399,7 @@ jobs:
           body: ${{ steps.pr_body.outputs.body }}
 
       - name: Comment on issue
-        if: steps.cpr.outputs.pull-request-url != '' && github.event_name == 'issues'
+        if: steps.cpr.outputs.pull-request-url != '' && steps.task_brief.outputs.issue_number != ''
         uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
@@ -352,8 +407,9 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.issue.number,
+              issue_number: Number(process.env.TARGET_ISSUE_NUMBER),
               body: `Codex opened a PR: ${process.env.PR_URL}`,
             });
         env:
           PR_URL: ${{ steps.cpr.outputs.pull-request-url }}
+          TARGET_ISSUE_NUMBER: ${{ steps.task_brief.outputs.issue_number }}

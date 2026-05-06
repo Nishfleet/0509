@@ -34,6 +34,13 @@ jobs:
             echo "has_key=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fail missing OpenCode Go secret
+        if: steps.ai_secret.outputs.has_key == 'false'
+        shell: bash
+        run: |
+          echo "OPENCODE_GO_API_KEY is required for Codex PR Review."
+          exit 1
+
       - uses: actions/checkout@v6
         if: steps.ai_secret.outputs.has_key == 'true'
         with:
@@ -138,18 +145,36 @@ jobs:
 
           for model in "${models[@]}"; do
             echo "Trying review model: $model"
-            if timeout 140s opencode run \
+            safe_model="${model//\//-}"
+            safe_model="${safe_model//./-}"
+            output_file="codex-output-${safe_model}.md"
+
+            set +e
+            timeout 140s opencode run \
               "$prompt" \
               --pure \
               --model "$model" \
               --agent ci-reviewer \
-              --file .codex-runtime/pr-review-context.md > codex-output.md 2>&1; then
+              --file .codex-runtime/pr-review-context.md > "$output_file" 2>&1
+            status=$?
+            set -e
+
+            if [ "$status" -eq 0 ]; then
+              mv "$output_file" codex-output.md
               echo "ok=true" >> "$GITHUB_OUTPUT"
               echo "model=$model" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            status=$?
-            echo "Review model failed: $model status=$status" >> codex-review-failures.log
+
+            {
+              echo "Review model failed: $model status=$status"
+              if [ "$status" = "124" ]; then
+                echo "Reason: model attempt timed out."
+              fi
+              echo "--- output tail ($model) ---"
+              tail -n 80 "$output_file" || true
+              echo
+            } >> codex-review-failures.log
           done
 
           {
@@ -189,3 +214,10 @@ jobs:
         with:
           name: codex-pr-review
           path: codex-output.md
+
+      - name: Fail OpenCode Go review failure
+        if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'false'
+        shell: bash
+        run: |
+          echo "OpenCode Go review could not complete with any configured fallback model."
+          exit 1
