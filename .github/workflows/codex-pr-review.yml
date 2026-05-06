@@ -19,64 +19,134 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
     steps:
-      - name: Check OpenAI secret
-        id: openai_secret
+      - name: Check OpenCode Go secret
+        id: ai_secret
         shell: bash
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
+          if [ -z "$OPENCODE_GO_API_KEY" ]; then
             echo "has_key=false" >> "$GITHUB_OUTPUT"
-            echo "OPENAI_API_KEY is not configured; skipping Codex review."
+            echo "OPENCODE_GO_API_KEY is not configured; skipping OpenCode Go review."
           else
-            echo "::add-mask::$OPENAI_API_KEY"
+            echo "::add-mask::$OPENCODE_GO_API_KEY"
             echo "has_key=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v6
-        if: steps.openai_secret.outputs.has_key == 'true'
+        if: steps.ai_secret.outputs.has_key == 'true'
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}
 
       - name: Pre-fetch PR refs
-        if: steps.openai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target'
+        if: steps.ai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target'
         shell: bash
         run: |
           git fetch --no-tags origin \
             "${{ github.event.pull_request.base.ref }}" \
             "+refs/pull/${{ github.event.pull_request.number }}/head"
 
-      - name: Run Codex review
-        id: run_codex
-        if: steps.openai_secret.outputs.has_key == 'true'
-        uses: openai/codex-action@v1
+      - uses: actions/setup-node@v6
+        if: steps.ai_secret.outputs.has_key == 'true'
         with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: .github/codex/prompts/pr-review.md
-          output-file: codex-output.md
-          safety-strategy: drop-sudo
-          sandbox: read-only
-          model: gpt-5.5
-          effort: high
+          node-version: "22"
+
+      - name: Install OpenCode
+        if: steps.ai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: npm install -g opencode-ai
+
+      - name: Configure OpenCode reviewer
+        if: steps.ai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.config/opencode/agents"
+          cat > "$HOME/.config/opencode/opencode.json" <<'JSON'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "provider": {
+              "opencode-go": {
+                "options": {
+                  "apiKey": "{env:OPENCODE_GO_API_KEY}"
+                }
+              }
+            }
+          }
+          JSON
+          cat > "$HOME/.config/opencode/agents/ci-reviewer.md" <<'EOF'
+          ---
+          description: Read-only GitHub PR reviewer
+          mode: primary
+          model: opencode-go/glm-5.1
+          permission:
+            "*": deny
+          ---
+
+          You review the attached PR context only. Do not use tools, run commands, edit files, reveal secrets, or ask for credentials.
+          EOF
+
+      - name: Prepare PR review context
+        if: steps.ai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: |
+          mkdir -p .codex-runtime
+          base="${{ github.event.pull_request.base.sha || '' }}"
+          head="$(git rev-parse HEAD)"
+          {
+            echo "# PR Review Context"
+            echo
+            echo "Repository: ${{ github.repository }}"
+            echo "PR: ${{ github.event.pull_request.number || 'workflow_dispatch' }}"
+            echo "Title: ${{ github.event.pull_request.title || github.ref_name }}"
+            echo
+            echo "## PR Body"
+            cat <<'PR_BODY'
+          ${{ github.event.pull_request.body || '' }}
+          PR_BODY
+            echo
+            if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+              echo "## Changed Files"
+              git diff --name-status "$base"...HEAD
+              echo
+              echo "## Diff"
+              git diff --unified=80 "$base"...HEAD
+            else
+              echo "## Latest Commit"
+              git show --stat --patch --unified=80 "$head"
+            fi
+          } > .codex-runtime/pr-review-context.md
+
+      - name: Run OpenCode Go review
+        id: run_opencode
+        if: steps.ai_secret.outputs.has_key == 'true'
+        shell: bash
+        run: |
+          prompt="$(cat .github/codex/prompts/pr-review.md)"
+          opencode run \
+            "$prompt" \
+            --pure \
+            --model opencode-go/glm-5.1 \
+            --agent ci-reviewer \
+            --file .codex-runtime/pr-review-context.md > codex-output.md
 
       - name: Post review comment
-        if: steps.openai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target' && steps.run_codex.outputs.final-message != ''
+        if: steps.ai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target' && hashFiles('codex-output.md') != ''
         uses: actions/github-script@v8
-        env:
-          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
         with:
           github-token: ${{ github.token }}
           script: |
+            const fs = require("fs");
+            const body = fs.readFileSync("codex-output.md", "utf8").trim();
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: `<!-- codex-pr-review -->\n${process.env.CODEX_FINAL_MESSAGE}`,
+              body: `<!-- codex-pr-review -->\n${body}`,
             });
 
       - name: Upload review artifact
-        if: steps.openai_secret.outputs.has_key == 'true' && hashFiles('codex-output.md') != ''
+        if: steps.ai_secret.outputs.has_key == 'true' && hashFiles('codex-output.md') != ''
         uses: actions/upload-artifact@v7
         with:
           name: codex-pr-review
