@@ -2581,6 +2581,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
       summary: string;
       lastSuccessAt: string | null;
       lastFailureAt: string | null;
+      metadataJson: string | null;
       updatedAt: string;
     }>(
       env,
@@ -2592,6 +2593,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
           summary,
           last_success_at AS lastSuccessAt,
           last_failure_at AS lastFailureAt,
+          metadata_json AS metadataJson,
           updated_at AS updatedAt
         FROM discovery_provider_state
         ORDER BY updated_at DESC
@@ -2622,7 +2624,31 @@ export async function getOperatorSnapshot(env: AppEnv) {
     deliveryFailures,
     degradedWatchlists,
     discoveryFailures: discoveryFailures.map(toOperatorDiscoveryFailure),
-    discoveryProviders,
+    discoveryProviders: discoveryProviders.map(toOperatorDiscoveryProvider),
+  };
+}
+
+function toOperatorDiscoveryProvider(row: {
+  provider: AdDiscoveryProvider;
+  status: MetaIntegrationStatus["status"];
+  failureClass: DiscoveryFailureClass | null;
+  summary: string;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  metadataJson: string | null;
+  updatedAt: string;
+}) {
+  const metadata = parseJson<Record<string, unknown> | null>(row.metadataJson, null);
+
+  return {
+    provider: row.provider,
+    status: row.status,
+    failureClass: row.failureClass,
+    summary: row.summary,
+    lastErrorMessage: stringMetadataValue(metadata, "errorMessage"),
+    lastSuccessAt: row.lastSuccessAt,
+    lastFailureAt: row.lastFailureAt,
+    updatedAt: row.updatedAt,
   };
 }
 

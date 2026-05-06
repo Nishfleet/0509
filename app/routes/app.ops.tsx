@@ -163,6 +163,7 @@ export default function OpsRoute() {
                 <p className="section-label">{formatDiscoveryProvider(item.provider)}</p>
                 <h3>{formatDiscoveryStatus(item.status)}</h3>
                 <p>{item.summary}</p>
+                {item.lastErrorMessage ? <p>{item.lastErrorMessage}</p> : null}
                 <p className="muted-text">
                   {item.lastFailureAt
                     ? `Last failure ${formatTimestamp(item.lastFailureAt)}`

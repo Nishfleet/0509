@@ -418,6 +418,37 @@ describe("getOperatorSnapshot", () => {
       failureClass: "login_wall",
     });
   });
+
+  it("surfaces discovery provider error messages for operator triage", async () => {
+    const mock = createMockDb((sql) => {
+      if (!sql.includes("FROM discovery_provider_state")) {
+        return [];
+      }
+
+      return [
+        {
+          provider: "meta_api",
+          status: "degraded",
+          failureClass: "login_wall",
+          summary: "Meta Ad Library API fallback failed while browser capture is unavailable.",
+          lastSuccessAt: null,
+          lastFailureAt: "2026-05-06T00:52:54.103Z",
+          metadataJson: JSON.stringify({
+            errorMessage: "Error validating access token: Session has expired.",
+          }),
+          updatedAt: "2026-05-06T00:52:54.330Z",
+        },
+      ];
+    });
+
+    const snapshot = await getOperatorSnapshot({ DB: mock.db } as never);
+
+    expect(snapshot.discoveryProviders[0]).toMatchObject({
+      provider: "meta_api",
+      status: "degraded",
+      lastErrorMessage: "Error validating access token: Session has expired.",
+    });
+  });
 });
 
 describe("upsertProofTarget", () => {
