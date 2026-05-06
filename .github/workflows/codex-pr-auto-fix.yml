@@ -21,9 +21,24 @@ concurrency:
 jobs:
   auto-fix:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
+      - name: Check OpenAI secret
+        id: openai_secret
+        shell: bash
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "OPENAI_API_KEY is not configured; skipping Codex repair."
+          else
+            echo "::add-mask::$OPENAI_API_KEY"
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Pick blocked Codex PR
         id: pick
+        if: steps.openai_secret.outputs.has_key == 'true'
         uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
@@ -207,7 +222,7 @@ jobs:
 
       - name: Run Codex repair
         id: run_codex
-        if: steps.pick.outputs.number != ''
+        if: steps.openai_secret.outputs.has_key == 'true' && steps.pick.outputs.number != ''
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}

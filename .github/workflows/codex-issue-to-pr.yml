@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: Plain-English task for Codex to turn into a draft PR
+        description: Plain-English task for Codex to turn into a PR
         required: true
         type: string
 
@@ -144,7 +144,7 @@ jobs:
               }
             }
 
-      - name: Create draft pull request
+      - name: Create pull request
         id: cpr
         if: steps.openai_secret.outputs.has_key == 'true'
         uses: peter-evans/create-pull-request@v8
@@ -175,7 +175,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.issue.number,
-              body: `Codex opened a draft PR: ${process.env.PR_URL}`,
+              body: `Codex opened a PR: ${process.env.PR_URL}`,
             });
         env:
           PR_URL: ${{ steps.cpr.outputs.pull-request-url }}

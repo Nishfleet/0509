@@ -37,10 +37,10 @@ jobs:
         if: steps.openai_secret.outputs.has_key == 'true'
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}
+          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}
 
       - name: Pre-fetch PR refs
-        if: steps.openai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request'
+        if: steps.openai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target'
         shell: bash
         run: |
           git fetch --no-tags origin \
@@ -61,7 +61,7 @@ jobs:
           effort: high
 
       - name: Post review comment
-        if: steps.openai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request' && steps.run_codex.outputs.final-message != ''
+        if: steps.openai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target' && steps.run_codex.outputs.final-message != ''
         uses: actions/github-script@v8
         env:
           CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
