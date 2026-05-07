@@ -67,11 +67,18 @@ jobs:
       - name: Run production canary
         id: canary_guard
         shell: bash
+        env:
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
         run: |
           set +e
           {
             echo "[production canary]"
-            npm run canary:prod
+            if [ -z "${CANARY_BYPASS_TOKEN:-}" ]; then
+              echo "CANARY_BYPASS_TOKEN is not configured for the post-merge canary."
+              false
+            else
+              npm run canary:prod
+            fi
           } > codex-post-merge-canary.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
