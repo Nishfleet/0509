@@ -261,6 +261,7 @@ describe("search loader", () => {
       request: new Request("http://localhost/search?query=nykaa&fresh=live", {
         headers: {
           "user-agent": "0509-provider-bakeoff/1.0",
+          "x-0509-canary-token": "signed-canary-token-extra",
         },
       }),
     } as never);

@@ -335,7 +335,7 @@ export async function searchAdsViaSourceResolver(
     provider === "meta_library_browser" &&
     routeContext === "public_search" &&
     providerState &&
-    shouldPreferMetaApiFallbackForPublicSearch(providerState)
+    shouldUseRecentBrowserFailureFallbacksForPublicSearch(providerState)
   ) {
     if (usableCached) {
       return {
@@ -1055,7 +1055,7 @@ function shouldUseProviderCooldown(
   return Date.now() - updatedAtMs < PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS;
 }
 
-function shouldPreferMetaApiFallbackForPublicSearch(
+function shouldUseRecentBrowserFailureFallbacksForPublicSearch(
   providerState: Awaited<ReturnType<typeof getDiscoveryProviderState>>,
 ) {
   if (!providerState?.updatedAt || !providerState.failureClass || providerState.status === "healthy") {

@@ -681,7 +681,7 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
-  it("uses Meta API fallback before retrying recently failed browser capture for public search", async () => {
+  it("uses public-search fallbacks before retrying recently failed browser capture", async () => {
     const browserSearch = vi.fn();
     const apiSearch = vi.fn().mockResolvedValue(
       buildLiveBrowserResult({

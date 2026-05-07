@@ -56,11 +56,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
-  const canaryBypassToken = env.CANARY_BYPASS_TOKEN?.trim();
-  const suppliedCanaryToken = request.headers.get("x-0509-canary-token")?.trim();
   const shouldBypassDiscoveryCache =
-    Boolean(canaryBypassToken) &&
-    suppliedCanaryToken === canaryBypassToken &&
+    canaryBypassTokenMatches(
+      env.CANARY_BYPASS_TOKEN,
+      request.headers.get("x-0509-canary-token"),
+    ) &&
     url.searchParams.get("fresh") === "live" &&
     request.headers.get("user-agent")?.startsWith("0509-provider-bakeoff/") === true;
   const result = await searchAdsViaSourceResolver(
@@ -87,6 +87,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     collections,
     session,
   };
+}
+
+function canaryBypassTokenMatches(
+  configuredToken: string | undefined,
+  suppliedToken: string | null,
+) {
+  const expected = configuredToken?.trim();
+  const received = suppliedToken?.trim();
+  if (!expected || !received) {
+    return false;
+  }
+
+  let mismatch = expected.length ^ received.length;
+  const maxLength = Math.max(expected.length, received.length);
+  for (let index = 0; index < maxLength; index += 1) {
+    const expectedCode = index < expected.length ? expected.charCodeAt(index) : 0;
+    const receivedCode = index < received.length ? received.charCodeAt(index) : 0;
+    mismatch |= expectedCode ^ receivedCode;
+  }
+
+  return mismatch === 0;
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
