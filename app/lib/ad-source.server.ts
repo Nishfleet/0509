@@ -89,7 +89,7 @@ function normalizeSearchResponse(
 }
 
 export function resolveCommercialDiscoveryProvider(env: AppEnv): AdDiscoveryProvider {
-  if (env.BROWSER || hasBrowserRunQuickActions(env)) {
+  if (env.BROWSER || hasBrowserRunQuickActions(env) || env.BROWSERLESS_TOKEN?.trim()) {
     return "meta_library_browser";
   }
 
@@ -126,6 +126,8 @@ async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
       ...env,
       AI: env.AI ?? requestEnv.AI,
       BROWSER: requestEnv.BROWSER,
+      BROWSERLESS_BQL_URL: env.BROWSERLESS_BQL_URL ?? requestEnv.BROWSERLESS_BQL_URL,
+      BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN ?? requestEnv.BROWSERLESS_TOKEN,
       BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? requestEnv.BROWSER_RUN_ACCOUNT_ID,
       BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? requestEnv.BROWSER_RUN_API_TOKEN,
       DB: env.DB ?? requestEnv.DB,
@@ -139,6 +141,8 @@ async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
       ...requestEnv,
       ...env,
       AI: env.AI ?? requestEnv.AI,
+      BROWSERLESS_BQL_URL: env.BROWSERLESS_BQL_URL ?? requestEnv.BROWSERLESS_BQL_URL,
+      BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN ?? requestEnv.BROWSERLESS_TOKEN,
       BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? requestEnv.BROWSER_RUN_ACCOUNT_ID,
       BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? requestEnv.BROWSER_RUN_API_TOKEN,
       DB: env.DB ?? requestEnv.DB,
@@ -147,8 +151,25 @@ async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
     };
   }
 
+  if (requestEnv?.BROWSERLESS_TOKEN?.trim()) {
+    return {
+      ...requestEnv,
+      ...env,
+      AI: env.AI ?? requestEnv.AI,
+      BROWSERLESS_BQL_URL: env.BROWSERLESS_BQL_URL ?? requestEnv.BROWSERLESS_BQL_URL,
+      BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN ?? requestEnv.BROWSERLESS_TOKEN,
+      DB: env.DB ?? requestEnv.DB,
+      LANDING_PAGE_ARTIFACTS: env.LANDING_PAGE_ARTIFACTS ?? requestEnv.LANDING_PAGE_ARTIFACTS,
+      MONITORING_WORKFLOW: env.MONITORING_WORKFLOW ?? requestEnv.MONITORING_WORKFLOW,
+    };
+  }
+
   const runtimeEnv = await getRuntimeWorkerEnv();
-  if (!hasBrowserBinding(runtimeEnv?.BROWSER) && !hasBrowserRunQuickActions(runtimeEnv)) {
+  if (
+    !hasBrowserBinding(runtimeEnv?.BROWSER) &&
+    !hasBrowserRunQuickActions(runtimeEnv) &&
+    !runtimeEnv?.BROWSERLESS_TOKEN?.trim()
+  ) {
     return env;
   }
 
@@ -157,6 +178,8 @@ async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
     ...env,
     AI: env.AI ?? runtimeEnv.AI,
     BROWSER: hasBrowserBinding(env.BROWSER) ? env.BROWSER : runtimeEnv.BROWSER,
+    BROWSERLESS_BQL_URL: env.BROWSERLESS_BQL_URL ?? runtimeEnv.BROWSERLESS_BQL_URL,
+    BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN ?? runtimeEnv.BROWSERLESS_TOKEN,
     BROWSER_RUN_ACCOUNT_ID: env.BROWSER_RUN_ACCOUNT_ID ?? runtimeEnv.BROWSER_RUN_ACCOUNT_ID,
     BROWSER_RUN_API_TOKEN: env.BROWSER_RUN_API_TOKEN ?? runtimeEnv.BROWSER_RUN_API_TOKEN,
     DB: env.DB ?? runtimeEnv.DB,

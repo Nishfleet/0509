@@ -226,6 +226,66 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("uses Browserless BQL as a live commercial fallback when Browser Run is unavailable", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            html: {
+              html: `
+                <html>
+                  <body>
+                    <article>
+                      <strong>Nykaa</strong>
+                      <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
+                      <a href="/ads/library/?id=1234567890">View ad details</a>
+                      <a href="https://www.nykaa.com/glow-sale">Shop now</a>
+                    </article>
+                  </body>
+                </html>
+              `,
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+      },
+      buildQuery(),
+    );
+    const requestBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"));
+
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/stealth/bql?token=browserless-token");
+    expect(requestBody.variables).toMatchObject({
+      selector: 'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]',
+      userAgent: expect.stringContaining("iPhone"),
+    });
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      ads: [
+        expect.objectContaining({
+          metaAdId: "1234567890",
+          advertiser: "nykaa",
+          landingPageUrl: "https://www.nykaa.com/glow-sale",
+          source: "meta_library_browser",
+        }),
+      ],
+    });
+  });
+
   it("fails fast when Browser Run reports no new browser acquisitions are allowed", async () => {
     const launch = vi.fn();
     const sessions = vi.fn().mockResolvedValue([]);
