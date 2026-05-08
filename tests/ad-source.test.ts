@@ -178,6 +178,28 @@ describe("resolveCommercialAdSourceStatus", () => {
     });
     expect(status.summary).toContain("Browser Run");
   });
+
+  it("treats Browserless BQL config as a live browser-backed provider", async () => {
+    vi.doMock(
+      "cloudflare:workers",
+      () => ({
+        env: {},
+      }),
+    );
+
+    const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
+
+    const status = await resolveCommercialAdSourceStatus({
+      BROWSERLESS_TOKEN: "browserless-token",
+    } as never);
+
+    expect(status).toMatchObject({
+      status: "degraded",
+      provider: "meta_library_browser",
+      mode: "live",
+    });
+    expect(status.summary).toContain("Browser Run");
+  });
 });
 
 describe("searchAdsViaSourceResolver", () => {
