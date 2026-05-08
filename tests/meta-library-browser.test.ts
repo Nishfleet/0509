@@ -643,6 +643,91 @@ describe("searchMetaLibraryByBrowser", () => {
     ]);
   });
 
+  it("falls back to native Quick Actions scrape when content script injection is blocked", async () => {
+    const launch = vi.fn();
+    const sessions = vi.fn();
+    const limits = vi.fn();
+    const connect = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: "<html><body><main>No injected payload yet</main></body></html>",
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1000",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: [
+              {
+                selector: 'a[href*="/ads/library/?id="]',
+                results: [
+                  {
+                    attributes: [
+                      {
+                        name: "href",
+                        value: "/ads/library/?id=1234567890",
+                      },
+                    ],
+                    html: '<a href="/ads/library/?id=1234567890">Nykaa serum sale Shop now Instagram Facebook</a>',
+                    text: "Nykaa serum sale Shop now Instagram Facebook",
+                  },
+                ],
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1000",
+            },
+          },
+        ),
+      );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+      },
+      buildQuery(),
+    );
+    const scrapeRequest = JSON.parse(String(fetchSpy.mock.calls[1]?.[1]?.body ?? "{}"));
+
+    expect(String(fetchSpy.mock.calls[1]?.[0])).toContain("/browser-rendering/scrape");
+    expect(scrapeRequest.elements).toEqual([
+      {
+        selector: 'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]',
+      },
+    ]);
+    expect(result.ads).toEqual([
+      expect.objectContaining({
+        metaAdId: "1234567890",
+        advertiser: "nykaa",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+        platforms: expect.arrayContaining(["Instagram", "Facebook"]),
+        source: "meta_library_browser",
+      }),
+    ]);
+  });
+
   it("classifies Quick Actions 429 errors as rate limited", async () => {
     const launch = vi.fn();
     const sessions = vi.fn();

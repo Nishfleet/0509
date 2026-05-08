@@ -2,8 +2,10 @@ import puppeteer from "@cloudflare/puppeteer";
 
 import { inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
 import {
+  type BrowserRunQuickActionScrapeElement,
   BrowserRunQuickActionError,
   captureBrowserRunQuickActionContent,
+  captureBrowserRunQuickActionScrape,
   hasBrowserRunQuickActions,
 } from "~/lib/browser-run.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -31,6 +33,7 @@ const MOBILE_USER_AGENT =
 const QUICK_ACTION_RUNNER_SCRIPT_ID = "__0509_ad_library_extractor";
 const QUICK_ACTION_EXTRACTION_SCRIPT_ID = "__0509_ad_library_payload";
 const QUICK_ACTION_WAIT_FOR_TIMEOUT_MS = 1_000;
+const QUICK_ACTION_SCRAPE_WAIT_FOR_TIMEOUT_MS = 2_000;
 
 interface ExtractedAdCard {
   libraryId: string;
@@ -268,8 +271,49 @@ async function searchMetaLibraryByQuickActions(
   query: NormalizedSavedQuery,
 ): Promise<SearchResponse> {
   try {
+    const extracted = await extractMetaLibraryByQuickActions(env, query);
+    if (extracted.cards.length === 0) {
+      if (extracted.loginWall) {
+        throw new CommercialDiscoveryError(
+          "Meta Ad Library returned a login wall.",
+          "login_wall",
+        );
+      }
+
+      if (extracted.rateLimited) {
+        throw new CommercialDiscoveryError(
+          "Meta Ad Library is temporarily rate limited.",
+          "rate_limited",
+        );
+      }
+
+      throw new CommercialDiscoveryError(
+        "Meta Ad Library returned no extractable ad cards.",
+        "empty_result",
+      );
+    }
+
+    return {
+      ads: extracted.cards.map((card) => normalizeExtractedCard(card, query)),
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+    };
+  } catch (error) {
+    throw normalizeCommercialDiscoveryError(error);
+  }
+}
+
+async function extractMetaLibraryByQuickActions(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+): Promise<QuickActionExtractionPayload> {
+  const url = buildSearchUrl(query);
+
+  try {
     const quickActionContent = await captureBrowserRunQuickActionContent(env, {
-      url: buildSearchUrl(query),
+      url,
       actionTimeout: NAVIGATION_TIMEOUT_MS,
       addScriptTag: [
         {
@@ -301,35 +345,19 @@ async function searchMetaLibraryByQuickActions(
 
     const extracted = parseQuickActionExtractionPayload(quickActionContent.content);
     if (extracted.cards.length === 0) {
-      if (extracted.loginWall) {
-        throw new CommercialDiscoveryError(
-          "Meta Ad Library returned a login wall.",
-          "login_wall",
-        );
+      if (!extracted.loginWall && !extracted.rateLimited) {
+        return scrapeMetaLibraryByQuickActions(env, url);
       }
-
-      if (extracted.rateLimited) {
-        throw new CommercialDiscoveryError(
-          "Meta Ad Library is temporarily rate limited.",
-          "rate_limited",
-        );
-      }
-
-      throw new CommercialDiscoveryError(
-        "Meta Ad Library returned no extractable ad cards.",
-        "empty_result",
-      );
     }
 
-    return {
-      ads: extracted.cards.map((card) => normalizeExtractedCard(card, query)),
-      nextCursor: null,
-      source: "meta_library_browser",
-      provider: "meta_library_browser",
-      cacheStatus: "miss",
-    };
+    return extracted;
   } catch (error) {
-    throw normalizeCommercialDiscoveryError(error);
+    const normalizedError = normalizeCommercialDiscoveryError(error);
+    if (!shouldUseQuickActionScrapeFallback(normalizedError)) {
+      throw normalizedError;
+    }
+
+    return scrapeMetaLibraryByQuickActions(env, url);
   }
 }
 
@@ -440,6 +468,10 @@ function shouldUseQuickActionsFallback(
     "selector_drift",
     "empty_result",
   ].includes(error.failureClass);
+}
+
+function shouldUseQuickActionScrapeFallback(error: CommercialDiscoveryError) {
+  return ["selector_drift", "empty_result"].includes(error.failureClass);
 }
 
 function normalizeCommercialDiscoveryError(error: unknown) {
@@ -615,6 +647,96 @@ function parseQuickActionExtractionPayload(content: string): QuickActionExtracti
       "selector_drift",
     );
   }
+}
+
+async function scrapeMetaLibraryByQuickActions(
+  env: AppEnv,
+  url: string,
+): Promise<QuickActionExtractionPayload> {
+  const scraped = await captureBrowserRunQuickActionScrape(env, {
+    url,
+    actionTimeout: NAVIGATION_TIMEOUT_MS,
+    bestAttempt: true,
+    elements: [
+      {
+        selector: AD_LIBRARY_RESULT_SELECTOR,
+      },
+    ],
+    gotoOptions: {
+      timeout: NAVIGATION_TIMEOUT_MS,
+      waitUntil: "networkidle2",
+    },
+    userAgent: MOBILE_USER_AGENT,
+    viewport: MOBILE_VIEWPORT,
+    waitForSelector: {
+      selector: AD_LIBRARY_RESULT_SELECTOR,
+      timeout: PAGE_READY_TIMEOUT_MS,
+    },
+    waitForTimeout: QUICK_ACTION_SCRAPE_WAIT_FOR_TIMEOUT_MS,
+  });
+
+  if (!scraped) {
+    throw new CommercialDiscoveryError(
+      "Browser Run Quick Actions are not configured for commercial discovery.",
+      "browser_unavailable",
+    );
+  }
+
+  return extractQuickActionPayloadFromScrape(scraped.elements);
+}
+
+function extractQuickActionPayloadFromScrape(
+  elements: BrowserRunQuickActionScrapeElement[],
+): QuickActionExtractionPayload {
+  const cards: ExtractedAdCard[] = [];
+  const seen = new Set<string>();
+
+  for (const element of elements) {
+    const href = extractHrefFromScrapeElement(element);
+    if (!href) {
+      continue;
+    }
+
+    const idMatch = href.match(/[?&](?:amp;)?id=(\d+)/);
+    const libraryId = idMatch?.[1];
+    if (!libraryId || seen.has(libraryId)) {
+      continue;
+    }
+    seen.add(libraryId);
+
+    const html = element.html ?? "";
+    const text = stripHtml(html) || element.text?.trim() || "Meta Ad Library result";
+
+    cards.push({
+      libraryId,
+      advertiser: null,
+      body: text,
+      previewHeadline: element.text?.trim() || text.slice(0, 120),
+      previewSubhead: null,
+      cta: inferCta(text),
+      adSnapshotUrl: absolutizeMetaAdUrl(href),
+      landingPageUrl: extractExternalLink(html),
+      platforms: inferPlatforms(text),
+      active: !/inactive/i.test(text),
+    });
+  }
+
+  return {
+    cards,
+    loginWall: false,
+    rateLimited: false,
+  };
+}
+
+function extractHrefFromScrapeElement(element: BrowserRunQuickActionScrapeElement) {
+  const attrHref = element.attributes?.find((attribute) => attribute.name?.toLowerCase() === "href")
+    ?.value;
+  if (attrHref) {
+    return decodeHtmlEntity(attrHref);
+  }
+
+  const htmlHref = element.html?.match(/\bhref=(["'])(.*?)\1/i)?.[2];
+  return htmlHref ? decodeHtmlEntity(htmlHref) : null;
 }
 
 function extractQuickActionPayloadFromRenderedHtml(content: string): QuickActionExtractionPayload {
