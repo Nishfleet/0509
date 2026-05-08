@@ -157,10 +157,66 @@ describe("search loader", () => {
         }),
       }),
       null,
-      { purpose: "public_search" },
+      { purpose: "public_search", forceLive: false },
     );
     expect(prepareSearchResultSelection).toHaveBeenCalledWith(env, sourceResult, null);
     expect(result.result).toBe(hydratedResult);
+  });
+
+  it("allows only tokened canary probes to force fresh live discovery", async () => {
+    const env = { DB: {}, CANARY_BYPASS_TOKEN: "secret-token" };
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&fresh=live", {
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: true },
+    );
   });
 });
 

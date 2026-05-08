@@ -6,7 +6,7 @@ import {
   runProductionCanary,
 } from "../scripts/prod-canary.lib.mjs";
 
-function current0509Result(status: "ok" | "empty") {
+function current0509Result(status: "ok" | "empty", overrides = {}) {
   return {
     provider: "current_0509" as const,
     query: "nykaa",
@@ -24,6 +24,7 @@ function current0509Result(status: "ok" | "empty") {
     sourceLabel: "Live Ad Library capture",
     url: "https://0509.in/search?query=nykaa",
     note: null,
+    ...overrides,
   };
 }
 
@@ -132,6 +133,11 @@ describe("production canary", () => {
     ]);
     expect(formatProductionCanaryReport(report)).toContain("https://www.0509.in/api/health");
     expect(formatProductionCanaryReport(report)).toContain("https://api.0509.in/api/health");
+    expect(benchmarkImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        forceLive: true,
+      }),
+    );
   });
 
   it("keeps custom base-url canaries scoped to that hostname", async () => {
@@ -178,5 +184,60 @@ describe("production canary", () => {
 
     expect(report.passed).toBe(true);
     expect(formatProductionCanaryReport(report)).toContain("search: ok");
+  });
+
+  it("passes the canary bypass token into fresh-live search probes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
+
+    await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+      canaryBypassToken: "secret-token",
+    });
+
+    expect(benchmarkImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        forceLive: true,
+        canaryBypassToken: "secret-token",
+      }),
+    );
+  });
+
+  it("fails cached or degraded rendered evidence even when the public route returns results", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([
+      current0509Result("ok", {
+        degraded: true,
+        sourceLabel: "Cached live results",
+      }),
+    ]);
+
+    const report = await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.blockingFailures).toHaveLength(1);
+    expect(formatProductionCanaryReport(report)).toContain("Cached live results");
   });
 });

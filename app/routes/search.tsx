@@ -56,11 +56,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+  const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
   const result = await searchAdsViaSourceResolver(
     env,
     normalizeSavedQuery(parsed.mode, parsed.filters),
     url.searchParams.get("after"),
-    { purpose: "public_search" },
+    { purpose: "public_search", forceLive },
   );
   const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
     env,
@@ -635,6 +636,15 @@ function SearchStateFields({
       <input name="lastSeenFrom" type="hidden" value={filters.lastSeenFrom} />
     </>
   );
+}
+
+function canUseCanaryFreshLiveBypass(env: { CANARY_BYPASS_TOKEN?: string }, request: Request, url: URL) {
+  const configuredToken = env.CANARY_BYPASS_TOKEN?.trim();
+  if (!configuredToken || url.searchParams.get("fresh") !== "live") {
+    return false;
+  }
+
+  return request.headers.get("x-0509-canary-token") === configuredToken;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
