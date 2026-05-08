@@ -6,6 +6,8 @@ export interface AppEnv {
   APP_REGION_DEFAULT?: PricingRegion | string;
   BETTER_AUTH_SECRET?: string;
   BROWSER?: Fetcher;
+  BROWSERLESS_TOKEN?: string;
+  BROWSERLESS_BQL_URL?: string;
   BROWSER_RUN_ACCOUNT_ID?: string;
   BROWSER_RUN_API_TOKEN?: string;
   CANARY_BYPASS_TOKEN?: string;
