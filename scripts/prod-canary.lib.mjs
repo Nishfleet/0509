@@ -15,6 +15,7 @@ export const DEFAULT_CANARY_HEALTH_BASE_URLS = Object.freeze([
   DEFAULT_CANARY_API_BASE_URL,
 ]);
 export const DEFAULT_CANARY_EXPECTED_APP = "0509";
+export const DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS = 60_000;
 
 /**
  * @typedef {{
@@ -37,7 +38,8 @@ export const DEFAULT_CANARY_EXPECTED_APP = "0509";
  *   mode?: "advertiser" | "keyword",
  *   fetchImpl?: typeof fetch,
  *   benchmarkImpl?: typeof benchmarkProviders,
- *   canaryBypassToken?: string
+ *   canaryBypassToken?: string,
+ *   searchTimeoutMs?: number
  * }} ProductionCanaryOptions
  */
 
@@ -114,6 +116,7 @@ export async function runProductionCanary(options = {}) {
   const mode = options.mode ?? DEFAULT_MODE;
   const benchmarkImpl = options.benchmarkImpl ?? benchmarkProviders;
   const canaryBypassToken = options.canaryBypassToken ?? process.env.CANARY_BYPASS_TOKEN;
+  const searchTimeoutMs = options.searchTimeoutMs ?? DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS;
   const healthChecks = [];
   for (const healthBaseUrl of resolveHealthBaseUrls(options, baseUrl)) {
     healthChecks.push(
@@ -140,6 +143,7 @@ export async function runProductionCanary(options = {}) {
     baseUrl,
     forceLive: true,
     canaryBypassToken,
+    timeoutMs: searchTimeoutMs,
   });
   const blockingFailures = findBlockingFreshLiveCurrent0509Failures(results);
 
