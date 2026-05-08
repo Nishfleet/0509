@@ -136,6 +136,7 @@ describe("production canary", () => {
     expect(benchmarkImpl).toHaveBeenCalledWith(
       expect.objectContaining({
         forceLive: true,
+        timeoutMs: 60_000,
       }),
     );
   });
@@ -209,6 +210,34 @@ describe("production canary", () => {
       expect.objectContaining({
         forceLive: true,
         canaryBypassToken: "secret-token",
+        timeoutMs: 60_000,
+      }),
+    );
+  });
+
+  it("allows the fresh-live search timeout to be tuned for production checks", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "ok",
+        app: "0509",
+      }),
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
+
+    await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+      searchTimeoutMs: 90_000,
+    });
+
+    expect(benchmarkImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        forceLive: true,
+        timeoutMs: 90_000,
       }),
     );
   });

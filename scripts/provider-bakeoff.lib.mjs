@@ -1069,7 +1069,7 @@ export async function runProviderProbe(provider, target, options = {}) {
 }
 
 /**
- * @param {{ providers?: ProviderName[], queries?: string[], country?: string, mode?: SearchMode, fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, forceLive?: boolean, canaryBypassToken?: string }} [options]
+ * @param {{ providers?: ProviderName[], queries?: string[], country?: string, mode?: SearchMode, fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, forceLive?: boolean, canaryBypassToken?: string, timeoutMs?: number }} [options]
  */
 export async function benchmarkProviders(options = {}) {
   /** @type {ProviderName[]} */
