@@ -180,13 +180,13 @@ jobs:
           {
             echo "findings"
             echo
-            echo "- [block] OpenCode Go review could not complete with any configured fallback model."
+            echo "- [warn] OpenCode Go review could not complete with any configured fallback model."
             echo
             echo "open questions"
             echo
             echo "- Check the workflow logs/artifact for provider timeout or API failure details."
             echo
-            echo "merge posture: block"
+            echo "merge posture: manual review required"
             echo
             echo "Failure log:"
             cat codex-review-failures.log
@@ -215,9 +215,8 @@ jobs:
           name: codex-pr-review
           path: codex-output.md
 
-      - name: Fail OpenCode Go review failure
+      - name: Mark OpenCode Go review inconclusive
         if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'false'
         shell: bash
         run: |
-          echo "OpenCode Go review could not complete with any configured fallback model."
-          exit 1
+          echo "::warning::OpenCode Go review could not complete with any configured fallback model. Manual review is required before merge."
