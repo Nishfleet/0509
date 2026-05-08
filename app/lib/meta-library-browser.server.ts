@@ -34,6 +34,26 @@ const QUICK_ACTION_RUNNER_SCRIPT_ID = "__0509_ad_library_extractor";
 const QUICK_ACTION_EXTRACTION_SCRIPT_ID = "__0509_ad_library_payload";
 const QUICK_ACTION_WAIT_FOR_TIMEOUT_MS = 1_000;
 const QUICK_ACTION_SCRAPE_WAIT_FOR_TIMEOUT_MS = 2_000;
+const BROWSERLESS_SELECTOR_TIMEOUT_MS = 15_000;
+const BROWSERLESS_BQL_MUTATION = `
+mutation MetaLibraryLiveFallback($url: String!, $selector: String!, $userAgent: String!) {
+  userAgent(userAgent: $userAgent) {
+    time
+  }
+  viewport(width: 390, height: 844, deviceScaleFactor: 2, mobile: true) {
+    width
+  }
+  goto(url: $url) {
+    status
+  }
+  waitForSelector(selector: $selector, timeout: ${BROWSERLESS_SELECTOR_TIMEOUT_MS}) {
+    time
+  }
+  html {
+    html
+  }
+}
+`.trim();
 
 interface ExtractedAdCard {
   libraryId: string;
@@ -91,26 +111,35 @@ export async function searchMetaLibraryByBrowser(
 ): Promise<SearchResponse> {
   const browserBinding = env.BROWSER;
 
-  if (!browserBinding && !hasBrowserRunQuickActions(env)) {
+  if (!browserBinding && !hasBrowserRunQuickActions(env) && !hasBrowserlessBql(env)) {
     throw new CommercialDiscoveryError(
       "Browser Run is not configured for commercial discovery.",
       "browser_unavailable",
     );
   }
 
-  if (!browserBinding) {
-    return searchMetaLibraryByQuickActions(env, query);
-  }
-
   try {
-    return await searchMetaLibraryViaSessions(browserBinding, query);
-  } catch (error) {
-    const normalizedError = normalizeCommercialDiscoveryError(error);
-    if (!shouldUseQuickActionsFallback(env, normalizedError)) {
-      throw normalizedError;
+    if (!browserBinding) {
+      return await searchMetaLibraryByQuickActions(env, query);
     }
 
-    return searchMetaLibraryByQuickActions(env, query);
+    try {
+      return await searchMetaLibraryViaSessions(browserBinding, query);
+    } catch (error) {
+      const normalizedError = normalizeCommercialDiscoveryError(error);
+      if (!shouldUseQuickActionsFallback(env, normalizedError)) {
+        throw normalizedError;
+      }
+
+      return await searchMetaLibraryByQuickActions(env, query);
+    }
+  } catch (error) {
+    const normalizedError = normalizeCommercialDiscoveryError(error);
+    if (shouldUseBrowserlessFallback(env, normalizedError)) {
+      return searchMetaLibraryByBrowserless(env, query);
+    }
+
+    throw normalizedError;
   }
 }
 
@@ -474,6 +503,17 @@ function shouldUseQuickActionScrapeFallback(error: CommercialDiscoveryError) {
   return ["selector_drift", "empty_result"].includes(error.failureClass);
 }
 
+function shouldUseBrowserlessFallback(env: AppEnv, error: CommercialDiscoveryError) {
+  return (
+    hasBrowserlessBql(env) &&
+    ["browser_unavailable", "selector_drift", "empty_result", "timeout"].includes(error.failureClass)
+  );
+}
+
+function hasBrowserlessBql(env: AppEnv) {
+  return Boolean(env.BROWSERLESS_TOKEN?.trim());
+}
+
 function normalizeCommercialDiscoveryError(error: unknown) {
   if (error instanceof CommercialDiscoveryError) {
     return error;
@@ -502,6 +542,105 @@ function normalizeCommercialDiscoveryError(error: unknown) {
       ? "timeout"
       : "browser_launch_failed";
   return new CommercialDiscoveryError(message, failureClass);
+}
+
+async function searchMetaLibraryByBrowserless(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+): Promise<SearchResponse> {
+  const endpoint = buildBrowserlessBqlEndpoint(env);
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      query: BROWSERLESS_BQL_MUTATION,
+      variables: {
+        selector: AD_LIBRARY_RESULT_SELECTOR,
+        url: buildSearchUrl(query),
+        userAgent: MOBILE_USER_AGENT,
+      },
+    }),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        data?: {
+          html?: {
+            html?: string;
+          };
+        };
+        errors?: Array<{
+          message?: string;
+        }>;
+        message?: string;
+      }
+    | null;
+
+  if (!response.ok) {
+    throw normalizeBrowserlessError(response.status, payload?.message ?? null);
+  }
+
+  if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
+    const message = payload.errors.map((error) => error.message).filter(Boolean).join(" | ");
+    throw normalizeBrowserlessError(response.status, message || "Browserless returned a GraphQL error.");
+  }
+
+  const html = payload?.data?.html?.html ?? "";
+  const extracted = extractQuickActionPayloadFromRenderedHtml(html);
+  if (extracted.cards.length === 0) {
+    if (extracted.loginWall) {
+      throw new CommercialDiscoveryError("Meta Ad Library returned a login wall.", "login_wall");
+    }
+
+    if (extracted.rateLimited) {
+      throw new CommercialDiscoveryError("Meta Ad Library is temporarily rate limited.", "rate_limited");
+    }
+
+    throw new CommercialDiscoveryError(
+      "Browserless returned no extractable Meta Ad Library cards.",
+      "empty_result",
+    );
+  }
+
+  return {
+    ads: extracted.cards.map((card) => normalizeExtractedCard(card, query)),
+    nextCursor: null,
+    source: "meta_library_browser",
+    provider: "meta_library_browser",
+    cacheStatus: "miss",
+  };
+}
+
+function buildBrowserlessBqlEndpoint(env: AppEnv) {
+  const rawBase =
+    env.BROWSERLESS_BQL_URL ||
+    "https://production-sfo.browserless.io/stealth/bql";
+  const url = new URL(rawBase);
+  if (!url.pathname.endsWith("/stealth/bql") && !url.pathname.endsWith("/chromium/bql")) {
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/stealth/bql`;
+  }
+  url.searchParams.set("token", env.BROWSERLESS_TOKEN?.trim() ?? "");
+  return url.toString();
+}
+
+function normalizeBrowserlessError(status: number, message: string | null) {
+  const lower = (message ?? "").toLowerCase();
+  if (status === 429 || lower.includes("rate limit") || lower.includes("too many requests")) {
+    return new CommercialDiscoveryError(
+      message || "Browserless rate limited this request.",
+      "rate_limited",
+    );
+  }
+
+  if (lower.includes("timeout")) {
+    return new CommercialDiscoveryError(message || "Browserless timed out.", "timeout");
+  }
+
+  return new CommercialDiscoveryError(
+    message || `Browserless request failed with status ${status}.`,
+    "browser_launch_failed",
+  );
 }
 
 function buildQuickActionExtractionScript() {
