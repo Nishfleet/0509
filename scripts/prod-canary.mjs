@@ -11,12 +11,13 @@ import {
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], json: boolean }} */
+  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], json: boolean, searchTimeoutMs: number | undefined }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || undefined,
     expectedApp: process.env.CANARY_EXPECTED_APP || DEFAULT_CANARY_EXPECTED_APP,
     queries: [],
     json: false,
+    searchTimeoutMs: parsePositiveInteger(process.env.CANARY_SEARCH_TIMEOUT_MS),
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -39,9 +40,21 @@ function parseArgs(args) {
     if (arg === "--json") {
       parsed.json = true;
     }
+    if (arg === "--search-timeout-ms" && args[index + 1]) {
+      parsed.searchTimeoutMs = parsePositiveInteger(args[index + 1]);
+      index += 1;
+    }
   }
 
   return parsed;
+}
+
+/**
+ * @param {string | undefined} value
+ */
+function parsePositiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 const config = parseArgs(process.argv.slice(2));
@@ -50,6 +63,7 @@ const report = await runProductionCanary({
   expectedApp: config.expectedApp,
   queries: config.queries,
   canaryBypassToken: process.env.CANARY_BYPASS_TOKEN,
+  searchTimeoutMs: config.searchTimeoutMs,
 });
 
 if (config.json) {
