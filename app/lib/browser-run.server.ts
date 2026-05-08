@@ -40,6 +40,19 @@ interface BrowserRunQuickActionWaitForSelector {
   visible?: true;
 }
 
+export interface BrowserRunQuickActionScrapeElement {
+  attributes?: Array<{
+    name?: string;
+    value?: string;
+  }>;
+  height?: number;
+  html?: string;
+  left?: number;
+  text?: string;
+  top?: number;
+  width?: number;
+}
+
 export interface BrowserRunQuickActionContentOptions {
   url: string;
   actionTimeout?: number;
@@ -64,6 +77,17 @@ export interface BrowserRunQuickActionContentOptions {
   };
   waitForSelector?: BrowserRunQuickActionWaitForSelector;
   waitForTimeout?: number;
+}
+
+export interface BrowserRunQuickActionScrapeOptions extends Omit<BrowserRunQuickActionContentOptions, "addScriptTag"> {
+  elements: Array<{
+    selector: string;
+  }>;
+}
+
+interface BrowserRunQuickActionScrapeResult {
+  selector?: string;
+  results?: BrowserRunQuickActionScrapeElement[] | BrowserRunQuickActionScrapeElement;
 }
 
 export class BrowserRunQuickActionError extends Error {
@@ -160,6 +184,42 @@ export async function captureBrowserRunQuickActionContent(
   return {
     browserMsUsed: parseBrowserMsUsedHeader(response.headers.get("X-Browser-Ms-Used")),
     content: payload.result,
+  };
+}
+
+export async function captureBrowserRunQuickActionScrape(
+  env: AppEnv,
+  options: BrowserRunQuickActionScrapeOptions,
+): Promise<{
+  browserMsUsed: number | null;
+  elements: BrowserRunQuickActionScrapeElement[];
+} | null> {
+  if (!hasBrowserRunQuickActions(env) || !options.url || !/^https?:\/\//i.test(options.url)) {
+    return null;
+  }
+
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/scrape?cacheTTL=0`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(options),
+    },
+  );
+  const payload = (await response.json().catch(() => null)) as
+    | BrowserRunQuickActionEnvelope<BrowserRunQuickActionScrapeResult[]>
+    | null;
+
+  if (!response.ok || !payload?.success || !Array.isArray(payload.result)) {
+    throw buildBrowserRunQuickActionError(response, payload);
+  }
+
+  return {
+    browserMsUsed: parseBrowserMsUsedHeader(response.headers.get("X-Browser-Ms-Used")),
+    elements: payload.result.flatMap((entry) => normalizeScrapeResults(entry.results)),
   };
 }
 
@@ -318,7 +378,7 @@ function decodeHtml(value: string) {
 
 function buildBrowserRunQuickActionError(
   response: Response,
-  payload: BrowserRunQuickActionEnvelope<string> | null,
+  payload: BrowserRunQuickActionEnvelope<unknown> | null,
 ) {
   const retryAfterSeconds = parseRetryAfterHeader(response.headers.get("Retry-After"));
   const apiMessage = payload?.errors?.[0]?.message?.trim() || null;
@@ -341,6 +401,18 @@ function buildBrowserRunQuickActionError(
 function parseBrowserMsUsedHeader(value: string | null) {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeScrapeResults(
+  results: BrowserRunQuickActionScrapeResult["results"],
+): BrowserRunQuickActionScrapeElement[] {
+  if (Array.isArray(results)) {
+    return results;
+  }
+  if (results && typeof results === "object") {
+    return [results];
+  }
+  return [];
 }
 
 function parseRetryAfterHeader(value: string | null) {
