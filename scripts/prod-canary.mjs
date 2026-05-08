@@ -49,6 +49,7 @@ const report = await runProductionCanary({
   baseUrl: config.baseUrl,
   expectedApp: config.expectedApp,
   queries: config.queries,
+  canaryBypassToken: process.env.CANARY_BYPASS_TOKEN,
 });
 
 if (config.json) {

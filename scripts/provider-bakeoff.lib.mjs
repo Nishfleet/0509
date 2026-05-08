@@ -166,13 +166,16 @@ export function buildMetaLibraryUrl(target) {
 }
 
 /**
- * @param {{ query: string, country?: string, mode?: SearchMode, baseUrl?: string }} target
+ * @param {{ query: string, country?: string, mode?: SearchMode, baseUrl?: string, forceLive?: boolean }} target
  */
 export function buildCurrent0509SearchUrl(target) {
   const url = new URL("/search", target.baseUrl ?? "https://0509.in");
   url.searchParams.set("query", target.query);
   url.searchParams.set("country", target.country ?? DEFAULT_COUNTRY);
   url.searchParams.set("mode", target.mode ?? DEFAULT_MODE);
+  if (target.forceLive) {
+    url.searchParams.set("fresh", "live");
+  }
   return url.toString();
 }
 
@@ -418,7 +421,7 @@ function classifyCurrent0509Outcome(analysis, ok) {
 
 /**
  * @param {ProbeTarget} target
- * @param {{ fetchImpl?: typeof fetch, baseUrl?: string, timeoutMs?: number }} [options]
+ * @param {{ fetchImpl?: typeof fetch, baseUrl?: string, timeoutMs?: number, forceLive?: boolean, canaryBypassToken?: string }} [options]
  * @returns {Promise<ProbeResult>}
  */
 export async function runCurrent0509Probe(target, options = {}) {
@@ -429,14 +432,17 @@ export async function runCurrent0509Probe(target, options = {}) {
     country: target.country,
     mode: target.mode,
     baseUrl: options.baseUrl,
+    forceLive: options.forceLive,
   });
   const startedAt = performance.now();
+  const headers = {
+    "user-agent": "0509-provider-bakeoff/1.0",
+    ...(options.canaryBypassToken ? { "x-0509-canary-token": options.canaryBypassToken } : {}),
+  };
 
   try {
     const response = await fetchImpl(url, {
-      headers: {
-        "user-agent": "0509-provider-bakeoff/1.0",
-      },
+      headers,
       signal: AbortSignal.timeout(timeoutMs),
     });
     const html = await response.text();
@@ -1063,7 +1069,7 @@ export async function runProviderProbe(provider, target, options = {}) {
 }
 
 /**
- * @param {{ providers?: ProviderName[], queries?: string[], country?: string, mode?: SearchMode, fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl }} [options]
+ * @param {{ providers?: ProviderName[], queries?: string[], country?: string, mode?: SearchMode, fetchImpl?: FetchImpl, env?: ProviderEnv, baseUrl?: string, extractCdpImpl?: ExtractCdpImpl, forceLive?: boolean, canaryBypassToken?: string }} [options]
  */
 export async function benchmarkProviders(options = {}) {
   /** @type {ProviderName[]} */
@@ -1164,4 +1170,26 @@ export function findBlockingCurrent0509Failures(results) {
       result.provider === "current_0509" &&
       !["ok", "skipped"].includes(result.status),
   );
+}
+
+/**
+ * @param {ProbeResult[]} results
+ */
+export function findBlockingFreshLiveCurrent0509Failures(results) {
+  return results.filter((result) => {
+    if (result.provider !== "current_0509") {
+      return false;
+    }
+    if (!["ok", "skipped"].includes(result.status)) {
+      return true;
+    }
+    if (result.status === "skipped") {
+      return false;
+    }
+    return (
+      result.degraded ||
+      result.sourceLabel !== "Live Ad Library capture" ||
+      Number(result.matchCount || 0) <= 0
+    );
+  });
 }

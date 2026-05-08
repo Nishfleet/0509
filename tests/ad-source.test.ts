@@ -1588,6 +1588,84 @@ describe("searchAdsViaSourceResolver", () => {
     expect(result.discoverySummary).toContain("Retrying after about 30m.");
   });
 
+  it("allows tokened canary probes to bypass cache and provider cooldown for a fresh live check", async () => {
+    const browserSearch = vi
+      .fn<(...args: unknown[]) => Promise<SearchResponse>>()
+      .mockResolvedValue(buildLiveBrowserResult());
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: buildLiveBrowserResult(),
+      fetchedAt: "2026-04-21T18:00:00.000Z",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      browserMsUsed: 2500,
+      createdAt: "2026-04-21T18:00:00.000Z",
+      updatedAt: "2026-04-21T18:00:00.000Z",
+    });
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "cache_only",
+      failureClass: "rate_limited",
+      summary: "Commercial discovery degraded; serving cached results.",
+      lastSuccessAt: "2026-04-21T18:00:00.000Z",
+      lastFailureAt: new Date().toISOString(),
+      metadata: {
+        cooldownUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        retryAfterSeconds: 1800,
+      },
+      updatedAt: new Date().toISOString(),
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+        forceLive: true,
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoveryFailureClass: null,
+    });
+  });
+
   it("serves stale cached results without a fresh browser fetch during public-search cooldown", async () => {
     const browserSearch = vi.fn();
     const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({

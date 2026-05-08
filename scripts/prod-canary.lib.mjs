@@ -3,7 +3,7 @@ import {
   DEFAULT_MODE,
   DOGFOOD_QUERIES,
   benchmarkProviders,
-  findBlockingCurrent0509Failures,
+  findBlockingFreshLiveCurrent0509Failures,
 } from "./provider-bakeoff.lib.mjs";
 
 export const DEFAULT_CANARY_BASE_URL = "https://0509.in";
@@ -36,7 +36,8 @@ export const DEFAULT_CANARY_EXPECTED_APP = "0509";
  *   country?: string,
  *   mode?: "advertiser" | "keyword",
  *   fetchImpl?: typeof fetch,
- *   benchmarkImpl?: typeof benchmarkProviders
+ *   benchmarkImpl?: typeof benchmarkProviders,
+ *   canaryBypassToken?: string
  * }} ProductionCanaryOptions
  */
 
@@ -112,6 +113,7 @@ export async function runProductionCanary(options = {}) {
   const country = options.country ?? DEFAULT_COUNTRY;
   const mode = options.mode ?? DEFAULT_MODE;
   const benchmarkImpl = options.benchmarkImpl ?? benchmarkProviders;
+  const canaryBypassToken = options.canaryBypassToken ?? process.env.CANARY_BYPASS_TOKEN;
   const healthChecks = [];
   for (const healthBaseUrl of resolveHealthBaseUrls(options, baseUrl)) {
     healthChecks.push(
@@ -136,8 +138,10 @@ export async function runProductionCanary(options = {}) {
     country,
     mode,
     baseUrl,
+    forceLive: true,
+    canaryBypassToken,
   });
-  const blockingFailures = findBlockingCurrent0509Failures(results);
+  const blockingFailures = findBlockingFreshLiveCurrent0509Failures(results);
 
   return {
     passed: healthChecks.every((check) => check.ok) && blockingFailures.length === 0,
@@ -148,6 +152,7 @@ export async function runProductionCanary(options = {}) {
     queries,
     country,
     mode,
+    requireFreshLive: true,
     blockingFailures,
     results,
   };
@@ -173,7 +178,7 @@ export function formatProductionCanaryReport(report) {
   } else {
     lines.push(
       `search: failed for ${report.blockingFailures
-        .map((result) => `${result.query} (${result.status})`)
+        .map((result) => `${result.query} (${result.status}, ${result.sourceLabel ?? "no source"})`)
         .join(", ")}`,
     );
   }

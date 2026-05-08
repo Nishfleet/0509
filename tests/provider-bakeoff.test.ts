@@ -572,6 +572,41 @@ describe("current 0509 probe", () => {
     expect(result.matchCount).toBe(3);
   });
 
+  it("sends the tokened fresh-live bypass for canary probes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div>Source: Live Ad Library capture</div>
+            <h2>3 ads on this page</h2>
+          </body>
+        </html>
+      `,
+    });
+
+    await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+        forceLive: true,
+        canaryBypassToken: "secret-token",
+      },
+    );
+
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(String(url)).toContain("fresh=live");
+    expect(init?.headers).toMatchObject({
+      "x-0509-canary-token": "secret-token",
+    });
+  });
+
   it("treats API fallback pages with rendered results as healthy", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
@@ -634,5 +669,35 @@ describe("current 0509 probe", () => {
     expect(result.sourceLabel).toBe("Cached live results");
     expect(result.matchCount).toBe(0);
     expect(result.note).toContain("zero rendered results");
+  });
+
+  it("treats Demo dataset source label as error", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div>Source: Demo dataset</div>
+            <h2>5 ads on this page</h2>
+          </body>
+        </html>
+      `,
+    });
+
+    const result = await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+      },
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.sourceLabel).toBe("Demo dataset");
   });
 });
