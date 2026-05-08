@@ -24,6 +24,7 @@ export { CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 
 export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
+  forceLive?: boolean;
 }
 
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
@@ -238,6 +239,7 @@ export async function searchAdsViaSourceResolver(
   const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
   const provider = resolveCommercialDiscoveryProvider(effectiveEnv);
   const routeContext = options.purpose ?? "public_search";
+  const forceLive = options.forceLive === true && provider === "meta_library_browser";
   const providerState =
     provider !== "demo" && effectiveEnv.DB
       ? await getDiscoveryProviderState(effectiveEnv, provider)
@@ -260,7 +262,7 @@ export async function searchAdsViaSourceResolver(
   });
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
-  if (usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
+  if (!forceLive && usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
     return {
       ...usableCached.payload,
       source: provider,
@@ -272,7 +274,7 @@ export async function searchAdsViaSourceResolver(
     };
   }
 
-  if (providerState && shouldUseProviderCooldown(providerState)) {
+  if (!forceLive && providerState && shouldUseProviderCooldown(providerState)) {
     if (usableCached) {
       return {
         ...usableCached.payload,
@@ -314,6 +316,7 @@ export async function searchAdsViaSourceResolver(
   }
 
   if (
+    !forceLive &&
     provider === "meta_library_browser" &&
     routeContext === "public_search" &&
     providerState &&
@@ -353,7 +356,7 @@ export async function searchAdsViaSourceResolver(
   }
 
   const discoveryLease =
-    canUseDistributedDiscoveryLease(effectiveEnv.DB)
+    !forceLive && canUseDistributedDiscoveryLease(effectiveEnv.DB)
       ? await acquireDiscoveryQueryLease(effectiveEnv, {
           cacheKey,
           provider,
@@ -515,16 +518,18 @@ export async function searchAdsViaSourceResolver(
       });
     }
 
-    const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
-      browserFailureClass: failureClass,
-      browserSummary: summary,
-      routeContext,
-    });
-    if (apiFallback) {
-      return apiFallback;
+    if (!forceLive) {
+      const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
+        browserFailureClass: failureClass,
+        browserSummary: summary,
+        routeContext,
+      });
+      if (apiFallback) {
+        return apiFallback;
+      }
     }
 
-    if (usableCached) {
+    if (!forceLive && usableCached) {
       return {
         ...usableCached.payload,
         source: provider,
