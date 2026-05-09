@@ -404,6 +404,65 @@ describe("browser session providers", () => {
     expect(result.note).toContain("Browserbase session release failed");
   });
 
+  it("classifies Browserbase too-many-requests errors as rate limited", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({
+        message: "Too many requests",
+      }),
+    });
+
+    const result = await runBrowserbaseProbe(
+      {
+        provider: "browserbase",
+        query: "adspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        env: {
+          BROWSERBASE_API_KEY: "bb-key",
+          BROWSERBASE_PROJECT_ID: "proj_123",
+        },
+        fetchImpl,
+      },
+    );
+
+    expect(result.status).toBe("rate_limited");
+    expect(result.rateLimited).toBe(true);
+    expect(result.note).toBe("Too many requests");
+  });
+
+  it("classifies Zyte too-many-requests errors as rate limited", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({
+        message: "Too many requests",
+      }),
+    });
+
+    const result = await runZyteProbe(
+      {
+        provider: "zyte_api",
+        query: "adspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        env: {
+          ZYTE_API_KEY: "zyte-key",
+        },
+        fetchImpl,
+      },
+    );
+
+    expect(result.status).toBe("rate_limited");
+    expect(result.rateLimited).toBe(true);
+    expect(result.note).toBe("Too many requests");
+  });
+
   it("skips Bright Data when credentials are missing", async () => {
     const result = await runBrightDataProbe(
       {

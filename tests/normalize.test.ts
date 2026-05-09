@@ -4,6 +4,8 @@ import {
   fingerprintSavedQuery,
   normalizeHeadline,
   normalizeSavedQuery,
+  parseSearchParams,
+  buildSearchParams,
 } from "~/lib/normalize";
 
 describe("normalizeHeadline", () => {
@@ -35,5 +37,162 @@ describe("fingerprintSavedQuery", () => {
     });
 
     expect(fingerprintSavedQuery(first)).toBe(fingerprintSavedQuery(second));
+  });
+});
+
+describe("parseSearchParams", () => {
+  it("parses keyword mode from URLSearchParams", () => {
+    const params = new URLSearchParams({ mode: "keyword", query: "shoes" });
+    const result = parseSearchParams(params);
+    expect(result.mode).toBe("keyword");
+    expect(result.filters.query).toBe("shoes");
+  });
+
+  it("defaults to advertiser mode when mode is absent or invalid", () => {
+    const paramsNoMode = new URLSearchParams({ query: "test" });
+    expect(parseSearchParams(paramsNoMode).mode).toBe("advertiser");
+
+    const paramsInvalid = new URLSearchParams({ mode: "garbage", query: "test" });
+    expect(parseSearchParams(paramsInvalid).mode).toBe("advertiser");
+  });
+
+  it("applies India default for country", () => {
+    const params = new URLSearchParams({ query: "test" });
+    expect(parseSearchParams(params).filters.country).toBe("India");
+  });
+
+  it("applies all default for platform", () => {
+    const params = new URLSearchParams({ query: "test" });
+    expect(parseSearchParams(params).filters.platform).toBe("all");
+  });
+
+  it("applies all default for creativeType and status", () => {
+    const params = new URLSearchParams({ query: "test" });
+    expect(parseSearchParams(params).filters.creativeType).toBe("all");
+    expect(parseSearchParams(params).filters.status).toBe("all");
+  });
+
+  it("parses optional firstSeenFrom when present", () => {
+    const params = new URLSearchParams({ query: "test", firstSeenFrom: "2024-01-01" });
+    expect(parseSearchParams(params).filters.firstSeenFrom).toBe("2024-01-01");
+  });
+
+  it("parses optional lastSeenFrom when present", () => {
+    const params = new URLSearchParams({ query: "test", lastSeenFrom: "2024-06-15" });
+    expect(parseSearchParams(params).filters.lastSeenFrom).toBe("2024-06-15");
+  });
+
+  it("applies empty string default for firstSeenFrom and lastSeenFrom when absent", () => {
+    const params = new URLSearchParams({ query: "test" });
+    expect(parseSearchParams(params).filters.firstSeenFrom).toBe("");
+    expect(parseSearchParams(params).filters.lastSeenFrom).toBe("");
+  });
+
+  it("computes fingerprint for parsed result", () => {
+    const params = new URLSearchParams({ query: "cod", country: "India", platform: "Instagram" });
+    const result = parseSearchParams(params);
+    expect(result.fingerprint).toBeDefined();
+    expect(typeof result.fingerprint).toBe("string");
+    expect(result.fingerprint).toMatch(/^fnv1a-/);
+  });
+});
+
+describe("buildSearchParams", () => {
+  it("builds params for keyword mode", () => {
+    const query = normalizeSavedQuery("keyword", { query: "shoes", country: "India", platform: "all" });
+    const params = buildSearchParams(query);
+    expect(params.get("mode")).toBe("keyword");
+    expect(params.get("query")).toBe("shoes");
+  });
+
+  it("builds params for advertiser mode", () => {
+    const query = normalizeSavedQuery("advertiser", { query: "nike", country: "US", platform: "Facebook" });
+    const params = buildSearchParams(query);
+    expect(params.get("mode")).toBe("advertiser");
+    expect(params.get("country")).toBe("US");
+    expect(params.get("platform")).toBe("Facebook");
+  });
+
+  it("includes firstSeenFrom when set", () => {
+    const query = normalizeSavedQuery("keyword", {
+      query: "test",
+      firstSeenFrom: "2024-01-01",
+      lastSeenFrom: "",
+    });
+    const params = buildSearchParams(query);
+    expect(params.get("firstSeenFrom")).toBe("2024-01-01");
+    expect(params.has("lastSeenFrom")).toBe(false);
+  });
+
+  it("includes lastSeenFrom when set", () => {
+    const query = normalizeSavedQuery("keyword", {
+      query: "test",
+      firstSeenFrom: "",
+      lastSeenFrom: "2024-06-15",
+    });
+    const params = buildSearchParams(query);
+    expect(params.get("lastSeenFrom")).toBe("2024-06-15");
+    expect(params.has("firstSeenFrom")).toBe(false);
+  });
+
+  it("omits firstSeenFrom and lastSeenFrom when empty", () => {
+    const query = normalizeSavedQuery("keyword", {
+      query: "test",
+      firstSeenFrom: "",
+      lastSeenFrom: "",
+    });
+    const params = buildSearchParams(query);
+    expect(params.has("firstSeenFrom")).toBe(false);
+    expect(params.has("lastSeenFrom")).toBe(false);
+  });
+});
+
+describe("parseSearchParams + buildSearchParams round-trip", () => {
+  it("round-trips from URLSearchParams through normalized query and back", () => {
+    const originalParams = new URLSearchParams({
+      mode: "keyword",
+      query: "summer sale",
+      country: "India",
+      platform: "Instagram",
+      creativeType: "video",
+      status: "active",
+      firstSeenFrom: "2024-01-01",
+      lastSeenFrom: "2024-12-31",
+    });
+
+    const parsed = parseSearchParams(originalParams);
+    expect(parsed.mode).toBe("keyword");
+    expect(parsed.filters.query).toBe("summer sale");
+    expect(parsed.filters.country).toBe("India");
+    expect(parsed.filters.platform).toBe("Instagram");
+    expect(parsed.filters.creativeType).toBe("video");
+    expect(parsed.filters.status).toBe("active");
+    expect(parsed.filters.firstSeenFrom).toBe("2024-01-01");
+    expect(parsed.filters.lastSeenFrom).toBe("2024-12-31");
+
+    const rebuilt = buildSearchParams(parsed);
+    expect(rebuilt.get("mode")).toBe("keyword");
+    expect(rebuilt.get("query")).toBe("summer sale");
+    expect(rebuilt.get("country")).toBe("India");
+    expect(rebuilt.get("platform")).toBe("Instagram");
+    expect(rebuilt.get("creativeType")).toBe("video");
+    expect(rebuilt.get("status")).toBe("active");
+    expect(rebuilt.get("firstSeenFrom")).toBe("2024-01-01");
+    expect(rebuilt.get("lastSeenFrom")).toBe("2024-12-31");
+  });
+
+  it("round-trips with defaults applied (no explicit country/platform in original)", () => {
+    const originalParams = new URLSearchParams({
+      mode: "advertiser",
+      query: "tech",
+    });
+
+    const parsed = parseSearchParams(originalParams);
+    expect(parsed.filters.country).toBe("India");
+    expect(parsed.filters.platform).toBe("all");
+
+    const rebuilt = buildSearchParams(parsed);
+    expect(rebuilt.get("country")).toBe("India");
+    expect(rebuilt.get("platform")).toBe("all");
   });
 });
