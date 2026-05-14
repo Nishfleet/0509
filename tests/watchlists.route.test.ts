@@ -640,4 +640,60 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Recent proof attempts");
     expect(markup).toContain("Delivery settings");
   });
+
+  it("renders cache-only discovery status", async () => {
+    const cacheOnlyStatus = {
+      status: "cache_only",
+      provider: "meta_library_browser",
+      mode: "cache",
+      summary: "Browser Run with cached live results.",
+      lastCheckedAt: "2026-04-18T10:06:00.000Z",
+      lastErrorCode: null,
+      lastErrorMessage: null,
+    } as const;
+
+    await mockRouter({
+      actionData: undefined,
+      loaderData: {
+        watchlists: [watchlist],
+        selectedWatchlist: watchlist,
+        eventCandidates: recentCandidates,
+        events: recentEvents,
+        runs: recentRuns,
+        workspaceDeliveryConfig,
+        watchlistDeliveryConfig,
+        discoveryStatus: cacheOnlyStatus,
+        effectiveDeliveryConfig: {
+          sensitivityMode: "quiet",
+          instantEnabled: true,
+          digestEnabled: true,
+          emailEnabled: true,
+          whatsappEnabled: true,
+          quietHours: {
+            startHour: 22,
+            endHour: 8,
+          },
+          timezone: "Asia/Kolkata",
+        },
+        deliveryTargets,
+        workspaceDeliveryTargets: [],
+        recentDeliveryAttempts,
+        recentProofCaptures,
+        proofSummary: {
+          totalAttempts: 1,
+          successfulAttempts: 1,
+          failedAttempts: 0,
+          skippedAttempts: 0,
+          lastAttemptAt: "2026-04-18T09:59:50.000Z",
+          lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
+        },
+      },
+    });
+
+    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
+
+    expect(markup).toContain("Commercial discovery is running from cache");
+    expect(markup).toContain("Browser Run with cached live results");
+  });
 });
