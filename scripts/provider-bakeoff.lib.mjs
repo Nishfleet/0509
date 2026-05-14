@@ -584,18 +584,21 @@ export async function runBrowserlessBqlProbe(target, options = {}) {
         : typeof payload?.error === "string"
           ? payload.error
           : `HTTP ${response.status}`;
+      const status = response.status === 429 || classifyErrorStatus(note) === "rate_limited"
+        ? "rate_limited"
+        : "error";
       return {
         provider: "browserless_bql",
         query: target.query,
         country: target.country,
         mode: target.mode,
-        status: response.status === 429 ? "rate_limited" : "error",
+        status,
         latencyMs,
         httpStatus: response.status,
         siteStatus: null,
         matchCount: 0,
         loginWall: false,
-        rateLimited: response.status === 429,
+        rateLimited: status === "rate_limited",
         blockedLikely: false,
         degraded: false,
         sourceLabel: null,
@@ -651,18 +654,19 @@ export async function runBrowserlessBqlProbe(target, options = {}) {
       note: analysis.matchCount > 0 ? "Browserless BQL rendered extractable Meta Ad Library links." : null,
     };
   } catch (error) {
+    const status = classifyErrorStatus(error instanceof Error ? error.message : "Unknown Browserless probe failure.");
     return {
       provider: "browserless_bql",
       query: target.query,
       country: target.country,
       mode: target.mode,
-      status: "error",
+      status,
       latencyMs: Math.round(performance.now() - startedAt),
       httpStatus: null,
       siteStatus: null,
       matchCount: 0,
       loginWall: false,
-      rateLimited: false,
+      rateLimited: status === "rate_limited",
       blockedLikely: false,
       degraded: false,
       sourceLabel: null,
@@ -739,18 +743,19 @@ async function runCdpBackedProbe(target, options) {
     );
   } catch (error) {
     const note = error instanceof Error ? error.message : `Unknown ${options.provider} probe failure.`;
+    const status = classifyErrorStatus(note);
     return {
       provider: options.provider,
       query: target.query,
       country: target.country,
       mode: target.mode,
-      status: classifyErrorStatus(note),
+      status,
       latencyMs: Math.round(performance.now() - startedAt),
       httpStatus: null,
       siteStatus: null,
       matchCount: 0,
       loginWall: false,
-      rateLimited: note.toLowerCase().includes("rate"),
+      rateLimited: status === "rate_limited",
       blockedLikely: note.toLowerCase().includes("captcha") || note.toLowerCase().includes("blocked"),
       degraded: false,
       sourceLabel: null,
@@ -831,18 +836,21 @@ export async function runBrowserbaseProbe(target, options = {}) {
 
   if (!sessionResponse.ok) {
     const note = payload?.message || payload?.error || `HTTP ${sessionResponse.status}`;
+    const status = sessionResponse.status === 429 || classifyErrorStatus(String(note)) === "rate_limited"
+      ? "rate_limited"
+      : classifyErrorStatus(String(note));
     return {
       provider: "browserbase",
       query: target.query,
       country: target.country,
       mode: target.mode,
-      status: sessionResponse.status === 429 ? "rate_limited" : classifyErrorStatus(String(note)),
+      status,
       latencyMs: 0,
       httpStatus: sessionResponse.status,
       siteStatus: null,
       matchCount: 0,
       loginWall: false,
-      rateLimited: sessionResponse.status === 429,
+      rateLimited: status === "rate_limited",
       blockedLikely: false,
       degraded: false,
       sourceLabel: null,
@@ -974,18 +982,21 @@ export async function runZyteProbe(target, options = {}) {
 
     if (!response.ok) {
       const note = payload?.detail || payload?.message || payload?.error || `HTTP ${response.status}`;
+      const status = response.status === 429 || classifyErrorStatus(String(note)) === "rate_limited"
+        ? "rate_limited"
+        : classifyErrorStatus(String(note));
       return {
         provider: "zyte_api",
         query: target.query,
         country: target.country,
         mode: target.mode,
-        status: response.status === 429 ? "rate_limited" : classifyErrorStatus(String(note)),
+        status,
         latencyMs,
         httpStatus: response.status,
         siteStatus: null,
         matchCount: 0,
         loginWall: false,
-        rateLimited: response.status === 429,
+        rateLimited: status === "rate_limited",
         blockedLikely: false,
         degraded: false,
         sourceLabel: null,
@@ -1023,18 +1034,19 @@ export async function runZyteProbe(target, options = {}) {
     };
   } catch (error) {
     const note = error instanceof Error ? error.message : "Unknown zyte_api probe failure.";
+    const status = classifyErrorStatus(note);
     return {
       provider: "zyte_api",
       query: target.query,
       country: target.country,
       mode: target.mode,
-      status: classifyErrorStatus(note),
+      status,
       latencyMs: Math.round(performance.now() - startedAt),
       httpStatus: null,
       siteStatus: null,
       matchCount: 0,
       loginWall: false,
-      rateLimited: note.toLowerCase().includes("rate"),
+      rateLimited: status === "rate_limited",
       blockedLikely: note.toLowerCase().includes("blocked") || note.toLowerCase().includes("captcha"),
       degraded: false,
       sourceLabel: null,
