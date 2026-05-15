@@ -1,5 +1,9 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
 import { isAdLibraryBackedAd, mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
+import {
+  type DigestCadence,
+  digestMetadataForEvent,
+} from "~/lib/change-intelligence";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import { isCustomerDigestEligibleEvent } from "~/lib/delivery-policy.server";
 import {
@@ -66,7 +70,8 @@ import {
 const DEFAULT_PAGE_BUDGET = 2;
 const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
-const DIGEST_LOOKBACK_DAYS = 7;
+const DAILY_DIGEST_LOOKBACK_DAYS = 1;
+const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 
 type ObservationRecord = Awaited<ReturnType<typeof listObservationsForRun>>[number];
@@ -84,6 +89,10 @@ interface ScanPayload {
   pagesScanned: number;
 }
 
+interface ScanOptions {
+  customerMetaAdLibraryToken?: string | null;
+}
+
 export interface MonitoringWorkflowParams {
   watchlistId: string;
   triggerType: WatchlistRunRecord["triggerType"];
@@ -95,10 +104,14 @@ export interface MonitoringWorkflowParams {
 interface RunScheduledMonitoringOptions {
   includeDigests?: boolean;
   cron?: string;
+  digestCadence?: DigestCadence;
+  digestLookbackDays?: number;
   scheduledTime?: number;
 }
 
 interface RunWeeklyDigestsOptions {
+  cadence?: DigestCadence;
+  lookbackDays?: number;
   periodEnd?: number | string | Date;
 }
 
@@ -157,7 +170,11 @@ export async function runScheduledMonitoring(
   }
 
   const digests = options.includeDigests
-    ? await runWeeklyDigests(env, { periodEnd: options.scheduledTime })
+    ? await runDigests(env, {
+        cadence: options.digestCadence ?? "weekly",
+        lookbackDays: options.digestLookbackDays,
+        periodEnd: options.scheduledTime,
+      })
     : 0;
 
   return {
@@ -257,6 +274,8 @@ export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord
     throw new Error("This watchlist was refreshed recently. Try again in a few minutes.");
   }
 
+  const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
+
   return runWatchlist(
     env,
     watchlist,
@@ -266,8 +285,13 @@ export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord
       if (!query) {
         throw new Error("The watchlist target could not be resolved.");
       }
-      return performBoundedScan(env, query, DEFAULT_PAGE_BUDGET);
+      return performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+        customerMetaAdLibraryToken,
+      });
     })(),
+    {
+      customerMetaAdLibraryToken,
+    },
   );
 }
 
@@ -295,11 +319,17 @@ export async function runWatchlistWorkflowJob(
     };
   }
 
+  const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
   const result = await runWatchlist(
     env,
     watchlist,
     params.triggerType,
-    performBoundedScan(env, query, DEFAULT_PAGE_BUDGET),
+    performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+      customerMetaAdLibraryToken,
+    }),
+    {
+      customerMetaAdLibraryToken,
+    },
   );
 
   return {
@@ -315,6 +345,7 @@ export async function runWatchlist(
   watchlist: WatchlistRecord,
   triggerType: WatchlistRunRecord["triggerType"],
   scanPromise: Promise<ScanPayload>,
+  options: ScanOptions = {},
 ) {
   const recentRuns = await getRecentSuccessfulRuns(env, watchlist.id, 3);
   const baselineRun = recentRuns[0] ?? null;
@@ -388,7 +419,9 @@ export async function runWatchlist(
       },
     });
     await touchWatchlistScanned(env, watchlist.id);
-    const commercialProvider = resolveCommercialDiscoveryProvider(env);
+    const commercialProvider = resolveCommercialDiscoveryProvider(env, {
+      customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+    });
     await logMetaIntegrationStatus(env, {
       status:
         commercialProvider === "meta_library_browser"
@@ -512,14 +545,40 @@ export async function runWeeklyDigests(
   env: AppEnv,
   options: RunWeeklyDigestsOptions = {},
 ) {
+  return runDigests(env, {
+    ...options,
+    cadence: "weekly",
+    lookbackDays: options.lookbackDays ?? WEEKLY_DIGEST_LOOKBACK_DAYS,
+  });
+}
+
+export async function runDailyDigests(
+  env: AppEnv,
+  options: Omit<RunWeeklyDigestsOptions, "cadence"> = {},
+) {
+  return runDigests(env, {
+    ...options,
+    cadence: "daily",
+    lookbackDays: options.lookbackDays ?? DAILY_DIGEST_LOOKBACK_DAYS,
+  });
+}
+
+async function runDigests(
+  env: AppEnv,
+  options: RunWeeklyDigestsOptions = {},
+) {
   if (!env.DB) {
     return 0;
   }
 
   const db = env.DB;
+  const cadence = options.cadence ?? "weekly";
+  const lookbackDays = options.lookbackDays ?? (
+    cadence === "daily" ? DAILY_DIGEST_LOOKBACK_DAYS : WEEKLY_DIGEST_LOOKBACK_DAYS
+  );
   const periodEnd =
     options.periodEnd === undefined ? new Date() : new Date(options.periodEnd);
-  const periodStart = new Date(periodEnd.getTime() - DIGEST_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const periodStart = new Date(periodEnd.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
   const periodStartIso = periodStart.toISOString();
   const periodEndIso = periodEnd.toISOString();
 
@@ -551,6 +610,7 @@ export async function runWeeklyDigests(
       eventType: WatchEventType;
       title: string;
       summary: string;
+      metadata: Record<string, unknown>;
     }> = [];
 
     for (const watchlist of watchlists) {
@@ -569,6 +629,7 @@ export async function runWeeklyDigests(
           eventType: event.eventType,
           title: event.title,
           summary: event.summary,
+          metadata: digestMetadataForEvent(event),
         });
       }
     }
@@ -600,6 +661,7 @@ export async function runWeeklyDigests(
         eventType: item.eventType,
         title: item.title,
         summary: item.summary,
+        metadata: item.metadata,
       });
     }
 
@@ -612,6 +674,7 @@ export async function runWeeklyDigests(
       periodStart: periodStartIso,
       periodEnd: periodEndIso,
       items: digestItems,
+      cadence,
       lane: "customer",
     });
     if (delivery.attempts > 0) {
@@ -665,14 +728,27 @@ async function runScheduledWatchlistInline(
     return false;
   }
 
-  if (!scanCache.has(watchlist.targetFingerprint)) {
+  const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
+  const scanCacheKey = `${watchlist.userId}:${watchlist.targetFingerprint}`;
+
+  if (!scanCache.has(scanCacheKey)) {
     scanCache.set(
-      watchlist.targetFingerprint,
-      performBoundedScan(env, query, DEFAULT_PAGE_BUDGET),
+      scanCacheKey,
+      performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+        customerMetaAdLibraryToken,
+      }),
     );
   }
 
-  await runWatchlist(env, watchlist, "scheduled", scanCache.get(watchlist.targetFingerprint)!);
+  await runWatchlist(
+    env,
+    watchlist,
+    "scheduled",
+    scanCache.get(scanCacheKey)!,
+    {
+      customerMetaAdLibraryToken,
+    },
+  );
   return true;
 }
 
@@ -680,6 +756,7 @@ async function performBoundedScan(
   env: AppEnv,
   query: NormalizedSavedQuery,
   pageBudget: number,
+  options: ScanOptions = {},
 ): Promise<ScanPayload> {
   let cursor: string | null | undefined = null;
   let pagesScanned = 0;
@@ -690,7 +767,10 @@ async function performBoundedScan(
       env,
       query,
       cursor ?? null,
-      { purpose: "watchlist_scan" },
+      {
+        purpose: "watchlist_scan",
+        customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+      },
     );
     ads.push(...response.ads);
     cursor = response.nextCursor;
@@ -703,6 +783,18 @@ async function performBoundedScan(
     ads: hydratedAds,
     pagesScanned,
   };
+}
+
+async function resolveWatchlistCustomerMetaAdLibraryToken(
+  env: AppEnv,
+  watchlist: WatchlistRecord,
+) {
+  try {
+    const { getCustomerMetaAdLibraryToken } = await import("~/lib/customer-meta.server");
+    return await getCustomerMetaAdLibraryToken(env, watchlist.userId);
+  } catch {
+    return null;
+  }
 }
 
 function buildScanNativeEventDrafts(

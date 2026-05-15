@@ -57,11 +57,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
   const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
+  const customerMetaAdLibraryToken = session
+    ? await (await import("~/lib/customer-meta.server")).getCustomerMetaAdLibraryToken(env, session.user.id)
+    : null;
   const result = await searchAdsViaSourceResolver(
     env,
     normalizeSavedQuery(parsed.mode, parsed.filters),
     url.searchParams.get("after"),
-    { purpose: "public_search", forceLive },
+    {
+      purpose: "public_search",
+      forceLive,
+      ...(customerMetaAdLibraryToken ? { customerMetaAdLibraryToken } : {}),
+    },
   );
   const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
     env,
@@ -237,7 +244,7 @@ export default function SearchRoute() {
               <p className="eyebrow">Public search flow</p>
               <h1>Search competitor Meta ads and turn useful queries into reusable monitoring.</h1>
             </div>
-            <div className="source-pill">Source: {formatSearchSourceLabel(data.result)}</div>
+            <div className="source-pill">Meta ads beta · {formatSearchSourceLabel(data.result)}</div>
           </div>
 
           {actionData?.message ? (
@@ -678,7 +685,7 @@ function formatSearchSourceLabel(result: SearchResponse) {
   }
 
   if (result.source === "meta_api") {
-    return "API fallback";
+    return "Customer API fallback";
   }
 
   if (result.source === "meta") {

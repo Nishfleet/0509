@@ -9,6 +9,8 @@ export type ScheduledTask =
   | {
       kind: "monitoring";
       includeDigests: boolean;
+      digestCadence?: "daily" | "weekly";
+      digestLookbackDays?: number;
     };
 
 export function resolveScheduledTask(cron: string): ScheduledTask {
@@ -18,6 +20,8 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
 
   return {
     kind: "monitoring",
-    includeDigests: cron === WEEKLY_DIGEST_CRON,
+    includeDigests: cron === DAILY_MONITORING_CRON || cron === WEEKLY_DIGEST_CRON,
+    digestCadence: cron === DAILY_MONITORING_CRON ? "daily" : "weekly",
+    digestLookbackDays: cron === DAILY_MONITORING_CRON ? 1 : 7,
   };
 }

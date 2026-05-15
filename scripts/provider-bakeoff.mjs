@@ -7,6 +7,7 @@ import {
   DOGFOOD_QUERIES,
   benchmarkProviders,
   findBlockingCurrent0509Failures,
+  findBlockingFreshLiveCurrent0509Failures,
   formatResultsTable,
 } from "./provider-bakeoff.lib.mjs";
 
@@ -14,7 +15,7 @@ import {
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ providers: string[], queries: string[], country: string, mode: "advertiser" | "keyword", json: boolean, baseUrl: string | undefined }} */
+  /** @type {{ providers: string[], queries: string[], country: string, mode: "advertiser" | "keyword", json: boolean, baseUrl: string | undefined, freshLiveCurrent: boolean, canaryBypassToken: string | undefined }} */
   const parsed = {
     providers: [],
     queries: [],
@@ -22,6 +23,8 @@ function parseArgs(args) {
     mode: DEFAULT_MODE,
     json: false,
     baseUrl: process.env.BAKEOFF_BASE_URL,
+    freshLiveCurrent: process.env.BAKEOFF_FRESH_LIVE_CURRENT === "true",
+    canaryBypassToken: process.env.CANARY_BYPASS_TOKEN,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -54,6 +57,9 @@ function parseArgs(args) {
     if (arg === "--json") {
       parsed.json = true;
     }
+    if (arg === "--fresh-live-current" || arg === "--launch-gate") {
+      parsed.freshLiveCurrent = true;
+    }
   }
 
   return {
@@ -80,6 +86,8 @@ function parseArgs(args) {
     mode: parsed.mode,
     json: parsed.json,
     baseUrl: parsed.baseUrl,
+    freshLiveCurrent: parsed.freshLiveCurrent,
+    canaryBypassToken: parsed.canaryBypassToken,
   };
 }
 
@@ -90,8 +98,24 @@ const results = await benchmarkProviders({
   country: config.country,
   mode: config.mode,
   baseUrl: config.baseUrl,
+  forceLive: config.freshLiveCurrent,
+  canaryBypassToken: config.canaryBypassToken,
 });
-const blockingFailures = findBlockingCurrent0509Failures(results);
+const blockingFailures = config.freshLiveCurrent
+  ? findBlockingFreshLiveCurrent0509Failures(results)
+  : findBlockingCurrent0509Failures(results);
+const configurationFailures =
+  config.freshLiveCurrent &&
+  config.providers.includes("current_0509") &&
+  !config.canaryBypassToken?.trim()
+    ? [
+        {
+          code: "missing_canary_bypass_token",
+          message:
+            "Set CANARY_BYPASS_TOKEN to prove current_0509 bypassed cache and provider cooldown.",
+        },
+      ]
+    : [];
 
 if (config.json) {
   console.log(
@@ -100,6 +124,9 @@ if (config.json) {
         generatedAt: new Date().toISOString(),
         providers: config.providers,
         queries: config.queries,
+        current0509Gate: config.freshLiveCurrent ? "fresh_live" : "rendered_results",
+        freshLiveBypassConfigured: Boolean(config.canaryBypassToken?.trim()),
+        configurationFailures,
         blockingFailures,
         results,
       },
@@ -108,7 +135,15 @@ if (config.json) {
     ),
   );
 } else {
+  if (config.freshLiveCurrent) {
+    console.log(
+      `current_0509 gate: fresh live (${config.canaryBypassToken?.trim() ? "token configured" : "token missing"})`,
+    );
+  }
   console.log(formatResultsTable(results));
+  for (const failure of configurationFailures) {
+    console.error(`\nconfiguration failed: ${failure.message}`);
+  }
   if (blockingFailures.length > 0) {
     console.error(
       `\ncurrent_0509 failed the bakeoff gate for: ${blockingFailures
@@ -118,6 +153,6 @@ if (config.json) {
   }
 }
 
-if (blockingFailures.length > 0) {
+if (configurationFailures.length > 0 || blockingFailures.length > 0) {
   process.exitCode = 1;
 }

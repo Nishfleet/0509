@@ -632,7 +632,7 @@ describe("watchlists route rendering", () => {
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
     expect(markup).toContain("See what changed");
-    expect(markup).toContain("Commercial discovery");
+    expect(markup).toContain("Meta ads tracking beta");
     expect(markup).toContain("Browser Run live capture");
     expect(markup).toContain("Proof and delivery");
     expect(markup).toContain("High confidence");
@@ -693,7 +693,7 @@ describe("watchlists route rendering", () => {
     const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
-    expect(markup).toContain("Commercial discovery is running from cache");
+    expect(markup).toContain("Meta ads discovery is running from cache");
     expect(markup).toContain("Browser Run with cached live results");
   });
 });

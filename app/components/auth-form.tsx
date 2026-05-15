@@ -61,11 +61,11 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
 
   return (
     <div className="auth-card">
-      <p className="eyebrow">{isSignup ? "Create your workspace" : "Welcome back"}</p>
-      <h1>{isSignup ? "Start tracking competitor shifts." : "Sign in to Five to Nine."}</h1>
+      <p className="eyebrow">{isSignup ? "Create your pilot workspace" : "Welcome back"}</p>
+      <h1>{isSignup ? "Start a proof-backed monitoring workspace." : "Sign in to Five to Nine."}</h1>
       <p className="auth-copy">
         {isSignup
-          ? "Saved searches, watchlists, and weekly digests all live behind your account."
+          ? "Saved searches, watchlists, and weekly digests all live behind your account. Pilot access is activated manually when needed."
           : "Pick up your saved research, watchlists, and share links where you left them."}
       </p>
 
@@ -117,7 +117,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
           {pending
             ? "Working..."
             : isSignup
-              ? "Create account"
+              ? "Create pilot workspace"
               : "Sign in"}
         </button>
       </form>

@@ -7,6 +7,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
@@ -246,6 +248,8 @@ export default function DigestsRoute() {
                   )}
                 </section>
 
+                <DigestMovementSummary items={data.selectedDigest.items} />
+
                 <ul className="event-list">
                   {data.selectedDigest.items.map((item) => (
                     <li className="event-card" key={item.id}>
@@ -257,6 +261,7 @@ export default function DigestsRoute() {
                         <span className="badge">{item.eventType.replaceAll("_", " ")}</span>
                       </div>
                       <p>{item.summary}</p>
+                      <DigestIntelligence metadata={item.metadata} />
                     </li>
                   ))}
                 </ul>

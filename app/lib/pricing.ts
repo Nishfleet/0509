@@ -25,12 +25,14 @@ export function pricingPlansForRegion(region: PricingRegion): PricingPlan[] {
   if (region === "india") {
     return [
       {
+        slug: "starter",
         name: "Starter",
         monthlyLabel: "Rs 2,500 / month",
         yearlyLabel: "Rs 24,000 / year",
         detail: "Solo or small team. Saved searches, a few watchlists, and weekly digest delivery.",
       },
       {
+        slug: "agency",
         name: "Agency",
         monthlyLabel: "Rs 7,500 / month",
         yearlyLabel: "Rs 72,000 / year",
@@ -41,12 +43,14 @@ export function pricingPlansForRegion(region: PricingRegion): PricingPlan[] {
 
   return [
     {
+      slug: "starter",
       name: "Starter",
       monthlyLabel: "$39 / month",
       yearlyLabel: "$390 / year",
       detail: "Small team plan with saved queries, watchlists, and digest delivery.",
     },
     {
+      slug: "agency",
       name: "Agency",
       monthlyLabel: "$129 / month",
       yearlyLabel: "$1,290 / year",

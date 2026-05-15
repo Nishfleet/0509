@@ -25,6 +25,10 @@ export interface ReportEventSummary {
   title: string;
   summary: string;
   createdAt: string;
+  priorityScore: number | null;
+  priorityBand: string;
+  recommendedAction: string;
+  proofTrail: string;
 }
 
 export interface ReportRow {

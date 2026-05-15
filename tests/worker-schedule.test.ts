@@ -23,15 +23,21 @@ describe("worker schedule", () => {
     });
     expect(resolveScheduledTask(DAILY_MONITORING_CRON)).toEqual({
       kind: "monitoring",
-      includeDigests: false,
+      includeDigests: true,
+      digestCadence: "daily",
+      digestLookbackDays: 1,
     });
     expect(resolveScheduledTask(WEEKLY_DIGEST_CRON)).toEqual({
       kind: "monitoring",
       includeDigests: true,
+      digestCadence: "weekly",
+      digestLookbackDays: 7,
     });
     expect(resolveScheduledTask("0 5 * * MON-FRI")).toEqual({
       kind: "monitoring",
       includeDigests: false,
+      digestCadence: "weekly",
+      digestLookbackDays: 7,
     });
   });
 });

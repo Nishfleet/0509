@@ -54,6 +54,23 @@ export function ReportView({ report }: { report: ReportDocument }) {
                 <p className="section-label">Watch event</p>
                 <h3>{row.event.title}</h3>
                 <p>{row.event.summary}</p>
+                <dl className="proof-trail-list">
+                  <div>
+                    <dt>Priority</dt>
+                    <dd>
+                      {row.event.priorityBand}
+                      {row.event.priorityScore === null ? "" : ` · ${row.event.priorityScore}/100`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Next move</dt>
+                    <dd>{row.event.recommendedAction}</dd>
+                  </div>
+                  <div>
+                    <dt>Proof trail</dt>
+                    <dd>{row.event.proofTrail}</dd>
+                  </div>
+                </dl>
                 <p className="muted-text">
                   {new Date(row.event.createdAt).toLocaleString("en-IN")}
                 </p>

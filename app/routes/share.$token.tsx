@@ -2,6 +2,7 @@ import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 import { ReportView } from "~/components/report-view";
+import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
 import { isReportDocument } from "~/lib/report";
 
 export async function loader({ context, params }: LoaderFunctionArgs) {
@@ -113,11 +114,23 @@ export default function ShareRoute() {
           </article>
         ) : digestSnapshot ? (
           <article className="content-card">
-            <p className="section-label">Shared digest snapshot</p>
-            <h1>
-              {new Date(digestSnapshot.periodStart).toLocaleDateString("en-IN")} to{" "}
-              {new Date(digestSnapshot.periodEnd).toLocaleDateString("en-IN")}
-            </h1>
+            <div className="card-header report-toolbar">
+              <div>
+                <p className="section-label">Shared digest snapshot</p>
+                <h1>
+                  {new Date(digestSnapshot.periodStart).toLocaleDateString("en-IN")} to{" "}
+                  {new Date(digestSnapshot.periodEnd).toLocaleDateString("en-IN")}
+                </h1>
+              </div>
+              <button
+                className="button button-secondary"
+                onClick={() => window.print()}
+                type="button"
+              >
+                Download PDF
+              </button>
+            </div>
+            <DigestMovementSummary items={digestSnapshot.items} />
             <ul className="event-list">
               {digestSnapshot.items.map((item) => (
                 <li className="event-card" key={item.id}>
@@ -129,6 +142,7 @@ export default function ShareRoute() {
                     <span className="badge">{item.eventType.replaceAll("_", " ")}</span>
                   </div>
                   <p>{item.summary}</p>
+                  <DigestIntelligence metadata={item.metadata ?? {}} />
                 </li>
               ))}
             </ul>
@@ -193,6 +207,7 @@ function isDigestSnapshotPayload(value: unknown): value is {
     eventType: string;
     title: string;
     summary: string;
+    metadata?: Record<string, unknown>;
   }>;
 } {
   if (!value || typeof value !== "object") {

@@ -34,9 +34,9 @@ const QUICK_ACTION_RUNNER_SCRIPT_ID = "__0509_ad_library_extractor";
 const QUICK_ACTION_EXTRACTION_SCRIPT_ID = "__0509_ad_library_payload";
 const QUICK_ACTION_WAIT_FOR_TIMEOUT_MS = 1_000;
 const QUICK_ACTION_SCRAPE_WAIT_FOR_TIMEOUT_MS = 2_000;
-const BROWSERLESS_SELECTOR_TIMEOUT_MS = 15_000;
+const BROWSERLESS_RENDER_WAIT_MS = 5_000;
 const BROWSERLESS_BQL_MUTATION = `
-mutation MetaLibraryLiveFallback($url: String!, $selector: String!, $userAgent: String!) {
+mutation MetaLibraryLiveFallback($url: String!, $userAgent: String!) {
   userAgent(userAgent: $userAgent) {
     time
   }
@@ -46,7 +46,7 @@ mutation MetaLibraryLiveFallback($url: String!, $selector: String!, $userAgent: 
   goto(url: $url) {
     status
   }
-  waitForSelector(selector: $selector, timeout: ${BROWSERLESS_SELECTOR_TIMEOUT_MS}) {
+  waitForTimeout(time: ${BROWSERLESS_RENDER_WAIT_MS}) {
     time
   }
   html {
@@ -506,7 +506,7 @@ function shouldUseQuickActionScrapeFallback(error: CommercialDiscoveryError) {
 function shouldUseBrowserlessFallback(env: AppEnv, error: CommercialDiscoveryError) {
   return (
     hasBrowserlessBql(env) &&
-    ["browser_unavailable", "selector_drift", "empty_result", "timeout"].includes(error.failureClass)
+    ["browser_unavailable", "selector_drift", "empty_result", "timeout", "login_wall"].includes(error.failureClass)
   );
 }
 
@@ -557,7 +557,6 @@ async function searchMetaLibraryByBrowserless(
     body: JSON.stringify({
       query: BROWSERLESS_BQL_MUTATION,
       variables: {
-        selector: AD_LIBRARY_RESULT_SELECTOR,
         url: buildSearchUrl(query),
         userAgent: MOBILE_USER_AGENT,
       },

@@ -268,9 +268,10 @@ describe("searchMetaLibraryByBrowser", () => {
 
     expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/stealth/bql?token=browserless-token");
     expect(requestBody.variables).toMatchObject({
-      selector: 'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]',
       userAgent: expect.stringContaining("iPhone"),
     });
+    expect(requestBody.variables.selector).toBeUndefined();
+    expect(requestBody.query).toContain("waitForTimeout");
     expect(result).toMatchObject({
       source: "meta_library_browser",
       provider: "meta_library_browser",

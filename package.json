@@ -8,8 +8,10 @@
     "canary:prod": "node scripts/prod-canary.mjs",
     "deploy": "npm run build && wrangler deploy",
     "dev": "react-router dev",
+    "launch:readiness": "npm run typecheck && npm test && npm run build && npm run canary:prod",
     "preview": "npm run build && vite preview",
     "provider:bakeoff": "node scripts/provider-bakeoff.mjs",
+    "provider:bakeoff:launch": "node scripts/provider-bakeoff.mjs --launch-gate",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
@@ -35,5 +37,8 @@
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4",
     "wrangler": "^4.78.0"
+  },
+  "overrides": {
+    "kysely": "0.28.17"
   }
 }
