@@ -23,9 +23,9 @@ afterEach(() => {
 });
 
 describe("provider bakeoff helpers", () => {
-  it("keeps known failing production search samples in the default gate", () => {
+  it("keeps known ad-heavy production search samples in the default gate", () => {
     expect(DOGFOOD_QUERIES).toEqual(
-      expect.arrayContaining(["adspy", "bigspy", "adflex", "nykaa", "boat", "cod"]),
+      expect.arrayContaining(["nykaa", "boat", "mamaearth", "swiggy", "zomato", "meesho"]),
     );
   });
 
