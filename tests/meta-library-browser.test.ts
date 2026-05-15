@@ -287,6 +287,74 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("extracts rendered Meta Ad Library text cards when ad-detail links are absent", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            html: {
+              html: `
+                <html>
+                  <body>
+                    <main>
+                      ~6,200 results
+                      Active
+                      Library ID: 1280520150312258
+                      Started running on 14 Jul 2025
+                      Platforms
+                      This ad has multiple versions
+                      Menu
+                      See ad details
+                      Nykaa Man
+                      Sponsored
+                      For the Man Who Never Settles For Less
+                      Flat ₹400 Off on Your First Order
+                      NYKAAMAN.COM
+                      Shop Now
+                    </main>
+                  </body>
+                </html>
+              `,
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+      },
+      buildQuery(),
+    );
+
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      ads: [
+        expect.objectContaining({
+          metaAdId: "1280520150312258",
+          advertiser: "Nykaa Man",
+          previewHeadline: "For the Man Who Never Settles For Less",
+          cta: "Shop Now",
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1280520150312258",
+          landingPageUrl: "https://nykaaman.com/",
+          active: true,
+          source: "meta_library_browser",
+        }),
+      ],
+    });
+  });
+
   it("fails fast when Browser Run reports no new browser acquisitions are allowed", async () => {
     const launch = vi.fn();
     const sessions = vi.fn().mockResolvedValue([]);
