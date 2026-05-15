@@ -633,6 +633,69 @@ describe("current 0509 probe", () => {
     expect(result.matchCount).toBe(3);
   });
 
+  it("captures the source label from the rendered search pill", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div class="source-pill">Meta ads beta · Live Ad Library capture</div>
+            <h2>3 ads on this page</h2>
+          </body>
+        </html>
+      `,
+    });
+
+    const result = await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+      },
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.sourceLabel).toBe("Live Ad Library capture");
+    expect(result.matchCount).toBe(3);
+  });
+
+  it("uses the longer production timeout for fresh live probes", async () => {
+    const controller = new AbortController();
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div class="source-pill">Meta ads beta · Live Ad Library capture</div>
+            <h2>3 ads on this page</h2>
+          </body>
+        </html>
+      `,
+    });
+
+    await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+        forceLive: true,
+      },
+    );
+
+    expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+  });
+
   it("sends the tokened fresh-live bypass for canary probes", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

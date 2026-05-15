@@ -1467,7 +1467,7 @@ textarea {
   color: var(--site-muted);
 }
 
-.site-shell .ad-evidence button {
+.site-shell .ad-evidence .evidence-chip {
   justify-self: start;
   align-self: end;
   border: 1px solid rgba(247, 239, 224, 0.18);

@@ -4,9 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRazorpaySubscription,
   fingerprintRazorpayWebhookBody,
+  isRazorpayWebhookPlanAllowed,
   isRazorpayWebhookFresh,
   isRazorpaySubscriptionCheckoutConfigured,
   parseRazorpaySubscriptionWebhook,
+  resolveRazorpayPlanFromProviderPlanId,
   verifyRazorpaySubscriptionSignature,
   verifyRazorpayWebhookSignature,
 } from "~/lib/razorpay.server";
@@ -145,6 +147,31 @@ describe("Razorpay subscription billing", () => {
       shouldGrant: true,
       shouldRevoke: false,
     });
+  });
+
+  it("requires webhook provider plan ids to match configured billing plans", () => {
+    expect(
+      resolveRazorpayPlanFromProviderPlanId(
+        {
+          RAZORPAY_PLAN_STARTER_MONTHLY: "plan_starter_monthly",
+          RAZORPAY_PLAN_AGENCY_MONTHLY: "plan_agency_monthly",
+        },
+        "plan_starter_monthly",
+      ),
+    ).toEqual({ plan: "starter", cycle: "monthly" });
+
+    expect(
+      isRazorpayWebhookPlanAllowed(
+        {
+          RAZORPAY_PLAN_STARTER_MONTHLY: "plan_starter_monthly",
+          RAZORPAY_PLAN_AGENCY_MONTHLY: "plan_agency_monthly",
+        },
+        {
+          plan: "starter",
+          providerPlanId: "plan_agency_monthly",
+        },
+      ),
+    ).toBe(false);
   });
 
   it("fingerprints webhook bodies when Razorpay does not provide an event id", async () => {

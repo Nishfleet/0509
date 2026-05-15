@@ -876,6 +876,17 @@ export async function syncRazorpaySubscriptionStatus(
     shouldRevoke: boolean;
   },
 ) {
+  if (input.shouldRevoke) {
+    const current = await one<{ razorpay_subscription_id: string | null }>(
+      env,
+      "SELECT razorpay_subscription_id FROM user_plan WHERE user_id = ?",
+      input.userId,
+    );
+    if (current?.razorpay_subscription_id !== input.subscriptionId) {
+      return;
+    }
+  }
+
   const nextPlan = input.shouldGrant ? input.plan : input.shouldRevoke ? "free" : null;
 
   if (nextPlan) {
@@ -3878,6 +3889,7 @@ export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Dat
         FROM proof_capture
         WHERE status = 'succeeded'
           AND succeeded_at >= ?
+          AND COALESCE(json_extract(capture_metadata_json, '$.kind'), '') != 'launch_readiness_canary'
       `,
       since,
     ),
