@@ -13,7 +13,14 @@ export const DEFAULT_PROVIDERS = Object.freeze([
   "brightdata",
   "zyte_api",
 ]);
-export const DOGFOOD_QUERIES = Object.freeze(["adspy", "bigspy", "adflex", "nykaa", "boat", "cod"]);
+export const DOGFOOD_QUERIES = Object.freeze([
+  "nykaa",
+  "boat",
+  "mamaearth",
+  "swiggy",
+  "zomato",
+  "meesho",
+]);
 export const FRESH_LIVE_CURRENT_0509_TIMEOUT_MS = 60_000;
 export const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
