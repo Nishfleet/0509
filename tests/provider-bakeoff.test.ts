@@ -234,6 +234,8 @@ describe("browserless probe", () => {
 
     expect(request.endpoint).toBe("https://production-sfo.browserless.io/stealth/bql?token=test-token");
     expect(request.body.variables.url).toContain("q=adspy");
+    expect("selector" in request.body.variables).toBe(false);
+    expect(request.body.query).toContain("waitForTimeout");
   });
 
   it("parses a successful Browserless HTML response", async () => {

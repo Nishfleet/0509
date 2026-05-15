@@ -13,7 +13,10 @@ import {
   legacyWatchEventImportanceScore,
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
+  recordPendingRazorpaySubscription,
+  syncRazorpaySubscriptionStatus,
   upsertAd,
+  upsertCustomerMetaConnection,
   upsertDeliveryTarget,
   upsertProofTarget,
   upsertWatchlistDeliveryConfig,
@@ -94,6 +97,96 @@ describe("createLandingPageSnapshot", () => {
     expect(analysisInserts.some((statement) => statement.bindings.includes("price_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("form_present"))).toBe(true);
     expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v1"))).toBe(true);
+  });
+});
+
+describe("Razorpay billing persistence", () => {
+  it("records pending subscriptions without granting a paid plan", async () => {
+    const mock = createMockDb();
+
+    await recordPendingRazorpaySubscription(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        subscriptionId: "sub_123",
+        customerId: "cust_123",
+        providerPlanId: "plan_starter_monthly",
+        status: "created",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "razorpay_status");
+
+    expect(statement?.sql).toContain("VALUES (?, 'free'");
+    expect(statement?.sql).not.toContain("plan = excluded.plan");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "cust_123",
+      "sub_123",
+      "plan_starter_monthly",
+      "created",
+    ]);
+  });
+
+  it("grants the paid plan only after Razorpay reports an active subscription", async () => {
+    const mock = createMockDb();
+
+    await syncRazorpaySubscriptionStatus(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        plan: "starter",
+        status: "active",
+        subscriptionId: "sub_123",
+        customerId: "cust_123",
+        providerPlanId: "plan_starter_monthly",
+        shouldGrant: true,
+        shouldRevoke: false,
+      },
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "plan = excluded.plan");
+
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "starter",
+      "cust_123",
+      "sub_123",
+      "plan_starter_monthly",
+      "active",
+    ]);
+  });
+});
+
+describe("customer Meta connection persistence", () => {
+  it("stores encrypted customer Meta tokens without binding the raw token", async () => {
+    const mock = createMockDb();
+
+    await upsertCustomerMetaConnection(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        encryptedAccessToken: "v1:iv:ciphertext",
+        tokenLastFour: "1234",
+        tokenFingerprint: "fingerprint",
+        status: "healthy",
+        summary: "Connected.",
+        lastCheckedAt: "2026-05-15T00:00:00.000Z",
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      },
+    );
+
+    const statement = findStatement(
+      mock.statements,
+      "INSERT INTO customer_meta_connection",
+      "encrypted_access_token",
+    );
+
+    expect(statement?.bindings).toContain("v1:iv:ciphertext");
+    expect(statement?.bindings).toContain("1234");
+    expect(statement?.bindings).not.toContain("raw-meta-token");
+    expect(statement?.sql).toContain("ON CONFLICT(user_id)");
   });
 });
 
@@ -248,6 +341,7 @@ describe("createWatchEvent", () => {
     expect(statement?.sql).toContain("proof_capture_id");
     expect(statement?.sql).toContain("confirmed_at");
     expect(statement?.sql).toContain("last_evaluated_at");
+    expect(statement?.sql.match(/\?/g)?.length).toBe(statement?.bindings.length);
     expect(statement?.bindings).toContain("confirmed");
     expect(statement?.bindings).toContain(0);
   });

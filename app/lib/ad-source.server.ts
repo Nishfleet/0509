@@ -25,6 +25,7 @@ export { CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
   forceLive?: boolean;
+  customerMetaAdLibraryToken?: string | null;
 }
 
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
@@ -88,12 +89,35 @@ function normalizeSearchResponse(
   };
 }
 
-export function resolveCommercialDiscoveryProvider(env: AppEnv): AdDiscoveryProvider {
+function envFlagEnabled(value: string | undefined) {
+  return ["1", "true", "yes", "on"].includes(value?.trim().toLowerCase() ?? "");
+}
+
+function resolveCustomerOwnedMetaToken(
+  env: AppEnv,
+  options: Pick<SearchAdsViaSourceOptions, "customerMetaAdLibraryToken"> = {},
+) {
+  const customerToken = options.customerMetaAdLibraryToken?.trim();
+  if (customerToken) {
+    return customerToken;
+  }
+
+  if (envFlagEnabled(env.ALLOW_PLATFORM_META_API_FALLBACK)) {
+    return env.META_AD_LIBRARY_TOKEN?.trim() || null;
+  }
+
+  return null;
+}
+
+export function resolveCommercialDiscoveryProvider(
+  env: AppEnv,
+  options: Pick<SearchAdsViaSourceOptions, "customerMetaAdLibraryToken"> = {},
+): AdDiscoveryProvider {
   if (env.BROWSER || hasBrowserRunQuickActions(env) || env.BROWSERLESS_TOKEN?.trim()) {
     return "meta_library_browser";
   }
 
-  if (env.META_AD_LIBRARY_TOKEN) {
+  if (resolveCustomerOwnedMetaToken(env, options)) {
     return "meta_api";
   }
 
@@ -197,21 +221,27 @@ export async function resolveCommercialAdSourceStatus(
     provider !== "demo" && effectiveEnv.DB
       ? await getDiscoveryProviderState(effectiveEnv, provider)
       : null;
+  const diagnosticMetaProviderState =
+    provider === "demo" && effectiveEnv.META_AD_LIBRARY_TOKEN?.trim() && effectiveEnv.DB
+      ? await getDiscoveryProviderState(effectiveEnv, "meta_api")
+      : null;
 
-  if (providerState) {
+  if (providerState || diagnosticMetaProviderState) {
+    const state = providerState ?? diagnosticMetaProviderState!;
+    const stateProvider = providerState ? provider : "meta_api";
     return {
-      status: providerState.status,
-      provider,
+      status: state.status,
+      provider: stateProvider,
       mode:
-        providerState.status === "cache_only"
+        state.status === "cache_only"
           ? "cache"
-          : provider === "meta_api"
+          : stateProvider === "meta_api"
             ? "diagnostic"
             : "live",
-      summary: providerState.summary,
-      lastCheckedAt: providerState.updatedAt,
-      lastErrorCode: providerState.failureClass,
-      lastErrorMessage: extractProviderStateErrorMessage(providerState.metadata),
+      summary: state.summary,
+      lastCheckedAt: state.updatedAt,
+      lastErrorCode: state.failureClass,
+      lastErrorMessage: extractProviderStateErrorMessage(state.metadata),
     };
   }
 
@@ -228,13 +258,13 @@ export async function resolveCommercialAdSourceStatus(
     };
   }
 
-  if (provider === "meta_api") {
+  if (provider === "meta_api" || effectiveEnv.META_AD_LIBRARY_TOKEN?.trim()) {
     return {
       status: "degraded",
-      provider,
+      provider: "meta_api",
       mode: "diagnostic",
       summary:
-        "Official Meta API is configured for limited diagnostic use. It should not be treated as the live commercial discovery provider for India.",
+        "Official Meta API is configured for limited diagnostic use. Customer-facing fallback requires a customer-owned Meta connection or an explicit platform-token exception.",
       lastCheckedAt: null,
       lastErrorCode: null,
       lastErrorMessage: null,
@@ -260,11 +290,19 @@ export async function searchAdsViaSourceResolver(
   options: SearchAdsViaSourceOptions = {},
 ): Promise<SearchResponse> {
   const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
-  const provider = resolveCommercialDiscoveryProvider(effectiveEnv);
+  const provider = resolveCommercialDiscoveryProvider(effectiveEnv, {
+    customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+  });
+  const hasCustomerMetaToken = Boolean(options.customerMetaAdLibraryToken?.trim());
+  const metaApiToken = resolveCustomerOwnedMetaToken(effectiveEnv, {
+    customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+  });
   const routeContext = options.purpose ?? "public_search";
   const forceLive = options.forceLive === true && provider === "meta_library_browser";
   const providerState =
-    provider !== "demo" && effectiveEnv.DB
+    provider !== "demo" &&
+    effectiveEnv.DB &&
+    !(provider === "meta_api" && hasCustomerMetaToken)
       ? await getDiscoveryProviderState(effectiveEnv, provider)
       : null;
 
@@ -315,6 +353,7 @@ export async function searchAdsViaSourceResolver(
         browserFailureClass: providerState.failureClass,
         browserSummary: providerState.summary,
         routeContext,
+        customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
       });
       if (apiFallback) {
         return apiFallback;
@@ -349,6 +388,7 @@ export async function searchAdsViaSourceResolver(
       browserFailureClass: providerState.failureClass,
       browserSummary: providerState.summary,
       routeContext,
+      customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
     });
     if (apiFallback) {
       return apiFallback;
@@ -426,9 +466,17 @@ export async function searchAdsViaSourceResolver(
         provider === "meta_library_browser"
           ? await searchMetaLibraryByBrowser(effectiveEnv, query)
           : normalizeSearchResponse(
-              await searchMetaApiAds(effectiveEnv, query, cursor, {
-                allowDemoFallback: false,
-              }),
+              await searchMetaApiAds(
+                {
+                  ...effectiveEnv,
+                  META_AD_LIBRARY_TOKEN: metaApiToken ?? effectiveEnv.META_AD_LIBRARY_TOKEN,
+                },
+                query,
+                cursor,
+                {
+                  allowDemoFallback: false,
+                },
+              ),
               provider,
             );
       if (!isUsableLiveDiscoveryResult(provider, liveResult)) {
@@ -468,6 +516,7 @@ export async function searchAdsViaSourceResolver(
           browserMsUsed,
           metadata: {
             cursor: cursor ?? null,
+            customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
           },
         });
         await upsertDiscoveryProviderState(effectiveEnv, {
@@ -481,6 +530,7 @@ export async function searchAdsViaSourceResolver(
           lastSuccessAt: timestamp,
           lastFailureAt: null,
           metadata: {
+            customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
             routeContext,
           },
         });
@@ -522,6 +572,7 @@ export async function searchAdsViaSourceResolver(
         metadata: {
           cooldownUntil: cooldownState?.cooldownUntil ?? null,
           cursor: cursor ?? null,
+          customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
           errorMessage: error instanceof Error ? error.message : "Unknown discovery error.",
           retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
         },
@@ -535,6 +586,7 @@ export async function searchAdsViaSourceResolver(
         lastFailureAt: timestamp,
         metadata: {
           cooldownUntil: cooldownState?.cooldownUntil ?? null,
+          customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
           retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
           routeContext,
         },
@@ -546,6 +598,7 @@ export async function searchAdsViaSourceResolver(
         browserFailureClass: failureClass,
         browserSummary: summary,
         routeContext,
+        customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
       });
       if (apiFallback) {
         return apiFallback;
@@ -596,30 +649,42 @@ async function tryMetaApiFallback(
     browserFailureClass: DiscoveryFailureClass | null | undefined;
     browserSummary: string | null | undefined;
     routeContext: DiscoveryRouteContext;
+    customerMetaAdLibraryToken?: string | null;
   },
 ): Promise<SearchResponse | null> {
-  if (!env.META_AD_LIBRARY_TOKEN) {
+  const metaApiToken = resolveCustomerOwnedMetaToken(env, {
+    customerMetaAdLibraryToken: input.customerMetaAdLibraryToken ?? null,
+  });
+  if (!metaApiToken) {
     return null;
   }
 
+  const metaApiEnv = {
+    ...env,
+    META_AD_LIBRARY_TOKEN: metaApiToken,
+  };
+  const hasCustomerMetaToken = Boolean(input.customerMetaAdLibraryToken?.trim());
   const queryFingerprint = fingerprintSavedQuery(query);
   const country = query.filters.country || "India";
-  const providerState = env.DB ? await getDiscoveryProviderState(env, "meta_api") : null;
+  const providerState =
+    metaApiEnv.DB && !hasCustomerMetaToken
+      ? await getDiscoveryProviderState(metaApiEnv, "meta_api")
+      : null;
   if (providerState && shouldUseProviderCooldown(providerState)) {
     return null;
   }
 
   try {
     const apiResult = normalizeSearchResponse(
-      await searchMetaApiAds(env, query, cursor, {
+      await searchMetaApiAds(metaApiEnv, query, cursor, {
         allowDemoFallback: false,
       }),
       "meta_api",
     );
     const timestamp = new Date().toISOString();
 
-    if (env.DB) {
-      await createDiscoveryFetchLog(env, {
+    if (metaApiEnv.DB) {
+      await createDiscoveryFetchLog(metaApiEnv, {
         provider: "meta_api",
         routeContext: input.routeContext,
         queryFingerprint,
@@ -632,10 +697,11 @@ async function tryMetaApiFallback(
           browserFailureClass: input.browserFailureClass ?? null,
           browserSummary: input.browserSummary ?? null,
           cursor: cursor ?? null,
+          customerOwned: hasCustomerMetaToken,
           fallbackFor: "meta_library_browser",
         },
       });
-      await upsertDiscoveryProviderState(env, {
+      await upsertDiscoveryProviderState(metaApiEnv, {
         provider: "meta_api",
         status: "healthy",
         failureClass: null,
@@ -643,6 +709,7 @@ async function tryMetaApiFallback(
         lastSuccessAt: timestamp,
         lastFailureAt: null,
         metadata: {
+          customerOwned: hasCustomerMetaToken,
           fallbackFor: "meta_library_browser",
           routeContext: input.routeContext,
         },
@@ -664,8 +731,8 @@ async function tryMetaApiFallback(
     const cooldownState = buildDiscoveryCooldownState(error, failureClass);
     const errorMessage = error instanceof Error ? error.message : "Unknown API fallback error.";
 
-    if (env.DB) {
-      await createDiscoveryFetchLog(env, {
+    if (metaApiEnv.DB) {
+      await createDiscoveryFetchLog(metaApiEnv, {
         provider: "meta_api",
         routeContext: input.routeContext,
         queryFingerprint,
@@ -679,12 +746,13 @@ async function tryMetaApiFallback(
           browserSummary: input.browserSummary ?? null,
           cooldownUntil: cooldownState?.cooldownUntil ?? null,
           cursor: cursor ?? null,
+          customerOwned: hasCustomerMetaToken,
           errorMessage,
           fallbackFor: "meta_library_browser",
           retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
         },
       });
-      await upsertDiscoveryProviderState(env, {
+      await upsertDiscoveryProviderState(metaApiEnv, {
         provider: "meta_api",
         status: "degraded",
         failureClass,
@@ -693,6 +761,7 @@ async function tryMetaApiFallback(
         lastFailureAt: timestamp,
         metadata: {
           cooldownUntil: cooldownState?.cooldownUntil ?? null,
+          customerOwned: hasCustomerMetaToken,
           errorMessage,
           fallbackFor: "meta_library_browser",
           retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,

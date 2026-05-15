@@ -691,7 +691,10 @@ describe("runWatchlistManual cheap scan path", () => {
 
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
 
-    await runWatchlistManual({ META_AD_LIBRARY_TOKEN: "token" } as never, watchlist);
+    await runWatchlistManual(
+      { ALLOW_PLATFORM_META_API_FALLBACK: "true", META_AD_LIBRARY_TOKEN: "token" } as never,
+      watchlist,
+    );
 
     expect(createLandingPageSnapshot).not.toHaveBeenCalled();
 
@@ -865,21 +868,24 @@ describe("runWatchlistManual cheap scan path", () => {
 
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
 
-    await runWatchlistManual({ META_AD_LIBRARY_TOKEN: "token" } as never, watchlist);
+    await runWatchlistManual(
+      { ALLOW_PLATFORM_META_API_FALLBACK: "true", META_AD_LIBRARY_TOKEN: "token" } as never,
+      watchlist,
+    );
 
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
-      { META_AD_LIBRARY_TOKEN: "token" },
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
       "https://example.com/new-url",
     );
     expect(createProofCapture).toHaveBeenCalledWith(
-      { META_AD_LIBRARY_TOKEN: "token" },
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
       expect.objectContaining({
         status: "succeeded",
         proofTargetId: "target-1",
       }),
     );
     expect(createEventCandidate).toHaveBeenCalledWith(
-      { META_AD_LIBRARY_TOKEN: "token" },
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
       expect.objectContaining({
         eventType: "landing_page_cta_changed",
         status: "confirmed",
@@ -887,7 +893,7 @@ describe("runWatchlistManual cheap scan path", () => {
       }),
     );
     expect(createWatchEvent).toHaveBeenCalledWith(
-      { META_AD_LIBRARY_TOKEN: "token" },
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
       expect.objectContaining({
         eventType: "landing_page_cta_changed",
         proofCaptureId: "proof-capture-1",
@@ -1003,13 +1009,14 @@ describe("runWatchlistManual cheap scan path", () => {
 
     await runWatchlistManual(
       {
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
         META_AD_LIBRARY_TOKEN: "token",
       } as never,
       watchlist,
     );
 
     expect(deliverWatchlistAlerts).toHaveBeenCalledWith(
-      { META_AD_LIBRARY_TOKEN: "token" },
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
       expect.objectContaining({
         userId: "user-1",
         watchlist: expect.objectContaining({
