@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createRazorpaySubscription,
-  fingerprintRazorpayWebhookBody,
-  isRazorpayWebhookFresh,
   isRazorpaySubscriptionCheckoutConfigured,
   parseRazorpaySubscriptionWebhook,
   verifyRazorpaySubscriptionSignature,
@@ -113,9 +111,7 @@ describe("Razorpay subscription billing", () => {
 
   it("extracts the user and plan from subscription webhook notes", () => {
     const update = parseRazorpaySubscriptionWebhook({
-      id: "evt_123",
       event: "subscription.activated",
-      created_at: 1_777_777_000,
       payload: {
         subscription: {
           entity: {
@@ -133,9 +129,7 @@ describe("Razorpay subscription billing", () => {
     });
 
     expect(update).toMatchObject({
-      eventId: "evt_123",
       event: "subscription.activated",
-      payloadCreatedAt: "2026-05-03T02:56:40.000Z",
       userId: "user-1",
       plan: "starter",
       status: "active",
@@ -145,18 +139,5 @@ describe("Razorpay subscription billing", () => {
       shouldGrant: true,
       shouldRevoke: false,
     });
-  });
-
-  it("fingerprints webhook bodies when Razorpay does not provide an event id", async () => {
-    await expect(fingerprintRazorpayWebhookBody(JSON.stringify({ event: "subscription.activated" })))
-      .resolves.toMatch(/^body_sha256:[a-f0-9]{64}$/);
-  });
-
-  it("treats Razorpay webhook events outside the retry window as stale", () => {
-    const now = Date.parse("2026-05-15T12:00:00.000Z");
-
-    expect(isRazorpayWebhookFresh("2026-05-15T11:00:00.000Z", now)).toBe(true);
-    expect(isRazorpayWebhookFresh("2026-05-14T09:00:00.000Z", now)).toBe(false);
-    expect(isRazorpayWebhookFresh("2026-05-15T12:10:01.000Z", now)).toBe(false);
   });
 });

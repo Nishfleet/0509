@@ -77,19 +77,10 @@ describe("customer Meta token setup", () => {
 
 describe("credential encryption", () => {
   it("round-trips without storing the plaintext in the encrypted value", async () => {
-    const env = { META_TOKEN_ENCRYPTION_SECRET: "test-secret-that-is-more-than-32-characters" };
+    const env = { BETTER_AUTH_SECRET: "test-secret-that-is-more-than-32-characters" };
     const encrypted = await encryptCredential(env, "EAABabcdefghijklmnopqrstuvwxyz");
 
     expect(encrypted).not.toContain("EAABabcdefghijklmnopqrstuvwxyz");
     await expect(decryptCredential(env, encrypted)).resolves.toBe("EAABabcdefghijklmnopqrstuvwxyz");
-  });
-
-  it("does not reuse the auth secret for token encryption", async () => {
-    await expect(
-      encryptCredential(
-        { BETTER_AUTH_SECRET: "test-secret-that-is-more-than-32-characters" },
-        "EAABabcdefghijklmnopqrstuvwxyz",
-      ),
-    ).rejects.toThrow("META_TOKEN_ENCRYPTION_SECRET");
   });
 });

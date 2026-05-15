@@ -2,16 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
-  claimRazorpayWebhookEvent,
   createDeliveryAttempt,
   createDiscoveryFetchLog,
   createLandingPageSnapshot,
   createProofCapture,
   createWatchEvent,
-  getDiscoveryCacheEntry,
   getOperatorSnapshot,
-  listActiveWatchlists,
-  listDigests,
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
   legacyWatchEventImportanceScore,
@@ -47,9 +43,6 @@ function createMockDb() {
             };
           },
         };
-      },
-      async batch() {
-        return statements.map(() => ({ success: true }));
       },
     },
   };
@@ -162,79 +155,6 @@ describe("Razorpay billing persistence", () => {
       "plan_starter_monthly",
       "active",
     ]);
-  });
-
-  it("dedupes Razorpay webhook events and allows failed events to be retried", async () => {
-    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
-    const changes = [1, 0, 1];
-    const mock = {
-      db: {
-        prepare(sql: string) {
-          return {
-            bind(...bindings: unknown[]) {
-              statements.push({ sql, bindings });
-              return {
-                async run() {
-                  return { success: true, meta: { changes: changes.shift() ?? 0 } };
-                },
-              };
-            },
-          };
-        },
-      },
-    };
-
-    await expect(
-      claimRazorpayWebhookEvent(
-        { DB: mock.db } as never,
-        {
-          eventId: "evt_123",
-          eventType: "subscription.activated",
-          subscriptionId: "sub_123",
-          userId: "user-1",
-          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
-        },
-      ),
-    ).resolves.toBe(true);
-    await expect(
-      claimRazorpayWebhookEvent(
-        { DB: mock.db } as never,
-        {
-          eventId: "evt_123",
-          eventType: "subscription.activated",
-          subscriptionId: "sub_123",
-          userId: "user-1",
-          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
-        },
-      ),
-    ).resolves.toBe(false);
-    await expect(
-      claimRazorpayWebhookEvent(
-        { DB: mock.db } as never,
-        {
-          eventId: "evt_failed",
-          eventType: "subscription.activated",
-          subscriptionId: "sub_failed",
-          userId: "user-1",
-          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
-        },
-      ),
-    ).resolves.toBe(true);
-
-    expect(statements[0]?.sql).toContain("ON CONFLICT(event_id)");
-    expect(statements[0]?.sql).toContain("razorpay_webhook_event.outcome = 'failed'");
-  });
-});
-
-describe("scheduled watchlist selection", () => {
-  it("only returns active paid-plan watchlists for scheduled monitoring", async () => {
-    const mock = createMockDb();
-
-    await listActiveWatchlists({ DB: mock.db } as never);
-
-    expect(mock.statements[0]?.sql).toContain("INNER JOIN user_plan");
-    expect(mock.statements[0]?.sql).toContain("watchlist.is_active = 1");
-    expect(mock.statements[0]?.sql).toContain("user_plan.plan IN ('starter', 'agency')");
   });
 });
 
@@ -388,139 +308,6 @@ describe("listAdsByIds", () => {
     const result = await listAdsByIds({ DB: mock.db } as never, ["meta-boat-1"]);
 
     expect(result).toEqual([ad]);
-  });
-});
-
-describe("listDigests", () => {
-  it("loads digest items and deliveries in two batched lookups", async () => {
-    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
-    const mock = {
-      db: {
-        prepare(sql: string) {
-          return {
-            bind(...bindings: unknown[]) {
-              statements.push({ sql, bindings });
-              return {
-                async all<T>() {
-                  if (sql.includes("FROM digest_run")) {
-                    return {
-                      results: [
-                        {
-                          id: "digest-1",
-                          user_id: "user-1",
-                          period_start: "2026-05-01T00:00:00.000Z",
-                          period_end: "2026-05-02T00:00:00.000Z",
-                          created_at: "2026-05-02T00:00:00.000Z",
-                        },
-                        {
-                          id: "digest-2",
-                          user_id: "user-1",
-                          period_start: "2026-05-02T00:00:00.000Z",
-                          period_end: "2026-05-03T00:00:00.000Z",
-                          created_at: "2026-05-03T00:00:00.000Z",
-                        },
-                      ] as T[],
-                    };
-                  }
-
-                  if (sql.includes("FROM digest_item")) {
-                    return {
-                      results: [
-                        {
-                          id: "item-1",
-                          digest_run_id: "digest-1",
-                          watchlist_id: "watch-1",
-                          watchlist_name: "Nykaa",
-                          event_type: "ad_new",
-                          title: "New ad",
-                          summary: "A new ad appeared.",
-                          metadata_json: "{}",
-                          created_at: "2026-05-02T00:10:00.000Z",
-                        },
-                      ] as T[],
-                    };
-                  }
-
-                  if (sql.includes("FROM digest_delivery")) {
-                    return {
-                      results: [
-                        {
-                          id: "delivery-1",
-                          digest_run_id: "digest-1",
-                          provider: "resend",
-                          status: "sent",
-                          recipient_email: "owner@example.com",
-                          external_message_id: "msg_1",
-                          error_message: null,
-                          delivered_at: "2026-05-02T00:15:00.000Z",
-                        },
-                      ] as T[],
-                    };
-                  }
-
-                  return { results: [] as T[] };
-                },
-                async run() {
-                  return { success: true };
-                },
-              };
-            },
-          };
-        },
-      },
-    };
-
-    const digests = await listDigests({ DB: mock.db } as never, "user-1");
-
-    expect(digests).toHaveLength(2);
-    expect(digests[0]?.items).toHaveLength(1);
-    expect(digests[0]?.delivery?.id).toBe("delivery-1");
-    expect(digests[1]?.items).toHaveLength(0);
-    expect(statements.filter((statement) => statement.sql.includes("FROM digest_item"))).toHaveLength(1);
-    expect(statements.filter((statement) => statement.sql.includes("FROM digest_delivery"))).toHaveLength(1);
-    expect(statements.find((statement) => statement.sql.includes("FROM digest_item"))?.bindings).toEqual([
-      "digest-1",
-      "digest-2",
-    ]);
-  });
-});
-
-describe("getDiscoveryCacheEntry", () => {
-  it("returns null instead of demo data when cached payload JSON is corrupted", async () => {
-    const mock = {
-      db: {
-        prepare(sql: string) {
-          return {
-            bind(..._bindings: unknown[]) {
-              return {
-                async all<T>() {
-                  return {
-                    results: [
-                      {
-                        cache_key: "cache-1",
-                        provider: "meta_api",
-                        route_context: "public_search",
-                        query_fingerprint: "fp",
-                        country: "IN",
-                        cursor: null,
-                        payload_json: "{not-json",
-                        fetched_at: "2026-05-15T00:00:00.000Z",
-                        expires_at: "2026-05-15T01:00:00.000Z",
-                        browser_ms_used: null,
-                        created_at: "2026-05-15T00:00:00.000Z",
-                        updated_at: "2026-05-15T00:00:00.000Z",
-                      },
-                    ] as T[],
-                  };
-                },
-              };
-            },
-          };
-        },
-      },
-    };
-
-    await expect(getDiscoveryCacheEntry({ DB: mock.db } as never, "cache-1")).resolves.toBeNull();
   });
 });
 

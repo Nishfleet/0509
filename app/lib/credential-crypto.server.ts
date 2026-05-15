@@ -31,11 +31,16 @@ function base64UrlToBytes(value: string) {
 
 function resolveCredentialSecret(env: AppEnv) {
   const dedicatedSecret = env.META_TOKEN_ENCRYPTION_SECRET?.trim();
-  if (dedicatedSecret && dedicatedSecret.length >= 32) {
+  if (dedicatedSecret) {
     return dedicatedSecret;
   }
 
-  throw new Error("META_TOKEN_ENCRYPTION_SECRET must be configured with a 32+ character value.");
+  const fallbackSecret = env.BETTER_AUTH_SECRET?.trim();
+  if (fallbackSecret) {
+    return fallbackSecret;
+  }
+
+  throw new Error("Meta token encryption secret is not configured.");
 }
 
 async function deriveAesKey(secret: string) {
