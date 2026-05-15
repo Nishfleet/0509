@@ -11,13 +11,14 @@ import {
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], json: boolean, searchTimeoutMs: number | undefined }} */
+  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], json: boolean, searchTimeoutMs: number | undefined, metaAdsStrict: boolean }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || undefined,
     expectedApp: process.env.CANARY_EXPECTED_APP || DEFAULT_CANARY_EXPECTED_APP,
     queries: [],
     json: false,
     searchTimeoutMs: parsePositiveInteger(process.env.CANARY_SEARCH_TIMEOUT_MS),
+    metaAdsStrict: parseBoolean(process.env.CANARY_META_ADS_STRICT),
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -44,6 +45,9 @@ function parseArgs(args) {
       parsed.searchTimeoutMs = parsePositiveInteger(args[index + 1]);
       index += 1;
     }
+    if (arg === "--meta-ads-strict") {
+      parsed.metaAdsStrict = true;
+    }
   }
 
   return parsed;
@@ -57,6 +61,13 @@ function parsePositiveInteger(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+/**
+ * @param {string | undefined} value
+ */
+function parseBoolean(value) {
+  return value === "1" || value?.toLowerCase() === "true";
+}
+
 const config = parseArgs(process.argv.slice(2));
 const report = await runProductionCanary({
   baseUrl: config.baseUrl,
@@ -64,6 +75,7 @@ const report = await runProductionCanary({
   queries: config.queries,
   canaryBypassToken: process.env.CANARY_BYPASS_TOKEN,
   searchTimeoutMs: config.searchTimeoutMs,
+  metaAdsStrict: config.metaAdsStrict,
 });
 
 if (config.json) {

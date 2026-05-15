@@ -13,6 +13,7 @@ import type {
   AppSession,
   CollectionItemRecord,
   CollectionRecord,
+  CustomerMetaConnectionRecord,
   DeliveryAttemptRecord,
   DeliveryAttemptStatus,
   DeliveryChannel,
@@ -283,6 +284,7 @@ interface DigestItemRow {
   event_type: WatchEventType;
   title: string;
   summary: string;
+  metadata_json: string;
   created_at: string;
 }
 
@@ -339,6 +341,20 @@ interface MetaLogRow {
   error_code: string | null;
   error_message: string | null;
   created_at: string;
+}
+
+interface CustomerMetaConnectionRow {
+  user_id: string;
+  encrypted_access_token: string;
+  token_last_four: string;
+  token_fingerprint: string;
+  status: CustomerMetaConnectionRecord["status"];
+  summary: string;
+  last_checked_at: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface DiscoveryCacheEntryRow {
@@ -697,6 +713,7 @@ function toDigestItemRecord(row: DigestItemRow): DigestItemRecord {
     eventType: row.event_type,
     title: row.title,
     summary: row.summary,
+    metadata: parseJson<JsonRecord>(row.metadata_json, {}),
     createdAt: row.created_at,
   };
 }
@@ -770,6 +787,102 @@ export async function upsertPricingRegionPreference(
     timestamp,
     timestamp,
   );
+}
+
+export async function recordPendingRazorpaySubscription(
+  env: AppEnv,
+  input: {
+    userId: string;
+    subscriptionId: string;
+    customerId: string | null;
+    providerPlanId: string | null;
+    status: string;
+  },
+) {
+  await run(
+    env,
+    `
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        razorpay_customer_id,
+        razorpay_subscription_id,
+        razorpay_plan_id,
+        razorpay_status,
+        plan_updated_at
+      )
+      VALUES (?, 'free', ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        razorpay_customer_id = excluded.razorpay_customer_id,
+        razorpay_subscription_id = excluded.razorpay_subscription_id,
+        razorpay_plan_id = excluded.razorpay_plan_id,
+        razorpay_status = excluded.razorpay_status,
+        plan_updated_at = excluded.plan_updated_at
+    `,
+    input.userId,
+    input.customerId,
+    input.subscriptionId,
+    input.providerPlanId,
+    input.status,
+  );
+}
+
+export async function syncRazorpaySubscriptionStatus(
+  env: AppEnv,
+  input: {
+    userId: string;
+    plan: "starter" | "agency";
+    status: string;
+    subscriptionId: string;
+    customerId: string | null;
+    providerPlanId: string | null;
+    shouldGrant: boolean;
+    shouldRevoke: boolean;
+  },
+) {
+  const nextPlan = input.shouldGrant ? input.plan : input.shouldRevoke ? "free" : null;
+
+  if (nextPlan) {
+    await run(
+      env,
+      `
+        INSERT INTO user_plan (
+          user_id,
+          plan,
+          razorpay_customer_id,
+          razorpay_subscription_id,
+          razorpay_plan_id,
+          razorpay_status,
+          plan_updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(user_id)
+        DO UPDATE SET
+          plan = excluded.plan,
+          razorpay_customer_id = excluded.razorpay_customer_id,
+          razorpay_subscription_id = excluded.razorpay_subscription_id,
+          razorpay_plan_id = excluded.razorpay_plan_id,
+          razorpay_status = excluded.razorpay_status,
+          plan_updated_at = excluded.plan_updated_at
+      `,
+      input.userId,
+      nextPlan,
+      input.customerId,
+      input.subscriptionId,
+      input.providerPlanId,
+      input.status,
+    );
+    return;
+  }
+
+  await recordPendingRazorpaySubscription(env, {
+    userId: input.userId,
+    subscriptionId: input.subscriptionId,
+    customerId: input.customerId,
+    providerPlanId: input.providerPlanId,
+    status: input.status,
+  });
 }
 
 export async function completeUserOnboarding(env: AppEnv, userId: string) {
@@ -1493,7 +1606,7 @@ export async function createWatchEvent(
         last_evaluated_at,
         created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     id,
     input.watchlistId,
@@ -3180,6 +3293,141 @@ export async function getShareLink(env: AppEnv, token: string) {
   } satisfies ShareLinkRecord;
 }
 
+function toCustomerMetaConnectionRecord(
+  row: CustomerMetaConnectionRow,
+): CustomerMetaConnectionRecord {
+  return {
+    userId: row.user_id,
+    encryptedAccessToken: row.encrypted_access_token,
+    tokenLastFour: row.token_last_four,
+    tokenFingerprint: row.token_fingerprint,
+    status: row.status,
+    summary: row.summary,
+    lastCheckedAt: row.last_checked_at,
+    lastErrorCode: row.last_error_code,
+    lastErrorMessage: row.last_error_message,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function getCustomerMetaConnection(env: AppEnv, userId: string) {
+  const row = await one<CustomerMetaConnectionRow>(
+    env,
+    `
+      SELECT *
+      FROM customer_meta_connection
+      WHERE user_id = ?
+      LIMIT 1
+    `,
+    userId,
+  );
+
+  return row ? toCustomerMetaConnectionRecord(row) : null;
+}
+
+export async function upsertCustomerMetaConnection(
+  env: AppEnv,
+  input: {
+    userId: string;
+    encryptedAccessToken: string;
+    tokenLastFour: string;
+    tokenFingerprint: string;
+    status: CustomerMetaConnectionRecord["status"];
+    summary: string;
+    lastCheckedAt?: string | null;
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+  },
+) {
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT INTO customer_meta_connection (
+        user_id,
+        encrypted_access_token,
+        token_last_four,
+        token_fingerprint,
+        status,
+        summary,
+        last_checked_at,
+        last_error_code,
+        last_error_message,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id)
+      DO UPDATE SET encrypted_access_token = excluded.encrypted_access_token,
+                    token_last_four = excluded.token_last_four,
+                    token_fingerprint = excluded.token_fingerprint,
+                    status = excluded.status,
+                    summary = excluded.summary,
+                    last_checked_at = excluded.last_checked_at,
+                    last_error_code = excluded.last_error_code,
+                    last_error_message = excluded.last_error_message,
+                    updated_at = excluded.updated_at
+    `,
+    input.userId,
+    input.encryptedAccessToken,
+    input.tokenLastFour,
+    input.tokenFingerprint,
+    input.status,
+    input.summary,
+    input.lastCheckedAt ?? timestamp,
+    input.lastErrorCode ?? null,
+    input.lastErrorMessage ?? null,
+    timestamp,
+    timestamp,
+  );
+
+  return getCustomerMetaConnection(env, input.userId);
+}
+
+export async function updateCustomerMetaConnectionStatus(
+  env: AppEnv,
+  input: {
+    userId: string;
+    status: CustomerMetaConnectionRecord["status"];
+    summary: string;
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+  },
+) {
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      UPDATE customer_meta_connection
+      SET status = ?,
+          summary = ?,
+          last_checked_at = ?,
+          last_error_code = ?,
+          last_error_message = ?,
+          updated_at = ?
+      WHERE user_id = ?
+    `,
+    input.status,
+    input.summary,
+    timestamp,
+    input.lastErrorCode ?? null,
+    input.lastErrorMessage ?? null,
+    timestamp,
+    input.userId,
+  );
+
+  return getCustomerMetaConnection(env, input.userId);
+}
+
+export async function deleteCustomerMetaConnection(env: AppEnv, userId: string) {
+  await run(
+    env,
+    "DELETE FROM customer_meta_connection WHERE user_id = ?",
+    userId,
+  );
+}
+
 export async function logMetaIntegrationStatus(
   env: AppEnv,
   input: {
@@ -3475,5 +3723,75 @@ export async function getDiscoveryProviderState(env: AppEnv, provider: AdDiscove
     lastFailureAt: row.last_failure_at,
     metadata: parseJson<Record<string, unknown> | null>(row.metadata_json, null),
     updatedAt: row.updated_at,
+  };
+}
+
+export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Date()) {
+  const since = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
+  const [proofs, deliveries, watchlistRuns] = await Promise.all([
+    one<{
+      recent_count: number;
+      latest_at: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          COUNT(*) AS recent_count,
+          MAX(succeeded_at) AS latest_at
+        FROM proof_capture
+        WHERE status = 'succeeded'
+          AND succeeded_at >= ?
+      `,
+      since,
+    ),
+    one<{
+      recent_attempts: number;
+      recent_sent: number;
+      latest_at: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          COUNT(*) AS recent_attempts,
+          SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS recent_sent,
+          MAX(COALESCE(sent_at, created_at)) AS latest_at
+        FROM delivery_attempt
+        WHERE digest_run_id IS NOT NULL
+          AND created_at >= ?
+      `,
+      since,
+    ),
+    one<{
+      recent_count: number;
+      latest_at: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          COUNT(*) AS recent_count,
+          MAX(finished_at) AS latest_at
+        FROM watchlist_run
+        WHERE status = 'succeeded'
+          AND finished_at >= ?
+      `,
+      since,
+    ),
+  ]);
+
+  return {
+    since,
+    proof: {
+      recentSuccessfulCaptures: Number(proofs?.recent_count ?? 0),
+      latestSucceededAt: proofs?.latest_at ?? null,
+    },
+    digestDelivery: {
+      recentAttempts: Number(deliveries?.recent_attempts ?? 0),
+      recentSent: Number(deliveries?.recent_sent ?? 0),
+      latestAttemptAt: deliveries?.latest_at ?? null,
+    },
+    monitoring: {
+      recentSuccessfulRuns: Number(watchlistRuns?.recent_count ?? 0),
+      latestSucceededAt: watchlistRuns?.latest_at ?? null,
+    },
   };
 }

@@ -1,6 +1,11 @@
 import { Resend } from "resend";
 
 import {
+  type DigestCadence,
+  digestCadenceLabel,
+  readDigestIntelligence,
+} from "~/lib/change-intelligence";
+import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
   getWatchlistDeliveryConfig,
@@ -44,6 +49,7 @@ export interface DigestDeliveryItem {
   eventType: string;
   title: string;
   summary: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DeliverWeeklyDigestInput {
@@ -54,6 +60,7 @@ export interface DeliverWeeklyDigestInput {
   periodStart: string;
   periodEnd: string;
   items: DigestDeliveryItem[];
+  cadence?: DigestCadence;
   lane?: DeliveryLane;
 }
 
@@ -232,7 +239,8 @@ async function deliverDigestToEmailTarget(
     };
   }
 
-  const subject = `Five to Nine weekly digest: ${input.items.length} competitor changes`;
+  const cadenceLabel = digestCadenceLabel(input.cadence);
+  const subject = `Five to Nine ${cadenceLabel}: ${input.items.length} competitor changes`;
   const providerResult = await sendDigestEmail(env, {
     email: target.targetValue,
     name: input.userName,
@@ -240,6 +248,7 @@ async function deliverDigestToEmailTarget(
     periodEnd: input.periodEnd,
     items: input.items,
     subject,
+    cadence: input.cadence,
   });
 
   const attemptId = await createDeliveryAttempt(env, {
@@ -261,6 +270,7 @@ async function deliverDigestToEmailTarget(
       kind: "weekly_digest",
       channel: "email",
       subject,
+      cadence: input.cadence ?? "weekly",
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       itemCount: input.items.length,
@@ -705,6 +715,7 @@ async function sendDigestEmail(
     periodEnd: string;
     items: DigestDeliveryItem[];
     subject: string;
+    cadence?: DigestCadence;
   },
 ): Promise<{
   provider: "resend";
@@ -733,6 +744,7 @@ async function sendDigestEmail(
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
     items: input.items,
+    cadence: input.cadence,
   });
   const response = await resend.emails.send({
     from: env.RESEND_FROM_EMAIL!,
@@ -957,16 +969,18 @@ function renderDigestHtml(input: {
   periodStart: string;
   periodEnd: string;
   items: DigestDeliveryItem[];
+  cadence?: DigestCadence;
 }) {
   const groups = input.items.reduce<Record<string, DigestDeliveryItem[]>>((accumulator, item) => {
     accumulator[item.watchlistName] = accumulator[item.watchlistName] ?? [];
     accumulator[item.watchlistName].push(item);
     return accumulator;
   }, {});
+  const cadenceLabel = digestCadenceLabel(input.cadence);
 
   return `
     <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine weekly digest</p>
+      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, here’s what changed on Meta.</h1>
       <p style="margin: 0 0 24px; color: #475467;">
         ${formatDate(input.periodStart)} to ${formatDate(input.periodEnd)} · ${input.items.length} tracked changes
@@ -979,12 +993,23 @@ function renderDigestHtml(input: {
               <ul style="margin: 0; padding-left: 18px;">
                 ${items
                   .map(
-                    (item) => `
+                    (item) => {
+                      const intelligence = readDigestIntelligence(item.metadata);
+                      const scoreLabel = intelligence.priorityScore === null
+                        ? intelligence.priorityBand
+                        : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
+                      return `
                       <li style="margin-bottom: 10px;">
                         <strong>${escapeHtml(item.title)}</strong><br />
                         <span style="color: #475467;">${escapeHtml(item.summary)}</span>
+                        <div style="margin-top: 6px; color: #5b6577; font-size: 13px;">
+                          ${escapeHtml(scoreLabel)}<br />
+                          Next: ${escapeHtml(intelligence.recommendedAction)}<br />
+                          Proof: ${escapeHtml(intelligence.proofTrail)}
+                        </div>
                       </li>
-                    `,
+                    `;
+                    },
                   )
                   .join("")}
               </ul>

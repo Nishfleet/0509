@@ -11,6 +11,7 @@ import {
 
 import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
+import type { AppEnv } from "~/lib/env.server";
 import {
   detectPricingRegion,
   pricingPlansForRegion,
@@ -18,11 +19,31 @@ import {
 } from "~/lib/pricing";
 import type { AppSession, PricingPlan, PricingRegion } from "~/lib/types";
 
+type RazorpayCheckoutOptions = Record<
+  "starter" | "agency",
+  Record<"monthly" | "yearly", boolean>
+>;
+
 export interface RootLoaderData {
   session: AppSession | null;
   pricingRegion: PricingRegion;
   pricingPlans: PricingPlan[];
   countryCode: string | null;
+  razorpayCheckout: RazorpayCheckoutOptions;
+}
+
+function razorpayCheckoutOptions(env: AppEnv): RazorpayCheckoutOptions {
+  const hasKeys = Boolean(env.RAZORPAY_KEY_ID?.trim() && env.RAZORPAY_KEY_SECRET?.trim());
+  return {
+    starter: {
+      monthly: hasKeys && Boolean(env.RAZORPAY_PLAN_STARTER_MONTHLY?.trim()),
+      yearly: hasKeys && Boolean(env.RAZORPAY_PLAN_STARTER_YEARLY?.trim()),
+    },
+    agency: {
+      monthly: hasKeys && Boolean(env.RAZORPAY_PLAN_AGENCY_MONTHLY?.trim()),
+      yearly: hasKeys && Boolean(env.RAZORPAY_PLAN_AGENCY_YEARLY?.trim()),
+    },
+  };
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -30,7 +51,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getPricingRegionPreference } = await import("~/lib/data.server");
   const cloudflare = context.cloudflare as {
     country?: string | null;
-    env: Env;
+    env: AppEnv;
   };
   const env = cloudflare.env;
   const session = await getOptionalSession(env, request);
@@ -49,6 +70,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     pricingRegion,
     pricingPlans: pricingPlansForRegion(pricingRegion),
     countryCode: countryCode ?? null,
+    razorpayCheckout: razorpayCheckoutOptions(env),
   } satisfies RootLoaderData;
 }
 

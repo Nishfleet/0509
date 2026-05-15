@@ -47,10 +47,10 @@ export default function SignupRoute() {
           <div className="auth-points">
             <div>
               <p className="eyebrow">Built for</p>
-              <h2>Indian growth teams that need shared memory, not tab chaos.</h2>
+              <h2>Indian growth teams that need proof they can hand to a team or client.</h2>
             </div>
             <ul className="bullet-list">
-              <li>Save hours of repeated Ad Library digging every week.</li>
+              <li>Save repeated Ad Library checks without hiding source status.</li>
               <li>Track how offers, hooks, and landing pages change over time.</li>
               <li>Keep your team’s competitor learning in one reusable workspace.</li>
             </ul>

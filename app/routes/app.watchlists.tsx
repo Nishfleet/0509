@@ -439,10 +439,10 @@ export default function WatchlistsRoute() {
 
               <div className="stack-list">
                 <section>
-                  <p className="section-label">Commercial discovery</p>
+                  <p className="section-label">Meta ads tracking beta</p>
                   <div className="workspace-panels">
                     <article className="content-card">
-                      <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
+                      <h3>{formatDiscoveryHeadline(data.discoveryStatus)} <span className="badge badge-beta">Beta</span></h3>
                       <p className="muted-text">{data.discoveryStatus.summary}</p>
                       {data.discoveryStatus.lastErrorCode ? (
                         <p className="muted-text">
@@ -478,6 +478,9 @@ export default function WatchlistsRoute() {
                           </p>
                         </div>
                       </div>
+                      <Link className="button button-secondary" to="/app/sources">
+                        Manage Meta source
+                      </Link>
                     </article>
                   </div>
                 </section>
@@ -983,18 +986,18 @@ function formatRunEventTypes(summary: Record<string, unknown>) {
 
 function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
   if (status.status === "healthy") {
-    return "Live commercial discovery is healthy";
+    return "Live Meta ads discovery is healthy";
   }
   if (status.status === "cache_only") {
-    return "Commercial discovery is running from cache";
+    return "Meta ads discovery is running from cache";
   }
   if (status.status === "demo") {
     return "Watchlists are still in demo mode";
   }
   if (status.status === "disabled") {
-    return "Commercial discovery is disabled";
+    return "Meta ads discovery is disabled";
   }
-  return "Commercial discovery needs attention";
+  return "Meta ads discovery needs attention";
 }
 
 function formatDiscoveryProviderLabel(
@@ -1005,7 +1008,7 @@ function formatDiscoveryProviderLabel(
     return mode === "cache" ? "Browser Run with cached live results" : "Browser Run live capture";
   }
   if (provider === "meta_api") {
-    return "Official Meta API diagnostic path";
+    return mode === "diagnostic" ? "Official Meta API diagnostic path" : "Customer Meta API fallback";
   }
   if (provider === "demo") {
     return "Demo dataset";

@@ -4,6 +4,7 @@ import {
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
+import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
 import {
   createReportId,
   type ReportDocument,
@@ -81,6 +82,7 @@ export function buildWatchlistReport(input: {
   const generatedAt = input.generatedAt ?? new Date().toISOString();
   const rows = input.events.map((event) => {
     const ad = event.adId ? input.adsById.get(event.adId) ?? null : null;
+    const intelligence = buildChangeIntelligenceSummary(event);
 
     return buildReportRow("watchlist", event.id, ad, {
       event: {
@@ -88,6 +90,10 @@ export function buildWatchlistReport(input: {
         title: event.title,
         summary: event.summary,
         createdAt: event.createdAt,
+        priorityScore: intelligence.priorityScore,
+        priorityBand: intelligence.priorityBand,
+        recommendedAction: intelligence.recommendedAction,
+        proofTrail: intelligence.proofTrail,
       },
       advertiserFallback: readEventAdvertiser(event),
     });

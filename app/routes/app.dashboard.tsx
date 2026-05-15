@@ -14,6 +14,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
+    getCustomerMetaConnection,
     listCollections,
     listDigests,
     listSavedQueries,
@@ -21,12 +22,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const [savedQueries, collections, watchlists, digests, metaStatus] = await Promise.all([
+  const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection] = await Promise.all([
     listSavedQueries(env, session.user.id),
     listCollections(env, session.user.id),
     listWatchlists(env, session.user.id),
     listDigests(env, session.user.id),
     resolveCommercialAdSourceStatus(env),
+    getCustomerMetaConnection(env, session.user.id),
   ]);
 
   return {
@@ -35,6 +37,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     watchlists,
     digests,
     metaStatus,
+    customerMetaConnection: customerMetaConnection
+      ? {
+          status: customerMetaConnection.status,
+          tokenLastFour: customerMetaConnection.tokenLastFour,
+          lastCheckedAt: customerMetaConnection.lastCheckedAt,
+        }
+      : null,
   };
 }
 
@@ -143,12 +152,24 @@ export default function AppDashboardRoute() {
       <article className="content-card status-card">
         <div>
           <p className="section-label">Monitoring status</p>
-          <h2>{metaHeading}</h2>
+          <h2>{metaHeading} <span className="badge badge-beta">Meta ads beta</span></h2>
         </div>
         <p>{data.metaStatus.summary}</p>
+        {data.customerMetaConnection ? (
+          <p className="muted-text">
+            Customer Meta token connected. Ends in {data.customerMetaConnection.tokenLastFour}.
+          </p>
+        ) : (
+          <p className="muted-text">
+            For Meta ads beta, connect the customer's own token before relying on API fallback.
+          </p>
+        )}
         {data.metaStatus.lastCheckedAt ? (
           <p className="muted-text">Last checked {new Date(data.metaStatus.lastCheckedAt).toLocaleString("en-IN")}.</p>
         ) : null}
+        <Link className="button button-secondary" to="/app/sources">
+          Set up Meta beta
+        </Link>
       </article>
 
       {actionData?.message ? (

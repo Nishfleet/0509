@@ -47,11 +47,18 @@ const session = {
 };
 
 describe("billing route exposure", () => {
-  it("does not expose checkout or Stripe webhook endpoints", () => {
+  it("does not expose generic checkout or Stripe webhook endpoints", () => {
     const paths = flattenRoutePaths(routes as RouteEntry[]);
 
     expect(paths).not.toContain("api/checkout");
     expect(paths).not.toContain("api/webhooks/stripe");
+  });
+
+  it("exposes basic legal pages before self-serve launch", () => {
+    const paths = flattenRoutePaths(routes as RouteEntry[]);
+
+    expect(paths).toContain("privacy");
+    expect(paths).toContain("terms");
   });
 });
 
@@ -92,6 +99,7 @@ describe("marketing route", () => {
         useRouteLoaderData: vi.fn().mockReturnValue({
           pricingPlans: [
             {
+              slug: "starter",
               name: "Starter",
               monthlyLabel: "Rs 2,500 / month",
               yearlyLabel: "Rs 24,000 / year",
@@ -99,6 +107,10 @@ describe("marketing route", () => {
             },
           ],
           pricingRegion: "india",
+          razorpayCheckout: {
+            starter: { monthly: false, yearly: false },
+            agency: { monthly: false, yearly: false },
+          },
           session,
         }),
       };
@@ -110,6 +122,45 @@ describe("marketing route", () => {
     expect(markup).not.toContain("/api/checkout");
     expect(markup).not.toContain("Upgrade to Starter");
     expect(markup).toContain("Open workspace");
+  });
+
+  it("renders Razorpay subscription actions only when India checkout is configured", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useRouteLoaderData: vi.fn().mockReturnValue({
+          pricingPlans: [
+            {
+              slug: "starter",
+              name: "Starter",
+              monthlyLabel: "Rs 2,500 / month",
+              yearlyLabel: "Rs 24,000 / year",
+              detail: "Solo or small team.",
+            },
+          ],
+          pricingRegion: "india",
+          razorpayCheckout: {
+            starter: { monthly: true, yearly: true },
+            agency: { monthly: false, yearly: false },
+          },
+          session,
+        }),
+      };
+    });
+
+    const { default: MarketingRoute } = await import("~/routes/marketing");
+    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+
+    expect(markup).toContain("/api/billing/razorpay/subscription");
+    expect(markup).toContain("Start monthly");
+    expect(markup).toContain("Start yearly");
   });
 });
 
