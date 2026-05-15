@@ -1,0 +1,4 @@
+app/routes.ts
+app/routes/api.ops.resend-domain.ts
+tests/resend-domain.route.test.ts
+wrangler.jsonc
