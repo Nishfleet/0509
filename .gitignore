@@ -4,6 +4,7 @@
 /coverage
 /.next/
 /build
+/backups/
 /.react-router/
 /.wrangler/
 

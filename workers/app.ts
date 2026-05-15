@@ -12,6 +12,7 @@ import {
   PUBLIC_MARKDOWN,
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
+import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { resolveScheduledTask } from "./schedule";
 export { MonitoringWorkflow } from "./monitoring-workflow";
 
@@ -96,6 +97,11 @@ export default {
       isPublicMarkdownPage(url.pathname)
     ) {
       return markdownResponse(request, PUBLIC_MARKDOWN);
+    }
+
+    const rateLimitResponse = await enforceRequestRateLimit(request, env, ctx);
+    if (rateLimitResponse) {
+      return withSecurityHeaders(rateLimitResponse);
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;

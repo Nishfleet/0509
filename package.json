@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "backup:d1": "node scripts/d1-backup.mjs",
     "build": "react-router build",
     "cf-typegen": "wrangler types",
     "canary:prod": "node scripts/prod-canary.mjs",
