@@ -68,6 +68,11 @@ Important bindings and secrets:
 - `RAZORPAY_PLAN_AGENCY_MONTHLY`
 - `RAZORPAY_PLAN_AGENCY_YEARLY`
 
+## Operations
+
+- Run `npm run backup:d1` before risky migrations or data-shape changes. It exports the remote Cloudflare D1 database into `backups/d1/`, which is intentionally gitignored.
+- Apply `migrations/0012_rate_limit_events.sql` before relying on Worker request rate limiting.
+
 ## Notes
 
 - For the current Cloudflare Worker app, use `.dev.vars` for local secrets. A starter template now lives at `.dev.vars.example`.
