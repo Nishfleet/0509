@@ -7,7 +7,7 @@
     "build": "react-router build",
     "cf-typegen": "wrangler types",
     "canary:prod": "node scripts/prod-canary.mjs",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "node scripts/deploy-production.mjs",
     "dev": "react-router dev",
     "launch:readiness": "npm run typecheck && npm test && npm run build && npm run canary:prod",
     "preview": "npm run build && vite preview",
