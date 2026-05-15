@@ -18,7 +18,7 @@ function hasValidCanaryToken(request: Request, token: string | undefined) {
   return request.headers.get("x-0509-canary-token") === configured;
 }
 
-async function getCanaryTarget(env: { DB?: D1Database }) {
+async function getCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
   if (!env.DB) {
     return null;
   }
@@ -35,9 +35,10 @@ async function getCanaryTarget(env: { DB?: D1Database }) {
       INNER JOIN user
         ON user.id = watchlist.user_id
       WHERE watchlist.is_active = 1
+        AND lower(user.email) = lower(?)
       ORDER BY watchlist.updated_at DESC
       LIMIT 1
-    `).all<CanaryTargetRow>();
+    `).bind(canaryEmail).all<CanaryTargetRow>();
 
   return result.results?.[0] ?? null;
 }
@@ -74,12 +75,27 @@ export async function action({ context, request }: ActionFunctionArgs) {
     );
   }
 
-  const target = await getCanaryTarget(env);
+  const canaryEmail = env.LAUNCH_CANARY_EMAIL?.trim();
+  if (!canaryEmail) {
+    return Response.json(
+      {
+        ok: false,
+        blocker: "missing_launch_canary_email",
+      },
+      {
+        status: 503,
+        headers: { "cache-control": "no-store" },
+      },
+    );
+  }
+
+  const target = await getCanaryTarget(env, canaryEmail);
   if (!target) {
     return Response.json(
       {
         ok: false,
         blocker: "missing_active_watchlist",
+        canaryEmail,
       },
       {
         status: 503,

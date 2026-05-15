@@ -118,7 +118,7 @@ export default function MarketingRoute() {
                   <strong>Active source trail</strong>
                 </div>
                 <p>Hook, offer, destination, and proof state stay tied together.</p>
-                <button type="button">View evidence</button>
+                <span className="evidence-chip">Evidence ready</span>
               </div>
             </div>
             <div className="evidence-note">
