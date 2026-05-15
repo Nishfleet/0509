@@ -1,0 +1,223 @@
+[typecheck]
+
+> typecheck
+> npm run cf-typegen && react-router typegen && tsc -b
+
+
+> cf-typegen
+> wrangler types
+
+
+ ⛅️ wrangler 4.78.0 (update available 4.91.0)
+─────────────────────────────────────────────
+Generating project types...
+
+declare namespace Cloudflare {
+	interface GlobalProps {
+		mainModule: typeof import("./workers/app");
+	}
+	interface Env {
+		LANDING_PAGE_ARTIFACTS: R2Bucket;
+		DB: D1Database;
+		BROWSER: Fetcher;
+		AI: Ai;
+		APP_NAME: "0509";
+		APP_REGION_DEFAULT: "rest_of_world";
+		BROWSER_RUN_ACCOUNT_ID: "f670a698e17bf160c8e4679823e68916";
+		MONITORING_WORKFLOW: Workflow<Parameters<import("./workers/app").MonitoringWorkflow['run']>[0]['payload']>;
+	}
+}
+interface Env extends Cloudflare.Env {}
+type StringifyValues<EnvType extends Record<string, unknown>> = {
+	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
+};
+declare namespace NodeJS {
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "APP_NAME" | "APP_REGION_DEFAULT" | "BROWSER_RUN_ACCOUNT_ID">> {}
+}
+
+Generating runtime types...
+
+Runtime types generated.
+
+
+✨ Types written to worker-configuration.d.ts
+
+📖 Read about runtime types
+https://developers.cloudflare.com/workers/languages/typescript/#generate-types
+📣 Remember to rerun 'wrangler types' after you change your wrangler.jsonc file.
+
+(node:2182) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[test]
+
+> test
+> vitest run
+
+(node:2220) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90m/home/runner/work/0509/0509[39m
+
+ [32m✓[39m tests/ad-source.test.ts [2m([22m[2m34 tests[22m[2m)[22m[33m 581[2mms[22m[39m
+   [33m[2m✓[22m[39m resolveCommercialAdSourceStatus[2m > [22mtreats the official Meta API as diagnostic-only even when a token exists [33m 323[2mms[22m[39m
+ [32m✓[39m tests/data.server.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m tests/plan-monitoring.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 256[2mms[22m[39m
+ [32m✓[39m tests/meta-library-browser.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 152[2mms[22m[39m
+ [32m✓[39m tests/delivery.server.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 96[2mms[22m[39m
+ [32m✓[39m tests/watchlists.route.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 222[2mms[22m[39m
+ [32m✓[39m tests/provider-bakeoff.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m tests/proof-first-pipeline.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 134[2mms[22m[39m
+ [32m✓[39m tests/search.route.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 153[2mms[22m[39m
+ [32m✓[39m tests/plan-limits.route.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 184[2mms[22m[39m
+ [32m✓[39m tests/monitoring-scheduled-runtime.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 76[2mms[22m[39m
+ [32m✓[39m tests/onboarding.route.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 169[2mms[22m[39m
+ [32m✓[39m tests/prod-canary.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m tests/watch-event-evaluator.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/stripe-checkout.route.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 163[2mms[22m[39m
+ [32m✓[39m tests/proof-evals.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m tests/normalize.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/monitoring-idempotency.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 103[2mms[22m[39m
+ [32m✓[39m tests/report-builder.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/launch-readiness-canary.route.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 129[2mms[22m[39m
+ [32m✓[39m tests/pricing.test.ts [2m([22m[2m31 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/delivery-policy.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m tests/sources.route.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 100[2mms[22m[39m
+ [32m✓[39m tests/razorpay.server.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/creative-text.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m tests/meta-ads-readiness.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/delivery-webhooks.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m tests/monitoring-creative-reuse.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 102[2mms[22m[39m
+ [32m✓[39m tests/resend-domain.route.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m tests/proof-policy.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/landing-page-display.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/razorpay-webhook.route.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m tests/ops.route.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 87[2mms[22m[39m
+ [32m✓[39m tests/search-selection.persisted-translation.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 24[2mms[22m[39m
+[90mstderr[2m | tests/search-selection.no-db.test.ts[2m > [22m[2msearch selection without D1[2m > [22m[2mreturns public search results without touching D1-backed persistence
+[22m[39m[data.server] upsertAd called without a D1 binding; ad meta-boat-1 was NOT persisted. Check wrangler.jsonc and the deploy environment.
+
+[90mstderr[2m | tests/search-selection.no-db.test.ts[2m > [22m[2msearch selection without D1[2m > [22m[2mcaptures creative text for Browser Run Ad Library results
+[22m[39m[data.server] upsertAd called without a D1 binding; ad meta-boat-1 was NOT persisted. Check wrangler.jsonc and the deploy environment.
+
+ [32m✓[39m tests/search-selection.no-db.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m tests/analysis.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/rate-limit.server.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/landing-pages.browser-run.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m tests/monitoring.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m tests/search-selection.persisted-ocr.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m tests/customer-meta.server.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/landing-page-signals.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/meta-api.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/plan.server.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/language-classifier.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/auth-runtime.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/public-markdown.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/env.server.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/worker-schedule.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m tests/discovery-cache.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m tests/context.server.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m tests/auth.server.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m52 passed[39m[22m[90m (52)[39m
+[2m      Tests [22m [1m[32m349 passed[39m[22m[90m (349)[39m
+[2m   Start at [22m 11:16:22
+[2m   Duration [22m 15.50s[2m (transform 1.42s, setup 0ms, collect 2.03s, tests 3.17s, environment 17ms, prepare 3.72s)[22m
+
+[build]
+
+> build
+> react-router build
+
+(node:3362) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Using Vite Environment API (experimental)
+[36mvite v7.3.3 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 144 modules transformed.
+[33mGenerated an empty chunk: "pricing-region".[39m
+[33mGenerated an empty chunk: "api.auth._".[39m
+[33mGenerated an empty chunk: "api.billing.razorpay.subscription".[39m
+[33mGenerated an empty chunk: "api.delivery-status._provider".[39m
+[33mGenerated an empty chunk: "api.health".[39m
+[33mGenerated an empty chunk: "api.launch-readiness".[39m
+[33mGenerated an empty chunk: "api.launch-readiness.canary".[39m
+[33mGenerated an empty chunk: "api.ops.resend-domain".[39m
+[33mGenerated an empty chunk: "api.webhooks.razorpay".[39m
+[33mGenerated an empty chunk: "export._resourceType._resourceId".[39m
+rendering chunks...
+computing gzip size...
+[2mbuild/client/[22m[32m.assetsignore                                         [39m[1m[2m  0.02 kB[22m[1m[22m
+[2mbuild/client/[22m[32m.vite/manifest.json                                   [39m[1m[2m 10.41 kB[22m[1m[22m[2m │ gzip:  1.34 kB[22m
+[2mbuild/client/[22m[2massets/[22m[35mroot-COIIhaVL.css                              [39m[1m[2m 26.27 kB[22m[1m[22m[2m │ gzip:  6.19 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mpricing-region-l0sNRNKZ.js                     [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapi.auth._-l0sNRNKZ.js                         [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapi.billing.razorpay.subscription-l0sNRNKZ.js  [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapi.delivery-status._provider-l0sNRNKZ.js      [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapi.health-l0sNRNKZ.js                         [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapi.launch-readiness-l0sNRNKZ.js               [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapi.launch-readiness.canary-l0sNRNKZ.js        [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapi.ops.resend-domain-l0sNRNKZ.js              [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapi.webhooks.razorpay-l0sNRNKZ.js              [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mexport._resourceType._resourceId-l0sNRNKZ.js   [39m[1m[2m  0.00 kB[22m[1m[22m[2m │ gzip:  0.02 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mdemo-data-9r8VJisR.js                          [39m[1m[2m  0.13 kB[22m[1m[22m[2m │ gzip:  0.13 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mreport-CDkWkaqr.js                             [39m[1m[2m  0.25 kB[22m[1m[22m[2m │ gzip:  0.18 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mnot-found-CDVuh4TA.js                          [39m[1m[2m  0.62 kB[22m[1m[22m[2m │ gzip:  0.34 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mnormalize-Bo298dXw.js                          [39m[1m[2m  0.74 kB[22m[1m[22m[2m │ gzip:  0.30 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mroot-Br5JarQt.js                               [39m[1m[2m  1.32 kB[22m[1m[22m[2m │ gzip:  0.72 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp.reports-DQ-SDsZ8.js                        [39m[1m[2m  1.38 kB[22m[1m[22m[2m │ gzip:  0.65 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mauth.login-DMOwyBLv.js                         [39m[1m[2m  1.39 kB[22m[1m[22m[2m │ gzip:  0.66 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mauth.signup-3DA8s00f.js                        [39m[1m[2m  1.42 kB[22m[1m[22m[2m │ gzip:  0.70 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp-layout-B1SRsDNd.js                         [39m[1m[2m  1.82 kB[22m[1m[22m[2m │ gzip:  0.74 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mdigest-intelligence-6cxGDOox.js                [39m[1m[2m  1.92 kB[22m[1m[22m[2m │ gzip:  0.77 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mlanding-page-display-BJLRouRb.js               [39m[1m[2m  2.44 kB[22m[1m[22m[2m │ gzip:  1.06 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mauth-form-BwMWIMsF.js                          [39m[1m[2m  2.49 kB[22m[1m[22m[2m │ gzip:  1.08 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mprivacy-CYNbYroP.js                            [39m[1m[2m  2.77 kB[22m[1m[22m[2m │ gzip:  1.22 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mterms-CQOlEPMu.js                              [39m[1m[2m  2.83 kB[22m[1m[22m[2m │ gzip:  1.23 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp.onboard-BH6TB-Ou.js                        [39m[1m[2m  3.12 kB[22m[1m[22m[2m │ gzip:  1.16 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mshare._token-RNid13lu.js                       [39m[1m[2m  3.73 kB[22m[1m[22m[2m │ gzip:  1.06 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp.collections-BxlCxg2z.js                    [39m[1m[2m  4.06 kB[22m[1m[22m[2m │ gzip:  1.23 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp.dashboard-Ch1jFy2w.js                      [39m[1m[2m  4.47 kB[22m[1m[22m[2m │ gzip:  1.34 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mreport-view-RKUqJqhU.js                        [39m[1m[2m  4.62 kB[22m[1m[22m[2m │ gzip:  1.03 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp.digests-CRi-d3z_.js                        [39m[1m[2m  4.86 kB[22m[1m[22m[2m │ gzip:  1.69 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp.sources-Bjp6bNUM.js                        [39m[1m[2m  5.82 kB[22m[1m[22m[2m │ gzip:  2.01 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp.ops-dqwq-gjF.js                            [39m[1m[2m  6.36 kB[22m[1m[22m[2m │ gzip:  1.71 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mmarketing-CevY_ov0.js                          [39m[1m[2m 10.59 kB[22m[1m[22m[2m │ gzip:  3.14 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36msearch-CRqsRKeJ.js                             [39m[1m[2m 13.28 kB[22m[1m[22m[2m │ gzip:  3.50 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mapp.watchlists-DMvxEYrd.js                     [39m[1m[2m 15.86 kB[22m[1m[22m[2m │ gzip:  3.72 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mauth-client-EW7tl_6D.js                        [39m[1m[2m 28.57 kB[22m[1m[22m[2m │ gzip: 10.89 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mchunk-UVKPFVEO-79EHwjw_.js                     [39m[1m[2m126.40 kB[22m[1m[22m[2m │ gzip: 42.64 kB[22m
+[2mbuild/client/[22m[2massets/[22m[36mentry.client-Bv4jpfoU.js                       [39m[1m[2m190.57 kB[22m[1m[22m[2m │ gzip: 60.05 kB[22m
+[32m✓ built in 3.16s[39m
+[36mvite v7.3.3 [32mbuilding ssr environment for production...[36m[39m
+transforming...
+[32m✓[39m 1363 modules transformed.
+rendering chunks...
+[2mbuild/server/[22m[32mwrangler.json                                   [39m[1m[2m    1.83 kB[22m[1m[22m
+[2mbuild/server/[22m[32m.vite/manifest.json                             [39m[1m[2m   10.72 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[35mserver-build-COIIhaVL.css                [39m[1m[2m   26.27 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mrender_resend_false-MiC__Smr.js          [39m[1m[2m    0.16 kB[22m[1m[22m
+[2mbuild/server/[22m[36mindex.js                                        [39m[1m[2m    0.17 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mcontext.server-CiVtHntO.js               [39m[1m[2m    0.36 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mBrowserWebSocketTransport-_4zER8KH.js    [39m[1m[2m    0.83 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mNodeWebSocketTransport-DlzcABmg.js       [39m[1m[2m    1.81 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36menv.server-CT975kfn.js                   [39m[1m[2m    2.12 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36md1-sqlite-dialect-sYHNqBte-oQJhhktW.js   [39m[1m[2m    4.32 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mbun-sqlite-dialect-C8OaCWSL-DxkoPN3S.js  [39m[1m[2m    4.57 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mnode-sqlite-dialect-BYY1_h_R.js          [39m[1m[2m    4.58 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mmeta-ads-readiness.server-B90xkDe8.js    [39m[1m[2m    5.25 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mrazorpay.server-CsvQPEDE.js              [39m[1m[2m    6.10 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36msearch-selection.server-MFXwf7c3.js      [39m[1m[2m    6.79 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mreport-builder.server-C3ijFS7Y.js        [39m[1m[2m    7.06 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mcustomer-meta.server-k4Lml_Au.js         [39m[1m[2m    8.48 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mwhatsapp.server-D87eMvfd.js              [39m[1m[2m    9.60 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mindex-CVxBjACZ.js                        [39m[1m[2m    9.68 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mindex-DWQ0HJZl.js                        [39m[1m[2m   18.98 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mdelivery.server-pTlprPbx.js              [39m[1m[2m  483.95 kB[22m[1m[22m
+[2mbuild/server/[22m[2massets/[22m[36mserver-build-C-ogTAxG.js                 [39m[1m[33m  870.68 kB[39m[22m
+[2mbuild/server/[22m[2massets/[22m[36mworker-entry-GLZkq-LJ.js                 [39m[1m[33m1,151.73 kB[39m[22m
+[2mbuild/server/[22m[2massets/[22m[36mindex-apr2WgL0.js                        [39m[1m[33m1,556.82 kB[39m[22m
+
+[32m✓[39m 1 asset copied from React Router server build to client assets.
+[2mbuild/client/assets/server-build-COIIhaVL.css[22m
+
+[32m✓ built in 6.35s[39m
