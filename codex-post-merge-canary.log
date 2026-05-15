@@ -1,0 +1,11 @@
+[production canary]
+
+> canary:prod
+> node scripts/prod-canary.mjs
+
+health: ok (200) https://0509.in/api/health
+health: ok (200) https://www.0509.in/api/health
+health: ok (200) https://api.0509.in/api/health
+fresh-live bypass: failed (Missing CANARY_BYPASS_TOKEN; canary cannot prove it bypassed cache and provider cooldown.)
+ops readiness: failed (Missing CANARY_BYPASS_TOKEN; launch readiness signals cannot be checked.)
+meta ads beta: ok

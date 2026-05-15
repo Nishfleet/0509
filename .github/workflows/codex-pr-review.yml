@@ -50,13 +50,10 @@ jobs:
       - name: Pre-fetch PR refs
         if: steps.ai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target'
         shell: bash
-        env:
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           git fetch --no-tags origin \
-            "$PR_BASE_REF" \
-            "+refs/pull/${PR_NUMBER}/head"
+            "${{ github.event.pull_request.base.ref }}" \
+            "+refs/pull/${{ github.event.pull_request.number }}/head"
 
       - uses: actions/setup-node@v6
         if: steps.ai_secret.outputs.has_key == 'true'
@@ -105,25 +102,21 @@ jobs:
       - name: Prepare PR review context
         if: steps.ai_secret.outputs.has_key == 'true'
         shell: bash
-        env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-          PR_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number || 'workflow_dispatch' }}
-          PR_TITLE: ${{ github.event.pull_request.title || github.ref_name }}
-          PR_BODY: ${{ github.event.pull_request.body || '' }}
         run: |
           mkdir -p .codex-runtime
-          base="$PR_BASE_SHA"
+          base="${{ github.event.pull_request.base.sha || '' }}"
           head="$(git rev-parse HEAD)"
           {
             echo "# PR Review Context"
             echo
-            printf 'Repository: %s\n' "$PR_REPOSITORY"
-            printf 'PR: %s\n' "$PR_NUMBER"
-            printf 'Title: %s\n' "$PR_TITLE"
+            echo "Repository: ${{ github.repository }}"
+            echo "PR: ${{ github.event.pull_request.number || 'workflow_dispatch' }}"
+            echo "Title: ${{ github.event.pull_request.title || github.ref_name }}"
             echo
             echo "## PR Body"
-            printf '%s\n' "$PR_BODY"
+            cat <<'PR_BODY'
+          ${{ github.event.pull_request.body || '' }}
+          PR_BODY
             echo
             if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
               echo "## Changed Files"
