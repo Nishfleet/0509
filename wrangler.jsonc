@@ -57,7 +57,7 @@
   // - RAZORPAY_PLAN_STARTER_YEARLY
   // - RAZORPAY_PLAN_AGENCY_MONTHLY
   // - RAZORPAY_PLAN_AGENCY_YEARLY
-  // - META_TOKEN_ENCRYPTION_SECRET (optional; falls back to BETTER_AUTH_SECRET)
+  // - META_TOKEN_ENCRYPTION_SECRET
   "d1_databases": [
     {
       "binding": "DB",
