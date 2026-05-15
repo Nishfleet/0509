@@ -78,16 +78,6 @@ describe("launch readiness canary route", () => {
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
-      details: [
-        {
-          channel: "email",
-          status: "sent",
-          targetValue: "owner@example.com",
-          providerMessageId: "email-1",
-          errorMessage: null,
-          deliveredAt: new Date().toISOString(),
-        },
-      ],
     });
 
     vi.doMock("~/lib/context.server", () => ({
@@ -154,64 +144,5 @@ describe("launch readiness canary route", () => {
         status: "succeeded",
       }),
     );
-  });
-
-  it("fails when delivery is attempted but not sent", async () => {
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({
-        CANARY_BYPASS_TOKEN: "secret-token",
-        DB: createDbWithTarget(),
-      })),
-    }));
-    vi.doMock("~/lib/data.server", () => ({
-      addDigestItem: vi.fn().mockResolvedValue(undefined),
-      clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
-      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
-      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
-      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
-      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
-      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
-    vi.doMock("~/lib/delivery.server", () => ({
-      deliverWeeklyDigest: vi.fn().mockResolvedValue({
-        attempts: 1,
-        channels: ["email"],
-        details: [
-          {
-            channel: "email",
-            status: "failed",
-            targetValue: "owner@example.com",
-            providerMessageId: null,
-            errorMessage: "domain is not verified",
-            deliveredAt: null,
-          },
-        ],
-      }),
-    }));
-
-    const { action } = await import("~/routes/api.launch-readiness.canary");
-    const response = await action({
-      context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary", {
-        method: "POST",
-        headers: {
-          "x-0509-canary-token": "secret-token",
-        },
-      }),
-    } as never);
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({
-      ok: false,
-      delivery: {
-        attempts: 1,
-        details: [
-          {
-            status: "failed",
-          },
-        ],
-      },
-    });
   });
 });

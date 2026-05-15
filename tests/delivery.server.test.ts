@@ -102,16 +102,9 @@ describe("deliverWeeklyDigest", () => {
       },
     );
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       attempts: 1,
       channels: ["email"],
-      details: [
-        {
-          channel: "email",
-          status: "sent",
-          targetValue: "owner@example.com",
-        },
-      ],
     });
     expect(resendSend).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -268,21 +261,9 @@ describe("deliverWeeklyDigest", () => {
       },
     );
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       attempts: 2,
       channels: ["email", "whatsapp"],
-      details: [
-        {
-          channel: "email",
-          status: "sent",
-          targetValue: "owner@example.com",
-        },
-        {
-          channel: "whatsapp",
-          status: "failed",
-          targetValue: "+919999999999",
-        },
-      ],
     });
     expect(resendSend).toHaveBeenCalledTimes(1);
     expect(sendDigestWhatsApp).toHaveBeenCalledTimes(1);
@@ -407,16 +388,9 @@ describe("deliverWeeklyDigest", () => {
       },
     );
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       attempts: 1,
       channels: ["email"],
-      details: [
-        {
-          channel: "email",
-          status: "sent",
-          targetValue: "owner@example.com",
-        },
-      ],
     });
     expect(resendSend).not.toHaveBeenCalled();
   });

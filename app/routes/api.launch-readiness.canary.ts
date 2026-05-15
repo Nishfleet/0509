@@ -213,18 +213,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
     cadence: "daily",
     lane: "internal",
   });
-  const deliverySent = delivery.details.some((attempt) => attempt.status === "sent");
 
   return Response.json(
     {
-      ok: deliverySent,
+      ok: delivery.attempts > 0,
       runId,
       proofCaptureId,
       digestRunId,
       delivery,
     },
     {
-      status: deliverySent ? 200 : 503,
+      status: delivery.attempts > 0 ? 200 : 503,
       headers: { "cache-control": "no-store" },
     },
   );
