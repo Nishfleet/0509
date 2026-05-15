@@ -8,7 +8,7 @@ Five to Nine is ready for a narrow paid pilot, not a broad public launch.
 
 The app has real product surface: public search, authenticated workspace, watchlists, collections, daily briefs, weekly digests, reports, share/export flows, operator health, region-aware pricing display, Razorpay subscription scaffolding, and proof-first monitoring infrastructure.
 
-The broad-launch blocker is fresh Meta ads discovery. Meta ads tracking is now explicitly beta until production evidence proves fresh discovery, proof capture, and digest delivery stay reliable.
+The broad-launch blockers are Resend domain verification, Razorpay production setup, and enough production evidence that fresh discovery, proof capture, and digest delivery stay reliable.
 
 ## Live Blockers Found On 2026-05-15
 
@@ -18,7 +18,7 @@ The broad-launch blocker is fresh Meta ads discovery. Meta ads tracking is now e
 - Remote D1 migrations are fully applied; `user_plan`, `razorpay_webhook_event`, and `rate_limit_events` tables/columns exist.
 - Remote Worker secrets are missing all Razorpay keys and plan IDs, so checkout is still not live.
 - The platform `META_AD_LIBRARY_TOKEN` is expired. Remote provider state shows it expired on 2026-04-19 and the browser path is currently `cache_only` / `empty_result` with repeated login-wall or empty extraction failures.
-- `npm run provider:bakeoff:launch -- --provider current_0509 --query nykaa` still fails against production with degraded empty fresh-live results.
+- `npm run provider:bakeoff:launch -- --provider current_0509 --query nykaa` now returns fresh live Ad Library results after the text-card extractor fix, but Meta ads tracking remains beta until the production success window clears the historical failures.
 
 ## Hard Launch Gates
 
