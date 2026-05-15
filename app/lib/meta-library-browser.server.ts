@@ -163,7 +163,7 @@ async function searchMetaLibraryViaSessions(
     });
     await waitForLibrarySurface(page);
 
-    const extractedCards = await page.evaluate(() => {
+    const extraction = await page.evaluate(() => {
       const normalizeText = (value: string | null | undefined) =>
         (value ?? "")
           .replace(/\u00a0/g, " ")
@@ -180,7 +180,7 @@ async function searchMetaLibraryViaSessions(
         ),
       );
 
-      return anchors
+      const cards = anchors
         .map((anchor) => {
           const href = anchor.href || anchor.getAttribute("href") || "";
           const idMatch = href.match(/[?&]id=(\d+)/);
@@ -242,29 +242,49 @@ async function searchMetaLibraryViaSessions(
           };
         })
         .filter(Boolean);
+
+      const pageText = document.body?.innerText ?? "";
+      const lowerPageText = pageText.toLowerCase();
+
+      return {
+        cards,
+        pageText,
+        loginWall:
+          /log in|login|sign in|sign into/.test(lowerPageText) &&
+          lowerPageText.includes("facebook"),
+        rateLimited:
+          lowerPageText.includes("rate limit") ||
+          lowerPageText.includes("too many requests") ||
+          lowerPageText.includes("try again later"),
+      };
     });
 
-    if ((extractedCards as ExtractedAdCard[]).length === 0) {
-      const pageSignals = await page.evaluate(() => {
-        const text = (document.body?.innerText ?? "").toLowerCase();
-        return {
-          loginWall:
-            /log in|login|sign in|sign into/.test(text) && text.includes("facebook"),
-          rateLimited:
-            text.includes("rate limit") ||
-            text.includes("too many requests") ||
-            text.includes("try again later"),
+    const normalizedExtraction = Array.isArray(extraction)
+      ? {
+          cards: extraction as ExtractedAdCard[],
+          pageText: "",
+          loginWall: false,
+          rateLimited: false,
+        }
+      : extraction as {
+          cards: ExtractedAdCard[];
+          pageText: string;
+          loginWall: boolean;
+          rateLimited: boolean;
         };
-      });
+    const extractedCards = normalizedExtraction.cards.length > 0
+      ? normalizedExtraction.cards
+      : extractTextCardsFromVisibleText(normalizedExtraction.pageText);
 
-      if (pageSignals.loginWall) {
+    if (extractedCards.length === 0) {
+      if (normalizedExtraction.loginWall) {
         throw new CommercialDiscoveryError(
           "Meta Ad Library returned a login wall.",
           "login_wall",
         );
       }
 
-      if (pageSignals.rateLimited) {
+      if (normalizedExtraction.rateLimited) {
         throw new CommercialDiscoveryError(
           "Meta Ad Library is temporarily rate limited.",
           "rate_limited",
@@ -277,7 +297,7 @@ async function searchMetaLibraryViaSessions(
       );
     }
 
-    const ads = (extractedCards as ExtractedAdCard[]).map((card) =>
+    const ads = extractedCards.map((card) =>
       normalizeExtractedCard(card, query),
     );
 
@@ -770,7 +790,15 @@ function parseQuickActionExtractionPayload(content: string): QuickActionExtracti
   }
 
   try {
-    return JSON.parse(payloadText.replace(/<\\\//g, "</")) as QuickActionExtractionPayload;
+    const parsed = JSON.parse(payloadText.replace(/<\\\//g, "</")) as QuickActionExtractionPayload;
+    if (
+      (!Array.isArray(parsed.cards) || parsed.cards.length === 0) &&
+      renderedHtmlPayload.cards.length > 0
+    ) {
+      return renderedHtmlPayload;
+    }
+
+    return parsed;
   } catch {
     if (
       renderedHtmlPayload.cards.length > 0 ||
@@ -878,7 +906,8 @@ function extractHrefFromScrapeElement(element: BrowserRunQuickActionScrapeElemen
 }
 
 function extractQuickActionPayloadFromRenderedHtml(content: string): QuickActionExtractionPayload {
-  const text = stripHtml(content).toLowerCase();
+  const visibleText = stripHtmlPreservingLines(content);
+  const text = visibleText.toLowerCase();
   const cards: ExtractedAdCard[] = [];
   const seen = new Set<string>();
   const anchorRegex = /<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
@@ -917,7 +946,7 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
   }
 
   return {
-    cards,
+    cards: cards.length > 0 ? cards : extractTextCardsFromVisibleText(visibleText),
     loginWall:
       /log in|login|sign in|sign into/.test(text) && text.includes("facebook"),
     rateLimited:
@@ -925,6 +954,127 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
       text.includes("too many requests") ||
       text.includes("try again later"),
   };
+}
+
+function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[] {
+  const lines = value
+    .replace(/\u200b/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const idIndexes = lines
+    .map((line, index) => ({
+      index,
+      match: line.match(/^Library ID:\s*(\d+)/i),
+    }))
+    .filter((entry): entry is { index: number; match: RegExpMatchArray } => Boolean(entry.match));
+  const cards: ExtractedAdCard[] = [];
+  const seen = new Set<string>();
+
+  for (let entryIndex = 0; entryIndex < idIndexes.length; entryIndex += 1) {
+    const entry = idIndexes[entryIndex];
+    const libraryId = entry.match[1];
+    if (!libraryId || seen.has(libraryId)) {
+      continue;
+    }
+
+    const previousLine = lines[entry.index - 1]?.toLowerCase();
+    const blockStart = previousLine === "active" || previousLine === "inactive"
+      ? entry.index - 1
+      : entry.index;
+    const blockEnd = idIndexes[entryIndex + 1]?.index ?? lines.length;
+    const block = lines.slice(blockStart, blockEnd);
+    if (!block.some((line) => /^Sponsored$/i.test(line))) {
+      continue;
+    }
+
+    const advertiser = inferAdvertiserFromTextBlock(block);
+    const bodyLines = extractAdBodyLines(block);
+    const body = bodyLines.join("\n").trim();
+    const blockText = block.join("\n");
+    seen.add(libraryId);
+
+    cards.push({
+      libraryId,
+      advertiser,
+      body: body || advertiser || blockText,
+      previewHeadline: bodyLines[0] ?? advertiser,
+      previewSubhead: bodyLines.slice(1, 3).join(" ") || null,
+      cta: inferCta(blockText),
+      adSnapshotUrl: `https://www.facebook.com/ads/library/?id=${libraryId}`,
+      landingPageUrl: inferLandingPageFromTextBlock(block),
+      platforms: inferPlatforms(blockText),
+      active: !block.some((line) => /^Inactive$/i.test(line)),
+    });
+  }
+
+  return cards;
+}
+
+function inferAdvertiserFromTextBlock(block: string[]) {
+  const detailIndex = block.findIndex((line) => /^See (ad|summary) details$/i.test(line));
+  if (detailIndex >= 0) {
+    const advertiser = block
+      .slice(detailIndex + 1)
+      .find((line) => !isTextCardUiLine(line) && !/^Sponsored$/i.test(line));
+    if (advertiser) {
+      return advertiser;
+    }
+  }
+
+  const sponsoredIndex = block.findIndex((line) => /^Sponsored$/i.test(line));
+  for (let index = sponsoredIndex - 1; index >= 0; index -= 1) {
+    const line = block[index];
+    if (line && !isTextCardUiLine(line)) {
+      return line;
+    }
+  }
+
+  return null;
+}
+
+function extractAdBodyLines(block: string[]) {
+  const sponsoredIndex = block.findIndex((line) => /^Sponsored$/i.test(line));
+  const afterSponsored = sponsoredIndex >= 0 ? block.slice(sponsoredIndex + 1) : block;
+  const bodyLines: string[] = [];
+
+  for (const line of afterSponsored) {
+    if (isTextCardUiLine(line) || /^Sponsored$/i.test(line)) {
+      continue;
+    }
+    bodyLines.push(line);
+  }
+
+  return bodyLines;
+}
+
+function isTextCardUiLine(line: string) {
+  return (
+    /^Active$/i.test(line) ||
+    /^Inactive$/i.test(line) ||
+    /^Library ID:\s*\d+/i.test(line) ||
+    /^Started running on\b/i.test(line) ||
+    /^Platforms$/i.test(line) ||
+    /^This ad has multiple versions$/i.test(line) ||
+    /^\d+\s+ads?\s+use this creative and text$/i.test(line) ||
+    /^Menu$/i.test(line) ||
+    /^See (ad|summary) details$/i.test(line) ||
+    /^\d+:\d+\s*\/\s*\d+:\d+/.test(line)
+  );
+}
+
+function inferLandingPageFromTextBlock(block: string[]) {
+  const domainLine = block.find((line) => /^[A-Z0-9.-]+\.[A-Z]{2,}(?:\/\S*)?$/i.test(line));
+  if (!domainLine) {
+    return null;
+  }
+
+  try {
+    return new URL(`https://${domainLine.toLowerCase()}`).toString();
+  } catch {
+    return null;
+  }
 }
 
 function stripHtml(value: string) {
@@ -935,6 +1085,21 @@ function stripHtml(value: string) {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim(),
+  );
+}
+
+function stripHtmlPreservingLines(value: string) {
+  return decodeHtmlEntity(
+    value
+      .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+      .replace(/<\s*br\s*\/?>/gi, "\n")
+      .replace(/<\/?(?:article|aside|button|div|h[1-6]|li|main|p|section|strong)\b[^>]*>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .split(/\n+/)
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .join("\n"),
   );
 }
 
