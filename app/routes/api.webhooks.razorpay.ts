@@ -4,6 +4,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     fingerprintRazorpayWebhookBody,
+    isRazorpayWebhookPlanAllowed,
     isRazorpayWebhookFresh,
     parseRazorpaySubscriptionWebhook,
     verifyRazorpayWebhookSignature,
@@ -32,6 +33,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const update = parseRazorpaySubscriptionWebhook(payload);
   if (update?.payloadCreatedAt && !isRazorpayWebhookFresh(update.payloadCreatedAt)) {
     throw new Response("Stale Razorpay webhook event.", { status: 400 });
+  }
+  if (update && !isRazorpayWebhookPlanAllowed(env, update)) {
+    throw new Response("Razorpay webhook plan id does not match configured billing plans.", { status: 400 });
   }
 
   const headerEventId = request.headers.get("x-razorpay-event-id")?.trim() || null;

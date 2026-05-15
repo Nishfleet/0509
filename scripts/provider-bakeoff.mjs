@@ -5,6 +5,7 @@ import {
   DEFAULT_MODE,
   DEFAULT_PROVIDERS,
   DOGFOOD_QUERIES,
+  FRESH_LIVE_CURRENT_0509_TIMEOUT_MS,
   benchmarkProviders,
   findBlockingCurrent0509Failures,
   findBlockingFreshLiveCurrent0509Failures,
@@ -15,7 +16,7 @@ import {
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ providers: string[], queries: string[], country: string, mode: "advertiser" | "keyword", json: boolean, baseUrl: string | undefined, freshLiveCurrent: boolean, canaryBypassToken: string | undefined }} */
+  /** @type {{ providers: string[], queries: string[], country: string, mode: "advertiser" | "keyword", json: boolean, baseUrl: string | undefined, freshLiveCurrent: boolean, canaryBypassToken: string | undefined, timeoutMs: number | undefined }} */
   const parsed = {
     providers: [],
     queries: [],
@@ -25,6 +26,7 @@ function parseArgs(args) {
     baseUrl: process.env.BAKEOFF_BASE_URL,
     freshLiveCurrent: process.env.BAKEOFF_FRESH_LIVE_CURRENT === "true",
     canaryBypassToken: process.env.CANARY_BYPASS_TOKEN,
+    timeoutMs: parsePositiveInteger(process.env.BAKEOFF_TIMEOUT_MS),
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -60,6 +62,10 @@ function parseArgs(args) {
     if (arg === "--fresh-live-current" || arg === "--launch-gate") {
       parsed.freshLiveCurrent = true;
     }
+    if (arg === "--timeout-ms" && args[index + 1]) {
+      parsed.timeoutMs = parsePositiveInteger(args[index + 1]);
+      index += 1;
+    }
   }
 
   return {
@@ -88,7 +94,18 @@ function parseArgs(args) {
     baseUrl: parsed.baseUrl,
     freshLiveCurrent: parsed.freshLiveCurrent,
     canaryBypassToken: parsed.canaryBypassToken,
+    timeoutMs:
+      parsed.timeoutMs ??
+      (parsed.freshLiveCurrent ? FRESH_LIVE_CURRENT_0509_TIMEOUT_MS : undefined),
   };
+}
+
+/**
+ * @param {string | undefined} value
+ */
+function parsePositiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 const config = parseArgs(process.argv.slice(2));
@@ -100,6 +117,7 @@ const results = await benchmarkProviders({
   baseUrl: config.baseUrl,
   forceLive: config.freshLiveCurrent,
   canaryBypassToken: config.canaryBypassToken,
+  timeoutMs: config.timeoutMs,
 });
 const blockingFailures = config.freshLiveCurrent
   ? findBlockingFreshLiveCurrent0509Failures(results)
@@ -126,6 +144,7 @@ if (config.json) {
         queries: config.queries,
         current0509Gate: config.freshLiveCurrent ? "fresh_live" : "rendered_results",
         freshLiveBypassConfigured: Boolean(config.canaryBypassToken?.trim()),
+        timeoutMs: config.timeoutMs ?? null,
         configurationFailures,
         blockingFailures,
         results,

@@ -10,6 +10,16 @@ The app has real product surface: public search, authenticated workspace, watchl
 
 The broad-launch blocker is fresh Meta ads discovery. Meta ads tracking is now explicitly beta until production evidence proves fresh discovery, proof capture, and digest delivery stay reliable.
 
+## Live Blockers Found On 2026-05-15
+
+- `npm run canary:prod` passes health and fresh-live bypass, but fails ops readiness with `no_recent_proof_capture` and `no_recent_digest_sent`.
+- The private digest canary is pinned to `LAUNCH_CANARY_EMAIL=me@inish.in`, but Resend rejects delivery because `0509.in` is not verified in Resend.
+- The live Resend API key is send-only; it cannot create or verify the domain through `/api/ops/resend-domain`.
+- Remote D1 migrations are fully applied; `user_plan`, `razorpay_webhook_event`, and `rate_limit_events` tables/columns exist.
+- Remote Worker secrets are missing all Razorpay keys and plan IDs, so checkout is still not live.
+- The platform `META_AD_LIBRARY_TOKEN` is expired. Remote provider state shows it expired on 2026-04-19 and the browser path is currently `cache_only` / `empty_result` with repeated login-wall or empty extraction failures.
+- `npm run provider:bakeoff:launch -- --provider current_0509 --query nykaa` still fails against production with degraded empty fresh-live results.
+
 ## Hard Launch Gates
 
 - `npm run typecheck` passes.
@@ -20,6 +30,7 @@ The broad-launch blocker is fresh Meta ads discovery. Meta ads tracking is now e
 - Meta ads beta graduation requires enough live samples, at least 95% seven-day success, a fresh live success in the last 24 hours, no recent failures, and a healthy visual capture path.
 - `npm run canary:prod` also passes the private launch-readiness endpoint: recent successful monitoring, recent proof capture, and at least one recently sent digest.
 - `npm run provider:bakeoff:launch` is green for `current_0509`, proving the public app path returns fresh live Ad Library results before Meta ads can leave beta.
+- `npm audit --omit=dev --audit-level=moderate` passes.
 - Privacy and terms pages are present in the active React Router app.
 - Public copy does not claim live checkout, verified WhatsApp delivery, SOC 2, HIPAA, GDPR, zero retention, no training, or unverified model/provider behavior.
 - Pricing is framed as pilot pricing until Razorpay test-mode checkout, signed subscription webhooks, and live secrets are verified.

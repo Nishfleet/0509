@@ -14,6 +14,7 @@ export interface AppEnv {
   BETTER_AUTH_URL?: string;
   DB?: D1Database;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
+  LAUNCH_CANARY_EMAIL?: string;
   ALLOW_PLATFORM_META_API_FALLBACK?: string;
   META_AD_LIBRARY_TOKEN?: string;
   META_AD_LIBRARY_API_VERSION?: string;

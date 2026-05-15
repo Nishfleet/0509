@@ -57,6 +57,7 @@ describe("Razorpay webhook route", () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({
         RAZORPAY_WEBHOOK_SECRET: secret,
+        RAZORPAY_PLAN_STARTER_MONTHLY: "plan_starter_monthly",
       })),
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -105,6 +106,7 @@ describe("Razorpay webhook route", () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({
         RAZORPAY_WEBHOOK_SECRET: secret,
+        RAZORPAY_PLAN_STARTER_MONTHLY: "plan_starter_monthly",
       })),
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -143,5 +145,43 @@ describe("Razorpay webhook route", () => {
         },
       },
     );
+  });
+
+  it("rejects webhook plan ids that do not match configured plans", async () => {
+    const secret = "webhook-secret";
+    const rawBody = webhookPayload();
+    const claimRazorpayWebhookEvent = vi.fn();
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        RAZORPAY_WEBHOOK_SECRET: secret,
+        RAZORPAY_PLAN_STARTER_MONTHLY: "plan_different",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      claimRazorpayWebhookEvent,
+      markRazorpayWebhookEventFinished: vi.fn(),
+      syncRazorpaySubscriptionStatus: vi.fn(),
+    }));
+
+    const { action } = await import("~/routes/api.webhooks.razorpay");
+
+    await expect(
+      action({
+        context: createContext({
+          RAZORPAY_WEBHOOK_SECRET: secret,
+          RAZORPAY_PLAN_STARTER_MONTHLY: "plan_different",
+        }),
+        request: new Request("https://0509.in/api/webhooks/razorpay", {
+          method: "POST",
+          headers: {
+            "x-razorpay-signature": hmac(rawBody, secret),
+            "x-razorpay-event-id": "evt_header",
+          },
+          body: rawBody,
+        }),
+      } as never),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(claimRazorpayWebhookEvent).not.toHaveBeenCalled();
   });
 });

@@ -40,7 +40,7 @@ const CHECKOUT_LINK_TTL_SECONDS = 60 * 60;
 const WEBHOOK_MAX_AGE_MS = 26 * 60 * 60 * 1000;
 const WEBHOOK_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 
-function trim(value: string | undefined) {
+function trim(value: string | null | undefined) {
   return value?.trim() || "";
 }
 
@@ -79,6 +79,36 @@ export function isRazorpaySubscriptionCheckoutConfigured(env: AppEnv) {
     isRazorpaySubscriptionOptionConfigured(env, "agency", "monthly") ||
     isRazorpaySubscriptionOptionConfigured(env, "agency", "yearly")
   );
+}
+
+export function resolveRazorpayPlanFromProviderPlanId(
+  env: AppEnv,
+  providerPlanId: string | null | undefined,
+) {
+  const planId = trim(providerPlanId);
+  if (!planId) {
+    return null;
+  }
+
+  const options: Array<{
+    cycle: RazorpayBillingCycle;
+    plan: RazorpayBillingPlan;
+  }> = [
+    { plan: "starter", cycle: "monthly" },
+    { plan: "starter", cycle: "yearly" },
+    { plan: "agency", cycle: "monthly" },
+    { plan: "agency", cycle: "yearly" },
+  ];
+
+  return options.find((option) => razorpayPlanId(env, option.plan, option.cycle) === planId) ?? null;
+}
+
+export function isRazorpayWebhookPlanAllowed(
+  env: AppEnv,
+  update: Pick<RazorpaySubscriptionWebhookUpdate, "plan" | "providerPlanId">,
+) {
+  const configuredPlan = resolveRazorpayPlanFromProviderPlanId(env, update.providerPlanId);
+  return configuredPlan?.plan === update.plan;
 }
 
 function base64Encode(value: string) {

@@ -9,6 +9,7 @@ import {
   createProofCapture,
   createWatchEvent,
   getDiscoveryCacheEntry,
+  getLaunchReadinessSignals,
   getOperatorSnapshot,
   listActiveWatchlists,
   listDigests,
@@ -162,6 +163,49 @@ describe("Razorpay billing persistence", () => {
       "plan_starter_monthly",
       "active",
     ]);
+  });
+
+  it("does not let an old Razorpay cancellation downgrade a newer subscription", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async run() {
+                  return { success: true };
+                },
+                async all<T>() {
+                  if (sql.includes("SELECT razorpay_subscription_id FROM user_plan")) {
+                    return { results: [{ razorpay_subscription_id: "sub_new" }] as T[] };
+                  }
+                  return { results: [] as T[] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await syncRazorpaySubscriptionStatus(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        plan: "starter",
+        status: "cancelled",
+        subscriptionId: "sub_old",
+        customerId: "cust_123",
+        providerPlanId: "plan_starter_monthly",
+        shouldGrant: false,
+        shouldRevoke: true,
+      },
+    );
+
+    expect(findStatement(statements, "SELECT razorpay_subscription_id FROM user_plan")).toBeTruthy();
+    expect(findStatement(statements, "INSERT INTO user_plan")).toBeUndefined();
   });
 
   it("dedupes Razorpay webhook events and allows failed events to be retried", async () => {
@@ -1020,6 +1064,20 @@ describe("createDeliveryAttempt", () => {
           typeof binding === "string" && binding.includes("\"subject\":\"3 changes this week\""),
       ),
     ).toBe(true);
+  });
+});
+
+describe("getLaunchReadinessSignals", () => {
+  it("does not count synthetic launch canary proof captures as real proof readiness", async () => {
+    const mock = createMockDb();
+
+    await getLaunchReadinessSignals(
+      { DB: mock.db } as never,
+      new Date("2026-05-15T12:00:00.000Z"),
+    );
+
+    const proofQuery = findStatement(mock.statements, "FROM proof_capture", "launch_readiness_canary");
+    expect(proofQuery?.sql).toContain("json_extract(capture_metadata_json, '$.kind')");
   });
 });
 
