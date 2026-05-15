@@ -2,7 +2,7 @@ import { Form, Link, useRouteLoaderData } from "react-router";
 import type { MetaFunction } from "react-router";
 
 import { sampleQueries } from "~/lib/demo-data";
-import { PRICING_COPY } from "~/lib/pricing";
+import { detectPricingRegion, PRICING_COPY } from "~/lib/pricing";
 import type { RootLoaderData } from "~/root";
 
 export const meta: MetaFunction = () => [
@@ -17,6 +17,7 @@ export const meta: MetaFunction = () => [
 export default function MarketingRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
+  const geoPricingRegion = detectPricingRegion(rootData.countryCode);
 
   return (
     <main className="site-shell">
@@ -239,17 +240,28 @@ export default function MarketingRoute() {
 
           <p className="region-caption">
             Showing {PRICING_COPY[rootData.pricingRegion].label.toLowerCase()} in{" "}
-            {PRICING_COPY[rootData.pricingRegion].currency}. Self-serve checkout is not live yet; pilot access is
-            activated manually after fit review.
+            {PRICING_COPY[rootData.pricingRegion].currency}. India checkout uses Razorpay and international checkout uses
+            Dodo when configured; otherwise pilot access is activated manually after fit review.
           </p>
 
           <div className="pricing-grid">
             {rootData.pricingPlans.map((plan) => {
-              const checkoutOptions = rootData.razorpayCheckout[plan.slug];
+              const razorpayOptions = rootData.razorpayCheckout[plan.slug];
+              const dodoOptions = rootData.dodoCheckout[plan.slug];
               const canUseRazorpay =
                 rootData.session &&
                 rootData.pricingRegion === "india" &&
-                (checkoutOptions.monthly || checkoutOptions.yearly);
+                (razorpayOptions.monthly || razorpayOptions.yearly);
+              const canUseDodo =
+                rootData.session &&
+                rootData.pricingRegion === "rest_of_world" &&
+                geoPricingRegion !== "india" &&
+                (dodoOptions.monthly || dodoOptions.yearly);
+              const checkoutOptions = canUseDodo ? dodoOptions : razorpayOptions;
+              const checkoutAction = canUseDodo
+                ? "/api/billing/dodo/checkout"
+                : "/api/billing/razorpay/subscription";
+              const canUseCheckout = canUseRazorpay || canUseDodo;
 
               return (
                 <article className="pricing-card" key={plan.name}>
@@ -257,10 +269,10 @@ export default function MarketingRoute() {
                   <h3>{plan.monthlyLabel}</h3>
                   <p className="muted-text">{plan.yearlyLabel}</p>
                   <p>{plan.detail}</p>
-                  {canUseRazorpay ? (
+                  {canUseCheckout ? (
                     <div className="billing-actions">
                       {checkoutOptions.monthly ? (
-                        <Form method="post" action="/api/billing/razorpay/subscription">
+                        <Form method="post" action={checkoutAction}>
                           <input name="plan" type="hidden" value={plan.slug} />
                           <input name="cycle" type="hidden" value="monthly" />
                           <button className="button button-primary" type="submit">
@@ -269,7 +281,7 @@ export default function MarketingRoute() {
                         </Form>
                       ) : null}
                       {checkoutOptions.yearly ? (
-                        <Form method="post" action="/api/billing/razorpay/subscription">
+                        <Form method="post" action={checkoutAction}>
                           <input name="plan" type="hidden" value={plan.slug} />
                           <input name="cycle" type="hidden" value="yearly" />
                           <button className="button button-secondary" type="submit">

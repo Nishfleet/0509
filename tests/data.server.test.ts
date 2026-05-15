@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
+  claimDodoWebhookEvent,
   claimRazorpayWebhookEvent,
   createDeliveryAttempt,
   createDiscoveryFetchLog,
@@ -19,6 +20,8 @@ import {
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
   recordPendingRazorpaySubscription,
+  recordPendingDodoSubscription,
+  syncDodoSubscriptionStatus,
   syncRazorpaySubscriptionStatus,
   upsertAd,
   upsertCustomerMetaConnection,
@@ -267,6 +270,173 @@ describe("Razorpay billing persistence", () => {
 
     expect(statements[0]?.sql).toContain("ON CONFLICT(event_id)");
     expect(statements[0]?.sql).toContain("razorpay_webhook_event.outcome = 'failed'");
+  });
+});
+
+describe("Dodo billing persistence", () => {
+  it("records pending checkout sessions without granting a paid plan", async () => {
+    const mock = createMockDb();
+
+    await recordPendingDodoSubscription(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        checkoutSessionId: "cks_123",
+        subscriptionId: null,
+        customerId: null,
+        productId: null,
+        status: "checkout_created",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "dodo_status");
+
+    expect(statement?.sql).toContain("VALUES (?, 'free'");
+    expect(statement?.sql).not.toContain("plan = excluded.plan");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      null,
+      null,
+      null,
+      "cks_123",
+      "checkout_created",
+    ]);
+  });
+
+  it("grants the paid plan only after Dodo reports an active subscription", async () => {
+    const mock = createMockDb();
+
+    await syncDodoSubscriptionStatus(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        plan: "starter",
+        status: "active",
+        subscriptionId: "sub_123",
+        customerId: "cust_123",
+        productId: "prod_starter_monthly",
+        checkoutSessionId: "cks_123",
+        shouldGrant: true,
+        shouldRevoke: false,
+      },
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "plan = excluded.plan");
+
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "starter",
+      "cust_123",
+      "sub_123",
+      "prod_starter_monthly",
+      "cks_123",
+      "active",
+    ]);
+  });
+
+  it("does not let an old Dodo cancellation downgrade a newer subscription", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async run() {
+                  return { success: true };
+                },
+                async all<T>() {
+                  if (sql.includes("SELECT dodo_subscription_id FROM user_plan")) {
+                    return { results: [{ dodo_subscription_id: "sub_new" }] as T[] };
+                  }
+                  return { results: [] as T[] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await syncDodoSubscriptionStatus(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        plan: "starter",
+        status: "cancelled",
+        subscriptionId: "sub_old",
+        customerId: "cust_123",
+        productId: "prod_starter_monthly",
+        checkoutSessionId: "cks_123",
+        shouldGrant: false,
+        shouldRevoke: true,
+      },
+    );
+
+    expect(findStatement(statements, "SELECT dodo_subscription_id FROM user_plan")).toBeTruthy();
+    expect(findStatement(statements, "INSERT INTO user_plan")).toBeUndefined();
+  });
+
+  it("dedupes Dodo webhook events and allows failed events to be retried", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const changes = [1, 0, 1];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async run() {
+                  return { success: true, meta: { changes: changes.shift() ?? 0 } };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await expect(
+      claimDodoWebhookEvent(
+        { DB: mock.db } as never,
+        {
+          eventId: "wh_123",
+          eventType: "subscription.active",
+          subscriptionId: "sub_123",
+          userId: "user-1",
+          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
+        },
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      claimDodoWebhookEvent(
+        { DB: mock.db } as never,
+        {
+          eventId: "wh_123",
+          eventType: "subscription.active",
+          subscriptionId: "sub_123",
+          userId: "user-1",
+          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
+        },
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      claimDodoWebhookEvent(
+        { DB: mock.db } as never,
+        {
+          eventId: "wh_failed",
+          eventType: "subscription.active",
+          subscriptionId: "sub_failed",
+          userId: "user-1",
+          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
+        },
+      ),
+    ).resolves.toBe(true);
+
+    expect(statements[0]?.sql).toContain("ON CONFLICT(event_id)");
+    expect(statements[0]?.sql).toContain("dodo_webhook_event.outcome = 'failed'");
   });
 });
 

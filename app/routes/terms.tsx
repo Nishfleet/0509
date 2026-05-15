@@ -34,8 +34,8 @@ export default function TermsRoute() {
           <LegalBlock title="Billing">
             <p>
               Self-serve checkout is not live. Public prices are pilot pricing signals. Paid pilots should be activated
-              manually through an agreed payment path until Razorpay checkout and signed subscription webhooks are
-              verified.
+              manually through an agreed payment path until Razorpay India checkout, Dodo international checkout under
+              the 0509 Dodo brand, and signed subscription webhooks are verified.
             </p>
           </LegalBlock>
 

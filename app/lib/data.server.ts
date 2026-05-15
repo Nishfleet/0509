@@ -397,6 +397,7 @@ interface DiscoveryFetchLogRow {
 }
 
 type RazorpayWebhookOutcome = "received" | "processed" | "ignored" | "failed";
+type DodoWebhookOutcome = "received" | "processed" | "ignored" | "failed";
 
 export function nowIso() {
   return new Date().toISOString();
@@ -989,6 +990,192 @@ export async function markRazorpayWebhookEventFinished(
     env,
     `
       UPDATE razorpay_webhook_event
+      SET outcome = ?,
+          processed_at = ?,
+          metadata_json = ?
+      WHERE event_id = ?
+    `,
+    input.outcome,
+    nowIso(),
+    jsonValue(input.metadata ?? {}),
+    eventId,
+  );
+}
+
+export async function recordPendingDodoSubscription(
+  env: AppEnv,
+  input: {
+    userId: string;
+    checkoutSessionId: string | null;
+    subscriptionId: string | null;
+    customerId: string | null;
+    productId: string | null;
+    status: string;
+  },
+) {
+  await run(
+    env,
+    `
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_customer_id,
+        dodo_subscription_id,
+        dodo_product_id,
+        dodo_checkout_session_id,
+        dodo_status,
+        plan_updated_at
+      )
+      VALUES (?, 'free', ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        dodo_customer_id = excluded.dodo_customer_id,
+        dodo_subscription_id = COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id),
+        dodo_product_id = excluded.dodo_product_id,
+        dodo_checkout_session_id = COALESCE(excluded.dodo_checkout_session_id, user_plan.dodo_checkout_session_id),
+        dodo_status = excluded.dodo_status,
+        plan_updated_at = excluded.plan_updated_at
+    `,
+    input.userId,
+    input.customerId,
+    input.subscriptionId,
+    input.productId,
+    input.checkoutSessionId,
+    input.status,
+  );
+}
+
+export async function syncDodoSubscriptionStatus(
+  env: AppEnv,
+  input: {
+    userId: string;
+    plan: "starter" | "agency";
+    status: string;
+    subscriptionId: string;
+    customerId: string | null;
+    productId: string | null;
+    checkoutSessionId: string | null;
+    shouldGrant: boolean;
+    shouldRevoke: boolean;
+  },
+) {
+  if (input.shouldRevoke) {
+    const current = await one<{ dodo_subscription_id: string | null }>(
+      env,
+      "SELECT dodo_subscription_id FROM user_plan WHERE user_id = ?",
+      input.userId,
+    );
+    if (current?.dodo_subscription_id !== input.subscriptionId) {
+      return;
+    }
+  }
+
+  const nextPlan = input.shouldGrant ? input.plan : input.shouldRevoke ? "free" : null;
+
+  if (nextPlan) {
+    await run(
+      env,
+      `
+        INSERT INTO user_plan (
+          user_id,
+          plan,
+          dodo_customer_id,
+          dodo_subscription_id,
+          dodo_product_id,
+          dodo_checkout_session_id,
+          dodo_status,
+          plan_updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(user_id)
+        DO UPDATE SET
+          plan = excluded.plan,
+          dodo_customer_id = excluded.dodo_customer_id,
+          dodo_subscription_id = excluded.dodo_subscription_id,
+          dodo_product_id = excluded.dodo_product_id,
+          dodo_checkout_session_id = COALESCE(excluded.dodo_checkout_session_id, user_plan.dodo_checkout_session_id),
+          dodo_status = excluded.dodo_status,
+          plan_updated_at = excluded.plan_updated_at
+      `,
+      input.userId,
+      nextPlan,
+      input.customerId,
+      input.subscriptionId,
+      input.productId,
+      input.checkoutSessionId,
+      input.status,
+    );
+    return;
+  }
+
+  await recordPendingDodoSubscription(env, {
+    userId: input.userId,
+    checkoutSessionId: input.checkoutSessionId,
+    subscriptionId: input.subscriptionId,
+    customerId: input.customerId,
+    productId: input.productId,
+    status: input.status,
+  });
+}
+
+export async function claimDodoWebhookEvent(
+  env: AppEnv,
+  input: {
+    eventId: string;
+    eventType: string;
+    subscriptionId: string | null;
+    userId: string | null;
+    payloadCreatedAt: string | null;
+  },
+) {
+  const db = ensureDb(env);
+  const result = await db.prepare(`
+      INSERT INTO dodo_webhook_event (
+        event_id,
+        event_type,
+        subscription_id,
+        user_id,
+        received_at,
+        payload_created_at,
+        outcome,
+        metadata_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'received', '{}')
+      ON CONFLICT(event_id)
+      DO UPDATE SET
+        event_type = excluded.event_type,
+        subscription_id = excluded.subscription_id,
+        user_id = excluded.user_id,
+        received_at = excluded.received_at,
+        payload_created_at = excluded.payload_created_at,
+        processed_at = NULL,
+        outcome = 'received',
+        metadata_json = '{}'
+      WHERE dodo_webhook_event.outcome = 'failed'
+    `).bind(
+      input.eventId,
+      input.eventType,
+      input.subscriptionId,
+      input.userId,
+      nowIso(),
+      input.payloadCreatedAt,
+    ).run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function markDodoWebhookEventFinished(
+  env: AppEnv,
+  eventId: string,
+  input: {
+    outcome: Exclude<DodoWebhookOutcome, "received">;
+    metadata?: JsonRecord;
+  },
+) {
+  await run(
+    env,
+    `
+      UPDATE dodo_webhook_event
       SET outcome = ?,
           processed_at = ?,
           metadata_json = ?

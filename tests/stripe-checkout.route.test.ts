@@ -111,6 +111,10 @@ describe("marketing route", () => {
             starter: { monthly: false, yearly: false },
             agency: { monthly: false, yearly: false },
           },
+          dodoCheckout: {
+            starter: { monthly: false, yearly: false },
+            agency: { monthly: false, yearly: false },
+          },
           session,
         }),
       };
@@ -150,6 +154,10 @@ describe("marketing route", () => {
             starter: { monthly: true, yearly: true },
             agency: { monthly: false, yearly: false },
           },
+          dodoCheckout: {
+            starter: { monthly: false, yearly: false },
+            agency: { monthly: false, yearly: false },
+          },
           session,
         }),
       };
@@ -159,6 +167,51 @@ describe("marketing route", () => {
     const markup = renderToStaticMarkup(createElement(MarketingRoute));
 
     expect(markup).toContain("/api/billing/razorpay/subscription");
+    expect(markup).toContain("Start monthly");
+    expect(markup).toContain("Start yearly");
+  });
+
+  it("renders Dodo checkout actions only for configured rest-of-world billing", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useRouteLoaderData: vi.fn().mockReturnValue({
+          pricingPlans: [
+            {
+              slug: "starter",
+              name: "Starter",
+              monthlyLabel: "$49 / month",
+              yearlyLabel: "$470 / year",
+              detail: "Solo or small team.",
+            },
+          ],
+          pricingRegion: "rest_of_world",
+          razorpayCheckout: {
+            starter: { monthly: false, yearly: false },
+            agency: { monthly: false, yearly: false },
+          },
+          dodoCheckout: {
+            starter: { monthly: true, yearly: true },
+            agency: { monthly: false, yearly: false },
+          },
+          countryCode: "US",
+          session,
+        }),
+      };
+    });
+
+    const { default: MarketingRoute } = await import("~/routes/marketing");
+    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+
+    expect(markup).toContain("/api/billing/dodo/checkout");
+    expect(markup).not.toContain("/api/billing/razorpay/subscription");
     expect(markup).toContain("Start monthly");
     expect(markup).toContain("Start yearly");
   });

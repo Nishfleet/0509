@@ -20,7 +20,7 @@ Five to Nine turns competitor ad, offer, and landing-page changes into proof-bac
 ## Current product truth
 
 - Five to Nine is in pilot-readiness mode, not broad self-serve launch mode.
-- Self-serve billing is not live yet. Razorpay Subscriptions are scaffolded behind env-gated routes.
+- Self-serve billing is not live yet. Razorpay Subscriptions for India and Dodo checkout for international customers are scaffolded behind env-gated routes; Dodo must use the separate 0509 brand config.
 - Pilot access is activated manually after fit review.
 - Commercial discovery status must be labeled honestly as live, cached live, degraded, or demo.
 - Meta ads tracking is a beta feature until fresh discovery, proof capture, and digest canaries prove resilience.
@@ -30,7 +30,7 @@ Five to Nine turns competitor ad, offer, and landing-page changes into proof-bac
 
 ## Pricing
 
-Pricing is region-aware for India and rest of world. Public prices are pilot pricing signals until Razorpay test-mode checkout and signed webhooks are verified.
+Pricing is region-aware for India and rest of world. Public prices are pilot pricing signals until Razorpay and Dodo checkout plus signed webhooks are verified.
 
 ## Trust
 
@@ -49,7 +49,7 @@ Current product truth:
 - After-hours market intelligence is the north-star product story.
 - The product is in pilot-readiness mode, not broad self-serve launch mode.
 - Self-serve billing is not live yet.
-- Plan gating is scaffolded, and Razorpay checkout/webhook routes should not be described as live until test-mode verification passes.
+- Plan gating is scaffolded, and Razorpay/Dodo checkout and webhook routes should not be described as live until test-mode verification passes with the correct 0509 Dodo brand config.
 - Fresh commercial discovery is a launch gate; cached results must be labeled as cached.
 - Meta ads tracking is beta until discovery, proof, and digest canaries prove reliability.
 - Customer-facing Meta API fallback requires customer-owned Meta access. Customer tokens are test-before-save, stored encrypted, and platform Meta tokens are diagnostic-only unless an explicit exception is configured.

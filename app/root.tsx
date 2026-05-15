@@ -23,12 +23,17 @@ type RazorpayCheckoutOptions = Record<
   "starter" | "agency",
   Record<"monthly" | "yearly", boolean>
 >;
+type DodoCheckoutOptions = Record<
+  "starter" | "agency",
+  Record<"monthly" | "yearly", boolean>
+>;
 
 export interface RootLoaderData {
   session: AppSession | null;
   pricingRegion: PricingRegion;
   pricingPlans: PricingPlan[];
   countryCode: string | null;
+  dodoCheckout: DodoCheckoutOptions;
   razorpayCheckout: RazorpayCheckoutOptions;
 }
 
@@ -42,6 +47,25 @@ function razorpayCheckoutOptions(env: AppEnv): RazorpayCheckoutOptions {
     agency: {
       monthly: hasKeys && Boolean(env.RAZORPAY_PLAN_AGENCY_MONTHLY?.trim()),
       yearly: hasKeys && Boolean(env.RAZORPAY_PLAN_AGENCY_YEARLY?.trim()),
+    },
+  };
+}
+
+function dodoCheckoutOptions(env: AppEnv): DodoCheckoutOptions {
+  const hasReadyRuntime = Boolean(
+    env.DODO_0509_PAYMENTS_API_KEY?.trim() &&
+    env.DODO_0509_PAYMENTS_WEBHOOK_KEY?.trim() &&
+    env.DODO_0509_BRAND_ID?.trim() &&
+    ["test", "live"].includes(env.DODO_0509_ENVIRONMENT?.trim().toLowerCase() ?? ""),
+  );
+  return {
+    starter: {
+      monthly: hasReadyRuntime && Boolean(env.DODO_0509_PRODUCT_STARTER_MONTHLY?.trim()),
+      yearly: hasReadyRuntime && Boolean(env.DODO_0509_PRODUCT_STARTER_YEARLY?.trim()),
+    },
+    agency: {
+      monthly: hasReadyRuntime && Boolean(env.DODO_0509_PRODUCT_AGENCY_MONTHLY?.trim()),
+      yearly: hasReadyRuntime && Boolean(env.DODO_0509_PRODUCT_AGENCY_YEARLY?.trim()),
     },
   };
 }
@@ -70,6 +94,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     pricingRegion,
     pricingPlans: pricingPlansForRegion(pricingRegion),
     countryCode: countryCode ?? null,
+    dodoCheckout: dodoCheckoutOptions(env),
     razorpayCheckout: razorpayCheckoutOptions(env),
   } satisfies RootLoaderData;
 }

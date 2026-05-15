@@ -60,6 +60,14 @@ Important bindings and secrets:
 - `META_AD_LIBRARY_API_VERSION`
 - `RESEND_API_KEY`
 - `RESEND_FROM_EMAIL`
+- `DODO_0509_BRAND_ID`
+- `DODO_0509_ENVIRONMENT` (`test` or `live`)
+- `DODO_0509_PAYMENTS_API_KEY`
+- `DODO_0509_PAYMENTS_WEBHOOK_KEY`
+- `DODO_0509_PRODUCT_STARTER_MONTHLY`
+- `DODO_0509_PRODUCT_STARTER_YEARLY`
+- `DODO_0509_PRODUCT_AGENCY_MONTHLY`
+- `DODO_0509_PRODUCT_AGENCY_YEARLY`
 - `RAZORPAY_KEY_ID`
 - `RAZORPAY_KEY_SECRET`
 - `RAZORPAY_WEBHOOK_SECRET`
@@ -86,7 +94,7 @@ Important bindings and secrets:
 - Cloudflare cost policy: stay on the included/free tier by default. Do not enable usage-billed add-ons just because they exist; enable them when the missing capability is materially hampering product quality, operations, or launch.
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.
-- Razorpay Subscriptions are the approved billing path for India checkout. The routes stay hidden unless Razorpay keys, plan ids, and webhook secret are configured; plan upgrades only happen after a signed Razorpay subscription webhook marks the subscription active.
+- Razorpay Subscriptions are the approved billing path for India checkout. Dodo is the international checkout path for the separate 0509/Five to Nine Dodo brand. Dodo deliberately uses `DODO_0509_*` env names and must not reuse AI Converter Dodo keys, product ids, webhook secrets, or brand ids. Both lanes stay hidden unless their own keys, product/plan ids, and webhook secrets are configured; plan upgrades only happen after a signed provider subscription webhook marks the subscription active.
 - Broad launch is gated by `npm run launch:readiness`, including the production canary. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can prove it bypassed cache and provider cooldown. The production canary also checks recent monitoring, proof capture, and sent digest signals. If fresh commercial discovery is cached, degraded, demo, stale, unsent, or the bypass token is missing, the product should be framed as pilot-readiness rather than broad self-serve launch.
 - Use `npm run provider:bakeoff:launch` when comparing discovery providers for launch. The default bakeoff is useful for debugging, but the launch gate requires `current_0509` to return fresh live Ad Library results, not API fallback or cached live results.
 - The old `src/` Next.js app remains in the repo as legacy reference material and is no longer the live production runtime.
