@@ -290,7 +290,10 @@ describe("proof-first pipeline", () => {
     const { runWatchlistManual, runWeeklyDigests } = await import("~/lib/monitoring.server");
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
-    await runWatchlistManual({ META_AD_LIBRARY_TOKEN: "token" } as never, watchlist);
+    await runWatchlistManual(
+      { ALLOW_PLATFORM_META_API_FALLBACK: "true", META_AD_LIBRARY_TOKEN: "token" } as never,
+      watchlist,
+    );
 
     expect(createdEvents).toHaveLength(1);
     expect(createdEvents[0]).toEqual(
@@ -388,7 +391,10 @@ describe("proof-first pipeline", () => {
 
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
 
-    await runWatchlistManual({ META_AD_LIBRARY_TOKEN: "token" } as never, watchlist);
+    await runWatchlistManual(
+      { ALLOW_PLATFORM_META_API_FALLBACK: "true", META_AD_LIBRARY_TOKEN: "token" } as never,
+      watchlist,
+    );
 
     expect(createdEvents).toEqual([]);
     expect(finishWatchlistRun).toHaveBeenCalledWith(

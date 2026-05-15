@@ -48,6 +48,7 @@ afterEach(() => {
 describe("runWatchlistManual OCR reuse", () => {
   it("hydrates stored creative text before deciding whether to capture OCR", async () => {
     const env = {
+      ALLOW_PLATFORM_META_API_FALLBACK: "true",
       META_AD_LIBRARY_TOKEN: "token",
     };
     const hydratedAd: AdRecord = {

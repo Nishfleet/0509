@@ -24,9 +24,10 @@ const MOBILE_VIEWPORT = Object.freeze({
   deviceScaleFactor: 2,
   mobile: true,
 });
+const BROWSERLESS_RENDER_WAIT_MS = 5_000;
 
 const BROWSERLESS_BQL_MUTATION = `
-mutation MetaLibraryBakeoff($url: String!, $selector: String!, $userAgent: String!) {
+mutation MetaLibraryBakeoff($url: String!, $userAgent: String!) {
   userAgent(userAgent: $userAgent) {
     time
   }
@@ -44,7 +45,7 @@ mutation MetaLibraryBakeoff($url: String!, $selector: String!, $userAgent: Strin
   goto(url: $url) {
     status
   }
-  waitForSelector(selector: $selector, timeout: 8000) {
+  waitForTimeout(time: ${BROWSERLESS_RENDER_WAIT_MS}) {
     time
   }
   html {
@@ -527,7 +528,6 @@ export function buildBrowserlessBqlRequest(target, env = process.env) {
       query: BROWSERLESS_BQL_MUTATION,
       variables: {
         url: buildMetaLibraryUrl(target),
-        selector: AD_LIBRARY_RESULT_SELECTOR,
         userAgent: MOBILE_USER_AGENT,
       },
     },

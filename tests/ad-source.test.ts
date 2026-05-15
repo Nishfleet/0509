@@ -203,13 +203,20 @@ describe("resolveCommercialAdSourceStatus", () => {
 });
 
 describe("searchAdsViaSourceResolver", () => {
-  it("routes discovery through the resolver instead of importing meta-api directly", async () => {
+  it("does not use the platform Meta token for customer-facing discovery by default", async () => {
     const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
       ads: [],
       nextCursor: null,
       source: "meta_api",
       provider: "meta_api",
       cacheStatus: "miss",
+    });
+    const demoSearch = vi.fn().mockReturnValue({
+      ads: [],
+      nextCursor: null,
+      source: "demo",
+      provider: "demo",
+      cacheStatus: "none",
     });
 
     vi.doMock(
@@ -220,7 +227,7 @@ describe("searchAdsViaSourceResolver", () => {
     );
     vi.doMock("~/lib/meta-api.server", () => ({
       searchAds: metaApiSearch,
-      demoSearch: vi.fn(),
+      demoSearch,
     }));
 
     const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
@@ -245,7 +252,65 @@ describe("searchAdsViaSourceResolver", () => {
       },
     );
 
-    expect(metaApiSearch).toHaveBeenCalledTimes(1);
+    expect(metaApiSearch).not.toHaveBeenCalled();
+    expect(demoSearch).toHaveBeenCalledTimes(1);
+    expect(result.provider).toBe("demo");
+    expect(result.source).toBe("demo");
+  });
+
+  it("uses a customer-owned Meta token when the caller provides one", async () => {
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_api",
+      provider: "meta_api",
+      cacheStatus: "miss",
+    });
+
+    vi.doMock(
+      "cloudflare:workers",
+      () => ({
+        env: {},
+      }),
+    );
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {} as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+        customerMetaAdLibraryToken: "customer-token",
+      },
+    );
+
+    expect(metaApiSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        META_AD_LIBRARY_TOKEN: "customer-token",
+      }),
+      expect.anything(),
+      null,
+      expect.objectContaining({
+        allowDemoFallback: false,
+      }),
+    );
     expect(result.provider).toBe("meta_api");
     expect(result.source).toBe("meta_api");
   });
@@ -290,6 +355,7 @@ describe("searchAdsViaSourceResolver", () => {
       null,
       {
         purpose: "public_search",
+        customerMetaAdLibraryToken: "customer-token",
       },
     );
 
@@ -339,6 +405,7 @@ describe("searchAdsViaSourceResolver", () => {
       null,
       {
         purpose: "public_search",
+        customerMetaAdLibraryToken: "customer-token",
       },
     );
 
@@ -395,6 +462,7 @@ describe("searchAdsViaSourceResolver", () => {
         BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
         DB: {} as D1Database,
         META_AD_LIBRARY_TOKEN: "live-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
       } as never,
       {
         mode: "advertiser",
@@ -411,6 +479,7 @@ describe("searchAdsViaSourceResolver", () => {
       null,
       {
         purpose: "public_search",
+        customerMetaAdLibraryToken: "customer-token",
       },
     );
 
@@ -490,6 +559,7 @@ describe("searchAdsViaSourceResolver", () => {
         BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
         DB: {} as D1Database,
         META_AD_LIBRARY_TOKEN: "expired-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
       } as never,
       {
         mode: "advertiser",
@@ -506,6 +576,7 @@ describe("searchAdsViaSourceResolver", () => {
       null,
       {
         purpose: "public_search",
+        customerMetaAdLibraryToken: "customer-token",
       },
     );
 
@@ -578,6 +649,7 @@ describe("searchAdsViaSourceResolver", () => {
         BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
         DB: {} as D1Database,
         META_AD_LIBRARY_TOKEN: "live-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
       } as never,
       {
         mode: "keyword",
@@ -664,6 +736,7 @@ describe("searchAdsViaSourceResolver", () => {
         BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
         DB: {} as D1Database,
         META_AD_LIBRARY_TOKEN: "expired-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
       } as never,
       {
         mode: "keyword",
@@ -754,6 +827,7 @@ describe("searchAdsViaSourceResolver", () => {
       null,
       {
         purpose: "public_search",
+        customerMetaAdLibraryToken: "customer-token",
       },
     );
 

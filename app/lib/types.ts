@@ -490,6 +490,7 @@ export interface DigestItemRecord {
   eventType: WatchEventType;
   title: string;
   summary: string;
+  metadata: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -516,6 +517,7 @@ export interface ShareLinkRecord {
 }
 
 export interface PricingPlan {
+  slug: "starter" | "agency";
   name: string;
   monthlyLabel: string;
   yearlyLabel: string;
@@ -530,4 +532,18 @@ export interface MetaIntegrationStatus {
   lastCheckedAt: string | null;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
+}
+
+export interface CustomerMetaConnectionRecord {
+  userId: string;
+  encryptedAccessToken: string;
+  tokenLastFour: string;
+  tokenFingerprint: string;
+  status: "untested" | "healthy" | "degraded";
+  summary: string;
+  lastCheckedAt: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

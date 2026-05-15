@@ -54,6 +54,7 @@ export default function AppLayoutRoute() {
           <NavLink to="/app/collections">Collections</NavLink>
           <NavLink to="/app/watchlists">Watchlists</NavLink>
           <NavLink to="/app/digests">Digests</NavLink>
+          <NavLink to="/app/sources">Sources</NavLink>
           {showOpsNav ? <NavLink to="/app/ops">Ops</NavLink> : null}
           <NavLink to="/search">Search</NavLink>
         </nav>
