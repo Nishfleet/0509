@@ -18,6 +18,7 @@ export default [
   route("api/health", "routes/api.health.ts"),
   route("api/launch-readiness", "routes/api.launch-readiness.ts"),
   route("api/launch-readiness/canary", "routes/api.launch-readiness.canary.ts"),
+  route("api/ops/resend-domain", "routes/api.ops.resend-domain.ts"),
   route("api/webhooks/razorpay", "routes/api.webhooks.razorpay.ts"),
   route("app/onboard", "routes/app.onboard.tsx"),
   route("share/:token", "routes/share.$token.tsx"),
