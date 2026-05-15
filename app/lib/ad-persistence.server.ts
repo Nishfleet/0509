@@ -246,18 +246,15 @@ export async function replaceAnalysisFields(
   scopeId: string,
   fields: AnalysisFieldInput[],
 ) {
-  await run(
-    env,
-    "DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?",
-    scopeType,
-    scopeId,
-  );
+  const db = ensureDb(env);
+  const timestamp = nowIso();
+  const statements = [
+    db.prepare("DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?").bind(scopeType, scopeId),
+  ];
 
   for (const field of fields) {
-    const timestamp = nowIso();
-    await run(
-      env,
-      `
+    statements.push(
+      db.prepare(`
         INSERT INTO analysis_field (
           id,
           scope_type,
@@ -272,18 +269,21 @@ export async function replaceAnalysisFields(
           updated_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      createId(),
-      scopeType,
-      scopeId,
-      field.fieldKey,
-      field.fieldValue,
-      field.provenanceSource,
-      field.extractorVersion,
-      field.confidence ?? null,
-      jsonValue(field.metadata ?? null),
-      timestamp,
-      timestamp,
+      `).bind(
+        createId(),
+        scopeType,
+        scopeId,
+        field.fieldKey,
+        field.fieldValue,
+        field.provenanceSource,
+        field.extractorVersion,
+        field.confidence ?? null,
+        jsonValue(field.metadata ?? null),
+        timestamp,
+        timestamp,
+      ),
     );
   }
+
+  await db.batch(statements);
 }

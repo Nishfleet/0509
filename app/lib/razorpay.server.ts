@@ -20,7 +20,9 @@ export interface RazorpaySubscriptionInput {
 }
 
 export interface RazorpaySubscriptionWebhookUpdate {
+  eventId: string | null;
   event: string;
+  payloadCreatedAt: string | null;
   userId: string;
   plan: RazorpayBillingPlan;
   status: string;
@@ -35,6 +37,8 @@ const RAZORPAY_API_BASE_URL = "https://api.razorpay.com/v1";
 const MONTHLY_TOTAL_COUNT = 120;
 const YEARLY_TOTAL_COUNT = 10;
 const CHECKOUT_LINK_TTL_SECONDS = 60 * 60;
+const WEBHOOK_MAX_AGE_MS = 26 * 60 * 60 * 1000;
+const WEBHOOK_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 
 function trim(value: string | undefined) {
   return value?.trim() || "";
@@ -213,6 +217,42 @@ function readString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function readUnixTimestampIso(value: unknown) {
+  const timestamp =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return null;
+  }
+
+  return new Date(timestamp * 1000).toISOString();
+}
+
+export async function fingerprintRazorpayWebhookBody(rawBody: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawBody));
+  const hex = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return `body_sha256:${hex}`;
+}
+
+export function isRazorpayWebhookFresh(payloadCreatedAt: string | null, now = Date.now()) {
+  if (!payloadCreatedAt) {
+    return true;
+  }
+
+  const createdAt = Date.parse(payloadCreatedAt);
+  if (!Number.isFinite(createdAt)) {
+    return false;
+  }
+
+  return createdAt <= now + WEBHOOK_FUTURE_TOLERANCE_MS && now - createdAt <= WEBHOOK_MAX_AGE_MS;
+}
+
 export function parseRazorpaySubscriptionWebhook(
   payload: unknown,
 ): RazorpaySubscriptionWebhookUpdate | null {
@@ -233,7 +273,9 @@ export function parseRazorpaySubscriptionWebhook(
   }
 
   return {
+    eventId: readString(root?.id),
     event,
+    payloadCreatedAt: readUnixTimestampIso(root?.created_at),
     userId,
     plan,
     status,

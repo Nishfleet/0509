@@ -396,6 +396,8 @@ interface DiscoveryFetchLogRow {
   created_at: string;
 }
 
+type RazorpayWebhookOutcome = "received" | "processed" | "ignored" | "failed";
+
 export function nowIso() {
   return new Date().toISOString();
 }
@@ -460,6 +462,39 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function isAdDiscoverySource(value: unknown): value is SearchResponse["source"] {
+  return (
+    value === "meta" ||
+    value === "meta_api" ||
+    value === "meta_library_browser" ||
+    value === "demo"
+  );
+}
+
+function parseDiscoveryCachePayload(value: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+
+  const candidate = parsed as Partial<SearchResponse>;
+  if (
+    !Array.isArray(candidate.ads) ||
+    (candidate.nextCursor !== null && typeof candidate.nextCursor !== "string") ||
+    !isAdDiscoverySource(candidate.source)
+  ) {
+    return null;
+  }
+
+  return candidate as SearchResponse;
 }
 
 function jsonValue(value: unknown) {
@@ -885,6 +920,76 @@ export async function syncRazorpaySubscriptionStatus(
   });
 }
 
+export async function claimRazorpayWebhookEvent(
+  env: AppEnv,
+  input: {
+    eventId: string;
+    eventType: string;
+    subscriptionId: string | null;
+    userId: string | null;
+    payloadCreatedAt: string | null;
+  },
+) {
+  const db = ensureDb(env);
+  const result = await db.prepare(`
+      INSERT INTO razorpay_webhook_event (
+        event_id,
+        event_type,
+        subscription_id,
+        user_id,
+        received_at,
+        payload_created_at,
+        outcome,
+        metadata_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'received', '{}')
+      ON CONFLICT(event_id)
+      DO UPDATE SET
+        event_type = excluded.event_type,
+        subscription_id = excluded.subscription_id,
+        user_id = excluded.user_id,
+        received_at = excluded.received_at,
+        payload_created_at = excluded.payload_created_at,
+        processed_at = NULL,
+        outcome = 'received',
+        metadata_json = '{}'
+      WHERE razorpay_webhook_event.outcome = 'failed'
+    `).bind(
+      input.eventId,
+      input.eventType,
+      input.subscriptionId,
+      input.userId,
+      nowIso(),
+      input.payloadCreatedAt,
+    ).run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function markRazorpayWebhookEventFinished(
+  env: AppEnv,
+  eventId: string,
+  input: {
+    outcome: Exclude<RazorpayWebhookOutcome, "received">;
+    metadata?: JsonRecord;
+  },
+) {
+  await run(
+    env,
+    `
+      UPDATE razorpay_webhook_event
+      SET outcome = ?,
+          processed_at = ?,
+          metadata_json = ?
+      WHERE event_id = ?
+    `,
+    input.outcome,
+    nowIso(),
+    jsonValue(input.metadata ?? {}),
+    eventId,
+  );
+}
+
 export async function completeUserOnboarding(env: AppEnv, userId: string) {
   await run(
     env,
@@ -1252,10 +1357,13 @@ export async function listActiveWatchlists(env: AppEnv) {
   const rows = await many<WatchlistRow>(
     env,
     `
-      SELECT *
+      SELECT watchlist.*
       FROM watchlist
-      WHERE is_active = 1
-      ORDER BY updated_at ASC
+      INNER JOIN user_plan
+        ON user_plan.user_id = watchlist.user_id
+      WHERE watchlist.is_active = 1
+        AND user_plan.plan IN ('starter', 'agency')
+      ORDER BY watchlist.updated_at ASC
     `,
   );
   return rows.map(toWatchlistRecord);
@@ -3151,30 +3259,58 @@ export async function listDigests(env: AppEnv, userId: string) {
     userId,
   );
 
-  const digests: DigestRecord[] = [];
-  for (const run of runs) {
-    const items = await many<DigestItemRow>(
+  if (runs.length === 0) {
+    return [];
+  }
+
+  const runIds = runs.map((run) => run.id);
+  const placeholders = runIds.map(() => "?").join(", ");
+  const [items, deliveries] = await Promise.all([
+    many<DigestItemRow>(
       env,
-      "SELECT * FROM digest_item WHERE digest_run_id = ? ORDER BY created_at ASC",
-      run.id,
-    );
-    const delivery = await one<DigestDeliveryRow>(
+      `
+        SELECT *
+        FROM digest_item
+        WHERE digest_run_id IN (${placeholders})
+        ORDER BY created_at ASC
+      `,
+      ...runIds,
+    ),
+    many<DigestDeliveryRow>(
       env,
-      "SELECT * FROM digest_delivery WHERE digest_run_id = ?",
-      run.id,
-    );
-    digests.push({
+      `
+        SELECT *
+        FROM digest_delivery
+        WHERE digest_run_id IN (${placeholders})
+      `,
+      ...runIds,
+    ),
+  ]);
+  const itemsByDigestId = new Map<string, DigestItemRow[]>();
+  const deliveryByDigestId = new Map<string, DigestDeliveryRow>();
+
+  for (const item of items) {
+    const group = itemsByDigestId.get(item.digest_run_id) ?? [];
+    group.push(item);
+    itemsByDigestId.set(item.digest_run_id, group);
+  }
+
+  for (const delivery of deliveries) {
+    deliveryByDigestId.set(delivery.digest_run_id, delivery);
+  }
+
+  return runs.map((run) => {
+    const delivery = deliveryByDigestId.get(run.id) ?? null;
+    return {
       id: run.id,
       userId: run.user_id,
       periodStart: run.period_start,
       periodEnd: run.period_end,
       createdAt: run.created_at,
-      items: items.map(toDigestItemRecord),
+      items: (itemsByDigestId.get(run.id) ?? []).map(toDigestItemRecord),
       delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
-    });
-  }
-
-  return digests;
+    };
+  });
 }
 
 export async function getDigest(env: AppEnv, digestRunId: string) {
@@ -3578,6 +3714,11 @@ export async function getDiscoveryCacheEntry(env: AppEnv, cacheKey: string) {
     return null;
   }
 
+  const payload = parseDiscoveryCachePayload(row.payload_json);
+  if (!payload) {
+    return null;
+  }
+
   return {
     cacheKey: row.cache_key,
     provider: row.provider,
@@ -3585,11 +3726,7 @@ export async function getDiscoveryCacheEntry(env: AppEnv, cacheKey: string) {
     queryFingerprint: row.query_fingerprint,
     country: row.country,
     cursor: row.cursor,
-    payload: parseJson<SearchResponse>(row.payload_json, {
-      ads: [],
-      nextCursor: null,
-      source: "demo",
-    }),
+    payload,
     fetchedAt: row.fetched_at,
     expiresAt: row.expires_at,
     browserMsUsed: row.browser_ms_used,
