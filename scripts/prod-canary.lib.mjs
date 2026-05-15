@@ -226,11 +226,6 @@ export async function runProductionCanary(options = {}) {
     message: "No health endpoints configured.",
     url: new URL("/api/health", baseUrl).toString(),
   };
-  const launchReadiness = await checkLaunchReadinessEndpoint({
-    baseUrl,
-    canaryBypassToken,
-    fetchImpl: options.fetchImpl,
-  });
   const results = await benchmarkImpl({
     providers: ["current_0509"],
     queries,
@@ -240,6 +235,11 @@ export async function runProductionCanary(options = {}) {
     forceLive: true,
     canaryBypassToken,
     timeoutMs: searchTimeoutMs,
+  });
+  const launchReadiness = await checkLaunchReadinessEndpoint({
+    baseUrl,
+    canaryBypassToken,
+    fetchImpl: options.fetchImpl,
   });
   const blockingFailures = findBlockingFreshLiveCurrent0509Failures(results);
   const metaAdsBeta = {

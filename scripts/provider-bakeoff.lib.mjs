@@ -14,6 +14,7 @@ export const DEFAULT_PROVIDERS = Object.freeze([
   "zyte_api",
 ]);
 export const DOGFOOD_QUERIES = Object.freeze(["adspy", "bigspy", "adflex", "nykaa", "boat", "cod"]);
+export const FRESH_LIVE_CURRENT_0509_TIMEOUT_MS = 60_000;
 export const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 export const CURRENT_0509_PROBE_TIMEOUT_MS = 10_000;
@@ -209,8 +210,9 @@ export function analyzeMetaLibraryHtml(html) {
   const text = stripHtml(html).toLowerCase();
   const hasLogin = /(log in|login|sign in|sign into)/.test(text);
   const mentionsFacebook = text.includes("facebook") || text.includes("meta ad library");
-  const sourceMatch = stripHtml(html).match(
-    /source:\s*(cached live results|live ad library capture|api fallback|demo dataset)/i,
+  const renderedText = stripHtml(html);
+  const sourceMatch = renderedText.match(
+    /(?:source:\s*|meta ads beta\s*[·-]\s*)(cached live results|live ad library capture|customer api fallback|api fallback|demo dataset)/i,
   );
   const resultCountMatch = stripHtml(html).match(/\b(\d+)\s+ads?\s+on\s+this\s+page\b/i);
 
@@ -228,10 +230,33 @@ export function analyzeMetaLibraryHtml(html) {
       text.includes("temporarily blocked") ||
       text.includes("unusual activity"),
     degraded: text.includes("commercial discovery degraded"),
-    sourceLabel: sourceMatch?.[1] ?? null,
+    sourceLabel: sourceMatch?.[1] ? normalizeCurrent0509SourceLabel(sourceMatch[1]) : null,
     resultCount: resultCountMatch?.[1] ? Number(resultCountMatch[1]) : null,
     noAdsFound: text.includes("no ads found for this query"),
   };
+}
+
+/**
+ * @param {string} value
+ */
+function normalizeCurrent0509SourceLabel(value) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "customer api fallback") {
+    return "API fallback";
+  }
+  if (normalized === "api fallback") {
+    return "API fallback";
+  }
+  if (normalized === "cached live results") {
+    return "Cached live results";
+  }
+  if (normalized === "live ad library capture") {
+    return "Live Ad Library capture";
+  }
+  if (normalized === "demo dataset") {
+    return "Demo dataset";
+  }
+  return value.trim();
 }
 
 /**
@@ -427,7 +452,9 @@ function classifyCurrent0509Outcome(analysis, ok) {
  */
 export async function runCurrent0509Probe(target, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const timeoutMs = options.timeoutMs ?? CURRENT_0509_PROBE_TIMEOUT_MS;
+  const timeoutMs =
+    options.timeoutMs ??
+    (options.forceLive ? FRESH_LIVE_CURRENT_0509_TIMEOUT_MS : CURRENT_0509_PROBE_TIMEOUT_MS);
   const url = buildCurrent0509SearchUrl({
     query: target.query,
     country: target.country,

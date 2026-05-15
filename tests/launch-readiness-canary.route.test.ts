@@ -12,18 +12,25 @@ function createDbWithTarget() {
   return {
     prepare() {
       return {
-        async all<T>() {
+        bind(email: string) {
           return {
-            results: [
-              {
-                user_id: "user-1",
-                email: "owner@example.com",
-                name: "Owner",
-                watchlist_id: "watch-1",
-                watchlist_name: "Nykaa watch",
-                target_label: "Nykaa",
-              },
-            ] as T[],
+            async all<T>() {
+              return {
+                results:
+                  email === "owner@example.com"
+                    ? ([
+                        {
+                          user_id: "user-1",
+                          email: "owner@example.com",
+                          name: "Owner",
+                          watchlist_id: "watch-1",
+                          watchlist_name: "Nykaa watch",
+                          target_label: "Nykaa",
+                        },
+                      ] as T[])
+                    : ([] as T[]),
+              };
+            },
           };
         },
       };
@@ -49,6 +56,7 @@ describe("launch readiness canary route", () => {
       getEnv: vi.fn(() => ({
         CANARY_BYPASS_TOKEN: "secret-token",
         DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
 
@@ -94,6 +102,7 @@ describe("launch readiness canary route", () => {
       getEnv: vi.fn(() => ({
         CANARY_BYPASS_TOKEN: "secret-token",
         DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -161,6 +170,7 @@ describe("launch readiness canary route", () => {
       getEnv: vi.fn(() => ({
         CANARY_BYPASS_TOKEN: "secret-token",
         DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -212,6 +222,32 @@ describe("launch readiness canary route", () => {
           },
         ],
       },
+    });
+  });
+
+  it("fails closed when no internal canary email is configured", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+      })),
+    }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.in/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      blocker: "missing_launch_canary_email",
     });
   });
 });
