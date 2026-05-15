@@ -86,6 +86,7 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
     return {
       attempts: 0,
       channels: [] as DeliveryChannel[],
+      details: [] as DigestAttemptSummary[],
     };
   }
 
@@ -122,6 +123,7 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   return {
     attempts: attempts.length,
     channels: [...new Set(attempts.map((attempt) => attempt.channel))],
+    details: attempts,
   };
 }
 
