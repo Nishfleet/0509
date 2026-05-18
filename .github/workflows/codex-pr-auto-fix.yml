@@ -47,7 +47,7 @@ jobs:
       - name: Pick blocked Codex PR
         id: pick
         if: steps.ai_secret.outputs.has_key == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
@@ -270,7 +270,7 @@ jobs:
 
       - name: Restore repair brief
         if: steps.pick.outputs.number != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
@@ -352,7 +352,7 @@ jobs:
 
       - name: Surface MiniMax repair failure
         if: steps.pick.outputs.number != '' && steps.run_opencode.outputs.ok == 'false'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
@@ -433,7 +433,7 @@ jobs:
 
       - name: Surface empty repair result
         if: steps.pick.outputs.number != '' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'false'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
@@ -475,7 +475,7 @@ jobs:
 
       - name: Reset review label and comment
         if: steps.pick.outputs.number != '' && steps.cpr.outputs.pull-request-url != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |

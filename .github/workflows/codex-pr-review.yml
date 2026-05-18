@@ -202,7 +202,7 @@ jobs:
 
       - name: Post review comment
         if: steps.ai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target' && hashFiles('codex-output.md') != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
