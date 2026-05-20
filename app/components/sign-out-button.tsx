@@ -9,7 +9,7 @@ export function SignOutButton() {
 
   return (
     <button
-      className="button button-secondary"
+      className="f9-secondary-button f9-sign-out-button"
       disabled={pending}
       onClick={async () => {
         setPending(true);

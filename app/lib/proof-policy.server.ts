@@ -35,6 +35,8 @@ export interface ProofPolicyInput {
   watchlistRunAttemptCount: number;
   watchlistDailyAttemptCount: number;
   workspaceDailyAttemptCount: number;
+  workspaceMonthlyAttemptCount?: number;
+  workspaceMonthlyCap?: number;
   workspaceRecentAttempts: Array<Pick<{ status: ProofStatus }, "status">>;
   activeCaptureCount: number;
   burstCount: number;
@@ -118,6 +120,10 @@ export function evaluateProofPolicy(input: ProofPolicyInput): ProofPolicyDecisio
     return buildSkippedDecision(threshold, score, bucket, forced, "skipped_due_to_dedupe");
   }
 
+  if (hasExhaustedMonthlyCap(input.workspaceMonthlyAttemptCount, input.workspaceMonthlyCap)) {
+    return buildSkippedDecision(threshold, score, bucket, forced, "skipped_due_to_budget");
+  }
+
   if (input.activeCaptureCount >= V1_PROOF_BUDGETS.workspaceConcurrencyCap) {
     return buildSkippedDecision(threshold, score, bucket, forced, "skipped_due_to_rate_limit");
   }
@@ -145,6 +151,14 @@ export function evaluateProofPolicy(input: ProofPolicyInput): ProofPolicyDecisio
     shouldCapture: true,
     skipReason: null,
   };
+}
+
+function hasExhaustedMonthlyCap(count: number | undefined, cap: number | undefined) {
+  if (typeof count !== "number" || typeof cap !== "number" || !Number.isFinite(cap)) {
+    return false;
+  }
+
+  return cap >= 0 && count >= cap;
 }
 
 function computeCandidateScore(input: ProofPolicyInput, fresh: boolean) {

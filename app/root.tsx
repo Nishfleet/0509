@@ -12,65 +12,31 @@ import {
 import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
 import type { AppEnv } from "~/lib/env.server";
-import {
-  detectPricingRegion,
-  pricingPlansForRegion,
-  readPricingRegionCookie,
-} from "~/lib/pricing";
-import type { AppSession, PricingPlan, PricingRegion } from "~/lib/types";
-
-type RazorpayCheckoutOptions = Record<
-  "starter" | "agency",
-  Record<"monthly" | "yearly", boolean>
->;
+import { pricingPlans, usageBundles } from "~/lib/pricing";
+import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
 
 export interface RootLoaderData {
   session: AppSession | null;
-  pricingRegion: PricingRegion;
   pricingPlans: PricingPlan[];
+  usageBundles: UsageBundle[];
   countryCode: string | null;
-  razorpayCheckout: RazorpayCheckoutOptions;
-}
-
-function razorpayCheckoutOptions(env: AppEnv): RazorpayCheckoutOptions {
-  const hasKeys = Boolean(env.RAZORPAY_KEY_ID?.trim() && env.RAZORPAY_KEY_SECRET?.trim());
-  return {
-    starter: {
-      monthly: hasKeys && Boolean(env.RAZORPAY_PLAN_STARTER_MONTHLY?.trim()),
-      yearly: hasKeys && Boolean(env.RAZORPAY_PLAN_STARTER_YEARLY?.trim()),
-    },
-    agency: {
-      monthly: hasKeys && Boolean(env.RAZORPAY_PLAN_AGENCY_MONTHLY?.trim()),
-      yearly: hasKeys && Boolean(env.RAZORPAY_PLAN_AGENCY_YEARLY?.trim()),
-    },
-  };
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
-  const { getPricingRegionPreference } = await import("~/lib/data.server");
   const cloudflare = context.cloudflare as {
     country?: string | null;
     env: AppEnv;
   };
   const env = cloudflare.env;
   const session = await getOptionalSession(env, request);
-  const cookieRegion = readPricingRegionCookie(request);
-  const userRegion = session
-    ? await getPricingRegionPreference(env, session.user.id)
-    : null;
   const countryCode = cloudflare.country ?? request.headers.get("cf-ipcountry");
-  const pricingRegion =
-    userRegion ??
-    cookieRegion ??
-    detectPricingRegion(countryCode ?? env.APP_REGION_DEFAULT);
 
   return {
     session,
-    pricingRegion,
-    pricingPlans: pricingPlansForRegion(pricingRegion),
+    pricingPlans: pricingPlans(),
+    usageBundles: usageBundles(),
     countryCode: countryCode ?? null,
-    razorpayCheckout: razorpayCheckoutOptions(env),
   } satisfies RootLoaderData;
 }
 
@@ -83,7 +49,7 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap",
   },
 ];
 
@@ -99,7 +65,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body data-region={data.pricingRegion}>
+      <body data-pricing="dodo-local">
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -129,11 +95,13 @@ export function ErrorBoundary({ error }: { error: unknown }) {
   }
 
   return (
-    <main className="error-shell">
-      <div className="container error-card">
-        <p className="eyebrow">Five to Nine</p>
-        <h1>{message}</h1>
-        <p>{details}</p>
+    <main className="f9-error-page">
+      <div className="f9-container f9-error-layout">
+        <section className="f9-error-card">
+          <span className="f9-app-kicker">Five to Nine</span>
+          <h1>{message}</h1>
+          <p>{details}</p>
+        </section>
       </div>
       {stack && (
         <pre className="error-stack">

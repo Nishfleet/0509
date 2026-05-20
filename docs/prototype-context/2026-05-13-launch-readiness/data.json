@@ -15,7 +15,7 @@
     },
     {
       "gate": "self-serve billing",
-      "evidence": "Razorpay subscription routes exist but stay hidden until keys, plan ids, and signed webhooks are verified",
+      "evidence": "Dodo 0509 pricing preview exists but stays unavailable until brand id, product ids, API key, and signed webhooks are verified",
       "customerCopy": "Pilot access is activated manually until checkout is verified."
     },
     {

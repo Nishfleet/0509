@@ -6,17 +6,17 @@ Last checked: 2026-05-15
 
 Five to Nine is ready for a narrow paid pilot, not a broad public launch.
 
-The app has real product surface: public search, authenticated workspace, watchlists, collections, daily briefs, weekly digests, reports, share/export flows, operator health, region-aware pricing display, Razorpay subscription scaffolding, and proof-first monitoring infrastructure.
+The app has real product surface: public search, authenticated workspace, watchlists, collections, daily briefs, weekly digests, reports, share/export flows, operator health, Dodo local-pricing preview scaffolding, and proof-first monitoring infrastructure.
 
-The broad-launch blockers are Resend domain verification, Razorpay production setup, and enough production evidence that fresh discovery, proof capture, and digest delivery stay reliable.
+The broad-launch blockers are Resend domain verification, Dodo 0509 production setup, and enough production evidence that fresh discovery, proof capture, and digest delivery stay reliable.
 
 ## Live Blockers Found On 2026-05-15
 
 - `npm run canary:prod` passes health and fresh-live bypass, but fails ops readiness with `no_recent_proof_capture` and `no_recent_digest_sent`.
 - The private digest canary is pinned to `LAUNCH_CANARY_EMAIL=me@inish.in`, but Resend rejects delivery because `0509.in` is not verified in Resend.
 - The live Resend API key is send-only; it cannot create or verify the domain through `/api/ops/resend-domain`.
-- Remote D1 migrations are fully applied; `user_plan`, `razorpay_webhook_event`, and `rate_limit_events` tables/columns exist.
-- Remote Worker secrets are missing all Razorpay keys and plan IDs, so checkout is still not live.
+- Remote D1 migrations are fully applied; `user_plan`, legacy billing event tables, and `rate_limit_events` tables/columns exist.
+- Remote Worker secrets include the shared Dodo key, 0509 brand id, Starter/Agency product ids, proof-pack product ids, and webhook secret. Scout monthly/yearly product-id secrets still need to be added before Scout can be purchasable.
 - The platform `META_AD_LIBRARY_TOKEN` is expired. Remote provider state shows it expired on 2026-04-19 and the browser path is currently `cache_only` / `empty_result` with repeated login-wall or empty extraction failures.
 - `npm run provider:bakeoff:launch -- --provider current_0509 --query nykaa` now returns fresh live Ad Library results after the text-card extractor fix, but Meta ads tracking remains beta until the production success window clears the historical failures.
 
@@ -33,7 +33,7 @@ The broad-launch blockers are Resend domain verification, Razorpay production se
 - `npm audit --omit=dev --audit-level=moderate` passes.
 - Privacy and terms pages are present in the active React Router app.
 - Public copy does not claim live checkout, verified WhatsApp delivery, SOC 2, HIPAA, GDPR, zero retention, no training, or unverified model/provider behavior.
-- Pricing is framed as pilot pricing until Razorpay test-mode checkout, signed subscription webhooks, and live secrets are verified.
+- Public pricing display must come from Dodo local-price preview once Dodo 0509 product ids, signed webhooks, and live secrets are verified.
 - Auth runtime stays on Better Auth + D1 unless a future B2B auth requirement justifies Stytch.
 - Meta ads tracking is labeled beta in customer-facing setup/status surfaces until discovery resilience is proven.
 - Customer-facing Meta API fallback uses customer-owned Meta access. Customer tokens are test-before-save and stored encrypted. The platform `META_AD_LIBRARY_TOKEN` stays diagnostic-only unless `ALLOW_PLATFORM_META_API_FALLBACK=true` is deliberately configured as an exception.
@@ -64,7 +64,7 @@ Use this framing until the fresh discovery canary passes:
 ## Not Ready To Claim
 
 - Broad self-serve launch.
-- Live checkout or automatic subscription management until Razorpay plan ids, secrets, D1 migration, and signed webhooks are verified in test mode.
+- Live checkout or automatic subscription management until Dodo 0509 brand id, product ids, secrets, D1 migration, and signed webhooks are verified in test mode.
 - Non-beta Meta ads tracking before the beta graduation gate says it is ready to review.
 - Customer WhatsApp delivery unless opt-in, template readiness, provider sends, and webhook reconciliation are verified.
 - Untested customer Meta tokens. Customer token paste is allowed only through the guarded setup flow: test first, store encrypted, and keep Meta ads tracking labeled beta.

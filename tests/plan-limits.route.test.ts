@@ -78,7 +78,7 @@ describe("search watchlist limit", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached the free watchlist limit.",
+      message: "You have reached your workspace watchlist limit.",
       ok: false,
     });
     expect(createWatchlist).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe("collection limit", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached the free collection limit.",
+      message: "You have reached your workspace collection limit.",
       ok: false,
     });
     expect(createCollection).not.toHaveBeenCalled();
@@ -211,7 +211,7 @@ describe("dashboard watchlist limit", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached the free watchlist limit.",
+      message: "You have reached your workspace watchlist limit.",
       ok: false,
     });
     expect(createWatchlist).not.toHaveBeenCalled();
@@ -264,7 +264,7 @@ describe("pricing CTA rendering", () => {
       actionData: {
         ok: false,
         error: "plan_limit_exceeded",
-        message: "You have reached the free watchlist limit.",
+        message: "You have reached your workspace watchlist limit.",
       },
       loaderData: {
         savedQueries: [],
@@ -276,13 +276,16 @@ describe("pricing CTA rendering", () => {
           summary: "Healthy",
           lastCheckedAt: null,
         },
+        proofUsage: {
+          warningLevel: "ok",
+        },
       },
     });
 
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("You have reached the free watchlist limit.");
+    expect(markup).toContain("You have reached your workspace watchlist limit.");
     expect(markup).not.toContain("View pricing");
   });
 
@@ -291,7 +294,7 @@ describe("pricing CTA rendering", () => {
       actionData: {
         ok: false,
         error: "plan_limit_exceeded",
-        message: "You have reached the free collection limit.",
+        message: "You have reached your workspace collection limit.",
       },
       loaderData: {
         collections: [],
@@ -303,7 +306,7 @@ describe("pricing CTA rendering", () => {
     const { default: CollectionsRoute } = await import("~/routes/app.collections");
     const markup = renderToStaticMarkup(createElement(CollectionsRoute));
 
-    expect(markup).toContain("You have reached the free collection limit.");
+    expect(markup).toContain("You have reached your workspace collection limit.");
     expect(markup).not.toContain("View pricing");
   });
 
@@ -312,7 +315,7 @@ describe("pricing CTA rendering", () => {
       actionData: {
         ok: false,
         error: "plan_limit_exceeded",
-        message: "You have reached the free watchlist limit.",
+        message: "You have reached your workspace watchlist limit.",
       },
       loaderData: {
         mode: "advertiser",
@@ -343,7 +346,7 @@ describe("pricing CTA rendering", () => {
     const { default: SearchRoute } = await import("~/routes/search");
     const markup = renderToStaticMarkup(createElement(SearchRoute));
 
-    expect(markup).toContain("You have reached the free watchlist limit.");
+    expect(markup).toContain("You have reached your workspace watchlist limit.");
     expect(markup).not.toContain("View pricing");
   });
 });

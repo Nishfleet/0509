@@ -7,6 +7,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { BrandWordmark } from "~/components/brand-wordmark";
 import { sampleQueries } from "~/lib/demo-data";
 import {
   buildSearchParams,
@@ -139,7 +140,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message: "You have reached the free watchlist limit.",
+        message: "You have reached your workspace watchlist limit.",
       };
     }
 
@@ -209,65 +210,74 @@ export default function SearchRoute() {
   const creativeTextField = data.selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
 
   return (
-    <main className="app-shell">
-      <header className="site-header">
-        <div className="container header-row">
-          <Link className="brand-mark" to="/">
-            <span className="brand-pill" aria-hidden="true">
-              09
-            </span>
-            <span>
-              <strong>Five to Nine</strong>
-              <small>Search + proof</small>
-            </span>
+    <main className="f9-search-page">
+      <header className="f9-search-nav">
+        <div className="f9-container f9-search-nav-inner">
+          <Link className="f9-brand f9-search-brand" to="/" aria-label="Five to Nine home">
+            <BrandWordmark />
           </Link>
 
-          <nav className="site-nav" aria-label="Search navigation">
+          <nav className="f9-search-nav-links" aria-label="Search navigation">
             <Link to="/">Home</Link>
+            <Link to="/search">Search</Link>
             {rootData.session ? (
-              <Link className="nav-cta" to="/app">
+              <Link className="f9-search-nav-pill" to="/app">
                 Workspace
               </Link>
             ) : (
-              <Link className="nav-cta" to="/auth/signup?redirectTo=/search">
-                Create account
+              <Link className="f9-search-nav-pill" to="/auth/signup?redirectTo=/search">
+                Start now
               </Link>
             )}
           </nav>
         </div>
       </header>
 
-      <section className="search-shell">
-        <div className="container">
-          <div className="search-heading">
-            <div>
-              <p className="eyebrow">Public search flow</p>
-              <h1>Search competitor Meta ads and turn useful queries into reusable monitoring.</h1>
-            </div>
-            <div className="source-pill">Meta ads beta · {formatSearchSourceLabel(data.result)}</div>
+      <section className="f9-search-hero">
+        <div className="f9-search-gradient" aria-hidden="true" />
+        <div className="f9-container f9-search-hero-grid">
+          <div>
+            <p className="f9-search-kicker">Public market search</p>
+            <h1>Search competitor moves with proof attached.</h1>
+            <p>
+              Start with a brand, category term, or offer phrase. Five to Nine keeps source state, extraction method,
+              and landing-page context visible before a signal becomes a decision.
+            </p>
           </div>
+          <div className="f9-search-source-card">
+            <span>Current source state</span>
+            <strong>{formatSearchSourceLabel(data.result)}</strong>
+            <p>
+              {data.result.discoverySummary ??
+                "Search is ready. Results will label live, cached, degraded, or demo source paths."}
+            </p>
+          </div>
+        </div>
+      </section>
 
+      <section className="f9-search-workspace">
+        <div className="f9-container">
           {actionData?.message ? (
-            <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+            <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
               <p>{actionData.message}</p>
             </div>
           ) : null}
 
           {data.result.discoverySummary ? (
-            <div className="callout-card">
-              <p className="section-label">Commercial discovery status</p>
+            <div className="f9-discovery-banner">
+              <span>Discovery status</span>
               <p>{data.result.discoverySummary}</p>
               {data.result.discoveryFailureClass ? (
-                <p className="muted-text">Failure class: {formatFailureClass(data.result.discoveryFailureClass)}</p>
+                <small>Failure class: {formatFailureClass(data.result.discoveryFailureClass)}</small>
               ) : null}
             </div>
           ) : null}
 
-          <div className="search-layout">
-            <section className="search-panel">
-              <Form className="stack-form" method="get">
-                <div className="segmented-control">
-                  <label className={`segment ${data.mode === "advertiser" ? "is-active" : ""}`}>
+          <div className="f9-search-grid">
+            <section className="f9-search-controls">
+              <Form className="f9-search-form" method="get">
+                <div className="f9-mode-toggle">
+                  <label className={data.mode === "advertiser" ? "is-active" : ""}>
                     <input
                       defaultChecked={data.mode === "advertiser"}
                       name="mode"
@@ -276,7 +286,7 @@ export default function SearchRoute() {
                     />
                     Advertiser
                   </label>
-                  <label className={`segment ${data.mode === "keyword" ? "is-active" : ""}`}>
+                  <label className={data.mode === "keyword" ? "is-active" : ""}>
                     <input
                       defaultChecked={data.mode === "keyword"}
                       name="mode"
@@ -287,20 +297,20 @@ export default function SearchRoute() {
                   </label>
                 </div>
 
-                <label className="field">
+                <label className="f9-field">
                   <span>Search query</span>
                   <input defaultValue={data.filters.query} name="query" placeholder="nykaa, cod, whatsapp, festive sale" />
                 </label>
 
-                <div className="field-grid">
-                  <label className="field">
+                <div className="f9-field-grid">
+                  <label className="f9-field">
                     <span>Country</span>
                     <select defaultValue={data.filters.country} name="country">
                       <option value="India">India</option>
                       <option value="all">All countries</option>
                     </select>
                   </label>
-                  <label className="field">
+                  <label className="f9-field">
                     <span>Platform</span>
                     <select defaultValue={data.filters.platform} name="platform">
                       <option value="all">All platforms</option>
@@ -309,7 +319,7 @@ export default function SearchRoute() {
                       <option value="Messenger">Messenger</option>
                     </select>
                   </label>
-                  <label className="field">
+                  <label className="f9-field">
                     <span>Creative type</span>
                     <select defaultValue={data.filters.creativeType} name="creativeType">
                       <option value="all">All</option>
@@ -318,7 +328,7 @@ export default function SearchRoute() {
                       <option value="carousel">Carousel</option>
                     </select>
                   </label>
-                  <label className="field">
+                  <label className="f9-field">
                     <span>Status</span>
                     <select defaultValue={data.filters.status} name="status">
                       <option value="all">All</option>
@@ -328,23 +338,23 @@ export default function SearchRoute() {
                   </label>
                 </div>
 
-                <div className="field-grid">
-                  <label className="field">
+                <div className="f9-field-grid">
+                  <label className="f9-field">
                     <span>First seen from</span>
                     <input defaultValue={data.filters.firstSeenFrom} name="firstSeenFrom" type="date" />
                   </label>
-                  <label className="field">
+                  <label className="f9-field">
                     <span>Last seen from</span>
                     <input defaultValue={data.filters.lastSeenFrom} name="lastSeenFrom" type="date" />
                   </label>
                 </div>
 
-                <div className="inline-actions">
-                  <button className="button button-primary" type="submit">
+                <div className="f9-action-row">
+                  <button className="f9-primary-button" type="submit">
                     Run search
                   </button>
                   <Link
-                    className="button button-secondary"
+                    className="f9-secondary-button"
                     to={`/search?mode=${data.mode}&query=${encodeURIComponent(sampleQueries[data.mode][0])}`}
                   >
                     Load example
@@ -352,8 +362,8 @@ export default function SearchRoute() {
                 </div>
               </Form>
 
-              <div className="hero-samples">
-                <span>Try these:</span>
+              <div className="f9-search-samples">
+                <span>Try these</span>
                 {sampleQueries[data.mode].map((query) => {
                   const params = buildSearchParams({
                     mode: data.mode,
@@ -364,7 +374,7 @@ export default function SearchRoute() {
                   });
 
                   return (
-                    <Link className="sample-pill" key={query} to={`/search?${params.toString()}`}>
+                    <Link key={query} to={`/search?${params.toString()}`}>
                       {query}
                     </Link>
                   );
@@ -373,17 +383,17 @@ export default function SearchRoute() {
 
               {data.session ? (
                 data.filters.query ? (
-                  <div className="stack-list">
-                    <Form className="inline-form" method="post">
+                  <div className="f9-save-stack">
+                    <Form className="f9-inline-save" method="post">
                       <input name="intent" type="hidden" value="save-query" />
                       <SearchStateFields filters={data.filters} mode={data.mode} />
                       <input name="name" placeholder="Save this search as..." required />
-                      <button className="button button-secondary" type="submit">
+                      <button className="f9-secondary-button" type="submit">
                         Save search
                       </button>
                     </Form>
 
-                    <Form className="inline-form" method="post">
+                    <Form className="f9-inline-save" method="post">
                       <input name="intent" type="hidden" value="create-watchlist" />
                       <SearchStateFields filters={data.filters} mode={data.mode} />
                       <input
@@ -391,39 +401,39 @@ export default function SearchRoute() {
                         name="name"
                         placeholder="Watchlist name"
                       />
-                      <button className="button button-primary" type="submit">
+                      <button className="f9-primary-button" type="submit">
                         Track this query
                       </button>
                     </Form>
                   </div>
                 ) : (
-                  <div className="callout-card">
+                  <div className="f9-side-note">
                     <p>Run a search, then save it or turn it into a watchlist.</p>
                   </div>
                 )
               ) : (
-                <div className="callout-card">
-                  <p className="section-label">Why create an account?</p>
+                <div className="f9-side-note">
+                  <span>Workspace layer</span>
                   <p>
-                    Search stays public. Saving queries, building watchlists, and sharing collections
-                    need a workspace so the insights are still there next week.
+                    Search stays public. Saving queries, building watchlists, and sharing collections need a workspace
+                    so the intelligence is still there next week.
                   </p>
-                  <Link className="button button-primary" to="/auth/signup?redirectTo=/search">
-                    Create account
+                  <Link className="f9-primary-button" to="/auth/signup?redirectTo=/search">
+                    Start now
                   </Link>
                 </div>
               )}
             </section>
 
-            <section className="results-panel">
-              <div className="card-header">
+            <section className="f9-results-panel">
+              <div className="f9-panel-head">
                 <div>
-                  <p className="section-label">Results</p>
+                  <span>Results</span>
                   <h2>{data.result.ads.length} ads on this page</h2>
                 </div>
                 {data.result.nextCursor ? (
                   <Link
-                    className="button button-secondary"
+                    className="f9-secondary-button"
                     to={`/search?${appendCursor(
                       buildSearchParams({
                         mode: data.mode,
@@ -438,11 +448,11 @@ export default function SearchRoute() {
                 ) : null}
               </div>
 
-              <div className="results-grid">
+              <div className="f9-results-list">
                 {data.result.ads.length > 0 ? (
                   data.result.ads.map((ad) => (
                     <Link
-                      className={`result-card ${data.selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
+                      className={`f9-result-card ${data.selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
                       key={ad.metaAdId}
                       to={`/search?${withSelected(
                         buildSearchParams({
@@ -452,24 +462,20 @@ export default function SearchRoute() {
                         ad.metaAdId,
                       ).toString()}`}
                     >
-                      <div className="card-header">
-                        <div>
-                          <p className="section-label">{ad.advertiser}</p>
-                          <h3>{ad.previewHeadline}</h3>
-                        </div>
-                        <span className="badge">{ad.format}</span>
+                      <div>
+                        <span>{ad.advertiser}</span>
+                        <h3>{ad.previewHeadline}</h3>
                       </div>
                       <p>{ad.hook}</p>
-                      <p className="muted-text">
+                      <small>
                         {ad.offer} · {ad.destinationType} · {ad.languageLabel}
-                      </p>
+                      </small>
+                      <em>{ad.format}</em>
                     </Link>
                   ))
                 ) : (
-                  <div className="empty-state">
-                    <h3>
-                      {formatEmptyResultHeadline(data.result)}
-                    </h3>
+                  <div className="f9-empty-state">
+                    <h3>{formatEmptyResultHeadline(data.result)}</h3>
                     <p>
                       {data.result.discoverySummary ??
                         "Try a broader query or switch between advertiser and keyword mode."}
@@ -479,23 +485,25 @@ export default function SearchRoute() {
               </div>
             </section>
 
-            <aside className="search-detail">
+            <aside className="f9-proof-detail">
               {data.selectedAd ? (
                 <>
-                  <div className="card-header">
+                  <div className="f9-panel-head">
                     <div>
-                      <p className="section-label">Ad detail</p>
+                      <span>Ad proof</span>
                       <h2>{data.selectedAd.advertiser}</h2>
                     </div>
-                    <span className={`badge ${data.selectedAd.active ? "badge-success" : ""}`}>
+                    <em className={data.selectedAd.active ? "is-active" : ""}>
                       {data.selectedAd.active ? "Active" : "Inactive"}
-                    </span>
+                    </em>
                   </div>
 
-                  <p className="detail-headline">{data.selectedAd.previewHeadline}</p>
-                  <p>{data.selectedAd.body}</p>
+                  <div className="f9-detail-hero">
+                    <h3>{data.selectedAd.previewHeadline}</h3>
+                    <p>{data.selectedAd.body}</p>
+                  </div>
 
-                  <dl className="detail-grid">
+                  <dl className="f9-detail-grid">
                     <DetailRow label="Hook" value={data.selectedAd.hook} />
                     <DetailRow label="Offer" value={data.selectedAd.offer} />
                     <DetailRow label="CTA" value={data.selectedAd.cta} />
@@ -504,20 +512,20 @@ export default function SearchRoute() {
                     <DetailRow label="Destination" value={data.selectedAd.destinationType} />
                   </dl>
 
-                  <div className="content-card nested-card">
-                    <p className="section-label">Creative text</p>
+                  <div className="f9-proof-block">
+                    <span>Creative text</span>
                     <p>{formatLandingPageSignalValue(creativeTextField?.fieldValue)}</p>
-                    <p className="muted-text">
+                    <small>
                       {creativeTextField
                         ? `${formatAnalysisSourceLabel(creativeTextField.provenanceSource)} · best-effort creative extraction`
                         : "Not detected from the ad snapshot yet."}
-                    </p>
+                    </small>
                   </div>
 
-                  <div className="content-card nested-card">
-                    <p className="section-label">Landing page intelligence</p>
+                  <div className="f9-proof-block">
+                    <span>Landing page intelligence</span>
                     <h3>{data.selectedAd.landingPage?.rawHeadline ?? "Headline not captured yet"}</h3>
-                    <dl className="detail-grid">
+                    <dl className="f9-detail-grid">
                       <DetailRow
                         label="Primary CTA"
                         value={formatLandingPageSignalValue(data.selectedAd.landingPage?.ctaText)}
@@ -540,13 +548,13 @@ export default function SearchRoute() {
                         {data.selectedAd.landingPageUrl}
                       </a>
                     ) : (
-                      <p className="muted-text">No landing page URL detected.</p>
+                      <small>No landing page URL detected.</small>
                     )}
                   </div>
 
-                  <div className="content-card nested-card">
-                    <p className="section-label">Analysis provenance</p>
-                    <ul className="field-list">
+                  <div className="f9-proof-block">
+                    <span>Analysis provenance</span>
+                    <ul className="f9-field-list">
                       {data.selectedAd.analysisFields.map((field) => (
                         <li key={`${field.fieldKey}-${field.provenanceSource}`}>
                           <strong>{field.fieldKey.replaceAll("_", " ")}</strong>
@@ -560,14 +568,10 @@ export default function SearchRoute() {
                   </div>
 
                   {data.session && data.collections.length > 0 ? (
-                    <Form className="stack-form" method="post">
+                    <Form className="f9-save-stack" method="post">
                       <input name="intent" type="hidden" value="save-to-collection" />
-                      <input
-                        name="adJson"
-                        type="hidden"
-                        value={JSON.stringify(data.selectedAd)}
-                      />
-                      <label className="field">
+                      <input name="adJson" type="hidden" value={JSON.stringify(data.selectedAd)} />
+                      <label className="f9-field">
                         <span>Collection</span>
                         <select name="collectionId" required>
                           {data.collections.map((collection) => (
@@ -577,29 +581,29 @@ export default function SearchRoute() {
                           ))}
                         </select>
                       </label>
-                      <label className="field">
+                      <label className="f9-field">
                         <span>Note</span>
                         <textarea name="note" placeholder="Why this ad matters" rows={3} />
                       </label>
-                      <label className="field">
+                      <label className="f9-field">
                         <span>Tags</span>
                         <input name="tags" placeholder="discount, COD, creator-led" />
                       </label>
-                      <button className="button button-primary" type="submit">
+                      <button className="f9-primary-button" type="submit">
                         Save to collection
                       </button>
                     </Form>
                   ) : data.session ? (
-                    <div className="callout-card">
+                    <div className="f9-side-note">
                       <p>Create a collection in the workspace first, then save ads from search.</p>
-                      <Link className="button button-secondary" to="/app/collections">
+                      <Link className="f9-secondary-button" to="/app/collections">
                         Open collections
                       </Link>
                     </div>
                   ) : null}
                 </>
               ) : (
-                <div className="empty-state">
+                <div className="f9-empty-state">
                   <h2>No ad selected</h2>
                   <p>Run a search and select one result to inspect the offer and landing page.</p>
                 </div>
@@ -656,7 +660,7 @@ function canUseCanaryFreshLiveBypass(env: { CANARY_BYPASS_TOKEN?: string }, requ
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="detail-row">
+    <div className="f9-detail-row">
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>

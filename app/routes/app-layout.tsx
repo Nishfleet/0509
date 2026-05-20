@@ -7,6 +7,7 @@ import {
 } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
+import { BrandWordmark } from "~/components/brand-wordmark";
 import { SignOutButton } from "~/components/sign-out-button";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -30,24 +31,18 @@ export default function AppLayoutRoute() {
   const { session, showOpsNav } = useLoaderData<typeof loader>();
 
   return (
-    <main className="workspace-shell">
-      <aside className="workspace-sidebar">
-        <Link className="brand-mark" to="/app">
-          <span className="brand-pill" aria-hidden="true">
-            09
-          </span>
-          <span>
-            <strong>Five to Nine</strong>
-            <small>Workspace</small>
-          </span>
+    <main className="f9-app-shell">
+      <aside className="f9-app-sidebar">
+        <Link className="f9-app-brand" to="/app">
+          <BrandWordmark meta="Workspace" />
         </Link>
 
-        <div className="workspace-user">
+        <div className="f9-app-user">
           <p>{session.user.name}</p>
           <small>{session.user.email}</small>
         </div>
 
-        <nav className="workspace-nav" aria-label="Workspace">
+        <nav className="f9-app-nav" aria-label="Workspace">
           <NavLink end to="/app">
             Dashboard
           </NavLink>
@@ -59,18 +54,18 @@ export default function AppLayoutRoute() {
           <NavLink to="/search">Search</NavLink>
         </nav>
 
-        <div className="workspace-sidebar-footer">
+        <div className="f9-app-sidebar-footer">
           <SignOutButton />
         </div>
       </aside>
 
-      <div className="workspace-main">
-        <header className="workspace-topbar">
+      <div className="f9-app-main">
+        <header className="f9-app-topbar">
           <div>
-            <p className="eyebrow">Five to Nine workspace</p>
+            <span className="f9-app-kicker">Five to Nine workspace</span>
             <h1>Track competitor changes without losing the context.</h1>
           </div>
-          <Link className="button button-primary" to="/search">
+          <Link className="f9-primary-button f9-app-new-search" to="/search">
             New search
           </Link>
         </header>

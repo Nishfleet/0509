@@ -340,9 +340,9 @@ export default function WatchlistsRoute() {
   const lastAttemptByEventId = buildLastAttemptByEventId(data.recentDeliveryAttempts);
 
   return (
-    <section className="workspace-section-stack">
+    <section className="f9-app-stack">
       {actionData?.message ? (
-        <p className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+        <p className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           {actionData.ok && actionData.message.startsWith("http") ? (
             <a href={actionData.message} rel="noreferrer" target="_blank">
               {actionData.message}
@@ -353,22 +353,22 @@ export default function WatchlistsRoute() {
         </p>
       ) : null}
 
-      <div className="workspace-panels">
-        <article className="content-card narrow-card">
-          <div className="card-header">
+      <div className="f9-dashboard-grid">
+        <article className="f9-app-panel f9-side-panel">
+          <div className="f9-panel-toolbar">
             <div>
-              <p className="section-label">Watchlists</p>
+              <p className="f9-app-kicker">Watchlists</p>
               <h2>Monitoring control panel</h2>
             </div>
           </div>
-          <p className="muted-text">
+          <p className="f9-muted-copy">
             Pick a watchlist to see the latest confirmed changes, proof freshness, and send state.
           </p>
 
-          <div className="stack-list compact-list">
+          <div className="f9-work-list is-compact">
             {data.watchlists.map((watchlist) => (
               <a
-                className={`list-card ${
+                className={`f9-work-row ${
                   searchParams.get("watchlist") === watchlist.id ||
                   (!searchParams.get("watchlist") && data.selectedWatchlist?.id === watchlist.id)
                     ? "is-active"
@@ -379,10 +379,10 @@ export default function WatchlistsRoute() {
               >
                 <div>
                   <h3>{watchlist.name}</h3>
-                  <p className="muted-text">
+                  <p className="f9-muted-copy">
                     {watchlist.targetType.replace("_", " ")} · {watchlist.targetLabel}
                   </p>
-                  <p className="muted-text">
+                  <p className="f9-muted-copy">
                     {watchlist.lastScannedAt
                       ? `Last scanned ${new Date(watchlist.lastScannedAt).toLocaleString("en-IN")}`
                       : "Never scanned yet"}
@@ -393,29 +393,29 @@ export default function WatchlistsRoute() {
           </div>
         </article>
 
-        <article className="content-card">
+        <article className="f9-app-panel">
           {data.selectedWatchlist ? (
             <>
-              <div className="card-header">
+              <div className="f9-panel-toolbar">
                 <div>
-                  <p className="section-label">Selected watchlist</p>
+                  <p className="f9-app-kicker">Selected watchlist</p>
                   <h2>{data.selectedWatchlist.name}</h2>
-                  <p className="muted-text">
+                  <p className="f9-muted-copy">
                     {data.selectedWatchlist.targetLabel} · last scanned{" "}
                     {data.selectedWatchlist.lastScannedAt
                       ? new Date(data.selectedWatchlist.lastScannedAt).toLocaleString("en-IN")
                       : "never"}
                   </p>
                 </div>
-                <div className="inline-actions">
+                <div className="f9-action-row">
                   <Link
-                    className="button button-secondary"
+                    className="f9-secondary-button"
                     to={`/app/reports/${createReportId("watchlist", data.selectedWatchlist.id)}`}
                   >
                     Open report
                   </Link>
                   <a
-                    className="button button-secondary"
+                    className="f9-secondary-button"
                     href={`/export/watchlist/${data.selectedWatchlist.id}`}
                   >
                     Export CSV
@@ -423,29 +423,29 @@ export default function WatchlistsRoute() {
                   <Form method="post">
                     <input name="intent" type="hidden" value="share-watchlist" />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <button className="button button-secondary" type="submit">
+                    <button className="f9-secondary-button" type="submit">
                       Share summary
                     </button>
                   </Form>
                   <Form method="post">
                     <input name="intent" type="hidden" value="refresh-watchlist" />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <button className="button button-primary" type="submit">
+                    <button className="f9-primary-button" type="submit">
                       Refresh now
                     </button>
                   </Form>
                 </div>
               </div>
 
-              <div className="stack-list">
+              <div className="f9-work-list">
                 <section>
-                  <p className="section-label">Meta ads tracking beta</p>
-                  <div className="workspace-panels">
-                    <article className="content-card">
-                      <h3>{formatDiscoveryHeadline(data.discoveryStatus)} <span className="badge badge-beta">Beta</span></h3>
-                      <p className="muted-text">{data.discoveryStatus.summary}</p>
+                  <p className="f9-app-kicker">Meta ads source</p>
+                  <div className="f9-dashboard-grid">
+                    <article className="f9-app-panel">
+                      <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
+                      <p className="f9-muted-copy">{data.discoveryStatus.summary}</p>
                       {data.discoveryStatus.lastErrorCode ? (
-                        <p className="muted-text">
+                        <p className="f9-muted-copy">
                           Last issue: {data.discoveryStatus.lastErrorCode}
                           {data.discoveryStatus.lastErrorMessage
                             ? ` · ${data.discoveryStatus.lastErrorMessage}`
@@ -453,32 +453,32 @@ export default function WatchlistsRoute() {
                         </p>
                       ) : null}
 
-                      <div className="stack-list compact-list" style={{ marginTop: "0.75rem" }}>
-                        <div className="list-card">
-                          <p className="section-label">Source</p>
-                          <p className="muted-text">
+                      <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
+                        <div className="f9-work-row">
+                          <p className="f9-app-kicker">Source</p>
+                          <p className="f9-muted-copy">
                             {formatDiscoveryProviderLabel(
                               data.discoveryStatus.provider,
                               data.discoveryStatus.mode,
                             )}
                           </p>
                         </div>
-                        <div className="list-card">
-                          <p className="section-label">Current state</p>
-                          <p className="muted-text">
+                        <div className="f9-work-row">
+                          <p className="f9-app-kicker">Current state</p>
+                          <p className="f9-muted-copy">
                             {formatDiscoveryStatusLabel(data.discoveryStatus.status)}
                           </p>
                         </div>
-                        <div className="list-card">
-                          <p className="section-label">Last check</p>
-                          <p className="muted-text">
+                        <div className="f9-work-row">
+                          <p className="f9-app-kicker">Last check</p>
+                          <p className="f9-muted-copy">
                             {data.discoveryStatus.lastCheckedAt
                               ? new Date(data.discoveryStatus.lastCheckedAt).toLocaleString("en-IN")
                               : "No live check recorded yet"}
                           </p>
                         </div>
                       </div>
-                      <Link className="button button-secondary" to="/app/sources">
+                      <Link className="f9-secondary-button" to="/app/sources">
                         Manage Meta source
                       </Link>
                     </article>
@@ -486,9 +486,9 @@ export default function WatchlistsRoute() {
                 </section>
 
                 <section>
-                  <p className="section-label">See what changed</p>
+                  <p className="f9-app-kicker">See what changed</p>
                   {data.events.length === 0 ? (
-                    <p className="muted-text">
+                    <p className="f9-muted-copy">
                       No confirmed changes yet. Run the watchlist or wait for the next scheduled scan.
                     </p>
                   ) : (
@@ -500,21 +500,21 @@ export default function WatchlistsRoute() {
                         const lastAttempt = lastAttemptByEventId.get(event.id) ?? null;
 
                         return (
-                          <li className="event-card" key={event.id}>
-                            <div className="card-header">
+                          <li className="f9-event-card" key={event.id}>
+                            <div className="f9-panel-toolbar">
                               <div>
-                                <p className="section-label">
+                                <p className="f9-app-kicker">
                                   {humanizeEventType(event.eventType)} · {event.status.replaceAll("_", " ")}
                                 </p>
                                 <h3>{event.title}</h3>
                               </div>
-                              <span className="badge">{formatImportanceBandLabel(event.importanceScore)}</span>
+                              <span className="f9-status-pill">{formatImportanceBandLabel(event.importanceScore)}</span>
                             </div>
                             <p>{event.summary}</p>
-                            <div className="stack-list compact-list" style={{ marginTop: "0.75rem" }}>
-                              <div className="list-card">
-                                <p className="section-label">Proof summary</p>
-                                <p className="muted-text">
+                            <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
+                              <div className="f9-work-row">
+                                <p className="f9-app-kicker">Proof summary</p>
+                                <p className="f9-muted-copy">
                                   {proofCapture
                                     ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · proof age ${formatProofAgeLabel(
                                         proofCapture.succeededAt ?? proofCapture.attemptedAt,
@@ -522,9 +522,9 @@ export default function WatchlistsRoute() {
                                     : "No proof required for this scan-side event."}
                                 </p>
                               </div>
-                              <div className="list-card">
-                                <p className="section-label">Why this alerted</p>
-                                <p className="muted-text">
+                              <div className="f9-work-row">
+                                <p className="f9-app-kicker">Why this alerted</p>
+                                <p className="f9-muted-copy">
                                   {formatWhyAlertedLabel({
                                     eventType: event.eventType,
                                     status: event.status,
@@ -532,9 +532,9 @@ export default function WatchlistsRoute() {
                                   })}
                                 </p>
                               </div>
-                              <div className="list-card">
-                                <p className="section-label">Last send state</p>
-                                <p className="muted-text">
+                              <div className="f9-work-row">
+                                <p className="f9-app-kicker">Last send state</p>
+                                <p className="f9-muted-copy">
                                   {lastAttempt
                                     ? `${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel)} · ${
                                         lastAttempt.targetValue
@@ -551,36 +551,36 @@ export default function WatchlistsRoute() {
                 </section>
 
                 <section>
-                  <div className="card-header">
+                  <div className="f9-panel-toolbar">
                     <div>
-                      <p className="section-label">Proof and delivery</p>
+                      <p className="f9-app-kicker">Proof and delivery</p>
                       <h3 style={{ marginTop: 0 }}>Trust signals</h3>
                     </div>
                   </div>
 
-                  <div className="workspace-panels">
-                    <article className="content-card">
-                      <p className="section-label">Recent proof attempts</p>
+                  <div className="f9-dashboard-grid">
+                    <article className="f9-app-panel">
+                      <p className="f9-app-kicker">Recent proof attempts</p>
                       <h3>Proof freshness</h3>
-                      <p className="muted-text">
+                      <p className="f9-muted-copy">
                         {data.proofSummary.successfulAttempts} successful · {data.proofSummary.failedAttempts} failed
                         {data.proofSummary.skippedAttempts > 0
                           ? ` · ${data.proofSummary.skippedAttempts} skipped`
                           : ""}
                       </p>
-                      <p className="muted-text">
+                      <p className="f9-muted-copy">
                         {data.proofSummary.lastSuccessfulProofAt
                           ? `Last good proof ${formatProofAgeLabel(data.proofSummary.lastSuccessfulProofAt)}`
                           : "No successful proof captured yet."}
                       </p>
-                      <div className="stack-list compact-list">
+                      <div className="f9-work-list is-compact">
                         {data.recentProofCaptures.slice(0, 4).map((capture) => (
-                          <div className="list-card" key={capture.id}>
+                          <div className="f9-work-row" key={capture.id}>
                             <div>
                               <h4 style={{ marginBottom: "0.25rem" }}>
                                 {capture.status.replaceAll("_", " ")}
                               </h4>
-                              <p className="muted-text">
+                              <p className="f9-muted-copy">
                                 {formatConfidenceBandLabel(capture.fieldConfidence)} ·{" "}
                                 {formatProofAgeLabel(capture.succeededAt ?? capture.attemptedAt)}
                               </p>
@@ -588,23 +588,23 @@ export default function WatchlistsRoute() {
                           </div>
                         ))}
                         {data.recentProofCaptures.length === 0 ? (
-                          <p className="muted-text">Proof attempts will appear here after the next capture.</p>
+                          <p className="f9-muted-copy">Proof attempts will appear here after the next capture.</p>
                         ) : null}
                       </div>
                     </article>
 
-                    <article className="content-card">
-                      <p className="section-label">Delivery settings</p>
+                    <article className="f9-app-panel">
+                      <p className="f9-app-kicker">Delivery settings</p>
                       <h3>Channel policy</h3>
                       {!data.watchlistDeliveryConfig ? (
-                        <p className="muted-text">
+                        <p className="f9-muted-copy">
                           No watchlist override yet. Workspace defaults are currently applying.
                         </p>
                       ) : null}
-                      <Form method="post" className="stack-list compact-list">
+                      <Form method="post" className="f9-work-list is-compact">
                         <input name="intent" type="hidden" value="save-delivery-config" />
                         <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                        <label className="field">
+                        <label className="f9-field">
                           <span>Sensitivity</span>
                           <select defaultValue={data.effectiveDeliveryConfig.sensitivityMode} name="sensitivityMode">
                             <option value="quiet">Quiet</option>
@@ -613,7 +613,7 @@ export default function WatchlistsRoute() {
                             <option value="auto">Auto (Balanced)</option>
                           </select>
                         </label>
-                        <label className="field">
+                        <label className="f9-field">
                           <span>Timezone</span>
                           <input
                             defaultValue={data.effectiveDeliveryConfig.timezone ?? "Asia/Kolkata"}
@@ -621,8 +621,8 @@ export default function WatchlistsRoute() {
                             type="text"
                           />
                         </label>
-                        <div className="workspace-panels">
-                          <label className="field">
+                        <div className="f9-dashboard-grid">
+                          <label className="f9-field">
                             <span>Quiet hours start</span>
                             <input
                               defaultValue={data.effectiveDeliveryConfig.quietHours?.startHour ?? 22}
@@ -630,7 +630,7 @@ export default function WatchlistsRoute() {
                               type="number"
                             />
                           </label>
-                          <label className="field">
+                          <label className="f9-field">
                             <span>Quiet hours end</span>
                             <input
                               defaultValue={data.effectiveDeliveryConfig.quietHours?.endHour ?? 8}
@@ -639,23 +639,23 @@ export default function WatchlistsRoute() {
                             />
                           </label>
                         </div>
-                        <label className="field field-inline">
+                        <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.instantEnabled} name="instantEnabled" type="checkbox" />
                           <span>Instant alerts</span>
                         </label>
-                        <label className="field field-inline">
+                        <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.digestEnabled} name="digestEnabled" type="checkbox" />
                           <span>Digest alerts</span>
                         </label>
-                        <label className="field field-inline">
+                        <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.emailEnabled} name="emailEnabled" type="checkbox" />
                           <span>Email enabled</span>
                         </label>
-                        <label className="field field-inline">
+                        <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.whatsappEnabled} name="whatsappEnabled" type="checkbox" />
                           <span>WhatsApp enabled</span>
                         </label>
-                        <button className="button button-primary" type="submit">
+                        <button className="f9-primary-button" type="submit">
                           Save delivery settings
                         </button>
                       </Form>
@@ -664,21 +664,21 @@ export default function WatchlistsRoute() {
                 </section>
 
                 <section>
-                  <div className="card-header">
+                  <div className="f9-panel-toolbar">
                     <div>
-                      <p className="section-label">Delivery targets</p>
+                      <p className="f9-app-kicker">Delivery targets</p>
                       <h3 style={{ marginTop: 0 }}>Targets and pauses</h3>
                     </div>
                   </div>
-                  <div className="stack-list compact-list">
+                  <div className="f9-work-list is-compact">
                     {data.deliveryTargets.map((target) => (
-                      <div className="list-card" key={target.id}>
+                      <div className="f9-work-row" key={target.id}>
                         <div>
                           <h4 style={{ marginBottom: "0.25rem" }}>
                             {target.channel === "email" ? "Email" : "WhatsApp"}
                           </h4>
-                          <p className="muted-text">{target.targetValue}</p>
-                          <p className="muted-text">
+                          <p className="f9-muted-copy">{target.targetValue}</p>
+                          <p className="f9-muted-copy">
                             {target.isPaused
                               ? "Paused"
                               : target.channel === "whatsapp" && !target.templateEligible
@@ -692,46 +692,46 @@ export default function WatchlistsRoute() {
                           <input name="channel" type="hidden" value={target.channel} />
                           <input name="targetValue" type="hidden" value={target.targetValue} />
                           <input name="isPaused" type="hidden" value={target.isPaused ? "false" : "true"} />
-                          <button className="button button-secondary" type="submit">
+                          <button className="f9-secondary-button" type="submit">
                             {target.isPaused ? "Resume" : "Pause"}
                           </button>
                         </Form>
                       </div>
                     ))}
                     {data.deliveryTargets.length === 0 ? (
-                      <p className="muted-text">
+                      <p className="f9-muted-copy">
                         No watchlist-specific targets yet. Workspace defaults will carry delivery until you add one.
                       </p>
                     ) : null}
                   </div>
 
-                  <Form method="post" className="stack-list compact-list" style={{ marginTop: "1rem" }}>
+                  <Form method="post" className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
                     <input name="intent" type="hidden" value="add-delivery-target" />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <label className="field">
+                    <label className="f9-field">
                       <span>Channel</span>
                       <select defaultValue="email" name="channel">
                         <option value="email">Email</option>
                         <option value="whatsapp">WhatsApp</option>
                       </select>
                     </label>
-                    <label className="field">
+                    <label className="f9-field">
                       <span>Target</span>
                       <input name="targetValue" placeholder="owner@example.com or +919999999999" type="text" />
                     </label>
-                    <label className="field field-inline">
+                    <label className="f9-field f9-field-inline">
                       <input defaultChecked name="explicitOptIn" type="checkbox" />
                       <span>Explicit opt-in confirmed</span>
                     </label>
-                    <button className="button button-secondary" type="submit">
+                    <button className="f9-secondary-button" type="submit">
                       Add delivery target
                     </button>
                   </Form>
 
                   {data.workspaceDeliveryTargets.length > 0 ? (
                     <div style={{ marginTop: "1rem" }}>
-                      <p className="section-label">Workspace defaults</p>
-                      <p className="muted-text">
+                      <p className="f9-app-kicker">Workspace defaults</p>
+                      <p className="f9-muted-copy">
                         {data.workspaceDeliveryTargets.map((target) => target.targetValue).join(" · ")}
                       </p>
                     </div>
@@ -739,35 +739,35 @@ export default function WatchlistsRoute() {
                 </section>
 
                 <section>
-                  <p className="section-label">Recent runs</p>
+                  <p className="f9-app-kicker">Recent runs</p>
                   {data.runs.length === 0 ? (
-                    <p className="muted-text">No runs recorded yet.</p>
+                    <p className="f9-muted-copy">No runs recorded yet.</p>
                   ) : (
                     <ul className="event-list">
                       {data.runs.map((run) => (
-                        <li className="event-card" key={run.id}>
-                          <div className="card-header">
+                        <li className="f9-event-card" key={run.id}>
+                          <div className="f9-panel-toolbar">
                             <div>
-                              <p className="section-label">
+                              <p className="f9-app-kicker">
                                 {run.status} · {run.triggerType}
                               </p>
                               <h3>
                                 Started {new Date(run.startedAt).toLocaleString("en-IN")}
                               </h3>
                             </div>
-                            <span className="badge">{run.pagesScanned} pages</span>
+                            <span className="f9-status-pill">{run.pagesScanned} pages</span>
                           </div>
-                          <p className="muted-text">
+                          <p className="f9-muted-copy">
                             {run.finishedAt
                               ? `Finished ${new Date(run.finishedAt).toLocaleString("en-IN")}`
                               : "Still running"}
                             {run.baselineFromRunId ? ` · baseline ${run.baselineFromRunId.slice(0, 8)}` : ""}
                           </p>
                           {formatRunSummary(run.summary) ? (
-                            <p className="muted-text">{formatRunSummary(run.summary)}</p>
+                            <p className="f9-muted-copy">{formatRunSummary(run.summary)}</p>
                           ) : null}
                           {formatRunEventTypes(run.summary) ? (
-                            <p className="muted-text">{formatRunEventTypes(run.summary)}</p>
+                            <p className="f9-muted-copy">{formatRunEventTypes(run.summary)}</p>
                           ) : null}
                           {run.errorMessage ? <p>{run.errorMessage}</p> : null}
                         </li>
@@ -778,15 +778,15 @@ export default function WatchlistsRoute() {
 
                 <details>
                   <summary>Raw candidate history</summary>
-                  <div className="stack-list compact-list" style={{ marginTop: "1rem" }}>
+                  <div className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
                     {data.eventCandidates.length === 0 ? (
-                      <p className="muted-text">No candidate history yet.</p>
+                      <p className="f9-muted-copy">No candidate history yet.</p>
                     ) : (
                       data.eventCandidates.map((candidate) => (
-                        <div className="list-card" key={candidate.id}>
+                        <div className="f9-work-row" key={candidate.id}>
                           <div>
                             <h4 style={{ marginBottom: "0.25rem" }}>{candidate.title}</h4>
-                            <p className="muted-text">
+                            <p className="f9-muted-copy">
                               {candidate.status.replaceAll("_", " ")} · {formatImportanceBandLabel(candidate.importanceScore)}
                             </p>
                           </div>
@@ -798,7 +798,7 @@ export default function WatchlistsRoute() {
               </div>
             </>
           ) : (
-            <div className="empty-state">
+            <div className="f9-empty-panel">
               <h2>No watchlist selected</h2>
               <p>Track a search from the dashboard or the search page to see monitoring history here.</p>
             </div>

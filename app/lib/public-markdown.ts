@@ -2,7 +2,7 @@ const PUBLIC_MARKDOWN_PATHS = new Set(["/", "/search", "/privacy", "/terms"]);
 
 export const PUBLIC_MARKDOWN = `---
 title: Five to Nine
-description: After-hours market intelligence for growth teams.
+description: Market intelligence for revenue teams.
 ---
 
 # Five to Nine
@@ -11,7 +11,7 @@ Five to Nine turns competitor ad, offer, and landing-page changes into proof-bac
 
 ## Product
 
-- After-hours competitor monitoring for growth teams.
+- Competitor monitoring for growth teams.
 - Public analysis, retained monitoring, and reusable workspace memory.
 - Search is public; saved queries, watchlists, collections, reports, and delivery live inside the workspace.
 - Alerts and reports should include source proof instead of unsupported AI summaries.
@@ -19,18 +19,24 @@ Five to Nine turns competitor ad, offer, and landing-page changes into proof-bac
 
 ## Current product truth
 
-- Five to Nine is in pilot-readiness mode, not broad self-serve launch mode.
-- Self-serve billing is not live yet. Razorpay Subscriptions are scaffolded behind env-gated routes.
-- Pilot access is activated manually after fit review.
+- Workspace access uses verified access paths.
+- Checkout should appear only after the payment path and webhooks are verified.
 - Commercial discovery status must be labeled honestly as live, cached live, degraded, or demo.
-- Meta ads tracking is a beta feature until fresh discovery, proof capture, and digest canaries prove resilience.
-- Fresh commercial discovery is a launch gate; cached results must not be described as fresh live proof.
+- Meta source coverage stays explicitly labeled until fresh discovery, proof capture, and digest canaries prove resilience.
+- Fresh commercial discovery is a release gate; cached results must not be described as fresh live proof.
 - Customer-facing Meta API fallback requires customer-owned Meta access. Customer tokens are test-before-save, stored encrypted, and platform Meta tokens are diagnostic-only unless an explicit exception is configured.
 - Customer WhatsApp delivery must stay behind opt-in, template-readiness, and webhook-readiness checks.
 
 ## Pricing
 
-Pricing is region-aware for India and rest of world. Public prices are pilot pricing signals until Razorpay test-mode checkout and signed webhooks are verified.
+- Pricing display is Dodo-backed and localized from checkout preview for the buyer location.
+- There is no free retained-monitoring plan. Unpaid users can use public search but cannot keep workspace watchlists or collections.
+- Scout includes 3 watchlists, 10 collections, search-led research, and 50 proof captures/month.
+- Starter includes 10 watchlists, 25 collections, weekly digest delivery, and 250 proof captures/month.
+- Agency includes 75 watchlists, 250 collections, daily and weekly briefs, and 2,500 proof captures/month.
+- Usage bundles add extra proof captures for 30-day spikes. They do not make monitoring unlimited.
+- Workspaces warn after 80% proof-capture usage and hard-stop when paid capacity is exhausted.
+- Meta source access remains beta-gated.
 
 ## Trust
 
@@ -46,12 +52,13 @@ export const LLMS_TEXT = `# Five to Nine
 Five to Nine turns competitor ad, offer, and landing-page changes into proof-backed morning intelligence.
 
 Current product truth:
-- After-hours market intelligence is the north-star product story.
-- The product is in pilot-readiness mode, not broad self-serve launch mode.
-- Self-serve billing is not live yet.
-- Plan gating is scaffolded, and Razorpay checkout/webhook routes should not be described as live until test-mode verification passes.
-- Fresh commercial discovery is a launch gate; cached results must be labeled as cached.
-- Meta ads tracking is beta until discovery, proof, and digest canaries prove reliability.
+- Market intelligence for revenue teams is the north-star product story.
+- Workspace access uses verified access paths.
+- Checkout should appear only after the payment path and webhooks are verified.
+- Dodo checkout and webhook routes exist for plan and usage-bundle purchases, but public copy should treat billing as verified-current only after live product ids, webhook secret, and signed webhook proof pass.
+- Paid plans have explicit caps: Scout includes 50 proof captures/month, Starter includes 250 proof captures/month, and Agency includes 2,500 proof captures/month; usage bundles add 30-day proof capacity for spikes.
+- Fresh commercial discovery is a release gate; cached results must be labeled as cached.
+- Meta source coverage stays labeled until discovery, proof, and digest canaries prove reliability.
 - Customer-facing Meta API fallback requires customer-owned Meta access. Customer tokens are test-before-save, stored encrypted, and platform Meta tokens are diagnostic-only unless an explicit exception is configured.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
 - Customer WhatsApp delivery must stay behind opt-in, template-readiness, and webhook-readiness checks.

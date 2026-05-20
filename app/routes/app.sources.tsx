@@ -5,7 +5,7 @@ export const meta: MetaFunction = () => [
   { title: "Sources | Five to Nine" },
   {
     name: "description",
-    content: "Connect customer-owned Meta access for beta Meta ads tracking in Five to Nine.",
+    content: "Connect customer-owned Meta access for evidence-backed ad discovery in Five to Nine.",
   },
 ];
 
@@ -92,50 +92,54 @@ export default function AppSourcesRoute() {
   const statusLabel = data.connection ? formatConnectionStatus(data.connection.status) : "Not connected";
 
   return (
-    <section className="workspace-section-stack">
-      <section className="source-setup-card">
-        <div className="card-header">
+    <section className="f9-app-stack">
+      <section className="f9-app-panel f9-source-setup">
+        <div className="f9-panel-toolbar">
           <div>
-            <p className="section-label">Source setup</p>
-            <h2>Meta ads tracking <span className="badge badge-beta">Beta</span></h2>
+            <span className="f9-app-kicker">Source setup</span>
+            <div className="f9-heading-with-pill">
+              <h2>Meta ads source</h2>
+              <span className="f9-beta-pill">Beta</span>
+            </div>
           </div>
-          <Link className="button button-secondary" to="/app/watchlists">
+          <Link className="f9-secondary-button" to="/app/watchlists">
             Open watchlists
           </Link>
         </div>
 
-        <p className="muted-text">
+        <p className="f9-muted-copy">
+          Meta coverage is beta until fresh discovery, proof capture, and digest canaries stay green.
           Connect the customer's own Meta token so Five to Nine can use the official Ad Library API
           fallback without relying on a shared platform token.
         </p>
 
-        <div className="status-strip">
+        <div className="f9-status-strip">
           <div>
-            <span className="section-label">Connection</span>
+            <span className="f9-app-kicker">Connection</span>
             <strong>{statusLabel}</strong>
             {data.connection ? (
-              <p className="muted-text">
+              <p className="f9-muted-copy">
                 Token ends in {data.connection.tokenLastFour}
                 {data.connection.lastCheckedAt
                   ? ` · tested ${new Date(data.connection.lastCheckedAt).toLocaleString("en-IN")}`
                   : ""}
               </p>
             ) : (
-              <p className="muted-text">No customer-owned Meta token is connected yet.</p>
+              <p className="f9-muted-copy">No customer-owned Meta token is connected yet.</p>
             )}
           </div>
           <div>
-            <span className="section-label">Live path</span>
+            <span className="f9-app-kicker">Live path</span>
             <strong>{formatDiscoveryStatus(data.discoveryStatus.status)}</strong>
-            <p className="muted-text">{data.discoveryStatus.summary}</p>
+            <p className="f9-muted-copy">{data.discoveryStatus.summary}</p>
           </div>
         </div>
 
-        <div className="source-readiness-panel">
+        <div className="f9-source-readiness-panel">
           <div>
-            <span className="section-label">Beta graduation gate</span>
-            <strong>{data.betaReadiness.label}</strong>
-            <p className="muted-text">
+            <span className="f9-app-kicker">Reliability gate</span>
+            <strong>{formatReadinessLabel(data.betaReadiness.label)}</strong>
+            <p className="f9-muted-copy">
               {data.betaReadiness.samples}/{data.betaReadiness.sampleTarget} live samples in the last{" "}
               {data.betaReadiness.windowDays} days · {formatSuccessRate(data.betaReadiness.successRate)} success
               {data.betaReadiness.latestSuccessAt
@@ -153,14 +157,14 @@ export default function AppSourcesRoute() {
         </div>
 
         {actionData?.message ? (
-          <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+          <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
             <p>{actionData.message}</p>
           </div>
         ) : null}
 
-        <div className="workspace-panels">
-          <section className="content-card source-guide-card">
-            <p className="section-label">Stupid-proof steps</p>
+        <div className="f9-dashboard-grid">
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Source steps</span>
             <h3>How the customer gets the token</h3>
             <ol className="numbered-guide">
               <li>
@@ -181,17 +185,17 @@ export default function AppSourcesRoute() {
               </li>
               <li>Paste the full token below and test it before saving.</li>
             </ol>
-            <p className="muted-text">
+            <p className="f9-muted-copy">
               The token is stored encrypted. It is only used for this workspace's Meta API fallback.
             </p>
           </section>
 
-          <section className="content-card source-guide-card">
-            <p className="section-label">Connect</p>
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Connect</span>
             <h3>Paste and test</h3>
-            <Form className="stack-form" method="post">
+            <Form className="f9-auth-form" method="post">
               <input name="intent" type="hidden" value="connect-meta-token" />
-              <label className="field">
+              <label className="f9-field">
                 <span>Meta access token</span>
                 <textarea
                   autoComplete="off"
@@ -200,22 +204,22 @@ export default function AppSourcesRoute() {
                   rows={5}
                 />
               </label>
-              <button className="button button-primary" type="submit">
+              <button className="f9-primary-button" type="submit">
                 Test and save token
               </button>
             </Form>
 
             {data.connection ? (
-              <div className="inline-actions source-actions">
+              <div className="f9-action-row source-actions">
                 <Form method="post">
                   <input name="intent" type="hidden" value="retest-meta-token" />
-                  <button className="button button-secondary" type="submit">
+                  <button className="f9-secondary-button" type="submit">
                     Retest saved token
                   </button>
                 </Form>
                 <Form method="post">
                   <input name="intent" type="hidden" value="disconnect-meta-token" />
-                  <button className="button button-secondary" type="submit">
+                  <button className="f9-secondary-button" type="submit">
                     Disconnect
                   </button>
                 </Form>
@@ -225,12 +229,12 @@ export default function AppSourcesRoute() {
         </div>
       </section>
 
-      <article className="callout-card">
-        <p className="section-label">Beta guardrail</p>
+      <article className="f9-app-panel f9-callout-panel">
+        <span className="f9-app-kicker">Source guardrail</span>
         <p>
-          Meta ads tracking stays beta until live discovery, proof capture, and daily digest canaries
-          stay green. Website snapshots, price/discount checks, and proof-backed reports are not
-          blocked by this label.
+          Meta ads discovery stays evidence-gated until live discovery, proof capture, and daily digest
+          canaries stay green. Website snapshots, price/discount checks, and proof-backed reports continue
+          to work independently.
         </p>
       </article>
     </section>
@@ -252,7 +256,7 @@ function formatDiscoveryStatus(status: string) {
     return "Cache only";
   }
   if (status === "healthy") {
-    return "Live beta";
+    return "Live path ready";
   }
   return status.replaceAll("_", " ");
 }
@@ -263,6 +267,10 @@ function formatSuccessRate(value: number | null) {
   }
 
   return `${Math.round(value * 100)}%`;
+}
+
+function formatReadinessLabel(label: string) {
+  return label.replace(/^Beta:\s*/i, "");
 }
 
 function formatReadinessBlocker(blocker: string) {

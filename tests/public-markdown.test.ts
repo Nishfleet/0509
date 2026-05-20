@@ -31,9 +31,10 @@ describe("public markdown", () => {
   });
 
   it("keeps agent-readable content aligned with launch truth", () => {
-    expect(PUBLIC_MARKDOWN).toContain("pilot-readiness mode");
-    expect(PUBLIC_MARKDOWN).toContain("Self-serve billing is not live yet");
-    expect(PUBLIC_MARKDOWN).toContain("Fresh commercial discovery is a launch gate");
+    expect(PUBLIC_MARKDOWN).toContain("verified access paths");
+    expect(PUBLIC_MARKDOWN).toContain("Checkout should appear only after");
+    expect(PUBLIC_MARKDOWN).toContain("Fresh commercial discovery is a release gate");
     expect(LLMS_TEXT).toContain("cached results must be labeled as cached");
+    expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve|not live/i);
   });
 });

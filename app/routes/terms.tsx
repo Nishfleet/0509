@@ -2,40 +2,41 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { MetaFunction } from "react-router";
 
+import { BrandWordmark } from "~/components/brand-wordmark";
+
 export const meta: MetaFunction = () => [
   { title: "Terms | Five to Nine" },
   {
     name: "description",
-    content: "Pilot terms for Five to Nine, including billing status, acceptable use, and source-proof limits.",
+    content: "Terms for Five to Nine, including billing, acceptable use, and source-proof limits.",
   },
 ];
 
 export default function TermsRoute() {
   return (
-    <main className="site-shell">
+    <main className="f9-legal-page">
       <SimpleHeader />
-      <section className="legal-section">
-        <article className="container content-card legal-card">
-          <p className="eyebrow">Terms</p>
-          <h1>Five to Nine pilot terms.</h1>
+      <section className="f9-container f9-legal-section">
+        <article className="f9-legal-card">
+          <span className="f9-app-kicker">Terms</span>
+          <h1>Five to Nine terms.</h1>
           <p>
-            Five to Nine is currently a pilot-readiness product. These terms are plain-English operating terms for pilot
-            users and should be replaced or reviewed before broad self-serve launch.
+            These plain-English operating terms cover accounts using Five to Nine. They should be reviewed by counsel
+            before a broader commercial rollout.
           </p>
 
           <LegalBlock title="Product status">
             <p>
               The product helps teams search competitor ads, save proof, create watchlists, and review proof-backed
-              monitoring outputs. Meta ads tracking is beta. Fresh discovery, billing, and customer WhatsApp delivery
-              remain launch gates until verified in production.
+              monitoring outputs. Cached results, degraded discovery, and fresh source checks must be labeled honestly
+              wherever they appear.
             </p>
           </LegalBlock>
 
           <LegalBlock title="Billing">
             <p>
-              Self-serve checkout is not live. Public prices are pilot pricing signals. Paid pilots should be activated
-              manually through an agreed payment path until Razorpay checkout and signed subscription webhooks are
-              verified.
+              Paid access, subscription changes, cancellations, and refunds should follow the confirmed payment path or
+              written order connected to the workspace.
             </p>
           </LegalBlock>
 
@@ -56,8 +57,7 @@ export default function TermsRoute() {
 
           <LegalBlock title="Support">
             <p>
-              During pilot rollout, support, cancellation, and refund handling should happen through the founder contact
-              path that approved access.
+              Support, cancellation, and refund handling should happen through the contact path connected to the account.
             </p>
           </LegalBlock>
         </article>
@@ -68,18 +68,12 @@ export default function TermsRoute() {
 
 function SimpleHeader() {
   return (
-    <header className="site-header">
-      <div className="container header-row">
-        <Link className="brand-mark" to="/">
-          <span className="brand-pill" aria-hidden="true">
-            09
-          </span>
-          <span>
-            <strong>Five to Nine</strong>
-            <small>Proof-backed competitor monitoring</small>
-          </span>
+    <header className="f9-legal-nav">
+      <div className="f9-container f9-legal-nav-inner">
+        <Link className="f9-app-brand" to="/">
+          <BrandWordmark meta="Proof-backed competitor monitoring" />
         </Link>
-        <nav className="site-nav" aria-label="Legal navigation">
+        <nav className="f9-search-nav-links" aria-label="Legal navigation">
           <Link to="/">Home</Link>
           <Link to="/privacy">Privacy</Link>
         </nav>
@@ -90,7 +84,7 @@ function SimpleHeader() {
 
 function LegalBlock(props: { title: string; children: ReactNode }) {
   return (
-    <section className="legal-block">
+    <section className="f9-legal-block">
       <h2>{props.title}</h2>
       {props.children}
     </section>

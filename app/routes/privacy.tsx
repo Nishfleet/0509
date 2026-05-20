@@ -2,25 +2,27 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { MetaFunction } from "react-router";
 
+import { BrandWordmark } from "~/components/brand-wordmark";
+
 export const meta: MetaFunction = () => [
   { title: "Privacy | Five to Nine" },
   {
     name: "description",
-    content: "How Five to Nine handles account, search, monitoring, proof, and delivery data during pilot rollout.",
+    content: "How Five to Nine handles account, search, monitoring, proof, and delivery data.",
   },
 ];
 
 export default function PrivacyRoute() {
   return (
-    <main className="site-shell">
+    <main className="f9-legal-page">
       <SimpleHeader />
-      <section className="legal-section">
-        <article className="container content-card legal-card">
-          <p className="eyebrow">Privacy</p>
+      <section className="f9-container f9-legal-section">
+        <article className="f9-legal-card">
+          <span className="f9-app-kicker">Privacy</span>
           <h1>Five to Nine privacy basics.</h1>
           <p>
-            Five to Nine is in pilot-readiness mode. This page describes the current product behavior and should stay
-            narrower than any future legal policy reviewed by counsel.
+            This page describes current product behavior and should stay narrower than any future legal policy
+            reviewed by counsel.
           </p>
 
           <LegalBlock title="What we collect">
@@ -33,8 +35,8 @@ export default function PrivacyRoute() {
           <LegalBlock title="Proof data">
             <p>
               The product may store ad records, landing-page snapshots, extracted text, screenshots, HTML, timestamps,
-              source URLs, and delivery attempts so teams can verify what changed. Meta ads tracking is beta until the
-              live discovery canaries prove reliability.
+              source URLs, and delivery attempts so teams can verify what changed. Source status must stay visible when
+              discovery is cached, degraded, or freshly verified.
             </p>
           </LegalBlock>
 
@@ -52,10 +54,10 @@ export default function PrivacyRoute() {
             </p>
           </LegalBlock>
 
-          <LegalBlock title="Pilot support">
+          <LegalBlock title="Support">
             <p>
-              For access, correction, deletion, billing, or security questions during the pilot, use the founder contact
-              path that gave you access to the workspace.
+              For access, correction, deletion, billing, or security questions, use the contact path that gave you
+              access to the workspace.
             </p>
           </LegalBlock>
         </article>
@@ -66,18 +68,12 @@ export default function PrivacyRoute() {
 
 function SimpleHeader() {
   return (
-    <header className="site-header">
-      <div className="container header-row">
-        <Link className="brand-mark" to="/">
-          <span className="brand-pill" aria-hidden="true">
-            09
-          </span>
-          <span>
-            <strong>Five to Nine</strong>
-            <small>Proof-backed competitor monitoring</small>
-          </span>
+    <header className="f9-legal-nav">
+      <div className="f9-container f9-legal-nav-inner">
+        <Link className="f9-app-brand" to="/">
+          <BrandWordmark meta="Proof-backed competitor monitoring" />
         </Link>
-        <nav className="site-nav" aria-label="Legal navigation">
+        <nav className="f9-search-nav-links" aria-label="Legal navigation">
           <Link to="/">Home</Link>
           <Link to="/terms">Terms</Link>
         </nav>
@@ -88,7 +84,7 @@ function SimpleHeader() {
 
 function LegalBlock(props: { title: string; children: ReactNode }) {
   return (
-    <section className="legal-block">
+    <section className="f9-legal-block">
       <h2>{props.title}</h2>
       {props.children}
     </section>

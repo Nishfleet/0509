@@ -7,6 +7,7 @@
     "build": "react-router build",
     "cf-typegen": "wrangler types",
     "canary:prod": "node scripts/prod-canary.mjs",
+    "check:public-home": "node scripts/check-public-home-current.mjs",
     "deploy": "node scripts/deploy-production.mjs",
     "dev": "react-router dev",
     "launch:readiness": "npm run typecheck && npm test && npm run build && npm audit --omit=dev --audit-level=moderate && npm run canary:prod && npm run provider:bakeoff:launch",

@@ -35,7 +35,9 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/search` public analysis flow
 - `/privacy`
 - `/terms`
-- `/pricing-region`
+- `/api/pricing-preview`
+- `/api/billing/dodo/checkout`
+- `/api/webhooks/dodo`
 - `/auth/login`
 - `/auth/signup`
 - `/app/onboard`
@@ -60,13 +62,19 @@ Important bindings and secrets:
 - `META_AD_LIBRARY_API_VERSION`
 - `RESEND_API_KEY`
 - `RESEND_FROM_EMAIL`
-- `RAZORPAY_KEY_ID`
-- `RAZORPAY_KEY_SECRET`
-- `RAZORPAY_WEBHOOK_SECRET`
-- `RAZORPAY_PLAN_STARTER_MONTHLY`
-- `RAZORPAY_PLAN_STARTER_YEARLY`
-- `RAZORPAY_PLAN_AGENCY_MONTHLY`
-- `RAZORPAY_PLAN_AGENCY_YEARLY`
+- `DODO_PAYMENTS_API_KEY` or `DODO_0509_API_KEY`
+- `DODO_0509_BRAND_ID`
+- `DODO_0509_ENVIRONMENT`
+- `DODO_0509_PRODUCT_SCOUT_MONTHLY_ID`
+- `DODO_0509_PRODUCT_SCOUT_YEARLY_ID`
+- `DODO_0509_PRODUCT_STARTER_MONTHLY_ID`
+- `DODO_0509_PRODUCT_STARTER_YEARLY_ID`
+- `DODO_0509_PRODUCT_AGENCY_MONTHLY_ID`
+- `DODO_0509_PRODUCT_AGENCY_YEARLY_ID`
+- `DODO_0509_PRODUCT_PROOF_PACK_500_ID`
+- `DODO_0509_PRODUCT_PROOF_PACK_2000_ID`
+- `DODO_0509_PRODUCT_PROOF_PACK_7500_ID`
+- `DODO_0509_WEBHOOK_SECRET`
 
 ## Operations
 
@@ -86,7 +94,7 @@ Important bindings and secrets:
 - Cloudflare cost policy: stay on the included/free tier by default. Do not enable usage-billed add-ons just because they exist; enable them when the missing capability is materially hampering product quality, operations, or launch.
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.
-- Razorpay Subscriptions are the approved billing path for India checkout. The routes stay hidden unless Razorpay keys, plan ids, and webhook secret are configured; plan upgrades only happen after a signed Razorpay subscription webhook marks the subscription active.
+- Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the shared Dodo account API key, `DODO_0509_BRAND_ID`, and 0509 product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Current caps are Scout: 3 watchlists, 10 collections, no automated digests, 50 proof captures/month; Starter: 10 watchlists, 25 collections, weekly digests, 250 proof captures/month; Agency: 75 watchlists, 250 collections, daily and weekly briefs, 2,500 proof captures/month. Workspaces warn after 80% proof-capture usage. Usage bundles are overflow proof-capture packs, not unlimited monitoring, and Dodo webhooks grant purchased proof credits for 30 days.
 - Broad launch is gated by `npm run launch:readiness`, including the production canary. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can prove it bypassed cache and provider cooldown. The production canary also checks recent monitoring, proof capture, and sent digest signals. If fresh commercial discovery is cached, degraded, demo, stale, unsent, or the bypass token is missing, the product should be framed as pilot-readiness rather than broad self-serve launch.
 - Use `npm run provider:bakeoff:launch` when comparing discovery providers for launch. The default bakeoff is useful for debugging, but the launch gate requires `current_0509` to return fresh live Ad Library results, not API fallback or cached live results.
 - The old `src/` Next.js app remains in the repo as legacy reference material and is no longer the live production runtime.
