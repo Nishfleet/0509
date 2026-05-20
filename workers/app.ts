@@ -12,6 +12,7 @@ import {
   PUBLIC_MARKDOWN,
   wantsPublicMarkdown,
 } from "../app/lib/public-markdown";
+import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { resolveScheduledTask } from "./schedule";
 import { withSecurityHeaders } from "./security-headers";
@@ -48,9 +49,25 @@ function markdownResponse(request: Request, body: string): Response {
   );
 }
 
+function publicFileResponse(request: Request, file: NonNullable<ReturnType<typeof publicSeoFileForPathname>>): Response {
+  return withSecurityHeaders(
+    new Response(request.method === "HEAD" ? null : file.body, {
+      headers: {
+        "content-type": file.contentType,
+        "cache-control": file.cacheControl,
+      },
+    }),
+  );
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const publicSeoFile = publicSeoFileForPathname(url.pathname);
+    if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
+      return publicFileResponse(request, publicSeoFile);
+    }
+
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/llms.txt") {
       return markdownResponse(request, LLMS_TEXT);
     }

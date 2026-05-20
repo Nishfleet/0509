@@ -69,6 +69,22 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
           : "Pick up your saved research, watchlists, and share links where you left them."}
       </p>
 
+      {isSignup ? (
+        <div className="auth-context-block">
+          <h2>Use the account when search becomes a weekly operating habit.</h2>
+          <p>
+            Five to Nine is for teams that need more than a single competitor lookup. The workspace keeps saved filters,
+            recurring competitor sets, proof collections, and shareable report links together so a founder, marketer, or
+            agency lead can show exactly what changed and where the evidence came from.
+          </p>
+          <p>
+            After signup, start with a public search, save the useful sources, and turn the pattern into a watchlist.
+            We keep source status visible because a weak claim is worse than no claim; every useful finding should be
+            easy to revisit, verify, and explain before it reaches a client deck or growth review.
+          </p>
+        </div>
+      ) : null}
+
       <form className="stack-form" onSubmit={handleSubmit}>
         {isSignup ? (
           <label className="field">
