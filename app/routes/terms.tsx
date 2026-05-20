@@ -1,14 +1,20 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import type { MetaFunction } from "react-router";
+import type { LinksFunction, MetaFunction } from "react-router";
 
-export const meta: MetaFunction = () => [
-  { title: "Terms | Five to Nine" },
-  {
-    name: "description",
-    content: "Pilot terms for Five to Nine, including billing status, acceptable use, and source-proof limits.",
-  },
-];
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+
+const description =
+  "Pilot terms for Five to Nine, including billing status, acceptable use, and source-proof limits.";
+
+export const links: LinksFunction = () => canonicalLinks("/terms");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Terms | Five to Nine",
+    description,
+    pathname: "/terms",
+  });
 
 export default function TermsRoute() {
   return (

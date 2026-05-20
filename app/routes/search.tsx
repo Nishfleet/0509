@@ -5,7 +5,7 @@ import {
   useLoaderData,
   useRouteLoaderData,
 } from "react-router";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { sampleQueries } from "~/lib/demo-data";
 import {
@@ -20,17 +20,21 @@ import {
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse } from "~/lib/types";
 
-export const meta: MetaFunction = () => [
-  { title: "Search | Five to Nine" },
-  {
-    name: "description",
-    content:
-      "Search competitor Meta ads, inspect the hook and offer, save the best examples, and turn useful queries into proof-backed watchlists.",
-  },
-];
+const description =
+  "Search competitor Meta ads, inspect the hook and offer, save the best examples, and turn useful queries into proof-backed watchlists.";
+
+export const links: LinksFunction = () => canonicalLinks("/search");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Search | Five to Nine",
+    description,
+    pathname: "/search",
+  });
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
@@ -246,6 +250,53 @@ export default function SearchRoute() {
             </div>
             <div className="source-pill">Meta ads beta · {formatSearchSourceLabel(data.result)}</div>
           </div>
+
+          <section className="search-primer" aria-label="How Five to Nine public search works">
+            <article className="search-primer-card">
+              <p className="section-label">What to search</p>
+              <h2>Start with a competitor or market phrase.</h2>
+              <p>
+                Use advertiser mode for brand names and keyword mode for market language such as COD,
+                WhatsApp, free shipping, festive sale, or creator-led hooks. Country, platform, creative type,
+                and status filters stay visible before a search runs.
+              </p>
+            </article>
+            <article className="search-primer-card">
+              <p className="section-label">What to inspect</p>
+              <h2>Judge the ad before saving it.</h2>
+              <p>
+                Results keep the hook, offer, destination, language label, landing-page signal, and source status
+                together so cached, live, degraded, and demo states are not confused.
+              </p>
+            </article>
+            <article className="search-primer-card">
+              <p className="section-label">What needs a workspace</p>
+              <h2>Search is public. Memory is gated.</h2>
+              <p>
+                Saving searches, creating watchlists, building collections, reports, and delivery all require a
+                workspace. Self-serve billing is not live yet; pilot access is activated manually after fit review.
+              </p>
+            </article>
+          </section>
+
+          <section className="search-proof-section" aria-labelledby="search-proof-title">
+            <div>
+              <p className="section-label">How to use the output</p>
+              <h2 id="search-proof-title">Treat search as the first proof pass, not the final report.</h2>
+            </div>
+            <div className="search-proof-copy">
+              <p>
+                Start broad enough to see the market language, then narrow to one advertiser or one repeated hook.
+                A useful result should show what the ad is promising, where the click goes, whether the source is
+                live or cached, and which landing-page signals are worth saving for later review.
+              </p>
+              <p>
+                When the same query matters every week, create a workspace and save it as a watchlist. That keeps the
+                source status, selected examples, notes, collections, and reports together instead of turning competitor
+                monitoring into screenshots spread across chat threads.
+              </p>
+            </div>
+          </section>
 
           {actionData?.message ? (
             <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
