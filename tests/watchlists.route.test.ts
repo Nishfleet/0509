@@ -632,7 +632,8 @@ describe("watchlists route rendering", () => {
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
     expect(markup).toContain("See what changed");
-    expect(markup).toContain("Meta ads tracking beta");
+    expect(markup).toContain("Meta ads source");
+    expect(markup).not.toContain("Meta ads tracking beta");
     expect(markup).toContain("Browser Run live capture");
     expect(markup).toContain("Proof and delivery");
     expect(markup).toContain("High confidence");

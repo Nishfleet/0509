@@ -62,9 +62,9 @@ export default function ReportsRoute() {
       : `/app/watchlists?watchlist=${report.resourceId}`;
 
   return (
-    <section className="workspace-section-stack">
+    <section className="f9-app-stack">
       {actionData?.message ? (
-        <p className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+        <p className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           {actionData.ok && actionData.message.startsWith("http") ? (
             <a href={actionData.message} rel="noreferrer" target="_blank">
               {actionData.message}
@@ -75,25 +75,25 @@ export default function ReportsRoute() {
         </p>
       ) : null}
 
-      <article className="content-card report-page-card">
-        <div className="card-header report-toolbar">
+      <article className="f9-app-panel f9-report-page">
+        <div className="f9-panel-toolbar f9-report-toolbar">
           <div>
-            <p className="section-label">Agency export</p>
+            <p className="f9-app-kicker">Agency export</p>
             <h2>Client-ready report</h2>
           </div>
 
-          <div className="inline-actions">
-            <Link className="button button-secondary" to={backHref}>
+          <div className="f9-action-row">
+            <Link className="f9-secondary-button" to={backHref}>
               Back to source
             </Link>
             <Form method="post">
               <input name="intent" type="hidden" value="share-report" />
-              <button className="button button-secondary" type="submit">
+              <button className="f9-secondary-button" type="submit">
                 Share snapshot
               </button>
             </Form>
             <button
-              className="button button-primary"
+              className="f9-primary-button"
               onClick={() => window.print()}
               type="button"
             >

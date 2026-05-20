@@ -517,10 +517,19 @@ export interface ShareLinkRecord {
 }
 
 export interface PricingPlan {
-  slug: "starter" | "agency";
+  slug: "scout" | "starter" | "agency";
   name: string;
   monthlyLabel: string;
   yearlyLabel: string;
+  detail: string;
+  features: string[];
+}
+
+export interface UsageBundle {
+  slug: "proof_500" | "proof_2000" | "proof_7500";
+  name: string;
+  priceLabel: string;
+  creditLabel: string;
   detail: string;
 }
 

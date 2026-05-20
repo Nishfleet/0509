@@ -1,0 +1,127 @@
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  createDodo0509CheckoutSession,
+  extractDodoPlanGrant,
+  extractDodoProofCreditGrant,
+} from "~/lib/dodo-billing.server";
+
+const session = {
+  user: {
+    id: "user-1",
+    email: "owner@example.com",
+    name: "Owner",
+  },
+} as never;
+
+describe("Dodo billing", () => {
+  it("creates a usage-bundle checkout with user and credit metadata", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        checkout_url: "https://checkout.dodopayments.com/session_123",
+        session_id: "session_123",
+      }),
+    });
+
+    const checkout = await createDodo0509CheckoutSession({
+      env: {
+        DODO_0509_API_KEY: "secret",
+        DODO_0509_PRODUCT_PROOF_PACK_500_ID: "prod_pack_500",
+      },
+      request: new Request("https://0509.in/app"),
+      session,
+      target: { kind: "usage_bundle", bundle: "proof_500" },
+      fetcher: fetcher as never,
+    });
+
+    expect(checkout).toEqual({
+      checkoutUrl: "https://checkout.dodopayments.com/session_123",
+      sessionId: "session_123",
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://live.dodopayments.com/checkouts",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer secret",
+        }),
+      }),
+    );
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({
+      product_cart: [{ product_id: "prod_pack_500", quantity: 1 }],
+      metadata: {
+        app: "0509",
+        user_id: "user-1",
+        target_kind: "usage_bundle",
+        bundle: "proof_500",
+        credits: 500,
+      },
+    });
+  });
+
+  it("extracts a proof-credit grant from a Dodo payment payload", () => {
+    const grant = extractDodoProofCreditGrant(
+      {
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_PRODUCT_PROOF_PACK_2000_ID: "prod_pack_2000",
+      },
+      {
+        id: "pay_123",
+        brand_id: "brand_0509",
+        created_at: "2026-05-20T00:00:00.000Z",
+        metadata: {
+          user_id: "user-1",
+        },
+        product_cart: [
+          {
+            product_id: "prod_pack_2000",
+            quantity: 2,
+          },
+        ],
+      },
+    );
+
+    expect(grant).toMatchObject({
+      userId: "user-1",
+      paymentId: "pay_123",
+      productId: "prod_pack_2000",
+      bundle: "proof_2000",
+      quantity: 2,
+      credits: 4000,
+      expiresAt: "2026-06-19T00:00:00.000Z",
+    });
+  });
+
+  it("extracts a paid plan grant from a Dodo payment payload", () => {
+    const grant = extractDodoPlanGrant(
+      {
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      },
+      {
+        id: "pay_scout",
+        brand_id: "brand_0509",
+        status: "succeeded",
+        metadata: {
+          user_id: "user-1",
+        },
+        product_cart: [
+          {
+            product_id: "prod_scout_monthly",
+            quantity: 1,
+          },
+        ],
+      },
+    );
+
+    expect(grant).toMatchObject({
+      userId: "user-1",
+      paymentId: "pay_scout",
+      productId: "prod_scout_monthly",
+      plan: "scout",
+      cycle: "monthly",
+      status: "succeeded",
+    });
+  });
+});

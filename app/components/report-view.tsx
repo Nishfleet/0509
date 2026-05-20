@@ -5,12 +5,12 @@ export function ReportView({ report }: { report: ReportDocument }) {
     <div className="report-layout">
       <section className="report-hero">
         <div>
-          <p className="section-label">{report.resourceType} report</p>
+          <p className="f9-app-kicker">{report.resourceType} report</p>
           <h1>{report.title}</h1>
-          <p className="muted-text">{report.subtitle}</p>
+          <p className="f9-muted-copy">{report.subtitle}</p>
         </div>
         <div className="report-meta">
-          <p className="section-label">Generated</p>
+          <p className="f9-app-kicker">Generated</p>
           <p>{new Date(report.generatedAt).toLocaleString("en-IN")}</p>
         </div>
       </section>
@@ -20,7 +20,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
       <section className="report-stats" aria-label="Report summary">
         {report.stats.map((stat) => (
           <article className="report-stat-card" key={stat.label}>
-            <p className="section-label">{stat.label}</p>
+            <p className="f9-app-kicker">{stat.label}</p>
             <strong>{stat.value}</strong>
           </article>
         ))}
@@ -31,13 +31,13 @@ export function ReportView({ report }: { report: ReportDocument }) {
           <article className="report-card" key={row.id}>
             <div className="report-card-header">
               <div>
-                <p className="section-label">{row.formatLabel}</p>
+                <p className="f9-app-kicker">{row.formatLabel}</p>
                 <h2>{row.advertiser}</h2>
-                <p className="muted-text">{row.previewHeadline}</p>
+                <p className="f9-muted-copy">{row.previewHeadline}</p>
               </div>
               <div className="report-card-meta">
-                <span className="badge">{row.languageLabel}</span>
-                {row.event ? <span className="badge">{row.event.typeLabel}</span> : null}
+                <span className="f9-status-pill">{row.languageLabel}</span>
+                {row.event ? <span className="f9-status-pill">{row.event.typeLabel}</span> : null}
               </div>
             </div>
 
@@ -51,7 +51,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
             {row.event ? (
               <section className="report-event">
-                <p className="section-label">Watch event</p>
+                <p className="f9-app-kicker">Watch event</p>
                 <h3>{row.event.title}</h3>
                 <p>{row.event.summary}</p>
                 <dl className="proof-trail-list">
@@ -71,7 +71,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
                     <dd>{row.event.proofTrail}</dd>
                   </div>
                 </dl>
-                <p className="muted-text">
+                <p className="f9-muted-copy">
                   {new Date(row.event.createdAt).toLocaleString("en-IN")}
                 </p>
               </section>
@@ -79,7 +79,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
             <div className="report-columns">
               <section className="report-column">
-                <p className="section-label">Ad summary</p>
+                <p className="f9-app-kicker">Ad summary</p>
                 <dl className="report-field-list">
                   <div className="report-field">
                     <dt>Offer</dt>
@@ -102,7 +102,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
                 {row.tags.length > 0 ? (
                   <div className="report-tag-list">
                     {row.tags.map((tag) => (
-                      <span className="badge" key={tag}>
+                      <span className="f9-status-pill" key={tag}>
                         {tag}
                       </span>
                     ))}
@@ -111,14 +111,14 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
                 {row.note ? (
                   <div className="report-note">
-                    <p className="section-label">Internal note</p>
+                    <p className="f9-app-kicker">Internal note</p>
                     <p>{row.note}</p>
                   </div>
                 ) : null}
               </section>
 
               <section className="report-column">
-                <p className="section-label">Landing page</p>
+                <p className="f9-app-kicker">Landing page</p>
                 <dl className="report-field-list">
                   <div className="report-field">
                     <dt>URL</dt>
@@ -137,7 +137,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
                 <div className="report-signal-grid">
                   {row.landingPage.signals.map((signal) => (
                     <div className="report-signal-card" key={signal.label}>
-                      <p className="section-label">{signal.label}</p>
+                      <p className="f9-app-kicker">{signal.label}</p>
                       <strong>{signal.value}</strong>
                     </div>
                   ))}
@@ -147,7 +147,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
             {row.analysisFields.length > 0 ? (
               <section className="report-analysis">
-                <p className="section-label">Analysis fields</p>
+                <p className="f9-app-kicker">Analysis fields</p>
                 <dl className="report-field-list">
                   {row.analysisFields.map((field) => (
                     <div className="report-field" key={`${row.id}-${field.label}`}>

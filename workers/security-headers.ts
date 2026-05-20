@@ -21,11 +21,28 @@ export const SECURITY_HEADERS: Record<string, string> = {
   ].join("; "),
 };
 
+export const HTML_NO_STORE_HEADERS: Record<string, string> = {
+  "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "cdn-cache-control": "no-store",
+  "cloudflare-cdn-cache-control": "no-store",
+  pragma: "no-cache",
+  expires: "0",
+};
+
+function isHtmlResponse(headers: Headers) {
+  return (headers.get("content-type") ?? "").toLowerCase().includes("text/html");
+}
+
 export function withSecurityHeaders(response: Response): Response {
   // Clone headers so we don't mutate a potentially-immutable response.
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     if (!headers.has(name)) {
+      headers.set(name, value);
+    }
+  }
+  if (isHtmlResponse(headers)) {
+    for (const [name, value] of Object.entries(HTML_NO_STORE_HEADERS)) {
       headers.set(name, value);
     }
   }

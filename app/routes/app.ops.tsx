@@ -25,17 +25,17 @@ export default function OpsRoute() {
   const { snapshot } = useLoaderData<typeof loader>();
 
   return (
-    <section className="workspace-section-stack">
-      <div className="card-header">
+    <section className="f9-app-stack">
+      <div className="f9-panel-toolbar">
         <div>
-          <p className="section-label">Ops</p>
+          <p className="f9-app-kicker">Ops</p>
           <h2>Proof-first monitoring health</h2>
         </div>
       </div>
 
-      <div className="workspace-panels">
-        <article className="content-card narrow-card">
-          <div className="stack-list compact-list">
+      <div className="f9-dashboard-grid">
+        <article className="f9-app-panel f9-side-panel">
+          <div className="f9-work-list is-compact">
             <MetricCard label="Failing runs" value={snapshot.summary.failingRuns} />
             <MetricCard label="Stuck runs" value={snapshot.summary.stuckRuns} />
             <MetricCard label="Failed proofs" value={snapshot.summary.failedProofs} />
@@ -51,17 +51,17 @@ export default function OpsRoute() {
           </div>
         </article>
 
-        <article className="content-card">
+        <article className="f9-app-panel">
           <OpsSection
             empty="No failed watchlist runs in the recent window."
             items={snapshot.failingRuns}
             title="What is failing"
             renderItem={(item) => (
               <>
-                <p className="section-label">{item.watchlist_name}</p>
+                <p className="f9-app-kicker">{item.watchlist_name}</p>
                 <h3>Run failed</h3>
                 <p>{item.error_message ?? item.error_code ?? "Unknown run failure."}</p>
-                <p className="muted-text">{formatTimestamp(item.started_at)}</p>
+                <p className="f9-muted-copy">{formatTimestamp(item.started_at)}</p>
               </>
             )}
           />
@@ -72,9 +72,9 @@ export default function OpsRoute() {
             title="What is stuck"
             renderItem={(item) => (
               <>
-                <p className="section-label">{item.watchlist_name}</p>
+                <p className="f9-app-kicker">{item.watchlist_name}</p>
                 <h3>{item.status === "running" ? "Run still running" : "Run still pending"}</h3>
-                <p className="muted-text">{formatTimestamp(item.started_at)}</p>
+                <p className="f9-muted-copy">{formatTimestamp(item.started_at)}</p>
               </>
             )}
           />
@@ -85,9 +85,9 @@ export default function OpsRoute() {
             title="Recent proof failures"
             renderItem={(item) => (
               <>
-                <p className="section-label">{item.watchlist_name}</p>
+                <p className="f9-app-kicker">{item.watchlist_name}</p>
                 <h3>{item.failure_reason ?? item.failure_code ?? "Proof capture failed"}</h3>
-                <p className="muted-text">{formatTimestamp(item.attempted_at)}</p>
+                <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
           />
@@ -98,9 +98,9 @@ export default function OpsRoute() {
             title="What is paused by budget"
             renderItem={(item) => (
               <>
-                <p className="section-label">{item.watchlist_name}</p>
+                <p className="f9-app-kicker">{item.watchlist_name}</p>
                 <h3>{item.status === "skipped_due_to_rate_limit" ? "Rate-limited proof" : "Budget-skipped proof"}</h3>
-                <p className="muted-text">{formatTimestamp(item.attempted_at)}</p>
+                <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
           />
@@ -111,12 +111,12 @@ export default function OpsRoute() {
             title="Recent delivery failures"
             renderItem={(item) => (
               <>
-                <p className="section-label">{item.watchlist_name ?? "Workspace default"}</p>
+                <p className="f9-app-kicker">{item.watchlist_name ?? "Workspace default"}</p>
                 <h3>
                   {item.channel === "email" ? "Email" : "WhatsApp"} to {item.target_value}
                 </h3>
                 <p>{item.error_message ?? "Delivery failed for an operational reason."}</p>
-                <p className="muted-text">{formatTimestamp(item.created_at)}</p>
+                <p className="f9-muted-copy">{formatTimestamp(item.created_at)}</p>
               </>
             )}
           />
@@ -127,10 +127,10 @@ export default function OpsRoute() {
             title="What is blocked by provider or template state"
             renderItem={(item) => (
               <>
-                <p className="section-label">{item.watchlist_name ?? "Workspace default"}</p>
+                <p className="f9-app-kicker">{item.watchlist_name ?? "Workspace default"}</p>
                 <h3>{item.target_value}</h3>
                 <p>{describeBlockedTarget(item)}</p>
-                <p className="muted-text">{formatTimestamp(item.updated_at)}</p>
+                <p className="f9-muted-copy">{formatTimestamp(item.updated_at)}</p>
               </>
             )}
           />
@@ -141,7 +141,7 @@ export default function OpsRoute() {
             title="Recent discovery failures"
             renderItem={(item) => (
               <>
-                <p className="section-label">
+                <p className="f9-app-kicker">
                   {formatDiscoveryProvider(item.provider)} · {formatRouteContext(item.routeContext)}
                 </p>
                 <h3>{item.failureClass ?? "Discovery failure"}</h3>
@@ -149,7 +149,7 @@ export default function OpsRoute() {
                   {item.country}
                   {item.cacheStatus === "stale" ? " · stale cache served" : " · no fresh cache"}
                 </p>
-                <p className="muted-text">{formatTimestamp(item.createdAt)}</p>
+                <p className="f9-muted-copy">{formatTimestamp(item.createdAt)}</p>
               </>
             )}
           />
@@ -160,10 +160,10 @@ export default function OpsRoute() {
             title="Commercial discovery provider state"
             renderItem={(item) => (
               <>
-                <p className="section-label">{formatDiscoveryProvider(item.provider)}</p>
+                <p className="f9-app-kicker">{formatDiscoveryProvider(item.provider)}</p>
                 <h3>{formatDiscoveryStatus(item.status)}</h3>
                 <p>{item.summary}</p>
-                <p className="muted-text">
+                <p className="f9-muted-copy">
                   {item.lastFailureAt
                     ? `Last failure ${formatTimestamp(item.lastFailureAt)}`
                     : item.lastSuccessAt
@@ -181,12 +181,12 @@ export default function OpsRoute() {
             title="Which watchlists are degraded right now"
             renderItem={(item) => (
               <>
-                <p className="section-label">{item.watchlist_name}</p>
+                <p className="f9-app-kicker">{item.watchlist_name}</p>
                 <h3>{item.failed_runs + item.failed_proofs + item.failed_deliveries} recent issues</h3>
                 <p>
                   {item.failed_runs} failed runs · {item.failed_proofs} failed proofs · {item.failed_deliveries} failed deliveries
                 </p>
-                <p className="muted-text">
+                <p className="f9-muted-copy">
                   {item.last_seen_at ? formatTimestamp(item.last_seen_at) : "No recent timestamp"}
                 </p>
               </>
@@ -200,8 +200,8 @@ export default function OpsRoute() {
 
 function MetricCard(props: { label: string; value: number }) {
   return (
-    <div className="list-card">
-      <p className="section-label">{props.label}</p>
+    <div className="f9-work-row">
+      <p className="f9-app-kicker">{props.label}</p>
       <h3>{props.value}</h3>
     </div>
   );
@@ -215,13 +215,13 @@ function OpsSection<T>(props: {
 }) {
   return (
     <section style={{ marginBottom: "1.5rem" }}>
-      <p className="section-label">{props.title}</p>
+      <p className="f9-app-kicker">{props.title}</p>
       {props.items.length === 0 ? (
-        <p className="muted-text">{props.empty}</p>
+        <p className="f9-muted-copy">{props.empty}</p>
       ) : (
         <ul className="event-list">
           {props.items.map((item, index) => (
-            <li className="event-card" key={index}>
+            <li className="f9-event-card" key={index}>
               {props.renderItem(item)}
             </li>
           ))}

@@ -135,4 +135,29 @@ describe("proof policy", () => {
     expect(decision.skipReason).toBe("skipped_due_to_rate_limit");
     expect(decision.bucket).toBe("freshness-triggered");
   });
+
+  it("blocks proof once the workspace monthly plan cap is exhausted", () => {
+    const decision = evaluateProofPolicy({
+      sensitivityMode: "balanced",
+      triggerEventTypes: ["landing_page_url_changed"],
+      lastSuccessfulProofAt: "2026-04-10T00:00:00.000Z",
+      watchlistRunAttemptCount: 0,
+      watchlistDailyAttemptCount: 0,
+      workspaceDailyAttemptCount: 0,
+      workspaceMonthlyAttemptCount: 250,
+      workspaceMonthlyCap: 250,
+      workspaceRecentAttempts: [],
+      activeCaptureCount: 0,
+      burstCount: 1,
+      proofRequestDuplicate: false,
+      recentFailureCountForTarget: 0,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(decision).toMatchObject({
+      shouldCapture: false,
+      forced: true,
+      skipReason: "skipped_due_to_budget",
+    });
+  });
 });

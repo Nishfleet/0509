@@ -2,6 +2,7 @@ import { Link, redirect, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AuthForm } from "~/components/auth-form";
+import { BrandWordmark } from "~/components/brand-wordmark";
 
 export const meta: MetaFunction = () => [
   { title: "Create account | Five to Nine" },
@@ -32,30 +33,38 @@ export default function SignupRoute() {
   const loaderData = useLoaderData<typeof loader>();
 
   return (
-    <main className="auth-shell">
-      <div className="container auth-grid">
-        <div className="auth-aside">
-          <Link className="brand-mark" to="/">
-            <span className="brand-pill" aria-hidden="true">
-              09
-            </span>
-            <span>
-              <strong>Five to Nine</strong>
-              <small>India-first proof-backed monitoring</small>
-            </span>
+    <main className="f9-auth-page">
+      <div className="f9-auth-gradient" aria-hidden="true" />
+      <div className="f9-container f9-auth-layout">
+        <section className="f9-auth-story">
+          <Link className="f9-brand f9-auth-brand" to="/" aria-label="Five to Nine home">
+            <BrandWordmark />
           </Link>
-          <div className="auth-points">
-            <div>
-              <p className="eyebrow">Built for</p>
-              <h2>Indian growth teams that need proof they can hand to a team or client.</h2>
-            </div>
-            <ul className="bullet-list">
-              <li>Save repeated Ad Library checks without hiding source status.</li>
-              <li>Track how offers, hooks, and landing pages change over time.</li>
-              <li>Keep your team’s competitor learning in one reusable workspace.</li>
-            </ul>
+
+          <div>
+            <span>Workspace access</span>
+            <h1>Build a proof-backed market intelligence workspace.</h1>
+            <p>
+              Save repeated market checks, monitor the competitor moves that matter, and keep evidence close to every
+              decision your team makes.
+            </p>
           </div>
-        </div>
+
+          <div className="f9-auth-proof-list">
+            <div>
+              <strong>Search</strong>
+              <p>Start from advertiser, keyword, offer, and platform searches.</p>
+            </div>
+            <div>
+              <strong>Monitor</strong>
+              <p>Turn repeated checks into watchlists with source-state history.</p>
+            </div>
+            <div>
+              <strong>Brief</strong>
+              <p>Use proof-backed summaries to move copy, pricing, and channel decisions.</p>
+            </div>
+          </div>
+        </section>
 
         <AuthForm mode="signup" redirectTo={loaderData.redirectTo} />
       </div>

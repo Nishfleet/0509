@@ -51,7 +51,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message: "You have reached the free watchlist limit.",
+        message: "You have reached your workspace watchlist limit.",
       };
     }
 
@@ -93,33 +93,34 @@ export default function AppOnboardRoute() {
   ).toString();
 
   return (
-    <main className="auth-shell">
-      <section className="container section-grid">
-        <article className="content-card">
-          <p className="eyebrow">First-run setup</p>
+    <main className="f9-onboard-page">
+      <div className="f9-auth-gradient" aria-hidden="true" />
+      <section className="f9-container f9-onboard-layout">
+        <article className="f9-onboard-card">
+          <span className="f9-app-kicker">First-run setup</span>
           <h1>Start with one brand or keyword you want to watch.</h1>
-          <p className="muted-text">
+          <p className="f9-muted-copy">
             Search once to see the ad landscape, then create a watchlist so the workspace has
             something useful waiting for you next week.
           </p>
 
           {actionData?.message ? (
-            <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+            <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
               <p>{actionData.message}</p>
             </div>
           ) : null}
 
-          <div className="stack-list">
-            <section className="content-card">
-              <p className="section-label">Step 1</p>
+          <div className="f9-onboard-steps">
+            <section className="f9-onboard-step">
+              <span className="f9-app-kicker">Step 1</span>
               <h2>What do you want to track?</h2>
-              <Form action="/search" className="stack-form" method="get">
+              <Form action="/search" className="f9-auth-form" method="get">
                 <input name="mode" type="hidden" value="advertiser" />
                 <input name="country" type="hidden" value="India" />
                 <input name="platform" type="hidden" value="all" />
                 <input name="creativeType" type="hidden" value="all" />
                 <input name="status" type="hidden" value="all" />
-                <label className="field">
+                <label className="f9-field">
                   <span>Brand or keyword</span>
                   <input
                     name="query"
@@ -128,41 +129,41 @@ export default function AppOnboardRoute() {
                     value={query}
                   />
                 </label>
-                <div className="inline-form">
-                  <button className="button button-secondary" disabled={!trimmedQuery} type="submit">
+                <div className="f9-action-row">
+                  <button className="f9-secondary-button" disabled={!trimmedQuery} type="submit">
                     Preview search
                   </button>
-                  <small className="muted-text">
+                  <small className="f9-muted-copy">
                     This opens the public search view with the same query.
                   </small>
                 </div>
               </Form>
             </section>
 
-            <section className="content-card">
-              <p className="section-label">Step 2</p>
+            <section className="f9-onboard-step">
+              <span className="f9-app-kicker">Step 2</span>
               <h2>Create your first watchlist</h2>
-              <p className="muted-text">
+              <p className="f9-muted-copy">
                 One click is enough to start tracking the same query inside the workspace.
               </p>
-              <Form className="stack-form" method="post">
+              <Form className="f9-auth-form" method="post">
                 <input name="intent" type="hidden" value="create-watchlist" />
                 <input name="query" type="hidden" value={trimmedQuery} />
-                <button className="button button-primary" disabled={!trimmedQuery} type="submit">
+                <button className="f9-primary-button" disabled={!trimmedQuery} type="submit">
                   Create watchlist for {trimmedQuery || "your query"}
                 </button>
               </Form>
             </section>
           </div>
 
-          <div className="inline-form">
+          <div className="f9-onboard-actions">
             <Form method="post">
               <input name="intent" type="hidden" value="finish" />
-              <button className="button button-secondary" type="submit">
+              <button className="f9-secondary-button" type="submit">
                 Skip for now
               </button>
             </Form>
-            <Link className="auth-switch" to={previewParams ? `/search?${previewParams}` : "/search"}>
+            <Link className="f9-text-link" to={previewParams ? `/search?${previewParams}` : "/search"}>
               Go straight to search instead
             </Link>
           </div>

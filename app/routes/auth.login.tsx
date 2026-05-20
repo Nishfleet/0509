@@ -2,6 +2,7 @@ import { Link, redirect, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AuthForm } from "~/components/auth-form";
+import { BrandWordmark } from "~/components/brand-wordmark";
 
 export const meta: MetaFunction = () => [
   { title: "Sign in | Five to Nine" },
@@ -32,30 +33,38 @@ export default function LoginRoute() {
   const loaderData = useLoaderData<typeof loader>();
 
   return (
-    <main className="auth-shell">
-      <div className="container auth-grid">
-        <div className="auth-aside">
-          <Link className="brand-mark" to="/">
-            <span className="brand-pill" aria-hidden="true">
-              09
-            </span>
-            <span>
-              <strong>Five to Nine</strong>
-              <small>Proof-backed competitor monitoring</small>
-            </span>
+    <main className="f9-auth-page">
+      <div className="f9-auth-gradient" aria-hidden="true" />
+      <div className="f9-container f9-auth-layout">
+        <section className="f9-auth-story">
+          <Link className="f9-brand f9-auth-brand" to="/" aria-label="Five to Nine home">
+            <BrandWordmark />
           </Link>
-          <div className="auth-points">
-            <div>
-              <p className="eyebrow">What unlocks after login</p>
-              <h2>Monitoring is where the value compounds.</h2>
-            </div>
-            <ul className="bullet-list">
-              <li>Save advertiser and keyword research without losing the filters.</li>
-              <li>Track changes over time with watchlists and run history.</li>
-              <li>Share collections and weekly digests with clients or teammates.</li>
-            </ul>
+
+          <div>
+            <span>Workspace sign in</span>
+            <h1>Return to the proof layer behind your market decisions.</h1>
+            <p>
+              Saved searches, watchlists, collections, and digests stay tied to source state so the team can pick up
+              the exact market trail.
+            </p>
           </div>
-        </div>
+
+          <div className="f9-auth-proof-list">
+            <div>
+              <strong>Saved research</strong>
+              <p>Keep filters and source labels attached to repeated checks.</p>
+            </div>
+            <div>
+              <strong>Watchlists</strong>
+              <p>Track competitor changes over time without losing proof history.</p>
+            </div>
+            <div>
+              <strong>Collections</strong>
+              <p>Share useful ads and landing-page evidence with clients or teammates.</p>
+            </div>
+          </div>
+        </section>
 
         <AuthForm mode="login" redirectTo={loaderData.redirectTo} />
       </div>

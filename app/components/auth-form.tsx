@@ -17,6 +17,9 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
   const [error, setError] = useState<string | null>(null);
 
   const isSignup = mode === "signup";
+  const switchHref = isSignup
+    ? `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`
+    : `/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,18 +63,18 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
   }
 
   return (
-    <div className="auth-card">
-      <p className="eyebrow">{isSignup ? "Create your pilot workspace" : "Welcome back"}</p>
-      <h1>{isSignup ? "Start a proof-backed monitoring workspace." : "Sign in to Five to Nine."}</h1>
-      <p className="auth-copy">
+    <div className="f9-auth-card">
+      <span>{isSignup ? "Create workspace" : "Welcome back"}</span>
+      <h2>{isSignup ? "Start a proof-backed monitoring workspace." : "Sign in to Five to Nine."}</h2>
+      <p>
         {isSignup
-          ? "Saved searches, watchlists, and weekly digests all live behind your account. Pilot access is activated manually when needed."
+          ? "Saved searches, watchlists, and weekly digests live behind your account so your team can keep the market trail reusable."
           : "Pick up your saved research, watchlists, and share links where you left them."}
       </p>
 
-      <form className="stack-form" onSubmit={handleSubmit}>
+      <form className="f9-auth-form" onSubmit={handleSubmit}>
         {isSignup ? (
-          <label className="field">
+          <label className="f9-field">
             <span>Name</span>
             <input
               autoComplete="name"
@@ -84,7 +87,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
           </label>
         ) : null}
 
-        <label className="field">
+        <label className="f9-field">
           <span>Email</span>
           <input
             autoComplete="email"
@@ -97,7 +100,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
           />
         </label>
 
-        <label className="field">
+        <label className="f9-field">
           <span>Password</span>
           <input
             autoComplete={isSignup ? "new-password" : "current-password"}
@@ -111,20 +114,20 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
           />
         </label>
 
-        {error ? <p className="form-message form-message-error">{error}</p> : null}
+        {error ? <p className="f9-message is-error">{error}</p> : null}
 
-        <button className="button button-primary" disabled={pending} type="submit">
+        <button className="f9-primary-button" disabled={pending} type="submit">
           {pending
             ? "Working..."
             : isSignup
-              ? "Create pilot workspace"
+              ? "Create workspace"
               : "Sign in"}
         </button>
       </form>
 
-      <p className="auth-switch">
+      <p className="f9-auth-switch">
         {isSignup ? "Already have an account?" : "Need an account?"}{" "}
-        <Link to={isSignup ? `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}` : `/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`}>
+        <Link to={switchHref}>
           {isSignup ? "Sign in" : "Create one"}
         </Link>
       </p>

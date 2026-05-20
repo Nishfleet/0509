@@ -1001,6 +1001,91 @@ export async function markRazorpayWebhookEventFinished(
   );
 }
 
+export async function grantProofUsageCredit(
+  env: AppEnv,
+  input: {
+    userId: string;
+    providerPaymentId: string;
+    providerProductId: string;
+    bundleSlug: string;
+    credits: number;
+    quantity: number;
+    grantedAt?: string;
+    expiresAt: string;
+    metadata?: JsonRecord;
+  },
+) {
+  await run(
+    env,
+    `
+      INSERT INTO proof_usage_credit (
+        id,
+        user_id,
+        provider,
+        provider_payment_id,
+        provider_product_id,
+        bundle_slug,
+        credits,
+        quantity,
+        granted_at,
+        expires_at,
+        metadata_json
+      )
+      VALUES (?, ?, 'dodo', ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(provider_payment_id) DO NOTHING
+    `,
+    createId(),
+    input.userId,
+    input.providerPaymentId,
+    input.providerProductId,
+    input.bundleSlug,
+    Math.max(0, Math.floor(input.credits)),
+    Math.max(1, Math.floor(input.quantity)),
+    input.grantedAt ?? nowIso(),
+    input.expiresAt,
+    jsonValue(input.metadata ?? {}),
+  );
+}
+
+export async function grantDodoPlanAccess(
+  env: AppEnv,
+  input: {
+    userId: string;
+    plan: "scout" | "starter" | "agency";
+    providerPaymentId: string;
+    providerProductId: string;
+    status: string;
+    metadata?: JsonRecord;
+  },
+) {
+  await run(
+    env,
+    `
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_payment_id,
+        dodo_product_id,
+        dodo_status,
+        plan_updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        plan = excluded.plan,
+        dodo_payment_id = excluded.dodo_payment_id,
+        dodo_product_id = excluded.dodo_product_id,
+        dodo_status = excluded.dodo_status,
+        plan_updated_at = excluded.plan_updated_at
+    `,
+    input.userId,
+    input.plan,
+    input.providerPaymentId,
+    input.providerProductId,
+    input.status,
+  );
+}
+
 export async function completeUserOnboarding(env: AppEnv, userId: string) {
   await run(
     env,

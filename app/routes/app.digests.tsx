@@ -129,9 +129,9 @@ export default function DigestsRoute() {
   }> = data.canAccessDigests ? (data.selectedDigestAttempts ?? []) : [];
 
   return (
-    <section className="workspace-section-stack">
+    <section className="f9-app-stack">
       {actionData?.message ? (
-        <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>
             {actionData.ok && actionData.message.startsWith("http") ? (
               <a href={actionData.message} rel="noreferrer" target="_blank">
@@ -145,36 +145,36 @@ export default function DigestsRoute() {
       ) : null}
 
       {!data.canAccessDigests ? (
-        <article className="content-card empty-state">
-          <p className="section-label">Digest history</p>
+        <article className="f9-app-panel f9-empty-panel">
+          <span className="f9-app-kicker">Digest history</span>
           <h2>Proof-backed digests are not available in the current workspace.</h2>
           <p>
             Use watchlists and collections to keep competitor monitoring organized until digests are unlocked.
           </p>
         </article>
       ) : (
-        <div className="workspace-panels">
-          <article className="content-card narrow-card">
-            <div className="card-header">
+        <div className="f9-dashboard-grid">
+          <article className="f9-app-panel f9-side-panel">
+            <div className="f9-panel-toolbar">
               <div>
-                <p className="section-label">Digests</p>
+                <span className="f9-app-kicker">Digests</span>
                 <h2>Digest history</h2>
               </div>
             </div>
 
-            <div className="stack-list compact-list">
+            <div className="f9-work-list is-compact">
               {data.digests.map((digest) => (
                 <a
-                  className={`list-card ${searchParams.get("digest") === digest.id || (!searchParams.get("digest") && data.selectedDigest?.id === digest.id) ? "is-active" : ""}`}
+                  className={`f9-work-row ${searchParams.get("digest") === digest.id || (!searchParams.get("digest") && data.selectedDigest?.id === digest.id) ? "is-active" : ""}`}
                   href={`/app/digests?digest=${digest.id}`}
                   key={digest.id}
                 >
                   <div>
                     <h3>{new Date(digest.periodEnd).toLocaleDateString("en-IN")}</h3>
-                    <p className="muted-text">
+                    <p className="f9-muted-copy">
                       {digest.items.length} proof-backed changes ready for review
                     </p>
-                    <p className="muted-text">
+                    <p className="f9-muted-copy">
                       {formatDigestSidebarStatus(
                         digestAttemptsByDigestId[digest.id] ?? [],
                         digest.delivery?.status ?? null,
@@ -184,25 +184,25 @@ export default function DigestsRoute() {
                 </a>
               ))}
               {data.digests.length === 0 ? (
-                <p className="muted-text">Digest history will appear after your watchlists start generating confirmed events.</p>
+                <p className="f9-muted-copy">Digest history will appear after your watchlists start generating confirmed events.</p>
               ) : null}
             </div>
           </article>
 
-          <article className="content-card">
+          <article className="f9-app-panel">
             {data.selectedDigest ? (
               <>
-                <div className="card-header">
+                <div className="f9-panel-toolbar">
                   <div>
-                    <p className="section-label">Selected digest</p>
+                    <span className="f9-app-kicker">Selected digest</span>
                     <h2>
                       {new Date(data.selectedDigest.periodStart).toLocaleDateString("en-IN")} to{" "}
                       {new Date(data.selectedDigest.periodEnd).toLocaleDateString("en-IN")}
                     </h2>
                   </div>
-                  <div className="inline-actions">
+                  <div className="f9-action-row">
                     <a
-                      className="button button-secondary"
+                      className="f9-secondary-button"
                       href={`/export/digest/${data.selectedDigest.id}`}
                     >
                       Export CSV
@@ -210,37 +210,37 @@ export default function DigestsRoute() {
                     <Form method="post">
                       <input name="intent" type="hidden" value="share-digest" />
                       <input name="digestId" type="hidden" value={data.selectedDigest.id} />
-                      <button className="button button-primary" type="submit">
+                      <button className="f9-primary-button" type="submit">
                         Share snapshot
                       </button>
                     </Form>
                   </div>
                 </div>
 
-                <section className="stack-list compact-list" style={{ marginBottom: "1rem" }}>
+                <section className="f9-work-list is-compact" style={{ marginBottom: "1rem" }}>
                   <div>
-                    <p className="section-label">Delivery status</p>
+                    <span className="f9-app-kicker">Delivery status</span>
                     <h3 style={{ marginTop: 0 }}>Recent channel outcomes</h3>
                   </div>
                   {selectedDigestAttempts.length > 0 ? (
                     selectedDigestAttempts.map((attempt) => (
-                      <div className="list-card" key={`${attempt.channel}:${attempt.targetValue}`}>
+                      <div className="f9-work-row" key={`${attempt.channel}:${attempt.targetValue}`}>
                         <div>
                           <h4 style={{ marginBottom: "0.25rem" }}>
                             {attempt.channel === "email" ? "Email" : "WhatsApp"}
                           </h4>
-                          <p className="muted-text" style={{ marginBottom: "0.25rem" }}>
+                          <p className="f9-muted-copy" style={{ marginBottom: "0.25rem" }}>
                             {describeAttemptStatus(attempt.status)}
                           </p>
-                          <p className="muted-text">{attempt.targetValue}</p>
+                          <p className="f9-muted-copy">{attempt.targetValue}</p>
                           {attempt.errorMessage ? (
-                            <p className="muted-text">{attempt.errorMessage}</p>
+                            <p className="f9-muted-copy">{attempt.errorMessage}</p>
                           ) : null}
                         </div>
                       </div>
                     ))
                   ) : (
-                    <p className="muted-text">
+                    <p className="f9-muted-copy">
                       {data.selectedDigest.delivery?.status === "sent"
                         ? "Legacy email delivery recorded."
                         : "No channel-level delivery attempts recorded yet."}
@@ -252,13 +252,13 @@ export default function DigestsRoute() {
 
                 <ul className="event-list">
                   {data.selectedDigest.items.map((item) => (
-                    <li className="event-card" key={item.id}>
-                      <div className="card-header">
+                    <li className="f9-event-card" key={item.id}>
+                      <div className="f9-panel-toolbar">
                         <div>
-                          <p className="section-label">{item.watchlistName}</p>
+                          <span className="f9-app-kicker">{item.watchlistName}</span>
                           <h3>{item.title}</h3>
                         </div>
-                        <span className="badge">{item.eventType.replaceAll("_", " ")}</span>
+                        <span className="f9-status-pill">{item.eventType.replaceAll("_", " ")}</span>
                       </div>
                       <p>{item.summary}</p>
                       <DigestIntelligence metadata={item.metadata} />
@@ -267,7 +267,7 @@ export default function DigestsRoute() {
                 </ul>
               </>
             ) : (
-              <div className="empty-state">
+              <div className="f9-empty-panel">
                 <h2>No digest selected</h2>
                 <p>Once proof-backed delivery runs, the generated snapshots show up here.</p>
               </div>

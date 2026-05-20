@@ -10,7 +10,7 @@ Close out the remaining monitoring trust gaps after the main trust hardening alr
 - Better Auth + D1 back authentication and app data.
 - Public analysis flow exists: search, structured fields, provenance, landing-page capture, collections, notes/tags, exports, and share links.
 - Monitoring architecture exists: `Watchlist`, `WatchlistRun`, `AdObservation`, `WatchEvent`, `DigestRun`, `DigestDelivery`, scheduled scans, and manual refresh.
-- India-first product framing and region-aware pricing are already live.
+- Early India-first framing has been replaced by Dodo local-pricing preview as the visible pricing source.
 - Source integrity is already tightened in code:
   - `searchAds(...)` has an explicit fallback contract.
   - public search can allow demo fallback.

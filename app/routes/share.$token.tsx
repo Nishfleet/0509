@@ -1,6 +1,7 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
+import { BrandWordmark } from "~/components/brand-wordmark";
 import { ReportView } from "~/components/report-view";
 import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
 import { isReportDocument } from "~/lib/report";
@@ -81,29 +82,23 @@ export default function ShareRoute() {
       : null;
 
   return (
-    <main className="share-shell">
-      <div className="container">
-        <div className="share-header">
-          <Link className="brand-mark" to="/">
-            <span className="brand-pill" aria-hidden="true">
-              09
-            </span>
-            <span>
-              <strong>Five to Nine</strong>
-              <small>Shared view</small>
-            </span>
+    <main className="f9-share-page">
+      <div className="f9-container">
+        <div className="f9-share-header">
+          <Link className="f9-app-brand" to="/">
+            <BrandWordmark meta="Shared view" />
           </Link>
         </div>
 
         {reportSnapshot ? (
-          <article className="content-card report-page-card">
-            <div className="card-header report-toolbar">
+          <article className="f9-app-panel f9-report-page">
+            <div className="f9-panel-toolbar f9-report-toolbar">
               <div>
-                <p className="section-label">Shared report snapshot</p>
+                <p className="f9-app-kicker">Shared report snapshot</p>
                 <h2>{reportSnapshot.title}</h2>
               </div>
               <button
-                className="button button-secondary"
+                className="f9-secondary-button"
                 onClick={() => window.print()}
                 type="button"
               >
@@ -113,17 +108,17 @@ export default function ShareRoute() {
             <ReportView report={reportSnapshot} />
           </article>
         ) : digestSnapshot ? (
-          <article className="content-card">
-            <div className="card-header report-toolbar">
+          <article className="f9-app-panel">
+            <div className="f9-panel-toolbar f9-report-toolbar">
               <div>
-                <p className="section-label">Shared digest snapshot</p>
+                <p className="f9-app-kicker">Shared digest snapshot</p>
                 <h1>
                   {new Date(digestSnapshot.periodStart).toLocaleDateString("en-IN")} to{" "}
                   {new Date(digestSnapshot.periodEnd).toLocaleDateString("en-IN")}
                 </h1>
               </div>
               <button
-                className="button button-secondary"
+                className="f9-secondary-button"
                 onClick={() => window.print()}
                 type="button"
               >
@@ -133,13 +128,13 @@ export default function ShareRoute() {
             <DigestMovementSummary items={digestSnapshot.items} />
             <ul className="event-list">
               {digestSnapshot.items.map((item) => (
-                <li className="event-card" key={item.id}>
-                  <div className="card-header">
+                <li className="f9-event-card" key={item.id}>
+                  <div className="f9-panel-toolbar">
                     <div>
-                      <p className="section-label">{item.watchlistName}</p>
+                      <p className="f9-app-kicker">{item.watchlistName}</p>
                       <h3>{item.title}</h3>
                     </div>
-                    <span className="badge">{item.eventType.replaceAll("_", " ")}</span>
+                    <span className="f9-status-pill">{item.eventType.replaceAll("_", " ")}</span>
                   </div>
                   <p>{item.summary}</p>
                   <DigestIntelligence metadata={item.metadata ?? {}} />
@@ -148,31 +143,31 @@ export default function ShareRoute() {
             </ul>
           </article>
         ) : "payload" in data ? (
-          <article className="content-card">
-            <p className="section-label">Snapshot share</p>
+          <article className="f9-app-panel">
+            <p className="f9-app-kicker">Snapshot share</p>
             <pre className="snapshot-pre">{JSON.stringify(data.payload, null, 2)}</pre>
           </article>
         ) : data.resourceType === "collection" ? (
-          <article className="content-card">
-            <p className="section-label">Shared collection</p>
+          <article className="f9-app-panel">
+            <p className="f9-app-kicker">Shared collection</p>
             <h1>{data.collection?.name ?? "Collection unavailable"}</h1>
-            <div className="stack-list">
+            <div className="f9-work-list">
               {data.items.map((item) => (
-                <div className="list-card" key={item.id}>
+                <div className="f9-work-row" key={item.id}>
                   <h3>{item.ad.advertiser}</h3>
                   <p>{item.ad.hook}</p>
-                  <p className="muted-text">{item.tags.join(", ") || "No tags"}</p>
+                  <p className="f9-muted-copy">{item.tags.join(", ") || "No tags"}</p>
                 </div>
               ))}
             </div>
           </article>
         ) : data.resourceType === "watchlist" ? (
-          <article className="content-card">
-            <p className="section-label">Shared watchlist</p>
+          <article className="f9-app-panel">
+            <p className="f9-app-kicker">Shared watchlist</p>
             <h1>{data.watchlist?.name ?? "Watchlist unavailable"}</h1>
             <ul className="event-list">
               {data.events.map((event) => (
-                <li className="event-card" key={event.id}>
+                <li className="f9-event-card" key={event.id}>
                   <h3>{event.title}</h3>
                   <p>{event.summary}</p>
                 </li>
@@ -180,12 +175,12 @@ export default function ShareRoute() {
             </ul>
           </article>
         ) : (
-          <article className="content-card">
-            <p className="section-label">Shared digest</p>
+          <article className="f9-app-panel">
+            <p className="f9-app-kicker">Shared digest</p>
             <h1>Weekly digest</h1>
             <ul className="event-list">
               {data.digest?.items.map((item) => (
-                <li className="event-card" key={item.id}>
+                <li className="f9-event-card" key={item.id}>
                   <h3>{item.title}</h3>
                   <p>{item.summary}</p>
                 </li>

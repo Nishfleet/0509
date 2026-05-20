@@ -906,6 +906,16 @@ async function evaluateSelectiveProofCandidates(
   const proofEvents: WatchEventRecord[] = [];
   const eventTypesByAd = mapEventTypesByAdId(input.scanNativeDrafts);
   const todayStart = startOfUtcDayIso();
+  const proofWindowStart = startOfRollingProofWindowIso();
+  const now = new Date().toISOString();
+  const userPlan = await getProofCapturePlan(env, input.watchlist.userId);
+  const purchasedProofCredits = await sumActiveProofUsageCredits(
+    env,
+    input.watchlist.userId,
+    proofWindowStart,
+    now,
+  );
+  const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
   const watchlistDailyAttempts = await countProofCapturesForWatchlistSince(
     env,
     input.watchlist.id,
@@ -916,11 +926,17 @@ async function evaluateSelectiveProofCandidates(
     input.watchlist.userId,
     todayStart,
   );
+  const workspaceMonthlyAttempts = await countProofCapturesForWorkspaceSince(
+    env,
+    input.watchlist.userId,
+    proofWindowStart,
+  );
   const workspaceRecentAttempts = await listRecentWorkspaceProofCaptures(env, input.watchlist.userId, 20);
   const proofAwareRecentEvents = [...input.recentWatchEvents];
   let watchlistRunAttemptCount = 0;
   let watchlistDailyAttemptCount = watchlistDailyAttempts;
   let workspaceDailyAttemptCount = workspaceDailyAttempts;
+  let workspaceMonthlyAttemptCount = workspaceMonthlyAttempts;
   let candidateCount = 0;
   let proofAttemptCount = 0;
   let confirmedEventCount = 0;
@@ -984,6 +1000,8 @@ async function evaluateSelectiveProofCandidates(
       watchlistRunAttemptCount,
       watchlistDailyAttemptCount,
       workspaceDailyAttemptCount,
+      workspaceMonthlyAttemptCount,
+      workspaceMonthlyCap,
       workspaceRecentAttempts,
       activeCaptureCount: 0,
       burstCount: input.currentObservations.length,
@@ -1007,6 +1025,7 @@ async function evaluateSelectiveProofCandidates(
     watchlistRunAttemptCount += 1;
     watchlistDailyAttemptCount += 1;
     workspaceDailyAttemptCount += 1;
+    workspaceMonthlyAttemptCount += 1;
     proofAttemptCount += 1;
     const snapshot = await captureLandingPageSnapshot(env, observation.landing_page_url);
 
@@ -1342,6 +1361,48 @@ async function getLastSuccessfulProofForAd(
 function startOfUtcDayIso() {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+}
+
+function startOfRollingProofWindowIso() {
+  return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function monthlyProofCapForPlan(plan: string) {
+  const cap = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.proofCapturesPerMonth;
+  return typeof cap === "number" ? cap : Number.POSITIVE_INFINITY;
+}
+
+async function getProofCapturePlan(env: AppEnv, userId: string) {
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    return "starter";
+  }
+
+  return getUserPlan(env, userId);
+}
+
+async function sumActiveProofUsageCredits(
+  env: AppEnv,
+  userId: string,
+  grantedSince: string,
+  now: string,
+) {
+  if (!env.DB || typeof env.DB.prepare !== "function") return 0;
+
+  try {
+    const result = await env.DB.prepare(`
+        SELECT COALESCE(SUM(credits), 0) AS total
+        FROM proof_usage_credit
+        WHERE user_id = ?
+          AND granted_at >= ?
+          AND expires_at > ?
+      `).bind(userId, grantedSince, now).all<{ total: number }>();
+    return Number(result.results?.[0]?.total ?? 0);
+  } catch (error) {
+    if (/proof_usage_credit|no such table/i.test(error instanceof Error ? error.message : String(error))) {
+      return 0;
+    }
+    throw error;
+  }
 }
 
 function snapshotToExtractedFields(snapshot: {

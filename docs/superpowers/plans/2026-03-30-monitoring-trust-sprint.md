@@ -18,7 +18,7 @@
 - Better Auth + D1 auth/data layer shipped
 - Analysis flow shipped: search, provenance, LP snapshot, save, collections, exports, sharing
 - Monitoring model shipped: watchlists, runs, events, digests, scheduled worker
-- India-first marketing and region-aware pricing shipped
+- Early India-first marketing shipped before the current fixed-INR plus Dodo local-pricing model
 - `searchAds(...)` fallback contract shipped
 - strict monitoring scan behavior shipped
 - watchlist dedup schema + create-path handling shipped

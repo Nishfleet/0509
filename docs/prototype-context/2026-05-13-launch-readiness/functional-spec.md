@@ -3,7 +3,7 @@
 ## Required Behavior
 
 - Public homepage should invite pilot workspace creation, not claim full self-serve launch.
-- Pricing should remain visible but state that checkout is not live until Razorpay test-mode checkout and signed subscription webhooks pass.
+- Pricing display should come from Dodo local-price preview; checkout stays gated until Dodo 0509 product ids, test-mode checkout, and signed webhooks pass.
 - Privacy and terms routes should be reachable from the public site.
 - Same-URL Markdown negotiation should serve truthful Markdown for `/`, `/search`, `/privacy`, and `/terms`.
 - `/llms.txt` should summarize current product truth for agents.

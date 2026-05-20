@@ -55,7 +55,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: collectionLimit.limit,
         current: collectionLimit.current,
-        message: "You have reached the free collection limit.",
+        message: "You have reached your workspace collection limit.",
       };
     }
 
@@ -119,9 +119,9 @@ export default function CollectionsRoute() {
   const [searchParams] = useSearchParams();
 
   return (
-    <section className="workspace-section-stack">
+    <section className="f9-app-stack">
       {actionData?.message ? (
-        <div className={`form-message ${actionData.ok ? "form-message-success" : "form-message-error"}`}>
+        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>
             {actionData.ok && actionData.message.startsWith("http") ? (
               <a href={actionData.message} rel="noreferrer" target="_blank">
@@ -134,63 +134,63 @@ export default function CollectionsRoute() {
         </div>
       ) : null}
 
-      <div className="workspace-panels">
-        <article className="content-card narrow-card">
-          <div className="card-header">
+      <div className="f9-dashboard-grid">
+        <article className="f9-app-panel f9-side-panel">
+          <div className="f9-panel-toolbar">
             <div>
-              <p className="section-label">Create collection</p>
+              <span className="f9-app-kicker">Create collection</span>
               <h2>Keep the best ads reusable.</h2>
             </div>
           </div>
 
-          <Form className="stack-form" method="post">
+          <Form className="f9-auth-form" method="post">
             <input name="intent" type="hidden" value="create-collection" />
-            <label className="field">
+            <label className="f9-field">
               <span>Name</span>
               <input name="name" placeholder="Nykaa competitors" required />
             </label>
-            <label className="field">
+            <label className="f9-field">
               <span>Description</span>
               <textarea name="description" placeholder="Optional context for the team" rows={3} />
             </label>
-            <button className="button button-primary" type="submit">
+            <button className="f9-primary-button" type="submit">
               Create collection
             </button>
           </Form>
 
-          <div className="stack-list compact-list">
+          <div className="f9-work-list is-compact">
             {data.collections.map((collection) => (
               <Link
-                className={`list-card ${searchParams.get("collection") === collection.id || (!searchParams.get("collection") && data.selectedCollection?.id === collection.id) ? "is-active" : ""}`}
+                className={`f9-work-row ${searchParams.get("collection") === collection.id || (!searchParams.get("collection") && data.selectedCollection?.id === collection.id) ? "is-active" : ""}`}
                 key={collection.id}
                 to={`/app/collections?collection=${collection.id}`}
               >
                 <div>
                   <h3>{collection.name}</h3>
-                  <p className="muted-text">{collection.description || "No description yet."}</p>
+                  <p className="f9-muted-copy">{collection.description || "No description yet."}</p>
                 </div>
               </Link>
             ))}
           </div>
         </article>
 
-        <article className="content-card">
+        <article className="f9-app-panel">
           {data.selectedCollection ? (
             <>
-              <div className="card-header">
+              <div className="f9-panel-toolbar">
                 <div>
-                  <p className="section-label">Selected collection</p>
+                  <span className="f9-app-kicker">Selected collection</span>
                   <h2>{data.selectedCollection.name}</h2>
                 </div>
-                <div className="inline-actions">
+                <div className="f9-action-row">
                   <Link
-                    className="button button-secondary"
+                    className="f9-secondary-button"
                     to={`/app/reports/${createReportId("collection", data.selectedCollection.id)}`}
                   >
                     Open report
                   </Link>
                   <a
-                    className="button button-secondary"
+                    className="f9-secondary-button"
                     href={`/export/collection/${data.selectedCollection.id}`}
                   >
                     Export CSV
@@ -198,7 +198,7 @@ export default function CollectionsRoute() {
                   <Form method="post">
                     <input name="intent" type="hidden" value="share-collection" />
                     <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
-                    <button className="button button-primary" type="submit">
+                    <button className="f9-primary-button" type="submit">
                       Create share link
                     </button>
                   </Form>
@@ -206,36 +206,36 @@ export default function CollectionsRoute() {
               </div>
 
               {data.items.length === 0 ? (
-                <p className="muted-text">
+                <p className="f9-muted-copy">
                   Save ads from the search page to populate this collection.
                 </p>
               ) : (
-                <div className="stack-list">
+                <div className="f9-work-list">
                   {data.items.map((item) => (
-                    <article className="list-card" key={item.id}>
-                      <div className="card-header">
+                    <article className="f9-work-row" key={item.id}>
+                      <div className="f9-panel-toolbar">
                         <div>
                           <h3>{item.ad.advertiser}</h3>
-                          <p className="muted-text">{item.ad.hook}</p>
+                          <p className="f9-muted-copy">{item.ad.hook}</p>
                         </div>
-                        <span className="badge">{item.ad.format}</span>
+                        <span className="f9-status-pill">{item.ad.format}</span>
                       </div>
                       <p>{item.ad.offer}</p>
-                      <p className="muted-text">
+                      <p className="f9-muted-copy">
                         {item.tags.length > 0 ? item.tags.join(", ") : "No tags yet"}
                       </p>
-                      <Form className="stack-form" method="post">
+                      <Form className="f9-auth-form" method="post">
                         <input name="intent" type="hidden" value="update-item" />
                         <input name="itemId" type="hidden" value={item.id} />
-                        <label className="field">
+                        <label className="f9-field">
                           <span>Note</span>
                           <textarea defaultValue={item.note ?? ""} name="note" rows={3} />
                         </label>
-                        <label className="field">
+                        <label className="f9-field">
                           <span>Tags</span>
                           <input defaultValue={item.tags.join(", ")} name="tags" />
                         </label>
-                        <button className="button button-secondary" type="submit">
+                        <button className="f9-secondary-button" type="submit">
                           Update item
                         </button>
                       </Form>
@@ -245,7 +245,7 @@ export default function CollectionsRoute() {
               )}
             </>
           ) : (
-            <div className="empty-state">
+            <div className="f9-empty-panel">
               <h2>No collection selected</h2>
               <p>Create a collection or save an ad from search to get started.</p>
             </div>

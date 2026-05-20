@@ -254,7 +254,7 @@ describe("onboarding route", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached the free watchlist limit.",
+      message: "You have reached your workspace watchlist limit.",
       ok: false,
     });
     expect(createWatchlist).not.toHaveBeenCalled();
@@ -318,7 +318,7 @@ describe("onboarding route", () => {
         useActionData: vi.fn().mockReturnValue({
           ok: false,
           error: "plan_limit_exceeded",
-          message: "You have reached the free watchlist limit.",
+          message: "You have reached your workspace watchlist limit.",
         }),
       };
     });
@@ -326,7 +326,7 @@ describe("onboarding route", () => {
     const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
     const markup = renderToStaticMarkup(createElement(AppOnboardRoute));
 
-    expect(markup).toContain("You have reached the free watchlist limit.");
+    expect(markup).toContain("You have reached your workspace watchlist limit.");
     expect(markup).not.toContain("View pricing");
   });
 });

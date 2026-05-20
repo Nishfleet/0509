@@ -1,6 +1,6 @@
 # 0509 Memory
 
-Last updated: 2026-04-22
+Last updated: 2026-05-20
 
 ## Product
 
@@ -9,14 +9,15 @@ Last updated: 2026-04-22
 - The north-star promise is: `See what changed, with proof.`
 - The core story is the gap between when a team stops checking and when the next decision gets made. `Five to Nine` closes that gap with trusted alerts.
 - Three layers: public `analysis` → retained `monitoring` → reusable `workspace memory`.
-- Region-aware pricing: India vs rest of world.
+- Pricing display is Dodo-backed: load local checkout preview for the buyer location and do not show hardcoded visible currency or fixed local prices as product truth. Do not revive India-vs-rest-of-world pricing.
 
 ## Current Product State
 
 - Analysis Depth work is complete in the checked-in app: OCR (Workers AI vision + HTML fallback), translation, agency report/export scaffolding, persisted OCR/translation reuse, and public search without D1.
-- The authenticated workspace already includes onboarding, watchlists, collections, digests, reports, share/export flows, and region-aware pricing display.
-- Plan gating is scaffolded in code now: `app/lib/plan.server.ts`, `migrations/0006_plan.sql`, and route tests cover free/starter/agency limits plus the onboarding flow.
-- Billing is not live yet: plan storage includes Stripe customer/subscription columns, but tests explicitly assert there is no checkout or Stripe webhook route exposure.
+- The authenticated workspace already includes onboarding, watchlists, collections, digests, reports, share/export flows, and one-table pricing display.
+- Plan gating is scaffolded in code now: `app/lib/plan.server.ts`, `migrations/0006_plan.sql`, and route tests cover unpaid/scout/starter/agency limits plus the onboarding flow.
+- Dodo 0509 pricing preview is wired for subscription products and proof-capture usage bundles. Checkout/webhook routes now exist for Dodo, but billing should still be treated as verified-current only after product ids, webhook secret, remote migration, and live signed webhook proof are confirmed.
+- Current commercial caps are intentionally generous but finite, with no free retained-monitoring plan: Scout has 3 watchlists, 10 collections, no automated digest delivery, and 50 proof captures/month; Starter has 10 watchlists, 25 collections, weekly digest delivery, and 250 proof captures/month; Agency has 75 watchlists, 250 collections, daily and weekly briefs, and 2,500 proof captures/month. Workspaces warn at 80% proof usage. Overflow bundles sell extra proof captures for 30-day spikes instead of unlimited monitoring.
 - Production cutover is now live on direct Cloudflare custom domains: `https://0509.in`, `https://www.0509.in`, and `https://api.0509.in` serve the checked-in Cloudflare app under `app/` (verified from live responses on 2026-04-06).
 - Cloudflare readiness is complete for the current launch shape: D1 database `0509` exists, remote migrations are applied, `BETTER_AUTH_SECRET` is uploaded, the R2 bucket `0509-landing-page-artifacts` is created and bound, the `0509.in` zone is active in Cloudflare, and the Worker preview is live at `https://0509.nishant345.workers.dev`.
 - Registrar state is now correct for Cloudflare: Porkbun still owns the registration, but nameservers delegate to Cloudflare and the old DNSSEC DS record has been removed.

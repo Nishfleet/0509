@@ -47,8 +47,11 @@ try {
     movedLocalEnvFiles.push({ source, held });
   }
 
+  run("node", ["scripts/check-public-home-current.mjs", "--source-only"]);
   run("npm", ["run", "build"]);
+  run("node", ["scripts/check-public-home-current.mjs"]);
   run("wrangler", ["deploy"]);
+  run("node", ["scripts/check-live-public-home.mjs"]);
 } catch (error) {
   exitCode = error && typeof error.exitCode === "number" ? error.exitCode : 1;
   console.error(error instanceof Error ? error.message : error);
