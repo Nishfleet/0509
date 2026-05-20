@@ -1,9 +1,6 @@
-import type { PricingRegion } from "~/lib/types";
-
 export interface AppEnv {
   AI?: Ai;
   APP_NAME?: string;
-  APP_REGION_DEFAULT?: PricingRegion | string;
   BETTER_AUTH_SECRET?: string;
   BROWSER?: Fetcher;
   BROWSERLESS_TOKEN?: string;
