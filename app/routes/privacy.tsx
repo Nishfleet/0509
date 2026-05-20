@@ -1,14 +1,20 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import type { MetaFunction } from "react-router";
+import type { LinksFunction, MetaFunction } from "react-router";
 
-export const meta: MetaFunction = () => [
-  { title: "Privacy | Five to Nine" },
-  {
-    name: "description",
-    content: "How Five to Nine handles account, search, monitoring, proof, and delivery data during pilot rollout.",
-  },
-];
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+
+const description =
+  "How Five to Nine handles account, search, monitoring, proof, and delivery data during pilot rollout.";
+
+export const links: LinksFunction = () => canonicalLinks("/privacy");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Privacy | Five to Nine",
+    description,
+    pathname: "/privacy",
+  });
 
 export default function PrivacyRoute() {
   return (

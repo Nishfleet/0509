@@ -1,18 +1,22 @@
 import { Form, Link, useRouteLoaderData } from "react-router";
-import type { MetaFunction } from "react-router";
+import type { LinksFunction, MetaFunction } from "react-router";
 
 import { sampleQueries } from "~/lib/demo-data";
 import { PRICING_COPY } from "~/lib/pricing";
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 
-export const meta: MetaFunction = () => [
-  { title: "Five to Nine | The market moves after you log off" },
-  {
-    name: "description",
-    content:
-      "Five to Nine helps growth teams turn competitor ad, offer, and landing-page changes into proof-backed morning intelligence.",
-  },
-];
+const description =
+  "Five to Nine helps growth teams turn competitor ad, offer, and landing-page changes into proof-backed morning intelligence.";
+
+export const links: LinksFunction = () => canonicalLinks("/");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Five to Nine | The market moves after you log off",
+    description,
+    pathname: "/",
+  });
 
 export default function MarketingRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
