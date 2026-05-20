@@ -30,7 +30,6 @@ import type {
   AdDiscoveryProvider,
   MetaIntegrationStatus,
   NormalizedSavedQuery,
-  PricingRegion,
   ProofCaptureRecord,
   ProofDeviceProfile,
   ProofRenderMode,
@@ -791,37 +790,6 @@ function toDeliveryAttemptRecord(row: DeliveryAttemptRow): DeliveryAttemptRecord
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-export async function getPricingRegionPreference(env: AppEnv, userId: string) {
-  const row = await one<{ region: PricingRegion }>(
-    env,
-    "SELECT region FROM pricing_region_preference WHERE user_id = ?",
-    userId,
-  );
-  return row?.region ?? null;
-}
-
-export async function upsertPricingRegionPreference(
-  env: AppEnv,
-  userId: string,
-  region: PricingRegion,
-) {
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO pricing_region_preference (id, user_id, region, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(user_id)
-      DO UPDATE SET region = excluded.region, updated_at = excluded.updated_at
-    `,
-    createId(),
-    userId,
-    region,
-    timestamp,
-    timestamp,
-  );
 }
 
 export async function recordPendingRazorpaySubscription(
