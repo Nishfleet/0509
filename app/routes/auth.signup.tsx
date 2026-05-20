@@ -1,15 +1,20 @@
 import { Link, redirect, useLoaderData } from "react-router";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AuthForm } from "~/components/auth-form";
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
-export const meta: MetaFunction = () => [
-  { title: "Create account | Five to Nine" },
-  {
-    name: "description",
-    content: "Create a Five to Nine account to save research, build collections, and monitor competitor changes on Meta.",
-  },
-];
+const description =
+  "Create a Five to Nine pilot workspace to save competitor research, build proof collections, and monitor Meta ad changes.";
+
+export const links: LinksFunction = () => canonicalLinks("/auth/signup");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Create account | Five to Nine",
+    description,
+    pathname: "/auth/signup",
+  });
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
@@ -54,6 +59,19 @@ export default function SignupRoute() {
               <li>Track how offers, hooks, and landing pages change over time.</li>
               <li>Keep your team’s competitor learning in one reusable workspace.</li>
             </ul>
+            <div className="auth-proof-note">
+              <h3>What happens after signup</h3>
+              <p>
+                The workspace keeps research actions separate: run a public search first, save the useful query,
+                turn it into a watchlist, then review changes only when source status and proof are visible.
+                Pilot access is still activated manually when payment and delivery gates need review.
+              </p>
+              <p>
+                Use signup when the public search flow is not enough anymore. Accounts are for teams that want
+                saved filters, reusable competitor sets, proof collections, report links, and weekly review habits
+                instead of one-off searches that disappear after the tab closes.
+              </p>
+            </div>
           </div>
         </div>
 

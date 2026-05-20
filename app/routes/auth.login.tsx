@@ -1,15 +1,20 @@
 import { Link, redirect, useLoaderData } from "react-router";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AuthForm } from "~/components/auth-form";
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
-export const meta: MetaFunction = () => [
-  { title: "Sign in | Five to Nine" },
-  {
-    name: "description",
-    content: "Sign in to access saved searches, watchlists, collections, and weekly competitor digests in Five to Nine.",
-  },
-];
+const description =
+  "Sign in to Five to Nine to access saved searches, watchlists, proof collections, reports, and competitor digests.";
+
+export const links: LinksFunction = () => canonicalLinks("/auth/login");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Sign in | Five to Nine",
+    description,
+    pathname: "/auth/login",
+  });
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
