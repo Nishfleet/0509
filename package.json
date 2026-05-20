@@ -21,20 +21,20 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
     "better-auth": "^1.5.6",
-    "isbot": "^5.1.36",
+    "isbot": "^5.1.40",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router": "^7.13.2",
-    "resend": "^6.9.4"
+    "react-router": "^7.15.0",
+    "resend": "^6.12.3"
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "1.1.0",
-    "@cloudflare/vite-plugin": "^1.30.2",
-    "@react-router/dev": "^7.13.2",
-    "@types/node": "^24.6.1",
+    "@cloudflare/vite-plugin": "^1.36.4",
+    "@react-router/dev": "^7.15.0",
+    "@types/node": "^24.12.4",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "typescript": "5.9.2",
+    "typescript": "5.9.3",
     "vite": "^7.1.7",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4",
