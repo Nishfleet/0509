@@ -1,16 +1,21 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import type { MetaFunction } from "react-router";
+import type { LinksFunction, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
-export const meta: MetaFunction = () => [
-  { title: "Terms | Five to Nine" },
-  {
-    name: "description",
-    content: "Terms for Five to Nine, including billing, acceptable use, and source-proof limits.",
-  },
-];
+const termsDescription =
+  "Terms for Five to Nine, including billing, acceptable use, and source-proof limits.";
+
+export const links: LinksFunction = () => canonicalLinks("/terms");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Terms | Five to Nine",
+    description: termsDescription,
+    pathname: "/terms",
+  });
 
 export default function TermsRoute() {
   return (

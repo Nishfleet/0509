@@ -5,7 +5,7 @@ import {
   useLoaderData,
   useRouteLoaderData,
 } from "react-router";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { sampleQueries } from "~/lib/demo-data";
@@ -21,17 +21,21 @@ import {
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse } from "~/lib/types";
 
-export const meta: MetaFunction = () => [
-  { title: "Search | Five to Nine" },
-  {
-    name: "description",
-    content:
-      "Search competitor Meta ads, inspect the hook and offer, save the best examples, and turn useful queries into proof-backed watchlists.",
-  },
-];
+const searchDescription =
+  "Search competitor Meta ads, inspect the hook and offer, save the best examples, and turn useful queries into proof-backed watchlists.";
+
+export const links: LinksFunction = () => canonicalLinks("/search");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Search | Five to Nine",
+    description: searchDescription,
+    pathname: "/search",
+  });
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");

@@ -1,20 +1,24 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
+import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 
-export const meta: MetaFunction = () => [
-  { title: "Five to Nine | Market intelligence for revenue teams" },
-  {
-    name: "description",
-    content:
-      "Five to Nine tracks competitor ads, offers, landing pages, and category shifts so revenue teams know what to do next.",
-  },
-];
+const marketingDescription =
+  "Five to Nine tracks competitor ads, offers, landing pages, and category shifts so revenue teams know what to do next.";
+
+export const links: LinksFunction = () => canonicalLinks("/");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Five to Nine | Market intelligence for revenue teams",
+    description: marketingDescription,
+    pathname: "/",
+  });
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
