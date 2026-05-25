@@ -25,7 +25,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router": "^7.13.2",
-    "resend": "^6.9.4"
+    "resend": "^6.12.3"
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "1.1.0",
