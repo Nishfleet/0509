@@ -18,7 +18,7 @@ jobs:
   post-merge-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
@@ -93,7 +93,7 @@ jobs:
 
       - name: Create rollback labels
         if: steps.local_guard.outputs.status != '0' || steps.canary_guard.outputs.status != '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
@@ -117,7 +117,7 @@ jobs:
 
       - name: Surface production canary failure
         if: steps.canary_guard.outputs.status != '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
@@ -189,7 +189,7 @@ jobs:
 
       - name: Surface rollback PR permission failure
         if: steps.rollback_pr.outcome == 'failure'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |

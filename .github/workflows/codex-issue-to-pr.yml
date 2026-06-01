@@ -46,7 +46,7 @@ jobs:
           echo "MINIMAX_API_KEY is required for Codex Issue To PR."
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
         if: steps.ai_secret.outputs.has_key == 'true'
         with:
           fetch-depth: 0
@@ -125,7 +125,7 @@ jobs:
       - name: Prepare task brief
         id: task_brief
         if: steps.ai_secret.outputs.has_key == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DISPATCH_TASK: ${{ github.event.inputs.task }}
         with:
@@ -236,7 +236,7 @@ jobs:
 
       - name: Surface MiniMax failure
         if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'false'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TARGET_ISSUE_NUMBER: ${{ steps.task_brief.outputs.issue_number }}
         with:
@@ -323,7 +323,7 @@ jobs:
 
       - name: Surface empty MiniMax result
         if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'false'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TARGET_ISSUE_NUMBER: ${{ steps.task_brief.outputs.issue_number }}
         with:
@@ -361,7 +361,7 @@ jobs:
 
       - name: Ensure automation labels exist
         if: steps.ai_secret.outputs.has_key == 'true' && steps.run_opencode.outputs.ok == 'true' && steps.diff.outputs.has_changes == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
@@ -400,7 +400,7 @@ jobs:
 
       - name: Comment on issue
         if: steps.cpr.outputs.pull-request-url != '' && steps.task_brief.outputs.issue_number != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
