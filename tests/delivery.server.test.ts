@@ -44,11 +44,13 @@ describe("deliverWeeklyDigest", () => {
     });
 
     vi.doMock("resend", () => ({
-      Resend: vi.fn(() => ({
-        emails: {
-          send: resendSend,
-        },
-      })),
+      Resend: vi.fn(function Resend() {
+        return {
+          emails: {
+            send: resendSend,
+          },
+        };
+      }),
     }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
@@ -181,11 +183,13 @@ describe("deliverWeeklyDigest", () => {
     });
 
     vi.doMock("resend", () => ({
-      Resend: vi.fn(() => ({
-        emails: {
-          send: resendSend,
-        },
-      })),
+      Resend: vi.fn(function Resend() {
+        return {
+          emails: {
+            send: resendSend,
+          },
+        };
+      }),
     }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
@@ -300,11 +304,13 @@ describe("deliverWeeklyDigest", () => {
     const resendSend = vi.fn();
 
     vi.doMock("resend", () => ({
-      Resend: vi.fn(() => ({
-        emails: {
-          send: resendSend,
-        },
-      })),
+      Resend: vi.fn(function Resend() {
+        return {
+          emails: {
+            send: resendSend,
+          },
+        };
+      }),
     }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt: vi.fn(),
@@ -455,11 +461,13 @@ describe("deliverWatchlistAlerts", () => {
     });
 
     vi.doMock("resend", () => ({
-      Resend: vi.fn(() => ({
-        emails: {
-          send: resendSend,
-        },
-      })),
+      Resend: vi.fn(function Resend() {
+        return {
+          emails: {
+            send: resendSend,
+          },
+        };
+      }),
     }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
@@ -631,11 +639,13 @@ describe("deliverWatchlistAlerts", () => {
     });
 
     vi.doMock("resend", () => ({
-      Resend: vi.fn(() => ({
-        emails: {
-          send: resendSend,
-        },
-      })),
+      Resend: vi.fn(function Resend() {
+        return {
+          emails: {
+            send: resendSend,
+          },
+        };
+      }),
     }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,

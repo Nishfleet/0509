@@ -8,7 +8,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.unmock("cloudflare:workers");
+  vi.doUnmock("cloudflare:workers");
   delete (globalThis as { __APP_REQUEST_ENV__?: unknown }).__APP_REQUEST_ENV__;
   delete (globalThis as { __0509InFlightDiscovery__?: unknown }).__0509InFlightDiscovery__;
   vi.resetModules();
