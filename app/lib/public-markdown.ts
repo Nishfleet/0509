@@ -17,6 +17,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Search, competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Authenticated collection, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
 - Customer API keys can read account-owned collection, watchlist, and digest exports at /api/v1.
+- Customer API keys can also use the read-only MCP endpoint at /api/mcp for account-owned collection, watchlist, and digest exports.
 - Slack incoming-webhook delivery can send eligible digests and high-priority change alerts for configured account destinations.
 - Account insight-depth summaries cover top hooks, media mix, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
@@ -72,10 +73,11 @@ Current product truth:
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
 - Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
 - Customer API keys support read-only /api/v1 collection, watchlist, and digest exports for account-owned data.
+- Customer API keys support the read-only /api/mcp endpoint for agent access to account-owned collection, watchlist, and digest exports.
 - Slack incoming-webhook delivery is live for configured account destinations and can send eligible digests and high-priority change alerts.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Customer WhatsApp delivery must stay behind opt-in, template-readiness, and webhook-readiness checks.
-- TikTok, Google, YouTube, LinkedIn, Pinterest, public write APIs, and MCP are not live yet.
+- TikTok, Google, YouTube, LinkedIn, Pinterest, and public write APIs are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
 Core layers:

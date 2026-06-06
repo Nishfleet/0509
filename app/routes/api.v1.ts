@@ -13,6 +13,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       endpoints: [
         {
+          method: "POST",
+          path: "/api/mcp",
+          formats: ["mcp-json-rpc"],
+        },
+        {
           method: "GET",
           path: "/api/v1/collections/{collectionId}",
           formats: ["json", "csv", "slack"],
@@ -38,7 +43,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         "Google or YouTube ingestion",
         "LinkedIn or Pinterest ingestion",
         "public write API",
-        "MCP server",
       ],
     },
     {

@@ -554,7 +554,8 @@ describe("sources route component", () => {
     expect(markup).toContain("Save Slack delivery");
     expect(markup).toContain("encrypted and never shown again");
     expect(markup).toContain("/api/v1/watchlists/");
-    expect(markup).toContain("MCP yet");
+    expect(markup).toContain("POST /api/mcp");
+    expect(markup).not.toContain("MCP yet");
     expect(markup).toContain("needs proof");
     expect(markup).toContain("recent results are available");
     expect(markup).not.toContain("Cached live results");

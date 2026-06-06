@@ -36,35 +36,18 @@ export function collectionExportResponse(
   format: ExportFormat,
 ) {
   if (format === "json") {
-    const insightDepth = buildCollectionInsightDepth(items);
-    return jsonResponse("collection.json", {
-      resourceType: "collection",
-      generatedAt: new Date().toISOString(),
-      collection,
-      insightDepth,
-      items: items.map((item) => ({
-        id: item.id,
-        advertiser: stringValue(item.ad.advertiser),
-        hook: stringValue(item.ad.hook),
-        offer: stringValue(item.ad.offer),
-        cta: stringValue(item.ad.cta),
-        landingPageUrl: item.ad.landingPageUrl,
-        adSnapshotUrl: item.ad.adSnapshotUrl,
-        tags: item.tags,
-        note: item.note,
-        savedAt: item.createdAt,
-      })),
-    });
+    const payload = buildCollectionExportPayload(collection, items);
+    return jsonResponse("collection.json", payload);
   }
 
   if (format === "slack") {
-    const insightDepth = buildCollectionInsightDepth(items);
+    const payload = buildCollectionExportPayload(collection, items);
     return slackResponse(
       "collection.slack.md",
       [
         `*Five to Nine collection: ${collection.name}*`,
         collection.description ? collection.description : null,
-        formatInsightDepthMarkdown(insightDepth),
+        formatInsightDepthMarkdown(payload.insightDepth),
         items.length === 0 ? "No saved proof yet." : "Saved proof:",
         ...items.map(
           (item) =>
@@ -101,36 +84,20 @@ export function watchlistExportResponse(
     ...event,
     intelligence: buildChangeIntelligenceSummary(event),
   }));
-  const insightDepth = buildWatchlistInsightDepth(events);
 
   if (format === "json") {
-    return jsonResponse("watchlist.json", {
-      resourceType: "watchlist",
-      generatedAt: new Date().toISOString(),
-      watchlist,
-      insightDepth,
-      events: enrichedEvents.map((event) => ({
-        id: event.id,
-        eventType: event.eventType,
-        status: event.status,
-        title: event.title,
-        summary: event.summary,
-        importanceScore: event.importanceScore,
-        confirmedAt: event.confirmedAt,
-        createdAt: event.createdAt,
-        metadata: event.metadata,
-        intelligence: event.intelligence,
-      })),
-    });
+    const payload = buildWatchlistExportPayload(watchlist, events);
+    return jsonResponse("watchlist.json", payload);
   }
 
   if (format === "slack") {
+    const payload = buildWatchlistExportPayload(watchlist, events);
     return slackResponse(
       "watchlist.slack.md",
       [
         `*Five to Nine watchlist: ${watchlist.name}*`,
         `Target: ${watchlist.targetLabel}`,
-        formatInsightDepthMarkdown(insightDepth),
+        formatInsightDepthMarkdown(payload.insightDepth),
         enrichedEvents.length === 0 ? "No recent changes yet." : "Latest changes:",
         ...enrichedEvents.map(
           (event) =>
@@ -162,39 +129,19 @@ export function digestExportResponse(digest: DigestRecord, format: ExportFormat)
     ...item,
     intelligence: readDigestIntelligence(item.metadata),
   }));
-  const insightDepth = buildDigestInsightDepth(digest.items);
 
   if (format === "json") {
-    return jsonResponse("digest.json", {
-      resourceType: "digest",
-      generatedAt: new Date().toISOString(),
-      digest: {
-        id: digest.id,
-        periodStart: digest.periodStart,
-        periodEnd: digest.periodEnd,
-        createdAt: digest.createdAt,
-        delivery: digest.delivery,
-      },
-      insightDepth,
-      items: enrichedItems.map((item) => ({
-        id: item.id,
-        watchlistName: item.watchlistName,
-        eventType: item.eventType,
-        title: item.title,
-        summary: item.summary,
-        createdAt: item.createdAt,
-        metadata: item.metadata,
-        intelligence: item.intelligence,
-      })),
-    });
+    const payload = buildDigestExportPayload(digest);
+    return jsonResponse("digest.json", payload);
   }
 
   if (format === "slack") {
+    const payload = buildDigestExportPayload(digest);
     return slackResponse(
       "digest.slack.md",
       [
         `*Five to Nine digest: ${dateLabel(digest.periodStart)} to ${dateLabel(digest.periodEnd)}*`,
-        formatInsightDepthMarkdown(insightDepth),
+        formatInsightDepthMarkdown(payload.insightDepth),
         enrichedItems.length === 0 ? "No digest changes yet." : "Competitor changes:",
         ...enrichedItems.map(
           (item) =>
@@ -219,6 +166,92 @@ export function digestExportResponse(digest: DigestRecord, format: ExportFormat)
       ]),
     ],
   );
+}
+
+export function buildCollectionExportPayload(
+  collection: CollectionRecord,
+  items: CollectionItemRecord[],
+) {
+  const insightDepth = buildCollectionInsightDepth(items);
+  return {
+    resourceType: "collection",
+    generatedAt: new Date().toISOString(),
+    collection,
+    insightDepth,
+    items: items.map((item) => ({
+      id: item.id,
+      advertiser: stringValue(item.ad.advertiser),
+      hook: stringValue(item.ad.hook),
+      offer: stringValue(item.ad.offer),
+      cta: stringValue(item.ad.cta),
+      landingPageUrl: item.ad.landingPageUrl,
+      adSnapshotUrl: item.ad.adSnapshotUrl,
+      tags: item.tags,
+      note: item.note,
+      savedAt: item.createdAt,
+    })),
+  };
+}
+
+export function buildWatchlistExportPayload(
+  watchlist: WatchlistRecord,
+  events: WatchEventRecord[],
+) {
+  const insightDepth = buildWatchlistInsightDepth(events);
+  const enrichedEvents = events.map((event) => ({
+    ...event,
+    intelligence: buildChangeIntelligenceSummary(event),
+  }));
+
+  return {
+    resourceType: "watchlist",
+    generatedAt: new Date().toISOString(),
+    watchlist,
+    insightDepth,
+    events: enrichedEvents.map((event) => ({
+      id: event.id,
+      eventType: event.eventType,
+      status: event.status,
+      title: event.title,
+      summary: event.summary,
+      importanceScore: event.importanceScore,
+      confirmedAt: event.confirmedAt,
+      createdAt: event.createdAt,
+      metadata: event.metadata,
+      intelligence: event.intelligence,
+    })),
+  };
+}
+
+export function buildDigestExportPayload(digest: DigestRecord) {
+  const insightDepth = buildDigestInsightDepth(digest.items);
+  const enrichedItems = digest.items.map((item) => ({
+    ...item,
+    intelligence: readDigestIntelligence(item.metadata),
+  }));
+
+  return {
+    resourceType: "digest",
+    generatedAt: new Date().toISOString(),
+    digest: {
+      id: digest.id,
+      periodStart: digest.periodStart,
+      periodEnd: digest.periodEnd,
+      createdAt: digest.createdAt,
+      delivery: digest.delivery,
+    },
+    insightDepth,
+    items: enrichedItems.map((item) => ({
+      id: item.id,
+      watchlistName: item.watchlistName,
+      eventType: item.eventType,
+      title: item.title,
+      summary: item.summary,
+      createdAt: item.createdAt,
+      metadata: item.metadata,
+      intelligence: item.intelligence,
+    })),
+  };
 }
 
 function csvResponse(filename: string, rows: string[][]) {
