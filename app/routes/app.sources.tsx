@@ -423,7 +423,8 @@ export default function AppSourcesRoute() {
               </div>
             </dl>
             <p className="f9-muted-copy">
-              This API does not add TikTok, Google, LinkedIn, Pinterest, or write access.
+              This API can read saved manual external proof links in collections, but does not add automated
+              TikTok, Google, LinkedIn, Pinterest, or write access.
             </p>
           </section>
         </div>
