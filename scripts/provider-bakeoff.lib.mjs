@@ -91,6 +91,7 @@ mutation MetaLibraryBakeoff($url: String!, $userAgent: String!) {
  *   rateLimited: boolean,
  *   blockedLikely: boolean,
  *   degraded: boolean,
+ *   emptyReason: string | null,
  *   sourceLabel: string | null,
  *   resultCount: number | null,
  *   noAdsFound: boolean
@@ -112,6 +113,7 @@ mutation MetaLibraryBakeoff($url: String!, $userAgent: String!) {
  *   rateLimited: boolean,
  *   blockedLikely: boolean,
  *   degraded: boolean,
+ *   emptyReason?: string | null,
  *   sourceLabel: string | null,
  *   url: string,
  *   note: string | null
@@ -227,9 +229,14 @@ export function analyzeMetaLibraryHtml(html) {
   const cacheMarkerMatch = html.match(
     /\bdata-f9-result-cache-status=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i,
   );
+  const emptyReasonMarkerMatch = html.match(
+    /\bdata-f9-result-empty-reason=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i,
+  );
   const resultCountMatch = renderedText.match(/\b(\d+)\s+ads?\s+(?:found|on\s+this\s+page)\b/i);
   const sourceMarker = sourceMarkerMatch?.[1] ?? sourceMarkerMatch?.[2] ?? sourceMarkerMatch?.[3] ?? "";
   const cacheMarker = cacheMarkerMatch?.[1] ?? cacheMarkerMatch?.[2] ?? cacheMarkerMatch?.[3] ?? "";
+  const emptyReasonMarker =
+    emptyReasonMarkerMatch?.[1] ?? emptyReasonMarkerMatch?.[2] ?? emptyReasonMarkerMatch?.[3] ?? "";
   const sourceLabel =
     normalizeCurrent0509SourceMarker(sourceMarker, cacheMarker) ??
     (sourceMatch?.[1] ? normalizeCurrent0509SourceLabel(sourceMatch[1]) : null);
@@ -248,6 +255,7 @@ export function analyzeMetaLibraryHtml(html) {
       text.includes("temporarily blocked") ||
       text.includes("unusual activity"),
     degraded: text.includes("commercial discovery degraded") || text.includes("live search is delayed"),
+    emptyReason: normalizeCurrent0509EmptyReason(emptyReasonMarker),
     sourceLabel,
     resultCount: resultCountMatch?.[1] ? Number(resultCountMatch[1]) : null,
     noAdsFound: text.includes("no ads found for this query"),
@@ -312,6 +320,14 @@ function normalizeCurrent0509SourceMarker(source, cacheStatus = "") {
     return "Demo dataset";
   }
   return null;
+}
+
+/**
+ * @param {string} value
+ */
+function normalizeCurrent0509EmptyReason(value) {
+  const normalized = value.trim().toLowerCase();
+  return normalized && normalized !== "none" ? normalized : null;
 }
 
 /**
@@ -501,6 +517,13 @@ function classifyCurrent0509Outcome(analysis, ok) {
   if (analysis.sourceLabel === "Demo dataset") {
     return "error";
   }
+  if (
+    analysis.emptyReason === "no_results" &&
+    analysis.sourceLabel === "Live Ad Library capture" &&
+    !analysis.degraded
+  ) {
+    return "ok";
+  }
   if (analysis.resultCount === 0 || analysis.noAdsFound) {
     return "empty";
   }
@@ -589,10 +612,13 @@ export async function runCurrent0509Probe(target, options = {}) {
       rateLimited: analysis.rateLimited,
       blockedLikely: analysis.blockedLikely,
       degraded: analysis.degraded,
+      emptyReason: analysis.emptyReason,
       sourceLabel: analysis.sourceLabel,
       url,
       note: analysis.degraded
         ? "0509 rendered its delayed search state."
+        : analysis.emptyReason === "no_results" && analysis.sourceLabel === "Live Ad Library capture"
+          ? "Tracking path: Live Ad Library capture returned a verified no-results page"
         : analysis.noAdsFound || analysis.resultCount === 0
           ? `Tracking path: ${analysis.sourceLabel ?? "unknown"} returned zero rendered results`
         : analysis.sourceLabel
@@ -1321,6 +1347,13 @@ export function findBlockingFreshLiveCurrent0509Failures(results) {
       return true;
     }
     if (result.status === "skipped") {
+      return false;
+    }
+    if (
+      result.emptyReason === "no_results" &&
+      result.sourceLabel === "Live Ad Library capture" &&
+      !result.degraded
+    ) {
       return false;
     }
     return (
