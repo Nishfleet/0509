@@ -174,7 +174,7 @@ describe("sources route action", () => {
 });
 
 describe("sources route component", () => {
-  it("renders Meta ads source setup with evidence-gated copy", async () => {
+  it("renders tracking reliability setup with customer-facing copy", async () => {
     await mockRouter({
       connection: null,
       discoveryStatus,
@@ -184,12 +184,13 @@ describe("sources route component", () => {
     const { default: AppSourcesRoute } = await import("~/routes/app.sources");
     const markup = renderToStaticMarkup(createElement(AppSourcesRoute));
 
-    expect(markup).toContain("Meta ads source");
-    expect(markup).toContain("Beta");
-    expect(markup).toContain("Meta coverage is beta");
-    expect(markup).toContain("Test and save token");
+    expect(markup).toContain("Keep competitor discovery reliable");
+    expect(markup).toContain("Tracking reliability");
+    expect(markup).not.toContain("Meta coverage is beta");
+    expect(markup).not.toContain("f9-beta-pill");
+    expect(markup).toContain("Test and save access");
     expect(markup).toContain("Ad Library API page");
-    expect(markup).toContain("Reliability gate");
+    expect(markup).toContain("Recent proof health");
     expect(markup).toContain("needs proof");
   });
 });

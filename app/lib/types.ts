@@ -495,7 +495,7 @@ export interface DigestItemRecord {
 export interface DigestDeliveryRecord {
   id: string;
   digestRunId: string;
-  provider: "resend";
+  provider: string;
   status: "pending" | "sent" | "failed";
   recipientEmail: string;
   externalMessageId: string | null;

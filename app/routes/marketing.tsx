@@ -9,7 +9,7 @@ import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 
 const marketingDescription =
-  "Five to Nine tracks competitor ads, offers, landing pages, and category shifts so revenue teams know what to do next.";
+  "Five to Nine tracks competitor ads, offers, and landing pages so revenue teams can react before deals move.";
 
 export const links: LinksFunction = () => canonicalLinks("/");
 
@@ -33,26 +33,26 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 const marketStats = [
-  { label: "Category moves", value: "14", detail: "since last scan" },
-  { label: "Action notes", value: "9", detail: "ready for review" },
-  { label: "Open checks", value: "3", detail: "source state visible" },
+  { label: "Watched sites", value: "3", detail: "sample setup" },
+  { label: "Fields checked", value: "4", detail: "headline, CTA, offer, form" },
+  { label: "Proof captures", value: "9", detail: "screenshots and page text" },
 ];
 
 const signalRows = [
-  ["Nykaa", "Bundle ladder changed", "Meta library", "Ready"],
-  ["boAt", "COD angle removed", "Landing page", "Review"],
-  ["Meesho", "Discount hook added", "Creative OCR", "Tracked"],
+  ["Competitor page", "Visible offer text changed", "Page proof", "Review"],
+  ["Landing page", "CTA changed on destination", "Page proof", "Review"],
+  ["Tracked form", "Lead form appeared", "Page proof", "Watched"],
 ];
 
 const backboneStats = [
-  { value: "4", label: "market lanes watched", detail: "ads, pages, offers, categories" },
-  { value: "3", label: "source states separated", detail: "live, cached, degraded" },
-  { value: "1", label: "source trail per move", detail: "capture, text, freshness" },
-  { value: "05:09", label: "decision scan", detail: "built for morning action" },
+  { value: "1", label: "competitor website", detail: "turns into a watchlist" },
+  { value: "24h", label: "change checks", detail: "visible offers, CTAs, forms" },
+  { value: "3", label: "proof artifacts", detail: "screenshot, page text, source link" },
+  { value: "05:09", label: "morning brief", detail: "what changed and why it matters" },
 ];
 
-const signalRays = Array.from({ length: 96 }, (_, index) => {
-  const angle = -82 + (index * 164) / 95;
+const signalRays = Array.from({ length: 42 }, (_, index) => {
+  const angle = -72 + (index * 144) / 41;
   const length = 36 + ((index * 17) % 42);
   const alpha = 0.2 + ((index * 11) % 40) / 100;
   return { angle, length, alpha };
@@ -158,16 +158,16 @@ export default function MarketingRoute() {
         <div className="f9-container f9-hero-layout">
           <div className="f9-hero-copy">
             <Link className="f9-announcement" to="/search">
-              <strong>Market pulse 05:09</strong>
-              <span>Revenue signal desk is live</span>
+              <strong>Competitor offer watch is live</strong>
+              <span>Enter a website and start tracking</span>
               <em aria-hidden="true" />
             </Link>
 
-            <h1>Market intelligence to grow revenue.</h1>
+            <h1>Know when competitors change the offer.</h1>
 
             <p>
-              Track competitor ads, offers, landing pages, and creative shifts from one premium workspace. Five to Nine
-              turns market evidence into revenue decisions.
+              Enter a competitor website. Five to Nine watches ads and landing pages, captures
+              proof, and tells your team when visible offer text, CTAs, forms, or onboarding page copy move.
             </p>
 
             <Form className="f9-email-cta" method="get" action={primaryCta}>
@@ -184,15 +184,15 @@ export default function MarketingRoute() {
             <div className="f9-workspace-panel">
               <div className="f9-workspace-top">
                 <strong>Five to Nine</strong>
-                <span>Search market moves</span>
+                <span>Competitor watch</span>
               </div>
 
               <div className="f9-workspace-card f9-wide-card">
                 <div>
                   <span>Today</span>
-                  <h2>Priority market moves</h2>
+                  <h2>Competitor changes to review</h2>
                 </div>
-                <p>05:09 scan</p>
+                <p>Proof captured</p>
               </div>
 
               <div className="f9-stat-grid">
@@ -227,20 +227,22 @@ export default function MarketingRoute() {
               <div className="f9-brief-token" aria-hidden="true">
                 59
               </div>
-              <span>Revenue brief</span>
-              <strong>9 moves to consider</strong>
-              <p>Nykaa changed bundle angle. boAt removed COD offer. Meesho added discount hook.</p>
+              <span>Sample brief</span>
+              <strong>3 changes to review</strong>
+              <p>
+                Visible offer text changed. CTA changed on the destination page. A lead form appeared.
+              </p>
               <div>
                 <small>Screenshot</small>
                 <em>ready</em>
               </div>
               <div>
-                <small>HTML</small>
-                <em>linked</em>
+                <small>Page text</small>
+                <em>saved</em>
               </div>
               <div>
-                <small>OCR</small>
-                <em>matched</em>
+                <small>Source link</small>
+                <em>captured</em>
               </div>
             </div>
           </aside>
@@ -250,8 +252,8 @@ export default function MarketingRoute() {
       <section className="f9-backbone-section" id="platform">
         <div className="f9-container f9-backbone-shell">
           <div className="f9-backbone-heading">
-            <span>Revenue signal layer</span>
-            <h2>The signal backbone for teams watching market movement.</h2>
+            <span>Why teams use it</span>
+            <h2>Stop finding out after the sales call.</h2>
           </div>
 
           <div className="f9-backbone-stats" aria-label="Five to Nine signal model">
@@ -294,20 +296,20 @@ export default function MarketingRoute() {
         <div className="f9-container">
           <div className="f9-growth-pricing-head">
             <div>
-              <span>Commercial access</span>
-              <h2>Start with the monitor your team will actually use.</h2>
+              <span>Plans</span>
+              <h2>Choose the watch depth your team needs.</h2>
             </div>
 
-            <div className="f9-pricing-receipt" aria-label="Dodo local pricing">
-              <span>Dodo preview</span>
-              <strong>Local</strong>
-              <p>Buyer currency is served from checkout preview.</p>
+            <div className="f9-plan-summary-card" aria-label="Pricing summary">
+              <span>Recommended launch plan</span>
+              <strong>Start with Starter</strong>
+              <p>Weekly proof briefs, 10 watchlists, and enough capture room for a real sales team.</p>
             </div>
           </div>
 
           <p className="f9-growth-pricing-note">
-            Prices are loaded from Dodo for the buyer location. No unlimited claims: watchlists,
-            collections, digests, Meta beta access, and proof captures all have visible caps.
+            Every paid plan includes competitor watchlists, proof captures, saved collections, and
+            clear caps. Upgrade when your category gets noisier.
           </p>
 
           <div className="f9-commerce-grid">
@@ -316,8 +318,12 @@ export default function MarketingRoute() {
               const yearlyReady = hasPrice(localPricing, plan.slug, "yearly");
 
               return (
-                <article className="f9-commerce-card" key={plan.name}>
+                <article
+                  className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}
+                  key={plan.name}
+                >
                   <span>{plan.name}</span>
+                  {plan.slug === "starter" ? <em className="f9-plan-badge">Recommended</em> : null}
                   <h3>{priceLabel(localPricing, plan.slug, "monthly", plan.monthlyLabel)}</h3>
                   <small>{priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)}</small>
                   <p>{plan.detail}</p>
@@ -345,7 +351,7 @@ export default function MarketingRoute() {
                         ) : null}
                       </div>
                     ) : (
-                      <span className="f9-price-sync">Dodo price syncing</span>
+                      <span className="f9-price-sync">Prices loading</span>
                     )
                   ) : (
                     <Link to={primaryCta}>{primaryLabel}</Link>
@@ -357,10 +363,10 @@ export default function MarketingRoute() {
 
           <div className="f9-usage-bundles" aria-label="Usage bundles">
             <div className="f9-usage-bundles-head">
-              <span>Overflow packs</span>
+              <span>Extra proof capacity</span>
               <p>
-                When a workspace has a noisy launch, buy extra proof capacity instead of pretending
-                monitoring is unlimited.
+                Add proof captures for launch weeks or big campaigns without changing the team's
+                plan.
               </p>
             </div>
             <div className="f9-usage-bundle-grid">
@@ -388,7 +394,7 @@ export default function MarketingRoute() {
           <Link className="f9-footer-brand" to="/" aria-label="Five to Nine home">
             <BrandWordmark meta="Market intelligence" />
           </Link>
-          <p>Five to Nine turns competitor movement into source-aware revenue decisions.</p>
+          <p>Five to Nine helps teams see competitor offer and landing-page changes before the next sales call.</p>
           <nav aria-label="Footer">
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>

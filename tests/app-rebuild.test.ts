@@ -26,6 +26,8 @@ describe("app rebuild", () => {
   it("uses the fresh app shell and dashboard classes", () => {
     expect(appSurface).toContain('className="f9-app-shell"');
     expect(appSurface).toContain('className="f9-app-stack"');
+    expect(appSurface).toContain('className="f9-market-desk"');
+    expect(appSurface).toContain('className="f9-market-search"');
     expect(appSurface).toContain('className="f9-onboard-page"');
     expect(appClasses).not.toEqual(
       expect.arrayContaining([
@@ -62,6 +64,15 @@ describe("app rebuild", () => {
 
   it("uses the Five to Nine wordmark in the app shell", () => {
     expect(appLayout).toContain('<BrandWordmark meta="Workspace" />');
+  });
+
+  it("matches the advertised market-moves dashboard surface", () => {
+    expect(appLayout).toContain("Search market moves");
+    expect(dashboardRoute).toContain("Add your first competitor");
+    expect(dashboardRoute).toContain("Revenue brief");
+    expect(dashboardRoute).toContain("Competitor website");
+    expect(dashboardRoute).not.toContain("Commercial discovery live");
+    expect(dashboardRoute).not.toContain("source state visible");
   });
 
   it("does not ship the legacy website or workspace selectors", () => {

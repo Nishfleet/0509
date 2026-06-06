@@ -26,18 +26,34 @@ const staleSignals = [
   "Rs 2,500",
   "Rs 7,500",
   "APP_REGION_DEFAULT",
-];
-const requiredSourceSignals = [
-  "Market intelligence to grow revenue.",
-  "Revenue signal layer",
   "Dodo preview",
   "Buyer currency is served from checkout preview.",
+  "Prices are loaded from Dodo",
+  "No unlimited claims",
+  "Meta beta access",
+  "Dodo price syncing",
+  "Loading local monthly price",
+  "Loading local annual price",
+  "Loading local pack price",
+  "market lanes watched",
+  "source states separated",
+  "source trail per move",
+  "decision scan",
+  "Start with Scout",
+];
+const requiredSourceSignals = [
+  "Know when competitors change the offer.",
+  "Stop finding out after the sales call.",
+  "Recommended launch plan",
+  "Start with Starter",
+  "Monthly price loading",
   "DODO_0509_ADAPTIVE_CURRENCY",
 ];
 const requiredBuildSignals = [
-  "Market intelligence to grow revenue.",
-  "Dodo preview",
-  "Buyer currency is served from checkout preview.",
+  "Know when competitors change the offer.",
+  "Stop finding out after the sales call.",
+  "Recommended launch plan",
+  "Start with Starter",
 ];
 
 function readText(path) {

@@ -1,32 +1,77 @@
-import { captureBrowserRunSnapshot } from "~/lib/browser-run.server";
+import { captureRenderedLandingPageSnapshot } from "~/lib/browser-run.server";
 import type { AppEnv } from "~/lib/env.server";
 import { extractLandingPageSignals } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
+import {
+  normalizePublicHttpUrl,
+  resolvePublicHttpUrl,
+  resolvePublicRedirectUrl,
+} from "~/lib/public-url.server";
 import type { LandingPageSnapshotData } from "~/lib/types";
 
 const TITLE_REGEX = /<title[^>]*>([^<]+)<\/title>/i;
 const OG_TITLE_REGEX =
   /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i;
 const H1_REGEX = /<h1[^>]*>(.*?)<\/h1>/i;
+const MAX_LANDING_PAGE_REDIRECTS = 5;
+
+interface CaptureLandingPageSnapshotOptions {
+  allowRenderedFallback?: boolean;
+  preferRendered?: boolean;
+}
 
 export async function captureLandingPageSnapshot(
   env: AppEnv,
   url: string,
+  options: CaptureLandingPageSnapshotOptions = {},
 ): Promise<LandingPageSnapshotData | null> {
-  if (!url || !/^https?:\/\//i.test(url)) {
+  const publicUrl = await resolvePublicHttpUrl(url);
+  if (!publicUrl) {
+    return null;
+  }
+
+  return captureLandingPageSnapshotAt(env, publicUrl, options, 0);
+}
+
+async function captureLandingPageSnapshotAt(
+  env: AppEnv,
+  url: URL,
+  options: CaptureLandingPageSnapshotOptions,
+  redirectCount: number,
+): Promise<LandingPageSnapshotData | null> {
+  if (redirectCount > MAX_LANDING_PAGE_REDIRECTS) {
     return null;
   }
 
   try {
-    const response = await fetch(url, {
-      redirect: "follow",
+    const resolvedUrl = await resolvePublicHttpUrl(url);
+    if (!resolvedUrl) {
+      return null;
+    }
+
+    const response = await fetch(resolvedUrl.toString(), {
+      redirect: "manual",
       headers: {
         "user-agent": "0509-bot/1.0 (+https://0509.in)",
       },
     });
 
+    if (isRedirectStatus(response.status)) {
+      const redirectedUrl = resolvePublicRedirectUrl(response.headers.get("location"), resolvedUrl);
+      return redirectedUrl
+        ? captureLandingPageSnapshotAt(env, redirectedUrl, options, redirectCount + 1)
+        : null;
+    }
+
+    const finalUrl = await resolvePublicHttpUrl(response.url || resolvedUrl.toString());
+    if (!finalUrl) {
+      return null;
+    }
+
     if (!response.ok) {
-      return captureBrowserRunSnapshot(env, url);
+      return options.allowRenderedFallback === false
+        ? null
+        : captureRenderedLandingPageSnapshot(env, finalUrl.toString());
     }
 
     const html = await response.text();
@@ -38,13 +83,19 @@ export async function captureLandingPageSnapshot(
       "Landing page";
 
     const normalized = normalizeHeadline(headline);
-    const canonicalUrl = response.url || url;
+    const canonicalUrl = finalUrl.toString();
     const artifactKey = env.LANDING_PAGE_ARTIFACTS
       ? await persistArtifact(env.LANDING_PAGE_ARTIFACTS, canonicalUrl, html)
       : null;
+    if (options.preferRendered) {
+      const renderedSnapshot = await captureRenderedLandingPageSnapshot(env, canonicalUrl);
+      if (renderedSnapshot) {
+        return renderedSnapshot;
+      }
+    }
 
     return {
-      rawUrl: url,
+      rawUrl: url.toString(),
       canonicalUrl,
       rawHeadline: normalized.raw,
       normalizedHeadline: normalized.normalized,
@@ -60,8 +111,14 @@ export async function captureLandingPageSnapshot(
       },
     };
   } catch {
-    return captureBrowserRunSnapshot(env, url);
+    return options.allowRenderedFallback === false
+      ? null
+      : captureRenderedLandingPageSnapshot(env, url.toString());
   }
+}
+
+function isRedirectStatus(status: number) {
+  return status >= 300 && status < 400;
 }
 
 async function persistArtifact(bucket: R2Bucket, url: string, html: string) {

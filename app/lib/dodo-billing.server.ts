@@ -91,15 +91,28 @@ export async function verifyDodoWebhookRequest(env: AppEnv, request: Request, ra
     throw new Response("Missing Dodo webhook signature headers.", { status: 400 });
   }
 
-  const signedPayload = `${webhookId}.${webhookTimestamp}.${rawBody}`;
-  const expectedSignature = await hmacSha256Base64(secret, signedPayload);
+  const expectedSignature = await signDodoWebhookPayload(env, webhookId, webhookTimestamp, rawBody);
   if (!signatureMatches(webhookSignature, expectedSignature)) {
     throw new Response("Invalid Dodo webhook signature.", { status: 401 });
   }
 }
 
+export async function signDodoWebhookPayload(
+  env: AppEnv,
+  webhookId: string,
+  webhookTimestamp: string,
+  rawBody: string,
+) {
+  const secret = env.DODO_0509_WEBHOOK_SECRET?.trim();
+  if (!secret) throw new Response("Dodo webhook secret is not configured.", { status: 503 });
+
+  return hmacSha256Base64(secret, `${webhookId}.${webhookTimestamp}.${rawBody}`);
+}
+
 export function extractDodoProofCreditGrant(env: AppEnv, payload: unknown) {
-  const root = objectOrEmpty(payload);
+  if (!isSuccessfulDodoPaymentWebhook(payload)) return null;
+
+  const root = paymentPayloadFromWebhookPayload(payload);
   const brandId = readString(root, "brand_id");
   const configuredBrandId = dodo0509BrandId(env);
   if (configuredBrandId && brandId && brandId !== configuredBrandId) return null;
@@ -114,25 +127,27 @@ export function extractDodoProofCreditGrant(env: AppEnv, payload: unknown) {
   const bundle = productId ? dodo0509UsageBundleForProductId(env, productId) : undefined;
   if (!productId || !bundle) return null;
 
-  const quantity = Math.max(1, Math.floor(Number(readValue(product, "quantity") ?? 1)));
-  const credits = usageBundleCreditCount(bundle) * quantity;
-  const grantedAt = readString(root, "created_at") || new Date().toISOString();
+	  const quantity = Math.max(1, Math.floor(Number(readValue(product, "quantity") ?? 1)));
+	  const credits = usageBundleCreditCount(bundle) * quantity;
+	  const grantedAt = readString(root, "created_at") || new Date().toISOString();
 
-  return {
-    userId,
+	  return {
+	    userId,
     paymentId,
     productId,
     bundle,
-    quantity,
-    credits,
-    grantedAt,
-    expiresAt: addDaysIso(grantedAt, 30),
-    metadata: root,
-  };
-}
+	    quantity,
+	    credits,
+	    grantedAt,
+	    expiresAt: addDaysIso(grantedAt, 30),
+	    metadata: root,
+	  };
+	}
 
 export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
-  const root = objectOrEmpty(payload);
+  if (!isSuccessfulDodoPaymentWebhook(payload)) return null;
+
+  const root = paymentPayloadFromWebhookPayload(payload);
   const brandId = readString(root, "brand_id");
   const configuredBrandId = dodo0509BrandId(env);
   if (configuredBrandId && brandId && brandId !== configuredBrandId) return null;
@@ -157,15 +172,26 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
     (metadataCycle === "monthly" || metadataCycle === "yearly" ? metadataCycle : "monthly");
   if (!plan || !productId) return null;
 
-  return {
-    userId,
-    paymentId,
-    productId,
-    plan,
-    cycle,
-    status: readString(root, "status") || "payment.succeeded",
-    metadata: root,
-  };
+	  return {
+	    userId,
+	    paymentId,
+	    productId,
+	    plan,
+	    cycle,
+	    status: readString(root, "status") || "payment.succeeded",
+	    grantedAt: readDodoPaymentGrantTimestamp(root),
+	    metadata: root,
+	  };
+	}
+
+function readDodoPaymentGrantTimestamp(root: Record<string, unknown>) {
+  return (
+    readString(root, "paid_at") ||
+    readString(root, "succeeded_at") ||
+    readString(root, "updated_at") ||
+    readString(root, "created_at") ||
+    new Date().toISOString()
+  );
 }
 
 function productIdForTarget(env: AppEnv, target: DodoCheckoutTarget) {
@@ -174,6 +200,25 @@ function productIdForTarget(env: AppEnv, target: DodoCheckoutTarget) {
   }
 
   return dodo0509UsageBundleProductIds(env)[target.bundle];
+}
+
+function isSuccessfulDodoPaymentWebhook(payload: unknown) {
+  const envelope = objectOrEmpty(payload);
+  const eventType = readString(envelope, "type") || readString(envelope, "event");
+  const payment = paymentPayloadFromWebhookPayload(payload);
+  const status = readString(payment, "status");
+
+  if (eventType) {
+    return eventType === "payment.succeeded";
+  }
+
+  return status === "succeeded" || status === "payment.succeeded";
+}
+
+function paymentPayloadFromWebhookPayload(payload: unknown) {
+  const envelope = objectOrEmpty(payload);
+  const data = objectOrEmpty(envelope.data);
+  return data.payload_type === "Payment" || Object.keys(data).length > 0 ? data : envelope;
 }
 
 function firstProduct(root: Record<string, unknown>) {
