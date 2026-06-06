@@ -41,7 +41,8 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Readiness-gated beta");
     expect(marketingRoute).toContain("Launch status: readiness-gated.");
     expect(marketingRoute).toContain("Search and monitoring require an account");
-    expect(marketingRoute).toContain('to={rootData.session ? "/search" : "/auth/signup"}');
+    expect(marketingRoute).not.toContain("Account search");
+    expect(marketingRoute).not.toContain('to={rootData.session ? "/search" : "/auth/signup"}');
     expect(marketingRoute).not.toContain('<Link to="/search">Search</Link>');
     expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
   });
