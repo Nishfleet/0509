@@ -210,6 +210,18 @@ export default function DigestsRoute() {
                     >
                       Export CSV
                     </a>
+                    <a
+                      className="f9-secondary-button"
+                      href={`/export/digest/${data.selectedDigest.id}?format=json`}
+                    >
+                      API JSON
+                    </a>
+                    <a
+                      className="f9-secondary-button"
+                      href={`/export/digest/${data.selectedDigest.id}?format=slack`}
+                    >
+                      Slack copy
+                    </a>
                     <Form method="post">
                       <input name="intent" type="hidden" value="share-digest" />
                       <input name="digestId" type="hidden" value={data.selectedDigest.id} />

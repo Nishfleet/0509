@@ -18,7 +18,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 - `Demo proof` is the public hook: show a sample competitor, proof trail, digest preview, and export shape without exposing live search.
 - `Analysis` is account-gated: signed-in users search competitor ads, inspect the hook/offer/CTA/landing page, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, daily briefs, and weekly digests.
-- `Workspace memory` is the compounding layer: collections, notes, tags, exports, and share links.
+- `Workspace memory` is the compounding layer: collections, notes, tags, CSV/API JSON/Slack-ready exports, and share links.
 
 ## Current stack
 
@@ -49,7 +49,7 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/app/digests`
 - `/app/reports/:id`
 - `/share/:token`
-- `/export/:resourceType/:resourceId`
+- `/export/:resourceType/:resourceId` authenticated CSV export; `?format=json` returns account-scoped API JSON and `?format=slack` returns Slack-ready markdown
 
 ## Environment
 

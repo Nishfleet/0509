@@ -73,6 +73,10 @@ describe("app rebuild", () => {
     expect(dashboardRoute).toContain("Competitor website");
     expect(dashboardRoute).not.toContain("Commercial discovery live");
     expect(dashboardRoute).not.toContain("source state visible");
+    expect(appSurface).toContain("?format=json");
+    expect(appSurface).toContain("?format=slack");
+    expect(appSurface).toContain("API JSON");
+    expect(appSurface).toContain("Slack copy");
   });
 
   it("does not ship the legacy website or workspace selectors", () => {

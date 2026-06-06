@@ -15,6 +15,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Public sample proof loop for buyer evaluation at /api/demo-proof.
 - Account-gated competitor ad search, retained monitoring, and reusable saved evidence.
 - Search, competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
+- Authenticated collection, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily briefs and weekly digests should show priority, recommended next move, and proof trail.
 
@@ -65,6 +66,7 @@ Current product truth:
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
+- Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
 - Customer WhatsApp delivery must stay behind opt-in, template-readiness, and webhook-readiness checks.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
