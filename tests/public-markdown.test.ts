@@ -36,6 +36,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Public sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("/api/demo-proof");
     expect(PUBLIC_MARKDOWN).toContain("Public demo proof is sample-only");
+    expect(PUBLIC_MARKDOWN).toContain("exports support CSV, API JSON, and Slack-ready markdown");
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("Launch status is readiness-gated");

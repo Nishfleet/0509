@@ -201,6 +201,18 @@ export default function CollectionsRoute() {
                   >
                     Export CSV
                   </a>
+                  <a
+                    className="f9-secondary-button"
+                    href={`/export/collection/${data.selectedCollection.id}?format=json`}
+                  >
+                    API JSON
+                  </a>
+                  <a
+                    className="f9-secondary-button"
+                    href={`/export/collection/${data.selectedCollection.id}?format=slack`}
+                  >
+                    Slack copy
+                  </a>
                   <Form method="post">
                     <input name="intent" type="hidden" value="share-collection" />
                     <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
