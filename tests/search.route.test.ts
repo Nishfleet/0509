@@ -68,7 +68,7 @@ afterEach(() => {
 });
 
 describe("search loader", () => {
-  it("redirects a logged-out visitor before showing the search page", async () => {
+  it("404s a logged-out visitor before showing the search page", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
     const searchAdsViaSourceResolver = vi.fn();
@@ -102,8 +102,8 @@ describe("search loader", () => {
     }
 
     expect(getOptionalSession).toHaveBeenCalledWith(env, expect.any(Request));
-    expect(response?.status).toBe(302);
-    expect(response?.headers.get("Location")).toBe("/auth/login?redirectTo=%2Fsearch");
+    expect(response?.status).toBe(404);
+    expect(await response?.text()).toBe("Not found");
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
   });
@@ -157,7 +157,7 @@ describe("search loader", () => {
     });
   });
 
-  it("redirects a logged-out visitor before showing competitor results", async () => {
+  it("404s a logged-out visitor before showing competitor results", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
     const searchAdsViaSourceResolver = vi.fn();
@@ -190,10 +190,8 @@ describe("search loader", () => {
       response = error as Response;
     }
 
-    expect(response?.status).toBe(302);
-    expect(response?.headers.get("Location")).toBe(
-      "/auth/login?redirectTo=%2Fsearch%3Fquery%3Dnykaa",
-    );
+    expect(response?.status).toBe(404);
+    expect(await response?.text()).toBe("Not found");
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
   });
@@ -376,7 +374,8 @@ describe("search loader", () => {
       redirected = error as Response;
     }
 
-    expect(redirected?.status).toBe(302);
+    expect(redirected?.status).toBe(404);
+    expect(await redirected?.text()).toBe("Not found");
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
 
     await loader({

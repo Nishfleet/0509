@@ -602,13 +602,10 @@ describe("current 0509 probe", () => {
     );
   });
 
-  it("skips unauthenticated rendered-result probes when search redirects to sign in", async () => {
+  it("skips unauthenticated rendered-result probes when search is not public", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response("", {
-        status: 302,
-        headers: {
-          Location: "/auth/login?redirectTo=%2Fsearch%3Fquery%3Dnykaa",
-        },
+        status: 404,
       }),
     );
 
@@ -625,8 +622,9 @@ describe("current 0509 probe", () => {
     );
 
     expect(result.status).toBe("skipped");
+    expect(result.httpStatus).toBe(404);
     expect(result.loginWall).toBe(true);
-    expect(result.note).toContain("require an account");
+    expect(result.note).toContain("not public");
     expect(fetchImpl).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
