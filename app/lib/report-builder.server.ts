@@ -31,17 +31,21 @@ const ANALYSIS_FIELD_PRIORITY = [
   "format",
   "language_label",
   "destination_type",
+  "channel",
+  "proof_url",
   "ocr_text",
   "landing_page_headline_summary",
   "cta_text",
   "price_text",
   "form_present",
+  "note",
 ] as const;
 
 const FIELD_LABEL_OVERRIDES: Record<string, string> = {
   cta: "CTA",
   cta_text: "CTA text",
   ocr_text: "OCR text",
+  proof_url: "Proof URL",
 };
 
 export function buildCollectionReport(input: {

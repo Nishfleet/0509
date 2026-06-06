@@ -9,7 +9,18 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
+import { proofLinkForAd } from "~/lib/proof-link";
 import { createReportId } from "~/lib/report";
+
+const externalProofChannels = [
+  "TikTok",
+  "Google / YouTube",
+  "LinkedIn",
+  "Pinterest",
+  "Meta",
+  "Landing page",
+  "Other",
+];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -36,7 +47,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
-  const { createCollection, createShareLink, getCollection, updateCollectionItem } = await import("~/lib/data.server");
+  const {
+    addExternalProofToCollection,
+    createCollection,
+    createShareLink,
+    getCollection,
+    updateCollectionItem,
+  } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const formData = await request.formData();
@@ -88,6 +105,39 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: true,
       message: "Collection note updated.",
+    };
+  }
+
+  if (intent === "add-external-proof") {
+    const collectionId = String(formData.get("collectionId") ?? "");
+    const advertiser = String(formData.get("advertiser") ?? "");
+    const proofUrl = String(formData.get("proofUrl") ?? "");
+    const channel = String(formData.get("channel") ?? "");
+    const hook = String(formData.get("hook") ?? "");
+    const offer = String(formData.get("offer") ?? "");
+    const cta = String(formData.get("cta") ?? "");
+    const note = String(formData.get("note") ?? "");
+    const observedAt = String(formData.get("observedAt") ?? "");
+    const tags = String(formData.get("tags") ?? "")
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    const ad = await addExternalProofToCollection(env, session.user.id, collectionId, {
+      advertiser,
+      proofUrl,
+      channel,
+      hook,
+      offer,
+      cta,
+      note,
+      observedAt,
+      tags,
+    });
+
+    return {
+      ok: true,
+      message: `Saved ${ad.platforms[0] ?? "external"} proof for ${ad.advertiser}.`,
     };
   }
 
@@ -228,10 +278,72 @@ export default function CollectionsRoute() {
 
               {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
+              <Form className="f9-auth-form" method="post">
+                <input name="intent" type="hidden" value="add-external-proof" />
+                <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
+                <div className="f9-panel-toolbar">
+                  <div>
+                    <span className="f9-app-kicker">External proof</span>
+                    <h3>Add a proof link</h3>
+                  </div>
+                </div>
+                <div className="f9-field-grid">
+                  <label className="f9-field">
+                    <span>Channel</span>
+                    <select name="channel" defaultValue="TikTok">
+                      {externalProofChannels.map((channel) => (
+                        <option key={channel} value={channel}>
+                          {channel}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="f9-field">
+                    <span>Advertiser</span>
+                    <input name="advertiser" placeholder="Competitor name" required />
+                  </label>
+                </div>
+                <label className="f9-field">
+                  <span>Proof URL</span>
+                  <input name="proofUrl" placeholder="https://..." required type="url" />
+                </label>
+                <label className="f9-field">
+                  <span>Hook</span>
+                  <input name="hook" placeholder="Main claim, hook, or visible change" required />
+                </label>
+                <div className="f9-field-grid">
+                  <label className="f9-field">
+                    <span>Offer</span>
+                    <input name="offer" placeholder="Optional offer" />
+                  </label>
+                  <label className="f9-field">
+                    <span>CTA</span>
+                    <input name="cta" placeholder="Optional CTA" />
+                  </label>
+                </div>
+                <div className="f9-field-grid">
+                  <label className="f9-field">
+                    <span>Observed</span>
+                    <input name="observedAt" type="date" />
+                  </label>
+                  <label className="f9-field">
+                    <span>Tags</span>
+                    <input name="tags" placeholder="campaign, launch, offer" />
+                  </label>
+                </div>
+                <label className="f9-field">
+                  <span>Note</span>
+                  <textarea name="note" placeholder="Optional team context" rows={2} />
+                </label>
+                <button className="f9-secondary-button" type="submit">
+                  Save proof link
+                </button>
+              </Form>
+
               {data.items.length === 0 ? (
                 <div className="f9-empty-panel">
-                  <h2>Save proof from search</h2>
-                  <p>Run a competitor search, open an ad, and save the examples your team needs to reuse.</p>
+                  <h2>Add proof or save from search</h2>
+                  <p>Save a proof link here, or run a competitor search and save the examples your team needs to reuse.</p>
                   <Link className="f9-primary-button" to="/search">
                     Open search
                   </Link>
@@ -245,9 +357,16 @@ export default function CollectionsRoute() {
                           <h3>{item.ad.advertiser}</h3>
                           <p className="f9-muted-copy">{item.ad.hook}</p>
                         </div>
-                        <span className="f9-status-pill">{item.ad.format}</span>
+                        <span className="f9-status-pill">{item.ad.platforms?.[0] ?? item.ad.format}</span>
                       </div>
                       <p>{item.ad.offer}</p>
+                      {proofLinkForAd(item.ad) ? (
+                        <p className="f9-muted-copy">
+                          <a href={proofLinkForAd(item.ad) ?? undefined} rel="noreferrer" target="_blank">
+                            Open proof
+                          </a>
+                        </p>
+                      ) : null}
                       <p className="f9-muted-copy">
                         {item.tags.length > 0 ? item.tags.join(", ") : "No tags yet"}
                       </p>

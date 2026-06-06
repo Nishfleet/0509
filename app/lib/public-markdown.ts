@@ -16,6 +16,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Account-gated competitor ad search, retained monitoring, and reusable saved evidence.
 - Search, competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Authenticated collection, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
+- Signed-in collections can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources.
 - Customer API keys can read account-owned collection, watchlist, and digest exports at /api/v1.
 - Customer API keys can also use the read-only MCP endpoint at /api/mcp for account-owned collection, watchlist, and digest exports.
 - Slack incoming-webhook delivery can send eligible digests and high-priority change alerts for configured account destinations.
@@ -33,7 +34,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
-- Observed campaign duration is based on first-seen and last-observed proof only. Spend, impressions, reach, and unsupported-channel benchmarks are not live.
+- Observed campaign duration is based on first-seen and last-observed proof only. Manual external proof links are saved evidence, not automated non-Meta ingestion. Spend, impressions, reach, and unsupported-channel benchmarks are not live.
 - Customer WhatsApp delivery stays behind opt-in, template-readiness, and webhook-readiness checks.
 
 ## Pricing
@@ -72,14 +73,14 @@ Current product truth:
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
-- Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; spend, impressions, reach, and unsupported-channel benchmarks are not live.
+- Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof to saved collections, but spend, impressions, reach, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
 - Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
 - Customer API keys support read-only /api/v1 collection, watchlist, and digest exports for account-owned data.
 - Customer API keys support the read-only /api/mcp endpoint for agent access to account-owned collection, watchlist, and digest exports.
 - Slack incoming-webhook delivery is live for configured account destinations and can send eligible digests and high-priority change alerts.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Customer WhatsApp delivery must stay behind opt-in, template-readiness, and webhook-readiness checks.
-- TikTok, Google, YouTube, LinkedIn, Pinterest, and public write APIs are not live yet.
+- Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and public write APIs are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
 Core layers:

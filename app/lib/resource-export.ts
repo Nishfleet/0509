@@ -8,6 +8,7 @@ import {
   buildWatchlistInsightDepth,
   formatInsightDepthMarkdown,
 } from "~/lib/insight-depth";
+import { proofLinkForAd } from "~/lib/proof-link";
 import type {
   CollectionItemRecord,
   CollectionRecord,
@@ -50,10 +51,14 @@ export function collectionExportResponse(
         formatInsightDepthMarkdown(payload.insightDepth),
         items.length === 0 ? "No saved proof yet." : "Saved proof:",
         ...items.map(
-          (item) =>
-            `- ${stringValue(item.ad.advertiser)}: ${stringValue(item.ad.hook)} | ${stringValue(
+          (item) => {
+            const proofLink = proofLinkForAd(item.ad);
+            return `- ${stringValue(item.ad.advertiser)}: ${stringValue(item.ad.hook)} | ${stringValue(
               item.ad.offer,
-            )} | CTA: ${stringValue(item.ad.cta)}${item.note ? ` | Note: ${item.note}` : ""}`,
+            )} | CTA: ${stringValue(item.ad.cta)}${proofLink ? ` | Proof: ${proofLink}` : ""}${
+              item.note ? ` | Note: ${item.note}` : ""
+            }`;
+          },
         ),
       ],
     );
@@ -62,12 +67,13 @@ export function collectionExportResponse(
   return csvResponse(
     "collection.csv",
     [
-      ["advertiser", "hook", "offer", "cta", "tags", "note"],
+      ["advertiser", "hook", "offer", "cta", "proof_url", "tags", "note"],
       ...items.map((item) => [
         stringValue(item.ad.advertiser),
         stringValue(item.ad.hook),
         stringValue(item.ad.offer),
         stringValue(item.ad.cta),
+        proofLinkForAd(item.ad) ?? "",
         item.tags.join("|"),
         item.note ?? "",
       ]),
@@ -186,6 +192,7 @@ export function buildCollectionExportPayload(
       cta: stringValue(item.ad.cta),
       landingPageUrl: item.ad.landingPageUrl,
       adSnapshotUrl: item.ad.adSnapshotUrl,
+      proofUrl: proofLinkForAd(item.ad),
       tags: item.tags,
       note: item.note,
       savedAt: item.createdAt,
