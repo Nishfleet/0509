@@ -22,7 +22,6 @@ import {
   parseSearchParams,
 } from "~/lib/normalize";
 import {
-  formatAnalysisSourceLabel,
   formatCaptureMethodLabel,
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
@@ -32,7 +31,7 @@ import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse } from "~/lib/types";
 
 const searchDescription =
-  "Search competitor Meta ads, inspect the hook and offer, save the best examples, and turn useful queries into proof-backed watchlists.";
+  "Sign in to search competitor Meta ads, save useful examples, and track visible offer changes over time.";
 
 export const links: LinksFunction = () => canonicalLinks("/search");
 
@@ -52,6 +51,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const competitorWebsite = normalizeCompetitorWebsiteInput(url.searchParams.get("website") ?? "");
   const parsed = applyWebsiteSearchFallback(parseSearchParams(url.searchParams), competitorWebsite);
+  const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
+
+  if (!session && !(forceLive && parsed.filters.query)) {
+    throw redirect(`/auth/login?redirectTo=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
+  }
+
   const collections = session ? await listCollections(env, session.user.id) : [];
 
   if (!parsed.filters.query) {
@@ -69,7 +74,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
-  const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
   const customerMetaAdLibraryToken = session
     ? await (await import("~/lib/customer-meta.server")).getCustomerMetaAdLibraryToken(env, session.user.id)
     : null;
@@ -160,7 +164,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message: "You have reached your workspace watchlist limit.",
+        message: "You have reached your competitor tracking limit.",
       };
     }
 
@@ -181,7 +185,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       });
 
       if (!savedQuery) {
-        return { ok: false, message: "Could not create the source query for this watchlist." };
+        return { ok: false, message: "Could not prepare this competitor for tracking." };
       }
 
       watchlist = await createWatchlist(env, session.user.id, {
@@ -245,6 +249,9 @@ export default function SearchRoute() {
   const inferredWatchlistName = (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
   const canTrackCurrentCompetitor = Boolean(data.filters.query);
   const discoverySummary = formatDiscoverySummary(data.result);
+  const idleSearchMessage = rootData.session
+    ? "Enter a competitor website to see ads and save what matters."
+    : "Sign in to see ads and save what matters.";
 
   return (
     <main className="f9-search-page">
@@ -259,11 +266,11 @@ export default function SearchRoute() {
             <Link to="/search">Search</Link>
             {rootData.session ? (
               <Link className="f9-search-nav-pill" to="/app">
-                Workspace
+                Account
               </Link>
             ) : (
               <Link className="f9-search-nav-pill" to="/auth/signup?redirectTo=/search">
-                Start now
+                Create account
               </Link>
             )}
           </nav>
@@ -274,16 +281,16 @@ export default function SearchRoute() {
         <div className="f9-search-gradient" aria-hidden="true" />
         <div className="f9-container f9-search-hero-grid">
           <div>
-            <p className="f9-search-kicker">Competitor tracker</p>
-            <h1>Enter a competitor website. Track what changes.</h1>
+            <p className="f9-search-kicker">Competitor ads</p>
+            <h1>Track competitor ads from one website.</h1>
             <p>
-              Start with the site you care about. Five to Nine turns the domain into a Meta ads search,
-              captures landing-page proof, and keeps the watchlist moving after you leave.
+              Start with the site you care about. Five to Nine finds the ads behind it, saves useful
+              examples, and keeps watching for offer changes.
             </p>
           </div>
           <div className="f9-search-intake-card">
-            <span>Track competitor</span>
-            <h2>Competitor website</h2>
+            <span>Start here</span>
+            <h2>Which website should we watch?</h2>
             <Form className="f9-hero-intake-form" method="get">
               <input name="mode" type="hidden" value="advertiser" />
               <input name="country" type="hidden" value={data.filters.country} />
@@ -300,7 +307,7 @@ export default function SearchRoute() {
                 />
               </label>
               <label className="f9-field">
-                <span>Brand or Meta search term</span>
+                <span>Brand or search term</span>
                 <input
                   defaultValue={data.filters.query}
                   name="query"
@@ -310,11 +317,11 @@ export default function SearchRoute() {
               </label>
               <div className="f9-action-row">
                 <button className="f9-primary-button" type="submit">
-                  Find competitor ads
+                  See competitor ads
                 </button>
                 {!rootData.session ? (
                   <Link className="f9-secondary-button" to={signupTrackingPath}>
-                    Sign in to track
+                    Sign in to see results
                   </Link>
                 ) : null}
               </div>
@@ -329,12 +336,18 @@ export default function SearchRoute() {
                 />
                 <input name="name" type="hidden" value={`${inferredWatchlistName} watch`} />
                 <button className="f9-secondary-button" type="submit">
-                  Start tracking this competitor
+                  Track this competitor
                 </button>
               </Form>
             ) : null}
-            <p>
-              Tracking path: <strong>{formatSearchSourceLabel(data.result)}</strong>
+            <p
+              data-f9-result-cache-status={data.result.cacheStatus ?? "none"}
+              data-f9-result-source={data.result.source}
+            >
+              {data.result.discoveryStatus === "disabled" ? idleSearchMessage : "Results: "}
+              {data.result.discoveryStatus !== "disabled" ? (
+                <strong>{formatSearchSourceLabel(data.result)}</strong>
+              ) : null}
             </p>
           </div>
         </div>
@@ -350,11 +363,8 @@ export default function SearchRoute() {
 
           {discoverySummary ? (
             <div className="f9-discovery-banner">
-              <span>Search status</span>
+              <span>Results update</span>
               <p>{discoverySummary}</p>
-              {data.result.discoveryFailureClass ? (
-                <small>Issue type: {formatFailureClass(data.result.discoveryFailureClass)}</small>
-              ) : null}
             </div>
           ) : null}
 
@@ -362,9 +372,9 @@ export default function SearchRoute() {
             <section className="f9-search-controls">
               <Form className="f9-search-form" method="get">
                 <div className="f9-controls-head">
-                  <span>Search setup</span>
-                  <h2>Choose who to watch</h2>
-                  <p>Enter a competitor site first. The brand/search field stays editable when Meta uses a different advertiser name.</p>
+                  <span>Search</span>
+                  <h2>Choose a competitor</h2>
+                  <p>Enter a competitor site first. Use the brand field if its ad account uses a different name.</p>
                 </div>
 
                 <label className="f9-field is-primary">
@@ -375,7 +385,7 @@ export default function SearchRoute() {
                     placeholder="https://mamaearth.in"
                     type="text"
                   />
-                  <small>Used to start the watchlist and infer the Meta advertiser search.</small>
+                  <small>This becomes the saved competitor when you track it.</small>
                 </label>
 
                 <div className="f9-mode-toggle">
@@ -453,13 +463,13 @@ export default function SearchRoute() {
 
                 <div className="f9-action-row">
                   <button className="f9-primary-button" type="submit">
-                    Run search
+                    Search ads
                   </button>
                   <Link
                     className="f9-secondary-button"
                     to={`/search?mode=${data.mode}&query=${encodeURIComponent(sampleQueries[data.mode][0])}`}
                   >
-                    Load example
+                    Example search
                   </Link>
                 </div>
               </Form>
@@ -525,11 +535,10 @@ export default function SearchRoute() {
                 <div className="f9-side-note">
                   <span>Save the watch</span>
                   <p>
-                    Search stays public. Tracking competitors, saving searches, and sharing collections need a workspace
-                    so the intelligence is still there next week.
+                    Sign in to view results, save useful ads, and keep tracking the competitor next week.
                   </p>
                   <Link className="f9-primary-button" to={signupTrackingPath}>
-                    Create workspace to track
+                    Create account
                   </Link>
                 </div>
               )}
@@ -539,7 +548,7 @@ export default function SearchRoute() {
               <div className="f9-panel-head">
                 <div>
                   <span>Results</span>
-                  <h2>{data.result.ads.length} ads on this page</h2>
+                  <h2>{data.result.ads.length} ads found</h2>
                 </div>
                 {data.result.nextCursor ? (
                   <Link
@@ -606,7 +615,7 @@ export default function SearchRoute() {
                 <>
                   <div className="f9-panel-head">
                     <div>
-                      <span>Ad proof</span>
+                      <span>Ad details</span>
                       <h2>{data.selectedAd.advertiser}</h2>
                     </div>
                     <em className={data.selectedAd.active ? "is-active" : ""}>
@@ -629,17 +638,17 @@ export default function SearchRoute() {
                   </dl>
 
                   <div className="f9-proof-block">
-                    <span>Creative text</span>
+                    <span>Text in the ad</span>
                     <p>{formatLandingPageSignalValue(creativeTextField?.fieldValue)}</p>
                     <small>
                       {creativeTextField
-                        ? `${formatAnalysisSourceLabel(creativeTextField.provenanceSource)} · best-effort creative extraction`
+                        ? "Read from the ad creative when available."
                         : "Not detected from the ad snapshot yet."}
                     </small>
                   </div>
 
                   <div className="f9-proof-block">
-                    <span>Landing page intelligence</span>
+                    <span>Landing page</span>
                     <h3>{data.selectedAd.landingPage?.rawHeadline ?? "Headline not captured yet"}</h3>
                     <dl className="f9-detail-grid">
                       <DetailRow
@@ -655,7 +664,7 @@ export default function SearchRoute() {
                         value={formatLandingPageFormValue(data.selectedAd.landingPage?.formPresent)}
                       />
                       <DetailRow
-                        label="Capture method"
+                        label="Page check"
                         value={formatCaptureMethodLabel(data.selectedAd.landingPage?.captureMethod)}
                       />
                     </dl>
@@ -669,16 +678,8 @@ export default function SearchRoute() {
                   </div>
 
                   <div className="f9-proof-block">
-                    <span>How this was extracted</span>
-                    <ul className="f9-field-list">
-                      {data.selectedAd.analysisFields.map((field) => (
-                        <li key={`${field.fieldKey}-${field.provenanceSource}`}>
-                          <strong>{field.fieldKey.replaceAll("_", " ")}</strong>
-                          <span>{field.fieldValue || "Not detected"}</span>
-                          <small>{formatAnalysisSourceLabel(field.provenanceSource)}</small>
-                        </li>
-                      ))}
-                    </ul>
+                    <span>Why this may matter</span>
+                    <p>{data.selectedAd.researchSummary}</p>
                   </div>
 
                   {data.session && data.collections.length > 0 ? (
@@ -709,7 +710,7 @@ export default function SearchRoute() {
                     </Form>
                   ) : data.session ? (
                     <div className="f9-side-note">
-                      <p>Create a collection in the workspace first, then save ads from search.</p>
+                      <p>Create a collection first, then save ads from search.</p>
                       <Link className="f9-secondary-button" to="/app/collections">
                         Open collections
                       </Link>
@@ -786,11 +787,11 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 function formatSearchSourceLabel(result: SearchResponse) {
   if (result.discoveryStatus === "disabled") {
-    return "Ready to search";
+    return "Ready when you are";
   }
 
   if (result.discoveryStatus === "degraded" && result.ads.length === 0) {
-    return "Live search delayed";
+    return "Fresh results delayed";
   }
 
   if (
@@ -798,25 +799,25 @@ function formatSearchSourceLabel(result: SearchResponse) {
     result.cacheStatus === "hit" ||
     result.cacheStatus === "stale"
   ) {
-    return "Cached live results";
+    return "Recent results";
   }
 
   if (result.source === "meta_library_browser") {
-    return "Live Ad Library capture";
+    return "Fresh results";
   }
 
   if (result.source === "meta_api") {
-    return "Workspace Meta access";
+    return "Fresh results";
   }
 
   if (result.source === "meta") {
-    return "Meta Ad Library";
+    return "Fresh results";
   }
 
-  return "Demo dataset";
+  return "Sample results";
 }
 
-function formatDiscoverySummary(result: SearchResponse) {
+export function formatDiscoverySummary(result: SearchResponse) {
   if (!result.discoverySummary) {
     return null;
   }
@@ -840,10 +841,29 @@ function formatDiscoverySummary(result: SearchResponse) {
   }
 
   if (/API fallback/i.test(result.discoverySummary)) {
-    return result.discoverySummary.replace(/API fallback/gi, "workspace Meta access");
+    const fallbackUnavailable =
+      result.discoveryStatus === "degraded" ||
+      Boolean(result.discoveryFailureClass) ||
+      /failed/i.test(result.discoverySummary);
+
+    if (fallbackUnavailable) {
+      return "Fresh visual checks are delayed and no alternate results are available.";
+    }
+
+    if (result.ads.length === 0) {
+      return "Fresh visual checks are delayed; alternate Meta checks found no ads.";
+    }
+
+    return "Fresh visual checks are delayed; showing alternate Meta ad results.";
   }
 
-  return result.discoverySummary;
+  return result.discoverySummary
+    .replace(/Commercial discovery/gi, "Competitor ad checks")
+    .replace(/commercial discovery/gi, "competitor ad checks")
+    .replace(/Browser Run/gi, "visual checks")
+    .replace(/API fallback/gi, "alternate Meta ad results")
+    .replace(/cached live results/gi, "recent results")
+    .replace(/cached results/gi, "recent results");
 }
 
 function formatEmptyResultHeadline(result: SearchResponse) {
@@ -856,10 +876,6 @@ function formatEmptyResultHeadline(result: SearchResponse) {
   }
 
   return "No ads found for this query";
-}
-
-function formatFailureClass(failureClass: string) {
-  return failureClass.replaceAll("_", " ");
 }
 
 function canCreateAdvertiserWatchlist(query: ReturnType<typeof normalizeSavedQuery>) {

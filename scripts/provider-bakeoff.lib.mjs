@@ -219,9 +219,20 @@ export function analyzeMetaLibraryHtml(html) {
   const mentionsFacebook = text.includes("facebook") || text.includes("meta ad library");
   const renderedText = stripHtml(html);
   const sourceMatch = renderedText.match(
-    /(?:source:\s*|tracking path:\s*|meta ads beta\s*[·-]\s*)(cached live results|live ad library capture|customer api fallback|workspace meta access|api fallback|demo dataset)/i,
+    /(?:source:\s*|tracking path:\s*|meta ads beta\s*[·-]\s*|results:\s*)(recent results|fresh results delayed|fresh results|sample results|cached live results|live ad library capture|customer api fallback|workspace meta access|api fallback|demo dataset)/i,
   );
-  const resultCountMatch = stripHtml(html).match(/\b(\d+)\s+ads?\s+on\s+this\s+page\b/i);
+  const sourceMarkerMatch = html.match(
+    /\bdata-f9-result-source=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i,
+  );
+  const cacheMarkerMatch = html.match(
+    /\bdata-f9-result-cache-status=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i,
+  );
+  const resultCountMatch = renderedText.match(/\b(\d+)\s+ads?\s+(?:found|on\s+this\s+page)\b/i);
+  const sourceMarker = sourceMarkerMatch?.[1] ?? sourceMarkerMatch?.[2] ?? sourceMarkerMatch?.[3] ?? "";
+  const cacheMarker = cacheMarkerMatch?.[1] ?? cacheMarkerMatch?.[2] ?? cacheMarkerMatch?.[3] ?? "";
+  const sourceLabel =
+    normalizeCurrent0509SourceMarker(sourceMarker, cacheMarker) ??
+    (sourceMatch?.[1] ? normalizeCurrent0509SourceLabel(sourceMatch[1]) : null);
 
   return {
     libraryIds: [...libraryIds],
@@ -237,7 +248,7 @@ export function analyzeMetaLibraryHtml(html) {
       text.includes("temporarily blocked") ||
       text.includes("unusual activity"),
     degraded: text.includes("commercial discovery degraded") || text.includes("live search is delayed"),
-    sourceLabel: sourceMatch?.[1] ? normalizeCurrent0509SourceLabel(sourceMatch[1]) : null,
+    sourceLabel,
     resultCount: resultCountMatch?.[1] ? Number(resultCountMatch[1]) : null,
     noAdsFound: text.includes("no ads found for this query"),
   };
@@ -260,13 +271,58 @@ function normalizeCurrent0509SourceLabel(value) {
   if (normalized === "cached live results") {
     return "Cached live results";
   }
+  if (normalized === "recent results") {
+    return "Cached live results";
+  }
   if (normalized === "live ad library capture") {
     return "Live Ad Library capture";
+  }
+  if (normalized === "fresh results") {
+    return "Fresh results";
+  }
+  if (normalized === "fresh results delayed") {
+    return "Fresh results delayed";
+  }
+  if (normalized === "sample results") {
+    return "Demo dataset";
   }
   if (normalized === "demo dataset") {
     return "Demo dataset";
   }
   return value.trim();
+}
+
+/**
+ * @param {string} source
+ * @param {string} cacheStatus
+ */
+function normalizeCurrent0509SourceMarker(source, cacheStatus = "") {
+  const normalizedSource = source.trim().toLowerCase();
+  const normalizedCacheStatus = cacheStatus.trim().toLowerCase();
+  if (normalizedCacheStatus === "hit" || normalizedCacheStatus === "stale") {
+    return "Cached live results";
+  }
+  if (normalizedSource === "meta_library_browser") {
+    return "Live Ad Library capture";
+  }
+  if (normalizedSource === "meta_api" || normalizedSource === "meta") {
+    return "API fallback";
+  }
+  if (normalizedSource === "demo") {
+    return "Demo dataset";
+  }
+  return null;
+}
+
+/**
+ * @param {Response} response
+ */
+function isCurrent0509LoginRedirect(response) {
+  if (response.status < 300 || response.status >= 400) {
+    return false;
+  }
+  const location = response.headers?.get?.("location") ?? "";
+  return /\/auth\/login\b/i.test(location);
 }
 
 /**
@@ -462,27 +518,52 @@ function classifyCurrent0509Outcome(analysis, ok) {
  */
 export async function runCurrent0509Probe(target, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const isPrivateFreshLiveProbe = options.forceLive === true;
+  const canaryBypassToken = isPrivateFreshLiveProbe ? options.canaryBypassToken?.trim() : undefined;
   const timeoutMs =
     options.timeoutMs ??
-    (options.forceLive ? FRESH_LIVE_CURRENT_0509_TIMEOUT_MS : CURRENT_0509_PROBE_TIMEOUT_MS);
+    (isPrivateFreshLiveProbe ? FRESH_LIVE_CURRENT_0509_TIMEOUT_MS : CURRENT_0509_PROBE_TIMEOUT_MS);
   const url = buildCurrent0509SearchUrl({
     query: target.query,
     country: target.country,
     mode: target.mode,
     baseUrl: options.baseUrl,
-    forceLive: options.forceLive,
+    forceLive: isPrivateFreshLiveProbe,
   });
   const startedAt = performance.now();
   const headers = {
     "user-agent": "0509-provider-bakeoff/1.0",
-    ...(options.canaryBypassToken ? { "x-0509-canary-token": options.canaryBypassToken } : {}),
+    ...(canaryBypassToken ? { "x-0509-canary-token": canaryBypassToken } : {}),
   };
 
   try {
     const response = await fetchImpl(url, {
       headers,
+      redirect: "manual",
       signal: AbortSignal.timeout(timeoutMs),
     });
+    if (isCurrent0509LoginRedirect(response)) {
+      return {
+        provider: "current_0509",
+        query: target.query,
+        country: target.country,
+        mode: target.mode,
+        status: isPrivateFreshLiveProbe ? "blocked" : "skipped",
+        latencyMs: Math.round(performance.now() - startedAt),
+        httpStatus: response.status,
+        siteStatus: null,
+        matchCount: 0,
+        loginWall: true,
+        rateLimited: false,
+        blockedLikely: isPrivateFreshLiveProbe,
+        degraded: false,
+        sourceLabel: null,
+        url,
+        note: isPrivateFreshLiveProbe
+          ? "Private current_0509 probe was redirected to sign in."
+          : "Current 0509 search results require an account; set CANARY_BYPASS_TOKEN for a private live probe.",
+      };
+    }
     const html = await response.text();
     const analysis = analyzeMetaLibraryHtml(html);
     const matchCount = analysis.resultCount ?? analysis.matchCount;

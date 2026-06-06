@@ -63,11 +63,11 @@ describe("app rebuild", () => {
   });
 
   it("uses the Five to Nine wordmark in the app shell", () => {
-    expect(appLayout).toContain('<BrandWordmark meta="Workspace" />');
+    expect(appLayout).toContain('<BrandWordmark meta="Account" />');
   });
 
-  it("matches the advertised market-moves dashboard surface", () => {
-    expect(appLayout).toContain("Search market moves");
+  it("matches the advertised competitor-ad dashboard surface", () => {
+    expect(appLayout).toContain("Search competitor ads");
     expect(dashboardRoute).toContain("Add your first competitor");
     expect(dashboardRoute).toContain("Revenue brief");
     expect(dashboardRoute).toContain("Competitor website");

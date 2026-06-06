@@ -554,7 +554,7 @@ export default function WatchlistsRoute() {
                       />
                     </label>
                     <label className="f9-field">
-                      <span>Brand or Meta search term</span>
+                      <span>Brand or search term</span>
                       <input
                         defaultValue={data.selectedWatchlist.targetLabel}
                         name="targetLabel"
@@ -569,17 +569,16 @@ export default function WatchlistsRoute() {
                 </section>
 
                 <section>
-                  <p className="f9-app-kicker">Tracking path</p>
+                  <p className="f9-app-kicker">Tracking status</p>
                   <div className="f9-dashboard-grid">
                     <article className="f9-app-panel">
                       <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
-                      <p className="f9-muted-copy">{data.discoveryStatus.summary}</p>
+                      <p className="f9-muted-copy">
+                        {formatTrackingStatusSummary(data.discoveryStatus.summary)}
+                      </p>
                       {data.discoveryStatus.lastErrorCode ? (
                         <p className="f9-muted-copy">
-                          Last issue: {data.discoveryStatus.lastErrorCode}
-                          {data.discoveryStatus.lastErrorMessage
-                            ? ` · ${data.discoveryStatus.lastErrorMessage}`
-                            : ""}
+                          What happened: {formatDiscoveryIssue(data.discoveryStatus.lastErrorCode)}
                         </p>
                       ) : null}
 
@@ -594,7 +593,7 @@ export default function WatchlistsRoute() {
                           </p>
                         </div>
                         <div className="f9-work-row">
-                          <p className="f9-app-kicker">Readiness</p>
+                          <p className="f9-app-kicker">Status</p>
                           <p className="f9-muted-copy">
                             {formatDiscoveryStatusLabel(data.discoveryStatus.status)}
                           </p>
@@ -604,7 +603,7 @@ export default function WatchlistsRoute() {
                           <p className="f9-muted-copy">
                             {data.discoveryStatus.lastCheckedAt
                               ? new Date(data.discoveryStatus.lastCheckedAt).toLocaleString("en-IN")
-                              : "No live check recorded yet"}
+                              : "No recent check yet"}
                           </p>
                         </div>
                       </div>
@@ -643,13 +642,13 @@ export default function WatchlistsRoute() {
                             <p>{event.summary}</p>
                             <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
                               <div className="f9-work-row">
-                                <p className="f9-app-kicker">Proof summary</p>
+                                <p className="f9-app-kicker">Evidence summary</p>
                                 <p className="f9-muted-copy">
                                   {proofCapture
                                     ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · proof age ${formatProofAgeLabel(
                                         proofCapture.succeededAt ?? proofCapture.attemptedAt,
                                       )}`
-                                    : "No separate landing-page proof was needed for this event."}
+                                    : "No separate landing-page evidence check was needed for this event."}
                                 </p>
                               </div>
                               <div className="f9-work-row">
@@ -683,15 +682,15 @@ export default function WatchlistsRoute() {
                 <section>
                   <div className="f9-panel-toolbar">
                     <div>
-                      <p className="f9-app-kicker">Proof and delivery</p>
-                      <h3 style={{ marginTop: 0 }}>Proof and alerts</h3>
+                      <p className="f9-app-kicker">Evidence and delivery</p>
+                      <h3 style={{ marginTop: 0 }}>Evidence and alerts</h3>
                     </div>
                   </div>
 
                   <div className="f9-dashboard-grid">
                     <article className="f9-app-panel">
-                      <p className="f9-app-kicker">Recent proof attempts</p>
-                      <h3>Proof freshness</h3>
+                      <p className="f9-app-kicker">Recent evidence checks</p>
+                      <h3>Evidence freshness</h3>
                       <p className="f9-muted-copy">
                         {data.proofSummary.successfulAttempts} successful · {data.proofSummary.failedAttempts} failed
                         {data.proofSummary.skippedAttempts > 0
@@ -700,8 +699,8 @@ export default function WatchlistsRoute() {
                       </p>
                       <p className="f9-muted-copy">
                         {data.proofSummary.lastSuccessfulProofAt
-                          ? `Last good proof ${formatProofAgeLabel(data.proofSummary.lastSuccessfulProofAt)}`
-                          : "No successful proof captured yet."}
+                          ? `Last good evidence check ${formatProofAgeLabel(data.proofSummary.lastSuccessfulProofAt)}`
+                          : "No successful evidence check yet."}
                       </p>
                       <div className="f9-work-list is-compact">
                         {data.recentProofCaptures.slice(0, 4).map((capture) => (
@@ -718,7 +717,7 @@ export default function WatchlistsRoute() {
                           </div>
                         ))}
                         {data.recentProofCaptures.length === 0 ? (
-                          <p className="f9-muted-copy">Proof attempts will appear here after the next capture.</p>
+                          <p className="f9-muted-copy">Evidence checks will appear here after the next capture.</p>
                         ) : null}
                       </div>
                     </article>
@@ -728,7 +727,7 @@ export default function WatchlistsRoute() {
                       <h3>Channel policy</h3>
                       {!data.watchlistDeliveryConfig ? (
                         <p className="f9-muted-copy">
-                          Using the default alert settings for this workspace.
+                          Using the default alert settings for this account.
                         </p>
                       ) : null}
                       <Form method="post" className="f9-work-list is-compact">
@@ -1120,7 +1119,7 @@ function formatRunEventTypes(summary: Record<string, unknown>) {
 
 function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
   if (status.status === "healthy") {
-    return "Live competitor discovery is ready";
+    return "Live competitor tracking is ready";
   }
   if (status.status === "cache_only") {
     return "Using recent competitor results";
@@ -1129,7 +1128,7 @@ function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
     return "Add a real competitor to start live tracking";
   }
   if (status.status === "disabled") {
-    return "Competitor discovery is unavailable";
+    return "Competitor tracking is unavailable";
   }
   return "Tracking path needs attention";
 }
@@ -1139,10 +1138,10 @@ function formatDiscoveryProviderLabel(
   mode?: MetaIntegrationStatus["mode"],
 ) {
   if (provider === "meta_library_browser") {
-    return mode === "cache" ? "Recent live results" : "Live ad library capture";
+    return mode === "cache" ? "Recent results" : "Live ad check";
   }
   if (provider === "meta_api") {
-    return mode === "diagnostic" ? "Meta API check" : "Workspace Meta access";
+    return mode === "diagnostic" ? "Backup Meta check" : "Your Meta backup";
   }
   if (provider === "demo") {
     return "Sample data";
@@ -1154,7 +1153,52 @@ function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status"]) {
   if (status === "cache_only") {
     return "Using recent results";
   }
-  return status.replaceAll("_", " ");
+  if (status === "healthy") {
+    return "Ready";
+  }
+  if (status === "demo") {
+    return "Setup needed";
+  }
+  if (status === "degraded") {
+    return "Needs attention";
+  }
+  if (status === "disabled") {
+    return "Unavailable";
+  }
+  return "Needs attention";
+}
+
+function formatTrackingStatusSummary(summary: string | null | undefined) {
+  if (!summary) {
+    return "Tracking status will appear after the first check.";
+  }
+
+  return summary
+    .replace(/Live commercial discovery/gi, "Fresh ad checks")
+    .replace(/commercial discovery/gi, "competitor ad checks")
+    .replace(/Commercial discovery/gi, "Competitor ad checks")
+    .replace(/Browser Run/gi, "visual checks")
+    .replace(/Official Meta API/gi, "alternate Meta ad access")
+    .replace(/API fallback/gi, "alternate Meta ad results")
+    .replace(/workspace Meta access/gi, "alternate Meta ad access")
+    .replace(/fresh discovery/gi, "fresh checks")
+    .replace(/cached live results/gi, "recent results")
+    .replace(/cached results/gi, "recent results")
+    .replace(/demo mode/gi, "sample mode");
+}
+
+function formatDiscoveryIssue(issue: string) {
+  const labels: Record<string, string> = {
+    browser_unavailable: "The visual ad check is temporarily unavailable.",
+    browser_launch_failed: "The visual ad check could not start.",
+    timeout: "The ad check took too long.",
+    login_wall: "Meta asked for login before showing ads.",
+    rate_limited: "Meta is rate limiting checks right now.",
+    selector_drift: "The ad page layout changed.",
+    empty_result: "No ad cards were found for this check.",
+  };
+
+  return labels[issue] ?? issue.replaceAll("_", " ");
 }
 
 function formatNumericSummaryPart(

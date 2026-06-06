@@ -184,13 +184,15 @@ describe("sources route component", () => {
     const { default: AppSourcesRoute } = await import("~/routes/app.sources");
     const markup = renderToStaticMarkup(createElement(AppSourcesRoute));
 
-    expect(markup).toContain("Keep competitor discovery reliable");
+    expect(markup).toContain("Keep competitor tracking reliable");
     expect(markup).toContain("Tracking reliability");
     expect(markup).not.toContain("Meta coverage is beta");
     expect(markup).not.toContain("f9-beta-pill");
     expect(markup).toContain("Test and save access");
     expect(markup).toContain("Ad Library API page");
-    expect(markup).toContain("Recent proof health");
+    expect(markup).toContain("Recent tracking health");
     expect(markup).toContain("needs proof");
+    expect(markup).toContain("recent results are available");
+    expect(markup).not.toContain("Cached live results");
   });
 });

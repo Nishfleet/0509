@@ -78,7 +78,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("CTA changed on the destination page");
     expect(marketingRoute).toContain("Recommended launch plan");
     expect(marketingRoute).toContain("Start with Starter");
-    expect(marketingRoute).toContain("Weekly proof briefs");
+    expect(marketingRoute).toContain("Weekly change briefs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");

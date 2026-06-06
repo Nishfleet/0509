@@ -133,7 +133,7 @@ describe("provider bakeoff helpers", () => {
     const analysis = analyzeMetaLibraryHtml(`
       <html>
         <body>
-          <div>Source: Cached live results</div>
+          <div>Results: Recent results</div>
           <div>Commercial discovery degraded</div>
           <a href="https://www.facebook.com/ads/library/?id=123">one</a>
           <a href="/ads/library/?id=123">duplicate</a>
@@ -573,8 +573,8 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div>Source: Live Ad Library capture</div>
-            <h2>1 ads on this page</h2>
+            <div data-f9-result-source="meta_library_browser">Results: Fresh results</div>
+            <h2>1 ads found</h2>
           </body>
         </html>
       `,
@@ -602,6 +602,39 @@ describe("current 0509 probe", () => {
     );
   });
 
+  it("skips unauthenticated rendered-result probes when search redirects to sign in", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response("", {
+        status: 302,
+        headers: {
+          Location: "/auth/login?redirectTo=%2Fsearch%3Fquery%3Dnykaa",
+        },
+      }),
+    );
+
+    const result = await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "nykaa",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+      },
+    );
+
+    expect(result.status).toBe("skipped");
+    expect(result.loginWall).toBe(true);
+    expect(result.note).toContain("require an account");
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        redirect: "manual",
+      }),
+    );
+  });
+
   it("captures the live source label from rendered HTML", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
@@ -609,8 +642,8 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div>Source: Live Ad Library capture</div>
-            <h2>3 ads on this page</h2>
+            <div data-f9-result-source="meta_library_browser">Results: Fresh results</div>
+            <h2>3 ads found</h2>
           </body>
         </html>
       `,
@@ -640,8 +673,8 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div class="source-pill">Meta ads beta · Live Ad Library capture</div>
-            <h2>3 ads on this page</h2>
+            <div class="source-pill" data-f9-result-source="meta_library_browser">Meta ads beta · Fresh results</div>
+            <h2>3 ads found</h2>
           </body>
         </html>
       `,
@@ -673,8 +706,8 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div class="source-pill">Meta ads beta · Live Ad Library capture</div>
-            <h2>3 ads on this page</h2>
+            <div class="source-pill" data-f9-result-source="meta_library_browser">Meta ads beta · Fresh results</div>
+            <h2>3 ads found</h2>
           </body>
         </html>
       `,
@@ -703,8 +736,8 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div>Source: Live Ad Library capture</div>
-            <h2>3 ads on this page</h2>
+            <div data-f9-result-source="meta_library_browser">Results: Fresh results</div>
+            <h2>3 ads found</h2>
           </body>
         </html>
       `,
@@ -731,6 +764,38 @@ describe("current 0509 probe", () => {
     });
   });
 
+  it("does not turn normal bakeoffs into fresh-live probes just because a canary token exists", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div data-f9-result-source="meta_library_cache">Results: Recent results</div>
+            <h2>3 ads found</h2>
+          </body>
+        </html>
+      `,
+    });
+
+    await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "bigspy",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+        canaryBypassToken: "secret-token",
+      },
+    );
+
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(String(url)).not.toContain("fresh=live");
+    expect(init?.headers).not.toHaveProperty("x-0509-canary-token");
+  });
+
   it("does not mistake 0509's own tracking sign-in CTA for a Meta login wall", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
@@ -740,8 +805,8 @@ describe("current 0509 probe", () => {
           <body>
             <p>Five to Nine turns the domain into a Meta ads search.</p>
             <a href="/auth/signup">Sign in to track</a>
-            <div>Source: Live Ad Library capture</div>
-            <h2>29 ads on this page</h2>
+            <div data-f9-result-source="meta_library_browser">Results: Fresh results</div>
+            <h2>29 ads found</h2>
             <a href="https://www.facebook.com/ads/library/?id=123">Facebook ad proof</a>
           </body>
         </html>
@@ -775,8 +840,8 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div>Source: API fallback</div>
-            <h2>2 ads on this page</h2>
+            <div data-f9-result-source="meta_api">Results: Fresh results</div>
+            <h2>2 ads found</h2>
           </body>
         </html>
       `,
@@ -806,8 +871,10 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div>Source: Cached live results</div>
-            <h2>0 ads on this page</h2>
+            <div data-f9-result-cache-status="hit" data-f9-result-source="meta_library_browser">
+              Results: Recent results
+            </div>
+            <h2>0 ads found</h2>
             <div>No ads found for this query</div>
           </body>
         </html>
@@ -839,8 +906,8 @@ describe("current 0509 probe", () => {
       text: async () => `
         <html>
           <body>
-            <div>Source: Demo dataset</div>
-            <h2>5 ads on this page</h2>
+            <div data-f9-result-source="demo">Results: Sample results</div>
+            <h2>5 ads found</h2>
           </body>
         </html>
       `,
