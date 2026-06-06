@@ -247,7 +247,7 @@ export default function DigestsRoute() {
                       <div className="f9-work-row" key={`${attempt.channel}:${attempt.targetValue}`}>
                         <div>
                           <h4 style={{ marginBottom: "0.25rem" }}>
-                            {attempt.channel === "email" ? "Email" : "WhatsApp"}
+                            {formatDeliveryChannelLabel(attempt.channel)}
                           </h4>
                           <p className="f9-muted-copy" style={{ marginBottom: "0.25rem" }}>
                             {describeAttemptStatus(attempt.status)}
@@ -340,8 +340,21 @@ function formatDigestSidebarStatus(
   }
 
   return attempts
-    .map((attempt) => `${attempt.channel === "email" ? "Email" : "WhatsApp"} ${describeAttemptStatus(attempt.status).toLowerCase()}`)
+    .map((attempt) => `${formatDeliveryChannelLabel(attempt.channel)} ${describeAttemptStatus(attempt.status).toLowerCase()}`)
     .join(" · ");
+}
+
+function formatDeliveryChannelLabel(channel: string) {
+  if (channel === "email") {
+    return "Email";
+  }
+  if (channel === "whatsapp") {
+    return "WhatsApp";
+  }
+  if (channel === "slack") {
+    return "Slack";
+  }
+  return channel.replaceAll("_", " ");
 }
 
 function describeAttemptStatus(status: string) {

@@ -53,6 +53,10 @@ function createContext(env = {}) {
   };
 }
 
+function fakeSlackWebhookUrl() {
+  return new URL(["services", "TSTUB", "BSTUB", "short"].join("/"), "https://hooks.slack.com/").toString();
+}
+
 async function mockRouter(loaderData: unknown, actionData?: unknown) {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
@@ -116,6 +120,35 @@ describe("sources route loader", () => {
           updatedAt: "2026-06-06T00:00:00.000Z",
         },
       ]),
+      listDeliveryTargets: vi.fn().mockResolvedValue([
+        {
+          id: "slack-target-1",
+          userId: "user-1",
+          watchlistId: null,
+          channel: "slack",
+          targetValue: "slack:abc123",
+          validationStatus: "validated",
+          isValidated: true,
+          isOptedIn: true,
+          optInSource: "manual_slack_webhook",
+          optedInAt: "2026-06-06T00:00:00.000Z",
+          isPaused: false,
+          pausedAt: null,
+          optedOutAt: null,
+          templateEligible: true,
+          lastSuccessfulDeliveryAt: null,
+          lastSuccessfulAttemptId: null,
+          providerIdentifier: "abc123",
+          metadata: {
+            displayName: "Growth alerts",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          updatedAt: "2026-06-06T00:00:00.000Z",
+        },
+      ]),
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      slackTargetDisplayName: vi.fn((target) => target.metadata.displayName),
     }));
     vi.doMock("~/lib/meta-ads-readiness.server", () => ({
       getMetaAdsBetaReadiness: vi.fn().mockResolvedValue(betaReadiness),
@@ -142,6 +175,15 @@ describe("sources route loader", () => {
           keyPrefix: ["f9", "live", "abcd1234"].join("_"),
           lastUsedAt: null,
           revokedAt: null,
+          createdAt: "2026-06-06T00:00:00.000Z",
+        },
+      ],
+      slackTargets: [
+        {
+          id: "slack-target-1",
+          displayName: "Growth alerts",
+          isPaused: false,
+          lastSuccessfulDeliveryAt: null,
           createdAt: "2026-06-06T00:00:00.000Z",
         },
       ],
@@ -278,6 +320,212 @@ describe("sources route action", () => {
       message: "API key revoked.",
     });
   });
+
+  it("saves a Slack webhook target", async () => {
+    const saveSlackWebhookTarget = vi.fn().mockResolvedValue({
+      id: "slack-target-1",
+    });
+    const upsertWorkspaceDeliveryConfig = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      saveSlackWebhookTarget,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-06-06T00:00:00.000Z",
+        updatedAt: "2026-06-06T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn().mockReturnValue({
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+      }),
+      upsertWorkspaceDeliveryConfig,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const webhookUrl = fakeSlackWebhookUrl();
+    const formData = new FormData();
+    formData.set("intent", "save-slack-webhook");
+    formData.set("slackWebhookUrl", webhookUrl);
+    formData.set("slackDestinationName", "Growth alerts");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(saveSlackWebhookTarget).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      webhookUrl,
+      name: "Growth alerts",
+    });
+    expect(upsertWorkspaceDeliveryConfig).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      sensitivityMode: "balanced",
+      instantEnabled: false,
+      digestEnabled: true,
+      emailEnabled: true,
+      whatsappEnabled: false,
+      slackEnabled: true,
+      quietHours: null,
+      timezone: "Asia/Kolkata",
+    });
+    expect(result).toEqual({
+      ok: true,
+      message:
+        "Slack delivery connected. Slack accepted the setup test, and future eligible digests can post to that channel.",
+    });
+  });
+
+  it("returns a form error when Slack rejects setup validation", async () => {
+    const saveSlackWebhookTarget = vi.fn().mockRejectedValue(
+      new Response("Slack did not accept the test message.", { status: 400 }),
+    );
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      saveSlackWebhookTarget,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "save-slack-webhook");
+    formData.set("slackWebhookUrl", "https://hooks.slack.com/services/T/B/C");
+    formData.set("slackDestinationName", "Growth alerts");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Slack did not accept the test message.",
+    });
+  });
+
+  it("pauses a Slack webhook target", async () => {
+    const pauseSlackWebhookTarget = vi.fn().mockResolvedValue(true);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      pauseSlackWebhookTarget,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "pause-slack-webhook");
+    formData.set("slackTargetId", "slack-target-1");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(pauseSlackWebhookTarget).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      targetId: "slack-target-1",
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: "Slack delivery paused.",
+    });
+  });
+
+  it("resumes a Slack webhook target", async () => {
+    const resumeSlackWebhookTarget = vi.fn().mockResolvedValue(true);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      resumeSlackWebhookTarget,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "resume-slack-webhook");
+    formData.set("slackTargetId", "slack-target-1");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(resumeSlackWebhookTarget).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      targetId: "slack-target-1",
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: "Slack delivery resumed.",
+    });
+  });
 });
 
 describe("sources route component", () => {
@@ -287,6 +535,7 @@ describe("sources route component", () => {
       discoveryStatus,
       betaReadiness,
       apiKeys: [],
+      slackTargets: [],
     });
 
     const { default: AppSourcesRoute } = await import("~/routes/app.sources");
@@ -301,6 +550,9 @@ describe("sources route component", () => {
     expect(markup).toContain("Recent tracking health");
     expect(markup).toContain("Customer API");
     expect(markup).toContain("Create API key");
+    expect(markup).toContain("Slack delivery");
+    expect(markup).toContain("Save Slack delivery");
+    expect(markup).toContain("encrypted and never shown again");
     expect(markup).toContain("/api/v1/watchlists/");
     expect(markup).toContain("MCP yet");
     expect(markup).toContain("needs proof");

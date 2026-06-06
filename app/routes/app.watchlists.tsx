@@ -23,12 +23,12 @@ import {
   formatProofAgeLabel,
   formatWhyAlertedLabel,
 } from "~/lib/landing-page-display";
+import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
 import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { createReportId } from "~/lib/report";
 import type {
   DeliveryAttemptRecord,
-  DeliveryTargetRecord,
   DiscoveryFailureClass,
   EventCandidateRecord,
   MetaIntegrationStatus,
@@ -78,8 +78,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       workspaceDeliveryConfig: buildLegacyWorkspaceConfig(session.user.id, Boolean(session.user.email)),
       watchlistDeliveryConfig: null,
       effectiveDeliveryConfig: buildLegacyWorkspaceConfig(session.user.id, Boolean(session.user.email)),
-      deliveryTargets: [] as DeliveryTargetRecord[],
-      workspaceDeliveryTargets: [] as DeliveryTargetRecord[],
+      deliveryTargets: [] as PublicDeliveryTargetRecord[],
+      workspaceDeliveryTargets: [] as PublicDeliveryTargetRecord[],
       recentDeliveryAttempts: [] as DeliveryAttemptRecord[],
       recentProofCaptures: [] as ProofCaptureRecord[],
       proofSummary: emptyProofSummary(),
@@ -135,8 +135,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       workspaceConfig: workspaceDeliveryConfig,
       watchlistConfig: watchlistDeliveryConfig,
     }),
-    deliveryTargets: watchlistDeliveryTargets,
-    workspaceDeliveryTargets,
+    deliveryTargets: watchlistDeliveryTargets.map(toPublicDeliveryTarget),
+    workspaceDeliveryTargets: workspaceDeliveryTargets.map(toPublicDeliveryTarget),
     recentDeliveryAttempts,
     recentProofCaptures,
     proofSummary: buildProofSummary(recentProofCaptures),
@@ -308,6 +308,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       digestEnabled: formData.has("digestEnabled"),
       emailEnabled: formData.has("emailEnabled"),
       whatsappEnabled: formData.has("whatsappEnabled"),
+      slackEnabled: formData.has("slackEnabled"),
       quietHours: parseQuietHours(formData),
       timezone: readOptionalString(formData.get("timezone")) ?? workspaceConfig.timezone ?? null,
     });
@@ -801,6 +802,10 @@ export default function WatchlistsRoute() {
                           <input defaultChecked={data.effectiveDeliveryConfig.whatsappEnabled} name="whatsappEnabled" type="checkbox" />
                           <span>WhatsApp enabled</span>
                         </label>
+                        <label className="f9-field f9-field-inline">
+                          <input defaultChecked={data.effectiveDeliveryConfig.slackEnabled} name="slackEnabled" type="checkbox" />
+                          <span>Slack enabled</span>
+                        </label>
                         <button className="f9-primary-button" type="submit">
                           Save delivery settings
                         </button>
@@ -970,6 +975,7 @@ function buildLegacyWorkspaceConfig(
     digestEnabled: true,
     emailEnabled: hasEmail,
     whatsappEnabled: false,
+    slackEnabled: false,
     quietHours: null,
     timezone: null,
     createdAt: "",

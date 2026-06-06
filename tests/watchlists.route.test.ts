@@ -53,6 +53,7 @@ const workspaceDeliveryConfig: WorkspaceDeliveryConfigRecord = {
   digestEnabled: true,
   emailEnabled: true,
   whatsappEnabled: false,
+  slackEnabled: false,
   quietHours: null,
   timezone: "Asia/Kolkata",
   createdAt: "2026-04-18T00:00:00.000Z",
@@ -68,6 +69,7 @@ const watchlistDeliveryConfig: WatchlistDeliveryConfigRecord = {
   digestEnabled: true,
   emailEnabled: true,
   whatsappEnabled: true,
+  slackEnabled: false,
   quietHours: {
     startHour: 22,
     endHour: 8,
@@ -339,6 +341,7 @@ describe("watchlists route loader", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: true,
+        slackEnabled: false,
       },
       discoveryStatus,
       proofSummary: {
@@ -529,6 +532,7 @@ describe("watchlists route actions", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: false,
+        slackEnabled: false,
         timezone: "Asia/Kolkata",
         quietHours: {
           startHour: 22,
@@ -875,6 +879,7 @@ describe("watchlists route rendering", () => {
           digestEnabled: true,
           emailEnabled: true,
           whatsappEnabled: true,
+          slackEnabled: false,
           quietHours: {
             startHour: 22,
             endHour: 8,
@@ -910,6 +915,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Why this alerted");
     expect(markup).toContain("Recent evidence checks");
     expect(markup).toContain("Delivery settings");
+    expect(markup).toContain("Slack enabled");
   });
 
   it("renders cache-only discovery status", async () => {
@@ -940,6 +946,7 @@ describe("watchlists route rendering", () => {
           digestEnabled: true,
           emailEnabled: true,
           whatsappEnabled: true,
+          slackEnabled: false,
           quietHours: {
             startHour: 22,
             endHour: 8,

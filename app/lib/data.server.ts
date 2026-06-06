@@ -211,6 +211,7 @@ interface WorkspaceDeliveryConfigRow {
   digest_enabled: number;
   email_enabled: number;
   whatsapp_enabled: number;
+  slack_enabled: number;
   quiet_hours_json: string | null;
   timezone: string | null;
   created_at: string;
@@ -226,6 +227,7 @@ interface WatchlistDeliveryConfigRow {
   digest_enabled: number;
   email_enabled: number;
   whatsapp_enabled: number;
+  slack_enabled: number;
   quiet_hours_json: string | null;
   timezone: string | null;
   created_at: string;
@@ -539,6 +541,7 @@ export function legacyWorkspaceDeliveryDefaults(input: { hasEmail: boolean }) {
     digestEnabled: true,
     emailEnabled: input.hasEmail,
     whatsappEnabled: false,
+    slackEnabled: false,
   };
 }
 
@@ -700,6 +703,7 @@ function toWorkspaceDeliveryConfigRecord(
     digestEnabled: row.digest_enabled === 1,
     emailEnabled: row.email_enabled === 1,
     whatsappEnabled: row.whatsapp_enabled === 1,
+    slackEnabled: row.slack_enabled === 1,
     quietHours: parseJson<DeliveryQuietHours | null>(row.quiet_hours_json, null),
     timezone: row.timezone,
     createdAt: row.created_at,
@@ -719,6 +723,7 @@ function toWatchlistDeliveryConfigRecord(
     digestEnabled: row.digest_enabled === 1,
     emailEnabled: row.email_enabled === 1,
     whatsappEnabled: row.whatsapp_enabled === 1,
+    slackEnabled: row.slack_enabled === 1,
     quietHours: parseJson<DeliveryQuietHours | null>(row.quiet_hours_json, null),
     timezone: row.timezone,
     createdAt: row.created_at,
@@ -2300,6 +2305,7 @@ export async function upsertWorkspaceDeliveryConfig(
     digestEnabled: boolean;
     emailEnabled: boolean;
     whatsappEnabled: boolean;
+    slackEnabled?: boolean;
     quietHours?: DeliveryQuietHours | null;
     timezone?: string | null;
   },
@@ -2317,18 +2323,20 @@ export async function upsertWorkspaceDeliveryConfig(
         digest_enabled,
         email_enabled,
         whatsapp_enabled,
+        slack_enabled,
         quiet_hours_json,
         timezone,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET sensitivity_mode = excluded.sensitivity_mode,
                     instant_enabled = excluded.instant_enabled,
                     digest_enabled = excluded.digest_enabled,
                     email_enabled = excluded.email_enabled,
                     whatsapp_enabled = excluded.whatsapp_enabled,
+                    slack_enabled = excluded.slack_enabled,
                     quiet_hours_json = excluded.quiet_hours_json,
                     timezone = excluded.timezone,
                     updated_at = excluded.updated_at
@@ -2340,6 +2348,7 @@ export async function upsertWorkspaceDeliveryConfig(
     boolToInt(input.digestEnabled),
     boolToInt(input.emailEnabled),
     boolToInt(input.whatsappEnabled),
+    boolToInt(input.slackEnabled ?? false),
     jsonValue(input.quietHours ?? null),
     input.timezone ?? null,
     timestamp,
@@ -2374,6 +2383,7 @@ export async function upsertWatchlistDeliveryConfig(
     digestEnabled: boolean;
     emailEnabled: boolean;
     whatsappEnabled: boolean;
+    slackEnabled?: boolean;
     quietHours?: DeliveryQuietHours | null;
     timezone?: string | null;
   },
@@ -2392,12 +2402,13 @@ export async function upsertWatchlistDeliveryConfig(
         digest_enabled,
         email_enabled,
         whatsapp_enabled,
+        slack_enabled,
         quiet_hours_json,
         timezone,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(watchlist_id)
       DO UPDATE SET user_id = excluded.user_id,
                     sensitivity_mode = excluded.sensitivity_mode,
@@ -2405,6 +2416,7 @@ export async function upsertWatchlistDeliveryConfig(
                     digest_enabled = excluded.digest_enabled,
                     email_enabled = excluded.email_enabled,
                     whatsapp_enabled = excluded.whatsapp_enabled,
+                    slack_enabled = excluded.slack_enabled,
                     quiet_hours_json = excluded.quiet_hours_json,
                     timezone = excluded.timezone,
                     updated_at = excluded.updated_at
@@ -2417,6 +2429,7 @@ export async function upsertWatchlistDeliveryConfig(
     boolToInt(input.digestEnabled),
     boolToInt(input.emailEnabled),
     boolToInt(input.whatsappEnabled),
+    boolToInt(input.slackEnabled ?? false),
     jsonValue(input.quietHours ?? null),
     input.timezone ?? null,
     timestamp,
@@ -2611,6 +2624,29 @@ async function getDeliveryTargetByUniqueFields(
       input.channel,
       input.targetValue,
     ],
+  );
+
+  return row ? toDeliveryTargetRecord(row) : null;
+}
+
+export async function getDeliveryTargetById(
+  env: AppEnv,
+  input: {
+    userId: string;
+    targetId: string;
+  },
+) {
+  const row = await one<DeliveryTargetRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_target
+      WHERE user_id = ?
+        AND id = ?
+      LIMIT 1
+    `,
+    input.userId,
+    input.targetId,
   );
 
   return row ? toDeliveryTargetRecord(row) : null;

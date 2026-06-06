@@ -83,6 +83,7 @@ describe("deliverWeeklyDigest", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: false,
+        slackEnabled: false,
         quietHours: null,
         timezone: "Asia/Kolkata",
         createdAt: "2026-04-19T00:00:00.000Z",
@@ -183,6 +184,7 @@ describe("deliverWeeklyDigest", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: false,
+        slackEnabled: false,
         quietHours: null,
         timezone: "Asia/Kolkata",
         createdAt: "2026-04-19T00:00:00.000Z",
@@ -321,6 +323,7 @@ describe("deliverWeeklyDigest", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: true,
+        slackEnabled: false,
         quietHours: null,
         timezone: "Asia/Kolkata",
         createdAt: "2026-04-19T00:00:00.000Z",
@@ -416,6 +419,145 @@ describe("deliverWeeklyDigest", () => {
     );
   });
 
+  it("sends weekly digests to configured Slack webhooks and records the attempt", async () => {
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-slack-1");
+    const upsertDigestDelivery = vi.fn();
+    const sendSlackWebhookMessage = vi.fn().mockResolvedValue({
+      provider: "slack_incoming_webhook",
+      status: "sent",
+      webhookStatus: "delivered",
+      providerMessageId: null,
+      providerStatusLastSeenAt: "2026-04-19T00:00:00.000Z",
+      errorMessage: null,
+      deliveredAt: "2026-04-19T00:00:00.000Z",
+    });
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: false,
+        whatsappEnabled: false,
+        slackEnabled: true,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([
+        {
+          id: "slack-target-1",
+          userId: "user-1",
+          watchlistId: null,
+          channel: "slack",
+          targetValue: "slack:abc123",
+          validationStatus: "validated",
+          isValidated: true,
+          isOptedIn: true,
+          optInSource: "manual_slack_webhook",
+          optedInAt: "2026-04-19T00:00:00.000Z",
+          isPaused: false,
+          pausedAt: null,
+          optedOutAt: null,
+          templateEligible: true,
+          lastSuccessfulDeliveryAt: null,
+          lastSuccessfulAttemptId: null,
+          providerIdentifier: "abc123",
+          metadata: {
+            displayName: "Growth alerts",
+          },
+          createdAt: "2026-04-19T00:00:00.000Z",
+          updatedAt: "2026-04-19T00:00:00.000Z",
+        },
+      ]),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+    vi.doMock("~/lib/slack-webhook.server", () => ({
+      SLACK_PROVIDER: "slack_incoming_webhook",
+      sendSlackWebhookMessage,
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+
+    const result = await deliverWeeklyDigest(
+      postmarkEnv as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: null,
+        digestRunId: "digest-1",
+        periodStart: "2026-04-12T00:00:00.000Z",
+        periodEnd: "2026-04-19T00:00:00.000Z",
+        items: [
+          {
+            eventId: "event-1",
+            watchlistId: "watch-1",
+            watchlistName: "boAt watch",
+            eventType: "landing_page_offer_changed",
+            title: "Landing page offer changed",
+            summary: "Offer changed on the landing page.",
+          },
+        ],
+      },
+    );
+
+    expect(result).toMatchObject({
+      attempts: 1,
+      channels: ["slack"],
+      details: [
+        {
+          channel: "slack",
+          status: "sent",
+          targetValue: "slack:abc123",
+        },
+      ],
+    });
+    expect(sendSlackWebhookMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        channel: "slack",
+        targetValue: "slack:abc123",
+      }),
+      {
+        text: expect.stringContaining("Five to Nine weekly digest"),
+      },
+    );
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        channel: "slack",
+        provider: "slack_incoming_webhook",
+        status: "sent",
+        webhookStatus: "delivered",
+        digestRunId: "digest-1",
+        targetValue: "slack:abc123",
+        eventIds: ["event-1"],
+      }),
+    );
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        provider: "slack_incoming_webhook",
+        status: "sent",
+        recipientEmail: "slack:abc123",
+        externalMessageId: null,
+        errorMessage: null,
+        deliveredAt: "2026-04-19T00:00:00.000Z",
+      }),
+    );
+  });
+
   it("reuses an existing idempotent email attempt instead of sending twice", async () => {
     const postmarkFetch = vi.fn();
     vi.stubGlobal("fetch", postmarkFetch);
@@ -456,6 +598,7 @@ describe("deliverWeeklyDigest", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: false,
+        slackEnabled: false,
         quietHours: null,
         timezone: "Asia/Kolkata",
         createdAt: "2026-04-19T00:00:00.000Z",
@@ -570,6 +713,7 @@ describe("deliverWatchlistAlerts", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: false,
+        slackEnabled: false,
         quietHours: null,
         timezone: "Asia/Kolkata",
         createdAt: "2026-04-19T00:00:00.000Z",
@@ -735,6 +879,7 @@ describe("deliverWatchlistAlerts", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: false,
+        slackEnabled: false,
         quietHours: {
           startHour: 22,
           endHour: 8,
