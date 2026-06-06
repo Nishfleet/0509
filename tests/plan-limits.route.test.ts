@@ -145,6 +145,7 @@ describe("digest access", () => {
       getUserPlan: vi.fn().mockResolvedValue("free"),
       PLAN_LIMITS: {
         free: { digests: false },
+        scout: { digests: true },
         starter: { digests: true },
         agency: { digests: true },
       },
@@ -167,6 +168,46 @@ describe("digest access", () => {
       selectedDigest: null,
     });
     expect(listDigests).not.toHaveBeenCalled();
+  });
+
+  it("allows Scout users to access digest history", async () => {
+    const listDigests = vi.fn().mockResolvedValue([]);
+    const listDeliveryAttempts = vi.fn().mockResolvedValue([]);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+      PLAN_LIMITS: {
+        free: { digests: false },
+        scout: { digests: true },
+        starter: { digests: true },
+        agency: { digests: true },
+      },
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDigest: vi.fn(),
+      listDeliveryAttempts,
+      listDigests,
+    }));
+
+    const { loader } = await import("~/routes/app.digests");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/digests"),
+    } as never);
+
+    expect(result).toMatchObject({
+      canAccessDigests: true,
+      digests: [],
+      selectedDigest: null,
+    });
+    expect(listDigests).toHaveBeenCalledWith(expect.anything(), "user-1");
+    expect(listDeliveryAttempts).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      limit: 80,
+    });
   });
 });
 

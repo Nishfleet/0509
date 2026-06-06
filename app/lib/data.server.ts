@@ -1449,7 +1449,10 @@ export async function listWatchlists(env: AppEnv, userId: string) {
   return rows.map(toWatchlistRecord);
 }
 
-export async function listActiveWatchlists(env: AppEnv) {
+export async function listActiveWatchlists(
+  env: AppEnv,
+  options: { includeScout?: boolean } = {},
+) {
   const rows = await many<WatchlistRow>(
     env,
     `
@@ -1458,9 +1461,13 @@ export async function listActiveWatchlists(env: AppEnv) {
       INNER JOIN user_plan
         ON user_plan.user_id = watchlist.user_id
       WHERE watchlist.is_active = 1
-        AND user_plan.plan IN ('starter', 'agency')
+        AND (
+          user_plan.plan IN ('starter', 'agency')
+          OR (? = 1 AND user_plan.plan = 'scout')
+        )
       ORDER BY watchlist.updated_at ASC
     `,
+    options.includeScout ? 1 : 0,
   );
   return rows.map(toWatchlistRecord);
 }

@@ -74,6 +74,7 @@ const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
 const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
+const WEEKLY_DIGEST_UTC_DAY = 1;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 const DIRECT_WEBSITE_PROOF_INTERVAL_MS = 20 * 60 * 60 * 1000;
 
@@ -126,7 +127,9 @@ export async function runScheduledMonitoring(
     return { queued: 0, duplicates: 0, inlineRuns: 0, digests: 0 };
   }
 
-  const watchlists = await listActiveWatchlists(env);
+  const watchlists = await listActiveWatchlists(env, {
+    includeScout: shouldIncludeScoutInScheduledMonitoring(options),
+  });
   let queued = 0;
   let duplicates = 0;
   let inlineRuns = 0;
@@ -707,7 +710,7 @@ async function runDigests(
 
   for (const user of users) {
     const plan = await getUserPlan(env, user.id);
-    if (!PLAN_LIMITS[plan].digests) {
+    if (!PLAN_LIMITS[plan].digests || !planAllowsDigestCadence(plan, cadence)) {
       continue;
     }
 
@@ -792,6 +795,28 @@ async function runDigests(
   }
 
   return digestsSent;
+}
+
+function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoringOptions) {
+  if (!options.includeDigests || options.digestCadence !== "daily") {
+    return false;
+  }
+
+  const scheduledAt = options.scheduledTime === undefined
+    ? new Date()
+    : new Date(options.scheduledTime);
+
+  return scheduledAt.getUTCDay() === WEEKLY_DIGEST_UTC_DAY;
+}
+
+function planAllowsDigestCadence(plan: keyof typeof PLAN_LIMITS, cadence: DigestCadence) {
+  const planCadence = PLAN_LIMITS[plan].digestCadence;
+
+  if (cadence === "daily") {
+    return planCadence === "daily_and_weekly";
+  }
+
+  return planCadence === "weekly" || planCadence === "daily_and_weekly";
 }
 
 async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {
