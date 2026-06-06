@@ -11,6 +11,7 @@ import {
   buildZyteRequest,
   DOGFOOD_QUERIES,
   findBlockingCurrent0509Failures,
+  findBlockingFreshLiveCurrent0509Failures,
   runBrightDataProbe,
   runBrowserbaseProbe,
   runBrowserlessBqlProbe,
@@ -198,6 +199,51 @@ describe("provider bakeoff helpers", () => {
 
     expect(failures).toHaveLength(1);
     expect(failures[0].query).toBe("nykaa");
+  });
+
+  it("does not block the fresh-live gate for verified no-results pages", () => {
+    const failures = findBlockingFreshLiveCurrent0509Failures([
+      {
+        provider: "current_0509",
+        query: "adflex",
+        country: "India",
+        mode: "advertiser",
+        status: "ok",
+        latencyMs: 1,
+        httpStatus: 200,
+        siteStatus: null,
+        matchCount: 0,
+        loginWall: false,
+        rateLimited: false,
+        blockedLikely: false,
+        degraded: false,
+        emptyReason: "no_results",
+        sourceLabel: "Live Ad Library capture",
+        url: "https://0509.in/search?query=adflex&fresh=live",
+        note: "Tracking path: Live Ad Library capture returned a verified no-results page",
+      },
+      {
+        provider: "current_0509",
+        query: "cached-empty",
+        country: "India",
+        mode: "advertiser",
+        status: "ok",
+        latencyMs: 1,
+        httpStatus: 200,
+        siteStatus: null,
+        matchCount: 0,
+        loginWall: false,
+        rateLimited: false,
+        blockedLikely: false,
+        degraded: false,
+        sourceLabel: "Cached live results",
+        url: "https://0509.in/search?query=cached-empty&fresh=live",
+        note: null,
+      },
+    ]);
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0].query).toBe("cached-empty");
   });
 });
 
@@ -895,6 +941,46 @@ describe("current 0509 probe", () => {
     expect(result.sourceLabel).toBe("Cached live results");
     expect(result.matchCount).toBe(0);
     expect(result.note).toContain("zero rendered results");
+  });
+
+  it("treats explicit fresh live no-results pages as ok", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <div
+              data-f9-result-cache-status="miss"
+              data-f9-result-empty-reason="no_results"
+              data-f9-result-source="meta_library_browser"
+            >
+              Results: Fresh results
+            </div>
+            <h2>0 ads found</h2>
+            <div>No ads found for this query</div>
+          </body>
+        </html>
+      `,
+    });
+
+    const result = await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "adflex",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+        forceLive: true,
+      },
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.sourceLabel).toBe("Live Ad Library capture");
+    expect(result.matchCount).toBe(0);
+    expect(result.note).toContain("verified no-results page");
   });
 
   it("treats Demo dataset source label as error", async () => {

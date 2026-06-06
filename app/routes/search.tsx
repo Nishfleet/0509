@@ -343,6 +343,7 @@ export default function SearchRoute() {
             ) : null}
             <p
               data-f9-result-cache-status={data.result.cacheStatus ?? "none"}
+              data-f9-result-empty-reason={data.result.discoveryEmptyReason ?? "none"}
               data-f9-result-source={data.result.source}
             >
               {data.result.discoveryStatus === "disabled" ? idleSearchMessage : "Results: "}
