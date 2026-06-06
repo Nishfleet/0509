@@ -34,11 +34,47 @@ jobs:
             echo "has_key=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Mark OpenCode Go review skipped
+        if: steps.ai_secret.outputs.has_key == 'false'
+        shell: bash
+        run: |
+          echo "::warning::OPENCODE_GO_API_KEY is not configured. Skipping OpenCode Go review; manual review is required before merge."
+          {
+            echo "## Codex PR Review skipped"
+            echo
+            echo "OPENCODE_GO_API_KEY is not configured, so the OpenCode Go review could not run."
+            echo "Manual review is required before merge."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post skipped review comment
+        if: steps.ai_secret.outputs.has_key == 'false' && github.event_name == 'pull_request_target'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: [
+                "<!-- codex-pr-review -->",
+                "findings",
+                "",
+                "- [warn] OPENCODE_GO_API_KEY is not configured, so the OpenCode Go PR review was skipped.",
+                "",
+                "open questions",
+                "",
+                "- Run local autoreview or configure OPENCODE_GO_API_KEY before relying on automated PR review.",
+                "",
+                "merge posture: manual review required",
+              ].join("\n"),
+            });
+
       - name: Fail missing OpenCode Go secret
         if: steps.ai_secret.outputs.has_key == 'false'
         shell: bash
         run: |
-          echo "OPENCODE_GO_API_KEY is required for Codex PR Review."
+          echo "OPENCODE_GO_API_KEY is required for automated Codex PR Review. Configure the secret or complete manual review before merge."
           exit 1
 
       - uses: actions/checkout@v6

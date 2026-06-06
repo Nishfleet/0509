@@ -37,7 +37,7 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/api/demo-proof` sample public proof payload for buyer and agent evaluation
 - `/api/v1` customer API docs for read-only account export endpoints
 - `/api/v1/:resourceType/:resourceId` customer API-key export endpoint for account-owned collections, watchlists, and digests
-- `/search` account-gated analysis flow; logged-out requests return 404 except private canary probes
+- `/search` account-gated analysis flow; logged-out requests redirect to signup while private canary probes can bypass with the configured token
 - `/privacy`
 - `/terms`
 - `/api/pricing-preview`
