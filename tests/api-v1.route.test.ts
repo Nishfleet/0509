@@ -192,8 +192,9 @@ describe("customer API v1", () => {
     } as never);
     const body = await response.json() as { endpoints: Array<{ path: string }>; notLiveYet: string[] };
 
+    expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/mcp");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/watchlists/{watchlistId}");
-    expect(body.notLiveYet).toContain("MCP server");
+    expect(body.notLiveYet).not.toContain("MCP server");
     expect(body.notLiveYet).toContain("TikTok ingestion");
   });
 
