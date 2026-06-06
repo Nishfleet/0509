@@ -1,6 +1,13 @@
 import type { ReportDocument } from "~/lib/report";
+import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { safeInsightDepthSummary } from "~/lib/insight-depth";
 
 export function ReportView({ report }: { report: ReportDocument }) {
+  const reportSnapshot = report as ReportDocument & { insightDepth?: unknown };
+  const insightDepth = reportSnapshot.insightDepth
+    ? safeInsightDepthSummary(reportSnapshot.insightDepth)
+    : null;
+
   return (
     <div className="report-layout">
       <section className="report-hero">
@@ -25,6 +32,8 @@ export function ReportView({ report }: { report: ReportDocument }) {
           </article>
         ))}
       </section>
+
+      {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
       <section className="report-list" aria-label="Report rows">
         {report.rows.map((row) => (

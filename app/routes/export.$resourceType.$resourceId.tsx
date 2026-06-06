@@ -4,6 +4,12 @@ import {
   buildChangeIntelligenceSummary,
   readDigestIntelligence,
 } from "~/lib/change-intelligence";
+import {
+  buildCollectionInsightDepth,
+  buildDigestInsightDepth,
+  buildWatchlistInsightDepth,
+  formatInsightDepthMarkdown,
+} from "~/lib/insight-depth";
 import type {
   CollectionItemRecord,
   CollectionRecord,
@@ -81,10 +87,12 @@ function collectionExportResponse(
   format: ExportFormat,
 ) {
   if (format === "json") {
+    const insightDepth = buildCollectionInsightDepth(items);
     return jsonResponse("collection.json", {
       resourceType: "collection",
       generatedAt: new Date().toISOString(),
       collection,
+      insightDepth,
       items: items.map((item) => ({
         id: item.id,
         advertiser: stringValue(item.ad.advertiser),
@@ -101,11 +109,13 @@ function collectionExportResponse(
   }
 
   if (format === "slack") {
+    const insightDepth = buildCollectionInsightDepth(items);
     return slackResponse(
       "collection.slack.md",
       [
         `*Five to Nine collection: ${collection.name}*`,
         collection.description ? collection.description : null,
+        formatInsightDepthMarkdown(insightDepth),
         items.length === 0 ? "No saved proof yet." : "Saved proof:",
         ...items.map(
           (item) =>
@@ -142,12 +152,14 @@ function watchlistExportResponse(
     ...event,
     intelligence: buildChangeIntelligenceSummary(event),
   }));
+  const insightDepth = buildWatchlistInsightDepth(events);
 
   if (format === "json") {
     return jsonResponse("watchlist.json", {
       resourceType: "watchlist",
       generatedAt: new Date().toISOString(),
       watchlist,
+      insightDepth,
       events: enrichedEvents.map((event) => ({
         id: event.id,
         eventType: event.eventType,
@@ -169,6 +181,7 @@ function watchlistExportResponse(
       [
         `*Five to Nine watchlist: ${watchlist.name}*`,
         `Target: ${watchlist.targetLabel}`,
+        formatInsightDepthMarkdown(insightDepth),
         enrichedEvents.length === 0 ? "No recent changes yet." : "Latest changes:",
         ...enrichedEvents.map(
           (event) =>
@@ -200,6 +213,7 @@ function digestExportResponse(digest: DigestRecord, format: ExportFormat) {
     ...item,
     intelligence: readDigestIntelligence(item.metadata),
   }));
+  const insightDepth = buildDigestInsightDepth(digest.items);
 
   if (format === "json") {
     return jsonResponse("digest.json", {
@@ -212,6 +226,7 @@ function digestExportResponse(digest: DigestRecord, format: ExportFormat) {
         createdAt: digest.createdAt,
         delivery: digest.delivery,
       },
+      insightDepth,
       items: enrichedItems.map((item) => ({
         id: item.id,
         watchlistName: item.watchlistName,
@@ -230,6 +245,7 @@ function digestExportResponse(digest: DigestRecord, format: ExportFormat) {
       "digest.slack.md",
       [
         `*Five to Nine digest: ${dateLabel(digest.periodStart)} to ${dateLabel(digest.periodEnd)}*`,
+        formatInsightDepthMarkdown(insightDepth),
         enrichedItems.length === 0 ? "No digest changes yet." : "Competitor changes:",
         ...enrichedItems.map(
           (item) =>

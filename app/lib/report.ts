@@ -1,3 +1,5 @@
+import type { InsightDepthSummary } from "~/lib/insight-depth";
+
 export const REPORT_RESOURCE_TYPES = ["collection", "watchlist"] as const;
 
 export type ReportResourceType = (typeof REPORT_RESOURCE_TYPES)[number];
@@ -59,6 +61,7 @@ export interface ReportDocument {
   summary: string;
   generatedAt: string;
   stats: ReportStat[];
+  insightDepth: InsightDepthSummary;
   rows: ReportRow[];
 }
 
