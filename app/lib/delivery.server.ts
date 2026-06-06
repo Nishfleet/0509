@@ -28,6 +28,10 @@ import type {
   DeliveryLane,
 } from "~/lib/types";
 import { sendDigestWhatsApp, sendInstantWhatsApp } from "~/lib/whatsapp.server";
+import {
+  sendSlackWebhookMessage,
+  SLACK_PROVIDER,
+} from "~/lib/slack-webhook.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
 const EMAIL_PROVIDER = "postmark" as const;
@@ -107,6 +111,9 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   const whatsappTargets = config.whatsappEnabled
     ? await resolveDigestWhatsAppTargets(env, input.userId)
     : [];
+  const slackTargets = config.slackEnabled
+    ? await resolveDigestSlackTargets(env, input.userId)
+    : [];
 
   const attempts: DigestAttemptSummary[] = [];
 
@@ -118,15 +125,19 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
     attempts.push(await deliverDigestToWhatsAppTarget(env, input, lane, target));
   }
 
-  const primaryEmailAttempt = attempts.find((attempt) => attempt.channel === "email");
-  if (primaryEmailAttempt) {
+  for (const target of slackTargets) {
+    attempts.push(await deliverDigestToSlackTarget(env, input, lane, target));
+  }
+
+  const digestStatusAttempt = selectDigestStatusAttempt(attempts);
+  if (digestStatusAttempt) {
     await upsertDigestDelivery(env, input.digestRunId, {
-      provider: EMAIL_PROVIDER,
-      status: primaryEmailAttempt.status,
-      recipientEmail: primaryEmailAttempt.targetValue,
-      externalMessageId: primaryEmailAttempt.providerMessageId,
-      errorMessage: primaryEmailAttempt.errorMessage,
-      deliveredAt: primaryEmailAttempt.deliveredAt,
+      provider: digestStatusProvider(digestStatusAttempt),
+      status: digestStatusAttempt.status,
+      recipientEmail: digestStatusAttempt.targetValue,
+      externalMessageId: digestStatusAttempt.providerMessageId,
+      errorMessage: digestStatusAttempt.errorMessage,
+      deliveredAt: digestStatusAttempt.deliveredAt,
     });
   }
 
@@ -170,6 +181,9 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   const whatsappTargets = batches.some((batch) => batch.allowedChannels.includes("whatsapp"))
     ? await resolveAlertWhatsAppTargets(env, input.userId, input.watchlist.id)
     : [];
+  const slackTargets = batches.some((batch) => batch.allowedChannels.includes("slack"))
+    ? await resolveAlertSlackTargets(env, input.userId, input.watchlist.id)
+    : [];
 
   const attempts: DigestAttemptSummary[] = [];
 
@@ -205,6 +219,21 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
         );
       }
     }
+
+    if (batch.allowedChannels.includes("slack")) {
+      for (const target of slackTargets) {
+        attempts.push(
+          await deliverInstantSlackBatch(env, {
+            lane,
+            userId: input.userId,
+            deliveryTarget: target,
+            watchlistId: input.watchlist.id,
+            batch,
+            content,
+          }),
+        );
+      }
+    }
   }
 
   return {
@@ -225,6 +254,30 @@ export async function reconcileDeliveryStatus(
   },
 ) {
   return reconcileDeliveryAttemptByProviderMessageId(env, input);
+}
+
+const DIGEST_STATUS_CHANNEL_PRIORITY: DeliveryChannel[] = ["email", "slack", "whatsapp"];
+
+function selectDigestStatusAttempt(attempts: DigestAttemptSummary[]) {
+  for (const channel of DIGEST_STATUS_CHANNEL_PRIORITY) {
+    const successfulAttempt = attempts.find(
+      (attempt) => attempt.channel === channel && attempt.status === "sent",
+    );
+    if (successfulAttempt) return successfulAttempt;
+  }
+
+  for (const channel of DIGEST_STATUS_CHANNEL_PRIORITY) {
+    const attemptedDelivery = attempts.find((attempt) => attempt.channel === channel);
+    if (attemptedDelivery) return attemptedDelivery;
+  }
+
+  return null;
+}
+
+function digestStatusProvider(attempt: DigestAttemptSummary) {
+  if (attempt.channel === "slack") return SLACK_PROVIDER;
+  if (attempt.channel === "whatsapp") return "whatsapp_cloud_api";
+  return EMAIL_PROVIDER;
 }
 
 async function deliverDigestToEmailTarget(
@@ -532,6 +585,114 @@ async function deliverInstantWhatsAppBatch(
   };
 }
 
+async function deliverInstantSlackBatch(
+  env: AppEnv,
+  input: {
+    lane: DeliveryLane;
+    userId: string;
+    deliveryTarget: DeliveryTargetRecord;
+    watchlistId: string;
+    batch: InstantAlertBatch;
+    content: InstantAlertContent;
+  },
+): Promise<DigestAttemptSummary> {
+  const attemptDedupe = await resolveInstantAttemptDedupe(env, {
+    watchlistId: input.watchlistId,
+    lane: input.lane,
+    channel: "slack",
+    targetValue: input.deliveryTarget.targetValue,
+    batchKey: input.batch.batchKey,
+    deferredByQuietHours: input.batch.deferredByQuietHours,
+  });
+  if (attemptDedupe.duplicate) {
+    return summarizeDeliveryAttempt(attemptDedupe.duplicate);
+  }
+
+  if (input.batch.deferredByQuietHours) {
+    await createDeliveryAttempt(env, {
+      userId: input.userId,
+      watchlistId: input.watchlistId,
+      digestRunId: null,
+      deliveryTargetId: input.deliveryTarget.id,
+      lane: input.lane,
+      channel: "slack",
+      provider: SLACK_PROVIDER,
+      status: "skipped_due_to_quiet_hours",
+      webhookStatus: "provider_unknown",
+      targetValue: input.deliveryTarget.targetValue,
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: null,
+      eventIds: input.batch.events.map((event) => event.id),
+      payloadSnapshot: {
+        kind: "instant_alert",
+        channel: "slack",
+        batchKey: input.batch.batchKey,
+        provisional: input.batch.provisional,
+      },
+      idempotencyKey: attemptDedupe.idempotencyKey,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+    });
+
+    return {
+      channel: "slack",
+      status: "failed",
+      targetValue: input.deliveryTarget.targetValue,
+      providerMessageId: null,
+      errorMessage: null,
+      deliveredAt: null,
+    };
+  }
+
+  const providerResult = await sendSlackWebhookMessage(env, input.deliveryTarget, {
+    text: renderInstantSlackText(input.content, input.batch.events),
+  });
+
+  const attemptId = await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: input.watchlistId,
+    digestRunId: null,
+    deliveryTargetId: input.deliveryTarget.id,
+    lane: input.lane,
+    channel: "slack",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.deliveryTarget.targetValue,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: null,
+    eventIds: input.batch.events.map((event) => event.id),
+    payloadSnapshot: {
+      kind: "instant_alert",
+      channel: "slack",
+      batchKey: input.batch.batchKey,
+      provisional: input.batch.provisional,
+      subject: input.content.subject,
+      watchlistUrl: input.content.watchlistUrl,
+    },
+    idempotencyKey: attemptDedupe.idempotencyKey,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  if (providerResult.status === "sent") {
+    await persistDeliveryTargetSuccess(env, input.deliveryTarget, attemptId, providerResult.deliveredAt);
+  }
+
+  return {
+    channel: "slack",
+    status: providerResult.status,
+    targetValue: input.deliveryTarget.targetValue,
+    providerMessageId: providerResult.providerMessageId,
+    errorMessage: providerResult.errorMessage,
+    deliveredAt: providerResult.deliveredAt,
+  };
+}
+
 async function deliverDigestToWhatsAppTarget(
   env: AppEnv,
   input: DeliverWeeklyDigestInput,
@@ -603,6 +764,82 @@ async function deliverDigestToWhatsAppTarget(
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: providerResult.status === "sent" ? new Date().toISOString() : null,
+  };
+}
+
+async function deliverDigestToSlackTarget(
+  env: AppEnv,
+  input: DeliverWeeklyDigestInput,
+  lane: DeliveryLane,
+  target: DeliveryTargetRecord,
+): Promise<DigestAttemptSummary> {
+  const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
+    digestRunId: input.digestRunId,
+    lane,
+    channel: "slack",
+    targetValue: target.targetValue,
+  });
+  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+  if (duplicate) {
+    return {
+      channel: "slack" as const,
+      status: duplicate.status === "sent" ? "sent" : "failed",
+      targetValue: duplicate.targetValue,
+      providerMessageId: duplicate.providerMessageId,
+      errorMessage: duplicate.errorMessage,
+      deliveredAt: duplicate.sentAt,
+    };
+  }
+
+  const cadenceLabel = digestCadenceLabel(input.cadence);
+  const providerResult = await sendSlackWebhookMessage(env, target, {
+    text: renderDigestSlackText({
+      cadenceLabel,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      items: input.items,
+    }),
+  });
+  const attemptId = await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: input.digestRunId,
+    deliveryTargetId: target.id,
+    lane,
+    channel: "slack",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: target.targetValue,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: null,
+    eventIds: input.items.map((item) => item.eventId),
+    payloadSnapshot: {
+      kind: "weekly_digest",
+      channel: "slack",
+      cadence: input.cadence ?? "weekly",
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      itemCount: input.items.length,
+    },
+    idempotencyKey,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  if (providerResult.status === "sent") {
+    await persistDeliveryTargetSuccess(env, target, attemptId, providerResult.deliveredAt);
+  }
+
+  return {
+    channel: "slack" as const,
+    status: providerResult.status,
+    targetValue: target.targetValue,
+    providerMessageId: providerResult.providerMessageId,
+    errorMessage: providerResult.errorMessage,
+    deliveredAt: providerResult.deliveredAt,
   };
 }
 
@@ -715,6 +952,39 @@ async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlis
       !target.optedOutAt &&
       target.isValidated &&
       target.validationStatus === "validated",
+  );
+}
+
+async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
+  return (await listDeliveryTargets(env, userId, {
+    watchlistId: null,
+    channel: "slack",
+    limit: 10,
+  })).filter(isUsableSlackTarget);
+}
+
+async function resolveAlertSlackTargets(env: AppEnv, userId: string, watchlistId: string) {
+  return dedupeTargetsByValue([
+    ...(await listDeliveryTargets(env, userId, {
+      watchlistId,
+      channel: "slack",
+      limit: 10,
+    })),
+    ...(await listDeliveryTargets(env, userId, {
+      watchlistId: null,
+      channel: "slack",
+      limit: 10,
+    })),
+  ]).filter(isUsableSlackTarget);
+}
+
+function isUsableSlackTarget(target: DeliveryTargetRecord) {
+  return (
+    !target.isPaused &&
+    target.isOptedIn &&
+    !target.optedOutAt &&
+    target.isValidated &&
+    target.validationStatus === "validated"
   );
 }
 
@@ -904,6 +1174,7 @@ function buildLegacyWorkspaceConfig(
     digestEnabled: defaults.digestEnabled,
     emailEnabled: defaults.emailEnabled,
     whatsappEnabled: defaults.whatsappEnabled,
+    slackEnabled: defaults.slackEnabled,
     quietHours: null,
     timezone: null,
     createdAt: "",
@@ -1056,6 +1327,44 @@ function renderDigestHtml(input: {
   `;
 }
 
+function renderDigestSlackText(input: {
+  cadenceLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  items: DigestDeliveryItem[];
+}) {
+  const lines = [
+    `*Five to Nine ${escapeSlackText(input.cadenceLabel)}: ${input.items.length} competitor changes*`,
+    `${formatDate(input.periodStart)} to ${formatDate(input.periodEnd)}`,
+  ];
+
+  if (input.items.length === 0) {
+    return [...lines, "No digest changes yet."].join("\n");
+  }
+
+  for (const item of input.items.slice(0, 10)) {
+    const intelligence = readDigestIntelligence(item.metadata);
+    const scoreLabel = intelligence.priorityScore === null
+      ? intelligence.priorityBand
+      : `${intelligence.priorityBand} - ${intelligence.priorityScore}/100`;
+    lines.push(
+      [
+        `• *${escapeSlackText(item.watchlistName)}*: ${escapeSlackText(item.title)}`,
+        `  ${escapeSlackText(item.summary)}`,
+        `  Priority: ${escapeSlackText(scoreLabel)}`,
+        `  Next: ${escapeSlackText(intelligence.recommendedAction)}`,
+        `  Proof: ${escapeSlackText(intelligence.proofTrail)}`,
+      ].join("\n"),
+    );
+  }
+
+  if (input.items.length > 10) {
+    lines.push(`+${input.items.length - 10} more changes in Five to Nine.`);
+  }
+
+  return lines.join("\n\n");
+}
+
 type InstantAlertBatch = {
   batchKey: string;
   events: WatchEventRecord[];
@@ -1174,6 +1483,26 @@ function buildInstantAlertContent(
   };
 }
 
+function renderInstantSlackText(content: InstantAlertContent, events: WatchEventRecord[]) {
+  const lines = [
+    `*${escapeSlackText(content.subject)}*`,
+  ];
+
+  for (const event of events.slice(0, 6)) {
+    lines.push(`• ${escapeSlackText(event.title)}: ${escapeSlackText(event.summary)}`);
+  }
+
+  if (events.length > 6) {
+    lines.push(`+${events.length - 6} more changes.`);
+  }
+
+  if (content.watchlistUrl) {
+    lines.push(`<${content.watchlistUrl}|View watchlist>`);
+  }
+
+  return lines.join("\n");
+}
+
 function buildInstantSubject(eventType: WatchEventRecord["eventType"], competitor: string, fallbackTitle: string) {
   switch (eventType) {
     case "ad_new":
@@ -1230,4 +1559,11 @@ function escapeHtml(value: string) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function escapeSlackText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }

@@ -175,11 +175,15 @@ export function formatDeliveryAttemptStatusLabel(
   channel: DeliveryChannel,
 ) {
   if (status === "sent") {
-    return channel === "email" ? "Delivered by email" : "Delivered by WhatsApp";
+    if (channel === "email") return "Delivered by email";
+    if (channel === "slack") return "Delivered by Slack";
+    return "Delivered by WhatsApp";
   }
 
   if (status === "failed") {
-    return channel === "email" ? "Email failed" : "WhatsApp failed";
+    if (channel === "email") return "Email failed";
+    if (channel === "slack") return "Slack failed";
+    return "WhatsApp failed";
   }
 
   if (status === "skipped_due_to_quiet_hours") {

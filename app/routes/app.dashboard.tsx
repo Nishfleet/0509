@@ -7,6 +7,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { buildSearchParams } from "~/lib/normalize";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -53,7 +54,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     digests,
     recentEvents,
     recentProofCaptures,
-    deliveryTargets,
+    deliveryTargets: deliveryTargets.map(toPublicDeliveryTarget),
     metaStatus,
     proofUsage,
     customerMetaConnection: customerMetaConnection
