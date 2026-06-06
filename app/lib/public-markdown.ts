@@ -16,6 +16,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Account-gated competitor ad search, retained monitoring, and reusable saved evidence.
 - Search, competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Authenticated collection, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
+- Customer API keys can read account-owned collection, watchlist, and digest exports at /api/v1.
 - Account insight-depth summaries cover top hooks, media mix, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily briefs and weekly digests should show priority, recommended next move, and proof trail.
@@ -68,7 +69,9 @@ Current product truth:
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
 - Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
+- Customer API keys support read-only /api/v1 collection, watchlist, and digest exports for account-owned data.
 - Customer WhatsApp delivery must stay behind opt-in, template-readiness, and webhook-readiness checks.
+- TikTok, Google, YouTube, LinkedIn, Pinterest, public write APIs, and MCP are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
 Core layers:

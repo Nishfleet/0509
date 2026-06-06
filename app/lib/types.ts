@@ -554,3 +554,14 @@ export interface CustomerMetaConnectionRecord {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface CustomerApiKeyRecord {
+  id: string;
+  userId: string;
+  name: string;
+  keyPrefix: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

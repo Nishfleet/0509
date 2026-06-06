@@ -104,6 +104,18 @@ describe("sources route loader", () => {
         createdAt: "2026-05-15T00:00:00.000Z",
         updatedAt: "2026-05-15T00:00:00.000Z",
       }),
+      listCustomerApiKeys: vi.fn().mockResolvedValue([
+        {
+          id: "api-key-1",
+          userId: "user-1",
+          name: "Claude workflow",
+          keyPrefix: ["f9", "live", "abcd1234"].join("_"),
+          lastUsedAt: null,
+          revokedAt: null,
+          createdAt: "2026-06-06T00:00:00.000Z",
+          updatedAt: "2026-06-06T00:00:00.000Z",
+        },
+      ]),
     }));
     vi.doMock("~/lib/meta-ads-readiness.server", () => ({
       getMetaAdsBetaReadiness: vi.fn().mockResolvedValue(betaReadiness),
@@ -123,6 +135,16 @@ describe("sources route loader", () => {
       },
       discoveryStatus,
       betaReadiness,
+      apiKeys: [
+        {
+          id: "api-key-1",
+          name: "Claude workflow",
+          keyPrefix: ["f9", "live", "abcd1234"].join("_"),
+          lastUsedAt: null,
+          revokedAt: null,
+          createdAt: "2026-06-06T00:00:00.000Z",
+        },
+      ],
     });
   });
 });
@@ -171,6 +193,91 @@ describe("sources route action", () => {
       message: "Connected.",
     });
   });
+
+  it("creates a customer API key and returns the one-time secret", async () => {
+    const createCustomerApiKey = vi.fn().mockResolvedValue({
+      secret: ["f9", "live", "full_secret"].join("_"),
+      apiKey: {
+        keyPrefix: ["f9", "live", "full"].join("_"),
+      },
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/api-keys.server", () => ({
+      createCustomerApiKey,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "create-api-key");
+    formData.set("apiKeyName", "Claude workflow");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(createCustomerApiKey).toHaveBeenCalledWith(expect.anything(), "user-1", "Claude workflow");
+    expect(result).toMatchObject({
+      ok: true,
+      apiKeySecret: ["f9", "live", "full_secret"].join("_"),
+      apiKeyPrefix: ["f9", "live", "full"].join("_"),
+    });
+  });
+
+  it("revokes a customer API key", async () => {
+    const revokeCustomerApiKey = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      revokeCustomerApiKey,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "revoke-api-key");
+    formData.set("apiKeyId", "api-key-1");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(revokeCustomerApiKey).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      apiKeyId: "api-key-1",
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: "API key revoked.",
+    });
+  });
 });
 
 describe("sources route component", () => {
@@ -179,6 +286,7 @@ describe("sources route component", () => {
       connection: null,
       discoveryStatus,
       betaReadiness,
+      apiKeys: [],
     });
 
     const { default: AppSourcesRoute } = await import("~/routes/app.sources");
@@ -191,6 +299,10 @@ describe("sources route component", () => {
     expect(markup).toContain("Test and save access");
     expect(markup).toContain("Ad Library API page");
     expect(markup).toContain("Recent tracking health");
+    expect(markup).toContain("Customer API");
+    expect(markup).toContain("Create API key");
+    expect(markup).toContain("/api/v1/watchlists/");
+    expect(markup).toContain("MCP yet");
     expect(markup).toContain("needs proof");
     expect(markup).toContain("recent results are available");
     expect(markup).not.toContain("Cached live results");
