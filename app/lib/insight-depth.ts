@@ -7,6 +7,7 @@ import type {
 export interface InsightDepthSummary {
   topHooks: InsightCount[];
   mediaMix: InsightCount[];
+  campaignDurations: InsightCount[];
   creativeTimeline: InsightTimelineItem[];
   landingPageHistory: InsightTimelineItem[];
 }
@@ -27,6 +28,7 @@ export function emptyInsightDepthSummary(): InsightDepthSummary {
   return {
     topHooks: [{ label: "Pending", count: 0, detail: "No repeated hooks yet." }],
     mediaMix: [{ label: "Pending", count: 0, detail: "No channel mix yet." }],
+    campaignDurations: [{ label: "Pending", count: 0, detail: "No duration proof yet." }],
     creativeTimeline: [],
     landingPageHistory: [],
   };
@@ -45,6 +47,9 @@ export function safeInsightDepthSummary(value: unknown): InsightDepthSummary {
     mediaMix: Array.isArray(candidate.mediaMix)
       ? candidate.mediaMix
       : emptyInsightDepthSummary().mediaMix,
+    campaignDurations: Array.isArray(candidate.campaignDurations)
+      ? candidate.campaignDurations
+      : emptyInsightDepthSummary().campaignDurations,
     creativeTimeline: Array.isArray(candidate.creativeTimeline)
       ? candidate.creativeTimeline
       : [],
@@ -60,6 +65,9 @@ type InsightSource =
       advertiser: string;
       hook: string;
       platforms: unknown;
+      firstSeenAt: string | null;
+      lastSeenAt: string | null;
+      active: boolean;
       timestamp: string | null;
       detail: string;
       landingPageDetail: string | null;
@@ -80,6 +88,9 @@ export function buildCollectionInsightDepth(items: CollectionItemRecord[]): Insi
       advertiser: item.ad.advertiser,
       hook: item.ad.hook,
       platforms: item.ad.platforms,
+      firstSeenAt: item.ad.firstSeenAt,
+      lastSeenAt: item.ad.lastSeenAt,
+      active: item.ad.active,
       timestamp: item.ad.lastSeenAt ?? item.ad.firstSeenAt ?? item.createdAt,
       detail: item.ad.offer || item.ad.previewHeadline || item.note || "Saved proof",
       landingPageDetail: landingPageDetailForAd(item),
@@ -118,6 +129,7 @@ export function formatInsightDepthMarkdown(summary: InsightDepthSummary) {
     "*Insight depth*",
     markdownSection("Top hooks", summary.topHooks),
     markdownSection("Media mix", summary.mediaMix),
+    markdownSection("Observed campaign duration", summary.campaignDurations),
     markdownTimeline("Creative timeline", summary.creativeTimeline),
     markdownTimeline("Landing-page history", summary.landingPageHistory),
   ].join("\n\n");
@@ -127,6 +139,7 @@ function buildInsightDepth(sources: InsightSource[]): InsightDepthSummary {
   return {
     topHooks: summarizeCounts(readHookLabels(sources), "No repeated hooks yet."),
     mediaMix: summarizeCounts(readMediaLabels(sources), "No channel mix yet."),
+    campaignDurations: summarizeCounts(readCampaignDurationLabels(sources), "No duration proof yet."),
     creativeTimeline: readCreativeTimeline(sources),
     landingPageHistory: readLandingPageHistory(sources),
   };
@@ -155,6 +168,30 @@ function readMediaLabels(sources: InsightSource[]) {
     }
 
     return [{ label: labelForEventChannel(source.eventType), detail: source.title }];
+  });
+}
+
+function readCampaignDurationLabels(sources: InsightSource[]) {
+  return sources.flatMap((source) => {
+    if (source.kind !== "ad") {
+      return [];
+    }
+
+    const durationDays = observedDurationDays(source.firstSeenAt, source.lastSeenAt);
+    if (durationDays === null) {
+      return [];
+    }
+
+    return [
+      {
+        label: campaignDurationBucket(durationDays, source.active),
+        detail: [
+          source.advertiser,
+          `${durationDays} observed day${durationDays === 1 ? "" : "s"}`,
+          source.active ? "active" : "inactive",
+        ].join(" - "),
+      },
+    ];
   });
 }
 
@@ -288,6 +325,37 @@ function normalizeStringArray(value: unknown) {
         (item): item is string => typeof item === "string" && item.trim().length > 0,
       )
     : [];
+}
+
+function observedDurationDays(firstSeenAt: string | null, lastSeenAt: string | null) {
+  if (!firstSeenAt || !lastSeenAt) {
+    return null;
+  }
+
+  const firstSeenMs = Date.parse(firstSeenAt);
+  const lastSeenMs = Date.parse(lastSeenAt);
+  if (Number.isNaN(firstSeenMs) || Number.isNaN(lastSeenMs) || lastSeenMs < firstSeenMs) {
+    return null;
+  }
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.max(1, Math.ceil((lastSeenMs - firstSeenMs) / dayMs));
+}
+
+function campaignDurationBucket(durationDays: number, active: boolean) {
+  if (active && durationDays >= 30) {
+    return "Long-running active campaign";
+  }
+  if (durationDays >= 30) {
+    return "Long-running campaign";
+  }
+  if (durationDays >= 14) {
+    return "Multi-week run";
+  }
+  if (durationDays >= 7) {
+    return "One-week run";
+  }
+  return "Short test";
 }
 
 function labelForEventChannel(eventType: string) {

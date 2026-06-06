@@ -82,6 +82,7 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("Insight depth");
     expect(appSurface).toContain("Top hooks");
     expect(appSurface).toContain("Media mix");
+    expect(appSurface).toContain("Observed campaign duration");
     expect(appSurface).toContain("Landing-page history");
     expect(appSurface).toContain("Customer API");
     expect(appSurface).toContain("Create API key");
