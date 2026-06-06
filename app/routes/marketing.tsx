@@ -35,19 +35,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 const marketStats = [
   { label: "Watched sites", value: "3", detail: "sample setup" },
   { label: "Fields checked", value: "4", detail: "headline, CTA, offer, form" },
-  { label: "Proof captures", value: "9", detail: "screenshots and page text" },
+  { label: "Evidence saved", value: "9", detail: "screenshots and page text" },
 ];
 
 const signalRows = [
-  ["Competitor page", "Visible offer text changed", "Page proof", "Review"],
-  ["Landing page", "CTA changed on destination", "Page proof", "Review"],
-  ["Tracked form", "Lead form appeared", "Page proof", "Watched"],
+  ["Competitor page", "Visible offer text changed", "Page evidence", "Review"],
+  ["Landing page", "CTA changed on destination", "Page evidence", "Review"],
+  ["Tracked form", "Lead form appeared", "Page evidence", "Watched"],
 ];
 
 const backboneStats = [
   { value: "1", label: "competitor website", detail: "turns into a watchlist" },
   { value: "24h", label: "change checks", detail: "visible offers, CTAs, forms" },
-  { value: "3", label: "proof artifacts", detail: "screenshot, page text, source link" },
+  { value: "3", label: "saved evidence", detail: "screenshot, page text, original link" },
   { value: "05:09", label: "morning brief", detail: "what changed and why it matters" },
 ];
 
@@ -102,7 +102,7 @@ export default function MarketingRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const routeData = useLoaderData<typeof loader>();
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
-  const primaryLabel = rootData.session ? "Open workspace" : "Start now";
+  const primaryLabel = rootData.session ? "Open account" : "Start now";
   const [localPricing, setLocalPricing] = useState<LocalPricingPreview | null>(
     routeData.pricingPreview?.available ? routeData.pricingPreview : null,
   );
@@ -167,12 +167,12 @@ export default function MarketingRoute() {
 
             <p>
               Enter a competitor website. Five to Nine watches ads and landing pages, captures
-              proof, and tells your team when visible offer text, CTAs, forms, or onboarding page copy move.
+              evidence, and tells your team when visible offer text, CTAs, forms, or onboarding page copy move.
             </p>
 
             <Form className="f9-email-cta" method="get" action={primaryCta}>
               {rootData.session ? (
-                <span className="f9-email-state">Workspace ready</span>
+                <span className="f9-email-state">Account ready</span>
               ) : (
                 <input aria-label="Work email" name="email" placeholder="Work email" type="email" />
               )}
@@ -192,7 +192,7 @@ export default function MarketingRoute() {
                   <span>Today</span>
                   <h2>Competitor changes to review</h2>
                 </div>
-                <p>Proof captured</p>
+                <p>Evidence captured</p>
               </div>
 
               <div className="f9-stat-grid">
@@ -241,7 +241,7 @@ export default function MarketingRoute() {
                 <em>saved</em>
               </div>
               <div>
-                <small>Source link</small>
+                <small>Original link</small>
                 <em>captured</em>
               </div>
             </div>
@@ -303,12 +303,12 @@ export default function MarketingRoute() {
             <div className="f9-plan-summary-card" aria-label="Pricing summary">
               <span>Recommended launch plan</span>
               <strong>Start with Starter</strong>
-              <p>Weekly proof briefs, 10 watchlists, and enough capture room for a real sales team.</p>
+              <p>Weekly change briefs, 10 watchlists, and enough checks for a real sales team.</p>
             </div>
           </div>
 
           <p className="f9-growth-pricing-note">
-            Every paid plan includes competitor watchlists, proof captures, saved collections, and
+            Every paid plan includes competitor watchlists, page checks, saved collections, and
             clear caps. Upgrade when your category gets noisier.
           </p>
 
@@ -361,11 +361,11 @@ export default function MarketingRoute() {
             })}
           </div>
 
-          <div className="f9-usage-bundles" aria-label="Usage bundles">
+          <div className="f9-usage-bundles" aria-label="Extra check packs">
             <div className="f9-usage-bundles-head">
-              <span>Extra proof capacity</span>
+              <span>Extra check capacity</span>
               <p>
-                Add proof captures for launch weeks or big campaigns without changing the team's
+                Add page checks for launch weeks or big campaigns without changing the team's
                 plan.
               </p>
             </div>

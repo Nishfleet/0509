@@ -36,7 +36,7 @@ export function DigestMovementSummary({ items }: { items: DigestMovementItem[] }
       </div>
       <div>
         <dt>Report status</dt>
-        <dd>Client-ready snapshot with source proof, timestamp, and confidence trail.</dd>
+        <dd>Client-ready snapshot with evidence, timestamp, and confidence trail.</dd>
       </div>
     </dl>
   );
@@ -59,7 +59,7 @@ export function DigestIntelligence({ metadata }: { metadata?: Record<string, unk
         <dd>{intelligence.recommendedAction}</dd>
       </div>
       <div>
-        <dt>Proof trail</dt>
+        <dt>Evidence trail</dt>
         <dd>{intelligence.proofTrail}</dd>
       </div>
     </dl>

@@ -26,6 +26,19 @@ const baseAd: AdRecord = {
   analysisFields: [],
 };
 
+const appSession = {
+  user: {
+    id: "user-1",
+    email: "owner@example.com",
+    name: "Owner",
+  },
+  session: {
+    id: "session-1",
+    userId: "user-1",
+    expiresAt: "2026-04-03T00:00:00.000Z",
+  },
+};
+
 function createContext(env = {}) {
   return {
     cloudflare: {
@@ -43,6 +56,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/creative-text.server");
+  vi.doUnmock("~/lib/customer-meta.server");
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/landing-pages.server");
   vi.doUnmock("~/lib/plan.server");
@@ -54,10 +68,50 @@ afterEach(() => {
 });
 
 describe("search loader", () => {
-  it("does not call live discovery before a visitor submits a query", async () => {
+  it("redirects a logged-out visitor before showing the search page", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
-    const listCollections = vi.fn();
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    let response: Response | null = null;
+    try {
+      await loader({
+        context: createContext(env),
+        request: new Request("http://localhost/search"),
+      } as never);
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(getOptionalSession).toHaveBeenCalledWith(env, expect.any(Request));
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get("Location")).toBe("/auth/login?redirectTo=%2Fsearch");
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+  });
+
+  it("does not call live discovery before a signed-in user submits a query", async () => {
+    const env = { DB: {} };
+    const getOptionalSession = vi.fn().mockResolvedValue(appSession);
+    const listCollections = vi.fn().mockResolvedValue([]);
     const searchAdsViaSourceResolver = vi.fn();
     const prepareSearchResultSelection = vi.fn();
 
@@ -84,7 +138,7 @@ describe("search loader", () => {
     } as never);
 
     expect(getOptionalSession).toHaveBeenCalledWith(env, expect.any(Request));
-    expect(listCollections).not.toHaveBeenCalled();
+    expect(listCollections).toHaveBeenCalledWith(env, appSession.user.id);
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
     expect(result).toMatchObject({
@@ -103,7 +157,48 @@ describe("search loader", () => {
     });
   });
 
-  it("runs live discovery after a visitor submits a query", async () => {
+  it("redirects a logged-out visitor before showing competitor results", async () => {
+    const env = { DB: {} };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    let response: Response | null = null;
+    try {
+      await loader({
+        context: createContext(env),
+        request: new Request("http://localhost/search?query=nykaa"),
+      } as never);
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get("Location")).toBe(
+      "/auth/login?redirectTo=%2Fsearch%3Fquery%3Dnykaa",
+    );
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+  });
+
+  it("runs live discovery after a signed-in user submits a query", async () => {
     const env = { DB: {} };
     const sourceResult = {
       ads: [],
@@ -126,13 +221,16 @@ describe("search loader", () => {
     });
 
     vi.doMock("~/lib/auth.server", () => ({
-      getOptionalSession: vi.fn().mockResolvedValue(null),
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/lib/data.server", () => ({
-      listCollections: vi.fn(),
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -182,13 +280,16 @@ describe("search loader", () => {
     });
 
     vi.doMock("~/lib/auth.server", () => ({
-      getOptionalSession: vi.fn().mockResolvedValue(null),
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/lib/data.server", () => ({
-      listCollections: vi.fn(),
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -246,6 +347,7 @@ describe("search loader", () => {
       result: sourceResult,
       selectedAd: null,
     });
+    const listCollections = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(null),
@@ -254,7 +356,7 @@ describe("search loader", () => {
       getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/lib/data.server", () => ({
-      listCollections: vi.fn(),
+      listCollections,
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -264,6 +366,19 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
+    let redirected: Response | null = null;
+    try {
+      await loader({
+        context: createContext(env),
+        request: new Request("http://localhost/search?query=nykaa&fresh=live"),
+      } as never);
+    } catch (error) {
+      redirected = error as Response;
+    }
+
+    expect(redirected?.status).toBe(302);
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+
     await loader({
       context: createContext(env),
       request: new Request("http://localhost/search?query=nykaa&fresh=live", {
@@ -273,6 +388,7 @@ describe("search loader", () => {
       }),
     } as never);
 
+    expect(listCollections).not.toHaveBeenCalled();
     expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
       env,
       expect.objectContaining({
@@ -557,5 +673,40 @@ describe("search loader OCR reuse", () => {
         ]),
       }),
     );
+  });
+});
+
+describe("search status copy", () => {
+  it("does not claim alternate Meta results when API fallback failed without ads", async () => {
+    const { formatDiscoverySummary } = await import("~/routes/search");
+
+    expect(
+      formatDiscoverySummary({
+        ads: [],
+        nextCursor: null,
+        source: "meta",
+        cacheStatus: "none",
+        discoveryStatus: "degraded",
+        discoverySummary: "Meta Ad Library API fallback failed while browser capture is unavailable.",
+        discoveryFailureClass: "browser_unavailable",
+      }),
+    ).toBe("Fresh visual checks are delayed and no alternate results are available.");
+  });
+
+  it("does not call a successful empty API fallback unavailable", async () => {
+    const { formatDiscoverySummary } = await import("~/routes/search");
+
+    expect(
+      formatDiscoverySummary({
+        ads: [],
+        nextCursor: null,
+        source: "meta_api",
+        provider: "meta_api",
+        cacheStatus: "miss",
+        discoveryStatus: "healthy",
+        discoverySummary: "Browser capture is unavailable right now; showing API fallback results.",
+        discoveryFailureClass: null,
+      }),
+    ).toBe("Fresh visual checks are delayed; alternate Meta checks found no ads.");
   });
 });

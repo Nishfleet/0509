@@ -202,6 +202,7 @@ export async function runProductionCanary(options = {}) {
   const freshLiveBypass = {
     required: true,
     configured: isConfiguredSecret(canaryBypassToken),
+    proved: false,
     message: isConfiguredSecret(canaryBypassToken)
       ? null
       : "Missing CANARY_BYPASS_TOKEN; canary cannot prove it bypassed cache and provider cooldown.",
@@ -242,6 +243,11 @@ export async function runProductionCanary(options = {}) {
     fetchImpl: options.fetchImpl,
   });
   const blockingFailures = findBlockingFreshLiveCurrent0509Failures(results);
+  const freshLiveBypassFailure = findFreshLiveBypassFailure(results, blockingFailures);
+  freshLiveBypass.proved = freshLiveBypass.configured && !freshLiveBypassFailure;
+  if (freshLiveBypass.configured && freshLiveBypassFailure) {
+    freshLiveBypass.message = freshLiveBypassFailure;
+  }
   const metaAdsBeta = {
     beta: true,
     strict: metaAdsStrict,
@@ -254,7 +260,7 @@ export async function runProductionCanary(options = {}) {
     passed:
       healthChecks.every((check) => check.ok) &&
       launchReadiness.ok &&
-      freshLiveBypass.configured &&
+      freshLiveBypass.proved &&
       (!metaAdsStrict || blockingFailures.length === 0),
     generatedAt: new Date().toISOString(),
     baseUrl,
@@ -289,7 +295,7 @@ export function formatProductionCanaryReport(report) {
 
   if (report.freshLiveBypass?.required) {
     lines.push(
-      report.freshLiveBypass.configured
+      report.freshLiveBypass.proved
         ? "fresh-live bypass: ok"
         : `fresh-live bypass: failed (${report.freshLiveBypass.message})`,
     );
@@ -327,6 +333,35 @@ export function formatProductionCanaryReport(report) {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * @param {Awaited<ReturnType<typeof benchmarkProviders>>} results
+ * @param {Awaited<ReturnType<typeof findBlockingFreshLiveCurrent0509Failures>>} blockingFailures
+ */
+function findFreshLiveBypassFailure(results, blockingFailures) {
+  const currentResults = results.filter((result) => result.provider === "current_0509");
+  if (currentResults.length === 0) {
+    return "No current_0509 fresh-live probe ran.";
+  }
+
+  const loginRedirect = currentResults.find(
+    (result) =>
+      result.loginWall === true &&
+      typeof result.httpStatus === "number" &&
+      result.httpStatus >= 300 &&
+      result.httpStatus < 400,
+  );
+
+  if (loginRedirect) {
+    return "Private current_0509 probe was redirected to sign in.";
+  }
+
+  if (blockingFailures.length > 0) {
+    return "Private current_0509 fresh-live probe did not return live ad proof.";
+  }
+
+  return null;
 }
 
 /**

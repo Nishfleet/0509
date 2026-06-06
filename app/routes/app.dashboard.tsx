@@ -109,7 +109,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message: "You have reached your workspace watchlist limit.",
+        message: "You have reached your competitor tracking limit.",
       };
     }
 
@@ -176,8 +176,8 @@ export default function AppDashboardRoute() {
       done: firstCompetitorReady,
     },
     {
-      label: "Capture proof",
-      detail: proofReady ? `${successfulProofs || proofUsage.used} proof capture${successfulProofs === 1 || proofUsage.used === 1 ? "" : "s"} recorded` : "Refresh a watchlist to capture landing-page evidence.",
+      label: "Save evidence",
+      detail: proofReady ? `${successfulProofs || proofUsage.used} evidence check${successfulProofs === 1 || proofUsage.used === 1 ? "" : "s"} recorded` : "Refresh a watchlist to capture landing-page evidence.",
       done: proofReady,
     },
     {
@@ -203,7 +203,7 @@ export default function AppDashboardRoute() {
       detail: recentEvents.length > 0 ? "Recent watch events" : "Waiting for first scan",
     },
     {
-      label: "Proof captures",
+      label: "Evidence checks",
       value: proofUsage.used ?? successfulProofs,
       detail: proofUsage.limit ? `${proofUsage.remaining} left this month` : `${successfulProofs} recent successes`,
     },
@@ -328,7 +328,7 @@ export default function AppDashboardRoute() {
       </section>
 
       <section className="f9-dashboard-setup-row">
-        <aside className="f9-setup-card" aria-label="Workspace setup status">
+      <aside className="f9-setup-card" aria-label="Account setup status">
           <div>
             <span className="f9-app-kicker">Launch checklist</span>
             <h3>{readyCount} of {setupItems.length} ready</h3>
@@ -358,12 +358,12 @@ export default function AppDashboardRoute() {
             <span className="f9-app-kicker">Proof usage</span>
             <h2>
               {proofUsage.warningLevel === "exhausted"
-                ? "Proof capture limit reached."
-                : "Proof capture usage is above 80%."}
+                ? "Evidence check limit reached."
+                : "Evidence check usage is above 80%."}
             </h2>
           </div>
           <p>
-            {proofUsage.used} of {proofUsage.limit} proof captures used in the last 30 days.
+            {proofUsage.used} of {proofUsage.limit} evidence checks used in the last 30 days.
             {proofUsage.upgradeTarget
               ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next noisy launch.`
               : " Add an overflow pack before the next noisy launch."}
@@ -397,7 +397,7 @@ export default function AppDashboardRoute() {
               <h3>No competitor changes captured yet.</h3>
               <p>
                 Add a competitor website, start tracking from the search results, then refresh the watchlist to capture
-                the first proof-backed change trail.
+                the first evidence-backed change trail.
               </p>
               <Link className="f9-primary-button" to="/search">
                 Add first competitor
@@ -430,7 +430,7 @@ export default function AppDashboardRoute() {
             <div>
               <span className={`f9-status-dot ${sourceReady ? "is-good" : "is-attention"}`} />
               <strong>{metaHeading}</strong>
-              <p>{data.metaStatus.summary}</p>
+              <p>{formatTrackingStatusSummary(data.metaStatus.summary)}</p>
             </div>
             <div>
               <span className={`f9-status-dot ${firstCompetitorReady ? "is-good" : "is-attention"}`} />
@@ -439,8 +439,8 @@ export default function AppDashboardRoute() {
             </div>
             <div>
               <span className={`f9-status-dot ${proofUsage.remaining > 0 ? "is-good" : "is-attention"}`} />
-              <strong>Proof budget</strong>
-              <p>{proofUsage.limit ? `${proofUsage.remaining} of ${proofUsage.limit} captures left.` : "Proof capacity is not configured."}</p>
+              <strong>Evidence checks</strong>
+              <p>{proofUsage.limit ? `${proofUsage.remaining} of ${proofUsage.limit} checks left.` : "Evidence-check capacity is not configured."}</p>
             </div>
             <div>
               <span className={`f9-status-dot ${hasEmailDelivery ? "is-good" : "is-attention"}`} />
@@ -449,7 +449,7 @@ export default function AppDashboardRoute() {
             </div>
           </div>
           <Link className="f9-secondary-button" to="/app/sources">
-            Review source setup
+            Review tracking access
           </Link>
         </article>
       </div>
@@ -468,7 +468,7 @@ export default function AppDashboardRoute() {
           {watchlists.length === 0 ? (
             <div className="f9-dashboard-empty is-compact">
               <h3>No competitors yet.</h3>
-              <p>Start with one site. The watchlist will remember the advertiser search and proof history.</p>
+              <p>Start with one site. Five to Nine will remember the ads, notes, and page evidence.</p>
             </div>
           ) : (
             <div className="f9-work-list is-compact">
@@ -488,8 +488,8 @@ export default function AppDashboardRoute() {
         <article className="f9-app-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Workspace memory</span>
-              <h2>Proof saved for reuse</h2>
+              <span className="f9-app-kicker">Saved evidence</span>
+              <h2>Useful examples for reuse</h2>
             </div>
             <Link className="f9-secondary-button" to="/app/collections">
               Open collections
@@ -506,7 +506,7 @@ export default function AppDashboardRoute() {
             ))}
             {collections.length === 0 ? (
               <div className="f9-dashboard-empty is-compact">
-                <h3>No saved proof yet.</h3>
+                <h3>No saved evidence yet.</h3>
                 <p>Save ads, notes, and landing-page evidence from search or watchlist results.</p>
               </div>
             ) : null}
@@ -515,4 +515,23 @@ export default function AppDashboardRoute() {
       </div>
     </section>
   );
+}
+
+function formatTrackingStatusSummary(summary: string | null | undefined) {
+  if (!summary) {
+    return "Tracking status will appear after the first check.";
+  }
+
+  return summary
+    .replace(/Live commercial discovery/gi, "Fresh ad checks")
+    .replace(/commercial discovery/gi, "competitor ad checks")
+    .replace(/Commercial discovery/gi, "Competitor ad checks")
+    .replace(/Browser Run/gi, "visual checks")
+    .replace(/Official Meta API/gi, "alternate Meta ad access")
+    .replace(/API fallback/gi, "alternate Meta ad results")
+    .replace(/workspace Meta access/gi, "alternate Meta ad access")
+    .replace(/fresh discovery/gi, "fresh checks")
+    .replace(/cached live results/gi, "recent results")
+    .replace(/cached results/gi, "recent results")
+    .replace(/demo mode/gi, "sample mode");
 }

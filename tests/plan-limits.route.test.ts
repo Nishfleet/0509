@@ -78,7 +78,7 @@ describe("search watchlist limit", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached your workspace watchlist limit.",
+      message: "You have reached your competitor tracking limit.",
       ok: false,
     });
     expect(createWatchlist).not.toHaveBeenCalled();
@@ -211,7 +211,7 @@ describe("dashboard watchlist limit", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached your workspace watchlist limit.",
+      message: "You have reached your competitor tracking limit.",
       ok: false,
     });
     expect(createWatchlist).not.toHaveBeenCalled();

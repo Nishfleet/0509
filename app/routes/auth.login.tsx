@@ -6,7 +6,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const loginDescription =
-  "Sign in to access saved searches, watchlists, collections, and weekly competitor digests in Five to Nine.";
+  "Sign in to access saved competitors, alerts, reports, and useful ad examples in Five to Nine.";
 
 export const links: LinksFunction = () => canonicalLinks("/auth/login");
 
@@ -50,23 +50,22 @@ export default function LoginRoute() {
             <span>Competitor watch</span>
             <h1>Return to the changes your team is watching.</h1>
             <p>
-              Saved searches, watchlists, collections, and digests stay tied to the proof your team needs before the
-              next sales call.
+              Saved competitors, useful ads, and change reports stay ready for the next sales call.
             </p>
           </div>
 
           <div className="f9-auth-proof-list">
             <div>
               <strong>Saved research</strong>
-              <p>Keep filters, competitor sites, and proof notes attached to repeated checks.</p>
+              <p>Keep competitor sites, filters, and notes attached to repeated checks.</p>
             </div>
             <div>
               <strong>Watchlists</strong>
-              <p>Track competitor changes over time without losing proof history.</p>
+              <p>Track competitor changes over time without losing the evidence.</p>
             </div>
             <div>
               <strong>Collections</strong>
-              <p>Share useful ads and landing-page evidence with clients or teammates.</p>
+              <p>Share useful ads and landing-page examples with clients or teammates.</p>
             </div>
           </div>
         </section>

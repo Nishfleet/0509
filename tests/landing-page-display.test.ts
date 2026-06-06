@@ -14,9 +14,9 @@ import {
 
 describe("formatCaptureMethodLabel", () => {
   it("maps capture methods to explicit UI labels", () => {
-    expect(formatCaptureMethodLabel("landing_page_fetch")).toBe("Fetch capture");
-    expect(formatCaptureMethodLabel("browser_render")).toBe("Browser-rendered");
-    expect(formatCaptureMethodLabel("manual")).toBe("Capture unavailable");
+    expect(formatCaptureMethodLabel("landing_page_fetch")).toBe("Page text checked");
+    expect(formatCaptureMethodLabel("browser_render")).toBe("Checked in browser");
+    expect(formatCaptureMethodLabel("manual")).toBe("Not checked yet");
   });
 });
 
@@ -41,11 +41,11 @@ describe("formatLandingPageFormValue", () => {
 
 describe("formatAnalysisSourceLabel", () => {
   it("maps OCR and landing-page provenance sources to readable labels", () => {
-    expect(formatAnalysisSourceLabel("ad_snapshot_fetch")).toBe("Ad snapshot fetch");
-    expect(formatAnalysisSourceLabel("browser_render")).toBe("Browser-rendered");
-    expect(formatAnalysisSourceLabel("landing_page_fetch")).toBe("Fetch capture");
-    expect(formatAnalysisSourceLabel("meta_library_browser")).toBe("Browser Run capture");
-    expect(formatAnalysisSourceLabel("user")).toBe("Manual");
+    expect(formatAnalysisSourceLabel("ad_snapshot_fetch")).toBe("Ad snapshot");
+    expect(formatAnalysisSourceLabel("browser_render")).toBe("Browser check");
+    expect(formatAnalysisSourceLabel("landing_page_fetch")).toBe("Page text");
+    expect(formatAnalysisSourceLabel("meta_library_browser")).toBe("Live ad check");
+    expect(formatAnalysisSourceLabel("user")).toBe("Edited by user");
   });
 });
 

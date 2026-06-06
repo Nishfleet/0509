@@ -6,7 +6,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const privacyDescription =
-  "How Five to Nine handles account, search, monitoring, proof, and delivery data.";
+  "How Five to Nine handles account, search, monitoring, evidence, and delivery data.";
 
 export const links: LinksFunction = () => canonicalLinks("/privacy");
 
@@ -30,7 +30,7 @@ export default function PrivacyRoute() {
           <LegalBlock title="What we collect">
             <p>
               We collect account details, saved searches, watchlists, collections, notes, reports, share links, delivery
-              targets, customer-provided Meta API token settings, and operational logs needed to run the workspace.
+              targets, customer-provided Meta access settings, and operational logs needed to run the account.
             </p>
           </LegalBlock>
 
@@ -38,7 +38,7 @@ export default function PrivacyRoute() {
             <p>
               The product may store ad records, landing-page snapshots, extracted text, screenshots, HTML, timestamps,
               source URLs, and delivery attempts so teams can verify what changed. Tracking status stays visible when
-              discovery is recent, delayed, or freshly verified.
+              results are recent, delayed, or freshly verified.
             </p>
           </LegalBlock>
 
@@ -59,7 +59,7 @@ export default function PrivacyRoute() {
           <LegalBlock title="Support">
             <p>
               For access, correction, deletion, billing, or security questions, use the support or account contact path
-              that gave you access to the workspace.
+              that gave you access.
             </p>
           </LegalBlock>
         </article>

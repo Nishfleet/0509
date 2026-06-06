@@ -9,14 +9,14 @@ import type {
 
 export function formatCaptureMethodLabel(captureMethod: CaptureMethod | null | undefined) {
   if (captureMethod === "landing_page_fetch") {
-    return "Fetch capture";
+    return "Page text checked";
   }
 
   if (captureMethod === "browser_render") {
-    return "Browser-rendered";
+    return "Checked in browser";
   }
 
-  return "Capture unavailable";
+  return "Not checked yet";
 }
 
 export function formatLandingPageSignalValue(value: string | null | undefined) {
@@ -37,31 +37,31 @@ export function formatLandingPageFormValue(value: boolean | null | undefined) {
 
 export function formatAnalysisSourceLabel(source: AnalysisSource | null | undefined) {
   if (source === "ad_snapshot_fetch") {
-    return "Ad snapshot fetch";
+    return "Ad snapshot";
   }
 
   if (source === "landing_page_fetch") {
-    return "Fetch capture";
+    return "Page text";
   }
 
   if (source === "browser_render") {
-    return "Browser-rendered";
+    return "Browser check";
   }
 
   if (source === "meta_api") {
-    return "Meta API";
+    return "Alternate Meta ad access";
   }
 
   if (source === "meta_library_browser") {
-    return "Browser Run capture";
+    return "Live ad check";
   }
 
   if (source === "ai_summary") {
-    return "AI summary";
+    return "Summary";
   }
 
   if (source === "user") {
-    return "Manual";
+    return "Edited by user";
   }
 
   return "Source unavailable";

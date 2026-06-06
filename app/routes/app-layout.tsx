@@ -34,7 +34,7 @@ export default function AppLayoutRoute() {
     <main className="f9-app-shell">
       <aside className="f9-app-sidebar">
         <Link className="f9-app-brand" to="/app">
-          <BrandWordmark meta="Workspace" />
+          <BrandWordmark meta="Account" />
         </Link>
 
         <div className="f9-app-user">
@@ -42,14 +42,14 @@ export default function AppLayoutRoute() {
           <small>{session.user.email}</small>
         </div>
 
-        <nav className="f9-app-nav" aria-label="Workspace">
+        <nav className="f9-app-nav" aria-label="Account">
           <NavLink end to="/app">
             Dashboard
           </NavLink>
           <NavLink to="/app/collections">Collections</NavLink>
           <NavLink to="/app/watchlists">Watchlists</NavLink>
           <NavLink to="/app/digests">Digests</NavLink>
-          <NavLink to="/app/sources">Sources</NavLink>
+          <NavLink to="/app/sources">Tracking access</NavLink>
           {showOpsNav ? <NavLink to="/app/ops">Ops</NavLink> : null}
           <NavLink to="/search">Search</NavLink>
         </nav>
@@ -62,7 +62,7 @@ export default function AppLayoutRoute() {
       <div className="f9-app-main">
         <header className="f9-app-topbar">
           <Link className="f9-app-search-entry" to="/search">
-            Search market moves
+            Search competitor ads
           </Link>
           <Link className="f9-primary-button f9-app-new-search" to="/search">
             Add competitor

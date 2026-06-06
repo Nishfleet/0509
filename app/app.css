@@ -2119,6 +2119,10 @@ img {
   color: var(--f9-search-ink, var(--f9-global-ink));
 }
 
+.f9-search-page a.f9-secondary-button {
+  color: var(--f9-search-ink, var(--f9-global-ink));
+}
+
 .f9-primary-button:hover,
 .f9-secondary-button:hover,
 .f9-email-cta button:hover,
