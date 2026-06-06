@@ -1,8 +1,9 @@
 export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v1";
 
 const CTA_PRIORITY_PATTERNS = [
-  /\b(buy now|shop now|add to cart|get offer|claim deal|book demo|whatsapp us|get started|submit)\b/i,
+  /\b(buy now|shop now|add to cart|get offer|claim deal|book demo|whatsapp us|get started)\b/i,
   /\b(order now|start now|apply now|join now|download app|talk to us)\b/i,
+  /\bsubmit\b/i,
 ] as const;
 
 const PRICE_PATTERNS = [

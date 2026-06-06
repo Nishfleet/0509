@@ -1,5 +1,3 @@
-import { Resend } from "resend";
-
 import {
   type DigestCadence,
   digestCadenceLabel,
@@ -18,7 +16,7 @@ import {
 } from "~/lib/data.server";
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import type { AppEnv } from "~/lib/env.server";
-import { isResendConfigured } from "~/lib/env.server";
+import { isPostmarkConfigured, postmarkFromEmail, postmarkMessageStream } from "~/lib/env.server";
 import type {
   DeliveryChannel,
   DeliveryAttemptRecord,
@@ -32,6 +30,8 @@ import type {
 import { sendDigestWhatsApp, sendInstantWhatsApp } from "~/lib/whatsapp.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
+const EMAIL_PROVIDER = "postmark" as const;
+const POSTMARK_EMAIL_API_URL = "https://api.postmarkapp.com/email";
 
 interface DigestAttemptSummary {
   channel: DeliveryChannel;
@@ -41,6 +41,16 @@ interface DigestAttemptSummary {
   errorMessage: string | null;
   deliveredAt: string | null;
 }
+
+type EmailProviderResult = {
+  provider: typeof EMAIL_PROVIDER;
+  status: "sent" | "failed";
+  webhookStatus: "pending" | "failed" | "provider_unknown";
+  providerMessageId: string | null;
+  providerStatusLastSeenAt: string | null;
+  errorMessage: string | null;
+  deliveredAt: string | null;
+};
 
 export interface DigestDeliveryItem {
   eventId: string;
@@ -111,7 +121,7 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   const primaryEmailAttempt = attempts.find((attempt) => attempt.channel === "email");
   if (primaryEmailAttempt) {
     await upsertDigestDelivery(env, input.digestRunId, {
-      provider: "resend",
+      provider: EMAIL_PROVIDER,
       status: primaryEmailAttempt.status,
       recipientEmail: primaryEmailAttempt.targetValue,
       externalMessageId: primaryEmailAttempt.providerMessageId,
@@ -328,7 +338,7 @@ async function deliverInstantEmailBatch(
       deliveryTargetId: input.deliveryTarget.id,
       lane: input.lane,
       channel: "email",
-      provider: "resend",
+      provider: EMAIL_PROVIDER,
       status: "skipped_due_to_quiet_hours",
       webhookStatus: "provider_unknown",
       targetValue: input.deliveryTarget.targetValue,
@@ -719,28 +729,19 @@ async function sendDigestEmail(
     subject: string;
     cadence?: DigestCadence;
   },
-): Promise<{
-  provider: "resend";
-  status: "sent" | "failed";
-  webhookStatus: "pending" | "failed" | "provider_unknown";
-  providerMessageId: string | null;
-  providerStatusLastSeenAt: string | null;
-  errorMessage: string | null;
-  deliveredAt: string | null;
-}> {
-  if (!isResendConfigured(env)) {
+): Promise<EmailProviderResult> {
+  if (!isPostmarkConfigured(env)) {
     return {
-      provider: "resend",
+      provider: EMAIL_PROVIDER,
       status: "failed",
       webhookStatus: "provider_unknown",
       providerMessageId: null,
       providerStatusLastSeenAt: null,
-      errorMessage: "Resend is not configured for this environment.",
+      errorMessage: "Postmark is not configured for this environment.",
       deliveredAt: null,
     };
   }
 
-  const resend = new Resend(env.RESEND_API_KEY);
   const html = renderDigestHtml({
     name: input.name,
     periodStart: input.periodStart,
@@ -748,35 +749,18 @@ async function sendDigestEmail(
     items: input.items,
     cadence: input.cadence,
   });
-  const response = await resend.emails.send({
-    from: env.RESEND_FROM_EMAIL!,
+  return sendPostmarkEmail(env, {
     to: input.email,
     subject: input.subject,
     html,
     text: stripHtml(html),
+    tag: "weekly-digest",
+    metadata: {
+      kind: "weekly_digest",
+      item_count: String(input.items.length),
+      cadence: input.cadence ?? "weekly",
+    },
   });
-
-  if (response.error) {
-    return {
-      provider: "resend",
-      status: "failed",
-      webhookStatus: "failed",
-      providerMessageId: null,
-      providerStatusLastSeenAt: new Date().toISOString(),
-      errorMessage: response.error.message,
-      deliveredAt: null,
-    };
-  }
-
-  return {
-    provider: "resend",
-    status: "sent",
-    webhookStatus: "pending",
-    providerMessageId: response.data?.id ?? null,
-    providerStatusLastSeenAt: new Date().toISOString(),
-    errorMessage: null,
-    deliveredAt: new Date().toISOString(),
-  };
 }
 
 async function sendInstantEmail(
@@ -787,47 +771,96 @@ async function sendInstantEmail(
     html: string;
   },
 ) {
-  if (!isResendConfigured(env)) {
+  if (!isPostmarkConfigured(env)) {
     return {
-      provider: "resend" as const,
+      provider: EMAIL_PROVIDER,
       status: "failed" as const,
       webhookStatus: "provider_unknown" as const,
       providerMessageId: null,
       providerStatusLastSeenAt: null,
-      errorMessage: "Resend is not configured for this environment.",
+      errorMessage: "Postmark is not configured for this environment.",
       deliveredAt: null,
     };
   }
 
-  const resend = new Resend(env.RESEND_API_KEY);
-  const response = await resend.emails.send({
-    from: env.RESEND_FROM_EMAIL!,
+  return sendPostmarkEmail(env, {
     to: input.email,
     subject: input.subject,
     html: input.html,
     text: stripHtml(input.html),
+    tag: "instant-alert",
   });
+}
 
-  if (response.error) {
+async function sendPostmarkEmail(
+  env: AppEnv,
+  input: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+    tag: string;
+    metadata?: Record<string, string>;
+  },
+): Promise<EmailProviderResult> {
+  const statusSeenAt = new Date().toISOString();
+  let response: Response;
+  try {
+    response = await fetch(POSTMARK_EMAIL_API_URL, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-Postmark-Server-Token": env.POSTMARK_SERVER_TOKEN!.trim(),
+      },
+      body: JSON.stringify({
+        From: postmarkFromEmail(env),
+        To: input.to,
+        Subject: input.subject,
+        HtmlBody: input.html,
+        TextBody: input.text,
+        MessageStream: postmarkMessageStream(env),
+        Tag: input.tag,
+        Metadata: input.metadata ?? {},
+      }),
+    });
+  } catch (error) {
     return {
-      provider: "resend" as const,
+      provider: EMAIL_PROVIDER,
       status: "failed" as const,
       webhookStatus: "failed" as const,
       providerMessageId: null,
-      providerStatusLastSeenAt: new Date().toISOString(),
-      errorMessage: response.error.message,
+      providerStatusLastSeenAt: statusSeenAt,
+      errorMessage: `Postmark send failed: ${error instanceof Error ? error.message : "network error"}.`,
+      deliveredAt: null,
+    };
+  }
+  const payload = await response.json().catch(() => ({})) as {
+    ErrorCode?: number;
+    Message?: string;
+    MessageID?: string;
+  };
+
+  if (!response.ok || (typeof payload.ErrorCode === "number" && payload.ErrorCode !== 0)) {
+    return {
+      provider: EMAIL_PROVIDER,
+      status: "failed" as const,
+      webhookStatus: "failed" as const,
+      providerMessageId: null,
+      providerStatusLastSeenAt: statusSeenAt,
+      errorMessage: payload.Message ?? `Postmark send failed with HTTP ${response.status}.`,
       deliveredAt: null,
     };
   }
 
   return {
-    provider: "resend" as const,
+    provider: EMAIL_PROVIDER,
     status: "sent" as const,
     webhookStatus: "pending" as const,
-    providerMessageId: response.data?.id ?? null,
-    providerStatusLastSeenAt: new Date().toISOString(),
+    providerMessageId: payload.MessageID ?? null,
+    providerStatusLastSeenAt: statusSeenAt,
     errorMessage: null,
-    deliveredAt: new Date().toISOString(),
+    deliveredAt: statusSeenAt,
   };
 }
 

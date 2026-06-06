@@ -3,9 +3,38 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractLandingPageSignals, LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 
+const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+function mockFetchWithDns(handler: typeof fetch) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url.startsWith(DNS_JSON_ENDPOINT)) {
+      const parsed = new URL(url);
+      const type = parsed.searchParams.get("type") === "AAAA" ? "AAAA" : "A";
+      const addresses = type === "A" ? ["93.184.216.34"] : [];
+      return new Response(
+        JSON.stringify({
+          Answer: addresses.map((address) => ({
+            data: address,
+            type: type === "A" ? 1 : 28,
+          })),
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/dns-json",
+          },
+        },
+      );
+    }
+
+    return handler(input, init);
+  });
+}
 
 describe("extractLandingPageSignals", () => {
   it("extracts CTA text from a primary button", () => {
@@ -80,21 +109,23 @@ describe("extractLandingPageSignals", () => {
 
 describe("captureLandingPageSnapshot", () => {
   it("includes extracted landing-page signals for fetch captures", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        `
-          <html>
-            <head>
-              <title>Glow Serum Sale</title>
-            </head>
-            <body>
-              <button>Shop now</button>
-              <p>Starting at ₹499 only today</p>
-            </body>
-          </html>
-        `,
-        { status: 200 },
-      ),
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          `
+            <html>
+              <head>
+                <title>Glow Serum Sale</title>
+              </head>
+              <body>
+                <button>Shop now</button>
+                <p>Starting at ₹499 only today</p>
+              </body>
+            </html>
+          `,
+          { status: 200 },
+        ),
+      ) as never,
     );
 
     const snapshot = await captureLandingPageSnapshot({}, "https://example.com/glow");

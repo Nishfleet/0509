@@ -5,7 +5,7 @@ export const meta: MetaFunction = () => [
   { title: "Sources | Five to Nine" },
   {
     name: "description",
-    content: "Connect customer-owned Meta access for evidence-backed ad discovery in Five to Nine.",
+    content: "Review and connect the ad access that keeps competitor tracking reliable in Five to Nine.",
   },
 ];
 
@@ -76,7 +76,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     await disconnectCustomerMetaToken(env, session.user.id);
     return {
       ok: true,
-      message: "Meta token disconnected.",
+      message: "Meta access disconnected.",
     };
   }
 
@@ -96,11 +96,8 @@ export default function AppSourcesRoute() {
       <section className="f9-app-panel f9-source-setup">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Source setup</span>
-            <div className="f9-heading-with-pill">
-              <h2>Meta ads source</h2>
-              <span className="f9-beta-pill">Beta</span>
-            </div>
+            <span className="f9-app-kicker">Tracking reliability</span>
+            <h2>Keep competitor discovery reliable</h2>
           </div>
           <Link className="f9-secondary-button" to="/app/watchlists">
             Open watchlists
@@ -108,28 +105,27 @@ export default function AppSourcesRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          Meta coverage is beta until fresh discovery, proof capture, and digest canaries stay green.
-          Connect the customer's own Meta token so Five to Nine can use the official Ad Library API
-          fallback without relying on a shared platform token.
+          Five to Nine can track with the built-in live path. If Meta limits shared discovery, connect your own Meta Ad
+          Library token so this workspace has a backup path.
         </p>
 
         <div className="f9-status-strip">
           <div>
-            <span className="f9-app-kicker">Connection</span>
+            <span className="f9-app-kicker">Your access</span>
             <strong>{statusLabel}</strong>
             {data.connection ? (
               <p className="f9-muted-copy">
-                Token ends in {data.connection.tokenLastFour}
+                Access token ends in {data.connection.tokenLastFour}
                 {data.connection.lastCheckedAt
                   ? ` · tested ${new Date(data.connection.lastCheckedAt).toLocaleString("en-IN")}`
                   : ""}
               </p>
             ) : (
-              <p className="f9-muted-copy">No customer-owned Meta token is connected yet.</p>
+              <p className="f9-muted-copy">No workspace Meta access is connected yet.</p>
             )}
           </div>
           <div>
-            <span className="f9-app-kicker">Live path</span>
+            <span className="f9-app-kicker">Current tracking path</span>
             <strong>{formatDiscoveryStatus(data.discoveryStatus.status)}</strong>
             <p className="f9-muted-copy">{data.discoveryStatus.summary}</p>
           </div>
@@ -137,7 +133,7 @@ export default function AppSourcesRoute() {
 
         <div className="f9-source-readiness-panel">
           <div>
-            <span className="f9-app-kicker">Reliability gate</span>
+            <span className="f9-app-kicker">Recent proof health</span>
             <strong>{formatReadinessLabel(data.betaReadiness.label)}</strong>
             <p className="f9-muted-copy">
               {data.betaReadiness.samples}/{data.betaReadiness.sampleTarget} live samples in the last{" "}
@@ -164,8 +160,8 @@ export default function AppSourcesRoute() {
 
         <div className="f9-dashboard-grid">
           <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Source steps</span>
-            <h3>How the customer gets the token</h3>
+            <span className="f9-app-kicker">Connect your own Meta access</span>
+            <h3>Where to get the token</h3>
             <ol className="numbered-guide">
               <li>
                 Open Meta's{" "}
@@ -186,12 +182,12 @@ export default function AppSourcesRoute() {
               <li>Paste the full token below and test it before saving.</li>
             </ol>
             <p className="f9-muted-copy">
-              The token is stored encrypted. It is only used for this workspace's Meta API fallback.
+              The token is stored encrypted and only used to check ads for this workspace.
             </p>
           </section>
 
           <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Connect</span>
+            <span className="f9-app-kicker">Save access</span>
             <h3>Paste and test</h3>
             <Form className="f9-auth-form" method="post">
               <input name="intent" type="hidden" value="connect-meta-token" />
@@ -205,7 +201,7 @@ export default function AppSourcesRoute() {
                 />
               </label>
               <button className="f9-primary-button" type="submit">
-                Test and save token
+                Test and save access
               </button>
             </Form>
 
@@ -214,7 +210,7 @@ export default function AppSourcesRoute() {
                 <Form method="post">
                   <input name="intent" type="hidden" value="retest-meta-token" />
                   <button className="f9-secondary-button" type="submit">
-                    Retest saved token
+                    Retest saved access
                   </button>
                 </Form>
                 <Form method="post">
@@ -230,11 +226,10 @@ export default function AppSourcesRoute() {
       </section>
 
       <article className="f9-app-panel f9-callout-panel">
-        <span className="f9-app-kicker">Source guardrail</span>
+        <span className="f9-app-kicker">Reliability guardrail</span>
         <p>
-          Meta ads discovery stays evidence-gated until live discovery, proof capture, and daily digest
-          canaries stay green. Website snapshots, price/discount checks, and proof-backed reports continue
-          to work independently.
+          If live ad discovery is delayed, website snapshots, visible offer text checks, and proof-backed reports can
+          still continue independently.
         </p>
       </article>
     </section>
@@ -246,17 +241,17 @@ function formatConnectionStatus(status: string) {
     return "Connected";
   }
   if (status === "degraded") {
-    return "Needs a fresh token";
+    return "Needs fresh access";
   }
   return "Untested";
 }
 
 function formatDiscoveryStatus(status: string) {
   if (status === "cache_only") {
-    return "Cache only";
+    return "Using recent results";
   }
   if (status === "healthy") {
-    return "Live path ready";
+    return "Live tracking ready";
   }
   return status.replaceAll("_", " ");
 }

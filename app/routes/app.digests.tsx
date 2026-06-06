@@ -184,7 +184,10 @@ export default function DigestsRoute() {
                 </a>
               ))}
               {data.digests.length === 0 ? (
-                <p className="f9-muted-copy">Digest history will appear after your watchlists start generating confirmed events.</p>
+                <div className="f9-empty-panel">
+                  <h3>Your first brief appears after a confirmed change</h3>
+                  <p>Start a competitor watchlist and proof-backed changes will roll into digest history.</p>
+                </div>
               ) : null}
             </div>
           </article>
@@ -268,8 +271,11 @@ export default function DigestsRoute() {
               </>
             ) : (
               <div className="f9-empty-panel">
-                <h2>No digest selected</h2>
-                <p>Once proof-backed delivery runs, the generated snapshots show up here.</p>
+                <h2>Your first brief appears after a confirmed change</h2>
+                <p>Once a watchlist finds proof-backed movement, the generated snapshot shows up here.</p>
+                <Link className="f9-primary-button" to="/app/watchlists">
+                  Open watchlists
+                </Link>
               </div>
             )}
           </article>

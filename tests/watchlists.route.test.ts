@@ -393,7 +393,7 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message:
-        "Commercial discovery is temporarily rate limited. Scheduled warmups will keep retrying.",
+        "Competitor ad checks are temporarily rate limited. Scheduled checks will keep retrying.",
       ok: false,
     });
   });
@@ -440,9 +440,47 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message:
-        "Commercial discovery is temporarily rate limited. Retry after about 2h. Scheduled warmups will keep retrying.",
+        "Competitor ad checks are temporarily rate limited. Retry after about 2h. Scheduled checks will keep retrying.",
       ok: false,
     });
+  });
+
+  it("does not refresh an inactive watchlist left behind by retargeting", async () => {
+    const runWatchlistManual = vi.fn();
+    vi.doMock("~/lib/ad-source.server", () => ({
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue({
+        ...watchlist,
+        isActive: false,
+      }),
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      runWatchlistManual,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "refresh-watchlist");
+    formData.set("watchlistId", "watch-1");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Watchlist not found.",
+      ok: false,
+    });
+    expect(runWatchlistManual).not.toHaveBeenCalled();
   });
 
   it("saves watchlist delivery settings with parsed quiet hours and timezone", async () => {
@@ -498,6 +536,236 @@ describe("watchlists route actions", () => {
         },
       }),
     );
+  });
+
+  it("updates the selected watchlist competitor and name", async () => {
+    const updateWatchlist = vi.fn().mockResolvedValue({
+      ...watchlist,
+      name: "Mamaearth launch watch",
+      targetId: "Mamaearth",
+      targetLabel: "Mamaearth",
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("name", "Mamaearth launch watch");
+    formData.set("targetLabel", "Mamaearth");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Watchlist updated.",
+      ok: true,
+    });
+    expect(updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watch-1",
+      expect.objectContaining({
+        name: "Mamaearth launch watch",
+        targetType: "advertiser",
+        targetId: "Mamaearth",
+        targetLabel: "Mamaearth",
+      }),
+    );
+    expect(updateWatchlist.mock.calls[0][3].targetFingerprint).toMatch(/^fnv1a-/);
+  });
+
+  it("redirects to the replacement watchlist when retargeting creates a new baseline", async () => {
+    const updateWatchlist = vi.fn().mockResolvedValue({
+      ...watchlist,
+      id: "watch-2",
+      name: "Mamaearth launch watch",
+      targetId: "Mamaearth",
+      targetLabel: "Mamaearth",
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("name", "Mamaearth launch watch");
+    formData.set("targetLabel", "Mamaearth");
+
+    let redirectResponse: Response | null = null;
+    try {
+      await action({
+        context: createContext(),
+        request: new Request("http://localhost/app/watchlists", {
+          method: "POST",
+          body: formData,
+        }),
+      } as never);
+    } catch (error) {
+      redirectResponse = error as Response;
+    }
+
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe("/app/watchlists?watchlist=watch-2");
+  });
+
+  it("preserves direct competitor website proof tracking when editing a watchlist", async () => {
+    const updateWatchlist = vi.fn().mockResolvedValue({
+      ...watchlist,
+      name: "Nykaa launch watch",
+      targetId: "https://nykaa.com",
+      targetLabel: "Nykaa",
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue({
+        ...watchlist,
+        targetId: "https://nykaa.com",
+        targetLabel: "Nykaa",
+      }),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("name", "Nykaa launch watch");
+    formData.set("competitorWebsite", "https://www.nykaa.com/?utm_source=meta");
+    formData.set("targetLabel", "Nykaa");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Watchlist updated.",
+      ok: true,
+    });
+    expect(updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watch-1",
+      expect.objectContaining({
+        name: "Nykaa launch watch",
+        targetType: "advertiser",
+        targetId: "https://nykaa.com",
+        targetLabel: "Nykaa",
+      }),
+    );
+    expect(updateWatchlist.mock.calls[0][3].targetFingerprint).toMatch(/^fnv1a-/);
+  });
+
+  it("preserves saved-query targets and labels when editing a watchlist name", async () => {
+    const savedQueryWatchlist = {
+      ...watchlist,
+      targetType: "saved_query" as const,
+      targetId: "saved-query-1",
+      targetFingerprint: "saved-query-fingerprint",
+      targetLabel: "Nykaa launch searches",
+    };
+    const updateWatchlist = vi.fn().mockResolvedValue({
+      ...savedQueryWatchlist,
+      name: "Renamed saved query watch",
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(savedQueryWatchlist),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("name", "Renamed saved query watch");
+    formData.set("targetLabel", "Renamed query label");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Watchlist updated.",
+      ok: true,
+    });
+    expect(updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watch-1",
+      expect.objectContaining({
+        name: "Renamed saved query watch",
+        targetType: "saved_query",
+        targetId: "saved-query-1",
+        targetFingerprint: "saved-query-fingerprint",
+        targetLabel: "Nykaa launch searches",
+      }),
+    );
+  });
+
+  it("returns a friendly message when a watchlist edit duplicates another target", async () => {
+    const updateWatchlist = vi.fn().mockRejectedValue(new Error("watchlist_duplicate_target"));
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("name", "Duplicate watch");
+    formData.set("targetLabel", "Nykaa");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Another active watchlist already tracks that competitor.",
+      ok: false,
+    });
   });
 
   it("adds a new watchlist delivery target with explicit opt-in state", async () => {
@@ -632,9 +900,11 @@ describe("watchlists route rendering", () => {
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
     expect(markup).toContain("See what changed");
-    expect(markup).toContain("Meta ads source");
+    expect(markup).toContain("Watchlist setup");
+    expect(markup).toContain("Save watchlist");
+    expect(markup).toContain("Tracking path");
     expect(markup).not.toContain("Meta ads tracking beta");
-    expect(markup).toContain("Browser Run live capture");
+    expect(markup).toContain("Live ad library capture");
     expect(markup).toContain("Proof and delivery");
     expect(markup).toContain("High confidence");
     expect(markup).toContain("Why this alerted");
@@ -694,7 +964,7 @@ describe("watchlists route rendering", () => {
     const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
-    expect(markup).toContain("Meta ads discovery is running from cache");
-    expect(markup).toContain("Browser Run with cached live results");
+    expect(markup).toContain("Using recent competitor results");
+    expect(markup).toContain("Recent live results");
   });
 });

@@ -51,7 +51,9 @@ import {
   buildCanonicalPageIdentity,
   buildProofTargetIdentity,
   evaluateProofPolicy,
+  V1_PROOF_BUDGETS,
 } from "~/lib/proof-policy.server";
+import { normalizePublicHttpUrl } from "~/lib/public-url.server";
 import type {
   AdRecord,
   NormalizedSavedQuery,
@@ -73,6 +75,7 @@ const INACTIVE_MISS_THRESHOLD = 2;
 const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
+const DIRECT_WEBSITE_PROOF_INTERVAL_MS = 20 * 60 * 60 * 1000;
 
 type ObservationRecord = Awaited<ReturnType<typeof listObservationsForRun>>[number];
 
@@ -390,7 +393,17 @@ export async function runWatchlist(
       scanNativeDrafts: eventDrafts,
       recentWatchEvents,
     });
-    const allEvents = [...scanNativeEvents, ...proofEvaluation.events];
+    const directWebsiteProofEvaluation = await evaluateDirectWebsiteProofCandidate(env, {
+      watchlist,
+      runId,
+      recentWatchEvents: [...recentWatchEvents, ...proofEvaluation.events],
+      watchlistRunAttemptCount: proofEvaluation.proofAttemptCount,
+    });
+    const allEvents = [
+      ...scanNativeEvents,
+      ...proofEvaluation.events,
+      ...directWebsiteProofEvaluation.events,
+    ];
     const userDeliveryProfile = await getUserDeliveryProfile(env, watchlist.userId);
     const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
     const alertDelivery =
@@ -410,9 +423,14 @@ export async function runWatchlist(
       pagesScanned,
       summary: {
         adsSeen: currentObservations.length,
-        candidatesDetected: eventDrafts.length + proofEvaluation.candidateCount,
-        proofsAttempted: proofEvaluation.proofAttemptCount,
-        eventsConfirmed: scanNativeEvents.length + proofEvaluation.confirmedEventCount,
+        websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+        candidatesDetected:
+          eventDrafts.length + proofEvaluation.candidateCount + directWebsiteProofEvaluation.candidateCount,
+        proofsAttempted: proofEvaluation.proofAttemptCount + directWebsiteProofEvaluation.proofAttemptCount,
+        eventsConfirmed:
+          scanNativeEvents.length +
+          proofEvaluation.confirmedEventCount +
+          directWebsiteProofEvaluation.confirmedEventCount,
         sendsTriggered: alertDelivery.attempts,
         events: allEvents.length,
         eventTypes: summarizeEventTypes(allEvents),
@@ -448,6 +466,97 @@ export async function runWatchlist(
       error instanceof CommercialDiscoveryError
         ? error.failureClass
         : "monitoring_failed";
+    const directWebsiteUrl = directWebsiteUrlForWatchlist(watchlist);
+
+    if (directWebsiteUrl) {
+      const directWebsiteProofEvaluation = await evaluateDirectWebsiteProofCandidate(env, {
+        watchlist,
+        runId,
+        recentWatchEvents: await listWatchEvents(env, watchlist.id, 80),
+        watchlistRunAttemptCount: 0,
+      });
+      if (!directWebsiteProofEvaluation.proofCaptureSucceeded) {
+        await finishWatchlistRun(env, runId, {
+          status: "failed",
+          pagesScanned: 0,
+          summary: {
+            adsSeen: 0,
+            websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+            candidatesDetected: directWebsiteProofEvaluation.candidateCount,
+            proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
+            eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
+            sendsTriggered: 0,
+            events: directWebsiteProofEvaluation.events.length,
+            eventTypes: summarizeEventTypes(directWebsiteProofEvaluation.events),
+            scanStatus: "failed",
+            scanErrorCode: errorCode,
+            scanErrorMessage: details,
+          },
+          errorCode,
+          errorMessage: details,
+        });
+        await logMetaIntegrationStatus(env, {
+          status: "degraded",
+          summary: "Commercial discovery failed and direct website proof did not complete.",
+          errorCode,
+          errorMessage: details,
+          metadata: {
+            watchlistId: watchlist.id,
+            runId,
+            websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+            proofAttemptCount: directWebsiteProofEvaluation.proofAttemptCount,
+          },
+        });
+
+        return { runId, events: 0 };
+      }
+
+      const userDeliveryProfile = await getUserDeliveryProfile(env, watchlist.userId);
+      const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+      const alertDelivery =
+        directWebsiteProofEvaluation.events.length > 0
+          ? await deliverWatchlistAlerts(env, {
+              userId: watchlist.userId,
+              userName: userDeliveryProfile?.name ?? watchlist.name,
+              accountEmail: userDeliveryProfile?.email ?? null,
+              watchlist,
+              events: directWebsiteProofEvaluation.events,
+              lane: "customer",
+            })
+          : { attempts: 0, channels: [] };
+
+      await finishWatchlistRun(env, runId, {
+        status: "succeeded",
+        pagesScanned: 0,
+        summary: {
+          adsSeen: 0,
+          websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+          candidatesDetected: directWebsiteProofEvaluation.candidateCount,
+          proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
+          eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
+          sendsTriggered: alertDelivery.attempts,
+          events: directWebsiteProofEvaluation.events.length,
+          eventTypes: summarizeEventTypes(directWebsiteProofEvaluation.events),
+          scanStatus: "degraded",
+          scanErrorCode: errorCode,
+          scanErrorMessage: details,
+        },
+      });
+      await touchWatchlistScanned(env, watchlist.id);
+      await logMetaIntegrationStatus(env, {
+        status: "degraded",
+        summary: "Commercial discovery failed, but direct website proof still completed.",
+        errorCode,
+        errorMessage: details,
+        metadata: {
+          watchlistId: watchlist.id,
+          runId,
+          websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+        },
+      });
+
+      return { runId, events: directWebsiteProofEvaluation.events.length };
+    }
 
     await finishWatchlistRun(env, runId, {
       status: "failed",
@@ -1186,6 +1295,353 @@ async function evaluateSelectiveProofCandidates(
     proofAttemptCount,
     confirmedEventCount,
   };
+}
+
+async function evaluateDirectWebsiteProofCandidate(
+  env: AppEnv,
+  input: {
+    watchlist: WatchlistRecord;
+    runId: string;
+    recentWatchEvents: WatchEventRecord[];
+    watchlistRunAttemptCount: number;
+  },
+) {
+  const websiteUrl = directWebsiteUrlForWatchlist(input.watchlist);
+  if (!websiteUrl) {
+    return emptyProofEvaluation(null);
+  }
+
+  if (input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun) {
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  const now = new Date().toISOString();
+  const todayStart = startOfUtcDayIso();
+  const proofWindowStart = startOfRollingProofWindowIso();
+  const userPlan = await getProofCapturePlan(env, input.watchlist.userId);
+  const purchasedProofCredits = await sumActiveProofUsageCredits(
+    env,
+    input.watchlist.userId,
+    proofWindowStart,
+    now,
+  );
+  const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
+  const [watchlistDailyAttempts, workspaceDailyAttempts, workspaceMonthlyAttempts] = await Promise.all([
+    countProofCapturesForWatchlistSince(env, input.watchlist.id, todayStart),
+    countProofCapturesForWorkspaceSince(env, input.watchlist.userId, todayStart),
+    countProofCapturesForWorkspaceSince(env, input.watchlist.userId, proofWindowStart),
+  ]);
+
+  if (
+    watchlistDailyAttempts >= V1_PROOF_BUDGETS.perWatchlistDay ||
+    workspaceDailyAttempts >= V1_PROOF_BUDGETS.perWorkspaceDay ||
+    workspaceMonthlyAttempts >= workspaceMonthlyCap
+  ) {
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  const canonicalPageIdentity = buildCanonicalPageIdentity(websiteUrl);
+  if (!canonicalPageIdentity) {
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  const proofTargetIdentity = buildProofTargetIdentity({
+    watchlistId: input.watchlist.id,
+    adId: null,
+    canonicalPageIdentity,
+  });
+  const proofTarget = await upsertProofTarget(env, {
+    watchlistId: input.watchlist.id,
+    adId: null,
+    landingPageUrl: websiteUrl,
+    canonicalPageIdentity,
+    proofTargetIdentity,
+  });
+
+  if (!proofTarget) {
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  const targetCaptures = await listProofCapturesForTarget(env, proofTarget.id, 20);
+  const lastSuccessfulProof = selectLastSuccessfulProofCapture(targetCaptures);
+  const proofRequestKeyBase = buildProofCaptureRequestIdempotencyKey({
+    watchlistId: input.watchlist.id,
+    adId: null,
+    landingPageUrl: websiteUrl,
+    eventType: "landing_page_offer_changed",
+  });
+  const proofRequestKey = [proofRequestKeyBase, input.runId].join(":");
+  const proofRequestDuplicate = targetCaptures.some((capture) => {
+    if (!capture.idempotencyKey || !capture.idempotencyKey.startsWith(proofRequestKeyBase)) {
+      return false;
+    }
+
+    return (
+      Date.now() - new Date(capture.attemptedAt).getTime() <
+      6 * 60 * 60 * 1000
+    );
+  });
+  const recentFailureCountForTarget = targetCaptures.filter(
+    (capture) => capture.status === "failed",
+  ).length;
+
+  if (
+    isWithinDirectWebsiteProofInterval(
+      lastSuccessfulProof?.succeededAt ?? proofTarget.lastSuccessfulProofAt,
+    )
+  ) {
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  if (proofRequestDuplicate) {
+    await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "skipped_due_to_dedupe",
+      skipReason: "skipped_due_to_dedupe",
+      failureReason: "Direct website proof was already requested recently.",
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    });
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  if (
+    input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun ||
+    recentFailureCountForTarget >= 2
+  ) {
+    await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "skipped_due_to_rate_limit",
+      skipReason: "skipped_due_to_rate_limit",
+      failureReason: "Direct website proof policy skipped the attempt.",
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    });
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  const snapshot = await captureLandingPageSnapshot(env, websiteUrl, {
+    preferRendered: true,
+  });
+
+  if (!snapshot) {
+    await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "failed",
+      failureCode: "direct_website_proof_capture_failed",
+      failureReason: "Competitor website proof capture failed.",
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      idempotencyKey: proofRequestKey,
+    });
+    return {
+      ...emptyProofEvaluation(websiteUrl),
+      proofAttemptCount: 1,
+    };
+  }
+
+  const extractedFields = snapshotToExtractedFields(snapshot);
+  const finalCanonicalPageIdentity =
+    buildCanonicalPageIdentity(snapshot.canonicalUrl) ?? canonicalPageIdentity;
+  const finalProofTargetIdentity = buildProofTargetIdentity({
+    watchlistId: input.watchlist.id,
+    adId: null,
+    canonicalPageIdentity: finalCanonicalPageIdentity,
+  });
+  const persistedProofTarget =
+    (await upsertProofTarget(env, {
+      watchlistId: input.watchlist.id,
+      adId: null,
+      landingPageUrl: snapshot.canonicalUrl,
+      canonicalPageIdentity: finalCanonicalPageIdentity,
+      proofTargetIdentity: finalProofTargetIdentity,
+      lastCaptureAttemptAt: snapshot.capturedAt,
+      lastSuccessfulProofAt: snapshot.capturedAt,
+    })) ?? proofTarget;
+  const finalTargetCaptures = await listProofCapturesForTarget(env, persistedProofTarget.id, 20);
+  const finalLastSuccessfulProof =
+    selectLastSuccessfulProofCapture(finalTargetCaptures) ?? lastSuccessfulProof;
+  const finalProofRequestKey = [
+    buildProofCaptureRequestIdempotencyKey({
+      watchlistId: input.watchlist.id,
+      adId: null,
+      landingPageUrl: snapshot.canonicalUrl,
+      eventType: "landing_page_offer_changed",
+    }),
+    input.runId,
+  ].join(":");
+  const proofCaptureId = await createProofCapture(env, {
+    proofTargetId: persistedProofTarget.id,
+    status: "succeeded",
+    screenshotArtifactKey: readSnapshotString(snapshot.metadata, "screenshotArtifactKey"),
+    htmlArtifactKey:
+      readSnapshotString(snapshot.metadata, "htmlArtifactKey") ?? snapshot.artifactKey ?? null,
+    extractedFields,
+    fieldConfidence: readSnapshotConfidence(snapshot),
+    extractionWarnings: readSnapshotWarnings(snapshot),
+    captureMetadata: {
+      ...(snapshot.metadata ?? {}),
+      source: "direct_competitor_website",
+      watchlistTargetId: input.watchlist.targetId,
+    },
+    renderMode: readSnapshotRenderMode(snapshot),
+    deviceProfile: readSnapshotDeviceProfile(snapshot),
+    extractorVersion:
+      readSnapshotString(snapshot.metadata, "extractorVersion") ??
+      LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    idempotencyKey: finalProofRequestKey,
+    attemptedAt: snapshot.capturedAt,
+    succeededAt: snapshot.capturedAt,
+  });
+  await upsertProofTarget(env, {
+    watchlistId: input.watchlist.id,
+    adId: null,
+    landingPageUrl: snapshot.canonicalUrl,
+    canonicalPageIdentity: finalCanonicalPageIdentity,
+    proofTargetIdentity: finalProofTargetIdentity,
+    lastCaptureAttemptAt: snapshot.capturedAt,
+      lastSuccessfulProofAt: snapshot.capturedAt,
+      lastSuccessfulCaptureId: proofCaptureId,
+    });
+  if (finalProofTargetIdentity !== proofTargetIdentity) {
+    await upsertProofTarget(env, {
+      watchlistId: input.watchlist.id,
+      adId: null,
+      landingPageUrl: websiteUrl,
+      canonicalPageIdentity,
+      proofTargetIdentity,
+      lastCaptureAttemptAt: snapshot.capturedAt,
+      lastSuccessfulProofAt: snapshot.capturedAt,
+    });
+  }
+
+  const evaluated = evaluateProofBackedEvents({
+    proofTargetIdentity: finalProofTargetIdentity,
+    currentProof: {
+      rawHeadline: snapshot.rawHeadline,
+      normalizedHeadline: snapshot.normalizedHeadline,
+      normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+      ctaText: snapshot.ctaText ?? null,
+      priceText: snapshot.priceText ?? null,
+      formPresent: snapshot.formPresent ?? null,
+    },
+    lastSuccessfulProof: finalLastSuccessfulProof,
+    recentWatchEvents: input.recentWatchEvents,
+    sensitivityMode: "balanced",
+    burstCount: 1,
+  });
+
+  const proofEvents: WatchEventRecord[] = [];
+  let candidateCount = 0;
+  let confirmedEventCount = 0;
+
+  for (const event of evaluated.events) {
+    const candidateId = await createEventCandidate(env, {
+      watchlistId: input.watchlist.id,
+      runId: input.runId,
+      eventType: event.eventType,
+      status: event.status,
+      importanceScore: event.importanceScore,
+      adId: null,
+      proofTargetId: persistedProofTarget.id,
+      title: event.title,
+      summary: event.summary,
+      metadata: {
+        ...event.metadata,
+        source: "direct_competitor_website",
+        websiteUrl: snapshot.canonicalUrl,
+      },
+      proofRequired: true,
+      dedupeReason: event.dedupeReason,
+      lastEvaluatedAt: snapshot.capturedAt,
+    });
+    candidateCount += 1;
+
+    if (event.status !== "confirmed") {
+      continue;
+    }
+
+    const eventId = await createWatchEvent(env, {
+      watchlistId: input.watchlist.id,
+      runId: input.runId,
+      eventType: event.eventType,
+      status: "confirmed",
+      importanceScore: event.importanceScore,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId,
+      proofCaptureId,
+      title: event.title,
+      summary: event.summary,
+      metadata: {
+        ...event.metadata,
+        source: "direct_competitor_website",
+        websiteUrl: snapshot.canonicalUrl,
+      },
+      confirmedAt: snapshot.capturedAt,
+      lastEvaluatedAt: snapshot.capturedAt,
+    });
+    confirmedEventCount += 1;
+
+    proofEvents.push({
+      id: eventId,
+      watchlistId: input.watchlist.id,
+      runId: input.runId,
+      eventType: event.eventType,
+      status: "confirmed",
+      importanceScore: event.importanceScore,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId,
+      proofCaptureId,
+      title: event.title,
+      summary: event.summary,
+      metadata: {
+        ...event.metadata,
+        source: "direct_competitor_website",
+        websiteUrl: snapshot.canonicalUrl,
+      },
+      confirmedAt: snapshot.capturedAt,
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: snapshot.capturedAt,
+      createdAt: snapshot.capturedAt,
+    });
+  }
+
+	  return {
+	    events: proofEvents,
+	    candidateCount,
+	    proofAttemptCount: 1,
+	    confirmedEventCount,
+	    websiteUrl: snapshot.canonicalUrl,
+	    proofCaptureSucceeded: true,
+	  };
+	}
+
+	function emptyProofEvaluation(websiteUrl: string | null) {
+	  return {
+	    events: [] as WatchEventRecord[],
+	    candidateCount: 0,
+	    proofAttemptCount: 0,
+	    confirmedEventCount: 0,
+	    websiteUrl,
+	    proofCaptureSucceeded: false,
+	  };
+	}
+
+function directWebsiteUrlForWatchlist(watchlist: WatchlistRecord) {
+  if (watchlist.targetType !== "advertiser") {
+    return null;
+  }
+
+  return normalizePublicHttpUrl(watchlist.targetId)?.toString() ?? null;
+}
+
+function isWithinDirectWebsiteProofInterval(value: string | null | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) && Date.now() - timestamp < DIRECT_WEBSITE_PROOF_INTERVAL_MS;
 }
 
 export function buildWatchlistExecutionIdempotencyKey(input: {

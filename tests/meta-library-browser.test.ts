@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
+
 function buildQuery() {
   return {
     mode: "advertiser" as const,
@@ -87,6 +89,37 @@ function buildQuickActionContent(
     ? `<script id="__0509_ad_library_extractor" type="application/javascript">(() => { throw new Error("not payload"); })();</script>`
     : "";
   return `<html><body>${runnerScript}<script id="__0509_ad_library_payload" type="application/json">${JSON.stringify(payload).replace(/<\//g, "<\\/")}</script></body></html>`;
+}
+
+function mockFetchWithDns(handler: typeof fetch) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url.startsWith(DNS_JSON_ENDPOINT)) {
+      const parsed = new URL(url);
+      const type = parsed.searchParams.get("type") === "AAAA" ? "AAAA" : "A";
+      const addresses = type === "A" ? ["31.13.70.36"] : [];
+      return new Response(
+        JSON.stringify({
+          Answer: addresses.map((address) => ({
+            data: address,
+            type: type === "A" ? 1 : 28,
+          })),
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/dns-json",
+          },
+        },
+      );
+    }
+
+    return handler(input, init);
+  });
+}
+
+function nonDnsFetchCalls(fetch: ReturnType<typeof mockFetchWithDns>) {
+  return fetch.mock.calls.filter(([input]) => !String(input).startsWith(DNS_JSON_ENDPOINT));
 }
 
 beforeEach(() => {
@@ -227,33 +260,35 @@ describe("searchMetaLibraryByBrowser", () => {
   });
 
   it("uses Browserless BQL as a live commercial fallback when Browser Run is unavailable", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            html: {
-              html: `
-                <html>
-                  <body>
-                    <article>
-                      <strong>Nykaa</strong>
-                      <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
-                      <a href="/ads/library/?id=1234567890">View ad details</a>
-                      <a href="https://www.nykaa.com/glow-sale">Shop now</a>
-                    </article>
-                  </body>
-                </html>
-              `,
+    const fetchSpy = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: `
+                  <html>
+                    <body>
+                      <article>
+                        <strong>Nykaa</strong>
+                        <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
+                        <a href="/ads/library/?id=1234567890">View ad details</a>
+                        <a href="https://www.nykaa.com/glow-sale">Shop now</a>
+                      </article>
+                    </body>
+                  </html>
+                `,
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
             },
           },
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
@@ -264,9 +299,10 @@ describe("searchMetaLibraryByBrowser", () => {
       },
       buildQuery(),
     );
-    const requestBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"));
+    const bqlFetch = nonDnsFetchCalls(fetchSpy)[0];
+    const requestBody = JSON.parse(String(bqlFetch?.[1]?.body ?? "{}"));
 
-    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/stealth/bql?token=browserless-token");
+    expect(String(bqlFetch?.[0])).toContain("/stealth/bql?token=browserless-token");
     expect(requestBody.variables).toMatchObject({
       userAgent: expect.stringContaining("iPhone"),
     });
@@ -288,43 +324,45 @@ describe("searchMetaLibraryByBrowser", () => {
   });
 
   it("extracts rendered Meta Ad Library text cards when ad-detail links are absent", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            html: {
-              html: `
-                <html>
-                  <body>
-                    <main>
-                      ~6,200 results
-                      Active
-                      Library ID: 1280520150312258
-                      Started running on 14 Jul 2025
-                      Platforms
-                      This ad has multiple versions
-                      Menu
-                      See ad details
-                      Nykaa Man
-                      Sponsored
-                      For the Man Who Never Settles For Less
-                      Flat ₹400 Off on Your First Order
-                      NYKAAMAN.COM
-                      Shop Now
-                    </main>
-                  </body>
-                </html>
-              `,
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: `
+                  <html>
+                    <body>
+                      <main>
+                        ~6,200 results
+                        Active
+                        Library ID: 1280520150312258
+                        Started running on 14 Jul 2025
+                        Platforms
+                        This ad has multiple versions
+                        Menu
+                        See ad details
+                        Nykaa Man
+                        Sponsored
+                        For the Man Who Never Settles For Less
+                        Flat ₹400 Off on Your First Order
+                        NYKAAMAN.COM
+                        Shop Now
+                      </main>
+                    </body>
+                  </html>
+                `,
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
             },
           },
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
@@ -477,20 +515,22 @@ describe("searchMetaLibraryByBrowser", () => {
       timeUntilNextAllowedBrowserAcquisition: 0,
     });
     const connect = vi.fn();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          result: buildQuickActionContent(),
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Browser-Ms-Used": "1234",
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent(),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1234",
+            },
           },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     vi.doMock("@cloudflare/puppeteer", () => ({
@@ -509,7 +549,7 @@ describe("searchMetaLibraryByBrowser", () => {
     );
 
     expect(launch).toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(1);
     expect(result).toMatchObject({
       source: "meta_library_browser",
       provider: "meta_library_browser",
@@ -541,20 +581,22 @@ describe("searchMetaLibraryByBrowser", () => {
       timeUntilNextAllowedBrowserAcquisition: 0,
     });
     const connect = vi.fn();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          result: buildQuickActionContent(),
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Browser-Ms-Used": "1234",
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent(),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1234",
+            },
           },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     vi.doMock("@cloudflare/puppeteer", () => ({
@@ -572,7 +614,7 @@ describe("searchMetaLibraryByBrowser", () => {
       buildQuery(),
     );
 
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(1);
     expect(result.ads).toHaveLength(1);
   });
 
@@ -594,20 +636,22 @@ describe("searchMetaLibraryByBrowser", () => {
       timeUntilNextAllowedBrowserAcquisition: 0,
     });
     const connect = vi.fn();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          result: buildQuickActionContent(),
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Browser-Ms-Used": "1234",
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent(),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1234",
+            },
           },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     vi.doMock("@cloudflare/puppeteer", () => ({
@@ -625,7 +669,7 @@ describe("searchMetaLibraryByBrowser", () => {
       buildQuery(),
     );
 
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(1);
     expect(result.ads).toHaveLength(1);
   });
 
@@ -634,20 +678,22 @@ describe("searchMetaLibraryByBrowser", () => {
     const sessions = vi.fn();
     const limits = vi.fn();
     const connect = vi.fn();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          result: buildQuickActionContent(),
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Browser-Ms-Used": "1234",
+    const fetch = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent(),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1234",
+            },
           },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     vi.doMock("@cloudflare/puppeteer", () => ({
@@ -664,7 +710,7 @@ describe("searchMetaLibraryByBrowser", () => {
       buildQuery(),
     );
 
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(1);
     expect(launch).not.toHaveBeenCalled();
     expect(result.ads).toHaveLength(1);
   });
@@ -674,22 +720,24 @@ describe("searchMetaLibraryByBrowser", () => {
     const sessions = vi.fn();
     const limits = vi.fn();
     const connect = vi.fn();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          result: buildQuickActionContent({
-            withRunnerScript: true,
+    const fetchSpy = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent({
+              withRunnerScript: true,
+            }),
           }),
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Browser-Ms-Used": "1234",
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1234",
+            },
           },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     vi.doMock("@cloudflare/puppeteer", () => ({
@@ -705,7 +753,7 @@ describe("searchMetaLibraryByBrowser", () => {
       },
       buildQuery(),
     );
-    const requestBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"));
+    const requestBody = JSON.parse(String(nonDnsFetchCalls(fetchSpy)[0]?.[1]?.body ?? "{}"));
 
     expect(requestBody.addScriptTag[0]).toMatchObject({
       id: "__0509_ad_library_extractor",
@@ -720,31 +768,33 @@ describe("searchMetaLibraryByBrowser", () => {
     const sessions = vi.fn();
     const limits = vi.fn();
     const connect = vi.fn();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          result: `
-            <html>
-              <body>
-                <article>
-                  <strong>Nykaa</strong>
-                  <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
-                  <a href="/ads/library/?id=1234567890">View ad details</a>
-                  <a href="https://www.nykaa.com/glow-sale">Shop now</a>
-                </article>
-              </body>
-            </html>
-          `,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Browser-Ms-Used": "1234",
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: `
+              <html>
+                <body>
+                  <article>
+                    <strong>Nykaa</strong>
+                    <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
+                    <a href="/ads/library/?id=1234567890">View ad details</a>
+                    <a href="https://www.nykaa.com/glow-sale">Shop now</a>
+                  </article>
+                </body>
+              </html>
+            `,
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1234",
+            },
           },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     vi.doMock("@cloudflare/puppeteer", () => ({
@@ -777,53 +827,53 @@ describe("searchMetaLibraryByBrowser", () => {
     const sessions = vi.fn();
     const limits = vi.fn();
     const connect = vi.fn();
-    const fetchSpy = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            result: "<html><body><main>No injected payload yet</main></body></html>",
-          }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "X-Browser-Ms-Used": "1000",
-            },
+    const quickActionResponses = [
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: "<html><body><main>No injected payload yet</main></body></html>",
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Browser-Ms-Used": "1000",
           },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            result: [
-              {
-                selector: 'a[href*="/ads/library/?id="]',
-                results: [
-                  {
-                    attributes: [
-                      {
-                        name: "href",
-                        value: "/ads/library/?id=1234567890",
-                      },
-                    ],
-                    html: '<a href="/ads/library/?id=1234567890">Nykaa serum sale Shop now Instagram Facebook</a>',
-                    text: "Nykaa serum sale Shop now Instagram Facebook",
-                  },
-                ],
-              },
-            ],
-          }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "X-Browser-Ms-Used": "1000",
+        },
+      ),
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: [
+            {
+              selector: 'a[href*="/ads/library/?id="]',
+              results: [
+                {
+                  attributes: [
+                    {
+                      name: "href",
+                      value: "/ads/library/?id=1234567890",
+                    },
+                  ],
+                  html: '<a href="/ads/library/?id=1234567890">Nykaa serum sale Shop now Instagram Facebook</a>',
+                  text: "Nykaa serum sale Shop now Instagram Facebook",
+                },
+              ],
             },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Browser-Ms-Used": "1000",
           },
-        ),
-      );
+        },
+      ),
+    ];
+    const fetchSpy = mockFetchWithDns(
+      vi.fn(async () => quickActionResponses.shift() ?? new Response(null, { status: 500 })) as never,
+    );
 
     vi.doMock("@cloudflare/puppeteer", () => ({
       default: { launch, sessions, limits, connect },
@@ -838,9 +888,10 @@ describe("searchMetaLibraryByBrowser", () => {
       },
       buildQuery(),
     );
-    const scrapeRequest = JSON.parse(String(fetchSpy.mock.calls[1]?.[1]?.body ?? "{}"));
+    const pageFetches = nonDnsFetchCalls(fetchSpy);
+    const scrapeRequest = JSON.parse(String(pageFetches[1]?.[1]?.body ?? "{}"));
 
-    expect(String(fetchSpy.mock.calls[1]?.[0])).toContain("/browser-rendering/scrape");
+    expect(String(pageFetches[1]?.[0])).toContain("/browser-rendering/scrape");
     expect(scrapeRequest.elements).toEqual([
       {
         selector: 'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]',
@@ -862,20 +913,22 @@ describe("searchMetaLibraryByBrowser", () => {
     const sessions = vi.fn();
     const limits = vi.fn();
     const connect = vi.fn();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: false,
-          errors: [{ message: "Too many requests" }],
-        }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": "10",
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ message: "Too many requests" }],
+          }),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": "10",
+            },
           },
-        },
-      ),
+        ),
+      ) as never,
     );
 
     vi.doMock("@cloudflare/puppeteer", () => ({

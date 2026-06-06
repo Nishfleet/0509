@@ -37,4 +37,10 @@ describe("search rebuild", () => {
   it("uses the Five to Nine wordmark in the search header", () => {
     expect(searchRoute).toContain("<BrandWordmark />");
   });
+
+  it("keeps public search centered on competitor website tracking", () => {
+    expect(searchRoute).toContain("Competitor website");
+    expect(searchRoute).toContain("Website to track");
+    expect(searchRoute).toContain("Track this competitor");
+  });
 });

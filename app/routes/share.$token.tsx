@@ -86,7 +86,7 @@ export default function ShareRoute() {
       <div className="f9-container">
         <div className="f9-share-header">
           <Link className="f9-app-brand" to="/">
-            <BrandWordmark meta="Shared view" />
+            <BrandWordmark meta="Shared proof" />
           </Link>
         </div>
 
@@ -144,7 +144,7 @@ export default function ShareRoute() {
           </article>
         ) : "payload" in data ? (
           <article className="f9-app-panel">
-            <p className="f9-app-kicker">Snapshot share</p>
+            <p className="f9-app-kicker">Shared snapshot</p>
             <pre className="snapshot-pre">{JSON.stringify(data.payload, null, 2)}</pre>
           </article>
         ) : data.resourceType === "collection" ? (
