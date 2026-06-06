@@ -54,7 +54,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
 
   if (!session && !(forceLive && parsed.filters.query)) {
-    throw new Response("Not found", { status: 404 });
+    const redirectTo = `${url.pathname}${url.search}`;
+    throw redirect(`/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
   const collections = session ? await listCollections(env, session.user.id) : [];
