@@ -20,6 +20,7 @@ const workspaceConfig: WorkspaceDeliveryConfigRecord = {
   digestEnabled: true,
   emailEnabled: true,
   whatsappEnabled: false,
+  slackEnabled: false,
   quietHours: {
     startHour: 22,
     endHour: 8,
@@ -73,6 +74,7 @@ describe("delivery policy", () => {
       digestEnabled: true,
       emailEnabled: true,
       whatsappEnabled: false,
+      slackEnabled: false,
       timezone: "Asia/Kolkata",
     });
   });
@@ -87,6 +89,7 @@ describe("delivery policy", () => {
       digestEnabled: true,
       emailEnabled: true,
       whatsappEnabled: true,
+      slackEnabled: false,
       quietHours: null,
       timezone: "UTC",
       createdAt: "2026-04-18T00:00:00.000Z",
@@ -104,6 +107,7 @@ describe("delivery policy", () => {
       digestEnabled: true,
       emailEnabled: true,
       whatsappEnabled: true,
+      slackEnabled: false,
       quietHours: null,
       timezone: "UTC",
     });
@@ -122,6 +126,22 @@ describe("delivery policy", () => {
     expect(decision.digestEligible).toBe(true);
     expect(decision.allowedChannels).toEqual(["email"]);
     expect(decision.provisional).toBe(false);
+  });
+
+  it("includes Slack when the effective delivery config enables it", () => {
+    const decision = evaluateDeliveryPolicy({
+      lane: "customer",
+      event: watchEvent(),
+      workspaceConfig: {
+        ...workspaceConfig,
+        whatsappEnabled: true,
+        slackEnabled: true,
+      },
+      watchlistConfig: null,
+      now: "2026-04-18T12:00:00.000Z",
+    });
+
+    expect(decision.allowedChannels).toEqual(["email", "whatsapp", "slack"]);
   });
 
   it("keeps customer proof_failed out of the interrupt path", () => {

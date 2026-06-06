@@ -880,6 +880,7 @@ describe("upsertWorkspaceDeliveryConfig", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: false,
+        slackEnabled: false,
         quietHours: {
           startHour: 22,
           endHour: 8,
@@ -892,6 +893,7 @@ describe("upsertWorkspaceDeliveryConfig", () => {
       entry.sql.includes("INSERT INTO workspace_delivery_config"),
     );
 
+    expect(statement?.sql).toContain("slack_enabled");
     expect(statement?.bindings).toContain("user-1");
     expect(statement?.bindings).toContain("balanced");
     expect(statement?.bindings).toContain(0);
@@ -919,6 +921,7 @@ describe("upsertWatchlistDeliveryConfig", () => {
         digestEnabled: true,
         emailEnabled: true,
         whatsappEnabled: true,
+        slackEnabled: false,
         quietHours: {
           startHour: 23,
           endHour: 7,
@@ -931,6 +934,7 @@ describe("upsertWatchlistDeliveryConfig", () => {
       entry.sql.includes("INSERT INTO watchlist_delivery_config"),
     );
 
+    expect(statement?.sql).toContain("slack_enabled");
     expect(statement?.bindings).toContain("watch-1");
     expect(statement?.bindings).toContain("user-1");
     expect(statement?.bindings).toContain("quiet");
@@ -1147,6 +1151,7 @@ describe("legacy proof-first defaults", () => {
       digestEnabled: true,
       emailEnabled: true,
       whatsappEnabled: false,
+      slackEnabled: false,
     });
   });
 });

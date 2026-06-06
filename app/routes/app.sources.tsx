@@ -13,15 +13,25 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { getCustomerMetaConnection, listCustomerApiKeys } = await import("~/lib/data.server");
+  const {
+    getCustomerMetaConnection,
+    listCustomerApiKeys,
+    listDeliveryTargets,
+  } = await import("~/lib/data.server");
   const { getMetaAdsBetaReadiness } = await import("~/lib/meta-ads-readiness.server");
+  const { slackTargetDisplayName } = await import("~/lib/slack.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const [connection, discoveryStatus, betaReadiness, apiKeys] = await Promise.all([
+  const [connection, discoveryStatus, betaReadiness, apiKeys, slackTargets] = await Promise.all([
     getCustomerMetaConnection(env, session.user.id),
     resolveCommercialAdSourceStatus(env),
     getMetaAdsBetaReadiness(env),
     listCustomerApiKeys(env, session.user.id),
+    listDeliveryTargets(env, session.user.id, {
+      watchlistId: null,
+      channel: "slack",
+      limit: 10,
+    }),
   ]);
 
   return {
@@ -45,6 +55,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       lastUsedAt: apiKey.lastUsedAt,
       revokedAt: apiKey.revokedAt,
       createdAt: apiKey.createdAt,
+    })),
+    slackTargets: slackTargets.map((target) => ({
+      id: target.id,
+      displayName: slackTargetDisplayName(target),
+      isPaused: target.isPaused,
+      lastSuccessfulDeliveryAt: target.lastSuccessfulDeliveryAt,
+      createdAt: target.createdAt,
     })),
   };
 }
@@ -113,6 +130,82 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: true,
       message: "API key revoked.",
+    };
+  }
+
+  if (intent === "save-slack-webhook") {
+    const { saveSlackWebhookTarget } = await import("~/lib/slack.server");
+    const {
+      getWorkspaceDeliveryConfig,
+      legacyWorkspaceDeliveryDefaults,
+      upsertWorkspaceDeliveryConfig,
+    } = await import("~/lib/data.server");
+    const webhookUrl = String(formData.get("slackWebhookUrl") ?? "");
+    const name = String(formData.get("slackDestinationName") ?? "");
+    try {
+      await saveSlackWebhookTarget(env, {
+        userId: session.user.id,
+        webhookUrl,
+        name,
+      });
+    } catch (error) {
+      if (error instanceof Response && error.status >= 400 && error.status < 500) {
+        return {
+          ok: false,
+          message: (await error.text()) || "Slack delivery could not be connected.",
+        };
+      }
+
+      throw error;
+    }
+    const existingConfig = await getWorkspaceDeliveryConfig(env, session.user.id);
+    const defaults = legacyWorkspaceDeliveryDefaults({
+      hasEmail: Boolean(session.user.email),
+    });
+    await upsertWorkspaceDeliveryConfig(env, {
+      userId: session.user.id,
+      sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
+      instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
+      digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
+      emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
+      whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
+      slackEnabled: true,
+      quietHours: existingConfig?.quietHours ?? null,
+      timezone: existingConfig?.timezone ?? null,
+    });
+
+    return {
+      ok: true,
+      message:
+        "Slack delivery connected. Slack accepted the setup test, and future eligible digests can post to that channel.",
+    };
+  }
+
+  if (intent === "pause-slack-webhook") {
+    const { pauseSlackWebhookTarget } = await import("~/lib/slack.server");
+    const targetId = String(formData.get("slackTargetId") ?? "");
+    const paused = await pauseSlackWebhookTarget(env, {
+      userId: session.user.id,
+      targetId,
+    });
+
+    return {
+      ok: paused,
+      message: paused ? "Slack delivery paused." : "Slack delivery target was not found.",
+    };
+  }
+
+  if (intent === "resume-slack-webhook") {
+    const { resumeSlackWebhookTarget } = await import("~/lib/slack.server");
+    const targetId = String(formData.get("slackTargetId") ?? "");
+    const resumed = await resumeSlackWebhookTarget(env, {
+      userId: session.user.id,
+      targetId,
+    });
+
+    return {
+      ok: resumed,
+      message: resumed ? "Slack delivery resumed." : "Slack delivery target was not found.",
     };
   }
 
@@ -273,8 +366,8 @@ export default function AppSourcesRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          API keys are read-only and only expose collections, watchlists, digests, proof trails, and Slack-ready
-          markdown owned by this account.
+          API keys are read-only and only expose collections, watchlists, digests, proof trails, and export markdown
+          owned by this account.
         </p>
 
         {actionData && "apiKeySecret" in actionData && actionData.apiKeySecret ? (
@@ -361,6 +454,106 @@ export default function AppSourcesRoute() {
               <div>
                 <strong>No API keys yet</strong>
                 <p>Create one when you are ready to connect a tool or agent workflow.</p>
+              </div>
+            </article>
+          )}
+        </div>
+      </section>
+
+      <section className="f9-app-panel f9-source-setup">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Slack delivery</span>
+            <h2>Send competitor changes to Slack</h2>
+          </div>
+        </div>
+
+        <p className="f9-muted-copy">
+          Add an incoming webhook from your Slack app. Five to Nine stores the webhook encrypted and sends eligible
+          digests and high-priority change alerts through the delivery engine.
+        </p>
+
+        <div className="f9-dashboard-grid">
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Connect channel</span>
+            <h3>Incoming webhook</h3>
+            <Form className="f9-auth-form" method="post">
+              <input name="intent" type="hidden" value="save-slack-webhook" />
+              <label className="f9-field">
+                <span>Channel label</span>
+                <input
+                  autoComplete="off"
+                  name="slackDestinationName"
+                  placeholder="Growth team, competitor alerts..."
+                  type="text"
+                />
+              </label>
+              <label className="f9-field">
+                <span>Slack webhook URL</span>
+                <input
+                  autoComplete="off"
+                  name="slackWebhookUrl"
+                  placeholder="Paste the incoming webhook URL"
+                  type="password"
+                />
+              </label>
+              <button className="f9-primary-button" type="submit">
+                Save Slack delivery
+              </button>
+            </Form>
+          </section>
+
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Delivery behavior</span>
+            <h3>What posts to Slack</h3>
+            <dl className="proof-trail-list">
+              <div>
+                <dt>Digests</dt>
+                <dd>Weekly or daily digest summaries when the account plan allows digests.</dd>
+              </div>
+              <div>
+                <dt>Alerts</dt>
+                <dd>High-priority confirmed competitor changes outside quiet hours.</dd>
+              </div>
+              <div>
+                <dt>Secrets</dt>
+                <dd>The webhook is encrypted and never shown again after saving.</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+
+        <div className="f9-work-list">
+          {data.slackTargets.length > 0 ? (
+            data.slackTargets.map((target) => (
+              <article className="f9-work-item" key={target.id}>
+                <div>
+                  <strong>{target.displayName}</strong>
+                  <p>
+                    {target.isPaused ? "Paused" : "Active"}
+                    {target.lastSuccessfulDeliveryAt
+                      ? ` · last sent ${new Date(target.lastSuccessfulDeliveryAt).toLocaleString("en-IN")}`
+                      : " · no sends yet"}
+                  </p>
+                </div>
+                <Form method="post">
+                  <input
+                    name="intent"
+                    type="hidden"
+                    value={target.isPaused ? "resume-slack-webhook" : "pause-slack-webhook"}
+                  />
+                  <input name="slackTargetId" type="hidden" value={target.id} />
+                  <button className="f9-secondary-button" type="submit">
+                    {target.isPaused ? "Resume" : "Pause"}
+                  </button>
+                </Form>
+              </article>
+            ))
+          ) : (
+            <article className="f9-work-item">
+              <div>
+                <strong>No Slack channel connected</strong>
+                <p>Add a webhook when you want digests and important changes posted to Slack.</p>
               </div>
             </article>
           )}
