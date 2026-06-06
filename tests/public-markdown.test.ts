@@ -37,6 +37,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("/api/demo-proof");
     expect(PUBLIC_MARKDOWN).toContain("Public demo proof is sample-only");
     expect(PUBLIC_MARKDOWN).toContain("exports support CSV, API JSON, and Slack-ready markdown");
+    expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned");
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, creative timeline, and landing-page history");
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public sample proof loop");
@@ -45,7 +46,9 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live proof");
     expect(LLMS_TEXT).toContain("Public demo proof is sample-only");
     expect(LLMS_TEXT).toContain("Account-gated analysis");
+    expect(LLMS_TEXT).toContain("read-only /api/v1");
+    expect(LLMS_TEXT).toContain("MCP are not live yet");
     expect(LLMS_TEXT).not.toContain("Public analysis.");
-    expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve|not live/i);
+    expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve/i);
   });
 });
