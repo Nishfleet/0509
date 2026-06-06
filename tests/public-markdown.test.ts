@@ -39,6 +39,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("exports support CSV, API JSON, and Slack-ready markdown");
     expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned");
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, creative timeline, and landing-page history");
+    expect(PUBLIC_MARKDOWN).toContain("Spend, impressions, reach, and unsupported-channel benchmarks are not live");
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 evidence checks/month");

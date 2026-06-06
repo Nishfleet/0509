@@ -33,6 +33,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
+- Observed campaign duration is based on first-seen and last-observed proof only. Spend, impressions, reach, and unsupported-channel benchmarks are not live.
 - Customer WhatsApp delivery stays behind opt-in, template-readiness, and webhook-readiness checks.
 
 ## Pricing
