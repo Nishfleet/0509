@@ -8,6 +8,7 @@ const appCss = readFileSync("app/app.css", "utf8");
 const rootRoute = readFileSync("app/root.tsx", "utf8");
 const routes = readFileSync("app/routes.ts", "utf8");
 const publicMarkdown = readFileSync("app/lib/public-markdown.ts", "utf8");
+const readme = readFileSync("README.md", "utf8");
 const publicHomeSource = [marketingRoute, brandWordmark, appCss, rootRoute, routes, publicMarkdown].join("\n");
 const marketingClasses = Array.from(marketingRoute.matchAll(/className="([^"]+)"/g)).flatMap((match) =>
   match[1].split(/\s+/),
@@ -41,10 +42,19 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Readiness-gated beta");
     expect(marketingRoute).toContain("Launch status: readiness-gated.");
     expect(marketingRoute).toContain("Search and monitoring require an account");
+    expect(marketingRoute).toContain('id="demo"');
+    expect(marketingRoute).toContain("See the proof shape before creating an account.");
+    expect(marketingRoute).toContain("/api/demo-proof");
     expect(marketingRoute).not.toContain("Account search");
     expect(marketingRoute).not.toContain('to={rootData.session ? "/search" : "/auth/signup"}');
     expect(marketingRoute).not.toContain('<Link to="/search">Search</Link>');
     expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
+  });
+
+  it("keeps README route truth aligned with account-gated search", () => {
+    expect(readme).toContain("/api/demo-proof");
+    expect(readme).toContain("/search` account-gated analysis flow");
+    expect(readme).not.toContain("/search` public analysis flow");
   });
 
   it("blocks the old public home from coming back", () => {

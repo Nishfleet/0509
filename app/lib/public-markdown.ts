@@ -12,6 +12,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Product
 
 - Competitor monitoring for growth teams.
+- Public sample proof loop for buyer evaluation at /api/demo-proof.
 - Account-gated competitor ad search, retained monitoring, and reusable saved evidence.
 - Search, competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
@@ -20,6 +21,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Current product truth
 
 - Account access uses verified access paths.
+- Public demo proof is sample-only; live search and retained monitoring require an account.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, and provider-canary success.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
@@ -32,7 +34,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Pricing display is localized from checkout preview for the buyer location.
 - There is no free retained-monitoring plan. Search and saved monitoring require an account.
 - Starter is the recommended plan for retained competitor monitoring.
-- Scout is the entry plan for a focused watch set: 3 watchlists, 10 collections, search-led research, and 50 evidence checks/month.
+- Scout is the entry plan after the public sample proof loop: 3 watchlists, 10 collections, account-gated research, and 50 evidence checks/month.
 - Starter includes 10 watchlists, 25 collections, weekly digest delivery, and 250 evidence checks/month.
 - Agency includes 75 watchlists, 250 collections, daily and weekly briefs, and 2,500 evidence checks/month.
 - Usage bundles add extra evidence checks for 30-day spikes. They do not make monitoring unlimited.
@@ -54,6 +56,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
+- Public demo proof is sample-only and available at /api/demo-proof for buyer and agent evaluation.
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, and provider-canary success.

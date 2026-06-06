@@ -33,11 +33,15 @@ describe("public markdown", () => {
   it("keeps agent-readable content aligned with launch truth", () => {
     expect(PUBLIC_MARKDOWN).toContain("verified access paths");
     expect(PUBLIC_MARKDOWN).toContain("visible plan caps");
+    expect(PUBLIC_MARKDOWN).toContain("Public sample proof loop");
+    expect(PUBLIC_MARKDOWN).toContain("/api/demo-proof");
+    expect(PUBLIC_MARKDOWN).toContain("Public demo proof is sample-only");
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
-    expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan");
+    expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("Launch status is readiness-gated");
     expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
     expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live proof");
+    expect(LLMS_TEXT).toContain("Public demo proof is sample-only");
     expect(LLMS_TEXT).toContain("Account-gated analysis");
     expect(LLMS_TEXT).not.toContain("Public analysis.");
     expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve|not live/i);
