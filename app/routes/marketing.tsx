@@ -135,7 +135,6 @@ export default function MarketingRoute() {
 
           <nav className="f9-nav-links" aria-label="Primary">
             <a href="#platform">Products</a>
-            <Link to={rootData.session ? "/search" : "/auth/signup"}>Account search</Link>
             <a href="#platform">Signals</a>
             <a href="#pricing">Pricing</a>
           </nav>
@@ -157,7 +156,7 @@ export default function MarketingRoute() {
 
         <div className="f9-container f9-hero-layout">
           <div className="f9-hero-copy">
-            <Link className="f9-announcement" to={rootData.session ? "/search" : "/auth/signup"}>
+            <Link className="f9-announcement" to="/auth/signup">
               <strong>Readiness-gated beta</strong>
               <span>Search and monitoring require an account</span>
               <em aria-hidden="true" />

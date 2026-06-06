@@ -326,6 +326,13 @@ function isCurrent0509LoginRedirect(response) {
 }
 
 /**
+ * @param {Response} response
+ */
+function isCurrent0509NonPublicSearchResponse(response) {
+  return response.status === 404 || isCurrent0509LoginRedirect(response);
+}
+
+/**
  * @param {string | null | undefined} note
  */
 function classifyErrorStatus(note) {
@@ -542,7 +549,7 @@ export async function runCurrent0509Probe(target, options = {}) {
       redirect: "manual",
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (isCurrent0509LoginRedirect(response)) {
+    if (isCurrent0509NonPublicSearchResponse(response)) {
       return {
         provider: "current_0509",
         query: target.query,
@@ -560,8 +567,8 @@ export async function runCurrent0509Probe(target, options = {}) {
         sourceLabel: null,
         url,
         note: isPrivateFreshLiveProbe
-          ? "Private current_0509 probe was redirected to sign in."
-          : "Current 0509 search results require an account; set CANARY_BYPASS_TOKEN for a private live probe.",
+          ? `Private current_0509 probe returned HTTP ${response.status}.`
+          : "Current 0509 search results are not public; set CANARY_BYPASS_TOKEN for a private live probe.",
       };
     }
     const html = await response.text();
