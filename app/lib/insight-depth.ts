@@ -89,7 +89,7 @@ export function buildCollectionInsightDepth(items: CollectionItemRecord[]): Insi
       hook: item.ad.hook,
       platforms: item.ad.platforms,
       firstSeenAt: item.ad.firstSeenAt,
-      lastSeenAt: item.ad.lastSeenAt,
+      lastSeenAt: lastObservedAtForAd(item),
       active: item.ad.active,
       timestamp: item.ad.lastSeenAt ?? item.ad.firstSeenAt ?? item.createdAt,
       detail: item.ad.offer || item.ad.previewHeadline || item.note || "Saved proof",
@@ -296,6 +296,26 @@ function landingPageDetailForAd(item: CollectionItemRecord) {
   ]
     .filter(Boolean)
     .join(" | ");
+}
+
+function lastObservedAtForAd(item: CollectionItemRecord) {
+  const lastSeenAt = item.ad.lastSeenAt;
+  if (!item.ad.active || !item.ad.firstSeenAt) {
+    return lastSeenAt;
+  }
+
+  const firstSeenMs = item.ad.firstSeenAt ? Date.parse(item.ad.firstSeenAt) : Number.NaN;
+  const lastSeenMs = lastSeenAt ? Date.parse(lastSeenAt) : Number.NaN;
+  if (!Number.isNaN(firstSeenMs) && !Number.isNaN(lastSeenMs) && lastSeenMs > firstSeenMs) {
+    return lastSeenAt;
+  }
+
+  const savedAtMs = Date.parse(item.createdAt);
+  if (Number.isNaN(firstSeenMs) || Number.isNaN(savedAtMs) || savedAtMs <= firstSeenMs) {
+    return lastSeenAt;
+  }
+
+  return item.createdAt;
 }
 
 function markdownSection(title: string, items: InsightCount[]) {

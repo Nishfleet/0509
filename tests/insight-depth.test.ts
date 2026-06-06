@@ -134,6 +134,27 @@ describe("insight depth", () => {
     expect(summary.campaignDurations[0]?.label).toBe("One-week run");
   });
 
+  it("uses saved observation time for active ads whose last-seen date is only a first-seen fallback", () => {
+    const summary = buildCollectionInsightDepth([
+      {
+        ...item,
+        createdAt: "2026-04-18T00:00:00.000Z",
+        ad: {
+          ...ad,
+          firstSeenAt: "2026-04-01T00:00:00.000Z",
+          lastSeenAt: "2026-04-01T00:00:00.000Z",
+          active: true,
+        },
+      },
+    ]);
+
+    expect(summary.campaignDurations[0]).toMatchObject({
+      label: "Multi-week run",
+      count: 1,
+      detail: "Nykaa - 17 observed days - active",
+    });
+  });
+
   it("summarizes watch events into landing-page change history", () => {
     const summary = buildWatchlistInsightDepth([event]);
 
