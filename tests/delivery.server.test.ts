@@ -1,23 +1,52 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const postmarkEnv = {
+  POSTMARK_SERVER_TOKEN: "pm_123",
+  POSTMARK_FROM_EMAIL: "alerts@0509.in",
+};
+
+function mockPostmarkSend(messageId = "msg_1") {
+  const fetchMock = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ ErrorCode: 0, Message: "OK", MessageID: messageId }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+function postmarkRequestBody(fetchMock: ReturnType<typeof vi.fn>) {
+  const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+  return JSON.parse(String(init?.body));
+}
+
+function expectPostmarkEmailRequest(fetchMock: ReturnType<typeof vi.fn>) {
+  expect(fetchMock).toHaveBeenCalledWith(
+    "https://api.postmarkapp.com/email",
+    expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({
+        "X-Postmark-Server-Token": "pm_123",
+      }),
+    }),
+  );
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.resetModules();
   vi.useRealTimers();
 });
 
 describe("deliverWeeklyDigest", () => {
   it("auto-provisions the account email target and records the email attempt", async () => {
-    const resendSend = vi.fn().mockResolvedValue({
-      data: {
-        id: "msg_1",
-      },
-      error: null,
-    });
+    const postmarkFetch = mockPostmarkSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const upsertDigestDelivery = vi.fn();
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
@@ -43,15 +72,6 @@ describe("deliverWeeklyDigest", () => {
       updatedAt: "2026-04-19T00:00:00.000Z",
     });
 
-    vi.doMock("resend", () => ({
-      Resend: vi.fn(function Resend() {
-        return {
-          emails: {
-            send: resendSend,
-          },
-        };
-      }),
-    }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
@@ -80,10 +100,7 @@ describe("deliverWeeklyDigest", () => {
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
     const result = await deliverWeeklyDigest(
-      {
-        RESEND_API_KEY: "re_123",
-        RESEND_FROM_EMAIL: "alerts@0509.in",
-      } as never,
+      postmarkEnv as never,
       {
         userId: "user-1",
         userName: "Owner",
@@ -115,13 +132,20 @@ describe("deliverWeeklyDigest", () => {
         },
       ],
     });
-    expect(resendSend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "owner@example.com",
-        subject: "Five to Nine weekly digest: 1 competitor changes",
-        html: expect.stringContaining("Five to Nine weekly digest"),
-      }),
-    );
+    expectPostmarkEmailRequest(postmarkFetch);
+    expect(postmarkRequestBody(postmarkFetch)).toMatchObject({
+      From: "alerts@0509.in",
+      To: "owner@example.com",
+      Subject: "Five to Nine weekly digest: 1 competitor changes",
+      HtmlBody: expect.stringContaining("Five to Nine weekly digest"),
+      MessageStream: "outbound",
+      Tag: "weekly-digest",
+      Metadata: {
+        kind: "weekly_digest",
+        item_count: "1",
+        cadence: "weekly",
+      },
+    });
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -142,13 +166,117 @@ describe("deliverWeeklyDigest", () => {
     );
   });
 
-  it("keeps email as the baseline when customer WhatsApp fails readiness checks", async () => {
-    const resendSend = vi.fn().mockResolvedValue({
-      data: {
-        id: "msg_1",
+  it("records a failed email attempt when Postmark network send rejects", async () => {
+    const postmarkFetch = vi.fn().mockRejectedValue(new Error("network timeout"));
+    vi.stubGlobal("fetch", postmarkFetch);
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const upsertDigestDelivery = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([
+        {
+          id: "email-target-1",
+          userId: "user-1",
+          watchlistId: null,
+          channel: "email",
+          targetValue: "owner@example.com",
+          validationStatus: "validated",
+          isValidated: true,
+          isOptedIn: true,
+          optInSource: "account_email",
+          optedInAt: "2026-04-19T00:00:00.000Z",
+          isPaused: false,
+          pausedAt: null,
+          optedOutAt: null,
+          templateEligible: false,
+          lastSuccessfulDeliveryAt: null,
+          lastSuccessfulAttemptId: null,
+          providerIdentifier: null,
+          metadata: {},
+          createdAt: "2026-04-19T00:00:00.000Z",
+          updatedAt: "2026-04-19T00:00:00.000Z",
+        },
+      ]),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+
+    const result = await deliverWeeklyDigest(
+      postmarkEnv as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        digestRunId: "digest-1",
+        periodStart: "2026-04-12T00:00:00.000Z",
+        periodEnd: "2026-04-19T00:00:00.000Z",
+        items: [
+          {
+            eventId: "event-1",
+            watchlistId: "watch-1",
+            watchlistName: "boAt watch",
+            eventType: "landing_page_offer_changed",
+            title: "Landing page offer changed",
+            summary: "Offer changed on the landing page.",
+          },
+        ],
       },
-      error: null,
+    );
+
+    expect(result).toMatchObject({
+      attempts: 1,
+      channels: ["email"],
+      details: [
+        {
+          channel: "email",
+          status: "failed",
+          targetValue: "owner@example.com",
+          errorMessage: "Postmark send failed: network timeout.",
+        },
+      ],
     });
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        channel: "email",
+        status: "failed",
+        errorMessage: "Postmark send failed: network timeout.",
+      }),
+    );
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        status: "failed",
+        recipientEmail: "owner@example.com",
+        errorMessage: "Postmark send failed: network timeout.",
+      }),
+    );
+  });
+
+  it("keeps email as the baseline when customer WhatsApp fails readiness checks", async () => {
+    const postmarkFetch = mockPostmarkSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
       id: "email-target-1",
@@ -182,15 +310,6 @@ describe("deliverWeeklyDigest", () => {
       errorMessage: "Customer WhatsApp delivery is not ready yet.",
     });
 
-    vi.doMock("resend", () => ({
-      Resend: vi.fn(function Resend() {
-        return {
-          emails: {
-            send: resendSend,
-          },
-        };
-      }),
-    }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
@@ -248,10 +367,7 @@ describe("deliverWeeklyDigest", () => {
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
     const result = await deliverWeeklyDigest(
-      {
-        RESEND_API_KEY: "re_123",
-        RESEND_FROM_EMAIL: "alerts@0509.in",
-      } as never,
+      postmarkEnv as never,
       {
         userId: "user-1",
         userName: "Owner",
@@ -288,7 +404,7 @@ describe("deliverWeeklyDigest", () => {
         },
       ],
     });
-    expect(resendSend).toHaveBeenCalledTimes(1);
+    expect(postmarkFetch).toHaveBeenCalledTimes(1);
     expect(sendDigestWhatsApp).toHaveBeenCalledTimes(1);
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
@@ -301,17 +417,8 @@ describe("deliverWeeklyDigest", () => {
   });
 
   it("reuses an existing idempotent email attempt instead of sending twice", async () => {
-    const resendSend = vi.fn();
-
-    vi.doMock("resend", () => ({
-      Resend: vi.fn(function Resend() {
-        return {
-          emails: {
-            send: resendSend,
-          },
-        };
-      }),
-    }));
+    const postmarkFetch = vi.fn();
+    vi.stubGlobal("fetch", postmarkFetch);
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi
@@ -324,7 +431,7 @@ describe("deliverWeeklyDigest", () => {
           deliveryTargetId: "email-target-1",
           lane: "customer",
           channel: "email",
-          provider: "resend",
+          provider: "postmark",
           status: "sent",
           webhookStatus: "pending",
           targetValue: "owner@example.com",
@@ -389,10 +496,7 @@ describe("deliverWeeklyDigest", () => {
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
     const result = await deliverWeeklyDigest(
-      {
-        RESEND_API_KEY: "re_123",
-        RESEND_FROM_EMAIL: "alerts@0509.in",
-      } as never,
+      postmarkEnv as never,
       {
         userId: "user-1",
         userName: "Owner",
@@ -424,18 +528,13 @@ describe("deliverWeeklyDigest", () => {
         },
       ],
     });
-    expect(resendSend).not.toHaveBeenCalled();
+    expect(postmarkFetch).not.toHaveBeenCalled();
   });
 });
 
 describe("deliverWatchlistAlerts", () => {
   it("sends instant alerts for confirmed watch events that clear delivery policy", async () => {
-    const resendSend = vi.fn().mockResolvedValue({
-      data: {
-        id: "msg_instant_1",
-      },
-      error: null,
-    });
+    const postmarkFetch = mockPostmarkSend("msg_instant_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-instant-1");
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
       id: "email-target-1",
@@ -460,15 +559,6 @@ describe("deliverWatchlistAlerts", () => {
       updatedAt: "2026-04-19T00:00:00.000Z",
     });
 
-    vi.doMock("resend", () => ({
-      Resend: vi.fn(function Resend() {
-        return {
-          emails: {
-            send: resendSend,
-          },
-        };
-      }),
-    }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
@@ -501,8 +591,7 @@ describe("deliverWatchlistAlerts", () => {
 
     const result = await deliverWatchlistAlerts(
       {
-        RESEND_API_KEY: "re_123",
-        RESEND_FROM_EMAIL: "alerts@0509.in",
+        ...postmarkEnv,
         BETTER_AUTH_URL: "https://0509.in",
       } as never,
       {
@@ -545,13 +634,15 @@ describe("deliverWatchlistAlerts", () => {
       attempts: 1,
       channels: ["email"],
     });
-    expect(resendSend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "owner@example.com",
-        subject: "Landing page URL changed: Nykaa",
-        html: expect.stringContaining("Five to Nine alert"),
-      }),
-    );
+    expectPostmarkEmailRequest(postmarkFetch);
+    expect(postmarkRequestBody(postmarkFetch)).toMatchObject({
+      From: "alerts@0509.in",
+      To: "owner@example.com",
+      Subject: "Landing page URL changed: Nykaa",
+      HtmlBody: expect.stringContaining("Five to Nine alert"),
+      MessageStream: "outbound",
+      Tag: "instant-alert",
+    });
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -568,12 +659,7 @@ describe("deliverWatchlistAlerts", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-18T18:30:00.000Z"));
 
-    const resendSend = vi.fn().mockResolvedValue({
-      data: {
-        id: "msg_after_quiet_hours",
-      },
-      error: null,
-    });
+    const postmarkFetch = mockPostmarkSend("msg_after_quiet_hours");
     const attemptsByKey = new Map<string, { status: string; idempotencyKey: string }>();
     const createDeliveryAttempt = vi.fn().mockImplementation(async (_env, attempt) => {
       attemptsByKey.set(attempt.idempotencyKey, {
@@ -598,7 +684,7 @@ describe("deliverWatchlistAlerts", () => {
           deliveryTargetId: "email-target-1",
           lane: "customer",
           channel: "email",
-          provider: "resend",
+          provider: "postmark",
           status: attempt.status,
           webhookStatus: "provider_unknown",
           targetValue: "owner@example.com",
@@ -638,15 +724,6 @@ describe("deliverWatchlistAlerts", () => {
       updatedAt: "2026-04-19T00:00:00.000Z",
     });
 
-    vi.doMock("resend", () => ({
-      Resend: vi.fn(function Resend() {
-        return {
-          emails: {
-            send: resendSend,
-          },
-        };
-      }),
-    }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey,
@@ -716,8 +793,7 @@ describe("deliverWatchlistAlerts", () => {
 
     await deliverWatchlistAlerts(
       {
-        RESEND_API_KEY: "re_123",
-        RESEND_FROM_EMAIL: "alerts@0509.in",
+        ...postmarkEnv,
         BETTER_AUTH_URL: "https://0509.in",
       } as never,
       input,
@@ -726,8 +802,7 @@ describe("deliverWatchlistAlerts", () => {
     vi.setSystemTime(new Date("2026-04-18T06:30:00.000Z"));
     const result = await deliverWatchlistAlerts(
       {
-        RESEND_API_KEY: "re_123",
-        RESEND_FROM_EMAIL: "alerts@0509.in",
+        ...postmarkEnv,
         BETTER_AUTH_URL: "https://0509.in",
       } as never,
       input,
@@ -737,7 +812,7 @@ describe("deliverWatchlistAlerts", () => {
       attempts: 1,
       channels: ["email"],
     });
-    expect(resendSend).toHaveBeenCalledTimes(1);
+    expect(postmarkFetch).toHaveBeenCalledTimes(1);
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

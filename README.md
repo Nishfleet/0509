@@ -25,7 +25,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 - Better Auth on Cloudflare D1 for active auth and sessions
 - D1 for product data
 - Optional R2 for landing-page artifact retention
-- Resend for digest delivery
+- Postmark for digest and instant-alert email delivery
 
 Auth runtime decision: `docs/auth-runtime.md`
 
@@ -60,8 +60,9 @@ Important bindings and secrets:
 - `ALLOW_PLATFORM_META_API_FALLBACK`
 - `META_AD_LIBRARY_TOKEN`
 - `META_AD_LIBRARY_API_VERSION`
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
+- `POSTMARK_SERVER_TOKEN`
+- `POSTMARK_FROM_EMAIL`
+- `POSTMARK_MESSAGE_STREAM`
 - `DODO_PAYMENTS_API_KEY` or `DODO_0509_API_KEY`
 - `DODO_0509_BRAND_ID`
 - `DODO_0509_ENVIRONMENT`

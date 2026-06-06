@@ -290,7 +290,7 @@ interface DigestItemRow {
 interface DigestDeliveryRow {
   id: string;
   digest_run_id: string;
-  provider: "resend";
+  provider: string;
   status: DigestDeliveryRecord["status"];
   recipient_email: string;
   external_message_id: string | null;
@@ -1023,9 +1023,12 @@ export async function grantDodoPlanAccess(
     providerPaymentId: string;
     providerProductId: string;
     status: string;
+    grantedAt?: string;
     metadata?: JsonRecord;
   },
 ) {
+  const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
+
   await run(
     env,
     `
@@ -1037,21 +1040,31 @@ export async function grantDodoPlanAccess(
         dodo_status,
         plan_updated_at
       )
-      VALUES (?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET
         plan = excluded.plan,
         dodo_payment_id = excluded.dodo_payment_id,
-        dodo_product_id = excluded.dodo_product_id,
-        dodo_status = excluded.dodo_status,
-        plan_updated_at = excluded.plan_updated_at
-    `,
+	        dodo_product_id = excluded.dodo_product_id,
+	        dodo_status = excluded.dodo_status,
+	        plan_updated_at = excluded.plan_updated_at
+	      WHERE
+	        user_plan.dodo_payment_id = excluded.dodo_payment_id
+	        OR julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+	    `,
     input.userId,
     input.plan,
     input.providerPaymentId,
     input.providerProductId,
     input.status,
+    planUpdatedAt,
   );
+}
+
+function validIsoTimestamp(value: string | undefined) {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
 export async function completeUserOnboarding(env: AppEnv, userId: string) {
@@ -1406,12 +1419,13 @@ async function ensureTags(env: AppEnv, userId: string, labels: string[]) {
 export async function listWatchlists(env: AppEnv, userId: string) {
   const rows = await many<WatchlistRow>(
     env,
-    `
-      SELECT *
-      FROM watchlist
-      WHERE user_id = ?
-      ORDER BY updated_at DESC
-    `,
+	    `
+	      SELECT *
+	      FROM watchlist
+	      WHERE user_id = ?
+	        AND is_active = 1
+	      ORDER BY updated_at DESC
+	    `,
     userId,
   );
   return rows.map(toWatchlistRecord);
@@ -1528,6 +1542,94 @@ export async function createWatchlist(
   );
 
   return concurrent ? toWatchlistRecord(concurrent) : null;
+}
+
+export async function updateWatchlist(
+  env: AppEnv,
+  userId: string,
+  watchlistId: string,
+  input: {
+    name: string;
+    targetType: WatchTargetType;
+    targetId: string;
+    targetFingerprint: string;
+    targetLabel: string;
+  },
+) {
+  const existing = await getWatchlist(env, watchlistId, userId);
+  if (!existing) {
+    return null;
+  }
+
+  const duplicate = await one<WatchlistRow>(
+    env,
+    `
+      SELECT *
+      FROM watchlist
+      WHERE user_id = ?
+        AND target_fingerprint = ?
+        AND id != ?
+        AND is_active = 1
+      LIMIT 1
+    `,
+    userId,
+    input.targetFingerprint,
+    watchlistId,
+  );
+
+	  if (duplicate) {
+	    throw new Error("watchlist_duplicate_target");
+	  }
+
+	  const timestamp = nowIso();
+	  if (existing.targetFingerprint !== input.targetFingerprint) {
+	    const replacement = await createWatchlist(env, userId, input);
+	    if (!replacement) {
+	      return null;
+	    }
+
+	    await run(
+	      env,
+	      `
+	        UPDATE watchlist
+	        SET is_active = 0,
+	            updated_at = ?
+	        WHERE id = ?
+	          AND user_id = ?
+	          AND is_active = 1
+	      `,
+	      timestamp,
+	      watchlistId,
+	      userId,
+	    );
+	    return replacement;
+	  }
+
+	  await run(
+	    env,
+    `
+      UPDATE watchlist
+      SET name = ?,
+          target_type = ?,
+          target_id = ?,
+          target_fingerprint = ?,
+          target_label = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND user_id = ?
+        AND is_active = 1
+    `,
+    input.name.trim(),
+    input.targetType,
+    input.targetId,
+    input.targetFingerprint,
+    input.targetLabel,
+    timestamp,
+    watchlistId,
+    userId,
+  );
+
+  return getWatchlist(env, watchlistId, userId);
 }
 
 export async function createWatchlistRun(
@@ -3291,7 +3393,8 @@ export async function upsertDigestDelivery(
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(digest_run_id)
-      DO UPDATE SET status = excluded.status,
+      DO UPDATE SET provider = excluded.provider,
+                    status = excluded.status,
                     recipient_email = excluded.recipient_email,
                     external_message_id = excluded.external_message_id,
                     error_message = excluded.error_message,

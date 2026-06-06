@@ -6,6 +6,7 @@ import {
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
+import { normalizePublicHttpUrl, resolvePublicHttpUrl } from "~/lib/public-url.server";
 import type { LandingPageSnapshotData, ProofDeviceProfile, ProofRenderMode } from "~/lib/types";
 
 const TITLE_REGEX = /<title[^>]*>([^<]+)<\/title>/i;
@@ -24,6 +25,39 @@ const MOBILE_VIEWPORT = {
 };
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+const BROWSERLESS_PROOF_RENDER_WAIT_MS = 5_000;
+const DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS = new Set([
+  "https://0509.in",
+  "https://www.0509.in",
+]);
+const BROWSERLESS_PROOF_SNAPSHOT_MUTATION = `
+mutation LandingPageProofFallback($url: String!, $userAgent: String!) {
+  userAgent(userAgent: $userAgent) {
+    time
+  }
+  viewport(width: 390, height: 844, deviceScaleFactor: 2, mobile: true) {
+    width
+  }
+  goto(url: $url) {
+    status
+  }
+  waitForTimeout(time: ${BROWSERLESS_PROOF_RENDER_WAIT_MS}) {
+    time
+  }
+  html {
+    html
+  }
+	  screenshot(type: jpeg, fullPage: true, quality: 85) {
+	    base64
+	  }
+	  documentRequests: request(type: [document], wait: false) {
+	    url
+	  }
+	  url {
+	    url
+	  }
+}
+`.trim();
 
 interface BrowserRunQuickActionEnvelope<T> {
   success?: boolean;
@@ -90,6 +124,16 @@ interface BrowserRunQuickActionScrapeResult {
   results?: BrowserRunQuickActionScrapeElement[] | BrowserRunQuickActionScrapeElement;
 }
 
+type BrowserRunBrowser = Awaited<ReturnType<typeof puppeteer.launch>>;
+type BrowserRunPage = Awaited<ReturnType<BrowserRunBrowser["newPage"]>>;
+
+interface BrowserRequestLike {
+  abort(): Promise<void> | void;
+  continue(): Promise<void> | void;
+  isInterceptResolutionHandled?: () => boolean;
+  url(): string;
+}
+
 export class BrowserRunQuickActionError extends Error {
   constructor(
     message: string,
@@ -116,18 +160,21 @@ export async function captureBrowserRunSnapshot(
   env: AppEnv,
   url: string,
 ): Promise<LandingPageSnapshotData | null> {
-  if (!env.BROWSER || !url || !/^https?:\/\//i.test(url)) {
+  const publicUrl = await resolvePublicHttpUrl(url);
+  if (!env.BROWSER || !publicUrl) {
     return null;
   }
 
+  const targetUrl = publicUrl.toString();
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
 
   try {
     browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
+    await installPublicBrowserRequestGuard(page);
     await page.setUserAgent(MOBILE_USER_AGENT);
     await page.setViewport(MOBILE_VIEWPORT);
-    await page.goto(url, {
+    await page.goto(targetUrl, {
       waitUntil: "networkidle2",
       timeout: 30_000,
     });
@@ -138,18 +185,150 @@ export async function captureBrowserRunSnapshot(
       quality: 85,
       fullPage: true,
     });
-    const canonicalUrl = page.url() || url;
+    const canonicalUrl = (await resolvePublicHttpUrl(page.url() || targetUrl))?.toString();
+    if (!canonicalUrl) {
+      return null;
+    }
 
     return buildBrowserRenderedSnapshot(env, {
-      url,
+      url: targetUrl,
       canonicalUrl,
       html,
       screenshot,
+      provider: "cloudflare_browser_run",
     });
   } catch {
     return null;
   } finally {
     await browser?.close().catch(() => undefined);
+  }
+}
+
+async function installPublicBrowserRequestGuard(page: BrowserRunPage) {
+  await page.setRequestInterception(true);
+  page.on("request", (request: BrowserRequestLike) => {
+    void handleGuardedBrowserRequest(request);
+  });
+}
+
+async function handleGuardedBrowserRequest(request: BrowserRequestLike) {
+  if (request.isInterceptResolutionHandled?.()) {
+    return;
+  }
+
+  const requestUrl = request.url();
+  const allowed =
+    isBrowserInternalUrl(requestUrl) || Boolean(await resolvePublicHttpUrl(requestUrl));
+
+  if (request.isInterceptResolutionHandled?.()) {
+    return;
+  }
+
+  if (allowed) {
+    await request.continue();
+  } else {
+    await request.abort();
+  }
+}
+
+function isBrowserInternalUrl(value: string) {
+  return /^(?:about|blob|data):/i.test(value);
+}
+
+function isBrowserlessProofOriginAllowed(env: AppEnv, url: URL) {
+  const configuredOrigins = String(env.BROWSERLESS_PROOF_ALLOWLIST_ORIGINS ?? "")
+    .split(/[\s,]+/)
+    .map((origin) => normalizePublicHttpUrl(origin)?.origin)
+    .filter((origin): origin is string => Boolean(origin));
+  const allowedOrigins =
+    configuredOrigins.length > 0
+      ? new Set(configuredOrigins)
+      : DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS;
+
+  return allowedOrigins.has(url.origin);
+}
+
+export async function captureRenderedLandingPageSnapshot(
+  env: AppEnv,
+  url: string,
+): Promise<LandingPageSnapshotData | null> {
+  return (
+    (await captureBrowserRunSnapshot(env, url)) ??
+    (await captureBrowserlessProofSnapshot(env, url))
+  );
+}
+
+export async function captureBrowserlessProofSnapshot(
+  env: AppEnv,
+  url: string,
+): Promise<LandingPageSnapshotData | null> {
+  const publicUrl = await resolvePublicHttpUrl(url);
+  if (!env.BROWSERLESS_TOKEN?.trim() || !publicUrl || !isBrowserlessProofOriginAllowed(env, publicUrl)) {
+    return null;
+  }
+
+  const targetUrl = publicUrl.toString();
+  try {
+    const response = await fetch(buildBrowserlessBqlEndpoint(env), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        query: BROWSERLESS_PROOF_SNAPSHOT_MUTATION,
+        variables: {
+          url: targetUrl,
+          userAgent: MOBILE_USER_AGENT,
+        },
+      }),
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          data?: {
+            html?: {
+              html?: string;
+            };
+	            screenshot?: {
+	              base64?: string;
+	            };
+	            documentRequests?: Array<{
+	              url?: string;
+	            }>;
+	            url?: {
+	              url?: string;
+	            };
+          };
+        }
+      | null;
+
+    const html = payload?.data?.html?.html ?? "";
+    const screenshotBase64 = payload?.data?.screenshot?.base64 ?? "";
+    const canonicalUrl = (await resolvePublicHttpUrl(payload?.data?.url?.url ?? targetUrl))?.toString();
+    const documentUrls = (payload?.data?.documentRequests ?? [])
+      .map((request) => request.url)
+      .filter((requestUrl): requestUrl is string => Boolean(requestUrl));
+    const publicDocumentUrls = await Promise.all(
+      documentUrls.map((requestUrl) => resolvePublicHttpUrl(requestUrl)),
+    );
+    if (
+      !response.ok ||
+      !html ||
+      !screenshotBase64 ||
+      !canonicalUrl ||
+      publicDocumentUrls.some((requestUrl) => !requestUrl)
+    ) {
+      return null;
+    }
+
+    return buildBrowserRenderedSnapshot(env, {
+      url: targetUrl,
+      canonicalUrl,
+      html,
+      screenshot: decodeBase64ToUint8Array(screenshotBase64),
+      provider: "browserless_bql",
+    });
+  } catch {
+    return null;
   }
 }
 
@@ -160,7 +339,8 @@ export async function captureBrowserRunQuickActionContent(
   browserMsUsed: number | null;
   content: string;
 } | null> {
-  if (!hasBrowserRunQuickActions(env) || !options.url || !/^https?:\/\//i.test(options.url)) {
+  const publicUrl = options.url ? await resolvePublicHttpUrl(options.url) : null;
+  if (!hasBrowserRunQuickActions(env) || !publicUrl) {
     return null;
   }
 
@@ -172,7 +352,7 @@ export async function captureBrowserRunQuickActionContent(
         authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify(options),
+      body: JSON.stringify({ ...options, url: publicUrl.toString() }),
     },
   );
   const payload = (await response.json().catch(() => null)) as BrowserRunQuickActionEnvelope<string> | null;
@@ -194,7 +374,8 @@ export async function captureBrowserRunQuickActionScrape(
   browserMsUsed: number | null;
   elements: BrowserRunQuickActionScrapeElement[];
 } | null> {
-  if (!hasBrowserRunQuickActions(env) || !options.url || !/^https?:\/\//i.test(options.url)) {
+  const publicUrl = options.url ? await resolvePublicHttpUrl(options.url) : null;
+  if (!hasBrowserRunQuickActions(env) || !publicUrl) {
     return null;
   }
 
@@ -206,7 +387,7 @@ export async function captureBrowserRunQuickActionScrape(
         authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify(options),
+      body: JSON.stringify({ ...options, url: publicUrl.toString() }),
     },
   );
   const payload = (await response.json().catch(() => null)) as
@@ -229,6 +410,7 @@ function buildBrowserRenderedSnapshot(
     url: string;
     canonicalUrl: string;
     html: string;
+    provider: string;
     screenshot: Uint8Array | ArrayBuffer | Buffer;
   },
 ): Promise<LandingPageSnapshotData> {
@@ -255,6 +437,7 @@ function buildBrowserRenderedSnapshot(
         screenshotArtifactKey,
         renderMode: MOBILE_RENDER_MODE,
         deviceProfile: MOBILE_DEVICE_PROFILE,
+        renderProvider: input.provider,
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         extractionWarnings: buildExtractionWarnings({
           headline,
@@ -271,6 +454,23 @@ function buildBrowserRenderedSnapshot(
       },
     }),
   );
+}
+
+function buildBrowserlessBqlEndpoint(env: AppEnv) {
+  const rawBase =
+    env.BROWSERLESS_BQL_URL ||
+    "https://production-sfo.browserless.io/stealth/bql";
+  const url = new URL(rawBase);
+  if (!url.pathname.endsWith("/stealth/bql") && !url.pathname.endsWith("/chromium/bql")) {
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/stealth/bql`;
+  }
+  url.searchParams.set("token", env.BROWSERLESS_TOKEN?.trim() ?? "");
+  return url.toString();
+}
+
+function decodeBase64ToUint8Array(value: string) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 async function persistBrowserArtifacts(

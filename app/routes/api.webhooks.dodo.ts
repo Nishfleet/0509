@@ -29,6 +29,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       providerPaymentId: planGrant.paymentId,
       providerProductId: planGrant.productId,
       status: planGrant.status,
+      grantedAt: planGrant.grantedAt,
       metadata: planGrant.metadata,
     });
     return Response.json({ ok: true });

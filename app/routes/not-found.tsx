@@ -11,7 +11,7 @@ export default function NotFoundPage() {
         <section className="f9-error-card">
           <span className="f9-app-kicker">Five to Nine</span>
           <h1>Page not found</h1>
-          <p>The route you asked for does not exist in this rebuild.</p>
+          <p>The page you asked for does not exist.</p>
           <div className="f9-action-row">
             <Link className="f9-primary-button" to="/">
               Back to Five to Nine

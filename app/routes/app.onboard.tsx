@@ -1,8 +1,14 @@
 import { useState } from "react";
-import { Form, Link, redirect, useActionData } from "react-router";
+import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
-import { buildSearchParams, fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
+import {
+  buildSearchParams,
+  fingerprintSavedQuery,
+  hashString,
+  normalizeSavedQuery,
+  stableStringify,
+} from "~/lib/normalize";
 
 export const meta: MetaFunction = () => [
   { title: "Set up your workspace | Five to Nine" },
@@ -15,6 +21,7 @@ export const meta: MetaFunction = () => [
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { checkPlanLimit, getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
 
@@ -22,7 +29,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect("/app");
   }
 
-  return { session };
+  const [plan, watchlistLimit] = await Promise.all([
+    getUserPlan(env, session.user.id),
+    checkPlanLimit(env, session.user.id, "watchlists"),
+  ]);
+
+  return { session, plan, watchlistLimit };
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
@@ -34,35 +46,51 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const session = await requireSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
-  const query = String(formData.get("query") ?? "").trim();
+  const competitorInput = String(formData.get("website") ?? formData.get("query") ?? "").trim();
+  const competitor = normalizeOnboardingCompetitorInput(competitorInput);
+  const query = competitor.query;
 
   if (intent === "create-watchlist") {
     if (!query) {
       return {
         ok: false,
-        message: "Enter a brand or keyword first.",
+        message: "Enter a competitor website first.",
       };
     }
 
     const watchlistLimit = await checkPlanLimit(env, session.user.id, "watchlists");
     if (!watchlistLimit.allowed) {
+      const isZeroLimit = watchlistLimit.limit === 0;
+
       return {
         ok: false,
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message: "You have reached your workspace watchlist limit.",
+        message: isZeroLimit
+          ? "Watchlists are available on paid plans. Starter is the recommended launch plan for monitoring this competitor."
+          : "You have reached your workspace watchlist limit.",
+        upgradePath: "/#pricing",
       };
     }
 
     const normalizedQuery = normalizeSavedQuery("advertiser", {
       query,
     });
+    const targetFingerprint = competitor.targetId
+      ? hashString(
+          stableStringify({
+            kind: "competitor_website",
+            website: competitor.targetId,
+            query: normalizedQuery,
+          }),
+        )
+      : fingerprintSavedQuery(normalizedQuery);
     const watchlist = await createWatchlist(env, session.user.id, {
       name: `${query} watch`,
       targetType: "advertiser",
-      targetId: query,
-      targetFingerprint: fingerprintSavedQuery(normalizedQuery),
+      targetId: competitor.targetId || query,
+      targetFingerprint,
       targetLabel: query,
     });
 
@@ -83,14 +111,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
 }
 
 export default function AppOnboardRoute() {
+  const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const [query, setQuery] = useState("");
-  const trimmedQuery = query.trim();
+  const [website, setWebsite] = useState("");
+  const trimmedWebsite = website.trim();
+  const competitor = normalizeOnboardingCompetitorInput(trimmedWebsite);
+  const watchlistCapacity = data.watchlistLimit.limit - data.watchlistLimit.current;
+  const canCreateWatchlist = data.watchlistLimit.allowed && data.watchlistLimit.limit > 0;
   const previewParams = buildSearchParams(
     normalizeSavedQuery("advertiser", {
-      query: trimmedQuery,
+      query: competitor.query,
     }),
-  ).toString();
+  );
+  if (trimmedWebsite) {
+    previewParams.set("website", trimmedWebsite);
+  }
 
   return (
     <main className="f9-onboard-page">
@@ -98,43 +133,49 @@ export default function AppOnboardRoute() {
       <section className="f9-container f9-onboard-layout">
         <article className="f9-onboard-card">
           <span className="f9-app-kicker">First-run setup</span>
-          <h1>Start with one brand or keyword you want to watch.</h1>
+          <h1>Add your first competitor website.</h1>
           <p className="f9-muted-copy">
-            Search once to see the ad landscape, then create a watchlist so the workspace has
-            something useful waiting for you next week.
+            Start with one competitor site. Five to Nine finds the advertiser search, creates the watchlist, and starts
+            keeping proof.
           </p>
 
           {actionData?.message ? (
             <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
               <p>{actionData.message}</p>
+              {!actionData.ok && "upgradePath" in actionData && actionData.upgradePath ? (
+                <Link className="f9-text-link" to={actionData.upgradePath}>
+                  View pricing
+                </Link>
+              ) : null}
             </div>
           ) : null}
 
           <div className="f9-onboard-steps">
             <section className="f9-onboard-step">
               <span className="f9-app-kicker">Step 1</span>
-              <h2>What do you want to track?</h2>
+              <h2>Paste the site you want to watch</h2>
               <Form action="/search" className="f9-auth-form" method="get">
                 <input name="mode" type="hidden" value="advertiser" />
                 <input name="country" type="hidden" value="India" />
                 <input name="platform" type="hidden" value="all" />
                 <input name="creativeType" type="hidden" value="all" />
                 <input name="status" type="hidden" value="all" />
+                <input name="query" type="hidden" value={competitor.query} />
                 <label className="f9-field">
-                  <span>Brand or keyword</span>
+                  <span>Competitor website</span>
                   <input
-                    name="query"
-                    onChange={(event) => setQuery(event.currentTarget.value)}
-                    placeholder="boAt, Meesho, skincare serum, seller acquisition"
-                    value={query}
+                    name="website"
+                    onChange={(event) => setWebsite(event.currentTarget.value)}
+                    placeholder="https://competitor.com"
+                    value={website}
                   />
                 </label>
                 <div className="f9-action-row">
-                  <button className="f9-secondary-button" disabled={!trimmedQuery} type="submit">
-                    Preview search
+                  <button className="f9-secondary-button" disabled={!trimmedWebsite} type="submit">
+                    Preview market moves
                   </button>
                   <small className="f9-muted-copy">
-                    This opens the public search view with the same query.
+                    We infer the advertiser name, but you can edit it on the search page.
                   </small>
                 </div>
               </Form>
@@ -142,17 +183,36 @@ export default function AppOnboardRoute() {
 
             <section className="f9-onboard-step">
               <span className="f9-app-kicker">Step 2</span>
-              <h2>Create your first watchlist</h2>
-              <p className="f9-muted-copy">
-                One click is enough to start tracking the same query inside the workspace.
-              </p>
-              <Form className="f9-auth-form" method="post">
-                <input name="intent" type="hidden" value="create-watchlist" />
-                <input name="query" type="hidden" value={trimmedQuery} />
-                <button className="f9-primary-button" disabled={!trimmedQuery} type="submit">
-                  Create watchlist for {trimmedQuery || "your query"}
-                </button>
-              </Form>
+              {canCreateWatchlist ? (
+                <>
+                  <h2>Create your first watchlist</h2>
+                  <p className="f9-muted-copy">
+                    One click starts tracking this competitor inside the workspace.
+                    You have {watchlistCapacity} watchlist{watchlistCapacity === 1 ? "" : "s"} available.
+                  </p>
+                  <Form className="f9-auth-form" method="post">
+                    <input name="intent" type="hidden" value="create-watchlist" />
+                    <input name="website" type="hidden" value={trimmedWebsite} />
+                    <button className="f9-primary-button" disabled={!trimmedWebsite} type="submit">
+                      Create watchlist for {competitor.query || "this competitor"}
+                    </button>
+                  </Form>
+                </>
+              ) : (
+                <>
+                  <h2>Choose a plan to start monitoring</h2>
+                  <p className="f9-muted-copy">
+                    Free accounts can preview search. Starter is the recommended launch plan for retained watchlists
+                    and weekly proof briefs.
+                  </p>
+                  <div className="f9-action-row">
+                    <Link className="f9-primary-button" to="/#pricing">
+                      View plans
+                    </Link>
+                    <span className="f9-muted-copy">Current plan: {data.plan}</span>
+                  </div>
+                </>
+              )}
             </section>
           </div>
 
@@ -171,4 +231,54 @@ export default function AppOnboardRoute() {
       </section>
     </main>
   );
+}
+
+function normalizeOnboardingCompetitorInput(value: string) {
+  const raw = value.trim();
+  if (!raw) {
+    return {
+      query: "",
+      targetId: "",
+    };
+  }
+
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const url = new URL(candidate);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (!host.includes(".")) {
+      return {
+        query: raw,
+        targetId: raw,
+      };
+    }
+
+    url.hash = "";
+    url.search = "";
+    const path = url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "");
+    const root = host.split(".").find((part) => part && part !== "www") ?? host;
+    const query = root
+      .replace(/[-_]+/g, " ")
+      .replace(/\b(official|store|shop|india|in)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return {
+      query: titleCase(query || host),
+      targetId: `${url.protocol}//${host}${path}`,
+    };
+  } catch {
+    return {
+      query: raw,
+      targetId: raw,
+    };
+  }
+}
+
+function titleCase(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }

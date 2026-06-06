@@ -64,12 +64,16 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
 
   return (
     <div className="f9-auth-card">
-      <span>{isSignup ? "Create workspace" : "Welcome back"}</span>
-      <h2>{isSignup ? "Start a proof-backed monitoring workspace." : "Sign in to Five to Nine."}</h2>
+      <span>{isSignup ? "Create your watch desk" : "Welcome back"}</span>
+      <h2>
+        {isSignup
+          ? "Start tracking competitor offer changes."
+          : "Return to your competitor watch desk."}
+      </h2>
       <p>
         {isSignup
-          ? "Saved searches, watchlists, and weekly digests live behind your account so your team can keep the market trail reusable."
-          : "Pick up your saved research, watchlists, and share links where you left them."}
+          ? "Save competitor searches, launch watchlists, capture proof, and keep digests and share links reusable."
+          : "Pick up your watchlists, proof captures, digests, and share links where you left them."}
       </p>
 
       <form className="f9-auth-form" onSubmit={handleSubmit}>
@@ -120,7 +124,7 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
           {pending
             ? "Working..."
             : isSignup
-              ? "Create workspace"
+              ? "Create watch desk"
               : "Sign in"}
         </button>
       </form>

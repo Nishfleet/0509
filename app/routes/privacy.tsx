@@ -25,10 +25,7 @@ export default function PrivacyRoute() {
         <article className="f9-legal-card">
           <span className="f9-app-kicker">Privacy</span>
           <h1>Five to Nine privacy basics.</h1>
-          <p>
-            This page describes current product behavior and should stay narrower than any future legal policy
-            reviewed by counsel.
-          </p>
+          <p>This is a plain-English summary of the current product behavior.</p>
 
           <LegalBlock title="What we collect">
             <p>
@@ -40,19 +37,19 @@ export default function PrivacyRoute() {
           <LegalBlock title="Proof data">
             <p>
               The product may store ad records, landing-page snapshots, extracted text, screenshots, HTML, timestamps,
-              source URLs, and delivery attempts so teams can verify what changed. Source status must stay visible when
-              discovery is cached, degraded, or freshly verified.
+              source URLs, and delivery attempts so teams can verify what changed. Tracking status stays visible when
+              discovery is recent, delayed, or freshly verified.
             </p>
           </LegalBlock>
 
           <LegalBlock title="Delivery data">
             <p>
-              Email delivery uses configured email infrastructure. WhatsApp delivery must remain behind opt-in,
-              template-readiness, validation, and webhook-readiness checks before customer rollout.
+              Email delivery uses configured email infrastructure. WhatsApp delivery, when enabled, requires opt-in,
+              template readiness, validation, and webhook readiness.
             </p>
           </LegalBlock>
 
-          <LegalBlock title="What we do not claim yet">
+          <LegalBlock title="Security and compliance claims">
             <p>
               We do not claim SOC 2, HIPAA, GDPR compliance, zero retention, no training, or similar guarantees until
               the matching policy, vendor configuration, and product behavior are verified.
@@ -61,8 +58,8 @@ export default function PrivacyRoute() {
 
           <LegalBlock title="Support">
             <p>
-              For access, correction, deletion, billing, or security questions, use the contact path that gave you
-              access to the workspace.
+              For access, correction, deletion, billing, or security questions, use the support or account contact path
+              that gave you access to the workspace.
             </p>
           </LegalBlock>
         </article>

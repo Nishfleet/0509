@@ -219,7 +219,7 @@ export function analyzeMetaLibraryHtml(html) {
   const mentionsFacebook = text.includes("facebook") || text.includes("meta ad library");
   const renderedText = stripHtml(html);
   const sourceMatch = renderedText.match(
-    /(?:source:\s*|meta ads beta\s*[·-]\s*)(cached live results|live ad library capture|customer api fallback|api fallback|demo dataset)/i,
+    /(?:source:\s*|tracking path:\s*|meta ads beta\s*[·-]\s*)(cached live results|live ad library capture|customer api fallback|workspace meta access|api fallback|demo dataset)/i,
   );
   const resultCountMatch = stripHtml(html).match(/\b(\d+)\s+ads?\s+on\s+this\s+page\b/i);
 
@@ -236,7 +236,7 @@ export function analyzeMetaLibraryHtml(html) {
       text.includes("access denied") ||
       text.includes("temporarily blocked") ||
       text.includes("unusual activity"),
-    degraded: text.includes("commercial discovery degraded"),
+    degraded: text.includes("commercial discovery degraded") || text.includes("live search is delayed"),
     sourceLabel: sourceMatch?.[1] ? normalizeCurrent0509SourceLabel(sourceMatch[1]) : null,
     resultCount: resultCountMatch?.[1] ? Number(resultCountMatch[1]) : null,
     noAdsFound: text.includes("no ads found for this query"),
@@ -249,6 +249,9 @@ export function analyzeMetaLibraryHtml(html) {
 function normalizeCurrent0509SourceLabel(value) {
   const normalized = value.trim().toLowerCase();
   if (normalized === "customer api fallback") {
+    return "API fallback";
+  }
+  if (normalized === "workspace meta access") {
     return "API fallback";
   }
   if (normalized === "api fallback") {
@@ -432,9 +435,6 @@ function classifyCurrent0509Outcome(analysis, ok) {
   if (analysis.rateLimited) {
     return "rate_limited";
   }
-  if (analysis.loginWall || analysis.blockedLikely) {
-    return "blocked";
-  }
   if (analysis.sourceLabel === "Demo dataset") {
     return "error";
   }
@@ -448,6 +448,9 @@ function classifyCurrent0509Outcome(analysis, ok) {
     ((analysis.resultCount ?? 0) > 0 || analysis.matchCount > 0)
   ) {
     return "ok";
+  }
+  if (analysis.loginWall || analysis.blockedLikely) {
+    return "blocked";
   }
   return classifyHtmlOutcome(analysis, ok);
 }
@@ -501,11 +504,11 @@ export async function runCurrent0509Probe(target, options = {}) {
       sourceLabel: analysis.sourceLabel,
       url,
       note: analysis.degraded
-        ? "0509 rendered its degraded commercial discovery state."
+        ? "0509 rendered its delayed search state."
         : analysis.noAdsFound || analysis.resultCount === 0
-          ? `Source: ${analysis.sourceLabel ?? "unknown"} returned zero rendered results`
+          ? `Tracking path: ${analysis.sourceLabel ?? "unknown"} returned zero rendered results`
         : analysis.sourceLabel
-          ? `Source: ${analysis.sourceLabel}`
+          ? `Tracking path: ${analysis.sourceLabel}`
           : null,
     };
   } catch (error) {

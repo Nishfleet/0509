@@ -2,7 +2,7 @@ const SITE_ORIGIN = "https://0509.in";
 const SITE_NAME = "Five to Nine";
 const SOCIAL_IMAGE_PATH = "/social-card.svg";
 const SOCIAL_IMAGE_URL = `${SITE_ORIGIN}${SOCIAL_IMAGE_PATH}`;
-const SOCIAL_IMAGE_ALT = "Five to Nine source-backed market intelligence preview";
+const SOCIAL_IMAGE_ALT = "Five to Nine competitor offer monitoring preview";
 
 export function canonicalUrl(pathname: string): string {
   const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
@@ -60,7 +60,7 @@ Sitemap: ${canonicalUrl("/sitemap.xml")}
 
 const SOCIAL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">Five to Nine</title>
-  <desc id="desc">Market intelligence workspace preview for Five to Nine.</desc>
+  <desc id="desc">Competitor offer monitoring workspace preview for Five to Nine.</desc>
   <defs>
     <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
       <stop offset="0" stop-color="#52c9df"/>
@@ -78,15 +78,15 @@ const SOCIAL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" he
   </g>
   <g font-family="Inter, Arial, sans-serif" font-weight="800">
     <text x="86" y="92" fill="#fff" font-size="42">Five to Nine</text>
-    <text x="86" y="222" fill="#07111a" font-size="86">Market intelligence</text>
-    <text x="86" y="318" fill="#07111a" font-size="86">to grow revenue.</text>
-    <text x="88" y="418" fill="#344052" font-size="34" font-weight="600">Competitor ads, offers, landing pages, and category shifts.</text>
+    <text x="86" y="222" fill="#07111a" font-size="78">Know when competitors</text>
+    <text x="86" y="318" fill="#07111a" font-size="78">change the offer.</text>
+    <text x="88" y="418" fill="#344052" font-size="34" font-weight="600">Watch ads and landing pages with proof.</text>
     <rect x="780" y="118" width="340" height="330" rx="34" fill="#ffffff" opacity="0.9"/>
     <text x="818" y="180" fill="#07111a" font-size="28">Signal desk</text>
     <path d="M820 260 L884 230 L944 246 L1014 186 L1080 206" fill="none" stroke="#635bff" stroke-width="7" stroke-linecap="round"/>
-    <text x="818" y="340" fill="#425466" font-size="26" font-weight="700">14 category moves</text>
-    <text x="818" y="386" fill="#425466" font-size="26" font-weight="700">9 action notes</text>
-    <text x="818" y="432" fill="#425466" font-size="26" font-weight="700">05:09 decision scan</text>
+    <text x="818" y="340" fill="#425466" font-size="26" font-weight="700">Offer changed</text>
+    <text x="818" y="386" fill="#425466" font-size="26" font-weight="700">Landing page saved</text>
+    <text x="818" y="432" fill="#425466" font-size="26" font-weight="700">Proof ready</text>
   </g>
 </svg>
 `;

@@ -48,6 +48,12 @@ describe("marketing rebuild", () => {
       "Manrope",
       "Rs 2,500",
       "Rs 7,500",
+      "Dodo preview",
+      "Buyer currency is served from checkout preview.",
+      "Prices are loaded from Dodo",
+      "Meta beta access",
+      "source states separated",
+      "source trail per move",
     ];
 
     for (const signal of deadSignals) {
@@ -62,6 +68,27 @@ describe("marketing rebuild", () => {
     expect(brandWordmark).toContain("<span>nine</span>");
     expect(marketingRoute).not.toContain("&gt;");
     expect(marketingRoute).toContain('className="f9-link-arrow"');
+  });
+
+  it("keeps the public homepage focused on the customer pain", () => {
+    expect(marketingRoute).toContain("Know when competitors change the offer.");
+    expect(marketingRoute).toContain("Stop finding out after the sales call.");
+    expect(marketingRoute).toContain("Sample brief");
+    expect(marketingRoute).toContain("Visible offer text changed");
+    expect(marketingRoute).toContain("CTA changed on the destination page");
+    expect(marketingRoute).toContain("Recommended launch plan");
+    expect(marketingRoute).toContain("Start with Starter");
+    expect(marketingRoute).toContain("Weekly proof briefs");
+    expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
+    expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
+    expect(marketingRoute).not.toContain("Proof-first monitoring");
+    expect(marketingRoute).not.toContain("Start with Scout");
+    expect(marketingRoute).not.toContain("Dodo price syncing");
+    expect(marketingRoute).not.toContain("No unlimited claims");
+    expect(marketingRoute).not.toContain("3 offer changes ready");
+    expect(marketingRoute).not.toContain("Nykaa changed onboarding bundle");
+    expect(marketingRoute).not.toContain("boAt removed COD offer");
+    expect(marketingRoute).not.toContain("Meesho added discount hook");
   });
 
   it("has incinerated the stale lower-page system", () => {

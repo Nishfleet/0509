@@ -1,24 +1,24 @@
 # Five to Nine Launch Readiness
 
-Last checked: 2026-05-15
+Last checked: 2026-06-04
 
 ## Current Verdict
 
-Five to Nine is ready for a narrow paid pilot, not a broad public launch.
+Five to Nine is ready to onboard the first paid customer.
 
-The app has real product surface: public search, authenticated workspace, watchlists, collections, daily briefs, weekly digests, reports, share/export flows, operator health, Dodo local-pricing preview scaffolding, and proof-first monitoring infrastructure.
+The app has real product surface: public competitor website search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo local-pricing preview/checkout, Postmark email delivery, and proof-first monitoring infrastructure.
 
-The broad-launch blockers are Resend domain verification, Dodo 0509 production setup, and enough production evidence that fresh discovery, proof capture, and digest delivery stay reliable.
+No first-customer onboarding blocker was found in the 2026-06-04 production pass. Meta ads tracking still stays labeled beta until the historical reliability gate graduates.
 
-## Live Blockers Found On 2026-05-15
+## Live Evidence From 2026-06-04
 
-- `npm run canary:prod` passes health and fresh-live bypass, but fails ops readiness with `no_recent_proof_capture` and `no_recent_digest_sent`.
-- The private digest canary is pinned to `LAUNCH_CANARY_EMAIL=me@inish.in`, but Resend rejects delivery because `0509.in` is not verified in Resend.
-- The live Resend API key is send-only; it cannot create or verify the domain through `/api/ops/resend-domain`.
-- Remote D1 migrations are fully applied; `user_plan`, legacy billing event tables, and `rate_limit_events` tables/columns exist.
-- Remote Worker secrets include the shared Dodo key, 0509 brand id, Starter/Agency product ids, proof-pack product ids, and webhook secret. Scout monthly/yearly product-id secrets still need to be added before Scout can be purchasable.
-- The platform `META_AD_LIBRARY_TOKEN` is expired. Remote provider state shows it expired on 2026-04-19 and the browser path is currently `cache_only` / `empty_result` with repeated login-wall or empty extraction failures.
-- `npm run provider:bakeoff:launch -- --provider current_0509 --query nykaa` now returns fresh live Ad Library results after the text-card extractor fix, but Meta ads tracking remains beta until the production success window clears the historical failures.
+- `npm run typecheck`, `npm test`, `npm run build`, and `npm audit --omit=dev --audit-level=moderate` pass.
+- Production health passes on `https://0509.in`, `https://www.0509.in`, and `https://api.0509.in`.
+- `npm run canary:prod` passes health, fresh-live bypass, ops readiness, and current Meta ads beta checks.
+- `npm run provider:bakeoff:launch` proves fresh live Ad Library results through the current 0509 path.
+- A fresh private launch-readiness canary captured browser-rendered proof and sent a Postmark email digest.
+- A fresh disposable customer flow passed: account creation, paid unlock via signed Dodo webhook canary, onboarding watchlist creation, competitor website watch setup, watchlist edit, delivery target add, refresh, and share page.
+- Dodo checkout creation works for a fresh account and returns a hosted Dodo checkout URL before payment.
 
 ## Hard Launch Gates
 
@@ -32,8 +32,8 @@ The broad-launch blockers are Resend domain verification, Dodo 0509 production s
 - `npm run provider:bakeoff:launch` is green for `current_0509`, proving the public app path returns fresh live Ad Library results before Meta ads can leave beta.
 - `npm audit --omit=dev --audit-level=moderate` passes.
 - Privacy and terms pages are present in the active React Router app.
-- Public copy does not claim live checkout, verified WhatsApp delivery, SOC 2, HIPAA, GDPR, zero retention, no training, or unverified model/provider behavior.
-- Public pricing display must come from Dodo local-price preview once Dodo 0509 product ids, signed webhooks, and live secrets are verified.
+- Public copy does not claim verified WhatsApp delivery, SOC 2, HIPAA, GDPR, zero retention, no training, or unverified model/provider behavior.
+- Public pricing display comes from Dodo local-price preview. Dodo checkout creation and signed webhook grant canaries must remain green.
 - Auth runtime stays on Better Auth + D1 unless a future B2B auth requirement justifies Stytch.
 - Meta ads tracking is labeled beta in customer-facing setup/status surfaces until discovery resilience is proven.
 - Customer-facing Meta API fallback uses customer-owned Meta access. Customer tokens are test-before-save and stored encrypted. The platform `META_AD_LIBRARY_TOKEN` stays diagnostic-only unless `ALLOW_PLATFORM_META_API_FALLBACK=true` is deliberately configured as an exception.
@@ -57,14 +57,12 @@ The broad-launch blockers are Resend domain verification, Dodo 0509 production s
 
 ## Pilot-Safe Offer
 
-Use this framing until the fresh discovery canary passes:
+Use this framing for the first customer:
 
-> Five to Nine helps growth teams turn competitor ad checks into proof-backed monitoring. Search stays public. Pilot workspaces save queries, track changes, label source status honestly, and prepare email-first proof reports.
+> Five to Nine helps growth teams turn competitor website checks into proof-backed monitoring. Enter a competitor website, find the matching Meta ads, capture landing-page proof, and get email-first change reports with source status shown honestly.
 
 ## Not Ready To Claim
 
-- Broad self-serve launch.
-- Live checkout or automatic subscription management until Dodo 0509 brand id, product ids, secrets, D1 migration, and signed webhooks are verified in test mode.
 - Non-beta Meta ads tracking before the beta graduation gate says it is ready to review.
 - Customer WhatsApp delivery unless opt-in, template readiness, provider sends, and webhook reconciliation are verified.
 - Untested customer Meta tokens. Customer token paste is allowed only through the guarded setup flow: test first, store encrypted, and keep Meta ads tracking labeled beta.
@@ -72,4 +70,4 @@ Use this framing until the fresh discovery canary passes:
 
 ## Recommended Next Slice
 
-Fix fresh discovery reliability or choose a commercial data provider. The launch gate should stay red until `npm run canary:prod` passes against `https://0509.in` without stale monitoring/proof/digest signals, and Meta ads should stay beta until `npm run provider:bakeoff:launch` proves fresh live discovery without cached/degraded/demo source status.
+Keep onboarding narrow, watch production events during the first customer setup, and keep Meta ads labeled beta until the seven-day success window clears the historical failures.
