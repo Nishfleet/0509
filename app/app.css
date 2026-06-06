@@ -494,6 +494,30 @@ img {
   line-height: 1.5;
 }
 
+.f9-public-status-note {
+  display: grid;
+  gap: 6px;
+  max-width: 560px;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border: 1px solid rgba(6, 22, 41, 0.12);
+  border-left: 4px solid #0aa982;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--f9-ink);
+  box-shadow: 0 14px 32px rgba(6, 22, 41, 0.08);
+}
+
+.f9-public-status-note strong {
+  font-size: 0.94rem;
+}
+
+.f9-public-status-note span {
+  color: var(--f9-muted);
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
 .f9-email-cta {
   display: flex;
   align-items: center;

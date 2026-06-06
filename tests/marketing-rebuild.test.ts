@@ -37,6 +37,15 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toMatch(/pilot|manual|fit review|self-serve|not live/i);
   });
 
+  it("labels the public beta and keeps public search account-gated", () => {
+    expect(marketingRoute).toContain("Readiness-gated beta");
+    expect(marketingRoute).toContain("Launch status: readiness-gated.");
+    expect(marketingRoute).toContain("Search and monitoring require an account");
+    expect(marketingRoute).toContain('to={rootData.session ? "/search" : "/auth/signup"}');
+    expect(marketingRoute).not.toContain('<Link to="/search">Search</Link>');
+    expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
+  });
+
   it("blocks the old public home from coming back", () => {
     const deadSignals = [
       "The market moves after you log off",

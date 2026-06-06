@@ -135,7 +135,7 @@ export default function MarketingRoute() {
 
           <nav className="f9-nav-links" aria-label="Primary">
             <a href="#platform">Products</a>
-            <Link to="/search">Search</Link>
+            <Link to={rootData.session ? "/search" : "/auth/signup"}>Account search</Link>
             <a href="#platform">Signals</a>
             <a href="#pricing">Pricing</a>
           </nav>
@@ -157,9 +157,9 @@ export default function MarketingRoute() {
 
         <div className="f9-container f9-hero-layout">
           <div className="f9-hero-copy">
-            <Link className="f9-announcement" to="/search">
-              <strong>Competitor offer watch is live</strong>
-              <span>Enter a website and start tracking</span>
+            <Link className="f9-announcement" to={rootData.session ? "/search" : "/auth/signup"}>
+              <strong>Readiness-gated beta</strong>
+              <span>Search and monitoring require an account</span>
               <em aria-hidden="true" />
             </Link>
 
@@ -169,6 +169,14 @@ export default function MarketingRoute() {
               Enter a competitor website. Five to Nine watches ads and landing pages, captures
               evidence, and tells your team when visible offer text, CTAs, forms, or onboarding page copy move.
             </p>
+
+            <div className="f9-public-status-note" role="note">
+              <strong>Launch status: readiness-gated.</strong>
+              <span>
+                Billing is verified; broad launch stays gated by fresh proof capture, digest delivery,
+                and provider canaries.
+              </span>
+            </div>
 
             <Form className="f9-email-cta" method="get" action={primaryCta}>
               {rootData.session ? (
