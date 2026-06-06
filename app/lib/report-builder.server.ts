@@ -6,6 +6,10 @@ import {
 } from "~/lib/landing-page-display";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
 import {
+  buildCollectionInsightDepth,
+  buildWatchlistInsightDepth,
+} from "~/lib/insight-depth";
+import {
   createReportId,
   type ReportDocument,
   type ReportField,
@@ -69,6 +73,7 @@ export function buildCollectionReport(input: {
       { label: "Countries", value: summarizeDistinct(rows.flatMap((row) => row._meta.countries)) },
       { label: "Platforms", value: summarizeDistinct(rows.flatMap((row) => row._meta.platforms)) },
     ],
+    insightDepth: buildCollectionInsightDepth(input.items),
     rows: rows.map(stripInternalMeta),
   };
 }
@@ -118,6 +123,7 @@ export function buildWatchlistReport(input: {
       { label: "Linked ads", value: String(linkedAds) },
       { label: "Event types", value: eventTypes },
     ],
+    insightDepth: buildWatchlistInsightDepth(input.events),
     rows: rows.map(stripInternalMeta),
   };
 }

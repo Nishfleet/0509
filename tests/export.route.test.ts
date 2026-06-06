@@ -202,6 +202,7 @@ describe("authenticated export route", () => {
     const body = await response.json() as {
       resourceType: string;
       collection: CollectionRecord;
+      insightDepth: { topHooks: Array<{ label: string; count: number }> };
       items: Array<{ advertiser: string; hook: string; tags: string[] }>;
     };
 
@@ -209,6 +210,10 @@ describe("authenticated export route", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body.resourceType).toBe("collection");
     expect(body.collection.name).toBe("Beauty proof");
+    expect(body.insightDepth.topHooks[0]).toMatchObject({
+      label: "Routine-first bundle",
+      count: 1,
+    });
     expect(body.items[0]).toMatchObject({
       advertiser: "Nykaa",
       hook: "Routine-first bundle",
@@ -223,6 +228,8 @@ describe("authenticated export route", () => {
 
     expect(response.headers.get("content-type")).toContain("text/markdown");
     expect(body).toContain("*Five to Nine watchlist: Nykaa watch*");
+    expect(body).toContain("*Insight depth*");
+    expect(body).toContain("_Landing-page history_");
     expect(body).toContain("Priority: Medium priority (84/100)");
     expect(body).toContain("Next move: Next review:");
     expect(body).toContain("Evidence: proof capture");
@@ -233,11 +240,13 @@ describe("authenticated export route", () => {
     const response = await loadExport("https://0509.in/export/digest/digest-1?format=json");
     const body = await response.json() as {
       resourceType: string;
+      insightDepth: { landingPageHistory: Array<{ detail: string }> };
       items: Array<{ intelligence: { priorityBand: string; recommendedAction: string; proofTrail: string } }>;
     };
 
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(body.resourceType).toBe("digest");
+    expect(body.insightDepth.landingPageHistory[0]?.detail).toBe("The routine bundle offer changed.");
     expect(body.items[0]?.intelligence).toMatchObject({
       priorityBand: "High priority",
       recommendedAction: "Today: brief one counter-test.",
@@ -252,6 +261,7 @@ describe("authenticated export route", () => {
 
     expect(response.headers.get("content-type")).toContain("text/markdown");
     expect(body).toContain("*Five to Nine digest:");
+    expect(body).toContain("*Insight depth*");
     expect(body).toContain("Nykaa watch: Landing page offer changed");
     expect(body).toContain("Next move: Today: brief one counter-test.");
     expect(body).toContain("Evidence: proof capture - source-backed - 18/4/2026");

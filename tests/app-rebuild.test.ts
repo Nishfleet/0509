@@ -11,10 +11,11 @@ const watchlistsRoute = readFileSync("app/routes/app.watchlists.tsx", "utf8");
 const reportsRoute = readFileSync("app/routes/app.reports.tsx", "utf8");
 const opsRoute = readFileSync("app/routes/app.ops.tsx", "utf8");
 const digestIntelligence = readFileSync("app/components/digest-intelligence.tsx", "utf8");
+const insightDepthPanel = readFileSync("app/components/insight-depth-panel.tsx", "utf8");
 const reportView = readFileSync("app/components/report-view.tsx", "utf8");
 const signOutButton = readFileSync("app/components/sign-out-button.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
-const appSurface = `${appLayout}\n${dashboardRoute}\n${onboardRoute}\n${collectionsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${reportView}\n${signOutButton}`;
+const appSurface = `${appLayout}\n${dashboardRoute}\n${onboardRoute}\n${collectionsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${insightDepthPanel}\n${reportView}\n${signOutButton}`;
 const appClasses = Array.from(appSurface.matchAll(/className=(?:"([^"]+)"|{`([^`]+)`})/g)).flatMap((match) =>
   (match[1] ?? match[2])
     .split(/\s+/)
@@ -77,6 +78,10 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("?format=slack");
     expect(appSurface).toContain("API JSON");
     expect(appSurface).toContain("Slack copy");
+    expect(appSurface).toContain("Insight depth");
+    expect(appSurface).toContain("Top hooks");
+    expect(appSurface).toContain("Media mix");
+    expect(appSurface).toContain("Landing-page history");
   });
 
   it("does not ship the legacy website or workspace selectors", () => {

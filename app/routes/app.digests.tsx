@@ -8,6 +8,8 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
+import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { buildDigestInsightDepth } from "~/lib/insight-depth";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -127,6 +129,9 @@ export default function DigestsRoute() {
     errorMessage: string | null;
     createdAt: string;
   }> = data.canAccessDigests ? (data.selectedDigestAttempts ?? []) : [];
+  const insightDepth = data.canAccessDigests && data.selectedDigest
+    ? buildDigestInsightDepth(data.selectedDigest.items)
+    : null;
 
   return (
     <section className="f9-app-stack">
@@ -262,6 +267,8 @@ export default function DigestsRoute() {
                     </p>
                   )}
                 </section>
+
+                {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
                 <DigestMovementSummary items={data.selectedDigest.items} />
 

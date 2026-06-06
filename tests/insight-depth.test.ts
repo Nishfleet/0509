@@ -1,0 +1,154 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  buildCollectionInsightDepth,
+  buildDigestInsightDepth,
+  buildWatchlistInsightDepth,
+  formatInsightDepthMarkdown,
+} from "~/lib/insight-depth";
+import type { AdRecord, CollectionItemRecord, DigestItemRecord, WatchEventRecord } from "~/lib/types";
+
+const ad: AdRecord = {
+  metaAdId: "meta-1",
+  advertiser: "Nykaa",
+  body: "Build your routine.",
+  previewHeadline: "Routine bundle",
+  previewSubhead: "Skincare",
+  hook: "Routine-first bundle",
+  offer: "Bundle and save",
+  cta: "Build your routine",
+  format: "image",
+  languageLabel: "English",
+  destinationType: "website",
+  landingPageUrl: "https://nykaa.example/routine",
+  adSnapshotUrl: "https://facebook.example/ad",
+  countries: ["India"],
+  platforms: ["Instagram", "Facebook"],
+  firstSeenAt: "2026-04-10T00:00:00.000Z",
+  lastSeenAt: "2026-04-18T00:00:00.000Z",
+  active: true,
+  researchSummary: "Nykaa is repeating a routine hook.",
+  source: "meta_library_browser",
+  analysisFields: [],
+  landingPage: {
+    rawUrl: "https://nykaa.example/routine?utm=ad",
+    canonicalUrl: "https://nykaa.example/routine",
+    rawHeadline: "Build your skincare routine",
+    normalizedHeadline: "build your skincare routine",
+    normalizedHeadlineHash: "headline-hash",
+    ctaText: "Build your routine",
+    priceText: "From ₹799",
+    formPresent: false,
+    captureMethod: "landing_page_fetch",
+    capturedAt: "2026-04-18T00:00:00.000Z",
+    artifactKey: "landing-pages/nykaa.html",
+  },
+};
+
+const item: CollectionItemRecord = {
+  id: "item-1",
+  collectionId: "collection-1",
+  adId: "meta-1",
+  note: null,
+  createdAt: "2026-04-18T00:00:00.000Z",
+  updatedAt: "2026-04-18T00:00:00.000Z",
+  ad,
+  tags: ["beauty"],
+};
+
+const event: WatchEventRecord = {
+  id: "event-1",
+  watchlistId: "watch-1",
+  runId: "run-1",
+  eventType: "landing_page_offer_changed",
+  status: "confirmed",
+  importanceScore: 88,
+  adId: "meta-1",
+  baselineFromRunId: null,
+  candidateId: "candidate-1",
+  proofCaptureId: "proof-1",
+  title: "Landing page offer changed",
+  summary: "Offer changed from sale-led to routine-led.",
+  metadata: {
+    from: "Sale-led hero",
+    to: "Routine-first bundle",
+  },
+  confirmedAt: "2026-04-19T00:00:00.000Z",
+  suppressedAt: null,
+  invalidatedAt: null,
+  lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+  createdAt: "2026-04-19T00:00:00.000Z",
+};
+
+const digestItem: DigestItemRecord = {
+  id: "digest-item-1",
+  digestRunId: "digest-1",
+  watchlistId: "watch-1",
+  watchlistName: "Nykaa watch",
+  eventType: "landing_page_offer_changed",
+  title: "Landing page offer changed",
+  summary: "Offer changed from sale-led to routine-led.",
+  metadata: {
+    from: "Sale-led hero",
+    to: "Routine-first bundle",
+  },
+  createdAt: "2026-04-19T00:00:00.000Z",
+};
+
+describe("insight depth", () => {
+  it("summarizes saved collection proof into hooks, media mix, timeline, and landing-page context", () => {
+    const summary = buildCollectionInsightDepth([item]);
+
+    expect(summary.topHooks[0]).toMatchObject({
+      label: "Routine-first bundle",
+      count: 1,
+      detail: "Nykaa",
+    });
+    expect(summary.mediaMix.map((entry) => entry.label)).toEqual(["Facebook", "Instagram"]);
+    expect(summary.creativeTimeline[0]).toMatchObject({
+      label: "Nykaa",
+      detail: "Bundle and save",
+    });
+    expect(summary.landingPageHistory[0]?.detail).toContain("Build your skincare routine");
+    expect(summary.landingPageHistory[0]?.detail).toContain("CTA: Build your routine");
+  });
+
+  it("falls back to Meta media mix when legacy collection snapshots lack platforms", () => {
+    const legacyAd = { ...ad } as Partial<AdRecord>;
+    delete legacyAd.platforms;
+
+    const summary = buildCollectionInsightDepth([
+      { ...item, ad: legacyAd as AdRecord },
+    ]);
+
+    expect(summary.mediaMix[0]).toMatchObject({
+      label: "Meta",
+      count: 1,
+      detail: "Nykaa",
+    });
+  });
+
+  it("summarizes watch events into landing-page change history", () => {
+    const summary = buildWatchlistInsightDepth([event]);
+
+    expect(summary.topHooks[0]).toMatchObject({
+      label: "Pending",
+      detail: "No repeated hooks yet.",
+    });
+    expect(summary.mediaMix[0]).toMatchObject({ label: "Landing page", count: 1 });
+    expect(summary.landingPageHistory[0]).toMatchObject({
+      label: "Landing page offer changed",
+      detail: "Sale-led hero -> Routine-first bundle",
+    });
+  });
+
+  it("formats digest insight depth for Slack-ready markdown", () => {
+    const summary = buildDigestInsightDepth([digestItem]);
+    const markdown = formatInsightDepthMarkdown(summary);
+
+    expect(markdown).toContain("*Insight depth*");
+    expect(markdown).toContain("_Top hooks_");
+    expect(markdown).toContain("_Landing-page history_");
+    expect(markdown).toContain("Sale-led hero -> Routine-first bundle");
+  });
+});
