@@ -13,14 +13,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { getCustomerMetaConnection } = await import("~/lib/data.server");
+  const { getCustomerMetaConnection, listCustomerApiKeys } = await import("~/lib/data.server");
   const { getMetaAdsBetaReadiness } = await import("~/lib/meta-ads-readiness.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const [connection, discoveryStatus, betaReadiness] = await Promise.all([
+  const [connection, discoveryStatus, betaReadiness, apiKeys] = await Promise.all([
     getCustomerMetaConnection(env, session.user.id),
     resolveCommercialAdSourceStatus(env),
     getMetaAdsBetaReadiness(env),
+    listCustomerApiKeys(env, session.user.id),
   ]);
 
   return {
@@ -37,6 +38,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : null,
     discoveryStatus,
     betaReadiness,
+    apiKeys: apiKeys.map((apiKey) => ({
+      id: apiKey.id,
+      name: apiKey.name,
+      keyPrefix: apiKey.keyPrefix,
+      lastUsedAt: apiKey.lastUsedAt,
+      revokedAt: apiKey.revokedAt,
+      createdAt: apiKey.createdAt,
+    })),
   };
 }
 
@@ -77,6 +86,33 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: true,
       message: "Backup Meta access disconnected.",
+    };
+  }
+
+  if (intent === "create-api-key") {
+    const { createCustomerApiKey } = await import("~/lib/api-keys.server");
+    const name = String(formData.get("apiKeyName") ?? "");
+    const result = await createCustomerApiKey(env, session.user.id, name);
+
+    return {
+      ok: true,
+      message: "API key created. Copy it now; it will not be shown again.",
+      apiKeySecret: result.secret,
+      apiKeyPrefix: result.apiKey.keyPrefix,
+    };
+  }
+
+  if (intent === "revoke-api-key") {
+    const { revokeCustomerApiKey } = await import("~/lib/data.server");
+    const apiKeyId = String(formData.get("apiKeyId") ?? "");
+    await revokeCustomerApiKey(env, {
+      userId: session.user.id,
+      apiKeyId,
+    });
+
+    return {
+      ok: true,
+      message: "API key revoked.",
     };
   }
 
@@ -222,6 +258,112 @@ export default function AppSourcesRoute() {
               </div>
             ) : null}
           </section>
+        </div>
+      </section>
+
+      <section className="f9-app-panel f9-source-setup">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Customer API</span>
+            <h2>Use Five to Nine from your tools</h2>
+          </div>
+          <a className="f9-secondary-button" href="/api/v1" target="_blank" rel="noreferrer">
+            API docs
+          </a>
+        </div>
+
+        <p className="f9-muted-copy">
+          API keys are read-only and only expose collections, watchlists, digests, proof trails, and Slack-ready
+          markdown owned by this account.
+        </p>
+
+        {actionData && "apiKeySecret" in actionData && actionData.apiKeySecret ? (
+          <div className="f9-message is-success">
+            <p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
+            <label className="f9-field">
+              <span>{actionData.apiKeyPrefix}</span>
+              <textarea readOnly rows={3} value={actionData.apiKeySecret} />
+            </label>
+          </div>
+        ) : null}
+
+        <div className="f9-dashboard-grid">
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Create API key</span>
+            <h3>Read-only export access</h3>
+            <Form className="f9-auth-form" method="post">
+              <input name="intent" type="hidden" value="create-api-key" />
+              <label className="f9-field">
+                <span>Key name</span>
+                <input
+                  autoComplete="off"
+                  name="apiKeyName"
+                  placeholder="Claude, Slack workflow, Zapier..."
+                  type="text"
+                />
+              </label>
+              <button className="f9-primary-button" type="submit">
+                Create API key
+              </button>
+            </Form>
+          </section>
+
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">API examples</span>
+            <h3>Current live endpoints</h3>
+            <dl className="proof-trail-list">
+              <div>
+                <dt>JSON</dt>
+                <dd>/api/v1/watchlists/&lbrace;id&rbrace;?format=json</dd>
+              </div>
+              <div>
+                <dt>Slack copy</dt>
+                <dd>/api/v1/digests/&lbrace;id&rbrace;?format=slack</dd>
+              </div>
+              <div>
+                <dt>Header</dt>
+                <dd>Authorization: Bearer your Five to Nine API key</dd>
+              </div>
+            </dl>
+            <p className="f9-muted-copy">
+              This API does not add TikTok, Google, LinkedIn, Pinterest, write access, or MCP yet.
+            </p>
+          </section>
+        </div>
+
+        <div className="f9-work-list">
+          {data.apiKeys.length > 0 ? (
+            data.apiKeys.map((apiKey) => (
+              <article className="f9-work-item" key={apiKey.id}>
+                <div>
+                  <strong>{apiKey.name}</strong>
+                  <p>
+                    {apiKey.keyPrefix}...
+                    {apiKey.lastUsedAt
+                      ? ` · last used ${new Date(apiKey.lastUsedAt).toLocaleString("en-IN")}`
+                      : " · never used"}
+                    {apiKey.revokedAt ? ` · revoked ${new Date(apiKey.revokedAt).toLocaleString("en-IN")}` : ""}
+                  </p>
+                </div>
+                {apiKey.revokedAt ? null : (
+                  <Form method="post">
+                    <input name="intent" type="hidden" value="revoke-api-key" />
+                    <input name="apiKeyId" type="hidden" value={apiKey.id} />
+                    <button className="f9-secondary-button" type="submit">
+                      Revoke
+                    </button>
+                  </Form>
+                )}
+              </article>
+            ))
+          ) : (
+            <article className="f9-work-item">
+              <div>
+                <strong>No API keys yet</strong>
+                <p>Create one when you are ready to connect a tool or agent workflow.</p>
+              </div>
+            </article>
+          )}
         </div>
       </section>
 

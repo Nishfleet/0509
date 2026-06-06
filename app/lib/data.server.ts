@@ -14,6 +14,7 @@ import type {
   CollectionItemRecord,
   CollectionRecord,
   CustomerMetaConnectionRecord,
+  CustomerApiKeyRecord,
   DeliveryAttemptRecord,
   DeliveryAttemptStatus,
   DeliveryChannel,
@@ -393,6 +394,18 @@ interface DiscoveryFetchLogRow {
   browser_ms_used: number | null;
   metadata_json: string | null;
   created_at: string;
+}
+
+interface CustomerApiKeyRow {
+  id: string;
+  user_id: string;
+  name: string;
+  key_prefix: string;
+  key_hash: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 type RazorpayWebhookOutcome = "received" | "processed" | "ignored" | "failed";
@@ -3612,6 +3625,141 @@ function toCustomerMetaConnectionRecord(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function toCustomerApiKeyRecord(row: CustomerApiKeyRow): CustomerApiKeyRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    keyPrefix: row.key_prefix,
+    lastUsedAt: row.last_used_at,
+    revokedAt: row.revoked_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function listCustomerApiKeys(env: AppEnv, userId: string) {
+  const rows = await many<CustomerApiKeyRow>(
+    env,
+    `
+      SELECT *
+      FROM customer_api_key
+      WHERE user_id = ?
+      ORDER BY revoked_at ASC, created_at DESC
+    `,
+    userId,
+  );
+
+  return rows.map(toCustomerApiKeyRecord);
+}
+
+export async function insertCustomerApiKey(
+  env: AppEnv,
+  input: {
+    userId: string;
+    name: string;
+    keyPrefix: string;
+    keyHash: string;
+  },
+) {
+  const id = createId();
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT INTO customer_api_key (
+        id,
+        user_id,
+        name,
+        key_prefix,
+        key_hash,
+        last_used_at,
+        revoked_at,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+    `,
+    id,
+    input.userId,
+    input.name,
+    input.keyPrefix,
+    input.keyHash,
+    timestamp,
+    timestamp,
+  );
+
+  const row = await one<CustomerApiKeyRow>(
+    env,
+    "SELECT * FROM customer_api_key WHERE id = ?",
+    id,
+  );
+
+  if (!row) {
+    throw new Error("Created API key could not be loaded.");
+  }
+
+  return toCustomerApiKeyRecord(row);
+}
+
+export async function getActiveCustomerApiKeyByHash(env: AppEnv, keyHash: string) {
+  const row = await one<CustomerApiKeyRow>(
+    env,
+    `
+      SELECT *
+      FROM customer_api_key
+      WHERE key_hash = ?
+        AND revoked_at IS NULL
+      LIMIT 1
+    `,
+    keyHash,
+  );
+
+  return row ? toCustomerApiKeyRecord(row) : null;
+}
+
+export async function recordCustomerApiKeyUsed(env: AppEnv, apiKeyId: string) {
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      UPDATE customer_api_key
+      SET last_used_at = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND revoked_at IS NULL
+    `,
+    timestamp,
+    timestamp,
+    apiKeyId,
+  );
+}
+
+export async function revokeCustomerApiKey(
+  env: AppEnv,
+  input: {
+    userId: string;
+    apiKeyId: string;
+  },
+) {
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      UPDATE customer_api_key
+      SET revoked_at = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND user_id = ?
+        AND revoked_at IS NULL
+    `,
+    timestamp,
+    timestamp,
+    input.apiKeyId,
+    input.userId,
+  );
 }
 
 export async function getCustomerMetaConnection(env: AppEnv, userId: string) {

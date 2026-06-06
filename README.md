@@ -18,7 +18,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 - `Demo proof` is the public hook: show a sample competitor, proof trail, digest preview, and export shape without exposing live search.
 - `Analysis` is account-gated: signed-in users search competitor ads, inspect the hook/offer/CTA/landing page, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, insight-depth summaries, daily briefs, and weekly digests.
-- `Workspace memory` is the compounding layer: collections, notes, tags, CSV/API JSON/Slack-ready exports, and share links.
+- `Workspace memory` is the compounding layer: collections, notes, tags, CSV/API JSON/Slack-ready exports, customer API keys, and share links.
 
 ## Current stack
 
@@ -34,6 +34,8 @@ Auth runtime decision: `docs/auth-runtime.md`
 
 - `/` marketing site
 - `/api/demo-proof` sample public proof payload for buyer and agent evaluation
+- `/api/v1` customer API docs for read-only account export endpoints
+- `/api/v1/:resourceType/:resourceId` customer API-key export endpoint for account-owned collections, watchlists, and digests
 - `/search` account-gated analysis flow; logged-out requests return 404 except private canary probes
 - `/privacy`
 - `/terms`
@@ -82,7 +84,7 @@ Important bindings and secrets:
 ## Operations
 
 - Run `npm run backup:d1` before risky migrations or data-shape changes. It exports the remote Cloudflare D1 database into `backups/d1/`, which is intentionally gitignored.
-- Apply `migrations/0012_rate_limit_events.sql` before relying on Worker request rate limiting.
+- Apply pending D1 migrations before deploying code that reads new tables. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys.
 
 ## Notes
 
@@ -94,7 +96,7 @@ Important bindings and secrets:
 - `META_AD_LIBRARY_TOKEN` should not be treated as proof that live India commercial-ad discovery is production-ready. The official Meta API is diagnostic-only by default. Customer-facing Meta API fallback requires a customer-owned Meta connection that is test-before-save and stored encrypted; the platform token can only be used if `ALLOW_PLATFORM_META_API_FALLBACK=true` is deliberately configured.
 - If no live commercial discovery provider is configured, the app should operate only in explicit demo mode. Production should not silently fall back to demo data on live-provider failures.
 - Daily briefs and weekly digests share the same proof-backed event model. Each digest item should carry a priority score, next action, source proof trail, timestamp, and confidence label.
-- Account insight-depth summaries are generated from real saved ads, watch events, and digest items: top hooks, media mix, creative timeline, and landing-page history. Do not imply unsupported TikTok, Google, LinkedIn, Pinterest, Slack-send, MCP, or public API coverage from this summary layer.
+- Account insight-depth summaries are generated from real saved ads, watch events, and digest items: top hooks, media mix, creative timeline, and landing-page history. Customer API keys are live for read-only account-owned export data at `/api/v1`, but do not imply unsupported TikTok, Google, LinkedIn, Pinterest, Slack-send, public write API, or MCP coverage.
 - Cloudflare cost policy: stay on the included/free tier by default. Do not enable usage-billed add-ons just because they exist; enable them when the missing capability is materially hampering product quality, operations, or launch.
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.
