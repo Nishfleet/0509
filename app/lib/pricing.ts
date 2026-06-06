@@ -16,8 +16,9 @@ const PLANS: PricingPlan[] = [
       "3 active watchlists",
       "10 saved collections",
       "Account-gated competitor research",
+      "Weekly evidence-backed digest",
       "50 evidence checks per month",
-      "Email-ready evidence trail",
+      "Email-ready proof trail",
     ],
   },
   {

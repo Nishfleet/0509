@@ -115,9 +115,9 @@ describe("runWeeklyDigests", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("free"),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -162,7 +162,7 @@ describe("runWeeklyDigests", () => {
     expect(listWatchlists).not.toHaveBeenCalled();
   });
 
-  it("delegates digest delivery to the delivery module after building the digest run", async () => {
+  it("delegates Scout digest delivery to the delivery module after building the digest run", async () => {
     const addDigestItem = vi.fn();
     const createDigestRun = vi.fn().mockResolvedValue("digest-1");
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
@@ -225,11 +225,12 @@ describe("runWeeklyDigests", () => {
       deliverWeeklyDigest,
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        scout: { digests: true, digestCadence: "weekly" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -294,6 +295,78 @@ describe("runWeeklyDigests", () => {
         ],
       }),
     );
+  });
+
+  it("skips daily digest generation for Scout users", async () => {
+    const listWatchlists = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn(),
+      clearDigestItems: vi.fn(),
+      createAdObservation: vi.fn(),
+      createDigestRun: vi.fn(),
+      createEventCandidate: vi.fn(),
+      createLandingPageSnapshot: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createWatchlistRun: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn(),
+      countProofCapturesForWorkspaceSince: vi.fn(),
+      finishWatchlistRun: vi.fn(),
+      getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn(),
+      getRecentSuccessfulRuns: vi.fn(),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn(),
+      listActiveWatchlists: vi.fn(),
+      listProofCapturesForTarget: vi.fn(),
+      listRecentWorkspaceProofCaptures: vi.fn(),
+      listSuccessfulProofCapturesForAd: vi.fn(),
+      listObservationsForRun: vi.fn(),
+      listWatchEvents: vi.fn(),
+      listWatchEventsBetween: vi.fn(),
+      listWatchlists,
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertProofTarget: vi.fn(),
+      upsertAd: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+      PLAN_LIMITS: {
+        free: { digests: false, digestCadence: "none" },
+        scout: { digests: true, digestCadence: "weekly" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
+      },
+    }));
+
+    const { runDailyDigests } = await import("~/lib/monitoring.server");
+
+    const result = await runDailyDigests({
+      DB: {
+        prepare() {
+          return {
+            async all<T>() {
+              return {
+                results: [
+                  {
+                    id: "user-1",
+                    email: "owner@example.com",
+                    name: "Owner",
+                  },
+                ] as T[],
+              };
+            },
+          };
+        },
+      },
+    } as never);
+
+    expect(result).toBe(0);
+    expect(listWatchlists).not.toHaveBeenCalled();
   });
 
   it("passes the scheduled monitoring timestamp into weekly digest generation", async () => {
@@ -372,9 +445,9 @@ describe("runWeeklyDigests", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -523,9 +596,9 @@ describe("runWeeklyDigests", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -683,9 +756,9 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -860,9 +933,9 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -1052,9 +1125,9 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -1271,9 +1344,9 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -1427,9 +1500,9 @@ describe("runWatchlistManual cheap scan path", () => {
 	  vi.doMock("~/lib/plan.server", () => ({
 	    getUserPlan: vi.fn(),
 	    PLAN_LIMITS: {
-	      free: { digests: false },
-	      starter: { digests: true },
-	      agency: { digests: true },
+	      free: { digests: false, digestCadence: "none" },
+	      starter: { digests: true, digestCadence: "weekly" },
+	      agency: { digests: true, digestCadence: "daily_and_weekly" },
 	    },
 	  }));
 
@@ -1552,9 +1625,9 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -1740,9 +1813,9 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -1869,9 +1942,9 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 

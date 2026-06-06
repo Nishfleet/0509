@@ -209,9 +209,9 @@ function installSharedMocks(input: {
   vi.doMock("~/lib/plan.server", () => ({
     getUserPlan: vi.fn().mockResolvedValue("starter"),
     PLAN_LIMITS: {
-      free: { digests: false },
-      starter: { digests: true },
-      agency: { digests: true },
+      free: { digests: false, digestCadence: "none" },
+      starter: { digests: true, digestCadence: "weekly" },
+      agency: { digests: true, digestCadence: "daily_and_weekly" },
     },
   }));
   vi.doMock("~/lib/data.server", () => ({

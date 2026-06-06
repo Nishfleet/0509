@@ -83,9 +83,9 @@ describe("runScheduledMonitoring workflow idempotency", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 
@@ -137,6 +137,8 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       inlineRuns: 0,
       digests: 0,
     });
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(1, expect.anything(), { includeScout: false });
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(2, expect.anything(), { includeScout: false });
 
     const [firstCreate, secondCreate, duplicateFirstCreate, duplicateSecondCreate] =
       workflowCreate.mock.calls;
@@ -151,6 +153,89 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       watchlistId: "watch-2",
       executionKey: secondCreate?.[0]?.id,
     });
+  });
+
+  it("includes Scout watchlists only for the Monday pre-digest scheduled scan", async () => {
+    const listActiveWatchlists = vi.fn().mockResolvedValue([]);
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildAnalysisFields: vi.fn(() => []),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn(),
+      clearDigestItems: vi.fn(),
+      createAdObservation: vi.fn(),
+      createDigestRun: vi.fn(),
+      createLandingPageSnapshot: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createWatchlistRun: vi.fn(),
+      finishWatchlistRun: vi.fn(),
+      getDigestByPeriod: vi.fn(),
+      getRecentSuccessfulRuns: vi.fn(),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn(),
+      listActiveWatchlists,
+      listObservationsForRun: vi.fn(),
+      listWatchEventsBetween: vi.fn(),
+      listWatchlists: vi.fn(),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertAd: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      MetaApiError: class MetaApiError extends Error {},
+      searchAds: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn(),
+      PLAN_LIMITS: {
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
+      },
+    }));
+
+    const env = {
+      DB: {
+        prepare() {
+          return {
+            async all<T>() {
+              return { results: [] as T[] };
+            },
+          };
+        },
+      },
+    };
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+
+    await runScheduledMonitoring(env as never, {
+      includeDigests: true,
+      digestCadence: "daily",
+      scheduledTime: Date.parse("2026-04-21T04:00:00.000Z"),
+    });
+    await runScheduledMonitoring(env as never, {
+      includeDigests: true,
+      digestCadence: "daily",
+      scheduledTime: Date.parse("2026-04-20T04:00:00.000Z"),
+    });
+    await runScheduledMonitoring(env as never, {
+      includeDigests: true,
+      digestCadence: "weekly",
+      scheduledTime: Date.parse("2026-04-20T05:00:00.000Z"),
+    });
+
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(1, expect.anything(), { includeScout: false });
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(2, expect.anything(), { includeScout: true });
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(3, expect.anything(), { includeScout: false });
   });
 
   it("builds stable proof-capture request keys from the same watch event inputs", async () => {
@@ -193,9 +278,9 @@ describe("runScheduledMonitoring workflow idempotency", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn(),
       PLAN_LIMITS: {
-        free: { digests: false },
-        starter: { digests: true },
-        agency: { digests: true },
+        free: { digests: false, digestCadence: "none" },
+        starter: { digests: true, digestCadence: "weekly" },
+        agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
     }));
 

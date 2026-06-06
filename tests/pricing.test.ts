@@ -29,6 +29,7 @@ describe("pricingPlans", () => {
     const [scout, starter, agency] = pricingPlans();
 
     expect(scout.features).toContain("3 active watchlists");
+    expect(scout.features).toContain("Weekly evidence-backed digest");
     expect(scout.features).toContain("50 evidence checks per month");
     expect(starter.features).toContain("10 active watchlists");
     expect(starter.features).toContain("250 evidence checks per month");

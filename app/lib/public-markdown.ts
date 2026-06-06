@@ -39,7 +39,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Pricing display is localized from checkout preview for the buyer location.
 - There is no free retained-monitoring plan. Search and saved monitoring require an account.
 - Starter is the recommended plan for retained competitor monitoring.
-- Scout is the entry plan after the public sample proof loop: 3 watchlists, 10 collections, account-gated research, and 50 evidence checks/month.
+- Scout is the entry plan after the public sample proof loop: 3 watchlists, 10 collections, account-gated research, weekly digest delivery, and 50 evidence checks/month.
 - Starter includes 10 watchlists, 25 collections, weekly digest delivery, and 250 evidence checks/month.
 - Agency includes 75 watchlists, 250 collections, daily and weekly briefs, and 2,500 evidence checks/month.
 - Usage bundles add extra evidence checks for 30-day spikes. They do not make monitoring unlimited.
@@ -65,7 +65,7 @@ Current product truth:
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, and provider-canary success.
-- Starter is the recommended plan. Paid plans have explicit caps: Scout includes 50 evidence checks/month, Starter includes 250 evidence checks/month, and Agency includes 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
+- Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly briefs plus 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
