@@ -1229,6 +1229,100 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
+  it("accepts explicit Browser Run no-results as a healthy empty discovery result", async () => {
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+    const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryEmptyReason: "no_results",
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+        constructor(
+          message: string,
+          public readonly failureClass: string,
+        ) {
+          super(message);
+          this.name = "CommercialDiscoveryError";
+        }
+      },
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "adflex",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryCacheEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_library_browser",
+        payload: expect.objectContaining({
+          ads: [],
+          discoveryEmptyReason: "no_results",
+        }),
+      }),
+    );
+    expect(createDiscoveryFetchLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_library_browser",
+        status: "succeeded",
+        failureClass: null,
+      }),
+    );
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_library_browser",
+        status: "healthy",
+        failureClass: null,
+      }),
+    );
+    expect(result).toMatchObject({
+      ads: [],
+      cacheStatus: "miss",
+      discoveryEmptyReason: "no_results",
+      discoveryStatus: "healthy",
+      discoveryFailureClass: null,
+    });
+  });
+
   it("downgrades live Browser Run zero-ad results instead of caching them as success", async () => {
     const upsertDiscoveryCacheEntry = vi.fn();
     const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({

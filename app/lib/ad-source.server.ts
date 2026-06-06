@@ -982,13 +982,13 @@ function isUsableDiscoveryCache(
 
 function isUsableLiveDiscoveryResult(
   provider: AdDiscoveryProvider,
-  result: Pick<SearchResponse, "ads">,
+  result: Pick<SearchResponse, "ads" | "discoveryEmptyReason">,
 ) {
   if (provider !== "meta_library_browser") {
     return true;
   }
 
-  return result.ads.length > 0;
+  return result.ads.length > 0 || result.discoveryEmptyReason === "no_results";
 }
 
 function resolveFailureClass(error: unknown): DiscoveryFailureClass {

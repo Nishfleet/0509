@@ -60,6 +60,7 @@ function buildQuickActionContent(
   input: {
     cards?: Array<Record<string, unknown>>;
     loginWall?: boolean;
+    noResults?: boolean;
     rateLimited?: boolean;
     withRunnerScript?: boolean;
   } = {},
@@ -82,6 +83,7 @@ function buildQuickActionContent(
         },
       ],
     loginWall: input.loginWall ?? false,
+    noResults: input.noResults ?? false,
     rateLimited: input.rateLimited ?? false,
   };
 
@@ -321,6 +323,89 @@ describe("searchMetaLibraryByBrowser", () => {
         }),
       ],
     });
+    expect(result.discoveryEmptyReason).toBeUndefined();
+  });
+
+  it("treats an explicit Browserless no-results page as a healthy empty Meta result", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: `
+                  <html>
+                    <body>
+                      <main>
+                        <h1>No results</h1>
+                        <p>We couldn't find any ads.</p>
+                      </main>
+                    </body>
+                  </html>
+                `,
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+      },
+      buildQuery(),
+    );
+
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryEmptyReason: "no_results",
+      ads: [],
+    });
+  });
+
+  it("treats a Quick Actions no-results payload as healthy instead of scraping fallback", async () => {
+    const fetchSpy = mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: buildQuickActionContent({ cards: [], noResults: true }),
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Browser-Ms-Used": "1000",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+      },
+      buildQuery(),
+    );
+
+    expect(nonDnsFetchCalls(fetchSpy)).toHaveLength(1);
+    expect(result.ads).toEqual([]);
+    expect(result.discoveryEmptyReason).toBe("no_results");
   });
 
   it("retries a transient empty Browserless render before failing the Meta capture", async () => {
@@ -566,6 +651,50 @@ describe("searchMetaLibraryByBrowser", () => {
     ).rejects.toMatchObject({
       name: CommercialDiscoveryError.name,
       failureClass: "empty_result",
+    });
+  });
+
+  it("treats Browser Run no-results page text as a healthy empty Meta result", async () => {
+    const { browser, page } = createBrowserHarness();
+    page.evaluate = vi.fn(async (callback: () => unknown) => {
+      vi.stubGlobal("document", {
+        querySelectorAll: vi.fn().mockReturnValue([]),
+        body: {
+          innerText: "No results We couldn't find any ads.",
+        },
+      });
+
+      return callback();
+    });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+      },
+      buildQuery(),
+    );
+
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryEmptyReason: "no_results",
+      ads: [],
     });
   });
 
