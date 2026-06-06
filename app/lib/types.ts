@@ -83,6 +83,7 @@ export type WatchTargetType = (typeof WATCH_TARGET_TYPES)[number];
 export type ShareResourceType = (typeof SHARE_RESOURCE_TYPES)[number];
 export type SearchMode = (typeof SEARCH_MODES)[number];
 export type CreativeTypeFilter = (typeof CREATIVE_TYPES)[number];
+export type AdCreativeFormat = Exclude<CreativeTypeFilter, "all"> | "unknown";
 export type SearchStatusFilter = (typeof SEARCH_STATUSES)[number];
 export type SensitivityMode = (typeof SENSITIVITY_MODES)[number];
 export type DeliveryLane = (typeof DELIVERY_LANES)[number];
@@ -174,7 +175,7 @@ export interface AdRecord {
   hook: string;
   offer: string;
   cta: string;
-  format: Exclude<CreativeTypeFilter, "all">;
+  format: AdCreativeFormat;
   languageLabel: string;
   destinationType: DestinationType;
   landingPageUrl: string | null;
@@ -195,7 +196,7 @@ export interface AdRecord {
 }
 
 export type AdDiscoveryProvider = "meta_api" | "meta_library_browser" | "demo";
-export type AdDiscoverySource = "meta" | "meta_api" | "meta_library_browser" | "demo";
+export type AdDiscoverySource = "meta" | "meta_api" | "meta_library_browser" | "demo" | "external";
 export type DiscoveryCacheStatus = "miss" | "hit" | "stale" | "none";
 export type DiscoveryRouteContext = "public_search" | "watchlist_scan" | "scheduled_warmup";
 export type DiscoveryFetchStatus = "succeeded" | "failed";

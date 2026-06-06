@@ -66,6 +66,53 @@ const collectionItem: CollectionItemRecord = {
   tags: ["beauty", "offer"],
 };
 
+const externalAd: AdRecord = {
+  metaAdId: "external:linkedin:fnv1a-abc123",
+  advertiser: "Mamaearth",
+  body: "Creator-led sunscreen routine\nCombo launch",
+  previewHeadline: "Creator-led sunscreen routine",
+  previewSubhead: "LinkedIn",
+  hook: "Creator-led sunscreen routine",
+  offer: "Combo launch",
+  cta: "Shop now",
+  format: "unknown",
+  languageLabel: "English",
+  destinationType: "website",
+  landingPageUrl: null,
+  adSnapshotUrl: null,
+  countries: [],
+  platforms: ["LinkedIn"],
+  firstSeenAt: "2026-06-06T00:00:00.000Z",
+  lastSeenAt: null,
+  active: false,
+  researchSummary: "Manual LinkedIn proof saved for Mamaearth.",
+  source: "external",
+  analysisFields: [
+    {
+      scopeType: "ad",
+      fieldKey: "proof_url",
+      fieldValue: "https://www.linkedin.com/posts/mamaearth-campaign",
+      provenanceSource: "user",
+      extractorVersion: "manual-external-proof-v1",
+      confidence: 1,
+    },
+  ],
+  creativeText: null,
+  creativeTextCaptureMethod: null,
+  creativeTextMetadata: null,
+};
+
+const externalCollectionItem: CollectionItemRecord = {
+  id: "item-external-1",
+  collectionId: "collection-1",
+  adId: "external:linkedin:fnv1a-abc123",
+  note: "Seen in launch review.",
+  createdAt: "2026-06-06T09:31:00.000Z",
+  updatedAt: "2026-06-06T09:31:00.000Z",
+  ad: externalAd,
+  tags: ["LinkedIn", "manual proof", "creator"],
+};
+
 const watchlist: WatchlistRecord = {
   id: "watchlist-1",
   userId: "user-1",
@@ -140,7 +187,7 @@ const digest: DigestRecord = {
   ],
 };
 
-function setupMocks() {
+function setupMocks(input: { collectionItems?: CollectionItemRecord[] } = {}) {
   const env = { DB: {} };
   vi.doMock("~/lib/auth.server", () => ({
     requireSession: vi.fn().mockResolvedValue(session),
@@ -152,7 +199,7 @@ function setupMocks() {
     getCollection: vi.fn().mockResolvedValue(collection),
     getDigest: vi.fn().mockResolvedValue(digest),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
-    listCollectionItems: vi.fn().mockResolvedValue([collectionItem]),
+    listCollectionItems: vi.fn().mockResolvedValue(input.collectionItems ?? [collectionItem]),
     listWatchEvents: vi.fn().mockResolvedValue([watchEvent]),
   }));
   return env;
@@ -192,8 +239,8 @@ describe("authenticated export route", () => {
 
     expect(response.headers.get("content-type")).toContain("text/csv");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(body).toContain('"advertiser","hook","offer","cta","tags","note"');
-    expect(body).toContain('"Nykaa","Routine-first bundle","Bundle and save","Build your routine","beauty|offer","Use in sales deck."');
+    expect(body).toContain('"advertiser","hook","offer","cta","proof_url","tags","note"');
+    expect(body).toContain('"Nykaa","Routine-first bundle","Bundle and save","Build your routine","https://facebook.com/ads/library/?id=meta-nykaa-1","beauty|offer","Use in sales deck."');
   });
 
   it("returns account-scoped JSON for collection exports", async () => {
@@ -218,6 +265,42 @@ describe("authenticated export route", () => {
       advertiser: "Nykaa",
       hook: "Routine-first bundle",
       tags: ["beauty", "offer"],
+    });
+  });
+
+  it("includes manual external proof in collection API exports", async () => {
+    setupMocks({ collectionItems: [externalCollectionItem] });
+    const response = await loadExport("https://0509.in/export/collection/collection-1?format=json");
+    const body = await response.json() as {
+      insightDepth: {
+        mediaMix: Array<{ label: string; count: number }>;
+        campaignDurations: Array<{ label: string; count: number }>;
+      };
+      items: Array<{
+        advertiser: string;
+        hook: string;
+        adSnapshotUrl: string | null;
+        landingPageUrl: string | null;
+        proofUrl: string | null;
+        tags: string[];
+      }>;
+    };
+
+    expect(body.insightDepth.mediaMix[0]).toMatchObject({
+      label: "LinkedIn",
+      count: 1,
+    });
+    expect(body.items[0]).toMatchObject({
+      advertiser: "Mamaearth",
+      hook: "Creator-led sunscreen routine",
+      adSnapshotUrl: null,
+      landingPageUrl: null,
+      proofUrl: "https://www.linkedin.com/posts/mamaearth-campaign",
+      tags: ["LinkedIn", "manual proof", "creator"],
+    });
+    expect(body.insightDepth.campaignDurations[0]).toMatchObject({
+      label: "Pending",
+      count: 0,
     });
   });
 

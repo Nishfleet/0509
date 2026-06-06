@@ -6,6 +6,7 @@ import {
   upsertAd as upsertAdImpl,
 } from "~/lib/ad-persistence.server";
 import type { AppEnv } from "~/lib/env.server";
+import { buildExternalProofAd } from "~/lib/external-proof.server";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import type {
   AdRecord,
@@ -483,7 +484,8 @@ function isAdDiscoverySource(value: unknown): value is SearchResponse["source"] 
     value === "meta" ||
     value === "meta_api" ||
     value === "meta_library_browser" ||
-    value === "demo"
+    value === "demo" ||
+    value === "external"
   );
 }
 
@@ -1395,6 +1397,29 @@ export async function addAdToCollection(
   if (row) {
     await updateCollectionItem(env, userId, row.id, { note, tags });
   }
+}
+
+export async function addExternalProofToCollection(
+  env: AppEnv,
+  userId: string,
+  collectionId: string,
+  input: {
+    advertiser: string;
+    proofUrl: string;
+    channel: string;
+    hook: string;
+    offer?: string | null;
+    cta?: string | null;
+    note?: string | null;
+    observedAt?: string | null;
+    tags?: string[];
+  },
+) {
+  const ad = buildExternalProofAd(input);
+  const tags = [...new Set([...(input.tags ?? []), ...(ad.tags ?? [])])];
+  await addAdToCollection(env, userId, collectionId, ad, input.note ?? null, tags);
+
+  return ad;
 }
 
 async function ensureTags(env: AppEnv, userId: string, labels: string[]) {

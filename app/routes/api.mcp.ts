@@ -78,6 +78,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Account-owned watchlists",
       "Account-owned digests",
       "Saved Meta and landing-page proof already captured in Five to Nine",
+      "Manual external proof links saved in account-owned collections",
     ],
     notLiveYet: [
       "TikTok ingestion",
@@ -129,7 +130,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        "Use these read-only tools to retrieve account-owned Five to Nine collections, watchlists, and digests. Do not treat the endpoint as TikTok, Google, LinkedIn, Pinterest, write API, or unsupported-channel coverage.",
+        "Use these read-only tools to retrieve account-owned Five to Nine collections, watchlists, and digests. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, write API, or unsupported-channel coverage.",
     });
   }
 

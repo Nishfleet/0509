@@ -101,6 +101,7 @@ describe("collection limit", () => {
       getUserPlan: vi.fn().mockResolvedValue("free"),
     }));
     vi.doMock("~/lib/data.server", () => ({
+      addExternalProofToCollection: vi.fn(),
       createCollection,
       createShareLink: vi.fn(),
       getCollection: vi.fn(),
@@ -131,6 +132,72 @@ describe("collection limit", () => {
       ok: false,
     });
     expect(createCollection).not.toHaveBeenCalled();
+  });
+
+  it("adds an external proof link to the selected collection", async () => {
+    const addExternalProofToCollection = vi.fn().mockResolvedValue({
+      advertiser: "Mamaearth",
+      platforms: ["LinkedIn"],
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn(),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addExternalProofToCollection,
+      createCollection: vi.fn(),
+      createShareLink: vi.fn(),
+      getCollection: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listCollections: vi.fn().mockResolvedValue([]),
+      updateCollectionItem: vi.fn(),
+    }));
+
+    const { action } = await import("~/routes/app.collections");
+    const formData = new FormData();
+    formData.set("intent", "add-external-proof");
+    formData.set("collectionId", "collection-1");
+    formData.set("channel", "LinkedIn");
+    formData.set("advertiser", "Mamaearth");
+    formData.set("proofUrl", "https://www.linkedin.com/posts/mamaearth-campaign");
+    formData.set("hook", "Creator-led sunscreen routine");
+    formData.set("offer", "Combo launch");
+    formData.set("cta", "Shop now");
+    formData.set("note", "Seen in launch review.");
+    formData.set("observedAt", "2026-06-06");
+    formData.set("tags", "creator, sunscreen");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/collections", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(addExternalProofToCollection).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "collection-1",
+      {
+        advertiser: "Mamaearth",
+        proofUrl: "https://www.linkedin.com/posts/mamaearth-campaign",
+        channel: "LinkedIn",
+        hook: "Creator-led sunscreen routine",
+        offer: "Combo launch",
+        cta: "Shop now",
+        note: "Seen in launch review.",
+        observedAt: "2026-06-06",
+        tags: ["creator", "sunscreen"],
+      },
+    );
+    expect(result).toEqual({
+      ok: true,
+      message: "Saved LinkedIn proof for Mamaearth.",
+    });
   });
 });
 
@@ -349,6 +416,161 @@ describe("pricing CTA rendering", () => {
 
     expect(markup).toContain("You have reached your workspace collection limit.");
     expect(markup).not.toContain("View pricing");
+  });
+
+  it("renders the external proof form inside collections", async () => {
+    await mockRouter({
+      loaderData: {
+        collections: [
+          {
+            id: "collection-1",
+            userId: "user-1",
+            name: "Cross-channel proof",
+            description: null,
+            createdAt: "2026-06-06T00:00:00.000Z",
+            updatedAt: "2026-06-06T00:00:00.000Z",
+          },
+        ],
+        selectedCollection: {
+          id: "collection-1",
+          userId: "user-1",
+          name: "Cross-channel proof",
+          description: null,
+          createdAt: "2026-06-06T00:00:00.000Z",
+          updatedAt: "2026-06-06T00:00:00.000Z",
+        },
+        items: [],
+      },
+    });
+
+    const { default: CollectionsRoute } = await import("~/routes/app.collections");
+    const markup = renderToStaticMarkup(createElement(CollectionsRoute));
+
+    expect(markup).toContain("External proof");
+    expect(markup).toContain("add-external-proof");
+    expect(markup).toContain("Google / YouTube");
+    expect(markup).toContain("LinkedIn");
+    expect(markup).toContain("Save proof link");
+  });
+
+  it("keeps rendering legacy collection items without stored platforms", async () => {
+    await mockRouter({
+      loaderData: {
+        collections: [
+          {
+            id: "collection-1",
+            userId: "user-1",
+            name: "Legacy proof",
+            description: null,
+            createdAt: "2026-06-06T00:00:00.000Z",
+            updatedAt: "2026-06-06T00:00:00.000Z",
+          },
+        ],
+        selectedCollection: {
+          id: "collection-1",
+          userId: "user-1",
+          name: "Legacy proof",
+          description: null,
+          createdAt: "2026-06-06T00:00:00.000Z",
+          updatedAt: "2026-06-06T00:00:00.000Z",
+        },
+        items: [
+          {
+            id: "item-1",
+            collectionId: "collection-1",
+            adId: "legacy-ad-1",
+            note: null,
+            createdAt: "2026-06-06T00:00:00.000Z",
+            updatedAt: "2026-06-06T00:00:00.000Z",
+            tags: [],
+            ad: {
+              metaAdId: "legacy-ad-1",
+              advertiser: "Nykaa",
+              hook: "Routine-first bundle",
+              offer: "Bundle and save",
+              format: "image",
+              firstSeenAt: null,
+              lastSeenAt: null,
+              active: true,
+              landingPageUrl: null,
+              adSnapshotUrl: null,
+            },
+          },
+        ],
+      },
+    });
+
+    const { default: CollectionsRoute } = await import("~/routes/app.collections");
+    const markup = renderToStaticMarkup(createElement(CollectionsRoute));
+
+    expect(markup).toContain("Nykaa");
+    expect(markup).toContain("image");
+  });
+
+  it("renders saved external proof links from the stored proof URL", async () => {
+    await mockRouter({
+      loaderData: {
+        collections: [
+          {
+            id: "collection-1",
+            userId: "user-1",
+            name: "External proof",
+            description: null,
+            createdAt: "2026-06-06T00:00:00.000Z",
+            updatedAt: "2026-06-06T00:00:00.000Z",
+          },
+        ],
+        selectedCollection: {
+          id: "collection-1",
+          userId: "user-1",
+          name: "External proof",
+          description: null,
+          createdAt: "2026-06-06T00:00:00.000Z",
+          updatedAt: "2026-06-06T00:00:00.000Z",
+        },
+        items: [
+          {
+            id: "item-1",
+            collectionId: "collection-1",
+            adId: "external:linkedin:fnv1a-abc123",
+            note: "Seen in launch review.",
+            createdAt: "2026-06-06T00:00:00.000Z",
+            updatedAt: "2026-06-06T00:00:00.000Z",
+            tags: ["LinkedIn"],
+            ad: {
+              metaAdId: "external:linkedin:fnv1a-abc123",
+              advertiser: "Mamaearth",
+              hook: "Creator-led sunscreen routine",
+              offer: "Combo launch",
+              format: "unknown",
+              source: "external",
+              platforms: ["LinkedIn"],
+              firstSeenAt: "2026-06-06T00:00:00.000Z",
+              lastSeenAt: null,
+              active: false,
+              landingPageUrl: null,
+              adSnapshotUrl: null,
+              analysisFields: [
+                {
+                  scopeType: "ad",
+                  fieldKey: "proof_url",
+                  fieldValue: "https://www.linkedin.com/posts/mamaearth-campaign",
+                  provenanceSource: "user",
+                  extractorVersion: "manual-external-proof-v1",
+                  confidence: 1,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const { default: CollectionsRoute } = await import("~/routes/app.collections");
+    const markup = renderToStaticMarkup(createElement(CollectionsRoute));
+
+    expect(markup).toContain("Open proof");
+    expect(markup).toContain("https://www.linkedin.com/posts/mamaearth-campaign");
   });
 
   it("does not render a pricing CTA on search plan-limit errors", async () => {

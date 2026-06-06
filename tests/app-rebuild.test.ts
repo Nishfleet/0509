@@ -88,6 +88,10 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("Create API key");
     expect(appSurface).toContain("/api/v1");
     expect(appSurface).toContain("/api/mcp");
+    expect(collectionsRoute).toContain("External proof");
+    expect(collectionsRoute).toContain("Save proof link");
+    expect(collectionsRoute).toContain("Google / YouTube");
+    expect(collectionsRoute).toContain("LinkedIn");
     expect(digestsRoute).toContain("formatDeliveryChannelLabel");
     expect(digestsRoute).toContain('channel === "slack"');
   });
