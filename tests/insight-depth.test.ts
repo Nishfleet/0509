@@ -105,6 +105,11 @@ describe("insight depth", () => {
       detail: "Nykaa",
     });
     expect(summary.mediaMix.map((entry) => entry.label)).toEqual(["Facebook", "Instagram"]);
+    expect(summary.campaignDurations[0]).toMatchObject({
+      label: "One-week run",
+      count: 1,
+      detail: "Nykaa - 8 observed days - active",
+    });
     expect(summary.creativeTimeline[0]).toMatchObject({
       label: "Nykaa",
       detail: "Bundle and save",
@@ -126,6 +131,7 @@ describe("insight depth", () => {
       count: 1,
       detail: "Nykaa",
     });
+    expect(summary.campaignDurations[0]?.label).toBe("One-week run");
   });
 
   it("summarizes watch events into landing-page change history", () => {
@@ -136,6 +142,10 @@ describe("insight depth", () => {
       detail: "No repeated hooks yet.",
     });
     expect(summary.mediaMix[0]).toMatchObject({ label: "Landing page", count: 1 });
+    expect(summary.campaignDurations[0]).toMatchObject({
+      label: "Pending",
+      detail: "No duration proof yet.",
+    });
     expect(summary.landingPageHistory[0]).toMatchObject({
       label: "Landing page offer changed",
       detail: "Sale-led hero -> Routine-first bundle",
@@ -148,6 +158,7 @@ describe("insight depth", () => {
 
     expect(markdown).toContain("*Insight depth*");
     expect(markdown).toContain("_Top hooks_");
+    expect(markdown).toContain("_Observed campaign duration_");
     expect(markdown).toContain("_Landing-page history_");
     expect(markdown).toContain("Sale-led hero -> Routine-first bundle");
   });
