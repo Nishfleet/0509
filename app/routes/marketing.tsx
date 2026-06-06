@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { demoProof } from "~/lib/demo-proof";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
@@ -134,6 +135,7 @@ export default function MarketingRoute() {
           </Link>
 
           <nav className="f9-nav-links" aria-label="Primary">
+            <a href="#demo">Demo</a>
             <a href="#platform">Products</a>
             <a href="#platform">Signals</a>
             <a href="#pricing">Pricing</a>
@@ -165,8 +167,8 @@ export default function MarketingRoute() {
             <h1>Know when competitors change the offer.</h1>
 
             <p>
-              Enter a competitor website. Five to Nine watches ads and landing pages, captures
-              evidence, and tells your team when visible offer text, CTAs, forms, or onboarding page copy move.
+              In an account, enter a competitor website. Five to Nine watches ads and landing pages,
+              captures evidence, and tells your team when visible offer text, CTAs, forms, or onboarding page copy move.
             </p>
 
             <div className="f9-public-status-note" role="note">
@@ -299,6 +301,96 @@ export default function MarketingRoute() {
         </div>
       </section>
 
+      <section className="f9-demo-proof-section" id="demo">
+        <div className="f9-container f9-demo-proof-layout">
+          <div className="f9-demo-proof-copy">
+            <span>Sample proof loop</span>
+            <h2>See the proof shape before creating an account.</h2>
+            <p>
+              This is sample data, not a public live search. It shows the buyer moment Five to Nine
+              is built around: one competitor, evidence trail, insight summary, digest preview, and export.
+            </p>
+            <div className="f9-demo-proof-actions">
+              <a href="/api/demo-proof">View JSON</a>
+              <a href="/api/demo-proof?format=markdown">Markdown proof</a>
+            </div>
+          </div>
+
+          <div className="f9-demo-proof-board" aria-label="Sample Five to Nine proof trail">
+            <article className="f9-demo-competitor-card">
+              <span>{demoProof.competitor.market}</span>
+              <h3>{demoProof.competitor.name}</h3>
+              <p>{demoProof.summary}</p>
+            </article>
+
+            <div className="f9-demo-proof-grid">
+              <article>
+                <span>Proof trail</span>
+                <ul>
+                  {demoProof.proofTrail.map((item) => (
+                    <li key={item.signal}>
+                      <strong>{item.signal}</strong>
+                      <p>{item.evidence}</p>
+                      <em>{item.source}</em>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+
+              <article>
+                <span>Digest preview</span>
+                <h3>{demoProof.digestPreview.subject}</h3>
+                <p>{demoProof.digestPreview.recommendedMove}</p>
+                <dl>
+                  <div>
+                    <dt>Priority</dt>
+                    <dd>{demoProof.digestPreview.priority}</dd>
+                  </div>
+                  <div>
+                    <dt>Confidence</dt>
+                    <dd>{demoProof.digestPreview.confidence}</dd>
+                  </div>
+                </dl>
+              </article>
+            </div>
+
+            <div className="f9-demo-intel-grid" aria-label="Sample insight depth">
+              <article>
+                <span>Top hooks</span>
+                <ul>
+                  {demoProof.insightPreview.topHooks.map((hook) => (
+                    <li key={hook}>{hook}</li>
+                  ))}
+                </ul>
+              </article>
+              <article>
+                <span>Media mix</span>
+                <ul>
+                  {demoProof.insightPreview.mediaMix.map((item) => (
+                    <li key={item.channel}>
+                      <strong>{item.channel}</strong>
+                      <em>{item.share}</em>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+              <article>
+                <span>Timeline</span>
+                <ul>
+                  {demoProof.insightPreview.creativeTimeline.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+              <article>
+                <span>Slack-ready export</span>
+                <p>{demoProof.exports.slackMarkdown}</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="f9-growth-pricing" id="pricing">
         <div className="f9-container">
           <div className="f9-growth-pricing-head">
@@ -315,8 +407,8 @@ export default function MarketingRoute() {
           </div>
 
           <p className="f9-growth-pricing-note">
-            Every paid plan includes competitor watchlists, page checks, saved collections, and
-            clear caps. Upgrade when your category gets noisier.
+            Review the sample proof loop first. Paid plans add account-gated competitor research,
+            watchlists, page checks, saved collections, and clear caps.
           </p>
 
           <div className="f9-commerce-grid">
