@@ -320,7 +320,7 @@ describe("Dodo billing persistence", () => {
 });
 
 describe("scheduled watchlist selection", () => {
-  it("only returns active paid-plan watchlists for scheduled monitoring", async () => {
+  it("excludes Scout watchlists from default scheduled monitoring selection", async () => {
     const mock = createMockDb();
 
     await listActiveWatchlists({ DB: mock.db } as never);
@@ -328,6 +328,16 @@ describe("scheduled watchlist selection", () => {
     expect(mock.statements[0]?.sql).toContain("INNER JOIN user_plan");
     expect(mock.statements[0]?.sql).toContain("watchlist.is_active = 1");
     expect(mock.statements[0]?.sql).toContain("user_plan.plan IN ('starter', 'agency')");
+    expect(mock.statements[0]?.sql).toContain("user_plan.plan = 'scout'");
+    expect(mock.statements[0]?.bindings).toEqual([0]);
+  });
+
+  it("can include Scout watchlists for the weekly digest path", async () => {
+    const mock = createMockDb();
+
+    await listActiveWatchlists({ DB: mock.db } as never, { includeScout: true });
+
+    expect(mock.statements[0]?.bindings).toEqual([1]);
   });
 });
 

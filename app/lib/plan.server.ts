@@ -12,8 +12,8 @@ export const PLAN_LIMITS = {
   scout: {
     watchlists: 3,
     collections: 10,
-    digests: false,
-    digestCadence: "none",
+    digests: true,
+    digestCadence: "weekly",
     proofCapturesPerMonth: 50,
     metaSourceStatus: "beta_limited",
   },

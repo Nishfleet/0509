@@ -141,6 +141,21 @@ describe("checkPlanLimit", () => {
   });
 });
 
+describe("PLAN_LIMITS", () => {
+  it("gives Scout an automated weekly digest loop", async () => {
+    const { PLAN_LIMITS } = await import("~/lib/plan.server");
+
+    expect(PLAN_LIMITS.scout).toMatchObject({
+      digests: true,
+      digestCadence: "weekly",
+      proofCapturesPerMonth: 50,
+      watchlists: 3,
+      collections: 10,
+    });
+    expect(PLAN_LIMITS.agency.digestCadence).toBe("daily_and_weekly");
+  });
+});
+
 describe("getProofUsageSummary", () => {
   it("warns when a paid workspace crosses 80 percent of proof capacity", async () => {
     const mock = createMockDb({
