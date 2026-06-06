@@ -414,12 +414,16 @@ export default function AppSourcesRoute() {
                 <dd>/api/v1/digests/&lbrace;id&rbrace;?format=slack</dd>
               </div>
               <div>
+                <dt>MCP</dt>
+                <dd>POST /api/mcp</dd>
+              </div>
+              <div>
                 <dt>Header</dt>
                 <dd>Authorization: Bearer your Five to Nine API key</dd>
               </div>
             </dl>
             <p className="f9-muted-copy">
-              This API does not add TikTok, Google, LinkedIn, Pinterest, write access, or MCP yet.
+              This API does not add TikTok, Google, LinkedIn, Pinterest, or write access.
             </p>
           </section>
         </div>

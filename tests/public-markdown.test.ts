@@ -48,7 +48,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Public demo proof is sample-only");
     expect(LLMS_TEXT).toContain("Account-gated analysis");
     expect(LLMS_TEXT).toContain("read-only /api/v1");
-    expect(LLMS_TEXT).toContain("MCP are not live yet");
+    expect(LLMS_TEXT).toContain("read-only /api/mcp");
+    expect(LLMS_TEXT).not.toContain("MCP are not live yet");
     expect(LLMS_TEXT).not.toContain("Public analysis.");
     expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve/i);
   });

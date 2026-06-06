@@ -86,6 +86,7 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("Customer API");
     expect(appSurface).toContain("Create API key");
     expect(appSurface).toContain("/api/v1");
+    expect(appSurface).toContain("/api/mcp");
     expect(digestsRoute).toContain("formatDeliveryChannelLabel");
     expect(digestsRoute).toContain('channel === "slack"');
   });
