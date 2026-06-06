@@ -323,6 +323,72 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("retries a transient empty Browserless render before failing the Meta capture", async () => {
+    const browserlessResponses = [
+      new Response(
+        JSON.stringify({
+          data: {
+            html: {
+              html: "<html><body>No ad cards rendered yet</body></html>",
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+      new Response(
+        JSON.stringify({
+          data: {
+            html: {
+              html: `
+                <html>
+                  <body>
+                    <article>
+                      <strong>Nykaa</strong>
+                      <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
+                      <a href="/ads/library/?id=1234567890">View ad details</a>
+                      <a href="https://www.nykaa.com/glow-sale">Shop now</a>
+                    </article>
+                  </body>
+                </html>
+              `,
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    ];
+    const fetchSpy = mockFetchWithDns(
+      vi.fn(async () => browserlessResponses.shift() ?? new Response(null, { status: 500 })) as never,
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+      },
+      buildQuery(),
+    );
+
+    expect(nonDnsFetchCalls(fetchSpy)).toHaveLength(2);
+    expect(result.ads).toEqual([
+      expect.objectContaining({
+        metaAdId: "1234567890",
+        advertiser: "nykaa",
+      }),
+    ]);
+  });
+
   it("extracts rendered Meta Ad Library text cards when ad-detail links are absent", async () => {
     mockFetchWithDns(
       vi.fn(async () =>

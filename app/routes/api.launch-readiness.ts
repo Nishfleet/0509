@@ -42,6 +42,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     signals.proof.recentSuccessfulCaptures > 0 ? null : "no_recent_proof_capture",
     signals.digestDelivery.recentAttempts > 0 ? null : "no_recent_digest_delivery_attempt",
     signals.digestDelivery.recentSent > 0 ? null : "no_recent_digest_sent",
+    ...metaAdsBeta.blockers.map((blocker) => `meta_ads_beta:${blocker}`),
   ].filter((value): value is string => Boolean(value));
 
   return Response.json(

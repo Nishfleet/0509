@@ -36,6 +36,13 @@ function createHealthyCanaryFetchImpl() {
         ok: true,
         blockers: [],
         signals: {},
+        metaAdsBeta: {
+          ok: true,
+          samples: 24,
+          sampleTarget: 20,
+          successRate: 1,
+          blockers: [],
+        },
       });
     }
 
@@ -210,6 +217,46 @@ describe("production canary", () => {
     expect(report.passed).toBe(true);
     expect(formatProductionCanaryReport(report)).toContain("meta ads beta: ok");
     expect(formatProductionCanaryReport(report)).toContain("fresh-live bypass: ok");
+  });
+
+  it("fails when the readiness endpoint says Meta ads beta is below the bar", async () => {
+    const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes("/api/launch-readiness")) {
+        return Response.json({
+          ok: true,
+          blockers: [],
+          signals: {},
+          metaAdsBeta: {
+            ok: false,
+            samples: 633,
+            sampleTarget: 20,
+            successRate: 0.9447,
+            blockers: ["success_rate_below_95_percent", "recent_live_failures"],
+          },
+        });
+      }
+
+      return Response.json({
+        status: "ok",
+        app: "0509",
+      });
+    });
+    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
+
+    const report = await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+      canaryBypassToken: "secret-token",
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.metaAdsBeta?.status).toBe("needs_proof");
+    const formatted = formatProductionCanaryReport(report);
+    expect(formatted).toContain("meta ads beta: needs proof (633/20 samples, 94% success)");
+    expect(formatted).not.toContain("meta ads probe:");
   });
 
   it("fails when the fresh-live bypass token is missing", async () => {
