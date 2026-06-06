@@ -1060,6 +1060,198 @@ img {
   transform: translate(-50%, 38%);
 }
 
+.f9-demo-proof-section {
+  background: #0b1530;
+  color: #fff;
+  padding: 96px 0;
+}
+
+.f9-demo-proof-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: 34px;
+  align-items: start;
+}
+
+.f9-demo-proof-copy {
+  display: grid;
+  gap: 18px;
+  position: sticky;
+  top: 24px;
+}
+
+.f9-demo-proof-copy > span,
+.f9-demo-proof-board span,
+.f9-demo-intel-grid span {
+  color: #7dde96;
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.f9-demo-proof-copy h2 {
+  max-width: 11ch;
+  margin: 0;
+  font-size: clamp(2.9rem, 4.9vw, 5rem);
+  font-weight: 560;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.f9-demo-proof-copy p {
+  max-width: 46ch;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 1.04rem;
+}
+
+.f9-demo-proof-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.f9-demo-proof-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.f9-demo-proof-board,
+.f9-demo-proof-grid,
+.f9-demo-intel-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.f9-demo-competitor-card,
+.f9-demo-proof-grid article,
+.f9-demo-intel-grid article {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.18);
+}
+
+.f9-demo-competitor-card {
+  padding: 24px;
+}
+
+.f9-demo-competitor-card h3,
+.f9-demo-proof-grid h3 {
+  margin: 8px 0 0;
+  color: #fff;
+  font-size: 1.54rem;
+  line-height: 1.08;
+}
+
+.f9-demo-competitor-card p,
+.f9-demo-proof-grid p,
+.f9-demo-intel-grid p {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.f9-demo-proof-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.78fr);
+}
+
+.f9-demo-proof-grid article,
+.f9-demo-intel-grid article {
+  padding: 20px;
+}
+
+.f9-demo-proof-grid ul,
+.f9-demo-intel-grid ul {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-demo-proof-grid li {
+  display: grid;
+  gap: 4px;
+  padding: 14px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.f9-demo-proof-grid li strong {
+  color: #fff;
+}
+
+.f9-demo-proof-grid li p {
+  margin: 0;
+}
+
+.f9-demo-proof-grid li em,
+.f9-demo-intel-grid li em {
+  color: #7dde96;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.f9-demo-proof-grid dl {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+.f9-demo-proof-grid dl div {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.f9-demo-proof-grid dt {
+  color: #7dde96;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.f9-demo-proof-grid dd {
+  margin: 4px 0 0;
+  color: #fff;
+  font-weight: 850;
+}
+
+.f9-demo-intel-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.f9-demo-intel-grid li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.9rem;
+}
+
+.f9-demo-intel-grid li strong {
+  color: #fff;
+}
+
+.f9-demo-intel-grid article:last-child p {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .f9-growth-pricing,
 .f9-footer {
   position: relative;
@@ -1579,9 +1771,19 @@ img {
 
   .f9-backbone-stats,
   .f9-commerce-grid,
+  .f9-demo-proof-layout,
+  .f9-demo-intel-grid,
   .f9-usage-bundles,
   .f9-usage-bundle-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .f9-demo-proof-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .f9-demo-proof-copy {
+    position: static;
   }
 }
 
@@ -1692,6 +1894,8 @@ img {
   .f9-signal-row,
   .f9-backbone-stats,
   .f9-commerce-grid,
+  .f9-demo-proof-grid,
+  .f9-demo-intel-grid,
   .f9-growth-pricing-head,
   .f9-usage-bundles,
   .f9-usage-bundle-grid {
@@ -1725,11 +1929,13 @@ img {
   }
 
   .f9-backbone-heading,
+  .f9-demo-proof-section,
   .f9-growth-pricing {
     padding: 64px 0;
   }
 
   .f9-backbone-heading h2,
+  .f9-demo-proof-copy h2,
   .f9-growth-pricing-head h2 {
     font-size: 2.42rem;
   }

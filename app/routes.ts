@@ -14,6 +14,7 @@ export default [
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/billing/dodo/checkout", "routes/api.billing.dodo.checkout.ts"),
   route("api/billing/dodo/canary", "routes/api.billing.dodo.canary.ts"),
+  route("api/demo-proof", "routes/api.demo-proof.ts"),
   route("api/pricing-preview", "routes/api.pricing-preview.ts"),
   route("api/webhooks/dodo", "routes/api.webhooks.dodo.ts"),
   route("api/delivery-status/:provider", "routes/api.delivery-status.$provider.ts"),
