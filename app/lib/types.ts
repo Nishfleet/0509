@@ -215,6 +215,7 @@ export interface SearchResponse {
   source: AdDiscoverySource;
   provider?: AdDiscoveryProvider;
   cacheStatus?: DiscoveryCacheStatus;
+  discoveryEmptyReason?: "no_results";
   discoveryStatus?: CommercialDiscoveryStatus;
   discoverySummary?: string | null;
   discoveryFailureClass?: DiscoveryFailureClass | null;

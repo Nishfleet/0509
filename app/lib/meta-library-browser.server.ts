@@ -83,6 +83,7 @@ interface BrowserRunLimits {
 interface QuickActionExtractionPayload {
   cards: ExtractedAdCard[];
   loginWall: boolean;
+  noResults: boolean;
   rateLimited: boolean;
 }
 
@@ -253,6 +254,7 @@ async function searchMetaLibraryViaSessions(
         loginWall:
           /log in|login|sign in|sign into/.test(lowerPageText) &&
           lowerPageText.includes("facebook"),
+        noResults: false,
         rateLimited:
           lowerPageText.includes("rate limit") ||
           lowerPageText.includes("too many requests") ||
@@ -265,17 +267,22 @@ async function searchMetaLibraryViaSessions(
           cards: extraction as ExtractedAdCard[],
           pageText: "",
           loginWall: false,
+          noResults: false,
           rateLimited: false,
         }
       : extraction as {
           cards: ExtractedAdCard[];
           pageText: string;
           loginWall: boolean;
+          noResults: boolean;
           rateLimited: boolean;
         };
     const extractedCards = normalizedExtraction.cards.length > 0
       ? normalizedExtraction.cards
       : extractTextCardsFromVisibleText(normalizedExtraction.pageText);
+    const noResults =
+      normalizedExtraction.noResults ||
+      hasNoResultsSignal(normalizedExtraction.pageText);
 
     if (extractedCards.length === 0) {
       if (normalizedExtraction.loginWall) {
@@ -290,6 +297,10 @@ async function searchMetaLibraryViaSessions(
           "Meta Ad Library is temporarily rate limited.",
           "rate_limited",
         );
+      }
+
+      if (noResults) {
+        return emptyMetaLibraryResponse();
       }
 
       throw new CommercialDiscoveryError(
@@ -335,6 +346,10 @@ async function searchMetaLibraryByQuickActions(
           "Meta Ad Library is temporarily rate limited.",
           "rate_limited",
         );
+      }
+
+      if (extracted.noResults) {
+        return emptyMetaLibraryResponse();
       }
 
       throw new CommercialDiscoveryError(
@@ -395,7 +410,7 @@ async function extractMetaLibraryByQuickActions(
 
     const extracted = parseQuickActionExtractionPayload(quickActionContent.content);
     if (extracted.cards.length === 0) {
-      if (!extracted.loginWall && !extracted.rateLimited) {
+      if (!extracted.loginWall && !extracted.rateLimited && !extracted.noResults) {
         return scrapeMetaLibraryByQuickActions(env, url);
       }
     }
@@ -646,6 +661,10 @@ async function searchMetaLibraryByBrowserlessOnce(
       throw new CommercialDiscoveryError("Meta Ad Library is temporarily rate limited.", "rate_limited");
     }
 
+    if (extracted.noResults) {
+      return emptyMetaLibraryResponse();
+    }
+
     throw new CommercialDiscoveryError(
       "Browserless returned no extractable Meta Ad Library cards.",
       "empty_result",
@@ -772,6 +791,16 @@ function buildQuickActionExtractionScript() {
   const payload = {
     cards,
     loginWall: /log in|login|sign in|sign into/.test(pageText) && pageText.includes("facebook"),
+    noResults:
+      pageText.includes("no ads found") ||
+      pageText.includes("no ads match") ||
+      pageText.includes("no results") ||
+      /\\b0\\s+results?\\b/.test(pageText) ||
+      /\\bno\\s+(ads?|results?)\\s+(match|matched|found|available)\\b/.test(pageText) ||
+      /\\bcouldn.?t find any ads\\b/.test(pageText) ||
+      /\\bcould not find any ads\\b/.test(pageText) ||
+      /\\bwe (didn't|did not) find any results\\b/.test(pageText) ||
+      /\\bthere are no ads\\b/.test(pageText),
     rateLimited:
       pageText.includes("rate limit") ||
       pageText.includes("too many requests") ||
@@ -808,6 +837,7 @@ function parseQuickActionExtractionPayload(content: string): QuickActionExtracti
     if (
       renderedHtmlPayload.cards.length > 0 ||
       renderedHtmlPayload.loginWall ||
+      renderedHtmlPayload.noResults ||
       renderedHtmlPayload.rateLimited
     ) {
       return renderedHtmlPayload;
@@ -833,6 +863,7 @@ function parseQuickActionExtractionPayload(content: string): QuickActionExtracti
     if (
       renderedHtmlPayload.cards.length > 0 ||
       renderedHtmlPayload.loginWall ||
+      renderedHtmlPayload.noResults ||
       renderedHtmlPayload.rateLimited
     ) {
       return renderedHtmlPayload;
@@ -920,6 +951,7 @@ function extractQuickActionPayloadFromScrape(
   return {
     cards,
     loginWall: false,
+    noResults: false,
     rateLimited: false,
   };
 }
@@ -979,6 +1011,7 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
     cards: cards.length > 0 ? cards : extractTextCardsFromVisibleText(visibleText),
     loginWall:
       /log in|login|sign in|sign into/.test(text) && text.includes("facebook"),
+    noResults: hasNoResultsSignal(visibleText),
     rateLimited:
       text.includes("rate limit") ||
       text.includes("too many requests") ||
@@ -1040,6 +1073,37 @@ function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[] {
   }
 
   return cards;
+}
+
+function emptyMetaLibraryResponse(): SearchResponse {
+  return {
+    ads: [],
+    nextCursor: null,
+    source: "meta_library_browser",
+    provider: "meta_library_browser",
+    cacheStatus: "miss",
+    discoveryEmptyReason: "no_results",
+  };
+}
+
+function hasNoResultsSignal(value: string) {
+  const normalized = value
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  return (
+    normalized.includes("no ads found") ||
+    normalized.includes("no ads match") ||
+    normalized.includes("no results") ||
+    /\b0\s+results?\b/.test(normalized) ||
+    /\bno\s+(ads?|results?)\s+(match|matched|found|available)\b/.test(normalized) ||
+    /\bcouldn.?t find any ads\b/.test(normalized) ||
+    /\bcould not find any ads\b/.test(normalized) ||
+    /\bwe (didn't|did not) find any results\b/.test(normalized) ||
+    /\bthere are no ads\b/.test(normalized)
+  );
 }
 
 function inferAdvertiserFromTextBlock(block: string[]) {
