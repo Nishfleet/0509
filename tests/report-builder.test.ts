@@ -174,6 +174,14 @@ describe("buildCollectionReport", () => {
       { label: "Countries", value: "India" },
       { label: "Platforms", value: "Instagram" },
     ]);
+    expect(report.insightDepth.topHooks[0]).toMatchObject({
+      label: "Bass bhi. Battery bhi.",
+      count: 1,
+    });
+    expect(report.insightDepth.mediaMix[0]).toMatchObject({
+      label: "Instagram",
+      count: 1,
+    });
     expect(report.rows[0]).toMatchObject({
       advertiser: "boAt",
       previewImageUrl: "https://cdn.example.com/boat.png",
@@ -220,6 +228,10 @@ describe("buildWatchlistReport", () => {
       { label: "Linked ads", value: "1" },
       { label: "Event types", value: "ad new" },
     ]);
+    expect(report.insightDepth.creativeTimeline[0]).toMatchObject({
+      label: "New ad detected",
+      detail: "A new ad entered Audio competitors.",
+    });
     expect(report.rows[0]).toMatchObject({
       advertiser: "boAt",
       event: {

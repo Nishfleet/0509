@@ -7,6 +7,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { buildCollectionInsightDepth } from "~/lib/insight-depth";
 import { createReportId } from "~/lib/report";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -117,6 +119,7 @@ export default function CollectionsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [searchParams] = useSearchParams();
+  const insightDepth = data.selectedCollection ? buildCollectionInsightDepth(data.items) : null;
 
   return (
     <section className="f9-app-stack">
@@ -222,6 +225,8 @@ export default function CollectionsRoute() {
                   </Form>
                 </div>
               </div>
+
+              {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
               {data.items.length === 0 ? (
                 <div className="f9-empty-panel">

@@ -8,6 +8,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import type { AppEnv } from "~/lib/env.server";
 import {
   emptyCompetitorWebsite,
@@ -22,6 +23,7 @@ import {
   formatProofAgeLabel,
   formatWhyAlertedLabel,
 } from "~/lib/landing-page-display";
+import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { createReportId } from "~/lib/report";
 import type {
@@ -417,6 +419,7 @@ export default function WatchlistsRoute() {
     data.recentProofCaptures.map((capture) => [capture.id, capture]),
   );
   const lastAttemptByEventId = buildLastAttemptByEventId(data.recentDeliveryAttempts);
+  const insightDepth = data.selectedWatchlist ? buildWatchlistInsightDepth(data.events) : null;
 
   return (
     <section className="f9-app-stack">
@@ -536,6 +539,8 @@ export default function WatchlistsRoute() {
                   </Form>
                 </div>
               </div>
+
+              {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
               <div className="f9-work-list">
                 <section>

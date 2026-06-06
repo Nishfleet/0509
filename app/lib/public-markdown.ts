@@ -16,6 +16,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Account-gated competitor ad search, retained monitoring, and reusable saved evidence.
 - Search, competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Authenticated collection, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
+- Account insight-depth summaries cover top hooks, media mix, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily briefs and weekly digests should show priority, recommended next move, and proof trail.
 
