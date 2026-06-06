@@ -47,18 +47,18 @@ export default function LoginRoute() {
           </Link>
 
           <div>
-            <span>Workspace sign in</span>
-            <h1>Return to the proof layer behind your market decisions.</h1>
+            <span>Competitor watch</span>
+            <h1>Return to the changes your team is watching.</h1>
             <p>
-              Saved searches, watchlists, collections, and digests stay tied to source state so the team can pick up
-              the exact market trail.
+              Saved searches, watchlists, collections, and digests stay tied to the proof your team needs before the
+              next sales call.
             </p>
           </div>
 
           <div className="f9-auth-proof-list">
             <div>
               <strong>Saved research</strong>
-              <p>Keep filters and source labels attached to repeated checks.</p>
+              <p>Keep filters, competitor sites, and proof notes attached to repeated checks.</p>
             </div>
             <div>
               <strong>Watchlists</strong>

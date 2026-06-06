@@ -67,9 +67,11 @@ describe("Dodo billing", () => {
         DODO_0509_PRODUCT_PROOF_PACK_2000_ID: "prod_pack_2000",
       },
       {
-        id: "pay_123",
-        brand_id: "brand_0509",
-        created_at: "2026-05-20T00:00:00.000Z",
+	        id: "pay_123",
+	        brand_id: "brand_0509",
+	        created_at: "2026-05-20T00:00:00.000Z",
+	        expires_at: "2026-05-20T00:00:00.000Z",
+	        status: "succeeded",
         metadata: {
           user_id: "user-1",
         },
@@ -123,5 +125,114 @@ describe("Dodo billing", () => {
       cycle: "monthly",
       status: "succeeded",
     });
+  });
+
+  it("extracts paid grants from current Dodo envelope payloads", () => {
+    const grant = extractDodoPlanGrant(
+      {
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_PRODUCT_STARTER_MONTHLY_ID: "prod_starter_monthly",
+      },
+      {
+        type: "payment.succeeded",
+        data: {
+          payment_id: "pay_starter",
+          brand_id: "brand_0509",
+          status: "succeeded",
+          metadata: {
+            user_id: "user-1",
+          },
+          product_cart: [
+            {
+              product_id: "prod_starter_monthly",
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    );
+
+	  expect(grant).toMatchObject({
+	    userId: "user-1",
+	    paymentId: "pay_starter",
+	    productId: "prod_starter_monthly",
+	    plan: "starter",
+	    cycle: "monthly",
+	    status: "succeeded",
+	  });
+	});
+
+	it("uses the Dodo payment update timestamp for paid plan ordering when available", () => {
+	  const grant = extractDodoPlanGrant(
+	    {
+	      DODO_0509_BRAND_ID: "brand_0509",
+	      DODO_0509_PRODUCT_STARTER_MONTHLY_ID: "prod_starter_monthly",
+	    },
+	    {
+	      type: "payment.succeeded",
+	      data: {
+	        payment_id: "pay_starter",
+	        brand_id: "brand_0509",
+	        created_at: "2026-06-04T12:00:00.000Z",
+	        updated_at: "2026-06-05T08:00:00.000Z",
+	        status: "succeeded",
+	        metadata: {
+	          user_id: "user-1",
+	        },
+	        product_cart: [
+	          {
+	            product_id: "prod_starter_monthly",
+	            quantity: 1,
+	          },
+	        ],
+	      },
+	    },
+	  );
+
+	  expect(grant).toMatchObject({
+	    grantedAt: "2026-06-05T08:00:00.000Z",
+	  });
+	});
+
+	it("does not grant paid access or proof credits for non-successful Dodo payment events", () => {
+    const env = {
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      DODO_0509_PRODUCT_PROOF_PACK_500_ID: "prod_pack_500",
+    };
+    const failedPlanPayment = {
+      type: "payment.failed",
+      data: {
+        payment_id: "pay_failed",
+        brand_id: "brand_0509",
+        status: "failed",
+        metadata: {
+          user_id: "user-1",
+        },
+        product_cart: [
+          {
+            product_id: "prod_scout_monthly",
+            quantity: 1,
+          },
+        ],
+      },
+    };
+    const processingCreditPayment = {
+      id: "pay_processing",
+      brand_id: "brand_0509",
+      status: "processing",
+      metadata: {
+        user_id: "user-1",
+      },
+      product_cart: [
+        {
+          product_id: "prod_pack_500",
+          quantity: 1,
+        },
+      ],
+    };
+
+    expect(extractDodoPlanGrant(env, failedPlanPayment)).toBeNull();
+    expect(extractDodoProofCreditGrant(env, processingCreditPayment)).toBeNull();
   });
 });

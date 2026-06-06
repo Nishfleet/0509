@@ -47,26 +47,26 @@ export default function SignupRoute() {
           </Link>
 
           <div>
-            <span>Workspace access</span>
-            <h1>Build a proof-backed market intelligence workspace.</h1>
+            <span>First competitor</span>
+            <h1>Start with the competitor your team keeps checking by hand.</h1>
             <p>
-              Save repeated market checks, monitor the competitor moves that matter, and keep evidence close to every
-              decision your team makes.
+              Paste a competitor website, find the ads behind it, and keep proof of offer and landing-page changes in
+              one place.
             </p>
           </div>
 
           <div className="f9-auth-proof-list">
             <div>
               <strong>Search</strong>
-              <p>Start from advertiser, keyword, offer, and platform searches.</p>
+              <p>Start from competitor website, advertiser, keyword, offer, and platform searches.</p>
             </div>
             <div>
               <strong>Monitor</strong>
-              <p>Turn repeated checks into watchlists with source-state history.</p>
+              <p>Turn repeated checks into watchlists with proof history.</p>
             </div>
             <div>
               <strong>Brief</strong>
-              <p>Use proof-backed summaries to move copy, pricing, and channel decisions.</p>
+              <p>Use proof-backed summaries to move copy, pricing, and sales responses faster.</p>
             </div>
           </div>
         </section>

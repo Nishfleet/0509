@@ -14,15 +14,15 @@ describe("pricingPlans", () => {
     expect(plans.map((plan) => plan.slug)).toEqual(["scout", "starter", "agency"]);
   });
 
-  it("keeps visible fallback pricing neutral until Dodo returns local checkout preview", () => {
+  it("keeps visible fallback pricing neutral until live prices return", () => {
     const [scout, starter, agency] = pricingPlans();
 
-    expect(scout.monthlyLabel).toBe("Loading local monthly price");
-    expect(scout.yearlyLabel).toBe("Loading local annual price");
-    expect(starter.monthlyLabel).toBe("Loading local monthly price");
-    expect(starter.yearlyLabel).toBe("Loading local annual price");
-    expect(agency.monthlyLabel).toBe("Loading local monthly price");
-    expect(agency.yearlyLabel).toBe("Loading local annual price");
+    expect(scout.monthlyLabel).toBe("Monthly price loading");
+    expect(scout.yearlyLabel).toBe("Annual price loading");
+    expect(starter.monthlyLabel).toBe("Monthly price loading");
+    expect(starter.yearlyLabel).toBe("Annual price loading");
+    expect(agency.monthlyLabel).toBe("Monthly price loading");
+    expect(agency.yearlyLabel).toBe("Annual price loading");
   });
 
   it("keeps plan caps generous but finite", () => {
@@ -40,17 +40,17 @@ describe("pricingPlans", () => {
     expect(usageBundles()).toEqual([
       expect.objectContaining({
         slug: "proof_500",
-        priceLabel: "Loading local pack price",
+        priceLabel: "Pack price loading",
         creditLabel: "500 extra proof captures",
       }),
       expect.objectContaining({
         slug: "proof_2000",
-        priceLabel: "Loading local pack price",
+        priceLabel: "Pack price loading",
         creditLabel: "2,000 extra proof captures",
       }),
       expect.objectContaining({
         slug: "proof_7500",
-        priceLabel: "Loading local pack price",
+        priceLabel: "Pack price loading",
         creditLabel: "7,500 extra proof captures",
       }),
     ]);

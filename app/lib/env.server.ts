@@ -3,6 +3,7 @@ export interface AppEnv {
   APP_NAME?: string;
   BETTER_AUTH_SECRET?: string;
   BROWSER?: Fetcher;
+  BROWSERLESS_PROOF_ALLOWLIST_ORIGINS?: string;
   BROWSERLESS_TOKEN?: string;
   BROWSERLESS_BQL_URL?: string;
   BROWSER_RUN_ACCOUNT_ID?: string;
@@ -43,8 +44,11 @@ export interface AppEnv {
   RAZORPAY_PLAN_STARTER_MONTHLY?: string;
   RAZORPAY_PLAN_STARTER_YEARLY?: string;
   RAZORPAY_WEBHOOK_SECRET?: string;
-  RESEND_API_KEY?: string;
-  RESEND_FROM_EMAIL?: string;
+  POSTMARK_ACCOUNT_TOKEN?: string;
+  POSTMARK_FROM_EMAIL?: string;
+  POSTMARK_MESSAGE_STREAM?: string;
+  POSTMARK_SERVER_TOKEN?: string;
+  POSTMARK_WEBHOOK_SECRET?: string;
   WHATSAPP_ACCESS_TOKEN?: string;
   WHATSAPP_APP_SECRET?: string;
   WHATSAPP_DELIVERY_ENABLED?: string;
@@ -99,8 +103,16 @@ function parseEnvFlag(value: string | undefined) {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-export function isResendConfigured(env: AppEnv) {
-  return Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL);
+export function postmarkFromEmail(env: AppEnv) {
+  return env.POSTMARK_FROM_EMAIL?.trim() || "";
+}
+
+export function postmarkMessageStream(env: AppEnv) {
+  return env.POSTMARK_MESSAGE_STREAM?.trim() || "outbound";
+}
+
+export function isPostmarkConfigured(env: AppEnv) {
+  return Boolean(env.POSTMARK_SERVER_TOKEN?.trim() && postmarkFromEmail(env));
 }
 
 export function isWhatsAppProviderConfigured(env: AppEnv) {

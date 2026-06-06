@@ -206,7 +206,7 @@ describe("onboarding route", () => {
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
 
-  it("returns a structured limit prompt without a pricing link when onboarding watchlists are capped", async () => {
+  it("returns a structured upgrade prompt when onboarding watchlists are capped", async () => {
     const completeUserOnboarding = vi.fn();
     const createWatchlist = vi.fn();
 
@@ -256,6 +256,7 @@ describe("onboarding route", () => {
       limit: 3,
       message: "You have reached your workspace watchlist limit.",
       ok: false,
+      upgradePath: "/#pricing",
     });
     expect(createWatchlist).not.toHaveBeenCalled();
     expect(completeUserOnboarding).not.toHaveBeenCalled();
@@ -304,7 +305,7 @@ describe("onboarding route", () => {
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
 
-  it("does not render a pricing CTA on onboarding plan-limit errors", async () => {
+  it("renders a pricing CTA when onboarding watchlists are gated", async () => {
     vi.doMock("react-router", async () => {
       const actual = await vi.importActual<typeof import("react-router")>("react-router");
       const React = await import("react");
@@ -318,7 +319,25 @@ describe("onboarding route", () => {
         useActionData: vi.fn().mockReturnValue({
           ok: false,
           error: "plan_limit_exceeded",
-          message: "You have reached your workspace watchlist limit.",
+          message:
+            "Watchlists are available on paid plans. Starter is the recommended launch plan for monitoring this competitor.",
+          upgradePath: "/#pricing",
+        }),
+        useLoaderData: vi.fn().mockReturnValue({
+          session: {
+            user: {
+              id: "user-1",
+              email: "owner@example.com",
+              name: "Owner",
+              onboardedAt: null,
+            },
+          },
+          plan: "free",
+          watchlistLimit: {
+            allowed: false,
+            current: 0,
+            limit: 0,
+          },
         }),
       };
     });
@@ -326,7 +345,12 @@ describe("onboarding route", () => {
     const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
     const markup = renderToStaticMarkup(createElement(AppOnboardRoute));
 
-    expect(markup).toContain("You have reached your workspace watchlist limit.");
-    expect(markup).not.toContain("View pricing");
+    expect(markup).toContain("Choose a plan to start monitoring");
+    expect(markup).toContain("Watchlists are available on paid plans.");
+    expect(markup).toContain("Starter is the recommended launch plan");
+    expect(markup).not.toContain("Choose Scout or higher");
+    expect(markup).toContain("View pricing");
+    expect(markup).toContain("href=\"/#pricing\"");
+    expect(markup).not.toContain("Create watchlist for");
   });
 });

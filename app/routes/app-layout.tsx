@@ -61,12 +61,11 @@ export default function AppLayoutRoute() {
 
       <div className="f9-app-main">
         <header className="f9-app-topbar">
-          <div>
-            <span className="f9-app-kicker">Five to Nine workspace</span>
-            <h1>Track competitor changes without losing the context.</h1>
-          </div>
+          <Link className="f9-app-search-entry" to="/search">
+            Search market moves
+          </Link>
           <Link className="f9-primary-button f9-app-new-search" to="/search">
-            New search
+            Add competitor
           </Link>
         </header>
 

@@ -25,16 +25,13 @@ export default function TermsRoute() {
         <article className="f9-legal-card">
           <span className="f9-app-kicker">Terms</span>
           <h1>Five to Nine terms.</h1>
-          <p>
-            These plain-English operating terms cover accounts using Five to Nine. They should be reviewed by counsel
-            before a broader commercial rollout.
-          </p>
+          <p>These plain-English operating terms cover accounts using Five to Nine.</p>
 
           <LegalBlock title="Product status">
             <p>
               The product helps teams search competitor ads, save proof, create watchlists, and review proof-backed
-              monitoring outputs. Cached results, degraded discovery, and fresh source checks must be labeled honestly
-              wherever they appear.
+              monitoring outputs. Recent results, delayed discovery, and fresh checks are labeled honestly wherever
+              they appear.
             </p>
           </LegalBlock>
 
@@ -45,11 +42,11 @@ export default function TermsRoute() {
             </p>
           </LegalBlock>
 
-          <LegalBlock title="Source limits">
+          <LegalBlock title="Tracking limits">
             <p>
-              Five to Nine must label source status honestly. Cached results, degraded discovery, and demo data must not
-              be described as fresh live proof. Customer Meta tokens must be customer-owned, test-before-save, and used
-              only for the workspace's Meta API fallback.
+              Five to Nine must label tracking status honestly. Recent results, delayed discovery, and sample data must
+              not be described as fresh live proof. Workspace Meta access must be owner-provided, tested before saving,
+              and used only for that workspace.
             </p>
           </LegalBlock>
 
@@ -62,7 +59,7 @@ export default function TermsRoute() {
 
           <LegalBlock title="Support">
             <p>
-              Support, cancellation, and refund handling should happen through the contact path connected to the account.
+              Support, cancellation, and refund handling happen through the contact path connected to the account.
             </p>
           </LegalBlock>
         </article>

@@ -171,6 +171,12 @@ export default function CollectionsRoute() {
                 </div>
               </Link>
             ))}
+            {data.collections.length === 0 ? (
+              <div className="f9-empty-panel">
+                <h3>Create your first proof collection</h3>
+                <p>Group competitor ads, offers, and landing-page proof for the deal or client you are working on.</p>
+              </div>
+            ) : null}
           </div>
         </article>
 
@@ -206,9 +212,13 @@ export default function CollectionsRoute() {
               </div>
 
               {data.items.length === 0 ? (
-                <p className="f9-muted-copy">
-                  Save ads from the search page to populate this collection.
-                </p>
+                <div className="f9-empty-panel">
+                  <h2>Save proof from search</h2>
+                  <p>Run a competitor search, open an ad, and save the examples your team needs to reuse.</p>
+                  <Link className="f9-primary-button" to="/search">
+                    Open search
+                  </Link>
+                </div>
               ) : (
                 <div className="f9-work-list">
                   {data.items.map((item) => (
@@ -246,8 +256,8 @@ export default function CollectionsRoute() {
             </>
           ) : (
             <div className="f9-empty-panel">
-              <h2>No collection selected</h2>
-              <p>Create a collection or save an ad from search to get started.</p>
+              <h2>Create your first proof collection</h2>
+              <p>Collections keep competitor examples, notes, tags, and share links ready for your team.</p>
             </div>
           )}
         </article>

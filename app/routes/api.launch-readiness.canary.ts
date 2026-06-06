@@ -56,6 +56,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     upsertProofTarget,
   } = await import("~/lib/data.server");
   const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+  const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+  const {
+    buildCanonicalPageIdentity,
+    buildProofTargetIdentity,
+  } = await import("~/lib/proof-policy.server");
   const env = getEnv(context);
 
   if (!hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN)) {
@@ -111,22 +116,67 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const canaryKey = `launch-readiness:${nowIso}`;
   const title = "Launch readiness canary";
   const summary = "Private canary verified the monitoring, proof, and digest delivery pipeline.";
+  const proofUrl = "https://0509.in/";
+  const requestedProofProvider =
+    new URL(request.url).searchParams.get("proofProvider") === "browserless"
+      ? "browserless"
+      : null;
   const metadata = {
     kind: "launch_readiness_canary",
     generatedAt: nowIso,
     targetLabel: target.target_label,
+    requestedProofProvider,
   };
 
   const runId = await createWatchlistRun(env, target.watchlist_id, "manual", null, 1);
-  const proofTargetIdentity = `launch-readiness:${target.watchlist_id}:0509-home`;
+  const snapshot =
+    requestedProofProvider === "browserless"
+      ? await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(env, proofUrl)
+      : await captureLandingPageSnapshot(env, proofUrl);
+
+  if (!snapshot) {
+    const blocker =
+      requestedProofProvider === "browserless"
+        ? "browserless_proof_capture_failed"
+        : "proof_capture_failed";
+    await finishWatchlistRun(env, runId, {
+      status: "failed",
+      pagesScanned: 0,
+      summary: {
+        ...metadata,
+        blocker,
+        proofUrl,
+      },
+    });
+
+    return Response.json(
+      {
+        ok: false,
+        blocker,
+        runId,
+      },
+      {
+        status: 503,
+        headers: { "cache-control": "no-store" },
+      },
+    );
+  }
+
+  const canonicalPageIdentity =
+    buildCanonicalPageIdentity(snapshot.canonicalUrl) ?? buildCanonicalPageIdentity(proofUrl) ?? "0509.in/";
+  const proofTargetIdentity = buildProofTargetIdentity({
+    watchlistId: target.watchlist_id,
+    adId: null,
+    canonicalPageIdentity,
+  });
   let proofTarget = await upsertProofTarget(env, {
     watchlistId: target.watchlist_id,
     adId: null,
-    landingPageUrl: "https://0509.in/",
-    canonicalPageIdentity: "launch-readiness:0509-home",
+    landingPageUrl: snapshot.canonicalUrl,
+    canonicalPageIdentity,
     proofTargetIdentity,
-    lastCaptureAttemptAt: nowIso,
-    lastSuccessfulProofAt: nowIso,
+    lastCaptureAttemptAt: snapshot.capturedAt,
+    lastSuccessfulProofAt: snapshot.capturedAt,
   });
 
   if (!proofTarget) {
@@ -136,29 +186,36 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const proofCaptureId = await createProofCapture(env, {
     proofTargetId: proofTarget.id,
     status: "succeeded",
-    extractedFields: {
-      headline: "Five to Nine",
-      proof: summary,
+    screenshotArtifactKey: readSnapshotString(snapshot.metadata, "screenshotArtifactKey"),
+    htmlArtifactKey:
+      readSnapshotString(snapshot.metadata, "htmlArtifactKey") ?? snapshot.artifactKey ?? null,
+    extractedFields: snapshotToExtractedFields(snapshot),
+    fieldConfidence: readSnapshotConfidence(snapshot),
+    extractionWarnings: readSnapshotWarnings(snapshot),
+    captureMetadata: {
+      ...snapshot.metadata,
+      ...metadata,
+      kind: "launch_readiness_real_capture",
+      proofUrl,
+      canonicalUrl: snapshot.canonicalUrl,
+      captureMethod: snapshot.captureMethod,
     },
-    fieldConfidence: {
-      headline: 1,
-      proof: 1,
-    },
-    captureMetadata: metadata,
-    extractorVersion: "launch-readiness-canary-v1",
+    renderMode: readSnapshotRenderMode(snapshot),
+    deviceProfile: readSnapshotDeviceProfile(snapshot),
+    extractorVersion: readSnapshotString(snapshot.metadata, "extractorVersion") ?? "launch-readiness-canary-v2",
     idempotencyKey: `${canaryKey}:proof`,
-    attemptedAt: nowIso,
-    succeededAt: nowIso,
+    attemptedAt: snapshot.capturedAt,
+    succeededAt: snapshot.capturedAt,
   });
 
   proofTarget = await upsertProofTarget(env, {
     watchlistId: target.watchlist_id,
     adId: null,
-    landingPageUrl: "https://0509.in/",
-    canonicalPageIdentity: "launch-readiness:0509-home",
+    landingPageUrl: snapshot.canonicalUrl,
+    canonicalPageIdentity,
     proofTargetIdentity,
-    lastCaptureAttemptAt: nowIso,
-    lastSuccessfulProofAt: nowIso,
+    lastCaptureAttemptAt: snapshot.capturedAt,
+    lastSuccessfulProofAt: snapshot.capturedAt,
     lastSuccessfulCaptureId: proofCaptureId,
   });
 
@@ -186,6 +243,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       events: 1,
       eventsConfirmed: 1,
       proofsAttempted: 1,
+      proofUrl,
     },
   });
 
@@ -238,10 +296,71 @@ export async function action({ context, request }: ActionFunctionArgs) {
       proofCaptureId,
       digestRunId,
       delivery,
+      proof: {
+        capturedAt: snapshot.capturedAt,
+        canonicalUrl: snapshot.canonicalUrl,
+        captureMethod: snapshot.captureMethod,
+        renderProvider: readSnapshotString(snapshot.metadata, "renderProvider"),
+      },
     },
     {
       status: deliverySent ? 200 : 503,
       headers: { "cache-control": "no-store" },
     },
   );
+}
+
+function snapshotToExtractedFields(snapshot: {
+  rawHeadline: string;
+  normalizedHeadline: string;
+  normalizedHeadlineHash: string;
+  ctaText?: string | null;
+  priceText?: string | null;
+  formPresent?: boolean | null;
+  canonicalUrl: string;
+}) {
+  return {
+    rawHeadline: snapshot.rawHeadline,
+    normalizedHeadline: snapshot.normalizedHeadline,
+    normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+    ctaText: snapshot.ctaText ?? null,
+    priceText: snapshot.priceText ?? null,
+    formPresent: snapshot.formPresent ?? null,
+    canonicalUrl: snapshot.canonicalUrl,
+  };
+}
+
+function readSnapshotString(metadata: Record<string, unknown> | undefined, key: string) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function readSnapshotConfidence(snapshot: { metadata?: Record<string, unknown> }) {
+  const confidence = snapshot.metadata?.extractedFieldConfidence;
+  if (!confidence || typeof confidence !== "object" || Array.isArray(confidence)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(confidence).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+  );
+}
+
+function readSnapshotWarnings(snapshot: { metadata?: Record<string, unknown> }) {
+  const warnings = snapshot.metadata?.extractionWarnings;
+  if (!Array.isArray(warnings)) {
+    return [];
+  }
+
+  return warnings.filter((warning): warning is string => typeof warning === "string");
+}
+
+function readSnapshotRenderMode(snapshot: { metadata?: Record<string, unknown> }) {
+  return readSnapshotString(snapshot.metadata, "renderMode") === "desktop" ? "desktop" : "mobile";
+}
+
+function readSnapshotDeviceProfile(snapshot: { metadata?: Record<string, unknown> }) {
+  return readSnapshotString(snapshot.metadata, "deviceProfile") === "desktop_default"
+    ? "desktop_default"
+    : "mobile_default";
 }

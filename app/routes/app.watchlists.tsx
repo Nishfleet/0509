@@ -1,6 +1,7 @@
 import {
   Form,
   Link,
+  redirect,
   useActionData,
   useLoaderData,
   useSearchParams,
@@ -9,12 +10,19 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import type { AppEnv } from "~/lib/env.server";
 import {
+  emptyCompetitorWebsite,
+  isHttpCompetitorWebsite,
+  normalizeCompetitorWebsiteInput,
+  watchlistFingerprint,
+} from "~/lib/competitor-website";
+import {
   formatConfidenceBandLabel,
   formatDeliveryAttemptStatusLabel,
   formatImportanceBandLabel,
   formatProofAgeLabel,
   formatWhyAlertedLabel,
 } from "~/lib/landing-page-display";
+import { normalizeSavedQuery } from "~/lib/normalize";
 import { createReportId } from "~/lib/report";
 import type {
   DeliveryAttemptRecord,
@@ -149,7 +157,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlistId = String(formData.get("watchlistId") ?? "");
     const watchlist = await getWatchlist(env, watchlistId, session.user.id);
 
-    if (!watchlist) {
+    if (!watchlist || !watchlist.isActive) {
       return { ok: false, message: "Watchlist not found." };
     }
 
@@ -199,6 +207,77 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: true,
       message: `${new URL(`/share/${share.token}`, request.url).toString()}`,
+    };
+  }
+
+  if (intent === "update-watchlist") {
+    const { getWatchlist, updateWatchlist } = await import("~/lib/data.server");
+    const watchlist = await getOwnedWatchlist(env, session.user.id, formData, getWatchlist);
+    const name = readOptionalString(formData.get("name"));
+    const targetLabel = readOptionalString(formData.get("targetLabel"));
+
+    if (!watchlist) {
+      return { ok: false, message: "Watchlist not found." };
+    }
+
+    if (!name || (watchlist.targetType !== "saved_query" && !targetLabel)) {
+      return {
+        ok: false,
+        message: "Add both a watchlist name and competitor first.",
+      };
+    }
+
+    const competitorWebsite = formData.has("competitorWebsite")
+      ? normalizeCompetitorWebsiteInput(String(formData.get("competitorWebsite") ?? ""))
+      : isHttpCompetitorWebsite(watchlist.targetId)
+        ? normalizeCompetitorWebsiteInput(watchlist.targetId)
+        : emptyCompetitorWebsite();
+    const targetUpdate =
+      watchlist.targetType === "saved_query"
+        ? {
+            targetType: watchlist.targetType,
+            targetId: watchlist.targetId,
+            targetFingerprint: watchlist.targetFingerprint,
+            targetLabel: watchlist.targetLabel,
+          }
+        : {
+            targetType: "advertiser" as const,
+            targetId: competitorWebsite.normalizedUrl ?? targetLabel ?? watchlist.targetLabel,
+            targetFingerprint: watchlistFingerprint(
+              normalizeSavedQuery("advertiser", {
+                query: targetLabel ?? watchlist.targetLabel,
+              }),
+              competitorWebsite,
+            ),
+            targetLabel: targetLabel ?? watchlist.targetLabel,
+          };
+
+    try {
+      const updatedWatchlist = await updateWatchlist(env, session.user.id, watchlist.id, {
+        name,
+        ...targetUpdate,
+      });
+      if (updatedWatchlist && updatedWatchlist.id !== watchlist.id) {
+        throw redirect(`/app/watchlists?watchlist=${updatedWatchlist.id}`);
+      }
+    } catch (error) {
+      if (error instanceof Response) {
+        throw error;
+      }
+
+      if (error instanceof Error && error.message === "watchlist_duplicate_target") {
+        return {
+          ok: false,
+          message: "Another active watchlist already tracks that competitor.",
+        };
+      }
+
+      throw error;
+    }
+
+    return {
+      ok: true,
+      message: "Watchlist updated.",
     };
   }
 
@@ -358,11 +437,11 @@ export default function WatchlistsRoute() {
           <div className="f9-panel-toolbar">
             <div>
               <p className="f9-app-kicker">Watchlists</p>
-              <h2>Monitoring control panel</h2>
+              <h2>Competitor tracking desk</h2>
             </div>
           </div>
           <p className="f9-muted-copy">
-            Pick a watchlist to see the latest confirmed changes, proof freshness, and send state.
+            Pick a competitor to review changes, proof freshness, and alert delivery.
           </p>
 
           <div className="f9-work-list is-compact">
@@ -390,6 +469,15 @@ export default function WatchlistsRoute() {
                 </div>
               </a>
             ))}
+            {data.watchlists.length === 0 ? (
+              <div className="f9-empty-panel">
+                <h3>Add your first competitor</h3>
+                <p>Paste a competitor website from search or onboarding to start tracking offer changes.</p>
+                <Link className="f9-primary-button" to="/search">
+                  Add competitor
+                </Link>
+              </div>
+            ) : null}
           </div>
         </article>
 
@@ -439,7 +527,49 @@ export default function WatchlistsRoute() {
 
               <div className="f9-work-list">
                 <section>
-                  <p className="f9-app-kicker">Meta ads source</p>
+                  <p className="f9-app-kicker">Watchlist setup</p>
+                  <Form method="post" className="f9-work-list is-compact">
+                    <input name="intent" type="hidden" value="update-watchlist" />
+                    <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
+                    <label className="f9-field">
+                      <span>Name</span>
+                      <input
+                        defaultValue={data.selectedWatchlist.name}
+                        name="name"
+                        placeholder="Nykaa launch watch"
+                        type="text"
+                      />
+                    </label>
+                    <label className="f9-field">
+                      <span>Competitor website</span>
+                      <input
+                        defaultValue={
+                          isHttpCompetitorWebsite(data.selectedWatchlist.targetId)
+                            ? data.selectedWatchlist.targetId
+                            : ""
+                        }
+                        name="competitorWebsite"
+                        placeholder="https://nykaa.com"
+                        type="text"
+                      />
+                    </label>
+                    <label className="f9-field">
+                      <span>Brand or Meta search term</span>
+                      <input
+                        defaultValue={data.selectedWatchlist.targetLabel}
+                        name="targetLabel"
+                        placeholder="Nykaa, Mamaearth, skincare serum"
+                        type="text"
+                      />
+                    </label>
+                    <button className="f9-secondary-button" type="submit">
+                      Save watchlist
+                    </button>
+                  </Form>
+                </section>
+
+                <section>
+                  <p className="f9-app-kicker">Tracking path</p>
                   <div className="f9-dashboard-grid">
                     <article className="f9-app-panel">
                       <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
@@ -455,7 +585,7 @@ export default function WatchlistsRoute() {
 
                       <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
                         <div className="f9-work-row">
-                          <p className="f9-app-kicker">Source</p>
+                          <p className="f9-app-kicker">How ads are checked</p>
                           <p className="f9-muted-copy">
                             {formatDiscoveryProviderLabel(
                               data.discoveryStatus.provider,
@@ -464,7 +594,7 @@ export default function WatchlistsRoute() {
                           </p>
                         </div>
                         <div className="f9-work-row">
-                          <p className="f9-app-kicker">Current state</p>
+                          <p className="f9-app-kicker">Readiness</p>
                           <p className="f9-muted-copy">
                             {formatDiscoveryStatusLabel(data.discoveryStatus.status)}
                           </p>
@@ -479,7 +609,7 @@ export default function WatchlistsRoute() {
                         </div>
                       </div>
                       <Link className="f9-secondary-button" to="/app/sources">
-                        Manage Meta source
+                        Review tracking access
                       </Link>
                     </article>
                   </div>
@@ -519,7 +649,7 @@ export default function WatchlistsRoute() {
                                     ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · proof age ${formatProofAgeLabel(
                                         proofCapture.succeededAt ?? proofCapture.attemptedAt,
                                       )}`
-                                    : "No proof required for this scan-side event."}
+                                    : "No separate landing-page proof was needed for this event."}
                                 </p>
                               </div>
                               <div className="f9-work-row">
@@ -554,7 +684,7 @@ export default function WatchlistsRoute() {
                   <div className="f9-panel-toolbar">
                     <div>
                       <p className="f9-app-kicker">Proof and delivery</p>
-                      <h3 style={{ marginTop: 0 }}>Trust signals</h3>
+                      <h3 style={{ marginTop: 0 }}>Proof and alerts</h3>
                     </div>
                   </div>
 
@@ -598,7 +728,7 @@ export default function WatchlistsRoute() {
                       <h3>Channel policy</h3>
                       {!data.watchlistDeliveryConfig ? (
                         <p className="f9-muted-copy">
-                          No watchlist override yet. Workspace defaults are currently applying.
+                          Using the default alert settings for this workspace.
                         </p>
                       ) : null}
                       <Form method="post" className="f9-work-list is-compact">
@@ -700,7 +830,7 @@ export default function WatchlistsRoute() {
                     ))}
                     {data.deliveryTargets.length === 0 ? (
                       <p className="f9-muted-copy">
-                        No watchlist-specific targets yet. Workspace defaults will carry delivery until you add one.
+                        Using the default delivery target until you add one for this competitor.
                       </p>
                     ) : null}
                   </div>
@@ -730,7 +860,7 @@ export default function WatchlistsRoute() {
 
                   {data.workspaceDeliveryTargets.length > 0 ? (
                     <div style={{ marginTop: "1rem" }}>
-                      <p className="f9-app-kicker">Workspace defaults</p>
+                      <p className="f9-app-kicker">Default delivery</p>
                       <p className="f9-muted-copy">
                         {data.workspaceDeliveryTargets.map((target) => target.targetValue).join(" · ")}
                       </p>
@@ -739,9 +869,9 @@ export default function WatchlistsRoute() {
                 </section>
 
                 <section>
-                  <p className="f9-app-kicker">Recent runs</p>
+                  <p className="f9-app-kicker">Recent checks</p>
                   {data.runs.length === 0 ? (
-                    <p className="f9-muted-copy">No runs recorded yet.</p>
+                    <p className="f9-muted-copy">No checks recorded yet.</p>
                   ) : (
                     <ul className="event-list">
                       {data.runs.map((run) => (
@@ -777,7 +907,7 @@ export default function WatchlistsRoute() {
                 </section>
 
                 <details>
-                  <summary>Raw candidate history</summary>
+                  <summary>Candidate history</summary>
                   <div className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
                     {data.eventCandidates.length === 0 ? (
                       <p className="f9-muted-copy">No candidate history yet.</p>
@@ -799,8 +929,11 @@ export default function WatchlistsRoute() {
             </>
           ) : (
             <div className="f9-empty-panel">
-              <h2>No watchlist selected</h2>
-              <p>Track a search from the dashboard or the search page to see monitoring history here.</p>
+              <h2>Add your first competitor</h2>
+              <p>Paste a competitor website to start tracking offer, CTA, headline, and form changes.</p>
+              <Link className="f9-primary-button" to="/search">
+                Add competitor
+              </Link>
             </div>
           )}
         </article>
@@ -846,16 +979,16 @@ function formatWatchlistRefreshFailure(
   switch (failureClass) {
     case "rate_limited":
       return retryAfterSeconds && retryAfterSeconds > 0
-        ? `Commercial discovery is temporarily rate limited. Retry after about ${formatRetryAfterLabel(
+        ? `Competitor ad checks are temporarily rate limited. Retry after about ${formatRetryAfterLabel(
             retryAfterSeconds,
-          )}. Scheduled warmups will keep retrying.`
-        : "Commercial discovery is temporarily rate limited. Scheduled warmups will keep retrying.";
+          )}. Scheduled checks will keep retrying.`
+        : "Competitor ad checks are temporarily rate limited. Scheduled checks will keep retrying.";
     case "timeout":
-      return "Commercial discovery timed out. Try again in a few minutes.";
+      return "Competitor ad check timed out. Try again in a few minutes.";
     case "login_wall":
-      return "Meta Ad Library blocked live capture just now. Try again in a few minutes.";
+      return "Meta blocked the ad library check just now. Try again in a few minutes.";
     default:
-      return "Commercial discovery is temporarily unavailable. Try again in a few minutes.";
+      return "Competitor ad checks are temporarily unavailable. Try again in a few minutes.";
   }
 }
 
@@ -896,7 +1029,8 @@ async function getOwnedWatchlist(
   getWatchlist: (env: AppEnv, watchlistId: string, userId?: string) => Promise<any>,
 ): Promise<any> {
   const watchlistId = String(formData.get("watchlistId") ?? "");
-  return getWatchlist(env, watchlistId, userId);
+  const watchlist = await getWatchlist(env, watchlistId, userId);
+  return watchlist?.isActive ? watchlist : null;
 }
 
 function parseQuietHours(formData: FormData) {
@@ -986,18 +1120,18 @@ function formatRunEventTypes(summary: Record<string, unknown>) {
 
 function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
   if (status.status === "healthy") {
-    return "Live Meta ads discovery is healthy";
+    return "Live competitor discovery is ready";
   }
   if (status.status === "cache_only") {
-    return "Meta ads discovery is running from cache";
+    return "Using recent competitor results";
   }
   if (status.status === "demo") {
-    return "Watchlists are still in demo mode";
+    return "Add a real competitor to start live tracking";
   }
   if (status.status === "disabled") {
-    return "Meta ads discovery is disabled";
+    return "Competitor discovery is unavailable";
   }
-  return "Meta ads discovery needs attention";
+  return "Tracking path needs attention";
 }
 
 function formatDiscoveryProviderLabel(
@@ -1005,20 +1139,20 @@ function formatDiscoveryProviderLabel(
   mode?: MetaIntegrationStatus["mode"],
 ) {
   if (provider === "meta_library_browser") {
-    return mode === "cache" ? "Browser Run with cached live results" : "Browser Run live capture";
+    return mode === "cache" ? "Recent live results" : "Live ad library capture";
   }
   if (provider === "meta_api") {
-    return mode === "diagnostic" ? "Official Meta API diagnostic path" : "Customer Meta API fallback";
+    return mode === "diagnostic" ? "Meta API check" : "Workspace Meta access";
   }
   if (provider === "demo") {
-    return "Demo dataset";
+    return "Sample data";
   }
-  return "Unknown source";
+  return "Not configured";
 }
 
 function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status"]) {
   if (status === "cache_only") {
-    return "Cache only";
+    return "Using recent results";
   }
   return status.replaceAll("_", " ");
 }

@@ -163,6 +163,72 @@ describe("search loader", () => {
     expect(result.result).toBe(hydratedResult);
   });
 
+  it("turns a competitor website into an advertiser search", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: null,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?website=https://www.nykaa.com"),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        mode: "advertiser",
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "India",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false },
+    );
+    expect(result).toMatchObject({
+      filters: expect.objectContaining({
+        query: "nykaa",
+      }),
+      competitorWebsite: {
+        raw: "https://www.nykaa.com",
+        normalizedUrl: "https://nykaa.com",
+        host: "nykaa.com",
+        displayName: "Nykaa",
+        searchTerm: "nykaa",
+      },
+    });
+  });
+
   it("allows only tokened canary probes to force fresh live discovery", async () => {
     const env = { DB: {}, CANARY_BYPASS_TOKEN: "secret-token" };
     const sourceResult = {
@@ -276,13 +342,91 @@ describe("search actions", () => {
 
       expect(result).toEqual({
         ok: false,
-        message: "Run a search before saving or tracking it.",
+        message: "Enter a competitor website or search term before saving or tracking it.",
       });
       expect(checkPlanLimit).not.toHaveBeenCalled();
       expect(createSavedQuery).not.toHaveBeenCalled();
       expect(createWatchlist).not.toHaveBeenCalled();
     },
   );
+
+  it("creates a competitor watchlist from a website and redirects to tracking", async () => {
+    const env = { DB: {} };
+    const checkPlanLimit = vi.fn().mockResolvedValue({
+      allowed: true,
+      limit: 10,
+      current: 0,
+    });
+    const createSavedQuery = vi.fn();
+    const createWatchlist = vi.fn().mockResolvedValue({
+      id: "watch-1",
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addAdToCollection: vi.fn(),
+      createSavedQuery,
+      createWatchlist,
+    }));
+
+    const { action } = await import("~/routes/search");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("mode", "advertiser");
+    formData.set("query", "");
+    formData.set("competitorWebsite", "https://www.nykaa.com");
+    formData.set("country", "India");
+    formData.set("platform", "all");
+    formData.set("creativeType", "all");
+    formData.set("status", "all");
+
+    let response: Response | null = null;
+    try {
+      await action({
+        context: createContext(env),
+        request: new Request("http://localhost/search", {
+          method: "POST",
+          body: formData,
+        }),
+      } as never);
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get("Location")).toBe("/app/watchlists?watchlist=watch-1");
+    expect(checkPlanLimit).toHaveBeenCalledWith(env, "user-1", "watchlists");
+    expect(createSavedQuery).not.toHaveBeenCalled();
+    expect(createWatchlist).toHaveBeenCalledWith(
+      env,
+      "user-1",
+      expect.objectContaining({
+        name: "Nykaa watch",
+        targetType: "advertiser",
+        targetId: "https://nykaa.com",
+        targetLabel: "nykaa",
+      }),
+    );
+  });
 });
 
 describe("search loader OCR reuse", () => {

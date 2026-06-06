@@ -8,11 +8,13 @@ import {
   createLandingPageSnapshot,
   createProofCapture,
   createWatchEvent,
+  grantDodoPlanAccess,
   getDiscoveryCacheEntry,
   getLaunchReadinessSignals,
   getOperatorSnapshot,
   listActiveWatchlists,
   listDigests,
+  upsertDigestDelivery,
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
   legacyWatchEventImportanceScore,
@@ -105,6 +107,22 @@ describe("createLandingPageSnapshot", () => {
     expect(analysisInserts.some((statement) => statement.bindings.includes("price_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("form_present"))).toBe(true);
     expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v1"))).toBe(true);
+  });
+
+  it("updates the digest delivery provider when rerunning an existing digest", async () => {
+    const mock = createMockDb();
+
+    await upsertDigestDelivery({ DB: mock.db } as never, "digest-1", {
+      provider: "postmark",
+      status: "sent",
+      recipientEmail: "owner@example.com",
+      externalMessageId: "postmark-1",
+      errorMessage: null,
+      deliveredAt: "2026-06-05T00:00:00.000Z",
+    });
+
+    const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
+    expect(statement?.sql).toContain("provider = excluded.provider");
   });
 });
 
@@ -267,6 +285,37 @@ describe("Razorpay billing persistence", () => {
 
     expect(statements[0]?.sql).toContain("ON CONFLICT(event_id)");
     expect(statements[0]?.sql).toContain("razorpay_webhook_event.outcome = 'failed'");
+  });
+});
+
+describe("Dodo billing persistence", () => {
+  it("records Dodo paid plan access with the supplied webhook event timestamp", async () => {
+    const mock = createMockDb();
+
+    await grantDodoPlanAccess(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: "pay_123",
+        providerProductId: "prod_starter_monthly",
+        status: "succeeded",
+        grantedAt: "2026-06-04T12:00:00.000Z",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "dodo_payment_id");
+
+    expect(statement?.sql).toContain("julianday(excluded.plan_updated_at)");
+    expect(statement?.sql).toContain("user_plan.dodo_payment_id = excluded.dodo_payment_id");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "starter",
+      "pay_123",
+      "prod_starter_monthly",
+      "succeeded",
+      "2026-06-04T12:00:00.000Z",
+    ]);
   });
 });
 

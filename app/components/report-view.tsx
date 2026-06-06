@@ -5,7 +5,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
     <div className="report-layout">
       <section className="report-hero">
         <div>
-          <p className="f9-app-kicker">{report.resourceType} report</p>
+          <p className="f9-app-kicker">Proof report</p>
           <h1>{report.title}</h1>
           <p className="f9-muted-copy">{report.subtitle}</p>
         </div>
@@ -51,7 +51,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
             {row.event ? (
               <section className="report-event">
-                <p className="f9-app-kicker">Watch event</p>
+                <p className="f9-app-kicker">Competitor change</p>
                 <h3>{row.event.title}</h3>
                 <p>{row.event.summary}</p>
                 <dl className="proof-trail-list">
@@ -111,7 +111,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
                 {row.note ? (
                   <div className="report-note">
-                    <p className="f9-app-kicker">Internal note</p>
+                    <p className="f9-app-kicker">Team note</p>
                     <p>{row.note}</p>
                   </div>
                 ) : null}
@@ -147,7 +147,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
             {row.analysisFields.length > 0 ? (
               <section className="report-analysis">
-                <p className="f9-app-kicker">Analysis fields</p>
+                <p className="f9-app-kicker">Proof fields</p>
                 <dl className="report-field-list">
                   {row.analysisFields.map((field) => (
                     <div className="report-field" key={`${row.id}-${field.label}`}>

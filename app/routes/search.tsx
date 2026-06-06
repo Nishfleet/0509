@@ -1,6 +1,7 @@
 import {
   Form,
   Link,
+  redirect,
   useActionData,
   useLoaderData,
   useRouteLoaderData,
@@ -8,10 +9,15 @@ import {
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import {
+  applyWebsiteSearchFallback,
+  emptyCompetitorWebsite,
+  normalizeCompetitorWebsiteInput,
+  watchlistFingerprint,
+} from "~/lib/competitor-website";
 import { sampleQueries } from "~/lib/demo-data";
 import {
   buildSearchParams,
-  fingerprintSavedQuery,
   normalizeSavedQuery,
   parseSearchParams,
 } from "~/lib/normalize";
@@ -44,7 +50,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
-  const parsed = parseSearchParams(url.searchParams);
+  const competitorWebsite = normalizeCompetitorWebsiteInput(url.searchParams.get("website") ?? "");
+  const parsed = applyWebsiteSearchFallback(parseSearchParams(url.searchParams), competitorWebsite);
   const collections = session ? await listCollections(env, session.user.id) : [];
 
   if (!parsed.filters.query) {
@@ -56,6 +63,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       selectedAd: null,
       collections,
       session,
+      competitorWebsite,
     };
   }
 
@@ -89,6 +97,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     selectedAd,
     collections,
     session,
+    competitorWebsite,
   };
 }
 
@@ -101,7 +110,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const session = await requireSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
-  const normalizedQuery = normalizeSavedQuery(
+  const competitorWebsite = normalizeCompetitorWebsiteInput(
+    String(formData.get("competitorWebsite") ?? formData.get("website") ?? ""),
+  );
+  const normalizedQuery = applyWebsiteSearchFallback(
+    normalizeSavedQuery(
     (String(formData.get("mode") ?? "advertiser") === "keyword" ? "keyword" : "advertiser"),
     {
       query: String(formData.get("query") ?? ""),
@@ -112,10 +125,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
       firstSeenFrom: String(formData.get("firstSeenFrom") ?? ""),
       lastSeenFrom: String(formData.get("lastSeenFrom") ?? ""),
     },
+    ),
+    competitorWebsite,
   );
 
   if ((intent === "save-query" || intent === "create-watchlist") && !normalizedQuery.filters.query) {
-    return { ok: false, message: "Run a search before saving or tracking it." };
+    return { ok: false, message: "Enter a competitor website or search term before saving or tracking it." };
   }
 
   if (intent === "save-query") {
@@ -134,7 +149,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "create-watchlist") {
-    const queryName = String(formData.get("name") ?? "").trim() || `${normalizedQuery.filters.query || "Untitled"} watch`;
+    const inferredName = (competitorWebsite.displayName ?? normalizedQuery.filters.query) || "Competitor";
+    const queryName = String(formData.get("name") ?? "").trim() || `${inferredName} watch`;
     const shouldUseAdvertiserMode = canCreateAdvertiserWatchlist(normalizedQuery);
     const watchlistLimit = await checkPlanLimit(env, session.user.id, "watchlists");
 
@@ -148,12 +164,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
+    let watchlist: Awaited<ReturnType<typeof createWatchlist>> = null;
     if (shouldUseAdvertiserMode) {
-      await createWatchlist(env, session.user.id, {
+      watchlist = await createWatchlist(env, session.user.id, {
         name: queryName,
         targetType: "advertiser",
-        targetId: normalizedQuery.filters.query,
-        targetFingerprint: fingerprintSavedQuery(normalizedQuery),
+        targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
+        targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
         targetLabel: normalizedQuery.filters.query,
       });
     } else {
@@ -167,16 +184,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
         return { ok: false, message: "Could not create the source query for this watchlist." };
       }
 
-      await createWatchlist(env, session.user.id, {
+      watchlist = await createWatchlist(env, session.user.id, {
         name: queryName,
         targetType: "saved_query",
         targetId: savedQuery.id,
-        targetFingerprint: savedQuery.fingerprint,
-        targetLabel: savedQuery.name,
+        targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
+        targetLabel: normalizedQuery.filters.query || savedQuery.name,
       });
     }
 
-    return { ok: true, message: `Now tracking ${queryName}.` };
+    if (!watchlist) {
+      return { ok: false, message: "Could not create this watchlist." };
+    }
+
+    throw redirect(`/app/watchlists?watchlist=${watchlist.id}`);
   }
 
   if (intent === "save-to-collection") {
@@ -212,6 +233,18 @@ export default function SearchRoute() {
   const actionData = useActionData<typeof action>();
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const creativeTextField = data.selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
+  const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
+  const currentSearchParams = withCompetitorWebsite(
+    buildSearchParams({
+      mode: data.mode,
+      filters: data.filters,
+    }),
+    competitorWebsite.raw,
+  );
+  const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(`/search?${currentSearchParams.toString()}`)}`;
+  const inferredWatchlistName = (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
+  const canTrackCurrentCompetitor = Boolean(data.filters.query);
+  const discoverySummary = formatDiscoverySummary(data.result);
 
   return (
     <main className="f9-search-page">
@@ -241,19 +274,67 @@ export default function SearchRoute() {
         <div className="f9-search-gradient" aria-hidden="true" />
         <div className="f9-container f9-search-hero-grid">
           <div>
-            <p className="f9-search-kicker">Public market search</p>
-            <h1>Search competitor moves with proof attached.</h1>
+            <p className="f9-search-kicker">Competitor tracker</p>
+            <h1>Enter a competitor website. Track what changes.</h1>
             <p>
-              Start with a brand, category term, or offer phrase. Five to Nine keeps source state, extraction method,
-              and landing-page context visible before a signal becomes a decision.
+              Start with the site you care about. Five to Nine turns the domain into a Meta ads search,
+              captures landing-page proof, and keeps the watchlist moving after you leave.
             </p>
           </div>
-          <div className="f9-search-source-card">
-            <span>Current source state</span>
-            <strong>{formatSearchSourceLabel(data.result)}</strong>
+          <div className="f9-search-intake-card">
+            <span>Track competitor</span>
+            <h2>Competitor website</h2>
+            <Form className="f9-hero-intake-form" method="get">
+              <input name="mode" type="hidden" value="advertiser" />
+              <input name="country" type="hidden" value={data.filters.country} />
+              <input name="platform" type="hidden" value="all" />
+              <input name="creativeType" type="hidden" value="all" />
+              <input name="status" type="hidden" value="all" />
+              <label className="f9-field is-primary">
+                <span>Website to track</span>
+                <input
+                  defaultValue={competitorWebsite.raw}
+                  name="website"
+                  placeholder="https://nykaa.com"
+                  type="text"
+                />
+              </label>
+              <label className="f9-field">
+                <span>Brand or Meta search term</span>
+                <input
+                  defaultValue={data.filters.query}
+                  name="query"
+                  placeholder="Nykaa"
+                  type="text"
+                />
+              </label>
+              <div className="f9-action-row">
+                <button className="f9-primary-button" type="submit">
+                  Find competitor ads
+                </button>
+                {!rootData.session ? (
+                  <Link className="f9-secondary-button" to={signupTrackingPath}>
+                    Sign in to track
+                  </Link>
+                ) : null}
+              </div>
+            </Form>
+            {canTrackCurrentCompetitor && rootData.session ? (
+              <Form className="f9-quick-track-form" method="post">
+                <input name="intent" type="hidden" value="create-watchlist" />
+                <SearchStateFields
+                  competitorWebsite={competitorWebsite.raw}
+                  filters={data.filters}
+                  mode={data.mode}
+                />
+                <input name="name" type="hidden" value={`${inferredWatchlistName} watch`} />
+                <button className="f9-secondary-button" type="submit">
+                  Start tracking this competitor
+                </button>
+              </Form>
+            ) : null}
             <p>
-              {data.result.discoverySummary ??
-                "Search is ready. Results will label live, cached, degraded, or demo source paths."}
+              Tracking path: <strong>{formatSearchSourceLabel(data.result)}</strong>
             </p>
           </div>
         </div>
@@ -267,12 +348,12 @@ export default function SearchRoute() {
             </div>
           ) : null}
 
-          {data.result.discoverySummary ? (
+          {discoverySummary ? (
             <div className="f9-discovery-banner">
-              <span>Discovery status</span>
-              <p>{data.result.discoverySummary}</p>
+              <span>Search status</span>
+              <p>{discoverySummary}</p>
               {data.result.discoveryFailureClass ? (
-                <small>Failure class: {formatFailureClass(data.result.discoveryFailureClass)}</small>
+                <small>Issue type: {formatFailureClass(data.result.discoveryFailureClass)}</small>
               ) : null}
             </div>
           ) : null}
@@ -280,6 +361,23 @@ export default function SearchRoute() {
           <div className="f9-search-grid">
             <section className="f9-search-controls">
               <Form className="f9-search-form" method="get">
+                <div className="f9-controls-head">
+                  <span>Search setup</span>
+                  <h2>Choose who to watch</h2>
+                  <p>Enter a competitor site first. The brand/search field stays editable when Meta uses a different advertiser name.</p>
+                </div>
+
+                <label className="f9-field is-primary">
+                  <span>Competitor website</span>
+                  <input
+                    defaultValue={competitorWebsite.raw}
+                    name="website"
+                    placeholder="https://mamaearth.in"
+                    type="text"
+                  />
+                  <small>Used to start the watchlist and infer the Meta advertiser search.</small>
+                </label>
+
                 <div className="f9-mode-toggle">
                   <label className={data.mode === "advertiser" ? "is-active" : ""}>
                     <input
@@ -302,7 +400,7 @@ export default function SearchRoute() {
                 </div>
 
                 <label className="f9-field">
-                  <span>Search query</span>
+                  <span>Brand or keyword</span>
                   <input defaultValue={data.filters.query} name="query" placeholder="nykaa, cod, whatsapp, festive sale" />
                 </label>
 
@@ -390,7 +488,11 @@ export default function SearchRoute() {
                   <div className="f9-save-stack">
                     <Form className="f9-inline-save" method="post">
                       <input name="intent" type="hidden" value="save-query" />
-                      <SearchStateFields filters={data.filters} mode={data.mode} />
+                      <SearchStateFields
+                        competitorWebsite={competitorWebsite.raw}
+                        filters={data.filters}
+                        mode={data.mode}
+                      />
                       <input name="name" placeholder="Save this search as..." required />
                       <button className="f9-secondary-button" type="submit">
                         Save search
@@ -399,31 +501,35 @@ export default function SearchRoute() {
 
                     <Form className="f9-inline-save" method="post">
                       <input name="intent" type="hidden" value="create-watchlist" />
-                      <SearchStateFields filters={data.filters} mode={data.mode} />
+                      <SearchStateFields
+                        competitorWebsite={competitorWebsite.raw}
+                        filters={data.filters}
+                        mode={data.mode}
+                      />
                       <input
-                        defaultValue={`${data.filters.query} watch`}
+                        defaultValue={`${inferredWatchlistName} watch`}
                         name="name"
                         placeholder="Watchlist name"
                       />
                       <button className="f9-primary-button" type="submit">
-                        Track this query
+                        Track this competitor
                       </button>
                     </Form>
                   </div>
                 ) : (
                   <div className="f9-side-note">
-                    <p>Run a search, then save it or turn it into a watchlist.</p>
+                    <p>Enter a competitor website or brand, then save it or turn it into a watchlist.</p>
                   </div>
                 )
               ) : (
                 <div className="f9-side-note">
-                  <span>Workspace layer</span>
+                  <span>Save the watch</span>
                   <p>
-                    Search stays public. Saving queries, building watchlists, and sharing collections need a workspace
+                    Search stays public. Tracking competitors, saving searches, and sharing collections need a workspace
                     so the intelligence is still there next week.
                   </p>
-                  <Link className="f9-primary-button" to="/auth/signup?redirectTo=/search">
-                    Start now
+                  <Link className="f9-primary-button" to={signupTrackingPath}>
+                    Create workspace to track
                   </Link>
                 </div>
               )}
@@ -439,10 +545,13 @@ export default function SearchRoute() {
                   <Link
                     className="f9-secondary-button"
                     to={`/search?${appendCursor(
-                      buildSearchParams({
-                        mode: data.mode,
-                        filters: data.filters,
-                      }),
+                      withCompetitorWebsite(
+                        buildSearchParams({
+                          mode: data.mode,
+                          filters: data.filters,
+                        }),
+                        competitorWebsite.raw,
+                      ),
                       data.result.nextCursor,
                       data.selectedAd?.metaAdId ?? null,
                     ).toString()}`}
@@ -459,10 +568,13 @@ export default function SearchRoute() {
                       className={`f9-result-card ${data.selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
                       key={ad.metaAdId}
                       to={`/search?${withSelected(
-                        buildSearchParams({
-                          mode: data.mode,
-                          filters: data.filters,
-                        }),
+                        withCompetitorWebsite(
+                          buildSearchParams({
+                            mode: data.mode,
+                            filters: data.filters,
+                          }),
+                          competitorWebsite.raw,
+                        ),
                         ad.metaAdId,
                       ).toString()}`}
                     >
@@ -481,7 +593,7 @@ export default function SearchRoute() {
                   <div className="f9-empty-state">
                     <h3>{formatEmptyResultHeadline(data.result)}</h3>
                     <p>
-                      {data.result.discoverySummary ??
+                      {discoverySummary ??
                         "Try a broader query or switch between advertiser and keyword mode."}
                     </p>
                   </div>
@@ -557,15 +669,13 @@ export default function SearchRoute() {
                   </div>
 
                   <div className="f9-proof-block">
-                    <span>Analysis provenance</span>
+                    <span>How this was extracted</span>
                     <ul className="f9-field-list">
                       {data.selectedAd.analysisFields.map((field) => (
                         <li key={`${field.fieldKey}-${field.provenanceSource}`}>
                           <strong>{field.fieldKey.replaceAll("_", " ")}</strong>
                           <span>{field.fieldValue || "Not detected"}</span>
-                          <small>
-                            {field.provenanceSource} · v{field.extractorVersion.replace(/^v/, "")}
-                          </small>
+                          <small>{formatAnalysisSourceLabel(field.provenanceSource)}</small>
                         </li>
                       ))}
                     </ul>
@@ -633,14 +743,17 @@ function buildIdleSearchResult(): SearchResponse {
 }
 
 function SearchStateFields({
+  competitorWebsite = "",
   mode,
   filters,
 }: {
+  competitorWebsite?: string;
   mode: "advertiser" | "keyword";
   filters: SearchFilters;
 }) {
   return (
     <>
+      <input name="competitorWebsite" type="hidden" value={competitorWebsite} />
       <input name="mode" type="hidden" value={mode} />
       <input name="query" type="hidden" value={filters.query} />
       <input name="country" type="hidden" value={filters.country} />
@@ -677,7 +790,7 @@ function formatSearchSourceLabel(result: SearchResponse) {
   }
 
   if (result.discoveryStatus === "degraded" && result.ads.length === 0) {
-    return "Commercial discovery degraded";
+    return "Live search delayed";
   }
 
   if (
@@ -693,7 +806,7 @@ function formatSearchSourceLabel(result: SearchResponse) {
   }
 
   if (result.source === "meta_api") {
-    return "Customer API fallback";
+    return "Workspace Meta access";
   }
 
   if (result.source === "meta") {
@@ -703,9 +816,39 @@ function formatSearchSourceLabel(result: SearchResponse) {
   return "Demo dataset";
 }
 
+function formatDiscoverySummary(result: SearchResponse) {
+  if (!result.discoverySummary) {
+    return null;
+  }
+
+  if (/rate limited/i.test(result.discoverySummary)) {
+    return result.discoverySummary
+      .replace(/Commercial discovery/gi, "Competitor ad checks")
+      .replace(/commercial discovery/gi, "competitor ad checks");
+  }
+
+  if (/degraded and no cached results are available/i.test(result.discoverySummary)) {
+    return "Live search is delayed and no recent results are available.";
+  }
+
+  if (result.ads.length > 0 && /no cached results are available/i.test(result.discoverySummary)) {
+    return "Live search is delayed; showing recent results.";
+  }
+
+  if (/Commercial discovery degraded; serving cached results/i.test(result.discoverySummary)) {
+    return "Live search is delayed; showing recent results.";
+  }
+
+  if (/API fallback/i.test(result.discoverySummary)) {
+    return result.discoverySummary.replace(/API fallback/gi, "workspace Meta access");
+  }
+
+  return result.discoverySummary;
+}
+
 function formatEmptyResultHeadline(result: SearchResponse) {
   if (result.discoveryStatus === "disabled") {
-    return "Enter a competitor or keyword";
+    return "Enter a competitor website or keyword";
   }
 
   if (result.discoveryStatus === "degraded") {
@@ -742,5 +885,13 @@ function withSelected(params: URLSearchParams, selected: string | null) {
 function appendCursor(params: URLSearchParams, after: string, selected: string | null) {
   const next = withSelected(params, selected);
   next.set("after", after);
+  return next;
+}
+
+function withCompetitorWebsite(params: URLSearchParams, website: string) {
+  const next = new URLSearchParams(params);
+  if (website.trim()) {
+    next.set("website", website.trim());
+  }
   return next;
 }

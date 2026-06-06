@@ -902,6 +902,876 @@ describe("runWatchlistManual cheap scan path", () => {
     );
   });
 
+  it("captures direct competitor website proof for onboarding offer changes", async () => {
+    const createEventCandidate = vi.fn().mockResolvedValue("candidate-direct-1");
+    const createProofCapture = vi.fn().mockResolvedValue("proof-direct-1");
+    const createWatchEvent = vi.fn().mockResolvedValue("event-direct-1");
+    const finishWatchlistRun = vi.fn();
+    const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+    });
+    const websiteWatchlist: WatchlistRecord = {
+      ...watchlist,
+      targetId: "https://competitor.example/onboarding",
+      targetFingerprint: "fp-competitor-website",
+      targetLabel: "Competitor",
+    };
+    const previousProofAt = new Date(Date.now() - 21 * 60 * 60 * 1000).toISOString();
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://competitor.example/onboarding",
+      canonicalUrl: "https://competitor.example/onboarding",
+      rawHeadline: "Move your sales team in one day",
+      normalizedHeadline: "move your sales team in one day",
+      normalizedHeadlineHash: "hash-direct-current",
+      ctaText: "Claim migration",
+      priceText: "Free migration and 2 months white-glove setup",
+      formPresent: true,
+      captureMethod: "browser_render",
+      capturedAt: "2026-04-18T00:00:00.000Z",
+      artifactKey: "landing-pages/direct.html",
+      metadata: {
+        htmlArtifactKey: "landing-pages/direct.html",
+        screenshotArtifactKey: "landing-pages/direct.jpeg",
+        extractorVersion: "lp-signals-v1",
+        extractedFieldConfidence: {
+          headline: 0.95,
+          ctaText: 0.9,
+          priceText: 0.85,
+          formPresent: 0.9,
+        },
+        extractionWarnings: [],
+        renderMode: "mobile",
+        deviceProfile: "mobile_default",
+      },
+    });
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildAnalysisFields: vi.fn(() => []),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+        failureClass = "browser_launch_failed" as const;
+      },
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue({
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn(),
+      clearDigestItems: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
+      countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
+      createAdObservation: vi.fn(),
+      createDigestRun: vi.fn(),
+      createEventCandidate,
+      createLandingPageSnapshot: vi.fn(),
+      createProofCapture,
+      createWatchEvent,
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun,
+      getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+      getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([]),
+      listActiveWatchlists: vi.fn(),
+      listEventCandidates: vi.fn().mockResolvedValue([]),
+      listObservationsForRun: vi.fn().mockResolvedValue([]),
+      listProofCapturesForTarget: vi.fn().mockResolvedValue([
+        {
+          id: "proof-prev",
+          proofTargetId: "target-direct-1",
+          status: "succeeded",
+          skipReason: null,
+          failureCode: null,
+          failureReason: null,
+          screenshotArtifactKey: null,
+          htmlArtifactKey: null,
+          extractedFields: {
+            rawHeadline: "Move your sales team in one day",
+            normalizedHeadline: "move your sales team in one day",
+            normalizedHeadlineHash: "hash-direct-current",
+            ctaText: "Book demo",
+            priceText: "Paid onboarding setup",
+            formPresent: true,
+          },
+          fieldConfidence: {},
+          extractionWarnings: [],
+          captureMetadata: {},
+          renderMode: "mobile",
+          deviceProfile: "mobile_default",
+          extractorVersion: "lp-signals-v1",
+          idempotencyKey: "proof-request:watch-1:direct-prev",
+          attemptedAt: previousProofAt,
+          succeededAt: previousProofAt,
+          createdAt: "2026-04-10T00:00:01.000Z",
+          updatedAt: "2026-04-10T00:00:01.000Z",
+        },
+      ]),
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi.fn().mockResolvedValue([]),
+      listWatchEventsBetween: vi.fn(),
+      listWatchlists: vi.fn(),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertAd: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+      upsertProofTarget: vi.fn().mockResolvedValue({
+        id: "target-direct-1",
+        watchlistId: "watch-1",
+        adId: null,
+        landingPageUrl: "https://competitor.example/onboarding",
+        canonicalPageIdentity: "competitor.example/onboarding",
+        proofTargetIdentity: "watch-1:direct:competitor.example/onboarding",
+        lastCaptureAttemptAt: null,
+        lastSuccessfulProofAt: previousProofAt,
+        lastSuccessfulCaptureId: "proof-prev",
+        createdAt: "2026-04-10T00:00:01.000Z",
+        updatedAt: "2026-04-10T00:00:01.000Z",
+      }),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn(),
+      PLAN_LIMITS: {
+        free: { digests: false },
+        starter: { digests: true },
+        agency: { digests: true },
+      },
+    }));
+
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+
+    const result = await runWatchlistManual(
+      { ALLOW_PLATFORM_META_API_FALLBACK: "true", META_AD_LIBRARY_TOKEN: "token" } as never,
+      websiteWatchlist,
+    );
+
+    expect(result.events).toBeGreaterThan(0);
+    expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
+      "https://competitor.example/onboarding",
+      expect.objectContaining({ preferRendered: true }),
+    );
+    expect(createProofCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
+      expect.objectContaining({
+        status: "succeeded",
+        proofTargetId: "target-direct-1",
+        captureMetadata: expect.objectContaining({
+          source: "direct_competitor_website",
+          watchlistTargetId: "https://competitor.example/onboarding",
+        }),
+      }),
+    );
+    expect(createEventCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
+      expect.objectContaining({
+        eventType: "landing_page_offer_changed",
+        status: "confirmed",
+        adId: null,
+        proofTargetId: "target-direct-1",
+        metadata: expect.objectContaining({
+          source: "direct_competitor_website",
+          from: "Paid onboarding setup",
+          to: "Free migration and 2 months white-glove setup",
+        }),
+      }),
+    );
+    expect(createWatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
+      expect.objectContaining({
+        eventType: "landing_page_offer_changed",
+        proofCaptureId: "proof-direct-1",
+        candidateId: "candidate-direct-1",
+      }),
+    );
+    expect(deliverWatchlistAlerts).toHaveBeenCalledWith(
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
+      expect.objectContaining({
+        events: expect.arrayContaining([
+          expect.objectContaining({
+            eventType: "landing_page_offer_changed",
+          }),
+        ]),
+      }),
+    );
+    expect(finishWatchlistRun).toHaveBeenCalledWith(
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
+      "run-1",
+      expect.objectContaining({
+        summary: expect.objectContaining({
+          websiteProofUrl: "https://competitor.example/onboarding",
+          proofsAttempted: 1,
+          events: expect.any(Number),
+        }),
+      }),
+    );
+  });
+
+  it("still captures direct competitor website proof when ad discovery fails", async () => {
+    class MockCommercialDiscoveryError extends Error {
+      failureClass = "browser_launch_failed" as const;
+    }
+
+    const createEventCandidate = vi.fn().mockResolvedValue("candidate-direct-1");
+    const createProofCapture = vi.fn().mockResolvedValue("proof-direct-1");
+    const createWatchEvent = vi.fn().mockResolvedValue("event-direct-1");
+    const finishWatchlistRun = vi.fn();
+    const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+    });
+    const websiteWatchlist: WatchlistRecord = {
+      ...watchlist,
+      targetId: "https://competitor.example/onboarding",
+      targetFingerprint: "fp-competitor-website",
+      targetLabel: "Competitor",
+    };
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://competitor.example/onboarding",
+      canonicalUrl: "https://competitor.example/onboarding",
+      rawHeadline: "Move your sales team in one day",
+      normalizedHeadline: "move your sales team in one day",
+      normalizedHeadlineHash: "hash-direct-current",
+      ctaText: "Claim migration",
+      priceText: "Free migration and 2 months white-glove setup",
+      formPresent: true,
+      captureMethod: "landing_page_fetch",
+      capturedAt: "2026-04-18T00:00:00.000Z",
+      artifactKey: "landing-pages/direct.html",
+      metadata: {
+        htmlArtifactKey: "landing-pages/direct.html",
+        screenshotArtifactKey: "landing-pages/direct.jpeg",
+        extractorVersion: "lp-signals-v1",
+        extractedFieldConfidence: {},
+        extractionWarnings: [],
+        renderMode: "mobile",
+        deviceProfile: "mobile_default",
+      },
+    });
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildAnalysisFields: vi.fn(() => []),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      CommercialDiscoveryError: MockCommercialDiscoveryError,
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver: vi.fn().mockRejectedValue(
+        new MockCommercialDiscoveryError("Browser discovery unavailable"),
+      ),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn(),
+      clearDigestItems: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
+      countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
+      createAdObservation: vi.fn(),
+      createDigestRun: vi.fn(),
+      createEventCandidate,
+      createLandingPageSnapshot: vi.fn(),
+      createProofCapture,
+      createWatchEvent,
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun,
+      getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+      getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([]),
+      listActiveWatchlists: vi.fn(),
+      listEventCandidates: vi.fn().mockResolvedValue([]),
+      listObservationsForRun: vi.fn().mockResolvedValue([]),
+      listProofCapturesForTarget: vi.fn().mockResolvedValue([
+        {
+          id: "proof-prev",
+          proofTargetId: "target-direct-1",
+          status: "succeeded",
+          skipReason: null,
+          failureCode: null,
+          failureReason: null,
+          screenshotArtifactKey: null,
+          htmlArtifactKey: null,
+          extractedFields: {
+            rawHeadline: "Move your sales team in one day",
+            normalizedHeadline: "move your sales team in one day",
+            normalizedHeadlineHash: "hash-direct-current",
+            ctaText: "Book demo",
+            priceText: "Paid onboarding setup",
+            formPresent: true,
+          },
+          fieldConfidence: {},
+          extractionWarnings: [],
+          captureMetadata: {},
+          renderMode: "mobile",
+          deviceProfile: "mobile_default",
+          extractorVersion: "lp-signals-v1",
+          idempotencyKey: "proof-request:watch-1:direct-prev",
+          attemptedAt: "2026-04-10T00:00:00.000Z",
+          succeededAt: "2026-04-10T00:00:01.000Z",
+          createdAt: "2026-04-10T00:00:01.000Z",
+          updatedAt: "2026-04-10T00:00:01.000Z",
+        },
+      ]),
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi.fn().mockResolvedValue([]),
+      listWatchEventsBetween: vi.fn(),
+      listWatchlists: vi.fn(),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertAd: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+      upsertProofTarget: vi.fn().mockResolvedValue({
+        id: "target-direct-1",
+        watchlistId: "watch-1",
+        adId: null,
+        landingPageUrl: "https://competitor.example/onboarding",
+        canonicalPageIdentity: "competitor.example/onboarding",
+        proofTargetIdentity: "watch-1:none:competitor.example/onboarding",
+        lastCaptureAttemptAt: null,
+        lastSuccessfulProofAt: "2026-04-10T00:00:01.000Z",
+        lastSuccessfulCaptureId: "proof-prev",
+        createdAt: "2026-04-10T00:00:01.000Z",
+        updatedAt: "2026-04-10T00:00:01.000Z",
+      }),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn(),
+      PLAN_LIMITS: {
+        free: { digests: false },
+        starter: { digests: true },
+        agency: { digests: true },
+      },
+    }));
+
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+
+    const result = await runWatchlistManual({} as never, websiteWatchlist);
+
+    expect(result.events).toBeGreaterThan(0);
+    expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://competitor.example/onboarding",
+      expect.objectContaining({ preferRendered: true }),
+    );
+    expect(createEventCandidate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventType: "landing_page_offer_changed",
+        proofTargetId: "target-direct-1",
+      }),
+    );
+    expect(finishWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "run-1",
+      expect.objectContaining({
+        status: "succeeded",
+        summary: expect.objectContaining({
+          scanStatus: "degraded",
+          scanErrorCode: "browser_launch_failed",
+          events: expect.any(Number),
+        }),
+      }),
+    );
+	  expect(deliverWatchlistAlerts).toHaveBeenCalled();
+	});
+
+	it("keeps failed discovery failed when direct website fallback skips", async () => {
+	  class MockCommercialDiscoveryError extends Error {
+	    failureClass = "browser_launch_failed" as const;
+	  }
+
+	  const freshProofAt = new Date().toISOString();
+	  const captureLandingPageSnapshot = vi.fn();
+	  const finishWatchlistRun = vi.fn();
+	  const logMetaIntegrationStatus = vi.fn();
+	  const touchWatchlistScanned = vi.fn();
+	  const deliverWatchlistAlerts = vi.fn();
+	  const websiteWatchlist: WatchlistRecord = {
+	    ...watchlist,
+	    targetId: "https://competitor.example/onboarding",
+	    targetFingerprint: "fp-competitor-website",
+	    targetLabel: "Competitor",
+	  };
+
+	  vi.doMock("~/lib/analysis.server", () => ({
+	    buildAnalysisFields: vi.fn(() => []),
+	  }));
+	  vi.doMock("~/lib/creative-text.server", () => ({
+	    captureCreativeText: vi.fn(),
+	  }));
+	  vi.doMock("~/lib/ad-source.server", () => ({
+	    CommercialDiscoveryError: MockCommercialDiscoveryError,
+	    resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+	    searchAdsViaSourceResolver: vi.fn(),
+	  }));
+	  vi.doMock("~/lib/data.server", () => ({
+	    addDigestItem: vi.fn(),
+	    clearDigestItems: vi.fn(),
+	    countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
+	    countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
+	    createAdObservation: vi.fn(),
+	    createDigestRun: vi.fn(),
+	    createEventCandidate: vi.fn(),
+	    createLandingPageSnapshot: vi.fn(),
+	    createProofCapture: vi.fn(),
+	    createWatchEvent: vi.fn(),
+	    createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+	    finishWatchlistRun,
+	    getDigestByPeriod: vi.fn(),
+	    getUserDeliveryProfile: vi.fn().mockResolvedValue({
+	      id: "user-1",
+	      email: "owner@example.com",
+	      name: "Owner",
+	    }),
+	    getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+	    getSavedQuery: vi.fn(),
+	    getWatchlist: vi.fn(),
+	    hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([]),
+	    listActiveWatchlists: vi.fn(),
+	    listEventCandidates: vi.fn().mockResolvedValue([]),
+	    listObservationsForRun: vi.fn().mockResolvedValue([]),
+	    listProofCapturesForTarget: vi.fn().mockResolvedValue([
+	      {
+	        id: "proof-prev",
+	        proofTargetId: "target-direct-1",
+	        status: "succeeded",
+	        skipReason: null,
+	        failureCode: null,
+	        failureReason: null,
+	        screenshotArtifactKey: null,
+	        htmlArtifactKey: null,
+	        extractedFields: {
+	          rawHeadline: "Move your sales team in one day",
+	          normalizedHeadline: "move your sales team in one day",
+	          normalizedHeadlineHash: "hash-direct-current",
+	          ctaText: "Book demo",
+	          priceText: "Paid onboarding setup",
+	          formPresent: true,
+	        },
+	        fieldConfidence: {},
+	        extractionWarnings: [],
+	        captureMetadata: {},
+	        renderMode: "mobile",
+	        deviceProfile: "mobile_default",
+	        extractorVersion: "lp-signals-v1",
+	        idempotencyKey: "proof-request:watch-1:direct-prev",
+	        attemptedAt: freshProofAt,
+	        succeededAt: freshProofAt,
+	        createdAt: freshProofAt,
+	        updatedAt: freshProofAt,
+	      },
+	    ]),
+	    listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+	    listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
+	    listWatchEvents: vi.fn().mockResolvedValue([]),
+	    listWatchEventsBetween: vi.fn(),
+	    listWatchlists: vi.fn(),
+	    logMetaIntegrationStatus,
+	    touchWatchlistScanned,
+	    upsertAd: vi.fn(),
+	    upsertDigestDelivery: vi.fn(),
+	    upsertProofTarget: vi.fn().mockResolvedValue({
+	      id: "target-direct-1",
+	      watchlistId: "watch-1",
+	      adId: null,
+	      landingPageUrl: "https://competitor.example/onboarding",
+	      canonicalPageIdentity: "competitor.example/onboarding",
+	      proofTargetIdentity: "watch-1:none:competitor.example/onboarding",
+	      lastCaptureAttemptAt: freshProofAt,
+	      lastSuccessfulProofAt: freshProofAt,
+	      lastSuccessfulCaptureId: "proof-prev",
+	      createdAt: freshProofAt,
+	      updatedAt: freshProofAt,
+	    }),
+	  }));
+	  vi.doMock("~/lib/landing-pages.server", () => ({
+	    captureLandingPageSnapshot,
+	  }));
+	  vi.doMock("~/lib/delivery.server", () => ({
+	    deliverWatchlistAlerts,
+	  }));
+	  vi.doMock("~/lib/plan.server", () => ({
+	    getUserPlan: vi.fn(),
+	    PLAN_LIMITS: {
+	      free: { digests: false },
+	      starter: { digests: true },
+	      agency: { digests: true },
+	    },
+	  }));
+
+	  const { runWatchlist } = await import("~/lib/monitoring.server");
+
+	  const result = await runWatchlist(
+	    {} as never,
+	    websiteWatchlist,
+	    "manual",
+	    Promise.reject(new MockCommercialDiscoveryError("Browser discovery unavailable")),
+	  );
+
+	  expect(result.events).toBe(0);
+	  expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+	  expect(deliverWatchlistAlerts).not.toHaveBeenCalled();
+	  expect(touchWatchlistScanned).not.toHaveBeenCalled();
+	  expect(finishWatchlistRun).toHaveBeenCalledWith(
+	    expect.anything(),
+	    "run-1",
+	    expect.objectContaining({
+	      status: "failed",
+	      errorCode: "browser_launch_failed",
+	      errorMessage: "Browser discovery unavailable",
+	      summary: expect.objectContaining({
+	        proofsAttempted: 0,
+	        events: 0,
+	        scanStatus: "failed",
+	        scanErrorCode: "browser_launch_failed",
+	      }),
+	    }),
+	  );
+	  expect(logMetaIntegrationStatus).toHaveBeenCalledWith(
+	    expect.anything(),
+	    expect.objectContaining({
+	      status: "degraded",
+	      summary: "Commercial discovery failed and direct website proof did not complete.",
+	    }),
+	  );
+	});
+
+	it("does not spend direct website proof quota while the previous proof is fresh", async () => {
+	  const captureLandingPageSnapshot = vi.fn();
+	  const finishWatchlistRun = vi.fn();
+	  const directWatchlist: WatchlistRecord = {
+      ...watchlist,
+      targetId: "https://competitor.example/onboarding",
+      targetFingerprint: "fp-competitor-website",
+      targetLabel: "Competitor",
+    };
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildAnalysisFields: vi.fn(() => []),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+        failureClass = "browser_launch_failed" as const;
+      },
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver: vi.fn(),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn(),
+      clearDigestItems: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
+      countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
+      createAdObservation: vi.fn(),
+      createDigestRun: vi.fn(),
+      createEventCandidate: vi.fn(),
+      createLandingPageSnapshot: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun,
+      getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+      getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([]),
+      listActiveWatchlists: vi.fn(),
+      listEventCandidates: vi.fn().mockResolvedValue([]),
+      listObservationsForRun: vi.fn().mockResolvedValue([]),
+      listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi.fn().mockResolvedValue([]),
+      listWatchEventsBetween: vi.fn(),
+      listWatchlists: vi.fn(),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertAd: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+      upsertProofTarget: vi.fn().mockResolvedValue({
+        id: "target-direct-1",
+        watchlistId: "watch-1",
+        adId: null,
+        landingPageUrl: "https://competitor.example/onboarding",
+        canonicalPageIdentity: "competitor.example/onboarding",
+        proofTargetIdentity: "watch-1:none:competitor.example/onboarding",
+        lastCaptureAttemptAt: new Date().toISOString(),
+        lastSuccessfulProofAt: new Date().toISOString(),
+        lastSuccessfulCaptureId: "proof-prev",
+        createdAt: "2026-04-10T00:00:01.000Z",
+        updatedAt: "2026-04-10T00:00:01.000Z",
+      }),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn(),
+      PLAN_LIMITS: {
+        free: { digests: false },
+        starter: { digests: true },
+        agency: { digests: true },
+      },
+    }));
+
+    const { runWatchlist } = await import("~/lib/monitoring.server");
+
+    await runWatchlist(
+      {} as never,
+      directWatchlist,
+      "manual",
+      Promise.resolve({ ads: [], pagesScanned: 0, source: "meta_library_browser" } as never),
+    );
+
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    expect(finishWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "run-1",
+      expect.objectContaining({
+        summary: expect.objectContaining({
+          proofsAttempted: 0,
+          events: 0,
+        }),
+      }),
+    );
+  });
+
+  it("compares redirected direct website proof against the canonical target history", async () => {
+    const createEventCandidate = vi.fn().mockResolvedValue("candidate-direct-redirect");
+    const createProofCapture = vi.fn().mockResolvedValue("proof-direct-redirect");
+    const createWatchEvent = vi.fn().mockResolvedValue("event-direct-redirect");
+    const initialTarget = {
+      id: "target-initial",
+      watchlistId: "watch-1",
+      adId: null,
+      landingPageUrl: "https://competitor.example/onboarding",
+      canonicalPageIdentity: "competitor.example/onboarding",
+      proofTargetIdentity: "watch-1:none:competitor.example/onboarding",
+      lastCaptureAttemptAt: null,
+      lastSuccessfulProofAt: null,
+      lastSuccessfulCaptureId: null,
+      createdAt: "2026-04-10T00:00:01.000Z",
+      updatedAt: "2026-04-10T00:00:01.000Z",
+    };
+    const finalTarget = {
+      ...initialTarget,
+      id: "target-final",
+      landingPageUrl: "https://www.competitor.example/onboarding",
+      canonicalPageIdentity: "www.competitor.example/onboarding",
+      proofTargetIdentity: "watch-1:none:www.competitor.example/onboarding",
+      lastSuccessfulProofAt: "2026-04-10T00:00:01.000Z",
+      lastSuccessfulCaptureId: "proof-prev",
+    };
+    const upsertProofTarget = vi.fn().mockImplementation(async (_env: unknown, input: { canonicalPageIdentity: string }) =>
+      input.canonicalPageIdentity === "www.competitor.example/onboarding" ? finalTarget : initialTarget,
+    );
+    const listProofCapturesForTarget = vi.fn().mockImplementation(async (_env: unknown, proofTargetId: string) =>
+      proofTargetId === "target-final"
+        ? [
+            {
+              id: "proof-prev",
+              proofTargetId: "target-final",
+              status: "succeeded",
+              skipReason: null,
+              failureCode: null,
+              failureReason: null,
+              screenshotArtifactKey: null,
+              htmlArtifactKey: null,
+              extractedFields: {
+                rawHeadline: "Move your sales team in one day",
+                normalizedHeadline: "move your sales team in one day",
+                normalizedHeadlineHash: "hash-direct-current",
+                ctaText: "Book demo",
+                priceText: "Paid onboarding setup",
+                formPresent: true,
+              },
+              fieldConfidence: {},
+              extractionWarnings: [],
+              captureMetadata: {},
+              renderMode: "mobile",
+              deviceProfile: "mobile_default",
+              extractorVersion: "lp-signals-v1",
+              idempotencyKey: "proof-request:watch-1:direct-prev",
+              attemptedAt: "2026-04-10T00:00:00.000Z",
+              succeededAt: "2026-04-10T00:00:01.000Z",
+              createdAt: "2026-04-10T00:00:01.000Z",
+              updatedAt: "2026-04-10T00:00:01.000Z",
+            },
+          ]
+        : [],
+    );
+    const websiteWatchlist: WatchlistRecord = {
+      ...watchlist,
+      targetId: "https://competitor.example/onboarding",
+      targetFingerprint: "fp-competitor-website",
+      targetLabel: "Competitor",
+    };
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://competitor.example/onboarding",
+      canonicalUrl: "https://www.competitor.example/onboarding",
+      rawHeadline: "Move your sales team in one day",
+      normalizedHeadline: "move your sales team in one day",
+      normalizedHeadlineHash: "hash-direct-current",
+      ctaText: "Claim migration",
+      priceText: "Free migration and 2 months white-glove setup",
+      formPresent: true,
+      captureMethod: "landing_page_fetch",
+      capturedAt: "2026-04-18T00:00:00.000Z",
+      artifactKey: "landing-pages/direct.html",
+      metadata: {
+        htmlArtifactKey: "landing-pages/direct.html",
+        screenshotArtifactKey: "landing-pages/direct.jpeg",
+        extractorVersion: "lp-signals-v1",
+        extractedFieldConfidence: {},
+        extractionWarnings: [],
+        renderMode: "mobile",
+        deviceProfile: "mobile_default",
+      },
+    });
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildAnalysisFields: vi.fn(() => []),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn(),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+        failureClass = "browser_launch_failed" as const;
+      },
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue({
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn(),
+      clearDigestItems: vi.fn(),
+      countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
+      countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
+      createAdObservation: vi.fn(),
+      createDigestRun: vi.fn(),
+      createEventCandidate,
+      createLandingPageSnapshot: vi.fn(),
+      createProofCapture,
+      createWatchEvent,
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn(),
+      getDigestByPeriod: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+      getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+      getSavedQuery: vi.fn(),
+      getWatchlist: vi.fn(),
+      hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([]),
+      listActiveWatchlists: vi.fn(),
+      listEventCandidates: vi.fn().mockResolvedValue([]),
+      listObservationsForRun: vi.fn().mockResolvedValue([]),
+      listProofCapturesForTarget,
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi.fn().mockResolvedValue([]),
+      listWatchEventsBetween: vi.fn(),
+      listWatchlists: vi.fn(),
+      logMetaIntegrationStatus: vi.fn(),
+      touchWatchlistScanned: vi.fn(),
+      upsertAd: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+      upsertProofTarget,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        attempts: 0,
+        channels: [],
+      }),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn(),
+      PLAN_LIMITS: {
+        free: { digests: false },
+        starter: { digests: true },
+        agency: { digests: true },
+      },
+    }));
+
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+
+    const result = await runWatchlistManual({} as never, websiteWatchlist);
+
+    expect(result.events).toBeGreaterThan(0);
+    expect(listProofCapturesForTarget).toHaveBeenCalledWith(expect.anything(), "target-final", 20);
+    expect(createEventCandidate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventType: "landing_page_offer_changed",
+        proofTargetId: "target-final",
+        metadata: expect.objectContaining({
+          from: "Paid onboarding setup",
+          to: "Free migration and 2 months white-glove setup",
+        }),
+      }),
+    );
+    expect(createProofCapture).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        proofTargetId: "target-final",
+        idempotencyKey: expect.stringContaining("www-competitor-example-onboarding"),
+      }),
+    );
+  });
+
   it("delegates confirmed watchlist events to the instant-delivery module", async () => {
     const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
       attempts: 1,

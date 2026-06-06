@@ -731,6 +731,43 @@ describe("current 0509 probe", () => {
     });
   });
 
+  it("does not mistake 0509's own tracking sign-in CTA for a Meta login wall", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => `
+        <html>
+          <body>
+            <p>Five to Nine turns the domain into a Meta ads search.</p>
+            <a href="/auth/signup">Sign in to track</a>
+            <div>Source: Live Ad Library capture</div>
+            <h2>29 ads on this page</h2>
+            <a href="https://www.facebook.com/ads/library/?id=123">Facebook ad proof</a>
+          </body>
+        </html>
+      `,
+    });
+
+    const result = await runCurrent0509Probe(
+      {
+        provider: "current_0509",
+        query: "nykaa",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        fetchImpl,
+        forceLive: true,
+        canaryBypassToken: "secret-token",
+      },
+    );
+
+    expect(result.loginWall).toBe(true);
+    expect(result.status).toBe("ok");
+    expect(result.sourceLabel).toBe("Live Ad Library capture");
+    expect(result.matchCount).toBe(29);
+  });
+
   it("treats API fallback pages with rendered results as healthy", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

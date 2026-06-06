@@ -78,13 +78,13 @@ export default function ReportsRoute() {
       <article className="f9-app-panel f9-report-page">
         <div className="f9-panel-toolbar f9-report-toolbar">
           <div>
-            <p className="f9-app-kicker">Agency export</p>
+            <p className="f9-app-kicker">Proof report</p>
             <h2>Client-ready report</h2>
           </div>
 
           <div className="f9-action-row">
             <Link className="f9-secondary-button" to={backHref}>
-              Back to source
+              Back to workspace
             </Link>
             <Form method="post">
               <input name="intent" type="hidden" value="share-report" />

@@ -32,9 +32,11 @@ describe("public markdown", () => {
 
   it("keeps agent-readable content aligned with launch truth", () => {
     expect(PUBLIC_MARKDOWN).toContain("verified access paths");
-    expect(PUBLIC_MARKDOWN).toContain("Checkout should appear only after");
-    expect(PUBLIC_MARKDOWN).toContain("Fresh commercial discovery is a release gate");
-    expect(LLMS_TEXT).toContain("cached results must be labeled as cached");
+    expect(PUBLIC_MARKDOWN).toContain("visible plan caps");
+    expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended launch plan");
+    expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan");
+    expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
+    expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live proof");
     expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve|not live/i);
   });
 });

@@ -61,6 +61,7 @@ describe("billing route exposure", () => {
     const paths = flattenRoutePaths(routes as RouteEntry[]);
 
     expect(paths).toContain("api/billing/dodo/checkout");
+    expect(paths).toContain("api/billing/dodo/canary");
     expect(paths).toContain("api/pricing-preview");
     expect(paths).toContain("api/webhooks/dodo");
     expect(paths).toContain("privacy");
@@ -91,7 +92,7 @@ describe("app layout loader", () => {
 });
 
 describe("marketing route", () => {
-  it("renders Dodo preview pricing with purchase forms for signed-in users", async () => {
+  it("renders customer-facing pricing with purchase forms for signed-in users", async () => {
     vi.doMock("react-router", async () => {
       const actual = await vi.importActual<typeof import("react-router")>("react-router");
       const React = await import("react");
@@ -107,8 +108,8 @@ describe("marketing route", () => {
             {
               slug: "starter",
               name: "Starter",
-              monthlyLabel: "Loading local monthly price",
-              yearlyLabel: "Loading local annual price",
+              monthlyLabel: "Monthly price loading",
+              yearlyLabel: "Annual price loading",
               detail: "Saved searches.",
             },
           ],
@@ -136,6 +137,10 @@ describe("marketing route", () => {
     expect(markup).toContain("$59");
     expect(markup).toContain("$499");
     expect(markup).not.toContain("INR");
+    expect(markup).toContain("Recommended launch plan");
+    expect(markup).toContain("Start with Starter");
+    expect(markup).not.toContain("Dodo preview");
+    expect(markup).not.toContain("Buyer currency");
     expect(markup).toContain("Start monthly");
     expect(markup).toContain("/api/billing/dodo/checkout");
     expect(markup).not.toContain("/pricing-region");
