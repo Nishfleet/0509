@@ -6,7 +6,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const termsDescription =
-  "Terms for Five to Nine, including billing, acceptable use, and source-proof limits.";
+  "Terms for Five to Nine, including billing, acceptable use, and tracking limits.";
 
 export const links: LinksFunction = () => canonicalLinks("/terms");
 
@@ -30,7 +30,7 @@ export default function TermsRoute() {
           <LegalBlock title="Product status">
             <p>
               The product helps teams search competitor ads, save proof, create watchlists, and review proof-backed
-              monitoring outputs. Recent results, delayed discovery, and fresh checks are labeled honestly wherever
+              monitoring outputs. Recent results, delayed checks, and fresh checks are labeled honestly wherever
               they appear.
             </p>
           </LegalBlock>
@@ -38,15 +38,15 @@ export default function TermsRoute() {
           <LegalBlock title="Billing">
             <p>
               Paid access, subscription changes, cancellations, and refunds should follow the confirmed payment path or
-              written order connected to the workspace.
+              written order connected to the account.
             </p>
           </LegalBlock>
 
           <LegalBlock title="Tracking limits">
             <p>
-              Five to Nine must label tracking status honestly. Recent results, delayed discovery, and sample data must
-              not be described as fresh live proof. Workspace Meta access must be owner-provided, tested before saving,
-              and used only for that workspace.
+              Five to Nine must label tracking status honestly. Recent results, delayed checks, and sample data must
+              not be described as fresh live proof. Backup Meta access must be owner-provided, tested before saving,
+              and used only for that account.
             </p>
           </LegalBlock>
 

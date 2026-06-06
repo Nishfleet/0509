@@ -197,7 +197,7 @@ describe("buildCollectionReport", () => {
         expect.objectContaining({
           label: "OCR text",
           value: "60 Hours Playback\nOnly ₹999",
-          sourceLabel: "Ad snapshot fetch",
+          sourceLabel: "Ad snapshot",
         }),
       ]),
     );

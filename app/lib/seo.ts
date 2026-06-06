@@ -45,7 +45,7 @@ export function publicSeoMeta(input: {
   ];
 }
 
-const SITEMAP_PATHS = ["/", "/search", "/privacy", "/terms"] as const;
+const SITEMAP_PATHS = ["/", "/privacy", "/terms"] as const;
 
 const SITEMAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

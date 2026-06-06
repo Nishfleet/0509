@@ -6,7 +6,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const signupDescription =
-  "Create a Five to Nine account to save research, build collections, and monitor competitor changes on Meta.";
+  "Create a Five to Nine account to search competitor ads, save useful examples, and monitor offer changes.";
 
 export const links: LinksFunction = () => canonicalLinks("/auth/signup");
 
@@ -50,7 +50,7 @@ export default function SignupRoute() {
             <span>First competitor</span>
             <h1>Start with the competitor your team keeps checking by hand.</h1>
             <p>
-              Paste a competitor website, find the ads behind it, and keep proof of offer and landing-page changes in
+              Paste a competitor website, find the ads behind it, and keep offer changes and landing-page evidence in
               one place.
             </p>
           </div>
@@ -58,15 +58,15 @@ export default function SignupRoute() {
           <div className="f9-auth-proof-list">
             <div>
               <strong>Search</strong>
-              <p>Start from competitor website, advertiser, keyword, offer, and platform searches.</p>
+              <p>Start from a competitor website, brand, keyword, offer, or platform.</p>
             </div>
             <div>
               <strong>Monitor</strong>
-              <p>Turn repeated checks into watchlists with proof history.</p>
+              <p>Turn repeated checks into saved competitors with evidence history.</p>
             </div>
             <div>
               <strong>Brief</strong>
-              <p>Use proof-backed summaries to move copy, pricing, and sales responses faster.</p>
+              <p>Use change summaries to move copy, pricing, and sales responses faster.</p>
             </div>
           </div>
         </section>

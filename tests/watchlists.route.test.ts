@@ -902,13 +902,13 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("See what changed");
     expect(markup).toContain("Watchlist setup");
     expect(markup).toContain("Save watchlist");
-    expect(markup).toContain("Tracking path");
+    expect(markup).toContain("Tracking status");
     expect(markup).not.toContain("Meta ads tracking beta");
-    expect(markup).toContain("Live ad library capture");
-    expect(markup).toContain("Proof and delivery");
+    expect(markup).toContain("Live ad check");
+    expect(markup).toContain("Evidence and delivery");
     expect(markup).toContain("High confidence");
     expect(markup).toContain("Why this alerted");
-    expect(markup).toContain("Recent proof attempts");
+    expect(markup).toContain("Recent evidence checks");
     expect(markup).toContain("Delivery settings");
   });
 
@@ -965,6 +965,8 @@ describe("watchlists route rendering", () => {
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
     expect(markup).toContain("Using recent competitor results");
-    expect(markup).toContain("Recent live results");
+    expect(markup).toContain("Recent results");
+    expect(markup).not.toContain("Browser Run");
+    expect(markup).not.toContain("cached live results");
   });
 });

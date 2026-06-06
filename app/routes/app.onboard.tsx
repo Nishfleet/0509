@@ -11,10 +11,10 @@ import {
 } from "~/lib/normalize";
 
 export const meta: MetaFunction = () => [
-  { title: "Set up your workspace | Five to Nine" },
+  { title: "Set up your account | Five to Nine" },
   {
     name: "description",
-    content: "Choose a competitor to track so your Five to Nine workspace starts with a concrete next step.",
+    content: "Choose a competitor to track so your Five to Nine account starts with a concrete next step.",
   },
 ];
 
@@ -68,8 +68,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
         message: isZeroLimit
-          ? "Watchlists are available on paid plans. Starter is the recommended launch plan for monitoring this competitor."
-          : "You have reached your workspace watchlist limit.",
+          ? "Competitor monitoring is available on paid plans. Starter is the recommended plan for this competitor."
+          : "You have reached your competitor monitoring limit.",
         upgradePath: "/#pricing",
       };
     }
@@ -135,8 +135,7 @@ export default function AppOnboardRoute() {
           <span className="f9-app-kicker">First-run setup</span>
           <h1>Add your first competitor website.</h1>
           <p className="f9-muted-copy">
-            Start with one competitor site. Five to Nine finds the advertiser search, creates the watchlist, and starts
-            keeping proof.
+            Start with one competitor site. Five to Nine finds the ads behind it and keeps checking for changes.
           </p>
 
           {actionData?.message ? (
@@ -172,10 +171,10 @@ export default function AppOnboardRoute() {
                 </label>
                 <div className="f9-action-row">
                   <button className="f9-secondary-button" disabled={!trimmedWebsite} type="submit">
-                    Preview market moves
+                    Search competitor ads
                   </button>
                   <small className="f9-muted-copy">
-                    We infer the advertiser name, but you can edit it on the search page.
+                    You can edit the brand name on the search page.
                   </small>
                 </div>
               </Form>
@@ -187,7 +186,7 @@ export default function AppOnboardRoute() {
                 <>
                   <h2>Create your first watchlist</h2>
                   <p className="f9-muted-copy">
-                    One click starts tracking this competitor inside the workspace.
+                    One click starts tracking this competitor inside your account.
                     You have {watchlistCapacity} watchlist{watchlistCapacity === 1 ? "" : "s"} available.
                   </p>
                   <Form className="f9-auth-form" method="post">
@@ -202,8 +201,7 @@ export default function AppOnboardRoute() {
                 <>
                   <h2>Choose a plan to start monitoring</h2>
                   <p className="f9-muted-copy">
-                    Free accounts can preview search. Starter is the recommended launch plan for retained watchlists
-                    and weekly proof briefs.
+                    Starter is the recommended plan for retained competitor tracking and weekly change briefs.
                   </p>
                   <div className="f9-action-row">
                     <Link className="f9-primary-button" to="/#pricing">

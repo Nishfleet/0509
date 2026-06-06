@@ -115,7 +115,12 @@ describe("production canary", () => {
       canaryBypassToken: "secret-token",
     });
 
-    expect(report.passed).toBe(true);
+    expect(report.passed).toBe(false);
+    expect(report.freshLiveBypass).toMatchObject({
+      configured: true,
+      proved: false,
+      message: "Private current_0509 fresh-live probe did not return live ad proof.",
+    });
     expect(report.blockingFailures).toHaveLength(1);
     expect(report.metaAdsBeta).toMatchObject({
       beta: true,
@@ -123,6 +128,9 @@ describe("production canary", () => {
       status: "needs_proof",
     });
     expect(formatProductionCanaryReport(report)).toContain("meta ads beta: needs proof");
+    expect(formatProductionCanaryReport(report)).toContain(
+      "fresh-live bypass: failed (Private current_0509 fresh-live probe did not return live ad proof.)",
+    );
   });
 
   it("can still run Meta ads as a strict provider gate when explicitly requested", async () => {
@@ -227,8 +235,40 @@ describe("production canary", () => {
     expect(report.freshLiveBypass).toMatchObject({
       required: true,
       configured: false,
+      proved: false,
     });
     expect(formatProductionCanaryReport(report)).toContain("fresh-live bypass: failed");
+  });
+
+  it("fails the fresh-live bypass when the private probe is redirected to sign in", async () => {
+    const fetchImpl = createHealthyCanaryFetchImpl();
+    const benchmarkImpl = vi.fn().mockResolvedValue([
+      current0509Result("empty", {
+        httpStatus: 302,
+        loginWall: true,
+        blockedLikely: true,
+        note: "Private current_0509 probe was redirected to sign in.",
+      }),
+    ]);
+
+    const report = await runProductionCanary({
+      baseUrl: "https://0509.in",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+      canaryBypassToken: "secret-token",
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.freshLiveBypass).toMatchObject({
+      required: true,
+      configured: true,
+      proved: false,
+      message: "Private current_0509 probe was redirected to sign in.",
+    });
+    expect(formatProductionCanaryReport(report)).toContain(
+      "fresh-live bypass: failed (Private current_0509 probe was redirected to sign in.)",
+    );
   });
 
   it("passes the canary bypass token into fresh-live search probes", async () => {
@@ -303,8 +343,13 @@ describe("production canary", () => {
       canaryBypassToken: "secret-token",
     });
 
-    expect(report.passed).toBe(true);
+    expect(report.passed).toBe(false);
     expect(report.blockingFailures).toHaveLength(1);
+    expect(report.freshLiveBypass).toMatchObject({
+      configured: true,
+      proved: false,
+      message: "Private current_0509 fresh-live probe did not return live ad proof.",
+    });
     expect(report.metaAdsBeta?.status).toBe("needs_proof");
     expect(formatProductionCanaryReport(report)).toContain("Cached live results");
   });
