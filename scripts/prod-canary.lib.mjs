@@ -248,10 +248,11 @@ export async function runProductionCanary(options = {}) {
   if (freshLiveBypass.configured && freshLiveBypassFailure) {
     freshLiveBypass.message = freshLiveBypassFailure;
   }
+  const readinessNeedsProof = metaAdsReadinessNeedsProof(launchReadiness.metaAdsBeta);
   const metaAdsBeta = {
     beta: true,
     strict: metaAdsStrict,
-    status: blockingFailures.length === 0 ? "ok" : "needs_proof",
+    status: blockingFailures.length === 0 && !readinessNeedsProof ? "ok" : "needs_proof",
     failures: blockingFailures,
     readiness: launchReadiness.metaAdsBeta ?? null,
   };
@@ -261,6 +262,8 @@ export async function runProductionCanary(options = {}) {
       healthChecks.every((check) => check.ok) &&
       launchReadiness.ok &&
       freshLiveBypass.proved &&
+      !readinessNeedsProof &&
+      blockingFailures.length === 0 &&
       (!metaAdsStrict || blockingFailures.length === 0),
     generatedAt: new Date().toISOString(),
     baseUrl,
@@ -312,11 +315,13 @@ export function formatProductionCanaryReport(report) {
   if (report.metaAdsBeta?.status === "needs_proof") {
     const readinessNote = formatReadinessNote(report.metaAdsBeta.readiness);
     lines.push(`meta ads beta: needs proof${readinessNote}`);
-    lines.push(
-      `meta ads probe: ${report.blockingFailures
-        .map((result) => `${result.query} (${result.status}, ${result.sourceLabel ?? "no source"})`)
-        .join(", ")}`,
-    );
+    if (report.blockingFailures.length > 0) {
+      lines.push(
+        `meta ads probe: ${report.blockingFailures
+          .map((result) => `${result.query} (${result.status}, ${result.sourceLabel ?? "no source"})`)
+          .join(", ")}`,
+      );
+    }
     if (report.metaAdsBeta.strict) {
       lines.push("meta ads strict gate: failed");
     }
@@ -362,6 +367,17 @@ function findFreshLiveBypassFailure(results, blockingFailures) {
   }
 
   return null;
+}
+
+/**
+ * @param {unknown} readiness
+ */
+function metaAdsReadinessNeedsProof(readiness) {
+  if (!readiness || typeof readiness !== "object") {
+    return false;
+  }
+
+  return /** @type {{ ok?: unknown }} */ (readiness).ok === false;
 }
 
 /**

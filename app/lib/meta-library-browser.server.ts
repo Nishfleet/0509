@@ -35,6 +35,7 @@ const QUICK_ACTION_EXTRACTION_SCRIPT_ID = "__0509_ad_library_payload";
 const QUICK_ACTION_WAIT_FOR_TIMEOUT_MS = 1_000;
 const QUICK_ACTION_SCRAPE_WAIT_FOR_TIMEOUT_MS = 2_000;
 const BROWSERLESS_RENDER_WAIT_MS = 5_000;
+const BROWSERLESS_EMPTY_RESULT_MAX_ATTEMPTS = 2;
 const BROWSERLESS_BQL_MUTATION = `
 mutation MetaLibraryLiveFallback($url: String!, $userAgent: String!) {
   userAgent(userAgent: $userAgent) {
@@ -565,6 +566,35 @@ function normalizeCommercialDiscoveryError(error: unknown) {
 }
 
 async function searchMetaLibraryByBrowserless(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+): Promise<SearchResponse> {
+  let lastEmptyResult: CommercialDiscoveryError | null = null;
+
+  for (let attempt = 1; attempt <= BROWSERLESS_EMPTY_RESULT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await searchMetaLibraryByBrowserlessOnce(env, query);
+    } catch (error) {
+      const normalizedError = normalizeCommercialDiscoveryError(error);
+      if (
+        normalizedError.failureClass === "empty_result" &&
+        attempt < BROWSERLESS_EMPTY_RESULT_MAX_ATTEMPTS
+      ) {
+        lastEmptyResult = normalizedError;
+        continue;
+      }
+
+      throw normalizedError;
+    }
+  }
+
+  throw lastEmptyResult ?? new CommercialDiscoveryError(
+    "Browserless returned no extractable Meta Ad Library cards.",
+    "empty_result",
+  );
+}
+
+async function searchMetaLibraryByBrowserlessOnce(
   env: AppEnv,
   query: NormalizedSavedQuery,
 ): Promise<SearchResponse> {
