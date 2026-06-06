@@ -43,6 +43,9 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Launch status: readiness-gated.");
     expect(marketingRoute).toContain("Search and monitoring require an account");
     expect(marketingRoute).toContain('id="demo"');
+    expect(marketingRoute).toContain('aria-label="Sample proof before signup"');
+    expect(marketingRoute).toContain("Review sample proof loop");
+    expect(marketingRoute).toContain("Open markdown proof");
     expect(marketingRoute).toContain("See the proof shape before creating an account.");
     expect(marketingRoute).toContain("/api/demo-proof");
     expect(marketingRoute).not.toContain("Account search");

@@ -171,6 +171,11 @@ export default function MarketingRoute() {
               captures evidence, and tells your team when visible offer text, CTAs, forms, or onboarding page copy move.
             </p>
 
+            <div className="f9-hero-proof-actions" aria-label="Sample proof before signup">
+              <a href="#demo">Review sample proof loop</a>
+              <a href="/api/demo-proof?format=markdown">Open markdown proof</a>
+            </div>
+
             <div className="f9-public-status-note" role="note">
               <strong>Launch status: readiness-gated.</strong>
               <span>
