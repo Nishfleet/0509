@@ -36,6 +36,58 @@ afterEach(() => {
 });
 
 describe("search selection persisted OCR reuse", () => {
+  it("can skip persisted hydration and enrichment for logged-out public search", async () => {
+    const hydratedAd: AdRecord = {
+      ...baseAd,
+      creativeText: "Stored account proof",
+      creativeTextCaptureMethod: "ad_snapshot_fetch",
+      creativeTextMetadata: {
+        source: "stored",
+      },
+    };
+    const hydrateAdsWithPersistedCreatives = vi.fn().mockResolvedValue([hydratedAd]);
+    const captureCreativeText = vi.fn().mockResolvedValue({
+      text: "Fresh OCR",
+      captureMethod: "ad_snapshot_fetch",
+      metadata: {
+        source: "fresh",
+      },
+    });
+
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives,
+      upsertAd: vi.fn().mockResolvedValue(undefined),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    const result = await prepareSearchResultSelection(
+      {
+        DB: {},
+      } as never,
+      {
+        ads: [baseAd],
+        nextCursor: null,
+        source: "meta",
+      },
+      "meta-boat-1",
+      {
+        enrichSelected: false,
+        hydratePersisted: false,
+      },
+    );
+
+    expect(hydrateAdsWithPersistedCreatives).not.toHaveBeenCalled();
+    expect(captureCreativeText).not.toHaveBeenCalled();
+    expect(result.result.ads).toEqual([baseAd]);
+    expect(result.selectedAd).toEqual(baseAd);
+  });
+
   it("rebuilds analysis fields when stored creative text is reused", async () => {
     const hydratedAd: AdRecord = {
       ...baseAd,

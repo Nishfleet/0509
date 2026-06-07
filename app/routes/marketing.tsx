@@ -11,6 +11,7 @@ import type { RootLoaderData } from "~/root";
 
 const marketingDescription =
   "Five to Nine tracks competitor ads, offers, and landing pages so revenue teams can react before deals move.";
+const publicSearchTrialPath = "/search?website=https%3A%2F%2Fnykaa.com";
 
 export const links: LinksFunction = () => canonicalLinks("/");
 
@@ -136,6 +137,7 @@ export default function MarketingRoute() {
 
           <nav className="f9-nav-links" aria-label="Primary">
             <a href="#demo">Demo</a>
+            <Link to={publicSearchTrialPath}>Live search</Link>
             <a href="#platform">Products</a>
             <a href="#platform">Signals</a>
             <a href="#pricing">Pricing</a>
@@ -158,20 +160,22 @@ export default function MarketingRoute() {
 
         <div className="f9-container f9-hero-layout">
           <div className="f9-hero-copy">
-            <Link className="f9-announcement" to="/auth/signup">
+            <Link className="f9-announcement" to={publicSearchTrialPath}>
               <strong>Readiness-gated beta</strong>
-              <span>Search and monitoring require an account</span>
+              <span>Preview live search before creating an account</span>
               <em aria-hidden="true" />
             </Link>
 
             <h1>Know when competitors change the offer.</h1>
 
             <p>
-              In an account, enter a competitor website. Five to Nine watches ads and landing pages,
-              captures evidence, and tells your team when visible offer text, CTAs, forms, or onboarding page copy move.
+              Enter a competitor website to preview live ads. Create an account when you want Five to Nine
+              to save useful examples, watch landing pages, capture evidence, and brief your team when visible
+              offer text, CTAs, forms, or onboarding page copy move.
             </p>
 
             <div className="f9-hero-proof-actions" aria-label="Sample proof before signup">
+              <Link to={publicSearchTrialPath}>Try live search</Link>
               <a href="#demo">Review sample proof loop</a>
               <a href="/api/demo-proof?format=markdown">Open markdown proof</a>
             </div>
@@ -312,7 +316,7 @@ export default function MarketingRoute() {
             <span>Sample proof loop</span>
             <h2>See the proof shape before creating an account.</h2>
             <p>
-              This is sample data, not a public live search. It shows the buyer moment Five to Nine
+              This is sample data, not the live search result. It shows the buyer moment Five to Nine
               is built around: one competitor, evidence trail, insight summary, digest preview, and export.
             </p>
             <div className="f9-demo-proof-actions">
@@ -412,7 +416,7 @@ export default function MarketingRoute() {
           </div>
 
           <p className="f9-growth-pricing-note">
-            Review the sample proof loop first. Paid plans add account-gated competitor research,
+            Review live search and the sample proof loop first. Paid plans add account-gated competitor research,
             watchlists, page checks, saved collections, and clear caps.
           </p>
 

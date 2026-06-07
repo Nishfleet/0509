@@ -5,6 +5,7 @@ type RateLimitPolicy = {
   limit: number;
   windowSeconds: number;
   failClosed: boolean;
+  keyByIpOnly?: boolean;
 };
 
 const CLEANUP_WINDOW_SECONDS = 2 * 60 * 60;
@@ -17,6 +18,28 @@ export async function enforceRequestRateLimit(
   const policy = rateLimitPolicyFor(request);
   if (!policy) return null;
 
+  return enforceRateLimitPolicy(request, env, policy, ctx);
+}
+
+export async function enforcePublicSearchRateLimit(
+  request: Request,
+  env: AppEnv,
+  ctx?: ExecutionContext,
+): Promise<Response | null> {
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    { scope: "public-search", limit: 20, windowSeconds: 10 * 60, failClosed: false, keyByIpOnly: true },
+    ctx,
+  );
+}
+
+async function enforceRateLimitPolicy(
+  request: Request,
+  env: AppEnv,
+  policy: RateLimitPolicy,
+  ctx?: ExecutionContext,
+) {
   if (!env.DB) {
     console.error("[rate-limit] D1 binding missing; request was not rate-limited.");
     return policy.failClosed ? rateLimitUnavailableResponse() : null;
@@ -26,7 +49,7 @@ export async function enforceRequestRateLimit(
     const url = new URL(request.url);
     const now = new Date();
     const since = new Date(now.getTime() - policy.windowSeconds * 1000).toISOString();
-    const keyHash = await requestKeyHash(request, policy.scope);
+    const keyHash = await requestKeyHash(request, policy);
 
     await env.DB.prepare(
       `INSERT INTO rate_limit_events (id, scope, key_hash, route, created_at)
@@ -92,13 +115,15 @@ export function rateLimitPolicyFor(request: Request): RateLimitPolicy | null {
   return null;
 }
 
-async function requestKeyHash(request: Request, scope: string) {
+async function requestKeyHash(request: Request, policy: RateLimitPolicy) {
   const ip =
     request.headers.get("cf-connecting-ip") ||
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown";
   const userAgent = request.headers.get("user-agent") || "";
-  const input = new TextEncoder().encode(`${scope}|${ip}|${userAgent}`);
+  const input = new TextEncoder().encode(
+    policy.keyByIpOnly ? `${policy.scope}|${ip}` : `${policy.scope}|${ip}|${userAgent}`,
+  );
   const digest = await crypto.subtle.digest("SHA-256", input);
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))

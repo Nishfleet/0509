@@ -9,14 +9,14 @@
 - Promise: `See what changed, with proof.`
 - Story: `Five to Nine` closes the gap between when a team stops checking and when the next decision gets made.
 - Positioning: lead with proof-backed competitor monitoring, not a generic competitor-analysis workspace.
-- Product shape: the public hook is a sample proof loop; account-gated search starts the real monitoring product, and workspace memory is the compounding layer.
+- Product shape: the public hook is read-only live search plus a sample proof loop; account-gated save/track starts the real monitoring product, and workspace memory is the compounding layer.
 
 Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-north-star.md`
 
 ## Product shape
 
-- `Demo proof` is the public hook: show a sample competitor, proof trail, digest preview, and export shape without exposing live search.
-- `Analysis` is account-gated: signed-in users search competitor ads, inspect the hook/offer/CTA/landing page, and save useful findings.
+- `Public trial` is the public hook: logged-out buyers can run read-only live search and inspect sample proof before creating an account.
+- `Analysis` is account-gated after the preview: signed-in users save searches, track competitors, inspect deeper proof, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, insight-depth summaries, observed campaign duration, daily briefs, and weekly digests.
 - `Workspace memory` is the compounding layer: collections, notes, tags, manual external proof links, CSV/API JSON/Slack-ready exports, customer API keys, Slack delivery, and share links.
 
@@ -38,7 +38,7 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/api/mcp` read-only MCP JSON-RPC endpoint for account-owned collection, watchlist, and digest exports with a customer API key
 - `/api/v1` customer API docs for read-only account export endpoints
 - `/api/v1/:resourceType/:resourceId` customer API-key export endpoint for account-owned collections, watchlists, and digests
-- `/search` account-gated analysis flow; logged-out requests redirect to signup while private canary probes can bypass with the configured token
+- `/search` public read-only live search trial; save, track, collections, and deeper proof enrichment require an account while private canary probes can force fresh live checks with the configured token
 - `/privacy`
 - `/terms`
 - `/api/pricing-preview`
@@ -104,7 +104,7 @@ Important bindings and secrets:
 - Cloudflare cost policy: stay on the included/free tier by default. Do not enable usage-billed add-ons just because they exist; enable them when the missing capability is materially hampering product quality, operations, or launch.
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.
-- Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the shared Dodo account API key, `DODO_0509_BRAND_ID`, and 0509 product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Buyers can review the public sample proof loop before signup. Current caps are Scout: 3 watchlists, 10 collections, weekly digests, 50 proof captures/month; Starter: 10 watchlists, 25 collections, weekly digests, 250 proof captures/month; Agency: 75 watchlists, 250 collections, daily and weekly briefs, 2,500 proof captures/month. Workspaces warn after 80% proof-capture usage. Usage bundles are overflow proof-capture packs, not unlimited monitoring, and Dodo webhooks grant purchased proof credits for 30 days.
+- Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the shared Dodo account API key, `DODO_0509_BRAND_ID`, and 0509 product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Buyers can review public read-only search and the sample proof loop before signup. Current caps are Scout: 3 watchlists, 10 collections, weekly digests, 50 proof captures/month; Starter: 10 watchlists, 25 collections, weekly digests, 250 proof captures/month; Agency: 75 watchlists, 250 collections, daily and weekly briefs, 2,500 proof captures/month. Workspaces warn after 80% proof-capture usage. Usage bundles are overflow proof-capture packs, not unlimited monitoring, and Dodo webhooks grant purchased proof credits for 30 days.
 - Broad launch is gated by `npm run launch:readiness`, including the production canary. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can prove it bypassed cache and provider cooldown. The production canary also checks recent monitoring, proof capture, and sent digest signals. If fresh commercial discovery is cached, degraded, demo, stale, unsent, or the bypass token is missing, the product should be framed as pilot-readiness rather than broad self-serve launch.
 - Use `npm run provider:bakeoff:launch` when comparing discovery providers for launch. The default bakeoff is useful for debugging, but the launch gate requires `current_0509` to return fresh live Ad Library results, not API fallback or cached live results.
 - The old `src/` Next.js app remains in the repo as legacy reference material and is no longer the live production runtime.

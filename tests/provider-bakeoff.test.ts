@@ -648,7 +648,7 @@ describe("current 0509 probe", () => {
     );
   });
 
-  it("skips unauthenticated rendered-result probes when search is not public", async () => {
+  it("skips rendered-result probes when the search route is unavailable", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response("", {
         status: 404,

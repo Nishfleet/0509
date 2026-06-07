@@ -34,7 +34,7 @@ function formatDemoProofMarkdown() {
 
   return `# Five to Nine Demo Proof
 
-Status: sample only. Live search and retained monitoring require an account.
+Status: sample only. Public live search is read-only; retained monitoring requires an account.
 
 Competitor: ${demoProof.competitor.name} (${demoProof.competitor.website})
 

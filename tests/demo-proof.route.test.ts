@@ -33,7 +33,7 @@ describe("demo proof API", () => {
     expect(response.headers.get("content-type")).toContain("text/markdown");
     expect(response.headers.get("vary")).toBe("Accept");
     expect(body).toContain("Status: sample only");
-    expect(body).toContain("Live search and retained monitoring require an account");
+    expect(body).toContain("Public live search is read-only; retained monitoring requires an account");
     expect(body).toContain("## Proof Trail");
     expect(body).toContain("## Slack Export");
     expect(body).toContain("\nPriority: Review before next campaign refresh");
