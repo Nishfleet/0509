@@ -53,9 +53,25 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const parsed = applyWebsiteSearchFallback(parseSearchParams(url.searchParams), competitorWebsite);
   const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
 
-  if (!session && !(forceLive && parsed.filters.query)) {
-    const redirectTo = `${url.pathname}${url.search}`;
-    throw redirect(`/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`);
+  if (!session && request.method.toUpperCase() === "HEAD" && parsed.filters.query) {
+    return {
+      mode: parsed.mode,
+      filters: parsed.filters,
+      fingerprint: parsed.fingerprint,
+      result: buildIdleSearchResult(),
+      selectedAd: null,
+      collections: [],
+      session,
+      competitorWebsite,
+    };
+  }
+
+  if (!session && parsed.filters.query) {
+    const { enforcePublicSearchRateLimit } = await import("~/lib/rate-limit.server");
+    const rateLimitResponse = await enforcePublicSearchRateLimit(request, env, context.cloudflare?.ctx);
+    if (rateLimitResponse) {
+      throw rateLimitResponse;
+    }
   }
 
   const collections = session ? await listCollections(env, session.user.id) : [];
@@ -92,6 +108,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     env,
     result,
     url.searchParams.get("selected"),
+    {
+      enrichSelected: Boolean(session),
+      hydratePersisted: Boolean(session),
+    },
   );
 
   return {
@@ -252,7 +272,7 @@ export default function SearchRoute() {
   const discoverySummary = formatDiscoverySummary(data.result);
   const idleSearchMessage = rootData.session
     ? "Enter a competitor website to see ads and save what matters."
-    : "Sign in to see ads and save what matters.";
+    : "Enter a competitor website to preview live ads. Create an account to save and track.";
 
   return (
     <main className="f9-search-page">
@@ -322,7 +342,7 @@ export default function SearchRoute() {
                 </button>
                 {!rootData.session ? (
                   <Link className="f9-secondary-button" to={signupTrackingPath}>
-                    Sign in to see results
+                    Create account to track
                   </Link>
                 ) : null}
               </div>
@@ -537,7 +557,7 @@ export default function SearchRoute() {
                 <div className="f9-side-note">
                   <span>Save the watch</span>
                   <p>
-                    Sign in to view results, save useful ads, and keep tracking the competitor next week.
+                    Preview live ads here. Create an account to save useful ads and keep tracking the competitor next week.
                   </p>
                   <Link className="f9-primary-button" to={signupTrackingPath}>
                     Create account
