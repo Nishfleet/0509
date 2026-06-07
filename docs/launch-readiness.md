@@ -27,7 +27,7 @@ No first-customer onboarding blocker was found in the 2026-06-04 production pass
 - `npm run build` passes.
 - `CANARY_BYPASS_TOKEN` is set locally and as a Worker secret.
 - `npm run canary:prod` reports Meta ads tracking as `meta ads beta: ok` or `meta ads beta: needs proof`; beta uncertainty is not hidden.
-- Meta ads beta graduation requires enough live samples, at least 95% seven-day success, a fresh live success in the last 24 hours, no recent failures, and a healthy visual capture path.
+- Meta ads beta graduation requires enough live samples, at least 95% seven-day success, a fresh live success in the last 24 hours, no unrecovered recent failures, and a healthy visual capture path.
 - `npm run canary:prod` also passes the private launch-readiness endpoint: recent successful monitoring, recent proof capture, and at least one recently sent digest.
 - `npm run provider:bakeoff:launch` is green for `current_0509`, proving the public app path returns fresh live Ad Library results before Meta ads can leave beta.
 - `npm audit --omit=dev --audit-level=moderate` passes.
@@ -70,4 +70,4 @@ Use this framing for the first customer:
 
 ## Recommended Next Slice
 
-Keep onboarding narrow, watch production events during the first customer setup, and keep Meta ads labeled beta until the seven-day success window clears the historical failures.
+Keep onboarding narrow, watch production events during the first customer setup, and keep Meta ads labeled beta until the seven-day success window clears the historical failures or newer live success proves recovery.
