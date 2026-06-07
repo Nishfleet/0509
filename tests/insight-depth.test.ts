@@ -155,6 +155,51 @@ describe("insight depth", () => {
     });
   });
 
+  it("summarizes manual spend, reach, and impression proof when saved on collection items", () => {
+    const summary = buildCollectionInsightDepth([
+      {
+        ...item,
+        ad: {
+          ...ad,
+          advertiser: "Mamaearth",
+          platforms: ["LinkedIn"],
+          analysisFields: [
+            {
+              scopeType: "ad",
+              fieldKey: "observed_spend",
+              fieldValue: "₹50k",
+              provenanceSource: "user",
+              extractorVersion: "manual-external-proof-v1",
+              confidence: 1,
+            },
+            {
+              scopeType: "ad",
+              fieldKey: "observed_impressions",
+              fieldValue: "120k",
+              provenanceSource: "user",
+              extractorVersion: "manual-external-proof-v1",
+              confidence: 1,
+            },
+            {
+              scopeType: "ad",
+              fieldKey: "observed_reach",
+              fieldValue: "80k",
+              provenanceSource: "user",
+              extractorVersion: "manual-external-proof-v1",
+              confidence: 1,
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(summary.metricProof[0]).toMatchObject({
+      label: "Mamaearth",
+      count: 1,
+      detail: "Spend: ₹50k | Impressions: 120k | Reach: 80k - LinkedIn",
+    });
+  });
+
   it("summarizes watch events into landing-page change history", () => {
     const summary = buildWatchlistInsightDepth([event]);
 

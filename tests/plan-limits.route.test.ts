@@ -168,6 +168,9 @@ describe("collection limit", () => {
     formData.set("cta", "Shop now");
     formData.set("note", "Seen in launch review.");
     formData.set("observedAt", "2026-06-06");
+    formData.set("spend", "₹50k");
+    formData.set("impressions", "120k");
+    formData.set("reach", "80k");
     formData.set("tags", "creator, sunscreen");
 
     const result = await action({
@@ -191,6 +194,9 @@ describe("collection limit", () => {
         cta: "Shop now",
         note: "Seen in launch review.",
         observedAt: "2026-06-06",
+        spend: "₹50k",
+        impressions: "120k",
+        reach: "80k",
         tags: ["creator", "sunscreen"],
       },
     );

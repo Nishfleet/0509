@@ -29,6 +29,13 @@ export function InsightDepthPanel({ summary }: { summary: InsightDepthSummary })
             detail: item.count > 0 ? `${item.count} signal${item.count === 1 ? "" : "s"} · ${item.detail}` : item.detail,
           }))}
         />
+        <InsightList
+          title="Metric proof"
+          items={summary.metricProof.map((item) => ({
+            label: item.label,
+            detail: item.count > 0 ? `${item.count} signal${item.count === 1 ? "" : "s"} · ${item.detail}` : item.detail,
+          }))}
+        />
       </div>
       <div className="f9-dashboard-grid">
         <InsightTimeline title="Creative timeline" items={summary.creativeTimeline} />

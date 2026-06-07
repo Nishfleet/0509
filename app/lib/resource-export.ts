@@ -53,9 +53,11 @@ export function collectionExportResponse(
         ...items.map(
           (item) => {
             const proofLink = proofLinkForAd(item.ad);
+            const metricProof = metricProofTextForAd(item.ad);
             return `- ${stringValue(item.ad.advertiser)}: ${stringValue(item.ad.hook)} | ${stringValue(
               item.ad.offer,
-            )} | CTA: ${stringValue(item.ad.cta)}${proofLink ? ` | Proof: ${proofLink}` : ""}${
+            )} | CTA: ${stringValue(item.ad.cta)}${metricProof ? ` | ${metricProof}` : ""}${
+              proofLink ? ` | Proof: ${proofLink}` : ""}${
               item.note ? ` | Note: ${item.note}` : ""
             }`;
           },
@@ -67,12 +69,13 @@ export function collectionExportResponse(
   return csvResponse(
     "collection.csv",
     [
-      ["advertiser", "hook", "offer", "cta", "proof_url", "tags", "note"],
+      ["advertiser", "hook", "offer", "cta", "metric_proof", "proof_url", "tags", "note"],
       ...items.map((item) => [
         stringValue(item.ad.advertiser),
         stringValue(item.ad.hook),
         stringValue(item.ad.offer),
         stringValue(item.ad.cta),
+        metricProofTextForAd(item.ad),
         proofLinkForAd(item.ad) ?? "",
         item.tags.join("|"),
         item.note ?? "",
@@ -193,6 +196,7 @@ export function buildCollectionExportPayload(
       landingPageUrl: item.ad.landingPageUrl,
       adSnapshotUrl: item.ad.adSnapshotUrl,
       proofUrl: proofLinkForAd(item.ad),
+      metricProof: metricProofForAd(item.ad),
       tags: item.tags,
       note: item.note,
       savedAt: item.createdAt,
@@ -308,4 +312,35 @@ function dateLabel(value: string) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function metricProofForAd(ad: CollectionItemRecord["ad"]) {
+  const metrics = {
+    spend: "",
+    impressions: "",
+    reach: "",
+  };
+
+  for (const field of Array.isArray(ad.analysisFields) ? ad.analysisFields : []) {
+    if (field.fieldKey === "observed_spend") {
+      metrics.spend = stringValue(field.fieldValue);
+    } else if (field.fieldKey === "observed_impressions") {
+      metrics.impressions = stringValue(field.fieldValue);
+    } else if (field.fieldKey === "observed_reach") {
+      metrics.reach = stringValue(field.fieldValue);
+    }
+  }
+
+  return metrics;
+}
+
+function metricProofTextForAd(ad: CollectionItemRecord["ad"]) {
+  const metrics = metricProofForAd(ad);
+  return [
+    metrics.spend ? `Spend: ${metrics.spend}` : null,
+    metrics.impressions ? `Impressions: ${metrics.impressions}` : null,
+    metrics.reach ? `Reach: ${metrics.reach}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
 }

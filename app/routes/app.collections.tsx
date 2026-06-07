@@ -118,6 +118,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const cta = String(formData.get("cta") ?? "");
     const note = String(formData.get("note") ?? "");
     const observedAt = String(formData.get("observedAt") ?? "");
+    const spend = String(formData.get("spend") ?? "");
+    const impressions = String(formData.get("impressions") ?? "");
+    const reach = String(formData.get("reach") ?? "");
     const tags = String(formData.get("tags") ?? "")
       .split(",")
       .map((tag) => tag.trim())
@@ -132,6 +135,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
       cta,
       note,
       observedAt,
+      spend,
+      impressions,
+      reach,
       tags,
     });
 
@@ -331,6 +337,20 @@ export default function CollectionsRoute() {
                     <input name="tags" placeholder="campaign, launch, offer" />
                   </label>
                 </div>
+                <div className="f9-field-grid">
+                  <label className="f9-field">
+                    <span>Spend</span>
+                    <input name="spend" placeholder="Visible spend" />
+                  </label>
+                  <label className="f9-field">
+                    <span>Impressions</span>
+                    <input name="impressions" placeholder="Visible impressions" />
+                  </label>
+                </div>
+                <label className="f9-field">
+                  <span>Reach</span>
+                  <input name="reach" placeholder="Visible reach" />
+                </label>
                 <label className="f9-field">
                   <span>Note</span>
                   <textarea name="note" placeholder="Optional team context" rows={2} />
