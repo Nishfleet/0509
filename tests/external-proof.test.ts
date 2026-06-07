@@ -14,6 +14,9 @@ describe("external proof builder", () => {
         cta: "Shop now",
         note: "Seen in the competitor launch review.",
         observedAt: "2026-06-06",
+        spend: "₹50k",
+        impressions: "120k",
+        reach: "80k",
       },
       new Date("2026-06-06T10:00:00.000Z"),
     );
@@ -39,6 +42,9 @@ describe("external proof builder", () => {
     expect(ad.analysisFields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ fieldKey: "channel", fieldValue: "LinkedIn" }),
+        expect.objectContaining({ fieldKey: "observed_spend", fieldValue: "₹50k" }),
+        expect.objectContaining({ fieldKey: "observed_impressions", fieldValue: "120k" }),
+        expect.objectContaining({ fieldKey: "observed_reach", fieldValue: "80k" }),
         expect.objectContaining({
           fieldKey: "proof_url",
           fieldValue: "https://www.linkedin.com/posts/mamaearth-campaign#comments",
@@ -66,6 +72,9 @@ describe("external proof builder", () => {
       expect.not.arrayContaining([
         expect.objectContaining({ fieldKey: "offer" }),
         expect.objectContaining({ fieldKey: "cta" }),
+        expect.objectContaining({ fieldKey: "observed_spend" }),
+        expect.objectContaining({ fieldKey: "observed_impressions" }),
+        expect.objectContaining({ fieldKey: "observed_reach" }),
       ]),
     );
   });
