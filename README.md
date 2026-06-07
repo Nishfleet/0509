@@ -15,7 +15,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 
 ## Product shape
 
-- `Public trial` is the public hook: logged-out buyers can run read-only live search and inspect sample proof before creating an account.
+- `Public trial` is the public hook: logged-out buyers can run read-only live search and inspect a sample tracked competitor, proof trail, and digest preview before creating an account.
 - `Analysis` is account-gated after the preview: signed-in users save searches, track competitors, inspect deeper proof, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, insight-depth summaries, observed campaign duration, daily briefs, and weekly digests.
 - `Workspace memory` is the compounding layer: collections, notes, tags, manual external proof links, visible metric proof fields, CSV/API JSON/Slack-ready exports, customer API keys, Slack delivery, and share links.

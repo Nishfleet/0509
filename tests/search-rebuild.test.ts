@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
+const searchCss = readFileSync("app/app.css", "utf8");
 const searchClasses = Array.from(searchRoute.matchAll(/className=(?:"([^"]+)"|{`([^`]+)`})/g)).flatMap((match) =>
   (match[1] ?? match[2]).split(/\s+/).map((className) => className.replace(/\$\{[^}]+\}/g, "").trim()).filter(Boolean),
 );
@@ -42,5 +43,13 @@ describe("search rebuild", () => {
     expect(searchRoute).toContain("Competitor website");
     expect(searchRoute).toContain("Website to track");
     expect(searchRoute).toContain("Track this competitor");
+    expect(searchRoute).toContain("Example tracked competitor");
+    expect(searchRoute).toContain("Digest preview");
+    expect(searchRoute).toContain("/api/demo-proof?format=markdown");
+  });
+
+  it("keeps primary search links legible on dark buttons", () => {
+    expect(searchCss).toContain(".f9-search-page a.f9-primary-button");
+    expect(searchCss).toContain("color: #fff;");
   });
 });

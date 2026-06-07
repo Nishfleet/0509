@@ -16,6 +16,7 @@ import {
   watchlistFingerprint,
 } from "~/lib/competitor-website";
 import { sampleQueries } from "~/lib/demo-data";
+import { demoProof } from "~/lib/demo-proof";
 import {
   buildSearchParams,
   normalizeSavedQuery,
@@ -559,6 +560,7 @@ export default function SearchRoute() {
                   <p>
                     Preview live ads here. Create an account to save useful ads and keep tracking the competitor next week.
                   </p>
+                  <PublicDigestPreview />
                   <Link className="f9-primary-button" to={signupTrackingPath}>
                     Create account
                   </Link>
@@ -750,6 +752,37 @@ export default function SearchRoute() {
         </div>
       </section>
     </main>
+  );
+}
+
+function PublicDigestPreview() {
+  return (
+    <div className="f9-public-digest-preview" aria-label="Example tracked competitor digest preview">
+      <div>
+        <strong>Example tracked competitor</strong>
+        <span>{demoProof.trackedPreview.watchlistName}</span>
+      </div>
+      <dl>
+        <div>
+          <dt>Cadence</dt>
+          <dd>{demoProof.trackedPreview.cadence}</dd>
+        </div>
+        <div>
+          <dt>Proof trail</dt>
+          <dd>{demoProof.trackedPreview.proofCount} signals</dd>
+        </div>
+        <div>
+          <dt>Delivery</dt>
+          <dd>{demoProof.trackedPreview.deliveryPreview}</dd>
+        </div>
+      </dl>
+      <div>
+        <strong>Digest preview</strong>
+        <span>{demoProof.digestPreview.subject}</span>
+      </div>
+      <p>{demoProof.digestPreview.recommendedMove}</p>
+      <a href="/api/demo-proof?format=markdown">Open example digest</a>
+    </div>
   );
 }
 

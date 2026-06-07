@@ -7,6 +7,18 @@ export const demoProof = {
     market: "India beauty retail",
   },
   summary: "Sample competitor proof trail for a buyer evaluating Five to Nine.",
+  trackedPreview: {
+    watchlistName: "Nykaa weekly competitor watch",
+    cadence: "Weekly digest",
+    savedCompetitor: "nykaa.com",
+    proofCount: 3,
+    deliveryPreview: "Email digest with Slack-ready export copy",
+    loop: [
+      "Run a public live search",
+      "Create an account to save the competitor",
+      "Receive the proof-backed digest preview",
+    ],
+  },
   proofTrail: [
     {
       signal: "Offer text changed",

@@ -35,8 +35,9 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("visible plan caps");
     expect(PUBLIC_MARKDOWN).toContain("Public read-only live search trial");
     expect(PUBLIC_MARKDOWN).toContain("Public sample proof loop");
+    expect(PUBLIC_MARKDOWN).toContain("example tracked competitor and digest preview before signup");
     expect(PUBLIC_MARKDOWN).toContain("/api/demo-proof");
-    expect(PUBLIC_MARKDOWN).toContain("Public demo proof is sample-only. Public live search is read-only");
+    expect(PUBLIC_MARKDOWN).toContain("Public demo proof is sample-only, including the example tracked competitor and digest preview");
     expect(PUBLIC_MARKDOWN).toContain("exports support CSV, API JSON, and Slack-ready markdown");
     expect(PUBLIC_MARKDOWN).toContain("Slack incoming-webhook setup exists");
     expect(PUBLIC_MARKDOWN).toContain("successful live delivery proof");
@@ -51,6 +52,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
     expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live proof");
     expect(LLMS_TEXT).toContain("Public read-only live search is available");
+    expect(LLMS_TEXT).toContain("example tracked competitor and digest preview");
     expect(LLMS_TEXT).toContain("Public read-only analysis preview");
     expect(LLMS_TEXT).toContain("Account-gated saved analysis");
     expect(LLMS_TEXT).toContain("user-supplied metric proof");
