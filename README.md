@@ -28,6 +28,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 - Optional R2 for landing-page artifact retention
 - Postmark for digest and instant-alert email delivery
 - Slack incoming-webhook setup for configured digest and instant-alert delivery; broad launch requires a configured Slack target with successful live delivery proof
+- WhatsApp Cloud API delivery is guarded behind provider configuration, customer enablement, opt-in, validation, template eligibility, webhook readiness, and successful delivery proof
 
 Auth runtime decision: `docs/auth-runtime.md`
 
@@ -84,6 +85,12 @@ Important bindings and secrets:
 - `DODO_0509_PRODUCT_PROOF_PACK_2000_ID`
 - `DODO_0509_PRODUCT_PROOF_PACK_7500_ID`
 - `DODO_0509_WEBHOOK_SECRET`
+- `WHATSAPP_ACCESS_TOKEN`
+- `WHATSAPP_PHONE_NUMBER_ID`
+- `WHATSAPP_DELIVERY_ENABLED`
+- `WHATSAPP_APP_SECRET`
+- `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+- `WHATSAPP_TEMPLATE_NAMESPACE`
 
 ## Operations
 
@@ -105,7 +112,7 @@ Important bindings and secrets:
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.
 - Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the shared Dodo account API key, `DODO_0509_BRAND_ID`, and 0509 product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Buyers can review public read-only search and the sample proof loop before signup. Current caps are Scout: 3 watchlists, 10 collections, weekly digests, 50 proof captures/month; Starter: 10 watchlists, 25 collections, weekly digests, 250 proof captures/month; Agency: 75 watchlists, 250 collections, daily and weekly briefs, 2,500 proof captures/month. Workspaces warn after 80% proof-capture usage. Usage bundles are overflow proof-capture packs, not unlimited monitoring, and Dodo webhooks grant purchased proof credits for 30 days.
-- Broad launch is gated by `npm run launch:readiness`, including the production canary. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can prove it bypassed cache and provider cooldown. The production canary also checks recent monitoring, proof capture, sent digest signals, and Slack delivery proof. If fresh commercial discovery is cached, degraded, demo, stale, unsent, missing Slack proof, or the bypass token is missing, the product should be framed as pilot-readiness rather than broad self-serve launch.
+- Broad launch is gated by `npm run launch:readiness`, including the production canary. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can prove it bypassed cache and provider cooldown. The production canary also checks recent monitoring, proof capture, sent digest signals, Slack delivery proof, and WhatsApp proof for any configured WhatsApp targets. If fresh commercial discovery is cached, degraded, demo, stale, unsent, missing Slack proof, configured WhatsApp proof is missing, or the bypass token is missing, the product should be framed as pilot-readiness rather than broad self-serve launch.
 - Use `npm run provider:bakeoff:launch` when comparing discovery providers for launch. The default bakeoff is useful for debugging, but the launch gate requires `current_0509` to return fresh live Ad Library results, not API fallback or cached live results.
 - The old `src/` Next.js app remains in the repo as legacy reference material and is no longer the live production runtime.
 - Production note: as of 2026-04-06, `https://0509.in`, `https://www.0509.in`, and `https://api.0509.in` now serve the current Cloudflare app directly through Worker custom domains.

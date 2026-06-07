@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appOrigin } from "~/lib/env.server";
+import { appOrigin, isWhatsAppWebhookConfigured } from "~/lib/env.server";
 
 describe("appOrigin", () => {
   it("prefers BETTER_AUTH_URL when configured", () => {
@@ -36,5 +36,19 @@ describe("appOrigin", () => {
     const request = new Request("https://0509.nishant345.workers.dev/auth/login");
 
     expect(appOrigin({}, request)).toBe("https://0509.nishant345.workers.dev");
+  });
+});
+
+describe("isWhatsAppWebhookConfigured", () => {
+  it("requires both the app signing secret and verification token", () => {
+    expect(isWhatsAppWebhookConfigured({})).toBe(false);
+    expect(isWhatsAppWebhookConfigured({ WHATSAPP_APP_SECRET: "secret" })).toBe(false);
+    expect(isWhatsAppWebhookConfigured({ WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify" })).toBe(false);
+    expect(
+      isWhatsAppWebhookConfigured({
+        WHATSAPP_APP_SECRET: "secret",
+        WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify",
+      }),
+    ).toBe(true);
   });
 });

@@ -44,6 +44,21 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     signals.digestDelivery.recentSent > 0 ? null : "no_recent_digest_sent",
     signals.slackDelivery.usableTargets > 0 ? null : "no_slack_delivery_target",
     signals.slackDelivery.recentSent > 0 ? null : "no_recent_slack_sent",
+    signals.whatsappDelivery.configuredTargets > 0 && !signals.whatsappDelivery.providerConfigured
+      ? "whatsapp_provider_not_configured"
+      : null,
+    signals.whatsappDelivery.configuredTargets > 0 && !signals.whatsappDelivery.customerReady
+      ? "whatsapp_customer_delivery_not_enabled"
+      : null,
+    signals.whatsappDelivery.configuredTargets > 0 && !signals.whatsappDelivery.webhookConfigured
+      ? "whatsapp_webhook_not_configured"
+      : null,
+    signals.whatsappDelivery.configuredTargets > 0 && signals.whatsappDelivery.usableTargets === 0
+      ? "no_usable_whatsapp_delivery_target"
+      : null,
+    signals.whatsappDelivery.configuredTargets > 0 && signals.whatsappDelivery.recentSent === 0
+      ? "no_recent_whatsapp_delivered"
+      : null,
     ...metaAdsBeta.blockers.map((blocker) => `meta_ads_beta:${blocker}`),
   ].filter((value): value is string => Boolean(value));
 
