@@ -18,13 +18,16 @@ export async function prepareSearchResultSelection(
   env: AppEnv,
   result: SearchResponse,
   selectedId: string | null,
+  options: { enrichSelected?: boolean; hydratePersisted?: boolean } = {},
 ) {
-  const hydratedAds = await hydrateAdsWithPersistedCreatives(env, result.ads);
+  const hydratedAds = options.hydratePersisted === false
+    ? result.ads
+    : await hydrateAdsWithPersistedCreatives(env, result.ads);
   const resolvedSelectedId = selectedId ?? hydratedAds[0]?.metaAdId ?? null;
   const selectedAdBase = hydratedAds.find((ad) => ad.metaAdId === resolvedSelectedId) ?? hydratedAds[0] ?? null;
 
   let selectedAd: AdRecord | null = selectedAdBase;
-  if (selectedAdBase) {
+  if (selectedAdBase && options.enrichSelected !== false) {
     const [snapshot, creativeText] = await Promise.all([
       selectedAdBase.landingPageUrl
         ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl)

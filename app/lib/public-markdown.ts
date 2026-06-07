@@ -12,9 +12,9 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Product
 
 - Competitor monitoring for growth teams.
-- Public sample proof loop for buyer evaluation at /api/demo-proof.
-- Account-gated competitor ad search, retained monitoring, and reusable saved evidence.
-- Search, competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
+- Public read-only live search trial and Public sample proof loop at /api/demo-proof for buyer evaluation.
+- Account-gated saved search, retained monitoring, and reusable saved evidence.
+- Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Authenticated collection, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
 - Signed-in collections can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources.
 - Customer API keys can read account-owned collection, watchlist, and digest exports at /api/v1.
@@ -27,7 +27,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Current product truth
 
 - Account access uses verified access paths.
-- Public demo proof is sample-only; live search and retained monitoring require an account.
+- Public demo proof is sample-only. Public live search is read-only; retained monitoring and saved evidence require an account.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, and provider-canary success.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
@@ -40,9 +40,9 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Pricing
 
 - Pricing display is localized from checkout preview for the buyer location.
-- There is no free retained-monitoring plan. Search and saved monitoring require an account.
+- There is no free retained-monitoring plan. Public live search is read-only; saved monitoring requires an account.
 - Starter is the recommended plan for retained competitor monitoring.
-- Scout is the entry plan after the public sample proof loop: 3 watchlists, 10 collections, account-gated research, weekly digest delivery, and 50 evidence checks/month.
+- Scout is the entry plan after the public read-only search and sample proof loop: 3 watchlists, 10 collections, account-gated research, weekly digest delivery, and 50 evidence checks/month.
 - Starter includes 10 watchlists, 25 collections, weekly digest delivery, and 250 evidence checks/month.
 - Agency includes 75 watchlists, 250 collections, daily and weekly briefs, and 2,500 evidence checks/month.
 - Usage bundles add extra evidence checks for 30-day spikes. They do not make monitoring unlimited.
@@ -64,7 +64,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
-- Public demo proof is sample-only and available at /api/demo-proof for buyer and agent evaluation.
+- Public read-only live search is available for buyer evaluation, and public demo proof is sample-only at /api/demo-proof.
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, and provider-canary success.
@@ -84,7 +84,8 @@ Current product truth:
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
 Core layers:
-- Account-gated analysis.
+- Public read-only analysis preview.
+- Account-gated saved analysis.
 - Retained monitoring.
 - Reusable saved evidence.
 `;

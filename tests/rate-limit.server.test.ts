@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { enforceRequestRateLimit, rateLimitPolicyFor } from "~/lib/rate-limit.server";
+import {
+  enforcePublicSearchRateLimit,
+  enforceRequestRateLimit,
+  rateLimitPolicyFor,
+} from "~/lib/rate-limit.server";
 import type { AppEnv } from "~/lib/env.server";
 
 describe("rateLimitPolicyFor", () => {
@@ -13,6 +17,12 @@ describe("rateLimitPolicyFor", () => {
       scope: "auth",
       limit: 20,
     });
+  });
+
+  it("leaves search queries to the route-level anonymous limiter", () => {
+    expect(rateLimitPolicyFor(new Request("https://0509.in/search"))).toBeNull();
+    expect(rateLimitPolicyFor(new Request("https://0509.in/search?website=https%3A%2F%2Fnykaa.com"))).toBeNull();
+    expect(rateLimitPolicyFor(new Request("https://0509.in/search?query=nykaa", { method: "HEAD" }))).toBeNull();
   });
 });
 
@@ -56,6 +66,49 @@ describe("enforceRequestRateLimit", () => {
 
     expect(response).toBeNull();
     consoleError.mockRestore();
+  });
+
+  it("blocks anonymous public search after the configured route limit", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const request = new Request("https://0509.in/search?query=nykaa", {
+      headers: {
+        "cf-connecting-ip": "203.0.113.11",
+        "user-agent": "vitest",
+      },
+    });
+
+    for (let index = 0; index < 20; index += 1) {
+      await expect(enforcePublicSearchRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    const blocked = await enforcePublicSearchRateLimit(request, env);
+    expect(blocked?.status).toBe(429);
+    await expect(blocked?.json()).resolves.toMatchObject({ error: "rate_limited" });
+  });
+
+  it("does not let anonymous public search reset quota by rotating user agent", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+
+    for (let index = 0; index < 20; index += 1) {
+      const request = new Request("https://0509.in/search?query=nykaa", {
+        headers: {
+          "cf-connecting-ip": "203.0.113.12",
+          "user-agent": `rotating-agent-${index}`,
+        },
+      });
+      await expect(enforcePublicSearchRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    const blocked = await enforcePublicSearchRateLimit(
+      new Request("https://0509.in/search?query=nykaa", {
+        headers: {
+          "cf-connecting-ip": "203.0.113.12",
+          "user-agent": "brand-new-agent",
+        },
+      }),
+      env,
+    );
+    expect(blocked?.status).toBe(429);
   });
 });
 

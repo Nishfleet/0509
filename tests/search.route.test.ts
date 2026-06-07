@@ -60,6 +60,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/landing-pages.server");
   vi.doUnmock("~/lib/plan.server");
+  vi.doUnmock("~/lib/rate-limit.server");
   vi.doUnmock("~/lib/search-selection.server");
   vi.doUnmock("~/lib/translation.server");
   vi.doUnmock("~/lib/analysis.server");
@@ -68,9 +69,10 @@ afterEach(() => {
 });
 
 describe("search loader", () => {
-  it("redirects a logged-out visitor before showing the search page", async () => {
+  it("shows the idle public search page without calling live discovery", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
     const searchAdsViaSourceResolver = vi.fn();
     const prepareSearchResultSelection = vi.fn();
 
@@ -81,7 +83,7 @@ describe("search loader", () => {
       getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/lib/data.server", () => ({
-      listCollections: vi.fn(),
+      listCollections,
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -91,21 +93,22 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    let response: Response | null = null;
-    try {
-      await loader({
-        context: createContext(env),
-        request: new Request("http://localhost/search"),
-      } as never);
-    } catch (error) {
-      response = error as Response;
-    }
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search"),
+    } as never);
 
     expect(getOptionalSession).toHaveBeenCalledWith(env, expect.any(Request));
-    expect(response?.status).toBe(302);
-    expect(response?.headers.get("Location")).toBe("/auth/signup?redirectTo=%2Fsearch");
+    expect(listCollections).not.toHaveBeenCalled();
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      session: null,
+      result: {
+        ads: [],
+        discoveryStatus: "disabled",
+      },
+    });
   });
 
   it("does not call live discovery before a signed-in user submits a query", async () => {
@@ -157,11 +160,30 @@ describe("search loader", () => {
     });
   });
 
-  it("redirects a logged-out visitor before showing competitor results", async () => {
+  it("runs read-only live discovery for a logged-out visitor with a query", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
-    const searchAdsViaSourceResolver = vi.fn();
-    const prepareSearchResultSelection = vi.fn();
+    const listCollections = vi.fn();
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const hydratedResult = {
+      ...sourceResult,
+      cacheStatus: "miss",
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: hydratedResult,
+      selectedAd: baseAd,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession,
@@ -170,7 +192,10 @@ describe("search loader", () => {
       getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/lib/data.server", () => ({
-      listCollections: vi.fn(),
+      listCollections,
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -180,22 +205,40 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    let response: Response | null = null;
-    try {
-      await loader({
-        context: createContext(env),
-        request: new Request("http://localhost/search?query=nykaa"),
-      } as never);
-    } catch (error) {
-      response = error as Response;
-    }
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never);
 
-    expect(response?.status).toBe(302);
-    expect(response?.headers.get("Location")).toBe(
-      "/auth/signup?redirectTo=%2Fsearch%3Fquery%3Dnykaa",
+    expect(listCollections).not.toHaveBeenCalled();
+    expect(enforcePublicSearchRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      env,
+      undefined,
     );
-    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
-    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        mode: "advertiser",
+        filters: expect.objectContaining({
+          query: "nykaa",
+          country: "India",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false },
+    );
+    expect(prepareSearchResultSelection).toHaveBeenCalledWith(
+      env,
+      sourceResult,
+      null,
+      { enrichSelected: false, hydratePersisted: false },
+    );
+    expect(result).toMatchObject({
+      session: null,
+      result: hydratedResult,
+      selectedAd: baseAd,
+    });
   });
 
   it("runs live discovery after a signed-in user submits a query", async () => {
@@ -219,6 +262,7 @@ describe("search loader", () => {
       result: hydratedResult,
       selectedAd: null,
     });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(appSession),
@@ -231,6 +275,9 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/customer-meta.server", () => ({
       getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -257,8 +304,102 @@ describe("search loader", () => {
       null,
       { purpose: "public_search", forceLive: false },
     );
-    expect(prepareSearchResultSelection).toHaveBeenCalledWith(env, sourceResult, null);
+    expect(enforcePublicSearchRateLimit).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).toHaveBeenCalledWith(
+      env,
+      sourceResult,
+      null,
+      { enrichSelected: true, hydratePersisted: true },
+    );
     expect(result.result).toBe(hydratedResult);
+  });
+
+  it("stops anonymous public searches when the route limiter blocks them", async () => {
+    const env = { DB: {} };
+    const rateLimitedResponse = new Response("Too many requests", { status: 429 });
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(rateLimitedResponse);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    await expect(
+      loader({
+        context: createContext(env),
+        request: new Request("http://localhost/search?query=nykaa"),
+      } as never),
+    ).rejects.toBe(rateLimitedResponse);
+
+    expect(enforcePublicSearchRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      env,
+      undefined,
+    );
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+  });
+
+  it("does not spend live discovery on anonymous HEAD searches", async () => {
+    const env = { DB: {} };
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa", {
+        method: "HEAD",
+      }),
+    } as never);
+
+    expect(enforcePublicSearchRateLimit).not.toHaveBeenCalled();
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      session: null,
+      result: {
+        ads: [],
+        discoveryStatus: "disabled",
+      },
+    });
   });
 
   it("turns a competitor website into an advertiser search", async () => {
@@ -278,6 +419,7 @@ describe("search loader", () => {
       result: sourceResult,
       selectedAd: null,
     });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(appSession),
@@ -290,6 +432,9 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/customer-meta.server", () => ({
       getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -315,6 +460,13 @@ describe("search loader", () => {
       }),
       null,
       { purpose: "public_search", forceLive: false },
+    );
+    expect(enforcePublicSearchRateLimit).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).toHaveBeenCalledWith(
+      env,
+      sourceResult,
+      null,
+      { enrichSelected: true, hydratePersisted: true },
     );
     expect(result).toMatchObject({
       filters: expect.objectContaining({
@@ -348,6 +500,7 @@ describe("search loader", () => {
       selectedAd: null,
     });
     const listCollections = vi.fn();
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(null),
@@ -358,6 +511,9 @@ describe("search loader", () => {
     vi.doMock("~/lib/data.server", () => ({
       listCollections,
     }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+    }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
     }));
@@ -366,21 +522,24 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    let redirected: Response | null = null;
-    try {
-      await loader({
-        context: createContext(env),
-        request: new Request("http://localhost/search?query=nykaa&fresh=live"),
-      } as never);
-    } catch (error) {
-      redirected = error as Response;
-    }
+    await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&fresh=live"),
+    } as never);
 
-    expect(redirected?.status).toBe(302);
-    expect(redirected?.headers.get("Location")).toBe(
-      "/auth/signup?redirectTo=%2Fsearch%3Fquery%3Dnykaa%26fresh%3Dlive",
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false },
     );
-    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(enforcePublicSearchRateLimit).toHaveBeenCalledTimes(1);
+    searchAdsViaSourceResolver.mockClear();
+    prepareSearchResultSelection.mockClear();
 
     await loader({
       context: createContext(env),
@@ -392,6 +551,7 @@ describe("search loader", () => {
     } as never);
 
     expect(listCollections).not.toHaveBeenCalled();
+    expect(enforcePublicSearchRateLimit).toHaveBeenCalledTimes(2);
     expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
       env,
       expect.objectContaining({
@@ -401,6 +561,12 @@ describe("search loader", () => {
       }),
       null,
       { purpose: "public_search", forceLive: true },
+    );
+    expect(prepareSearchResultSelection).toHaveBeenCalledWith(
+      env,
+      sourceResult,
+      null,
+      { enrichSelected: false, hydratePersisted: false },
     );
   });
 });

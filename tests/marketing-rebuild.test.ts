@@ -38,10 +38,12 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toMatch(/pilot|manual|fit review|self-serve|not live/i);
   });
 
-  it("labels the public beta and keeps public search account-gated", () => {
+  it("labels the public beta and keeps search preview read-only before account", () => {
     expect(marketingRoute).toContain("Readiness-gated beta");
     expect(marketingRoute).toContain("Launch status: readiness-gated.");
-    expect(marketingRoute).toContain("Search and monitoring require an account");
+    expect(marketingRoute).toContain("Preview live search before creating an account");
+    expect(marketingRoute).toContain("Try live search");
+    expect(marketingRoute).toContain("/search?website=https%3A%2F%2Fnykaa.com");
     expect(marketingRoute).toContain('id="demo"');
     expect(marketingRoute).toContain('aria-label="Sample proof before signup"');
     expect(marketingRoute).toContain("Review sample proof loop");
@@ -50,14 +52,14 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("/api/demo-proof");
     expect(marketingRoute).not.toContain("Account search");
     expect(marketingRoute).not.toContain('to={rootData.session ? "/search" : "/auth/signup"}');
-    expect(marketingRoute).not.toContain('<Link to="/search">Search</Link>');
     expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
   });
 
-  it("keeps README route truth aligned with account-gated search", () => {
+  it("keeps README route truth aligned with public read-only search", () => {
     expect(readme).toContain("/api/demo-proof");
-    expect(readme).toContain("/search` account-gated analysis flow");
-    expect(readme).not.toContain("/search` public analysis flow");
+    expect(readme).toContain("/search` public read-only live search trial");
+    expect(readme).toContain("save, track, collections, and deeper proof enrichment require an account");
+    expect(readme).not.toContain("/search` account-gated analysis flow");
   });
 
   it("blocks the old public home from coming back", () => {
