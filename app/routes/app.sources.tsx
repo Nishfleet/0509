@@ -19,10 +19,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listDeliveryTargets,
   } = await import("~/lib/data.server");
   const { getMetaAdsBetaReadiness } = await import("~/lib/meta-ads-readiness.server");
+  const {
+    isCustomerWhatsAppReady,
+    isWhatsAppProviderConfigured,
+    isWhatsAppWebhookConfigured,
+  } = await import("~/lib/env.server");
   const { slackTargetDisplayName } = await import("~/lib/slack.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const [connection, discoveryStatus, betaReadiness, apiKeys, slackTargets] = await Promise.all([
+  const [connection, discoveryStatus, betaReadiness, apiKeys, slackTargets, whatsappTargets] = await Promise.all([
     getCustomerMetaConnection(env, session.user.id),
     resolveCommercialAdSourceStatus(env),
     getMetaAdsBetaReadiness(env),
@@ -32,7 +37,25 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       channel: "slack",
       limit: 10,
     }),
+    listDeliveryTargets(env, session.user.id, {
+      channel: "whatsapp",
+      limit: 100,
+    }),
   ]);
+  const usableWhatsAppTargets = whatsappTargets.filter(
+    (target) =>
+      target.isOptedIn &&
+      target.isValidated &&
+      target.validationStatus === "validated" &&
+      target.templateEligible &&
+      !target.isPaused &&
+      !target.optedOutAt,
+  );
+  const lastWhatsAppSuccessAt = whatsappTargets
+    .map((target) => target.lastSuccessfulDeliveryAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? null;
 
   return {
     connection: connection
@@ -63,6 +86,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       lastSuccessfulDeliveryAt: target.lastSuccessfulDeliveryAt,
       createdAt: target.createdAt,
     })),
+    whatsappDelivery: {
+      providerConfigured: isWhatsAppProviderConfigured(env),
+      customerReady: isCustomerWhatsAppReady(env),
+      webhookConfigured: isWhatsAppWebhookConfigured(env),
+      configuredTargets: whatsappTargets.length,
+      usableTargets: usableWhatsAppTargets.length,
+      lastSuccessfulDeliveryAt: lastWhatsAppSuccessAt,
+    },
   };
 }
 
@@ -563,6 +594,49 @@ export default function AppSourcesRoute() {
             </article>
           )}
         </div>
+      </section>
+
+      <section className="f9-app-panel f9-source-setup">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">WhatsApp delivery</span>
+            <h2>WhatsApp is guarded until proof exists</h2>
+          </div>
+        </div>
+
+        <p className="f9-muted-copy">
+          WhatsApp delivery stays off for customer channels until provider setup, customer enablement, opt-in,
+          validation, template eligibility, webhook readiness, and successful delivery proof are all present.
+        </p>
+
+        <dl className="proof-trail-list">
+          <div>
+            <dt>Provider</dt>
+            <dd>{data.whatsappDelivery.providerConfigured ? "Configured" : "Not configured"}</dd>
+          </div>
+          <div>
+            <dt>Customer delivery</dt>
+            <dd>{data.whatsappDelivery.customerReady ? "Enabled" : "Not enabled"}</dd>
+          </div>
+          <div>
+            <dt>Webhook</dt>
+            <dd>{data.whatsappDelivery.webhookConfigured ? "Configured" : "Not configured"}</dd>
+          </div>
+          <div>
+            <dt>Targets</dt>
+            <dd>
+              {data.whatsappDelivery.usableTargets}/{data.whatsappDelivery.configuredTargets} usable
+            </dd>
+          </div>
+          <div>
+            <dt>Last sent</dt>
+            <dd>
+              {data.whatsappDelivery.lastSuccessfulDeliveryAt
+                ? new Date(data.whatsappDelivery.lastSuccessfulDeliveryAt).toLocaleString("en-IN")
+                : "No successful send yet"}
+            </dd>
+          </div>
+        </dl>
       </section>
 
       <article className="f9-app-panel f9-callout-panel">

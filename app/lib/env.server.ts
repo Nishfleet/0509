@@ -123,6 +123,10 @@ export function isCustomerWhatsAppReady(env: AppEnv) {
   return isWhatsAppProviderConfigured(env) && parseEnvFlag(env.WHATSAPP_DELIVERY_ENABLED);
 }
 
+export function isWhatsAppWebhookConfigured(env: AppEnv) {
+  return Boolean(env.WHATSAPP_APP_SECRET?.trim() && env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim());
+}
+
 export function whatsappGraphApiVersion(env: AppEnv) {
   return env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v23.0";
 }

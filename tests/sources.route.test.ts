@@ -94,6 +94,62 @@ describe("sources route loader", () => {
     vi.doMock("~/lib/ad-source.server", () => ({
       resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
     }));
+    const listDeliveryTargets = vi.fn(async (_env: unknown, _userId: string, options: { channel: string }) => {
+      if (options.channel === "slack") {
+        return [
+          {
+            id: "slack-target-1",
+            userId: "user-1",
+            watchlistId: null,
+            channel: "slack",
+            targetValue: "slack:abc123",
+            validationStatus: "validated",
+            isValidated: true,
+            isOptedIn: true,
+            optInSource: "manual_slack_webhook",
+            optedInAt: "2026-06-06T00:00:00.000Z",
+            isPaused: false,
+            pausedAt: null,
+            optedOutAt: null,
+            templateEligible: true,
+            lastSuccessfulDeliveryAt: null,
+            lastSuccessfulAttemptId: null,
+            providerIdentifier: "abc123",
+            metadata: {
+              displayName: "Growth alerts",
+            },
+            createdAt: "2026-06-06T00:00:00.000Z",
+            updatedAt: "2026-06-06T00:00:00.000Z",
+          },
+        ];
+      }
+
+      return [
+        {
+          id: "whatsapp-target-1",
+          userId: "user-1",
+          watchlistId: "watchlist-1",
+          channel: "whatsapp",
+          targetValue: "+919999999999",
+          validationStatus: "pending",
+          isValidated: false,
+          isOptedIn: true,
+          optInSource: "manual",
+          optedInAt: "2026-06-06T00:00:00.000Z",
+          isPaused: false,
+          pausedAt: null,
+          optedOutAt: null,
+          templateEligible: false,
+          lastSuccessfulDeliveryAt: null,
+          lastSuccessfulAttemptId: null,
+          providerIdentifier: null,
+          metadata: {},
+          createdAt: "2026-06-06T00:00:00.000Z",
+          updatedAt: "2026-06-06T00:00:00.000Z",
+        },
+      ];
+    });
+
     vi.doMock("~/lib/data.server", () => ({
       getCustomerMetaConnection: vi.fn().mockResolvedValue({
         userId: "user-1",
@@ -120,32 +176,12 @@ describe("sources route loader", () => {
           updatedAt: "2026-06-06T00:00:00.000Z",
         },
       ]),
-      listDeliveryTargets: vi.fn().mockResolvedValue([
-        {
-          id: "slack-target-1",
-          userId: "user-1",
-          watchlistId: null,
-          channel: "slack",
-          targetValue: "slack:abc123",
-          validationStatus: "validated",
-          isValidated: true,
-          isOptedIn: true,
-          optInSource: "manual_slack_webhook",
-          optedInAt: "2026-06-06T00:00:00.000Z",
-          isPaused: false,
-          pausedAt: null,
-          optedOutAt: null,
-          templateEligible: true,
-          lastSuccessfulDeliveryAt: null,
-          lastSuccessfulAttemptId: null,
-          providerIdentifier: "abc123",
-          metadata: {
-            displayName: "Growth alerts",
-          },
-          createdAt: "2026-06-06T00:00:00.000Z",
-          updatedAt: "2026-06-06T00:00:00.000Z",
-        },
-      ]),
+      listDeliveryTargets,
+    }));
+    vi.doMock("~/lib/env.server", () => ({
+      isCustomerWhatsAppReady: vi.fn().mockReturnValue(false),
+      isWhatsAppProviderConfigured: vi.fn().mockReturnValue(false),
+      isWhatsAppWebhookConfigured: vi.fn().mockReturnValue(false),
     }));
     vi.doMock("~/lib/slack.server", () => ({
       slackTargetDisplayName: vi.fn((target) => target.metadata.displayName),
@@ -187,6 +223,19 @@ describe("sources route loader", () => {
           createdAt: "2026-06-06T00:00:00.000Z",
         },
       ],
+      whatsappDelivery: {
+        providerConfigured: false,
+        customerReady: false,
+        webhookConfigured: false,
+        configuredTargets: 1,
+        usableTargets: 0,
+        lastSuccessfulDeliveryAt: null,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("+919999999999");
+    expect(listDeliveryTargets).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      channel: "whatsapp",
+      limit: 100,
     });
   });
 });
@@ -536,6 +585,14 @@ describe("sources route component", () => {
       betaReadiness,
       apiKeys: [],
       slackTargets: [],
+      whatsappDelivery: {
+        providerConfigured: false,
+        customerReady: false,
+        webhookConfigured: false,
+        configuredTargets: 3,
+        usableTargets: 0,
+        lastSuccessfulDeliveryAt: null,
+      },
     });
 
     const { default: AppSourcesRoute } = await import("~/routes/app.sources");
@@ -553,6 +610,11 @@ describe("sources route component", () => {
     expect(markup).toContain("Slack delivery");
     expect(markup).toContain("Save Slack delivery");
     expect(markup).toContain("encrypted and never shown again");
+    expect(markup).toContain("WhatsApp delivery");
+    expect(markup).toContain("WhatsApp is guarded until proof exists");
+    expect(markup).toContain("Webhook");
+    expect(markup).toContain("0/3 usable");
+    expect(markup).toContain("No successful send yet");
     expect(markup).toContain("/api/v1/watchlists/");
     expect(markup).toContain("POST /api/mcp");
     expect(markup).not.toContain("MCP yet");
