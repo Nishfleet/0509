@@ -174,6 +174,11 @@ describe("launch readiness canary route", () => {
         required: false,
         sent: false,
       },
+      whatsappDelivery: {
+        required: false,
+        sent: false,
+        lane: "internal",
+      },
     });
     expect(createWatchlistRun).toHaveBeenCalledWith(expect.anything(), "watch-1", "manual", null, 1);
     expect(createProofCapture).toHaveBeenCalledWith(
@@ -205,6 +210,148 @@ describe("launch readiness canary route", () => {
       "run-1",
       expect.objectContaining({
         status: "succeeded",
+      }),
+    );
+  });
+
+  it("fails when WhatsApp proof is required but no WhatsApp delivery is sent", async () => {
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+      details: [
+        {
+          channel: "email",
+          status: "sent",
+          targetValue: "owner@example.com",
+          providerMessageId: "email-1",
+          errorMessage: null,
+          deliveredAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn().mockResolvedValue(undefined),
+      clearDigestItems: vi.fn().mockResolvedValue(undefined),
+      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest,
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.in/api/launch-readiness/canary?requireWhatsApp=1", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      blockers: ["no_whatsapp_digest_sent"],
+      whatsappDelivery: {
+        required: true,
+        sent: false,
+        lane: "customer",
+      },
+    });
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        lane: "customer",
+      }),
+    );
+  });
+
+  it("passes WhatsApp-required canary when a customer WhatsApp delivery is sent", async () => {
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 2,
+      channels: ["email", "whatsapp"],
+      details: [
+        {
+          channel: "email",
+          status: "sent",
+          targetValue: "owner@example.com",
+          providerMessageId: "email-1",
+          errorMessage: null,
+          deliveredAt: new Date().toISOString(),
+        },
+        {
+          channel: "whatsapp",
+          status: "sent",
+          targetValue: "+919999999999",
+          providerMessageId: "wamid.123",
+          errorMessage: null,
+          deliveredAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn().mockResolvedValue(undefined),
+      clearDigestItems: vi.fn().mockResolvedValue(undefined),
+      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest,
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.in/api/launch-readiness/canary?requireWhatsApp=true", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      blockers: [],
+      whatsappDelivery: {
+        required: true,
+        sent: true,
+        lane: "customer",
+      },
+    });
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        lane: "customer",
       }),
     );
   });
