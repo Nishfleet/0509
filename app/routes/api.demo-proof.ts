@@ -38,6 +38,10 @@ Status: sample only. Public live search is read-only; retained monitoring requir
 
 Competitor: ${demoProof.competitor.name} (${demoProof.competitor.website})
 
+Tracked preview: ${demoProof.trackedPreview.watchlistName}
+Cadence: ${demoProof.trackedPreview.cadence}
+Saved competitor: ${demoProof.trackedPreview.savedCompetitor}
+
 ## Proof Trail
 
 ${proofItems}

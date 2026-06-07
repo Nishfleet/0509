@@ -2381,6 +2381,10 @@ img {
   color: var(--f9-search-ink, var(--f9-global-ink));
 }
 
+.f9-search-page a.f9-primary-button {
+  color: #fff;
+}
+
 .f9-search-page a.f9-secondary-button {
   color: var(--f9-search-ink, var(--f9-global-ink));
 }
@@ -2427,6 +2431,56 @@ img {
 
 .f9-side-note p {
   color: var(--f9-search-muted);
+}
+
+.f9-public-digest-preview {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(6, 22, 41, 0.1);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.f9-public-digest-preview strong {
+  display: block;
+  color: var(--f9-search-ink);
+  font-size: 0.92rem;
+}
+
+.f9-public-digest-preview span,
+.f9-public-digest-preview p,
+.f9-public-digest-preview dd {
+  color: var(--f9-search-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.f9-public-digest-preview dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.f9-public-digest-preview dt {
+  color: var(--f9-search-ink);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.f9-public-digest-preview dd {
+  margin: 2px 0 0;
+}
+
+.f9-public-digest-preview a {
+  color: var(--f9-search-ink);
+  font-size: 0.88rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .f9-inline-save input {
