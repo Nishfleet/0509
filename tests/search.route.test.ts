@@ -545,6 +545,29 @@ describe("search loader", () => {
       context: createContext(env),
       request: new Request("http://localhost/search?query=nykaa&fresh=live", {
         headers: {
+          "x-0509-canary-token": "wrong-token",
+        },
+      }),
+    } as never);
+
+    expect(enforcePublicSearchRateLimit).toHaveBeenCalledTimes(2);
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          query: "nykaa",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false },
+    );
+    searchAdsViaSourceResolver.mockClear();
+    prepareSearchResultSelection.mockClear();
+
+    await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&fresh=live", {
+        headers: {
           "x-0509-canary-token": "secret-token",
         },
       }),
