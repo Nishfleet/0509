@@ -4248,7 +4248,7 @@ export async function getDiscoveryProviderState(env: AppEnv, provider: AdDiscove
 
 export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Date()) {
   const since = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
-  const [proofs, deliveries, watchlistRuns] = await Promise.all([
+  const [proofs, deliveries, slackTargets, slackDeliveries, watchlistRuns] = await Promise.all([
     one<{
       recent_count: number;
       latest_at: string | null;
@@ -4283,6 +4283,48 @@ export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Dat
       since,
     ),
     one<{
+      configured_targets: number;
+      usable_targets: number;
+      latest_successful_delivery_at: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          COUNT(*) AS configured_targets,
+          SUM(
+            CASE
+              WHEN is_opted_in = 1
+                AND is_validated = 1
+                AND is_paused = 0
+                AND validation_status = 'validated'
+                AND opted_out_at IS NULL
+              THEN 1
+              ELSE 0
+            END
+          ) AS usable_targets,
+          MAX(last_successful_delivery_at) AS latest_successful_delivery_at
+        FROM delivery_target
+        WHERE channel = 'slack'
+      `,
+    ),
+    one<{
+      recent_attempts: number;
+      recent_sent: number;
+      latest_at: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          COUNT(*) AS recent_attempts,
+          SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS recent_sent,
+          MAX(COALESCE(sent_at, created_at)) AS latest_at
+        FROM delivery_attempt
+        WHERE channel = 'slack'
+          AND created_at >= ?
+      `,
+      since,
+    ),
+    one<{
       recent_count: number;
       latest_at: string | null;
     }>(
@@ -4309,6 +4351,14 @@ export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Dat
       recentAttempts: Number(deliveries?.recent_attempts ?? 0),
       recentSent: Number(deliveries?.recent_sent ?? 0),
       latestAttemptAt: deliveries?.latest_at ?? null,
+    },
+    slackDelivery: {
+      configuredTargets: Number(slackTargets?.configured_targets ?? 0),
+      usableTargets: Number(slackTargets?.usable_targets ?? 0),
+      latestTargetSuccessAt: slackTargets?.latest_successful_delivery_at ?? null,
+      recentAttempts: Number(slackDeliveries?.recent_attempts ?? 0),
+      recentSent: Number(slackDeliveries?.recent_sent ?? 0),
+      latestAttemptAt: slackDeliveries?.latest_at ?? null,
     },
     monitoring: {
       recentSuccessfulRuns: Number(watchlistRuns?.recent_count ?? 0),

@@ -43,6 +43,14 @@ describe("launch readiness route", () => {
           recentSent: 1,
           latestAttemptAt: "2026-06-06T12:35:06.795Z",
         },
+        slackDelivery: {
+          configuredTargets: 1,
+          usableTargets: 1,
+          latestTargetSuccessAt: "2026-06-06T12:36:00.000Z",
+          recentAttempts: 1,
+          recentSent: 1,
+          latestAttemptAt: "2026-06-06T12:36:00.000Z",
+        },
       }),
     }));
     vi.doMock("~/lib/meta-ads-readiness.server", () => ({
@@ -72,6 +80,71 @@ describe("launch readiness route", () => {
       ],
       metaAdsBeta: {
         ok: false,
+      },
+    });
+  });
+
+  it("blocks launch readiness when Slack delivery has no live target or sent proof", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: {},
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getLaunchReadinessSignals: vi.fn().mockResolvedValue({
+        monitoring: {
+          recentSuccessfulRuns: 1,
+          latestSucceededAt: "2026-06-06T12:35:06.079Z",
+        },
+        proof: {
+          recentSuccessfulCaptures: 1,
+          latestSucceededAt: "2026-06-06T12:35:05.500Z",
+        },
+        digestDelivery: {
+          recentAttempts: 1,
+          recentSent: 1,
+          latestAttemptAt: "2026-06-06T12:35:06.795Z",
+        },
+        slackDelivery: {
+          configuredTargets: 0,
+          usableTargets: 0,
+          latestTargetSuccessAt: null,
+          recentAttempts: 0,
+          recentSent: 0,
+          latestAttemptAt: null,
+        },
+      }),
+    }));
+    vi.doMock("~/lib/meta-ads-readiness.server", () => ({
+      getMetaAdsBetaReadiness: vi.fn().mockResolvedValue({
+        ok: true,
+        blockers: [],
+      }),
+    }));
+
+    const { loader } = await import("~/routes/api.launch-readiness");
+    const response = await loader({
+      context: createContext(),
+      request: new Request("https://0509.in/api/launch-readiness", {
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      blockers: [
+        "no_slack_delivery_target",
+        "no_recent_slack_sent",
+      ],
+      signals: {
+        slackDelivery: {
+          usableTargets: 0,
+          recentSent: 0,
+        },
       },
     });
   });

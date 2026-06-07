@@ -163,11 +163,16 @@ describe("launch readiness canary route", () => {
 
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
+      blockers: [],
       runId: "run-1",
       proofCaptureId: "proof-1",
       digestRunId: "digest-1",
       delivery: {
         attempts: 1,
+      },
+      slackDelivery: {
+        required: false,
+        sent: false,
       },
     });
     expect(createWatchlistRun).toHaveBeenCalledWith(expect.anything(), "watch-1", "manual", null, 1);
@@ -202,6 +207,130 @@ describe("launch readiness canary route", () => {
         status: "succeeded",
       }),
     );
+  });
+
+  it("fails when Slack proof is required but no Slack delivery is sent", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn().mockResolvedValue(undefined),
+      clearDigestItems: vi.fn().mockResolvedValue(undefined),
+      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest: vi.fn().mockResolvedValue({
+        attempts: 1,
+        channels: ["email"],
+        details: [
+          {
+            channel: "email",
+            status: "sent",
+            targetValue: "owner@example.com",
+            providerMessageId: "email-1",
+            errorMessage: null,
+            deliveredAt: new Date().toISOString(),
+          },
+        ],
+      }),
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.in/api/launch-readiness/canary?requireSlack=1", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      blockers: ["no_slack_digest_sent"],
+      slackDelivery: {
+        required: true,
+        sent: false,
+      },
+    });
+  });
+
+  it("passes Slack-required canary when a Slack delivery is sent", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn().mockResolvedValue(undefined),
+      clearDigestItems: vi.fn().mockResolvedValue(undefined),
+      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest: vi.fn().mockResolvedValue({
+        attempts: 2,
+        channels: ["email", "slack"],
+        details: [
+          {
+            channel: "email",
+            status: "sent",
+            targetValue: "owner@example.com",
+            providerMessageId: "email-1",
+            errorMessage: null,
+            deliveredAt: new Date().toISOString(),
+          },
+          {
+            channel: "slack",
+            status: "sent",
+            targetValue: "slack:abc123",
+            providerMessageId: null,
+            errorMessage: null,
+            deliveredAt: new Date().toISOString(),
+          },
+        ],
+      }),
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.in/api/launch-readiness/canary?requireSlack=true", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      blockers: [],
+      slackDelivery: {
+        required: true,
+        sent: true,
+      },
+    });
   });
 
   it("can force the Browserless proof fallback during the private canary", async () => {
