@@ -419,6 +419,115 @@ describe("deliverWeeklyDigest", () => {
     );
   });
 
+  it("does not send digests to pending WhatsApp setup targets", async () => {
+    const postmarkFetch = mockPostmarkSend("msg_1");
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const sendDigestWhatsApp = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: true,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn(async (_env: unknown, _userId: string, options?: { channel?: string }) => {
+        if (options?.channel === "whatsapp") {
+          return [
+            {
+              id: "wa-target-1",
+              userId: "user-1",
+              watchlistId: null,
+              channel: "whatsapp",
+              targetValue: "919999999999",
+              validationStatus: "pending",
+              isValidated: false,
+              isOptedIn: true,
+              optInSource: "manual_whatsapp_setup",
+              optedInAt: "2026-04-19T00:00:00.000Z",
+              isPaused: false,
+              pausedAt: null,
+              optedOutAt: null,
+              templateEligible: false,
+              lastSuccessfulDeliveryAt: null,
+              lastSuccessfulAttemptId: null,
+              providerIdentifier: "wa_1",
+              metadata: {},
+              createdAt: "2026-04-19T00:00:00.000Z",
+              updatedAt: "2026-04-19T00:00:00.000Z",
+            },
+          ];
+        }
+
+        return [];
+      }),
+      upsertDeliveryTarget: vi.fn().mockResolvedValue({
+        id: "email-target-1",
+        userId: "user-1",
+        watchlistId: null,
+        channel: "email",
+        targetValue: "owner@example.com",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "account_email",
+        optedInAt: "2026-04-19T00:00:00.000Z",
+        isPaused: false,
+        pausedAt: null,
+        optedOutAt: null,
+        templateEligible: false,
+        lastSuccessfulDeliveryAt: null,
+        lastSuccessfulAttemptId: null,
+        providerIdentifier: null,
+        metadata: {},
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp,
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const result = await deliverWeeklyDigest(postmarkEnv as never, {
+      userId: "user-1",
+      userName: "Owner",
+      accountEmail: "owner@example.com",
+      digestRunId: "digest-1",
+      periodStart: "2026-04-12T00:00:00.000Z",
+      periodEnd: "2026-04-19T00:00:00.000Z",
+      items: [
+        {
+          eventId: "event-1",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Landing page offer changed",
+          summary: "Offer changed on the landing page.",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      attempts: 1,
+      channels: ["email"],
+    });
+    expect(postmarkFetch).toHaveBeenCalledTimes(1);
+    expect(sendDigestWhatsApp).not.toHaveBeenCalled();
+  });
+
   it("sends weekly digests to configured Slack webhooks and records the attempt", async () => {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-slack-1");
     const upsertDigestDelivery = vi.fn();
@@ -974,3 +1083,368 @@ describe("deliverWatchlistAlerts", () => {
     );
   });
 });
+
+describe("reconcileDeliveryStatus", () => {
+  it("marks a WhatsApp setup target validated after delivered webhook proof", async () => {
+    const attempt = {
+      id: "attempt-setup-1",
+      userId: "user-1",
+      watchlistId: null,
+      digestRunId: null,
+      deliveryTargetId: "whatsapp-target-1",
+      lane: "customer",
+      channel: "whatsapp",
+      provider: "whatsapp_cloud_api",
+      status: "sent",
+      webhookStatus: "delivered",
+      targetValue: "919876543210",
+      providerMessageId: "wamid.setup-1",
+      providerStatusLastSeenAt: "2026-06-07T00:00:00.000Z",
+      templateName: "proof_digest_customer_v1",
+      eventIds: [],
+      payloadSnapshot: {
+        kind: "whatsapp_setup_validation",
+      },
+      idempotencyKey: "whatsapp_setup_validation:user-1:919876543210:wamid.setup-1",
+      errorMessage: null,
+      sentAt: "2026-06-07T00:00:00.000Z",
+      failedAt: null,
+      createdAt: "2026-06-07T00:00:00.000Z",
+      updatedAt: "2026-06-07T00:00:00.000Z",
+    };
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      getDeliveryAttemptByIdempotencyKey: vi.fn(),
+      getDeliveryTargetById: vi.fn().mockResolvedValue(whatsappTarget()),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue(attempt),
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { reconcileDeliveryStatus } = await import("~/lib/delivery.server");
+    const result = await reconcileDeliveryStatus({} as never, {
+      provider: "whatsapp_cloud_api",
+      providerMessageId: "wamid.setup-1",
+      webhookStatus: "delivered",
+      status: "sent",
+      rawProviderStatus: "delivered",
+      providerStatusLastSeenAt: "2026-06-07T00:00:00.000Z",
+    });
+
+    expect(result).toEqual(attempt);
+    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        channel: "whatsapp",
+        targetValue: "919876543210",
+        validationStatus: "validated",
+        isValidated: true,
+        templateEligible: true,
+        lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
+        lastSuccessfulAttemptId: "attempt-setup-1",
+        providerIdentifier: "wamid.setup-1",
+        metadata: expect.objectContaining({
+          validationAttemptId: "attempt-setup-1",
+          validationWebhookStatus: "delivered",
+        }),
+      }),
+    );
+  });
+
+  it("marks a WhatsApp setup target invalid after failed webhook proof without clearing old success proof", async () => {
+    const attempt = {
+      id: "attempt-setup-2",
+      userId: "user-1",
+      watchlistId: null,
+      digestRunId: null,
+      deliveryTargetId: "whatsapp-target-1",
+      lane: "customer",
+      channel: "whatsapp",
+      provider: "whatsapp_cloud_api",
+      status: "failed",
+      webhookStatus: "failed",
+      targetValue: "919876543210",
+      providerMessageId: "wamid.setup-2",
+      providerStatusLastSeenAt: "2026-06-07T01:00:00.000Z",
+      templateName: "proof_digest_customer_v1",
+      eventIds: [],
+      payloadSnapshot: {
+        kind: "whatsapp_setup_validation",
+      },
+      idempotencyKey: "whatsapp_setup_validation:user-1:919876543210:wamid.setup-2",
+      errorMessage: "Recipient blocked delivery.",
+      sentAt: null,
+      failedAt: "2026-06-07T01:00:00.000Z",
+      createdAt: "2026-06-07T01:00:00.000Z",
+      updatedAt: "2026-06-07T01:00:00.000Z",
+    };
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      getDeliveryAttemptByIdempotencyKey: vi.fn(),
+      getDeliveryTargetById: vi.fn().mockResolvedValue(
+        whatsappTarget({
+          validationStatus: "validated",
+          isValidated: true,
+          templateEligible: true,
+          lastSuccessfulDeliveryAt: "2026-06-06T01:00:00.000Z",
+          lastSuccessfulAttemptId: "attempt-existing",
+          metadata: {
+            displayName: "Founder phone",
+            validationProviderMessageId: "wamid.setup-2",
+          },
+        }),
+      ),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue(attempt),
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { reconcileDeliveryStatus } = await import("~/lib/delivery.server");
+    await reconcileDeliveryStatus({} as never, {
+      provider: "whatsapp_cloud_api",
+      providerMessageId: "wamid.setup-2",
+      webhookStatus: "failed",
+      status: "failed",
+      rawProviderStatus: "failed",
+      providerStatusLastSeenAt: "2026-06-07T01:00:00.000Z",
+      errorMessage: "Recipient blocked delivery.",
+    });
+
+    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        validationStatus: "invalid",
+        isValidated: false,
+        templateEligible: false,
+        lastSuccessfulDeliveryAt: "2026-06-06T01:00:00.000Z",
+        lastSuccessfulAttemptId: "attempt-existing",
+        metadata: expect.objectContaining({
+          validationWebhookStatus: "failed",
+          validationErrorMessage: "Recipient blocked delivery.",
+        }),
+      }),
+    );
+  });
+
+  it("does not validate WhatsApp setup targets from Meta sent-only status", async () => {
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      getDeliveryAttemptByIdempotencyKey: vi.fn(),
+      getDeliveryTargetById: vi.fn().mockResolvedValue(whatsappTarget()),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue({
+        id: "attempt-setup-3",
+        userId: "user-1",
+        watchlistId: null,
+        digestRunId: null,
+        deliveryTargetId: "whatsapp-target-1",
+        lane: "customer",
+        channel: "whatsapp",
+        provider: "whatsapp_cloud_api",
+        status: "sent",
+        webhookStatus: "delivered",
+        targetValue: "919876543210",
+        providerMessageId: "wamid.setup-1",
+        providerStatusLastSeenAt: "2026-06-07T02:00:00.000Z",
+        templateName: "proof_digest_customer_v1",
+        eventIds: [],
+        payloadSnapshot: {
+          kind: "whatsapp_setup_validation",
+        },
+        idempotencyKey: "whatsapp_setup_validation:user-1:919876543210:wamid.setup-1",
+        errorMessage: null,
+        sentAt: "2026-06-07T02:00:00.000Z",
+        failedAt: null,
+        createdAt: "2026-06-07T02:00:00.000Z",
+        updatedAt: "2026-06-07T02:00:00.000Z",
+      }),
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { reconcileDeliveryStatus } = await import("~/lib/delivery.server");
+    await reconcileDeliveryStatus({} as never, {
+      provider: "whatsapp_cloud_api",
+      providerMessageId: "wamid.setup-1",
+      webhookStatus: "delivered",
+      status: "sent",
+      rawProviderStatus: "sent",
+      providerStatusLastSeenAt: "2026-06-07T02:00:00.000Z",
+    });
+
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale WhatsApp setup webhooks from older validation attempts", async () => {
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      getDeliveryAttemptByIdempotencyKey: vi.fn(),
+      getDeliveryTargetById: vi.fn().mockResolvedValue(
+        whatsappTarget({
+          metadata: {
+            displayName: "Founder phone",
+            validationProviderMessageId: "wamid.setup-new",
+          },
+        }),
+      ),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue({
+        id: "attempt-setup-old",
+        userId: "user-1",
+        watchlistId: null,
+        digestRunId: null,
+        deliveryTargetId: "whatsapp-target-1",
+        lane: "customer",
+        channel: "whatsapp",
+        provider: "whatsapp_cloud_api",
+        status: "failed",
+        webhookStatus: "failed",
+        targetValue: "919876543210",
+        providerMessageId: "wamid.setup-old",
+        providerStatusLastSeenAt: "2026-06-07T03:00:00.000Z",
+        templateName: "proof_digest_customer_v1",
+        eventIds: [],
+        payloadSnapshot: {
+          kind: "whatsapp_setup_validation",
+        },
+        idempotencyKey: "whatsapp_setup_validation:user-1:919876543210:wamid.setup-old",
+        errorMessage: "Old setup failed.",
+        sentAt: null,
+        failedAt: "2026-06-07T03:00:00.000Z",
+        createdAt: "2026-06-07T03:00:00.000Z",
+        updatedAt: "2026-06-07T03:00:00.000Z",
+      }),
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { reconcileDeliveryStatus } = await import("~/lib/delivery.server");
+    await reconcileDeliveryStatus({} as never, {
+      provider: "whatsapp_cloud_api",
+      providerMessageId: "wamid.setup-old",
+      webhookStatus: "failed",
+      status: "failed",
+      rawProviderStatus: "failed",
+      providerStatusLastSeenAt: "2026-06-07T03:00:00.000Z",
+      errorMessage: "Old setup failed.",
+    });
+
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
+  it("validates WhatsApp setup targets by provider id when the attempt is not found yet", async () => {
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      getDeliveryAttemptByIdempotencyKey: vi.fn(),
+      getDeliveryTargetById: vi.fn(),
+      getDeliveryTargetByProviderIdentifier: vi.fn().mockResolvedValue(whatsappTarget()),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue(null),
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { reconcileDeliveryStatus } = await import("~/lib/delivery.server");
+    const result = await reconcileDeliveryStatus({} as never, {
+      provider: "whatsapp_cloud_api",
+      providerMessageId: "wamid.setup-1",
+      webhookStatus: "delivered",
+      status: "sent",
+      rawProviderStatus: "delivered",
+      providerStatusLastSeenAt: "2026-06-07T04:00:00.000Z",
+    });
+
+    expect(result).toBeNull();
+    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        validationStatus: "validated",
+        isValidated: true,
+        templateEligible: true,
+        lastSuccessfulDeliveryAt: "2026-06-07T04:00:00.000Z",
+        providerIdentifier: "wamid.setup-1",
+        metadata: expect.objectContaining({
+          validationWebhookStatus: "delivered",
+          validationReconciledWithoutAttempt: true,
+        }),
+      }),
+    );
+  });
+});
+
+function whatsappTarget(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "whatsapp-target-1",
+    userId: "user-1",
+    watchlistId: null,
+    channel: "whatsapp",
+    targetValue: "919876543210",
+    validationStatus: "pending",
+    isValidated: false,
+    isOptedIn: true,
+    optInSource: "manual_whatsapp_setup",
+    optedInAt: "2026-06-07T00:00:00.000Z",
+    isPaused: false,
+    pausedAt: null,
+    optedOutAt: null,
+    templateEligible: false,
+    lastSuccessfulDeliveryAt: null,
+    lastSuccessfulAttemptId: null,
+    providerIdentifier: "wamid.setup-1",
+    metadata: {
+      displayName: "Founder phone",
+      validationProviderMessageId: "wamid.setup-1",
+    },
+    createdAt: "2026-06-07T00:00:00.000Z",
+    updatedAt: "2026-06-07T00:00:00.000Z",
+    ...overrides,
+  };
+}

@@ -186,6 +186,9 @@ describe("sources route loader", () => {
     vi.doMock("~/lib/slack.server", () => ({
       slackTargetDisplayName: vi.fn((target) => target.metadata.displayName),
     }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      whatsappTargetDisplayName: vi.fn(() => "Founder phone"),
+    }));
     vi.doMock("~/lib/meta-ads-readiness.server", () => ({
       getMetaAdsBetaReadiness: vi.fn().mockResolvedValue(betaReadiness),
     }));
@@ -219,6 +222,16 @@ describe("sources route loader", () => {
           id: "slack-target-1",
           displayName: "Growth alerts",
           isPaused: false,
+          lastSuccessfulDeliveryAt: null,
+          createdAt: "2026-06-06T00:00:00.000Z",
+        },
+      ],
+      whatsappTargets: [
+        {
+          id: "whatsapp-target-1",
+          displayName: "Founder phone",
+          validationStatus: "pending",
+          templateEligible: false,
           lastSuccessfulDeliveryAt: null,
           createdAt: "2026-06-06T00:00:00.000Z",
         },
@@ -494,6 +507,130 @@ describe("sources route action", () => {
     });
   });
 
+  it("saves a WhatsApp delivery target and enables WhatsApp digests", async () => {
+    const saveWhatsAppDeliveryTarget = vi.fn().mockResolvedValue({
+      id: "whatsapp-target-1",
+    });
+    const upsertWorkspaceDeliveryConfig = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      saveWhatsAppDeliveryTarget,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: true,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-06-06T00:00:00.000Z",
+        updatedAt: "2026-06-06T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn().mockReturnValue({
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+      }),
+      upsertWorkspaceDeliveryConfig,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "save-whatsapp-target");
+    formData.set("whatsappTargetValue", "+919876543210");
+    formData.set("whatsappDestinationName", "Founder phone");
+    formData.set("whatsappExplicitOptIn", "yes");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(saveWhatsAppDeliveryTarget).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      targetValue: "+919876543210",
+      name: "Founder phone",
+      explicitOptIn: true,
+    });
+    expect(upsertWorkspaceDeliveryConfig).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      sensitivityMode: "balanced",
+      instantEnabled: false,
+      digestEnabled: true,
+      emailEnabled: true,
+      whatsappEnabled: true,
+      slackEnabled: true,
+      quietHours: null,
+      timezone: "Asia/Kolkata",
+    });
+    expect(result).toEqual({
+      ok: true,
+      message: "WhatsApp setup sent. Delivery turns on after Meta confirms the setup template was delivered.",
+    });
+  });
+
+  it("returns a form error when WhatsApp validation is rejected", async () => {
+    const saveWhatsAppDeliveryTarget = vi.fn().mockRejectedValue(
+      new Response("WhatsApp provider is not configured for this environment.", { status: 400 }),
+    );
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      saveWhatsAppDeliveryTarget,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "save-whatsapp-target");
+    formData.set("whatsappTargetValue", "+919876543210");
+    formData.set("whatsappDestinationName", "Founder phone");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "WhatsApp provider is not configured for this environment.",
+    });
+  });
+
   it("pauses a Slack webhook target", async () => {
     const pauseSlackWebhookTarget = vi.fn().mockResolvedValue(true);
 
@@ -585,6 +722,7 @@ describe("sources route component", () => {
       betaReadiness,
       apiKeys: [],
       slackTargets: [],
+      whatsappTargets: [],
       whatsappDelivery: {
         providerConfigured: false,
         customerReady: false,
@@ -612,6 +750,7 @@ describe("sources route component", () => {
     expect(markup).toContain("encrypted and never shown again");
     expect(markup).toContain("WhatsApp delivery");
     expect(markup).toContain("WhatsApp is guarded until proof exists");
+    expect(markup).toContain("Save WhatsApp delivery");
     expect(markup).toContain("Webhook");
     expect(markup).toContain("0/3 usable");
     expect(markup).toContain("No successful send yet");

@@ -2692,6 +2692,30 @@ export async function getDeliveryTargetById(
   return row ? toDeliveryTargetRecord(row) : null;
 }
 
+export async function getDeliveryTargetByProviderIdentifier(
+  env: AppEnv,
+  input: {
+    channel: DeliveryChannel;
+    providerIdentifier: string;
+  },
+) {
+  const row = await one<DeliveryTargetRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_target
+      WHERE channel = ?
+        AND provider_identifier = ?
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+    input.channel,
+    input.providerIdentifier,
+  );
+
+  return row ? toDeliveryTargetRecord(row) : null;
+}
+
 export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
   const row = await one<{ id: string; email: string | null; name: string | null }>(
     env,
