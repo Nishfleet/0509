@@ -16,6 +16,8 @@ describe("demo proof API", () => {
     expect(response.headers.get("vary")).toBe("Accept");
     expect(body.status).toBe("sample_only");
     expect(body.competitor.name).toBe("Nykaa");
+    expect(body.trackedPreview.watchlistName).toContain("Nykaa");
+    expect(body.trackedPreview.loop).toContain("Run a public live search");
     expect(body.proofTrail.length).toBeGreaterThanOrEqual(3);
     expect(body.digestPreview.recommendedMove).toContain("counter-test");
     expect(body.exports.apiPath).toBe("/api/demo-proof");
@@ -34,6 +36,8 @@ describe("demo proof API", () => {
     expect(response.headers.get("vary")).toBe("Accept");
     expect(body).toContain("Status: sample only");
     expect(body).toContain("Public live search is read-only; retained monitoring requires an account");
+    expect(body).toContain("Tracked preview: Nykaa weekly competitor watch");
+    expect(body).toContain("Cadence: Weekly digest");
     expect(body).toContain("## Proof Trail");
     expect(body).toContain("## Slack Export");
     expect(body).toContain("\nPriority: Review before next campaign refresh");

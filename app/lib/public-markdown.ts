@@ -12,7 +12,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Product
 
 - Competitor monitoring for growth teams.
-- Public read-only live search trial and Public sample proof loop at /api/demo-proof for buyer evaluation.
+- Public read-only live search trial and Public sample proof loop at /api/demo-proof for buyer evaluation, including an example tracked competitor and digest preview before signup.
 - Account-gated saved search, retained monitoring, and reusable saved evidence.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Authenticated collection, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
@@ -27,7 +27,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Current product truth
 
 - Account access uses verified access paths.
-- Public demo proof is sample-only. Public live search is read-only; retained monitoring and saved evidence require an account.
+- Public demo proof is sample-only, including the example tracked competitor and digest preview. Public live search is read-only; retained monitoring and saved evidence require an account.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, and provider-canary success.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
@@ -64,7 +64,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
-- Public read-only live search is available for buyer evaluation, and public demo proof is sample-only at /api/demo-proof.
+- Public read-only live search is available for buyer evaluation, and public demo proof is sample-only at /api/demo-proof with an example tracked competitor and digest preview.
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, and provider-canary success.
