@@ -67,7 +67,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
-  if (!session && parsed.filters.query) {
+  if (!session && parsed.filters.query && !forceLive) {
     const { enforcePublicSearchRateLimit } = await import("~/lib/rate-limit.server");
     const rateLimitResponse = await enforcePublicSearchRateLimit(request, env, context.cloudflare?.ctx);
     if (rateLimitResponse) {
