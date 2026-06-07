@@ -121,11 +121,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
     new URL(request.url).searchParams.get("proofProvider") === "browserless"
       ? "browserless"
       : null;
+  const requireSlackDelivery = ["1", "true"].includes(
+    new URL(request.url).searchParams.get("requireSlack")?.toLowerCase() ?? "",
+  );
   const metadata = {
     kind: "launch_readiness_canary",
     generatedAt: nowIso,
     targetLabel: target.target_label,
     requestedProofProvider,
+    requireSlackDelivery,
   };
 
   const runId = await createWatchlistRun(env, target.watchlist_id, "manual", null, 1);
@@ -288,14 +292,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
     lane: "internal",
   });
   const deliverySent = delivery.details.some((attempt) => attempt.status === "sent");
+  const slackDeliverySent = delivery.details.some(
+    (attempt) => attempt.channel === "slack" && attempt.status === "sent",
+  );
+  const deliveryBlockers = [
+    deliverySent ? null : "no_digest_delivery_sent",
+    requireSlackDelivery && !slackDeliverySent ? "no_slack_digest_sent" : null,
+  ].filter((value): value is string => Boolean(value));
 
   return Response.json(
     {
-      ok: deliverySent,
+      ok: deliveryBlockers.length === 0,
+      blockers: deliveryBlockers,
       runId,
       proofCaptureId,
       digestRunId,
       delivery,
+      slackDelivery: {
+        required: requireSlackDelivery,
+        sent: slackDeliverySent,
+      },
       proof: {
         capturedAt: snapshot.capturedAt,
         canonicalUrl: snapshot.canonicalUrl,
@@ -304,7 +320,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       },
     },
     {
-      status: deliverySent ? 200 : 503,
+      status: deliveryBlockers.length === 0 ? 200 : 503,
       headers: { "cache-control": "no-store" },
     },
   );

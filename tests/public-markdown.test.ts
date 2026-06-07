@@ -38,6 +38,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("/api/demo-proof");
     expect(PUBLIC_MARKDOWN).toContain("Public demo proof is sample-only. Public live search is read-only");
     expect(PUBLIC_MARKDOWN).toContain("exports support CSV, API JSON, and Slack-ready markdown");
+    expect(PUBLIC_MARKDOWN).toContain("Slack incoming-webhook setup exists");
+    expect(PUBLIC_MARKDOWN).toContain("successful live delivery proof");
     expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned");
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, creative timeline, and landing-page history");
     expect(PUBLIC_MARKDOWN).toContain("Spend, impressions, reach, and unsupported-channel benchmarks are not live");
@@ -53,7 +55,9 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("spend, impressions, reach, and unsupported-channel benchmarks are not live");
     expect(LLMS_TEXT).toContain("read-only /api/v1");
     expect(LLMS_TEXT).toContain("read-only /api/mcp");
+    expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");
     expect(LLMS_TEXT).not.toContain("MCP are not live yet");
+    expect(LLMS_TEXT).not.toContain("Slack incoming-webhook delivery is live");
     expect(LLMS_TEXT).not.toContain("Public analysis.");
     expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve/i);
   });
