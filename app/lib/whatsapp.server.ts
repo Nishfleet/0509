@@ -2,8 +2,14 @@ import type { AppEnv } from "~/lib/env.server";
 import {
   isCustomerWhatsAppReady,
   isWhatsAppProviderConfigured,
+  isWhatsAppWebhookConfigured,
   whatsappGraphApiVersion,
 } from "~/lib/env.server";
+import {
+  createDeliveryAttempt,
+  listDeliveryTargets,
+  upsertDeliveryTarget,
+} from "~/lib/data.server";
 import type {
   DeliveryAttemptStatus,
   DeliveryLane,
@@ -26,6 +32,7 @@ const WHATSAPP_INSTANT_TEMPLATE_NAMES = {
     provisional: "internal_instant_v1",
   },
 } as const;
+const WHATSAPP_OPT_IN_SOURCE = "manual_whatsapp_setup";
 
 interface WhatsAppSendResult {
   provider: "whatsapp_cloud_api";
@@ -57,10 +64,140 @@ interface SendInstantWhatsAppInput {
 export interface WhatsAppWebhookStatusUpdate {
   provider: "whatsapp_cloud_api";
   providerMessageId: string;
+  rawProviderStatus: string | null;
   webhookStatus: WebhookReconciliationStatus;
   status: DeliveryAttemptStatus | null;
   providerStatusLastSeenAt: string;
   errorMessage: string | null;
+}
+
+export function normalizeWhatsAppRecipient(input: string) {
+  const normalized = input.trim().replace(/[\s().-]/g, "");
+  const withoutPlus = normalized.startsWith("+") ? normalized.slice(1) : normalized;
+
+  if (!/^[1-9]\d{7,14}$/.test(withoutPlus)) {
+    throw new Response("Enter a WhatsApp number in international format, for example +919876543210.", {
+      status: 400,
+    });
+  }
+
+  return withoutPlus;
+}
+
+export async function saveWhatsAppDeliveryTarget(
+  env: AppEnv,
+  input: {
+    userId: string;
+    targetValue: string;
+    name?: string | null;
+    explicitOptIn: boolean;
+  },
+) {
+  if (!input.explicitOptIn) {
+    throw new Response("Confirm the recipient opted in before connecting WhatsApp delivery.", {
+      status: 400,
+    });
+  }
+
+  if (!isWhatsAppProviderConfigured(env)) {
+    throw new Response("WhatsApp provider is not configured for this environment.", { status: 400 });
+  }
+
+  if (!isCustomerWhatsAppReady(env)) {
+    throw new Response("Customer WhatsApp delivery is not enabled.", { status: 400 });
+  }
+
+  if (!isWhatsAppWebhookConfigured(env)) {
+    throw new Response("WhatsApp webhook is not configured.", { status: 400 });
+  }
+
+  const targetValue = normalizeWhatsAppRecipient(input.targetValue);
+  const existingTarget = await findExistingWhatsAppTarget(env, input.userId, targetValue);
+  const timestamp = new Date().toISOString();
+  const templateName = WHATSAPP_DIGEST_TEMPLATE_NAMES.customer;
+  const testResult = await sendWhatsAppTemplate(env, {
+    targetValue,
+    templateName,
+    bodyParameters: [formatPeriodRange(timestamp, timestamp), "1"],
+  });
+
+  if (testResult.status !== "sent") {
+    throw new Response(testResult.errorMessage ?? "WhatsApp did not accept the setup template.", {
+      status: 400,
+    });
+  }
+  if (!testResult.providerMessageId) {
+    throw new Response("WhatsApp accepted the setup template without a message id.", {
+      status: 400,
+    });
+  }
+
+  const requiresFreshValidation = Boolean(existingTarget?.optedOutAt);
+  const validationProviderMessageId = testResult.providerMessageId;
+  const target = await upsertDeliveryTarget(env, {
+    userId: input.userId,
+    watchlistId: null,
+    channel: "whatsapp",
+    targetValue,
+    validationStatus:
+      !requiresFreshValidation && existingTarget?.validationStatus === "validated"
+        ? "validated"
+        : "pending",
+    isValidated: !requiresFreshValidation && (existingTarget?.isValidated ?? false),
+    isOptedIn: true,
+    optInSource: WHATSAPP_OPT_IN_SOURCE,
+    optedInAt: timestamp,
+    isPaused: existingTarget?.isPaused ?? false,
+    pausedAt: existingTarget?.pausedAt ?? null,
+    optedOutAt: null,
+    templateEligible: !requiresFreshValidation && (existingTarget?.templateEligible ?? false),
+    lastSuccessfulDeliveryAt: existingTarget?.lastSuccessfulDeliveryAt ?? null,
+    lastSuccessfulAttemptId: existingTarget?.lastSuccessfulAttemptId ?? null,
+    providerIdentifier: validationProviderMessageId,
+    metadata: {
+      ...(existingTarget?.metadata ?? {}),
+      displayName: normalizeWhatsAppDestinationName(input.name),
+      validationTemplateName: templateName,
+      validationProviderMessageId,
+      validationAcceptedAt: testResult.providerStatusLastSeenAt,
+      validationWebhookStatus: "pending",
+    },
+  });
+
+  if (!target) {
+    throw new Response("WhatsApp target could not be saved.", { status: 500 });
+  }
+
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: target.id,
+    lane: "customer",
+    channel: "whatsapp",
+    provider: testResult.provider,
+    status: "pending",
+    webhookStatus: "pending",
+    targetValue,
+    providerMessageId: validationProviderMessageId,
+    providerStatusLastSeenAt: testResult.providerStatusLastSeenAt,
+    templateName,
+    eventIds: [],
+    payloadSnapshot: {
+      kind: "whatsapp_setup_validation",
+      templateName,
+    },
+    idempotencyKey: `whatsapp_setup_validation:${input.userId}:${targetValue}:${validationProviderMessageId}`,
+    errorMessage: null,
+    sentAt: null,
+    failedAt: null,
+  });
+
+  return target;
+}
+
+export function whatsappTargetDisplayName(target: Pick<DeliveryTargetRecord, "metadata" | "targetValue">) {
+  return readString(target.metadata.displayName) || maskWhatsAppRecipient(target.targetValue);
 }
 
 export async function sendDigestWhatsApp(
@@ -261,6 +398,7 @@ export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppW
         const candidate: WhatsAppWebhookStatusUpdate = {
           provider: "whatsapp_cloud_api",
           providerMessageId: status.id,
+          rawProviderStatus: status.status ?? null,
           webhookStatus: mapped.webhookStatus,
           status: mapped.status,
           providerStatusLastSeenAt,
@@ -417,10 +555,41 @@ function constantTimeHexEqual(left: string, right: string) {
 
 function statusPriority(candidate: WhatsAppWebhookStatusUpdate) {
   if (candidate.webhookStatus === "failed") {
+    return 4;
+  }
+  const rawStatus = candidate.rawProviderStatus?.toLowerCase() ?? null;
+  if (rawStatus === "read") {
     return 3;
   }
-  if (candidate.webhookStatus === "delivered") {
+  if (rawStatus === "delivered") {
     return 2;
   }
-  return 1;
+  if (rawStatus === "sent" || candidate.webhookStatus === "delivered") {
+    return 1;
+  }
+  return 0;
+}
+
+function normalizeWhatsAppDestinationName(value: string | null | undefined) {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized && normalized.length <= 80 ? normalized : "WhatsApp recipient";
+}
+
+function maskWhatsAppRecipient(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 4 ? `WhatsApp ending ${digits.slice(-4)}` : "WhatsApp recipient";
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+async function findExistingWhatsAppTarget(env: AppEnv, userId: string, targetValue: string) {
+  const targets = await listDeliveryTargets(env, userId, {
+    watchlistId: null,
+    channel: "whatsapp",
+    limit: 50,
+  });
+
+  return targets.find((target) => target.targetValue === targetValue) ?? null;
 }
