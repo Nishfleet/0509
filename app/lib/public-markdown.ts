@@ -19,7 +19,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Signed-in collections can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources.
 - Customer API keys can read account-owned collection, watchlist, and digest exports at /api/v1.
 - Customer API keys can also use the read-only MCP endpoint at /api/mcp for account-owned collection, watchlist, and digest exports.
-- Slack incoming-webhook delivery can send eligible digests and high-priority change alerts for configured account destinations.
+- Slack incoming-webhook setup exists for configured account destinations; broad launch still requires at least one configured Slack target with successful live delivery proof.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily briefs and weekly digests should show priority, recommended next move, and proof trail.
@@ -29,7 +29,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Account access uses verified access paths.
 - Public demo proof is sample-only. Public live search is read-only; retained monitoring and saved evidence require an account.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
-- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, and provider-canary success.
+- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, and provider-canary success.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
@@ -67,7 +67,7 @@ Current product truth:
 - Public read-only live search is available for buyer evaluation, and public demo proof is sample-only at /api/demo-proof.
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
-- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, and provider-canary success.
+- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, and provider-canary success.
 - Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly briefs plus 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
@@ -77,7 +77,7 @@ Current product truth:
 - Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
 - Customer API keys support read-only /api/v1 collection, watchlist, and digest exports for account-owned data.
 - Customer API keys support the read-only /api/mcp endpoint for agent access to account-owned collection, watchlist, and digest exports.
-- Slack incoming-webhook delivery is live for configured account destinations and can send eligible digests and high-priority change alerts.
+- Slack incoming-webhook setup exists for configured account destinations; broad launch still requires a configured Slack target with successful live delivery proof.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Customer WhatsApp delivery must stay behind opt-in, template-readiness, and webhook-readiness checks.
 - Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and public write APIs are not live yet.
