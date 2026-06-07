@@ -117,19 +117,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const title = "Launch readiness canary";
   const summary = "Private canary verified the monitoring, proof, and digest delivery pipeline.";
   const proofUrl = "https://0509.in/";
-  const requestedProofProvider =
-    new URL(request.url).searchParams.get("proofProvider") === "browserless"
-      ? "browserless"
-      : null;
-  const requireSlackDelivery = ["1", "true"].includes(
-    new URL(request.url).searchParams.get("requireSlack")?.toLowerCase() ?? "",
-  );
+  const requestUrl = new URL(request.url);
+  const requestedProofProvider = requestUrl.searchParams.get("proofProvider") === "browserless"
+    ? "browserless"
+    : null;
+  const requireSlackDelivery = readBooleanSearchParam(requestUrl, "requireSlack");
+  const requireWhatsAppDelivery = readBooleanSearchParam(requestUrl, "requireWhatsApp");
   const metadata = {
     kind: "launch_readiness_canary",
     generatedAt: nowIso,
     targetLabel: target.target_label,
     requestedProofProvider,
     requireSlackDelivery,
+    requireWhatsAppDelivery,
   };
 
   const runId = await createWatchlistRun(env, target.watchlist_id, "manual", null, 1);
@@ -289,15 +289,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
       },
     ],
     cadence: "daily",
-    lane: "internal",
+    lane: requireWhatsAppDelivery ? "customer" : "internal",
   });
   const deliverySent = delivery.details.some((attempt) => attempt.status === "sent");
   const slackDeliverySent = delivery.details.some(
     (attempt) => attempt.channel === "slack" && attempt.status === "sent",
   );
+  const whatsappDeliverySent = delivery.details.some(
+    (attempt) => attempt.channel === "whatsapp" && attempt.status === "sent",
+  );
   const deliveryBlockers = [
     deliverySent ? null : "no_digest_delivery_sent",
     requireSlackDelivery && !slackDeliverySent ? "no_slack_digest_sent" : null,
+    requireWhatsAppDelivery && !whatsappDeliverySent ? "no_whatsapp_digest_sent" : null,
   ].filter((value): value is string => Boolean(value));
 
   return Response.json(
@@ -312,6 +316,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
         required: requireSlackDelivery,
         sent: slackDeliverySent,
       },
+      whatsappDelivery: {
+        required: requireWhatsAppDelivery,
+        sent: whatsappDeliverySent,
+        lane: requireWhatsAppDelivery ? "customer" : "internal",
+      },
       proof: {
         capturedAt: snapshot.capturedAt,
         canonicalUrl: snapshot.canonicalUrl,
@@ -324,6 +333,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
       headers: { "cache-control": "no-store" },
     },
   );
+}
+
+function readBooleanSearchParam(url: URL, key: string) {
+  return ["1", "true"].includes(url.searchParams.get(key)?.toLowerCase() ?? "");
 }
 
 function snapshotToExtractedFields(snapshot: {

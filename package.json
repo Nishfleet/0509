@@ -6,6 +6,7 @@
     "backup:d1": "node scripts/d1-backup.mjs",
     "build": "node scripts/build-production.mjs",
     "cf-typegen": "wrangler types",
+    "canary:proof": "node scripts/launch-readiness-canary.mjs",
     "canary:prod": "node scripts/prod-canary.mjs",
     "check:public-home": "node scripts/check-public-home-current.mjs",
     "deploy": "node scripts/deploy-production.mjs",
