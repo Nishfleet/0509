@@ -1143,6 +1143,23 @@ describe("getLaunchReadinessSignals", () => {
     expect(proofQuery?.sql).toContain("json_extract(capture_metadata_json, '$.kind')");
     expect(findStatement(mock.statements, "FROM delivery_target", "channel = 'slack'")).toBeTruthy();
     expect(findStatement(mock.statements, "FROM delivery_attempt", "channel = 'slack'")).toBeTruthy();
+    expect(
+      findStatement(
+        mock.statements,
+        "FROM delivery_target",
+        "channel = 'whatsapp'",
+        "template_eligible = 1",
+      ),
+    ).toBeTruthy();
+    expect(
+      findStatement(
+        mock.statements,
+        "FROM delivery_attempt",
+        "channel = 'whatsapp'",
+        "lane = 'customer'",
+        "webhook_status = 'delivered'",
+      ),
+    ).toBeTruthy();
   });
 });
 

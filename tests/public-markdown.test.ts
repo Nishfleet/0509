@@ -49,6 +49,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 evidence checks/month");
     expect(PUBLIC_MARKDOWN).toContain("Launch status is readiness-gated");
+    expect(PUBLIC_MARKDOWN).toContain("any configured WhatsApp delivery proof");
+    expect(PUBLIC_MARKDOWN).toContain("Customer WhatsApp delivery stays behind provider configuration");
     expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
     expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live proof");
     expect(LLMS_TEXT).toContain("Public read-only live search is available");
@@ -60,6 +62,7 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("read-only /api/v1");
     expect(LLMS_TEXT).toContain("read-only /api/mcp");
     expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");
+    expect(LLMS_TEXT).toContain("Customer WhatsApp delivery must stay behind provider configuration");
     expect(LLMS_TEXT).not.toContain("MCP are not live yet");
     expect(LLMS_TEXT).not.toContain("Slack incoming-webhook delivery is live");
     expect(LLMS_TEXT).not.toContain("Public analysis.");
