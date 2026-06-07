@@ -34,6 +34,7 @@ export interface MetaAdsBetaReadiness {
   successes: number;
   failures: number;
   recentFailures: number;
+  unrecoveredRecentFailures: number;
   successRate: number | null;
   latestSuccessAt: string | null;
   latestFailureAt: string | null;
@@ -142,6 +143,10 @@ function buildReadiness(input: {
   const recentFailures = Number(input.aggregate.recent_failures ?? 0);
   const successRate = samples > 0 ? successes / samples : null;
   const latestSuccessAt = input.aggregate.latest_success_at ?? null;
+  const latestFailureAt = input.aggregate.latest_failure_at ?? null;
+  const unrecoveredRecentFailures = hasRecoveredSinceLatestFailure(latestSuccessAt, latestFailureAt)
+    ? 0
+    : recentFailures;
   const blockers = [...input.extraBlockers];
 
   if (samples < MIN_LIVE_SAMPLES) {
@@ -153,7 +158,7 @@ function buildReadiness(input: {
   if (!isRecentEnough(latestSuccessAt, input.now, RECENT_SUCCESS_HOURS)) {
     blockers.push("no_recent_live_success");
   }
-  if (recentFailures > 0) {
+  if (unrecoveredRecentFailures > 0) {
     blockers.push("recent_live_failures");
   }
   if (input.visualProviderStatus && input.visualProviderStatus !== "healthy") {
@@ -169,9 +174,10 @@ function buildReadiness(input: {
     successes,
     failures,
     recentFailures,
+    unrecoveredRecentFailures,
     successRate,
     latestSuccessAt,
-    latestFailureAt: input.aggregate.latest_failure_at ?? null,
+    latestFailureAt,
     blockers,
     providerBreakdown: input.providerRows.map((row) => {
       const providerSamples = Number(row.attempts ?? 0);
@@ -211,4 +217,18 @@ function isRecentEnough(value: string | null, now: Date, maxAgeHours: number) {
   }
 
   return now.getTime() - timestamp <= maxAgeHours * 60 * 60 * 1000;
+}
+
+function hasRecoveredSinceLatestFailure(latestSuccessAt: string | null, latestFailureAt: string | null) {
+  if (!latestSuccessAt || !latestFailureAt) {
+    return false;
+  }
+
+  const latestSuccessMs = Date.parse(latestSuccessAt);
+  const latestFailureMs = Date.parse(latestFailureAt);
+  if (Number.isNaN(latestSuccessMs) || Number.isNaN(latestFailureMs)) {
+    return false;
+  }
+
+  return latestSuccessMs > latestFailureMs;
 }
