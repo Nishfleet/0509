@@ -25,6 +25,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     isWhatsAppWebhookConfigured,
   } = await import("~/lib/env.server");
   const { slackTargetDisplayName } = await import("~/lib/slack.server");
+  const { whatsappTargetDisplayName } = await import("~/lib/whatsapp.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const [connection, discoveryStatus, betaReadiness, apiKeys, slackTargets, whatsappTargets] = await Promise.all([
@@ -83,6 +84,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       id: target.id,
       displayName: slackTargetDisplayName(target),
       isPaused: target.isPaused,
+      lastSuccessfulDeliveryAt: target.lastSuccessfulDeliveryAt,
+      createdAt: target.createdAt,
+    })),
+    whatsappTargets: whatsappTargets.map((target) => ({
+      id: target.id,
+      displayName: whatsappTargetDisplayName(target),
+      isPaused: target.isPaused,
+      validationStatus: target.validationStatus,
+      templateEligible: target.templateEligible,
       lastSuccessfulDeliveryAt: target.lastSuccessfulDeliveryAt,
       createdAt: target.createdAt,
     })),
@@ -209,6 +219,56 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ok: true,
       message:
         "Slack delivery connected. Slack accepted the setup test, and future eligible digests can post to that channel.",
+    };
+  }
+
+  if (intent === "save-whatsapp-target") {
+    const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
+    const {
+      getWorkspaceDeliveryConfig,
+      legacyWorkspaceDeliveryDefaults,
+      upsertWorkspaceDeliveryConfig,
+    } = await import("~/lib/data.server");
+    const targetValue = String(formData.get("whatsappTargetValue") ?? "");
+    const name = String(formData.get("whatsappDestinationName") ?? "");
+    const explicitOptIn = formData.has("whatsappExplicitOptIn");
+    try {
+      await saveWhatsAppDeliveryTarget(env, {
+        userId: session.user.id,
+        targetValue,
+        name,
+        explicitOptIn,
+      });
+    } catch (error) {
+      if (error instanceof Response && error.status >= 400 && error.status < 500) {
+        return {
+          ok: false,
+          message: (await error.text()) || "WhatsApp delivery could not be connected.",
+        };
+      }
+
+      throw error;
+    }
+    const existingConfig = await getWorkspaceDeliveryConfig(env, session.user.id);
+    const defaults = legacyWorkspaceDeliveryDefaults({
+      hasEmail: Boolean(session.user.email),
+    });
+    await upsertWorkspaceDeliveryConfig(env, {
+      userId: session.user.id,
+      sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
+      instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
+      digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
+      emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
+      whatsappEnabled: true,
+      slackEnabled: existingConfig?.slackEnabled ?? defaults.slackEnabled,
+      quietHours: existingConfig?.quietHours ?? null,
+      timezone: existingConfig?.timezone ?? null,
+    });
+
+    return {
+      ok: true,
+      message:
+        "WhatsApp setup sent. Delivery turns on after Meta confirms the setup template was delivered.",
     };
   }
 
@@ -609,6 +669,61 @@ export default function AppSourcesRoute() {
           validation, template eligibility, webhook readiness, and successful delivery proof are all present.
         </p>
 
+        <div className="f9-dashboard-grid">
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Connect recipient</span>
+            <h3>Validate WhatsApp</h3>
+            <Form className="f9-auth-form" method="post">
+              <input name="intent" type="hidden" value="save-whatsapp-target" />
+              <label className="f9-field">
+                <span>Recipient label</span>
+                <input
+                  autoComplete="off"
+                  name="whatsappDestinationName"
+                  placeholder="Founder, growth lead..."
+                  type="text"
+                />
+              </label>
+              <label className="f9-field">
+                <span>WhatsApp number</span>
+                <input
+                  autoComplete="off"
+                  inputMode="tel"
+                  name="whatsappTargetValue"
+                  placeholder="+919876543210"
+                  type="tel"
+                />
+              </label>
+              <label className="f9-checkbox-row">
+                <input name="whatsappExplicitOptIn" type="checkbox" value="yes" />
+                <span>Recipient has opted in to receive Five to Nine WhatsApp updates.</span>
+              </label>
+              <button className="f9-primary-button" type="submit">
+                Save WhatsApp delivery
+              </button>
+            </Form>
+          </section>
+
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Readiness</span>
+            <h3>What must pass</h3>
+            <dl className="proof-trail-list">
+              <div>
+                <dt>Setup template</dt>
+                <dd>Meta must accept the customer template before the target becomes usable.</dd>
+              </div>
+              <div>
+                <dt>Webhook proof</dt>
+                <dd>Launch readiness waits for delivered status from the WhatsApp webhook.</dd>
+              </div>
+              <div>
+                <dt>Customer lane</dt>
+                <dd>Customer WhatsApp delivery must be explicitly enabled in production.</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+
         <dl className="proof-trail-list">
           <div>
             <dt>Provider</dt>
@@ -637,6 +752,33 @@ export default function AppSourcesRoute() {
             </dd>
           </div>
         </dl>
+
+        <div className="f9-work-list">
+          {data.whatsappTargets.length > 0 ? (
+            data.whatsappTargets.map((target) => (
+              <article className="f9-work-item" key={target.id}>
+                <div>
+                  <strong>{target.displayName}</strong>
+                  <p>
+                    {target.validationStatus === "validated" && target.templateEligible
+                      ? "Template-ready"
+                      : "Needs validation"}
+                    {target.lastSuccessfulDeliveryAt
+                      ? ` · last sent ${new Date(target.lastSuccessfulDeliveryAt).toLocaleString("en-IN")}`
+                      : " · no delivered proof yet"}
+                  </p>
+                </div>
+              </article>
+            ))
+          ) : (
+            <article className="f9-work-item">
+              <div>
+                <strong>No WhatsApp recipient connected</strong>
+                <p>Add an opted-in recipient after WhatsApp provider and webhook setup are ready.</p>
+              </div>
+            </article>
+          )}
+        </div>
       </section>
 
       <article className="f9-app-panel f9-callout-panel">

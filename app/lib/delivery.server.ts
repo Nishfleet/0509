@@ -6,6 +6,8 @@ import {
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
+  getDeliveryTargetById,
+  getDeliveryTargetByProviderIdentifier,
   getWatchlistDeliveryConfig,
   getWorkspaceDeliveryConfig,
   legacyWorkspaceDeliveryDefaults,
@@ -249,14 +251,153 @@ export async function reconcileDeliveryStatus(
     providerMessageId: string;
     webhookStatus: "pending" | "delivered" | "failed" | "legacy_unknown" | "provider_unknown";
     status?: "pending" | "sent" | "failed" | "skipped_due_to_quiet_hours" | "skipped_due_to_dedupe" | null;
+    rawProviderStatus?: string | null;
     providerStatusLastSeenAt: string;
     errorMessage?: string | null;
   },
 ) {
-  return reconcileDeliveryAttemptByProviderMessageId(env, input);
+  const attempt = await reconcileDeliveryAttemptByProviderMessageId(env, input);
+  if (attempt) {
+    await reconcileWhatsAppSetupValidationTargetFromAttempt(env, attempt, input.rawProviderStatus ?? null);
+  } else {
+    await reconcileWhatsAppSetupValidationTargetFromProviderMessage(env, {
+      providerMessageId: input.providerMessageId,
+      rawProviderStatus: input.rawProviderStatus ?? null,
+      webhookStatus: input.webhookStatus,
+      status: input.status ?? null,
+      providerStatusLastSeenAt: input.providerStatusLastSeenAt,
+      errorMessage: input.errorMessage ?? null,
+    });
+  }
+
+  return attempt;
 }
 
 const DIGEST_STATUS_CHANNEL_PRIORITY: DeliveryChannel[] = ["email", "slack", "whatsapp"];
+
+async function reconcileWhatsAppSetupValidationTargetFromAttempt(
+  env: AppEnv,
+  attempt: DeliveryAttemptRecord,
+  rawProviderStatus: string | null,
+) {
+  if (
+    attempt.channel !== "whatsapp" ||
+    attempt.payloadSnapshot.kind !== "whatsapp_setup_validation" ||
+    !attempt.deliveryTargetId
+  ) {
+    return;
+  }
+
+  const normalizedRawStatus = rawProviderStatus?.toLowerCase() ?? null;
+  const delivered =
+    attempt.status === "sent" &&
+    attempt.webhookStatus === "delivered" &&
+    (normalizedRawStatus === "delivered" || normalizedRawStatus === "read");
+  const failed = attempt.status === "failed" || attempt.webhookStatus === "failed";
+  if (!delivered && !failed) {
+    return;
+  }
+
+  const target = await getDeliveryTargetById(env, {
+    userId: attempt.userId,
+    targetId: attempt.deliveryTargetId,
+  });
+  if (!target || target.channel !== "whatsapp") {
+    return;
+  }
+  if (readString(target.metadata.validationProviderMessageId) !== attempt.providerMessageId) {
+    return;
+  }
+
+  const statusSeenAt =
+    attempt.providerStatusLastSeenAt ?? attempt.sentAt ?? attempt.failedAt ?? new Date().toISOString();
+
+  await upsertDeliveryTarget(env, {
+    userId: target.userId,
+    watchlistId: target.watchlistId,
+    channel: target.channel,
+    targetValue: target.targetValue,
+    validationStatus: delivered ? "validated" : "invalid",
+    isValidated: delivered,
+    isOptedIn: target.isOptedIn,
+    optInSource: target.optInSource,
+    optedInAt: target.optedInAt,
+    isPaused: target.isPaused,
+    pausedAt: target.pausedAt,
+    optedOutAt: target.optedOutAt,
+    templateEligible: delivered,
+    lastSuccessfulDeliveryAt: delivered ? statusSeenAt : target.lastSuccessfulDeliveryAt,
+    lastSuccessfulAttemptId: delivered ? attempt.id : target.lastSuccessfulAttemptId,
+    providerIdentifier: attempt.providerMessageId ?? target.providerIdentifier,
+    metadata: {
+      ...target.metadata,
+      validationAttemptId: attempt.id,
+      validationWebhookStatus: attempt.webhookStatus,
+      validationStatusLastSeenAt: statusSeenAt,
+      validationErrorMessage: failed ? attempt.errorMessage ?? "WhatsApp setup delivery failed." : null,
+    },
+  });
+}
+
+async function reconcileWhatsAppSetupValidationTargetFromProviderMessage(
+  env: AppEnv,
+  input: {
+    providerMessageId: string;
+    rawProviderStatus: string | null;
+    webhookStatus: "pending" | "delivered" | "failed" | "legacy_unknown" | "provider_unknown";
+    status: "pending" | "sent" | "failed" | "skipped_due_to_quiet_hours" | "skipped_due_to_dedupe" | null;
+    providerStatusLastSeenAt: string;
+    errorMessage: string | null;
+  },
+) {
+  const target = await getDeliveryTargetByProviderIdentifier(env, {
+    channel: "whatsapp",
+    providerIdentifier: input.providerMessageId,
+  });
+  if (!target || readString(target.metadata.validationProviderMessageId) !== input.providerMessageId) {
+    return;
+  }
+
+  const normalizedRawStatus = input.rawProviderStatus?.toLowerCase() ?? null;
+  const delivered =
+    input.status === "sent" &&
+    input.webhookStatus === "delivered" &&
+    (normalizedRawStatus === "delivered" || normalizedRawStatus === "read");
+  const failed = input.status === "failed" || input.webhookStatus === "failed";
+  if (!delivered && !failed) {
+    return;
+  }
+
+  await upsertDeliveryTarget(env, {
+    userId: target.userId,
+    watchlistId: target.watchlistId,
+    channel: target.channel,
+    targetValue: target.targetValue,
+    validationStatus: delivered ? "validated" : "invalid",
+    isValidated: delivered,
+    isOptedIn: target.isOptedIn,
+    optInSource: target.optInSource,
+    optedInAt: target.optedInAt,
+    isPaused: target.isPaused,
+    pausedAt: target.pausedAt,
+    optedOutAt: target.optedOutAt,
+    templateEligible: delivered,
+    lastSuccessfulDeliveryAt: delivered ? input.providerStatusLastSeenAt : target.lastSuccessfulDeliveryAt,
+    lastSuccessfulAttemptId: target.lastSuccessfulAttemptId,
+    providerIdentifier: input.providerMessageId,
+    metadata: {
+      ...target.metadata,
+      validationWebhookStatus: input.webhookStatus,
+      validationStatusLastSeenAt: input.providerStatusLastSeenAt,
+      validationErrorMessage: failed ? input.errorMessage ?? "WhatsApp setup delivery failed." : null,
+      validationReconciledWithoutAttempt: true,
+    },
+  });
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
 
 function selectDigestStatusAttempt(attempts: DigestAttemptSummary[]) {
   for (const channel of DIGEST_STATUS_CHANNEL_PRIORITY) {
@@ -930,7 +1071,7 @@ async function resolveDigestWhatsAppTargets(env: AppEnv, userId: string) {
     watchlistId: null,
     channel: "whatsapp",
     limit: 10,
-  })).filter((target) => !target.isPaused && target.isOptedIn && !target.optedOutAt);
+  })).filter(isUsableWhatsAppTarget);
 }
 
 async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlistId: string) {
@@ -945,14 +1086,7 @@ async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlis
       channel: "whatsapp",
       limit: 10,
     })),
-  ]).filter(
-    (target) =>
-      !target.isPaused &&
-      target.isOptedIn &&
-      !target.optedOutAt &&
-      target.isValidated &&
-      target.validationStatus === "validated",
-  );
+  ]).filter(isUsableWhatsAppTarget);
 }
 
 async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
@@ -985,6 +1119,17 @@ function isUsableSlackTarget(target: DeliveryTargetRecord) {
     !target.optedOutAt &&
     target.isValidated &&
     target.validationStatus === "validated"
+  );
+}
+
+function isUsableWhatsAppTarget(target: DeliveryTargetRecord) {
+  return (
+    !target.isPaused &&
+    target.isOptedIn &&
+    !target.optedOutAt &&
+    target.isValidated &&
+    target.validationStatus === "validated" &&
+    target.templateEligible
   );
 }
 
