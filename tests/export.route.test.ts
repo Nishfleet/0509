@@ -69,7 +69,7 @@ const collectionItem: CollectionItemRecord = {
 const externalAd: AdRecord = {
   metaAdId: "external:linkedin:fnv1a-abc123",
   advertiser: "Mamaearth",
-  body: "Creator-led sunscreen routine\nCombo launch",
+  body: "Creator-led sunscreen routine\nCombo launch\nSpend: ₹50k | Impressions: 120k | Reach: 80k",
   previewHeadline: "Creator-led sunscreen routine",
   previewSubhead: "LinkedIn",
   hook: "Creator-led sunscreen routine",
@@ -85,13 +85,37 @@ const externalAd: AdRecord = {
   firstSeenAt: "2026-06-06T00:00:00.000Z",
   lastSeenAt: null,
   active: false,
-  researchSummary: "Manual LinkedIn proof saved for Mamaearth.",
+  researchSummary: "Spend: ₹50k | Impressions: 120k | Reach: 80k",
   source: "external",
   analysisFields: [
     {
       scopeType: "ad",
       fieldKey: "proof_url",
       fieldValue: "https://www.linkedin.com/posts/mamaearth-campaign",
+      provenanceSource: "user",
+      extractorVersion: "manual-external-proof-v1",
+      confidence: 1,
+    },
+    {
+      scopeType: "ad",
+      fieldKey: "observed_spend",
+      fieldValue: "₹50k",
+      provenanceSource: "user",
+      extractorVersion: "manual-external-proof-v1",
+      confidence: 1,
+    },
+    {
+      scopeType: "ad",
+      fieldKey: "observed_impressions",
+      fieldValue: "120k",
+      provenanceSource: "user",
+      extractorVersion: "manual-external-proof-v1",
+      confidence: 1,
+    },
+    {
+      scopeType: "ad",
+      fieldKey: "observed_reach",
+      fieldValue: "80k",
       provenanceSource: "user",
       extractorVersion: "manual-external-proof-v1",
       confidence: 1,
@@ -239,8 +263,8 @@ describe("authenticated export route", () => {
 
     expect(response.headers.get("content-type")).toContain("text/csv");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(body).toContain('"advertiser","hook","offer","cta","proof_url","tags","note"');
-    expect(body).toContain('"Nykaa","Routine-first bundle","Bundle and save","Build your routine","https://facebook.com/ads/library/?id=meta-nykaa-1","beauty|offer","Use in sales deck."');
+    expect(body).toContain('"advertiser","hook","offer","cta","metric_proof","proof_url","tags","note"');
+    expect(body).toContain('"Nykaa","Routine-first bundle","Bundle and save","Build your routine","","https://facebook.com/ads/library/?id=meta-nykaa-1","beauty|offer","Use in sales deck."');
   });
 
   it("returns account-scoped JSON for collection exports", async () => {
@@ -275,6 +299,7 @@ describe("authenticated export route", () => {
       insightDepth: {
         mediaMix: Array<{ label: string; count: number }>;
         campaignDurations: Array<{ label: string; count: number }>;
+        metricProof: Array<{ label: string; detail: string }>;
       };
       items: Array<{
         advertiser: string;
@@ -282,6 +307,7 @@ describe("authenticated export route", () => {
         adSnapshotUrl: string | null;
         landingPageUrl: string | null;
         proofUrl: string | null;
+        metricProof: { spend: string; impressions: string; reach: string };
         tags: string[];
       }>;
     };
@@ -296,12 +322,32 @@ describe("authenticated export route", () => {
       adSnapshotUrl: null,
       landingPageUrl: null,
       proofUrl: "https://www.linkedin.com/posts/mamaearth-campaign",
+      metricProof: {
+        spend: "₹50k",
+        impressions: "120k",
+        reach: "80k",
+      },
       tags: ["LinkedIn", "manual proof", "creator"],
+    });
+    expect(body.insightDepth.metricProof[0]).toMatchObject({
+      label: "Mamaearth",
+      detail: "Spend: ₹50k | Impressions: 120k | Reach: 80k - LinkedIn",
     });
     expect(body.insightDepth.campaignDurations[0]).toMatchObject({
       label: "Pending",
       count: 0,
     });
+  });
+
+  it("includes manual metric proof in Slack-ready collection exports", async () => {
+    setupMocks({ collectionItems: [externalCollectionItem] });
+    const response = await loadExport("https://0509.in/export/collection/collection-1?format=slack");
+    const body = await response.text();
+
+    expect(response.headers.get("content-type")).toContain("text/markdown");
+    expect(body).toContain("_Metric proof_");
+    expect(body).toContain("Spend: ₹50k | Impressions: 120k | Reach: 80k - LinkedIn");
+    expect(body).toContain("CTA: Shop now | Spend: ₹50k | Impressions: 120k | Reach: 80k | Proof:");
   });
 
   it("returns Slack-ready markdown for watchlist exports", async () => {

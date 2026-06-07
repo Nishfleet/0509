@@ -23,6 +23,9 @@ interface ExternalProofInput {
   cta?: string | null;
   note?: string | null;
   observedAt?: string | null;
+  spend?: string | null;
+  impressions?: string | null;
+  reach?: string | null;
 }
 
 export function buildExternalProofAd(input: ExternalProofInput, now = new Date()): AdRecord {
@@ -34,8 +37,12 @@ export function buildExternalProofAd(input: ExternalProofInput, now = new Date()
   const offer = input.offer?.trim() ?? "";
   const cta = input.cta?.trim() ?? "";
   const note = input.note?.trim() ?? "";
+  const spend = normalizeMetricValue(input.spend);
+  const impressions = normalizeMetricValue(input.impressions);
+  const reach = normalizeMetricValue(input.reach);
+  const metricSummary = metricSummaryText({ spend, impressions, reach });
   const landingPageUrl = channel === "Landing page" ? proofUrl : null;
-  const body = [hook, offer, note].filter(Boolean).join("\n");
+  const body = [hook, offer, metricSummary, note].filter(Boolean).join("\n");
   const analysisFields = externalProofAnalysisFields({
     channel,
     hook,
@@ -43,6 +50,9 @@ export function buildExternalProofAd(input: ExternalProofInput, now = new Date()
     cta,
     proofUrl,
     note,
+    spend,
+    impressions,
+    reach,
   });
 
   return {
@@ -64,7 +74,7 @@ export function buildExternalProofAd(input: ExternalProofInput, now = new Date()
     firstSeenAt: observedAt,
     lastSeenAt: null,
     active: false,
-    researchSummary: note || `Manual ${channel} proof saved for ${advertiser}.`,
+    researchSummary: note || metricSummary || `Manual ${channel} proof saved for ${advertiser}.`,
     source: "external",
     analysisFields,
     creativeText: null,
@@ -119,6 +129,21 @@ function normalizeObservedAt(value: string | null | undefined) {
   return parsed.toISOString();
 }
 
+function normalizeMetricValue(value: string | null | undefined) {
+  const normalized = value?.trim().replace(/\s+/g, " ") ?? "";
+  return normalized.slice(0, 120);
+}
+
+function metricSummaryText(input: { spend: string; impressions: string; reach: string }) {
+  return [
+    input.spend ? `Spend: ${input.spend}` : null,
+    input.impressions ? `Impressions: ${input.impressions}` : null,
+    input.reach ? `Reach: ${input.reach}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
 function requireText(value: string, message: string) {
   const normalized = value.trim();
   if (!normalized) {
@@ -135,6 +160,9 @@ function externalProofAnalysisFields(input: {
   cta: string;
   proofUrl: string;
   note: string;
+  spend: string;
+  impressions: string;
+  reach: string;
 }): AnalysisFieldInput[] {
   const base = {
     scopeType: "ad" as const,
@@ -148,6 +176,11 @@ function externalProofAnalysisFields(input: {
     { ...base, fieldKey: "proof_url", fieldValue: input.proofUrl, confidence: 1 },
     ...(input.offer ? [{ ...base, fieldKey: "offer", fieldValue: input.offer, confidence: 1 }] : []),
     ...(input.cta ? [{ ...base, fieldKey: "cta", fieldValue: input.cta, confidence: 1 }] : []),
+    ...(input.spend ? [{ ...base, fieldKey: "observed_spend", fieldValue: input.spend, confidence: 1 }] : []),
+    ...(input.impressions
+      ? [{ ...base, fieldKey: "observed_impressions", fieldValue: input.impressions, confidence: 1 }]
+      : []),
+    ...(input.reach ? [{ ...base, fieldKey: "observed_reach", fieldValue: input.reach, confidence: 1 }] : []),
     ...(input.note ? [{ ...base, fieldKey: "note", fieldValue: input.note, confidence: 1 }] : []),
   ];
 }

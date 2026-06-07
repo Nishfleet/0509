@@ -41,8 +41,9 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Slack incoming-webhook setup exists");
     expect(PUBLIC_MARKDOWN).toContain("successful live delivery proof");
     expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned");
-    expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, creative timeline, and landing-page history");
-    expect(PUBLIC_MARKDOWN).toContain("Spend, impressions, reach, and unsupported-channel benchmarks are not live");
+    expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history");
+    expect(PUBLIC_MARKDOWN).toContain("Manual external proof links can store user-supplied visible spend, impression, and reach values");
+    expect(PUBLIC_MARKDOWN).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 evidence checks/month");
@@ -52,7 +53,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Public read-only live search is available");
     expect(LLMS_TEXT).toContain("Public read-only analysis preview");
     expect(LLMS_TEXT).toContain("Account-gated saved analysis");
-    expect(LLMS_TEXT).toContain("spend, impressions, reach, and unsupported-channel benchmarks are not live");
+    expect(LLMS_TEXT).toContain("user-supplied metric proof");
+    expect(LLMS_TEXT).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(LLMS_TEXT).toContain("read-only /api/v1");
     expect(LLMS_TEXT).toContain("read-only /api/mcp");
     expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");

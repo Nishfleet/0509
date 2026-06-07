@@ -1412,6 +1412,9 @@ export async function addExternalProofToCollection(
     cta?: string | null;
     note?: string | null;
     observedAt?: string | null;
+    spend?: string | null;
+    impressions?: string | null;
+    reach?: string | null;
     tags?: string[];
   },
 ) {

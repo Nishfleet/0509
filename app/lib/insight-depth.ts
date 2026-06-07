@@ -1,4 +1,5 @@
 import type {
+  AnalysisFieldInput,
   CollectionItemRecord,
   DigestItemRecord,
   WatchEventRecord,
@@ -8,6 +9,7 @@ export interface InsightDepthSummary {
   topHooks: InsightCount[];
   mediaMix: InsightCount[];
   campaignDurations: InsightCount[];
+  metricProof: InsightCount[];
   creativeTimeline: InsightTimelineItem[];
   landingPageHistory: InsightTimelineItem[];
 }
@@ -29,6 +31,7 @@ export function emptyInsightDepthSummary(): InsightDepthSummary {
     topHooks: [{ label: "Pending", count: 0, detail: "No repeated hooks yet." }],
     mediaMix: [{ label: "Pending", count: 0, detail: "No channel mix yet." }],
     campaignDurations: [{ label: "Pending", count: 0, detail: "No duration proof yet." }],
+    metricProof: [{ label: "Pending", count: 0, detail: "No spend, reach, or impression proof yet." }],
     creativeTimeline: [],
     landingPageHistory: [],
   };
@@ -50,6 +53,9 @@ export function safeInsightDepthSummary(value: unknown): InsightDepthSummary {
     campaignDurations: Array.isArray(candidate.campaignDurations)
       ? candidate.campaignDurations
       : emptyInsightDepthSummary().campaignDurations,
+    metricProof: Array.isArray(candidate.metricProof)
+      ? candidate.metricProof
+      : emptyInsightDepthSummary().metricProof,
     creativeTimeline: Array.isArray(candidate.creativeTimeline)
       ? candidate.creativeTimeline
       : [],
@@ -71,6 +77,7 @@ type InsightSource =
       timestamp: string | null;
       detail: string;
       landingPageDetail: string | null;
+      analysisFields: AnalysisFieldInput[];
     }
   | {
       kind: "event";
@@ -94,6 +101,7 @@ export function buildCollectionInsightDepth(items: CollectionItemRecord[]): Insi
       timestamp: item.ad.lastSeenAt ?? item.ad.firstSeenAt ?? item.createdAt,
       detail: item.ad.offer || item.ad.previewHeadline || item.note || "Saved proof",
       landingPageDetail: landingPageDetailForAd(item),
+      analysisFields: normalizeAnalysisFields(item.ad.analysisFields),
     })),
   );
 }
@@ -130,6 +138,7 @@ export function formatInsightDepthMarkdown(summary: InsightDepthSummary) {
     markdownSection("Top hooks", summary.topHooks),
     markdownSection("Media mix", summary.mediaMix),
     markdownSection("Observed campaign duration", summary.campaignDurations),
+    markdownSection("Metric proof", summary.metricProof),
     markdownTimeline("Creative timeline", summary.creativeTimeline),
     markdownTimeline("Landing-page history", summary.landingPageHistory),
   ].join("\n\n");
@@ -140,6 +149,7 @@ function buildInsightDepth(sources: InsightSource[]): InsightDepthSummary {
     topHooks: summarizeCounts(readHookLabels(sources), "No repeated hooks yet."),
     mediaMix: summarizeCounts(readMediaLabels(sources), "No channel mix yet."),
     campaignDurations: summarizeCounts(readCampaignDurationLabels(sources), "No duration proof yet."),
+    metricProof: summarizeCounts(readMetricProofLabels(sources), "No spend, reach, or impression proof yet."),
     creativeTimeline: readCreativeTimeline(sources),
     landingPageHistory: readLandingPageHistory(sources),
   };
@@ -190,6 +200,29 @@ function readCampaignDurationLabels(sources: InsightSource[]) {
           `${durationDays} observed day${durationDays === 1 ? "" : "s"}`,
           source.active ? "active" : "inactive",
         ].join(" - "),
+      },
+    ];
+  });
+}
+
+function readMetricProofLabels(sources: InsightSource[]) {
+  return sources.flatMap((source) => {
+    if (source.kind !== "ad") {
+      return [];
+    }
+
+    const metricFields = source.analysisFields
+      .map(metricFieldForAnalysis)
+      .filter((field): field is { label: string; value: string } => Boolean(field));
+    if (metricFields.length === 0) {
+      return [];
+    }
+
+    const channel = normalizeStringArray(source.platforms)[0] ?? "Manual proof";
+    return [
+      {
+        label: source.advertiser,
+        detail: `${metricFields.map((field) => `${field.label}: ${field.value}`).join(" | ")} - ${channel}`,
       },
     ];
   });
@@ -345,6 +378,36 @@ function normalizeStringArray(value: unknown) {
         (item): item is string => typeof item === "string" && item.trim().length > 0,
       )
     : [];
+}
+
+function normalizeAnalysisFields(value: unknown): AnalysisFieldInput[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is AnalysisFieldInput =>
+          Boolean(item) &&
+          typeof item === "object" &&
+          typeof (item as AnalysisFieldInput).fieldKey === "string" &&
+          typeof (item as AnalysisFieldInput).fieldValue === "string",
+      )
+    : [];
+}
+
+function metricFieldForAnalysis(field: AnalysisFieldInput) {
+  if (!field.fieldValue.trim()) {
+    return null;
+  }
+
+  if (field.fieldKey === "observed_spend") {
+    return { label: "Spend", value: field.fieldValue.trim() };
+  }
+  if (field.fieldKey === "observed_impressions") {
+    return { label: "Impressions", value: field.fieldValue.trim() };
+  }
+  if (field.fieldKey === "observed_reach") {
+    return { label: "Reach", value: field.fieldValue.trim() };
+  }
+
+  return null;
 }
 
 function observedDurationDays(firstSeenAt: string | null, lastSeenAt: string | null) {
