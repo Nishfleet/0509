@@ -48,7 +48,7 @@ jobs:
 
       - name: Post skipped review comment
         if: steps.ai_secret.outputs.has_key == 'false' && github.event_name == 'pull_request_target'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
@@ -77,7 +77,7 @@ jobs:
           echo "OPENCODE_GO_API_KEY is required for automated Codex PR Review. Configure the secret or complete manual review before merge."
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
         if: steps.ai_secret.outputs.has_key == 'true'
         with:
           fetch-depth: 0
@@ -238,7 +238,7 @@ jobs:
 
       - name: Post review comment
         if: steps.ai_secret.outputs.has_key == 'true' && github.event_name == 'pull_request_target' && hashFiles('codex-output.md') != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
           script: |
