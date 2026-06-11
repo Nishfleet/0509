@@ -1275,6 +1275,45 @@ export async function getUserIdByEmail(env: AppEnv, email: string) {
   return row?.id ?? null;
 }
 
+export interface UserPlanBillingInfo {
+  plan: "free" | "scout" | "starter" | "agency";
+  dodoStatus: string | null;
+  dodoProductId: string | null;
+  planUpdatedAt: string | null;
+}
+
+export async function getUserPlanBillingInfo(
+  env: AppEnv,
+  userId: string,
+): Promise<UserPlanBillingInfo> {
+  const row = await one<{
+    plan: string | null;
+    dodo_status: string | null;
+    dodo_product_id: string | null;
+    plan_updated_at: string | null;
+  }>(
+    env,
+    `
+      SELECT plan, dodo_status, dodo_product_id, plan_updated_at
+      FROM user_plan
+      WHERE user_id = ?
+    `,
+    userId,
+  );
+
+  const plan =
+    row?.plan === "scout" || row?.plan === "starter" || row?.plan === "agency"
+      ? row.plan
+      : "free";
+
+  return {
+    plan,
+    dodoStatus: row?.dodo_status ?? null,
+    dodoProductId: row?.dodo_product_id ?? null,
+    planUpdatedAt: row?.plan_updated_at ?? null,
+  };
+}
+
 function validIsoTimestamp(value: string | undefined) {
   if (!value) return null;
   const timestamp = Date.parse(value);
