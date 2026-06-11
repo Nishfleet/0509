@@ -1307,21 +1307,23 @@ export async function listCollectionItems(env: AppEnv, collectionId: string) {
     collectionId,
   );
 
-  const itemIds = rows.map((row: CollectionItemRow) => row.id);
   const tagsByItemId = new Map<string, string[]>();
 
-  if (itemIds.length > 0) {
-    const placeholders = itemIds.map(() => "?").join(", ");
+  if (rows.length > 0) {
+    // Join through collection_item instead of expanding item ids into
+    // `IN (?, ...)` — D1 caps bound parameters at 100, so collections with
+    // more than 100 items would otherwise fail to load.
     const tags = await many<{ collection_item_id: string; label: string }>(
       env,
       `
         SELECT collection_item_tag.collection_item_id, tag.label
         FROM collection_item_tag
         INNER JOIN tag ON tag.id = collection_item_tag.tag_id
-        WHERE collection_item_tag.collection_item_id IN (${placeholders})
+        INNER JOIN collection_item ON collection_item.id = collection_item_tag.collection_item_id
+        WHERE collection_item.collection_id = ?
         ORDER BY tag.label ASC
       `,
-      ...itemIds,
+      collectionId,
     );
 
     for (const row of tags) {
@@ -3617,7 +3619,13 @@ export async function upsertDigestDelivery(
   );
 }
 
-export async function listDigests(env: AppEnv, userId: string) {
+const DIGEST_RUN_LIST_LIMIT = 60;
+
+export async function listDigests(
+  env: AppEnv,
+  userId: string,
+  limit: number = DIGEST_RUN_LIST_LIMIT,
+) {
   const runs = await many<DigestRunRow>(
     env,
     `
@@ -3625,35 +3633,45 @@ export async function listDigests(env: AppEnv, userId: string) {
       FROM digest_run
       WHERE user_id = ?
       ORDER BY period_end DESC
+      LIMIT ?
     `,
     userId,
+    limit,
   );
 
   if (runs.length === 0) {
     return [];
   }
 
-  const runIds = runs.map((run) => run.id);
-  const placeholders = runIds.map(() => "?").join(", ");
+  // Join through digest_run instead of expanding run ids into `IN (?, ...)`:
+  // D1 caps bound parameters at 100, so long-tenured users with many digest
+  // runs would otherwise break this query permanently. Rows from runs that
+  // tie on the oldest period_end but fall outside `runs` are ignored by the
+  // run-id maps below.
+  const oldestPeriodEnd = runs[runs.length - 1]!.period_end;
   const [items, deliveries] = await Promise.all([
     many<DigestItemRow>(
       env,
       `
-        SELECT *
+        SELECT digest_item.*
         FROM digest_item
-        WHERE digest_run_id IN (${placeholders})
-        ORDER BY created_at ASC
+        INNER JOIN digest_run ON digest_run.id = digest_item.digest_run_id
+        WHERE digest_run.user_id = ? AND digest_run.period_end >= ?
+        ORDER BY digest_item.created_at ASC
       `,
-      ...runIds,
+      userId,
+      oldestPeriodEnd,
     ),
     many<DigestDeliveryRow>(
       env,
       `
-        SELECT *
+        SELECT digest_delivery.*
         FROM digest_delivery
-        WHERE digest_run_id IN (${placeholders})
+        INNER JOIN digest_run ON digest_run.id = digest_delivery.digest_run_id
+        WHERE digest_run.user_id = ? AND digest_run.period_end >= ?
       `,
-      ...runIds,
+      userId,
+      oldestPeriodEnd,
     ),
   ]);
   const itemsByDigestId = new Map<string, DigestItemRow[]>();

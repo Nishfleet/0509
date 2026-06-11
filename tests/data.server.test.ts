@@ -14,6 +14,7 @@ import {
   getLaunchReadinessSignals,
   getOperatorSnapshot,
   listActiveWatchlists,
+  listCollectionItems,
   listDigests,
   upsertDigestDelivery,
   upsertDiscoveryCacheEntry,
@@ -518,6 +519,50 @@ describe("listAdsByIds", () => {
 
     expect(result).toEqual([ad]);
   });
+
+  it("chunks lookups so 150 ad ids never exceed D1's bound-parameter cap", async () => {
+    const adIds = Array.from({ length: 150 }, (_, index) => `ad-${index}`);
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  if (sql.includes("FROM ad")) {
+                    return {
+                      results: bindings.map((id) => ({
+                        id,
+                        raw_json: JSON.stringify({ metaAdId: id, advertiser: "Brand" }),
+                      })) as T[],
+                    };
+                  }
+
+                  return { results: [] as T[] };
+                },
+                async run() {
+                  return { success: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    const result = await listAdsByIds({ DB: mock.db } as never, adIds);
+
+    expect(result).toHaveLength(150);
+
+    const adQueries = statements.filter((statement) => statement.sql.includes("FROM ad"));
+    expect(adQueries.length).toBeGreaterThanOrEqual(2);
+
+    for (const statement of adQueries) {
+      expect(statement.bindings.length).toBeLessThanOrEqual(90);
+    }
+  });
 });
 
 describe("listDigests", () => {
@@ -608,9 +653,139 @@ describe("listDigests", () => {
     expect(statements.filter((statement) => statement.sql.includes("FROM digest_item"))).toHaveLength(1);
     expect(statements.filter((statement) => statement.sql.includes("FROM digest_delivery"))).toHaveLength(1);
     expect(statements.find((statement) => statement.sql.includes("FROM digest_item"))?.bindings).toEqual([
-      "digest-1",
-      "digest-2",
+      "user-1",
+      "2026-05-03T00:00:00.000Z",
     ]);
+  });
+
+  it("stays under D1's 100-bound-parameter cap with 150 digest runs", async () => {
+    const runs = Array.from({ length: 150 }, (_, index) => ({
+      id: `digest-${index}`,
+      user_id: "user-1",
+      period_start: `2025-01-01T00:00:00.000Z`,
+      period_end: `2025-01-02T00:00:00.000Z`,
+      created_at: `2025-01-02T00:00:00.000Z`,
+    }));
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  if (sql.includes("FROM digest_run")) {
+                    return { results: runs as T[] };
+                  }
+
+                  return { results: [] as T[] };
+                },
+                async run() {
+                  return { success: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    const digests = await listDigests({ DB: mock.db } as never, "user-1", 200);
+
+    expect(digests).toHaveLength(150);
+
+    for (const statement of statements) {
+      expect(statement.bindings.length).toBeLessThanOrEqual(90);
+      expect(statement.sql).not.toContain("IN (");
+    }
+  });
+
+  it("bounds the digest run list by default", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  return { results: [] as T[] };
+                },
+                async run() {
+                  return { success: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await listDigests({ DB: mock.db } as never, "user-1");
+
+    const runQuery = statements.find((statement) => statement.sql.includes("FROM digest_run"));
+    expect(runQuery?.sql).toContain("LIMIT ?");
+    expect(runQuery?.bindings).toEqual(["user-1", 60]);
+  });
+});
+
+describe("listCollectionItems", () => {
+  it("loads tags with a single-parameter join even for 150 items", async () => {
+    const items = Array.from({ length: 150 }, (_, index) => ({
+      id: `item-${index}`,
+      collection_id: "collection-1",
+      ad_id: `ad-${index}`,
+      note: null,
+      created_at: "2026-05-01T00:00:00.000Z",
+      updated_at: "2026-05-01T00:00:00.000Z",
+      ad_snapshot_json: "{}",
+    }));
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  if (sql.includes("FROM collection_item_tag")) {
+                    return {
+                      results: [
+                        { collection_item_id: "item-3", label: "festival" },
+                      ] as T[],
+                    };
+                  }
+
+                  if (sql.includes("FROM collection_item")) {
+                    return { results: items as T[] };
+                  }
+
+                  return { results: [] as T[] };
+                },
+                async run() {
+                  return { success: true };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    const records = await listCollectionItems({ DB: mock.db } as never, "collection-1");
+
+    expect(records).toHaveLength(150);
+    expect(records.find((record) => record.id === "item-3")?.tags).toEqual(["festival"]);
+
+    const tagQuery = statements.find((statement) => statement.sql.includes("FROM collection_item_tag"));
+    expect(tagQuery?.bindings).toEqual(["collection-1"]);
+
+    for (const statement of statements) {
+      expect(statement.bindings.length).toBeLessThanOrEqual(90);
+    }
   });
 });
 
