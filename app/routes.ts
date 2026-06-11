@@ -12,6 +12,8 @@ export default [
   route("unsubscribe", "routes/unsubscribe.tsx"),
   route("auth/login", "routes/auth.login.tsx"),
   route("auth/signup", "routes/auth.signup.tsx"),
+  route("auth/forgot-password", "routes/auth.forgot-password.tsx"),
+  route("auth/reset-password", "routes/auth.reset-password.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/billing/dodo/checkout", "routes/api.billing.dodo.checkout.ts"),
   route("api/billing/dodo/canary", "routes/api.billing.dodo.canary.ts"),
