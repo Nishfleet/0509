@@ -88,6 +88,8 @@ describe("runWatchlistManual OCR reuse", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
+      getDigest: vi.fn().mockResolvedValue(null),
+      listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",

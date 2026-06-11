@@ -228,6 +228,8 @@ function installSharedMocks(input: {
     createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
     finishWatchlistRun: input.finishWatchlistRun,
     getDigestByPeriod: vi.fn().mockResolvedValue(null),
+    getDigest: vi.fn().mockResolvedValue(null),
+    listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
     getUserDeliveryProfile: vi.fn().mockResolvedValue({
       id: "user-1",
       email: "owner@example.com",

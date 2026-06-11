@@ -1,0 +1,369 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { WatchEventRecord, WatchlistRecord } from "~/lib/types";
+
+function buildWatchlist(index: number, label: string): WatchlistRecord {
+  return {
+    id: `watch-${index}`,
+    userId: "user-1",
+    name: `${label} watch`,
+    targetType: "advertiser",
+    targetId: label,
+    targetFingerprint: `fp-${label}`,
+    targetLabel: label,
+    isActive: true,
+    lastScannedAt: null,
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
+  };
+}
+
+function buildConfirmedEvent(watchlistId: string): WatchEventRecord {
+  return {
+    id: `event-${watchlistId}`,
+    watchlistId,
+    runId: "run-1",
+    eventType: "ad_new",
+    status: "confirmed",
+    importanceScore: 90,
+    adId: "ad-1",
+    baselineFromRunId: null,
+    candidateId: null,
+    proofCaptureId: null,
+    title: "New ad detected",
+    summary: "A new ad appeared.",
+    metadata: {},
+    confirmedAt: "2026-06-10T04:00:00.000Z",
+    suppressedAt: null,
+    invalidatedAt: null,
+    lastEvaluatedAt: "2026-06-10T04:00:00.000Z",
+    createdAt: "2026-06-10T04:00:00.000Z",
+  } as WatchEventRecord;
+}
+
+const PLAN_LIMITS_FIXTURE = {
+  free: { digests: false, digestCadence: "none" },
+  scout: { digests: true, digestCadence: "weekly" },
+  starter: { digests: true, digestCadence: "daily_and_weekly" },
+  agency: { digests: true, digestCadence: "daily_and_weekly" },
+};
+
+function mockReliabilityDependencies(input: {
+  watchlists: WatchlistRecord[];
+  failingTargetLabel?: string;
+  digestUsers?: Array<{ id: string; email: string; name: string }>;
+  listWatchlistsImpl?: ReturnType<typeof vi.fn>;
+  listWatchEventsBetweenImpl?: ReturnType<typeof vi.fn>;
+  retryableDigestRuns?: Array<Record<string, unknown>>;
+  getDigestImpl?: ReturnType<typeof vi.fn>;
+}) {
+  const createWatchlistRun = vi.fn(
+    async (_env: unknown, watchlistId: string) => `run-${watchlistId}`,
+  );
+  const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
+  const searchAdsViaSourceResolver = vi.fn(
+    async (_env: unknown, query: { filters?: { query?: string } }) => {
+      if (input.failingTargetLabel && query.filters?.query === input.failingTargetLabel) {
+        throw new Error("scan blew up");
+      }
+      return {
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+        discoveryStatus: "healthy",
+        discoverySummary: null,
+        discoveryFailureClass: null,
+      };
+    },
+  );
+  const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+    attempts: 1,
+    channels: ["email"],
+    details: [
+      {
+        channel: "email",
+        status: "sent",
+        targetValue: "owner@example.com",
+        providerMessageId: "msg-1",
+        errorMessage: null,
+        deliveredAt: "2026-06-11T04:00:00.000Z",
+      },
+    ],
+  });
+  const listWatchlists =
+    input.listWatchlistsImpl ?? vi.fn().mockResolvedValue(input.watchlists);
+  const listWatchEventsBetween =
+    input.listWatchEventsBetweenImpl ??
+    vi.fn(async (_env: unknown, watchlistId: string) => [buildConfirmedEvent(watchlistId)]);
+  const getDigest = input.getDigestImpl ?? vi.fn().mockResolvedValue(null);
+  const listRetryableDigestRuns = vi
+    .fn()
+    .mockResolvedValue(input.retryableDigestRuns ?? []);
+  const createDigestRun = vi.fn().mockResolvedValue("digest-run-current");
+
+  vi.doMock("~/lib/analysis.server", () => ({
+    buildAnalysisFields: vi.fn(() => []),
+  }));
+  vi.doMock("~/lib/creative-text.server", () => ({
+    captureCreativeText: vi.fn(),
+  }));
+  vi.doMock("~/lib/ad-source.server", () => ({
+    CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+      failureClass = "browser_launch_failed" as const;
+    },
+    resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+    searchAdsViaSourceResolver,
+  }));
+  vi.doMock("~/lib/plan.server", () => ({
+    PLAN_LIMITS: PLAN_LIMITS_FIXTURE,
+    getUserPlan: vi.fn(async () => "starter"),
+  }));
+  vi.doMock("~/lib/data.server", () => ({
+    addDigestItem: vi.fn(),
+    clearDigestItems: vi.fn(),
+    countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
+    countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
+    createAdObservation: vi.fn(),
+    createDigestRun,
+    createEventCandidate: vi.fn(),
+    createProofCapture: vi.fn(),
+    createWatchEvent: vi.fn(),
+    createWatchlistRun,
+    finishWatchlistRun,
+    getDigest,
+    getDigestByPeriod: vi.fn().mockResolvedValue(null),
+    getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+    getSavedQuery: vi.fn(),
+    getUserDeliveryProfile: vi.fn().mockResolvedValue(null),
+    getWatchlist: vi.fn(),
+    hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: unknown[]) => ads),
+    listActiveWatchlists: vi.fn().mockResolvedValue(input.watchlists),
+    listObservationsForRun: vi.fn().mockResolvedValue([]),
+    listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
+    listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+    listRetryableDigestRuns,
+    listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
+    listWatchEvents: vi.fn().mockResolvedValue([]),
+    listWatchEventsBetween,
+    listWatchlists,
+    logMetaIntegrationStatus: vi.fn().mockResolvedValue(undefined),
+    touchWatchlistScanned: vi.fn().mockResolvedValue(undefined),
+    updateDeliveryAttemptResult: vi.fn(),
+    upsertAd: vi.fn(),
+    upsertProofTarget: vi.fn(),
+  }));
+  vi.doMock("~/lib/delivery.server", () => ({
+    deliverWatchlistAlerts: vi.fn().mockResolvedValue({ attempts: 0, channels: [] }),
+    deliverWeeklyDigest,
+  }));
+  vi.doMock("~/lib/landing-pages.server", () => ({
+    captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+  }));
+
+  const env = {
+    BROWSER: { fetch: vi.fn() },
+    DB: {
+      prepare: vi.fn(() => ({
+        all: vi.fn(async () => ({ results: input.digestUsers ?? [] })),
+        bind: vi.fn(() => ({
+          first: vi.fn(async () => null),
+          all: vi.fn(async () => ({ results: [] })),
+          run: vi.fn(async () => ({ success: true })),
+        })),
+      })),
+    },
+  };
+
+  return {
+    env,
+    createWatchlistRun,
+    finishWatchlistRun,
+    searchAdsViaSourceResolver,
+    deliverWeeklyDigest,
+    listWatchlists,
+    listRetryableDigestRuns,
+    getDigest,
+  };
+}
+
+beforeEach(() => {
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+});
+
+describe("scheduled monitoring error isolation", () => {
+  it("continues scanning remaining watchlists and still runs digests when one scan throws", async () => {
+    const watchlists = [buildWatchlist(1, "adspy"), buildWatchlist(2, "bigspy")];
+    const mocks = mockReliabilityDependencies({
+      watchlists,
+      failingTargetLabel: "adspy",
+      digestUsers: [{ id: "user-1", email: "owner@example.com", name: "Owner" }],
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: true,
+      digestCadence: "weekly",
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    // both watchlists attempted; the second succeeded despite the first failing
+    expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(2);
+    const finishStatuses = mocks.finishWatchlistRun.mock.calls.map(
+      (call) => (call[2] as { status: string }).status,
+    );
+    expect(finishStatuses).toContain("failed");
+    expect(finishStatuses).toContain("succeeded");
+
+    // digests still ran after the failure
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledTimes(1);
+    expect(result.digests).toBe(1);
+    expect(result.inlineRuns).toBe(1);
+    expect(result.inlineFailures).toBe(1);
+  });
+
+  it("does not let one user's digest failure abort other users' digests", async () => {
+    const listWatchlists = vi.fn(async (_env: unknown, userId: string) => {
+      if (userId === "user-1") {
+        throw new Error("digest assembly failed for user-1");
+      }
+      return [
+        {
+          ...buildWatchlist(9, "okbrand"),
+          userId,
+        },
+      ];
+    });
+    const mocks = mockReliabilityDependencies({
+      watchlists: [],
+      digestUsers: [
+        { id: "user-1", email: "first@example.com", name: "First" },
+        { id: "user-2", email: "second@example.com", name: "Second" },
+      ],
+      listWatchlistsImpl: listWatchlists,
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: true,
+      digestCadence: "weekly",
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledTimes(1);
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: "user-2" }),
+    );
+    expect(result.digests).toBe(1);
+  });
+});
+
+describe("digest retry sweep", () => {
+  it("redelivers recent digest runs whose delivery failed", async () => {
+    const failedDigest = {
+      id: "digest-old-1",
+      userId: "user-7",
+      userEmail: "seven@example.com",
+      userName: "Seven",
+      periodStart: "2026-06-09T04:00:00.000Z",
+      periodEnd: "2026-06-10T04:00:00.000Z",
+    };
+    const getDigest = vi.fn().mockResolvedValue({
+      id: "digest-old-1",
+      userId: "user-7",
+      periodStart: "2026-06-09T04:00:00.000Z",
+      periodEnd: "2026-06-10T04:00:00.000Z",
+      createdAt: "2026-06-10T04:00:00.000Z",
+      items: [
+        {
+          id: "item-1",
+          digestRunId: "digest-old-1",
+          watchlistId: "watch-7",
+          watchlistName: "brand seven watch",
+          eventType: "ad_new",
+          title: "New ad detected",
+          summary: "A new ad appeared.",
+          metadata: {},
+          createdAt: "2026-06-10T04:00:00.000Z",
+        },
+      ],
+      delivery: {
+        id: "delivery-1",
+        digestRunId: "digest-old-1",
+        provider: "cloudflare_email",
+        status: "failed",
+        recipientEmail: "seven@example.com",
+        externalMessageId: null,
+        errorMessage: "Cloudflare Email send failed: network timeout.",
+        deliveredAt: null,
+      },
+    });
+    const mocks = mockReliabilityDependencies({
+      watchlists: [],
+      digestUsers: [],
+      retryableDigestRuns: [failedDigest],
+      getDigestImpl: getDigest,
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: true,
+      digestCadence: "daily",
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(mocks.listRetryableDigestRuns).toHaveBeenCalled();
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledTimes(1);
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-7",
+        digestRunId: "digest-old-1",
+        periodStart: "2026-06-09T04:00:00.000Z",
+        periodEnd: "2026-06-10T04:00:00.000Z",
+        items: [
+          expect.objectContaining({
+            watchlistId: "watch-7",
+            title: "New ad detected",
+          }),
+        ],
+      }),
+    );
+    expect(result.digests).toBe(1);
+  });
+
+  it("skips retrying digests for users whose plan no longer includes digests", async () => {
+    const failedDigest = {
+      id: "digest-old-2",
+      userId: "user-8",
+      userEmail: "eight@example.com",
+      userName: "Eight",
+      periodStart: "2026-06-09T04:00:00.000Z",
+      periodEnd: "2026-06-10T04:00:00.000Z",
+    };
+    const mocks = mockReliabilityDependencies({
+      watchlists: [],
+      digestUsers: [],
+      retryableDigestRuns: [failedDigest],
+    });
+    const { getUserPlan } = await import("~/lib/plan.server");
+    (getUserPlan as ReturnType<typeof vi.fn>).mockResolvedValue("free");
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: true,
+      digestCadence: "weekly",
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(mocks.deliverWeeklyDigest).not.toHaveBeenCalled();
+    expect(result.digests).toBe(0);
+  });
+});

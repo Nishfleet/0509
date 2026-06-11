@@ -17,6 +17,7 @@ import {
   countProofCapturesForWatchlistSince,
   countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
+  getDigest,
   getDigestByPeriod,
   getRecentSuccessfulRuns,
   getSavedQuery,
@@ -26,6 +27,7 @@ import {
   listActiveWatchlists,
   listProofCapturesForTarget,
   listRecentWorkspaceProofCaptures,
+  listRetryableDigestRuns,
   listSuccessfulProofCapturesForAd,
   listObservationsForRun,
   listWatchEvents,
@@ -74,6 +76,8 @@ const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
 const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
+const DIGEST_RETRY_WINDOW_DAYS = 7;
+const DIGEST_RETRY_SWEEP_LIMIT = 25;
 const WEEKLY_DIGEST_UTC_DAY = 1;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 const DIRECT_WEBSITE_PROOF_INTERVAL_MS = 20 * 60 * 60 * 1000;
@@ -124,7 +128,7 @@ export async function runScheduledMonitoring(
   options: RunScheduledMonitoringOptions = {},
 ) {
   if (!env.DB) {
-    return { queued: 0, duplicates: 0, inlineRuns: 0, digests: 0 };
+    return { queued: 0, duplicates: 0, inlineRuns: 0, inlineFailures: 0, digests: 0 };
   }
 
   const watchlists = await listActiveWatchlists(env, {
@@ -133,6 +137,7 @@ export async function runScheduledMonitoring(
   let queued = 0;
   let duplicates = 0;
   let inlineRuns = 0;
+  let inlineFailures = 0;
 
   const workflowBinding = getMonitoringWorkflowBinding(env);
   const shouldBypassWorkflow = shouldRunScheduledMonitoringInline(env);
@@ -167,12 +172,22 @@ export async function runScheduledMonitoring(
           continue;
         }
 
-        const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
-        inlineRuns += ranInline ? 1 : 0;
+        try {
+          const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
+          inlineRuns += ranInline ? 1 : 0;
+        } catch (inlineError) {
+          inlineFailures += 1;
+          console.error(
+            `Scheduled scan failed for watchlist ${watchlist.id}; continuing with remaining watchlists.`,
+            inlineError,
+          );
+        }
       }
     }
   } else {
-    inlineRuns = await runScheduledMonitoringInline(env, watchlists);
+    const inlineResult = await runScheduledMonitoringInline(env, watchlists);
+    inlineRuns = inlineResult.inlineRuns;
+    inlineFailures = inlineResult.inlineFailures;
   }
 
   const digests = options.includeDigests
@@ -187,6 +202,7 @@ export async function runScheduledMonitoring(
     queued,
     duplicates,
     inlineRuns,
+    inlineFailures,
     digests,
   };
 }
@@ -694,6 +710,15 @@ async function runDigests(
   const periodStartIso = periodStart.toISOString();
   const periodEndIso = periodEnd.toISOString();
 
+  // Collect retry candidates BEFORE creating this tick's digest runs so the
+  // sweep can never race the current period's deliveries.
+  const retryCandidates = await listRetryableDigestRuns(env, {
+    since: new Date(
+      periodEnd.getTime() - DIGEST_RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString(),
+    limit: DIGEST_RETRY_SWEEP_LIMIT,
+  });
+
   const usersResult = await db
     .prepare(
       `
@@ -707,94 +732,171 @@ async function runDigests(
 
   const users = usersResult.results ?? [];
   let digestsSent = 0;
+  const handledDigestRunIds = new Set<string>();
 
   for (const user of users) {
-    const plan = await getUserPlan(env, user.id);
-    if (!PLAN_LIMITS[plan].digests || !planAllowsDigestCadence(plan, cadence)) {
-      continue;
-    }
+    try {
+      const plan = await getUserPlan(env, user.id);
+      if (!PLAN_LIMITS[plan].digests || !planAllowsDigestCadence(plan, cadence)) {
+        continue;
+      }
 
-    const watchlists = await listWatchlists(env, user.id);
-    const digestItems: Array<{
-      eventId: string;
-      watchlistId: string;
-      watchlistName: string;
-      eventType: WatchEventType;
-      title: string;
-      summary: string;
-      metadata: Record<string, unknown>;
-    }> = [];
+      const watchlists = await listWatchlists(env, user.id);
+      const digestItems: Array<{
+        eventId: string;
+        watchlistId: string;
+        watchlistName: string;
+        eventType: WatchEventType;
+        title: string;
+        summary: string;
+        metadata: Record<string, unknown>;
+      }> = [];
 
-    for (const watchlist of watchlists) {
-      const events = await listWatchEventsBetween(
-        env,
-        watchlist.id,
-        periodStartIso,
-        periodEndIso,
-      );
+      for (const watchlist of watchlists) {
+        const events = await listWatchEventsBetween(
+          env,
+          watchlist.id,
+          periodStartIso,
+          periodEndIso,
+        );
 
-      for (const event of events.filter(isCustomerDigestEligibleEvent)) {
-        digestItems.push({
-          eventId: event.id,
-          watchlistId: watchlist.id,
-          watchlistName: watchlist.name,
-          eventType: event.eventType,
-          title: event.title,
-          summary: event.summary,
-          metadata: digestMetadataForEvent(event),
+        for (const event of events.filter(isCustomerDigestEligibleEvent)) {
+          digestItems.push({
+            eventId: event.id,
+            watchlistId: watchlist.id,
+            watchlistName: watchlist.name,
+            eventType: event.eventType,
+            title: event.title,
+            summary: event.summary,
+            metadata: digestMetadataForEvent(event),
+          });
+        }
+      }
+
+      if (digestItems.length === 0) {
+        continue;
+      }
+
+      const existingDigest = await getDigestByPeriod(env, user.id, periodStartIso, periodEndIso);
+      if (existingDigest?.delivery?.status === "sent") {
+        continue;
+      }
+
+      const digestRunId =
+        existingDigest?.id ??
+        (await createDigestRun(env, user.id, periodStartIso, periodEndIso, {
+          totalEvents: digestItems.length,
+          watchlists: watchlists.length,
+        }));
+      handledDigestRunIds.add(digestRunId);
+
+      if (existingDigest) {
+        await clearDigestItems(env, digestRunId);
+      }
+
+      for (const item of digestItems) {
+        await addDigestItem(env, digestRunId, {
+          watchlistId: item.watchlistId,
+          watchlistName: item.watchlistName,
+          eventType: item.eventType,
+          title: item.title,
+          summary: item.summary,
+          metadata: item.metadata,
         });
       }
-    }
 
-    if (digestItems.length === 0) {
-      continue;
-    }
-
-    const existingDigest = await getDigestByPeriod(env, user.id, periodStartIso, periodEndIso);
-    if (existingDigest?.delivery?.status === "sent") {
-      continue;
-    }
-
-    const digestRunId =
-      existingDigest?.id ??
-      (await createDigestRun(env, user.id, periodStartIso, periodEndIso, {
-        totalEvents: digestItems.length,
-        watchlists: watchlists.length,
-      }));
-
-    if (existingDigest) {
-      await clearDigestItems(env, digestRunId);
-    }
-
-    for (const item of digestItems) {
-      await addDigestItem(env, digestRunId, {
-        watchlistId: item.watchlistId,
-        watchlistName: item.watchlistName,
-        eventType: item.eventType,
-        title: item.title,
-        summary: item.summary,
-        metadata: item.metadata,
+      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+      const delivery = await deliverWeeklyDigest(env, {
+        userId: user.id,
+        userName: user.name,
+        accountEmail: user.email,
+        digestRunId,
+        periodStart: periodStartIso,
+        periodEnd: periodEndIso,
+        items: digestItems,
+        cadence,
+        lane: "customer",
       });
-    }
-
-    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-    const delivery = await deliverWeeklyDigest(env, {
-      userId: user.id,
-      userName: user.name,
-      accountEmail: user.email,
-      digestRunId,
-      periodStart: periodStartIso,
-      periodEnd: periodEndIso,
-      items: digestItems,
-      cadence,
-      lane: "customer",
-    });
-    if (delivery.attempts > 0) {
-      digestsSent += 1;
+      if (delivery.attempts > 0) {
+        digestsSent += 1;
+      }
+    } catch (error) {
+      // One user's digest failure must never abort the remaining users.
+      console.error(
+        `Digest run failed for user ${user.id}; continuing with remaining users.`,
+        error,
+      );
     }
   }
 
+  digestsSent += await retryFailedDigests(env, { retryCandidates, handledDigestRunIds });
+
   return digestsSent;
+}
+
+async function retryFailedDigests(
+  env: AppEnv,
+  input: {
+    retryCandidates: Awaited<ReturnType<typeof listRetryableDigestRuns>>;
+    handledDigestRunIds: Set<string>;
+  },
+) {
+  let retried = 0;
+
+  for (const candidate of input.retryCandidates) {
+    if (input.handledDigestRunIds.has(candidate.id)) {
+      continue;
+    }
+
+    try {
+      const plan = await getUserPlan(env, candidate.userId);
+      const cadence = digestCadenceForPeriod(candidate.periodStart, candidate.periodEnd);
+      if (!PLAN_LIMITS[plan].digests || !planAllowsDigestCadence(plan, cadence)) {
+        continue;
+      }
+
+      const digest = await getDigest(env, candidate.id);
+      if (!digest || digest.items.length === 0) {
+        continue;
+      }
+
+      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+      const delivery = await deliverWeeklyDigest(env, {
+        userId: candidate.userId,
+        userName: candidate.userName,
+        accountEmail: candidate.userEmail,
+        digestRunId: candidate.id,
+        periodStart: candidate.periodStart,
+        periodEnd: candidate.periodEnd,
+        items: digest.items.map((item) => ({
+          eventId: item.id,
+          watchlistId: item.watchlistId,
+          watchlistName: item.watchlistName,
+          eventType: item.eventType,
+          title: item.title,
+          summary: item.summary,
+          metadata: item.metadata,
+        })),
+        cadence,
+        lane: "customer",
+      });
+      if (delivery.attempts > 0) {
+        retried += 1;
+      }
+    } catch (error) {
+      console.error(
+        `Digest retry failed for digest run ${candidate.id}; continuing with remaining retries.`,
+        error,
+      );
+    }
+  }
+
+  return retried;
+}
+
+function digestCadenceForPeriod(periodStart: string, periodEnd: string): DigestCadence {
+  const spanMs = new Date(periodEnd).getTime() - new Date(periodStart).getTime();
+  return spanMs <= 36 * 60 * 60 * 1000 ? "daily" : "weekly";
 }
 
 function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoringOptions) {
@@ -843,13 +945,25 @@ async function runScheduledMonitoringInline(
 ) {
   const scanCache = new Map<string, Promise<ScanPayload>>();
   let inlineRuns = 0;
+  let inlineFailures = 0;
 
   for (const watchlist of watchlists) {
-    const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
-    inlineRuns += ranInline ? 1 : 0;
+    try {
+      const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
+      inlineRuns += ranInline ? 1 : 0;
+    } catch (error) {
+      // One watchlist failure must never abort the rest of the nightly run
+      // (or the digests that follow). The run itself is already recorded as
+      // failed by runWatchlist before it rethrows.
+      inlineFailures += 1;
+      console.error(
+        `Scheduled scan failed for watchlist ${watchlist.id}; continuing with remaining watchlists.`,
+        error,
+      );
+    }
   }
 
-  return inlineRuns;
+  return { inlineRuns, inlineFailures };
 }
 
 async function runScheduledWatchlistInline(
