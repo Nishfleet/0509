@@ -20,10 +20,11 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { safeRedirectPath } = await import("~/lib/safe-redirect");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
-  const redirectTo = url.searchParams.get("redirectTo") || "/app";
+  const redirectTo = safeRedirectPath(url.searchParams.get("redirectTo"), "/app");
 
   if (session) {
     throw redirect(redirectTo);
