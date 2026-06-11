@@ -9,6 +9,7 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { SignOutButton } from "~/components/sign-out-button";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -55,6 +56,9 @@ export default function AppLayoutRoute() {
         </nav>
 
         <div className="f9-app-sidebar-footer">
+          <a className="f9-app-support-link" href={SUPPORT_MAILTO}>
+            {SUPPORT_EMAIL}
+          </a>
           <SignOutButton />
         </div>
       </aside>

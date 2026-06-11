@@ -184,6 +184,48 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
 	  };
 	}
 
+const DODO_REVOCATION_EVENT_TYPES = new Set([
+  "subscription.cancelled",
+  "subscription.expired",
+  "subscription.failed",
+  "subscription.on_hold",
+]);
+
+export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
+  const envelope = objectOrEmpty(payload);
+  const eventType = readString(envelope, "type") || readString(envelope, "event");
+  if (!DODO_REVOCATION_EVENT_TYPES.has(eventType)) return null;
+
+  const root = paymentPayloadFromWebhookPayload(payload);
+  const brandId = readString(root, "brand_id");
+  const configuredBrandId = dodo0509BrandId(env);
+  if (configuredBrandId && brandId && brandId !== configuredBrandId) return null;
+
+  const metadata = objectOrEmpty(root.metadata);
+  const userId = readString(metadata, "user_id") || readString(metadata, "userId") || null;
+  const customer = objectOrEmpty(root.customer);
+  const customerEmail = readString(customer, "email") || null;
+  if (!userId && !customerEmail) return null;
+
+  const subscriptionId =
+    readString(root, "subscription_id") || readString(root, "id") || eventType;
+  const revokedAt =
+    readString(root, "cancelled_at") ||
+    readString(root, "updated_at") ||
+    readString(root, "created_at") ||
+    new Date().toISOString();
+
+  return {
+    eventType,
+    userId,
+    customerEmail,
+    subscriptionId,
+    status: readString(root, "status") || eventType,
+    revokedAt,
+    metadata: root,
+  };
+}
+
 function readDodoPaymentGrantTimestamp(root: Record<string, unknown>) {
   return (
     readString(root, "paid_at") ||

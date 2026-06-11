@@ -9,6 +9,7 @@ import {
   createProofCapture,
   createWatchEvent,
   grantDodoPlanAccess,
+  revokeDodoPlanAccess,
   getDiscoveryCacheEntry,
   getLaunchReadinessSignals,
   getOperatorSnapshot,
@@ -315,6 +316,31 @@ describe("Dodo billing persistence", () => {
       "prod_starter_monthly",
       "succeeded",
       "2026-06-04T12:00:00.000Z",
+    ]);
+  });
+
+  it("revokes Dodo plan access to free with monotonic timestamp ordering", async () => {
+    const mock = createMockDb();
+
+    await revokeDodoPlanAccess(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        providerSubscriptionId: "sub_123",
+        status: "subscription.cancelled",
+        revokedAt: "2026-07-01T00:00:00.000Z",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "'free'");
+
+    expect(statement?.sql).toContain("julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)");
+    expect(statement?.sql).not.toContain("dodo_payment_id = excluded.dodo_payment_id\n");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "sub_123",
+      "subscription.cancelled",
+      "2026-07-01T00:00:00.000Z",
     ]);
   });
 });
