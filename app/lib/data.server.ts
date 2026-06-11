@@ -3275,6 +3275,48 @@ export async function createDeliveryAttempt(
   return id;
 }
 
+export async function updateDeliveryAttemptResult(
+  env: AppEnv,
+  attemptId: string,
+  input: {
+    provider: string;
+    status: DeliveryAttemptStatus;
+    webhookStatus: WebhookReconciliationStatus;
+    providerMessageId?: string | null;
+    providerStatusLastSeenAt?: string | null;
+    errorMessage?: string | null;
+    sentAt?: string | null;
+    failedAt?: string | null;
+  },
+) {
+  await run(
+    env,
+    `
+      UPDATE delivery_attempt
+      SET provider = ?,
+          status = ?,
+          webhook_status = ?,
+          provider_message_id = ?,
+          provider_status_last_seen_at = ?,
+          error_message = ?,
+          sent_at = ?,
+          failed_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `,
+    input.provider,
+    input.status,
+    input.webhookStatus,
+    input.providerMessageId ?? null,
+    input.providerStatusLastSeenAt ?? null,
+    input.errorMessage ?? null,
+    input.sentAt ?? null,
+    input.failedAt ?? null,
+    nowIso(),
+    attemptId,
+  );
+}
+
 export async function createLandingPageSnapshot(
   env: AppEnv,
   snapshot: NonNullable<AdRecord["landingPage"]>,
@@ -3644,6 +3686,41 @@ export async function getDigestByPeriod(
   }
 
   return getDigest(env, row.id);
+}
+
+export async function listRetryableDigestRuns(
+  env: AppEnv,
+  input: {
+    since: string;
+    limit: number;
+  },
+) {
+  const rows = await many<
+    DigestRunRow & { user_email: string; user_name: string }
+  >(
+    env,
+    `
+      SELECT digest_run.*, user.email AS user_email, user.name AS user_name
+      FROM digest_run
+      INNER JOIN user ON user.id = digest_run.user_id
+      LEFT JOIN digest_delivery ON digest_delivery.digest_run_id = digest_run.id
+      WHERE digest_run.period_end >= ?
+        AND (digest_delivery.status = 'failed' OR digest_delivery.id IS NULL)
+      ORDER BY digest_run.period_end ASC
+      LIMIT ?
+    `,
+    input.since,
+    input.limit,
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    userEmail: row.user_email,
+    userName: row.user_name,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+  }));
 }
 
 export async function createShareLink(

@@ -109,7 +109,20 @@ export default {
         digestLookbackDays: scheduledTask.digestLookbackDays,
         cron: controller.cron,
         scheduledTime: controller.scheduledTime,
-      }),
+      }).then(
+        (result) => {
+          console.log("scheduled monitoring completed", {
+            cron: controller.cron,
+            ...result,
+          });
+        },
+        (error) => {
+          console.error("scheduled monitoring run failed", {
+            cron: controller.cron,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        },
+      ),
     );
   },
 } satisfies ExportedHandler<Env>;

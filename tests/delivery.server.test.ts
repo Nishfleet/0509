@@ -773,6 +773,134 @@ describe("deliverWeeklyDigest", () => {
     expect(sendMock).not.toHaveBeenCalled();
   });
 
+  it("re-sends a digest email when the prior attempt failed, updating the existing attempt", async () => {
+    const sendMock = mockEmailSend("msg_retry_1");
+    const createDeliveryAttempt = vi.fn();
+    const updateDeliveryAttemptResult = vi.fn();
+    const upsertDigestDelivery = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        id: "attempt-failed-1",
+        userId: "user-1",
+        watchlistId: null,
+        digestRunId: "digest-1",
+        deliveryTargetId: "email-target-1",
+        lane: "customer",
+        channel: "email",
+        provider: "cloudflare_email",
+        status: "failed",
+        webhookStatus: "failed",
+        targetValue: "owner@example.com",
+        providerMessageId: null,
+        providerStatusLastSeenAt: "2026-06-10T04:00:00.000Z",
+        templateName: null,
+        eventIds: ["event-1"],
+        payloadSnapshot: {},
+        idempotencyKey: "digest:digest-1:customer:email:owner@example.com",
+        errorMessage: "Cloudflare Email send failed: network timeout.",
+        sentAt: null,
+        failedAt: "2026-06-10T04:00:00.000Z",
+        createdAt: "2026-06-10T04:00:00.000Z",
+        updatedAt: "2026-06-10T04:00:00.000Z",
+      }),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([
+        {
+          id: "email-target-1",
+          userId: "user-1",
+          watchlistId: null,
+          channel: "email",
+          targetValue: "owner@example.com",
+          validationStatus: "validated",
+          isValidated: true,
+          isOptedIn: true,
+          optInSource: "account_email",
+          optedInAt: "2026-04-19T00:00:00.000Z",
+          isPaused: false,
+          pausedAt: null,
+          optedOutAt: null,
+          templateEligible: false,
+          lastSuccessfulDeliveryAt: null,
+          lastSuccessfulAttemptId: null,
+          providerIdentifier: null,
+          metadata: {},
+          createdAt: "2026-04-19T00:00:00.000Z",
+          updatedAt: "2026-04-19T00:00:00.000Z",
+        },
+      ]),
+      upsertDeliveryTarget: vi.fn().mockResolvedValue(null),
+      upsertDigestDelivery,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const result = await deliverWeeklyDigest(emailEnv as never, {
+      userId: "user-1",
+      userName: "Owner",
+      accountEmail: "owner@example.com",
+      digestRunId: "digest-1",
+      periodStart: "2026-04-12T00:00:00.000Z",
+      periodEnd: "2026-04-19T00:00:00.000Z",
+      items: [
+        {
+          eventId: "event-1",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Landing page offer changed",
+          summary: "Offer changed on the landing page.",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      attempts: 1,
+      channels: ["email"],
+      details: [
+        {
+          channel: "email",
+          status: "sent",
+          targetValue: "owner@example.com",
+        },
+      ],
+    });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-failed-1",
+      expect.objectContaining({
+        status: "sent",
+        providerMessageId: "msg_retry_1",
+        errorMessage: null,
+      }),
+    );
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({ status: "sent" }),
+    );
+  });
+
   it("skips opted-out email targets and never re-provisions the account email", async () => {
     const sendMock = mockEmailSend("msg_1");
     const upsertDeliveryTarget = vi.fn();
