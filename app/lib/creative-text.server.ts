@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import type { AdRecord } from "~/lib/types";
 
 export const CREATIVE_TEXT_EXTRACTOR_VERSION = "creative-text-v2";
@@ -43,6 +44,40 @@ export interface CreativeTextCaptureResult {
   metadata: Record<string, unknown>;
 }
 
+const MAX_CREATIVE_FETCH_REDIRECTS = 5;
+
+// Ad snapshot pages — and the og:image / <img> URLs mined out of them — are
+// attacker-influenced content. Every fetch, including each redirect hop, must
+// resolve to the public internet (same guard as landing-pages.server.ts), or
+// the Worker becomes an SSRF proxy into private address space.
+async function fetchPublicCreativeResource(
+  url: string,
+  headers: Record<string, string>,
+): Promise<Response | null> {
+  let currentUrl = await resolvePublicHttpUrl(url);
+
+  for (
+    let redirects = 0;
+    currentUrl && redirects <= MAX_CREATIVE_FETCH_REDIRECTS;
+    redirects += 1
+  ) {
+    const response = await fetch(currentUrl.toString(), {
+      redirect: "manual",
+      headers,
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const redirected = resolvePublicRedirectUrl(response.headers.get("location"), currentUrl);
+      currentUrl = redirected ? await resolvePublicHttpUrl(redirected) : null;
+      continue;
+    }
+
+    return response;
+  }
+
+  return null;
+}
+
 export async function captureCreativeText(
   env: CreativeTextEnv,
   url: string,
@@ -53,14 +88,11 @@ export async function captureCreativeText(
   }
 
   try {
-    const response = await fetch(url, {
-      redirect: "follow",
-      headers: {
-        "user-agent": "0509-bot/1.0 (+https://0509.in)",
-      },
+    const response = await fetchPublicCreativeResource(url, {
+      "user-agent": "0509-bot/1.0 (+https://0509.in)",
     });
 
-    if (!response.ok) {
+    if (!response?.ok) {
       return null;
     }
 
@@ -243,15 +275,12 @@ async function fetchCreativeImagePayload(
     };
   }
 
-  const response = await fetch(candidate, {
-    redirect: "follow",
-    headers: {
-      "user-agent": "0509-bot/1.0 (+https://0509.in)",
-      accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-      referer: snapshotUrl,
-    },
+  const response = await fetchPublicCreativeResource(candidate, {
+    "user-agent": "0509-bot/1.0 (+https://0509.in)",
+    accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    referer: snapshotUrl,
   });
-  if (!response.ok) {
+  if (!response?.ok) {
     return null;
   }
 
