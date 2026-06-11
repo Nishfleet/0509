@@ -23,19 +23,25 @@ describe("worker schedule", () => {
     });
     expect(resolveScheduledTask(DAILY_MONITORING_CRON)).toEqual({
       kind: "monitoring",
+      includeScans: true,
       includeDigests: true,
       digestCadence: "daily",
       digestLookbackDays: 1,
     });
-    expect(resolveScheduledTask(WEEKLY_DIGEST_CRON)).toEqual({
+    expect(resolveScheduledTask("0 5 * * MON-FRI")).toEqual({
       kind: "monitoring",
-      includeDigests: true,
+      includeScans: true,
+      includeDigests: false,
       digestCadence: "weekly",
       digestLookbackDays: 7,
     });
-    expect(resolveScheduledTask("0 5 * * MON-FRI")).toEqual({
+  });
+
+  it("keeps the Monday weekly cron digest-only so it cannot double-scan after the daily run", () => {
+    expect(resolveScheduledTask(WEEKLY_DIGEST_CRON)).toEqual({
       kind: "monitoring",
-      includeDigests: false,
+      includeScans: false,
+      includeDigests: true,
       digestCadence: "weekly",
       digestLookbackDays: 7,
     });
