@@ -34,18 +34,23 @@
   "ai": {
     "binding": "AI"
   },
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
   "triggers": {
     "crons": ["17 */6 * * *", "0 4 * * *", "0 5 * * MON"]
   },
   "vars": {
     "APP_NAME": "0509",
+    "BETTER_AUTH_URL": "https://0509.in",
     "DODO_0509_ADAPTIVE_CURRENCY": "true",
     "DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE": "true",
     "DODO_0509_ENVIRONMENT": "live",
     "BROWSER_RUN_ACCOUNT_ID": "f670a698e17bf160c8e4679823e68916",
     "LAUNCH_CANARY_EMAIL": "me@inish.in",
-    "POSTMARK_FROM_EMAIL": "alerts@0509.in",
-    "POSTMARK_MESSAGE_STREAM": "outbound"
+    "EMAIL_FROM_EMAIL": "alerts@0509.in"
   },
   // Secrets configured outside this file via `wrangler secret put`:
   // - CANARY_BYPASS_TOKEN
@@ -68,10 +73,10 @@
   // - DODO_0509_PRODUCT_PROOF_PACK_500_ID
   // - DODO_0509_PRODUCT_PROOF_PACK_2000_ID
   // - DODO_0509_PRODUCT_PROOF_PACK_7500_ID
-  // - POSTMARK_ACCOUNT_TOKEN
-  // - POSTMARK_SERVER_TOKEN
-  // - POSTMARK_WEBHOOK_SECRET
   // - META_TOKEN_ENCRYPTION_SECRET
+  // Email sending uses the Cloudflare Email Service `send_email` binding above —
+  // no API key secret; the sending domain (0509.in) must be onboarded to Email
+  // Service in the Cloudflare dashboard.
   "d1_databases": [
     {
       "binding": "DB",
