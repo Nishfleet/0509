@@ -1125,6 +1125,147 @@ export async function revokeDodoPlanAccess(
   );
 }
 
+export async function claimDodoWebhookEvent(
+  env: AppEnv,
+  input: {
+    eventId: string;
+    eventType: string;
+    userId: string | null;
+    payloadTimestamp: string | null;
+  },
+) {
+  const db = ensureDb(env);
+  // Mirrors claimRazorpayWebhookEvent: first delivery claims the event;
+  // redeliveries of processed events are skipped; failed events may be
+  // reclaimed so processing can retry.
+  const result = await db.prepare(`
+      INSERT INTO dodo_webhook_event (
+        event_id,
+        event_type,
+        user_id,
+        received_at,
+        payload_timestamp,
+        outcome,
+        metadata_json
+      )
+      VALUES (?, ?, ?, ?, ?, 'received', '{}')
+      ON CONFLICT(event_id)
+      DO UPDATE SET
+        event_type = excluded.event_type,
+        user_id = excluded.user_id,
+        received_at = excluded.received_at,
+        payload_timestamp = excluded.payload_timestamp,
+        processed_at = NULL,
+        outcome = 'received',
+        metadata_json = '{}'
+      WHERE dodo_webhook_event.outcome = 'failed'
+    `).bind(
+      input.eventId,
+      input.eventType,
+      input.userId,
+      nowIso(),
+      input.payloadTimestamp,
+    ).run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function markDodoWebhookEventFinished(
+  env: AppEnv,
+  eventId: string,
+  input: {
+    outcome: "processed" | "ignored" | "failed";
+    metadata?: JsonRecord;
+  },
+) {
+  await run(
+    env,
+    `
+      UPDATE dodo_webhook_event
+      SET outcome = ?,
+          processed_at = ?,
+          metadata_json = ?
+      WHERE event_id = ?
+    `,
+    input.outcome,
+    nowIso(),
+    jsonValue(input.metadata ?? {}),
+    eventId,
+  );
+}
+
+export async function markDodoPlanPaymentIssue(
+  env: AppEnv,
+  input: {
+    userId: string;
+    status: string;
+    occurredAt?: string;
+  },
+) {
+  const planUpdatedAt = validIsoTimestamp(input.occurredAt) ?? nowIso();
+
+  // Dunning state (subscription.failed / on_hold): the customer keeps the
+  // paid plan while Dodo retries the payment; only dodo_status changes so
+  // the app can surface a payment-issue notice. The monotonic guard keeps a
+  // late-arriving stale event from overwriting a newer grant or revocation.
+  await run(
+    env,
+    `
+      UPDATE user_plan
+      SET dodo_status = ?,
+          plan_updated_at = ?
+      WHERE user_id = ?
+        AND plan != 'free'
+        AND julianday(?) >= julianday(plan_updated_at)
+    `,
+    input.status,
+    planUpdatedAt,
+    input.userId,
+    planUpdatedAt,
+  );
+}
+
+export async function revokeDodoAccessForRefundedPayment(
+  env: AppEnv,
+  input: {
+    paymentId: string;
+    refundedAt?: string;
+  },
+) {
+  const refundedAt = validIsoTimestamp(input.refundedAt) ?? nowIso();
+
+  // A full refund undoes whatever the payment bought. Plan payments are
+  // matched via user_plan.dodo_payment_id; usage-bundle payments via
+  // proof_usage_credit.provider_payment_id (its credits expire immediately).
+  await run(
+    env,
+    `
+      UPDATE user_plan
+      SET plan = 'free',
+          dodo_status = 'refunded',
+          plan_updated_at = ?
+      WHERE dodo_payment_id = ?
+        AND julianday(?) >= julianday(plan_updated_at)
+    `,
+    refundedAt,
+    input.paymentId,
+    refundedAt,
+  );
+
+  await run(
+    env,
+    `
+      UPDATE proof_usage_credit
+      SET expires_at = ?
+      WHERE provider_payment_id = ?
+        AND julianday(expires_at) > julianday(?)
+    `,
+    refundedAt,
+    input.paymentId,
+    refundedAt,
+  );
+}
+
 export async function getUserIdByEmail(env: AppEnv, email: string) {
   const row = await one<{ id: string }>(
     env,

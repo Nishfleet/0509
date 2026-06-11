@@ -5,6 +5,8 @@ import {
   extractDodoPlanGrant,
   extractDodoPlanRevocation,
   extractDodoProofCreditGrant,
+  extractDodoRefund,
+  isDodoWebhookTimestampFresh,
 } from "~/lib/dodo-billing.server";
 
 const session = {
@@ -275,6 +277,7 @@ describe("Dodo subscription lifecycle", () => {
 
     expect(revocation).toMatchObject({
       eventType: "subscription.cancelled",
+      action: "revoke",
       userId: "user-1",
       customerEmail: "owner@example.com",
       subscriptionId: "sub_123",
@@ -282,13 +285,62 @@ describe("Dodo subscription lifecycle", () => {
     });
   });
 
-  it("extracts revocations for expired, failed, and on-hold subscriptions", () => {
-    for (const type of ["subscription.expired", "subscription.failed", "subscription.on_hold"]) {
+  it("treats cancelled/expired as revocations but failed/on-hold as payment issues", () => {
+    for (const type of ["subscription.cancelled", "subscription.expired"]) {
       expect(extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope(type))).toMatchObject({
         eventType: type,
+        action: "revoke",
         userId: "user-1",
       });
     }
+
+    // Dunning states keep the paid plan; only the status flag changes.
+    for (const type of ["subscription.failed", "subscription.on_hold"]) {
+      expect(extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope(type))).toMatchObject({
+        eventType: type,
+        action: "payment_issue",
+        userId: "user-1",
+      });
+    }
+  });
+
+  it("extracts a full refund and ignores partial refunds and foreign brands", () => {
+    const refundEnvelope = (overrides: Record<string, unknown> = {}) => ({
+      type: "refund.succeeded",
+      data: {
+        payload_type: "Refund",
+        refund_id: "ref_1",
+        payment_id: "pay_1",
+        brand_id: "brand_0509",
+        is_partial: false,
+        created_at: "2026-07-05T00:00:00.000Z",
+        ...overrides,
+      },
+    });
+
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope())).toMatchObject({
+      eventType: "refund.succeeded",
+      paymentId: "pay_1",
+      refundId: "ref_1",
+      refundedAt: "2026-07-05T00:00:00.000Z",
+    });
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ is_partial: true }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ brand_id: "brand_other" }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, { type: "refund.failed", data: {} })).toBeNull();
+  });
+
+  it("rejects stale webhook timestamps outside the replay tolerance", () => {
+    const now = Date.parse("2026-06-11T12:00:00.000Z");
+    const fresh = String(Math.floor(now / 1000) - 60);
+    const stale = String(Math.floor(now / 1000) - 600);
+    const future = String(Math.floor(now / 1000) + 600);
+
+    expect(isDodoWebhookTimestampFresh(fresh, now)).toBe(true);
+    expect(isDodoWebhookTimestampFresh(stale, now)).toBe(false);
+    expect(isDodoWebhookTimestampFresh(future, now)).toBe(false);
+    expect(isDodoWebhookTimestampFresh("2026-06-11T11:59:00.000Z", now)).toBe(true);
+    expect(isDodoWebhookTimestampFresh("2026-06-11T00:00:00.000Z", now)).toBe(false);
+    expect(isDodoWebhookTimestampFresh("not-a-timestamp", now)).toBe(false);
   });
 
   it("falls back to the customer email when metadata has no user id", () => {

@@ -78,6 +78,10 @@ export async function createDodo0509CheckoutSession({
   };
 }
 
+// Standard Svix/Dodo replay tolerance: signed events older (or newer) than
+// this are rejected so a captured-but-valid webhook cannot be replayed later.
+export const DODO_WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
+
 export async function verifyDodoWebhookRequest(env: AppEnv, request: Request, rawBody: string) {
   const secret = env.DODO_0509_WEBHOOK_SECRET?.trim();
   if (!secret) throw new Response("Dodo webhook secret is not configured.", { status: 503 });
@@ -91,10 +95,26 @@ export async function verifyDodoWebhookRequest(env: AppEnv, request: Request, ra
     throw new Response("Missing Dodo webhook signature headers.", { status: 400 });
   }
 
+  if (!isDodoWebhookTimestampFresh(webhookTimestamp)) {
+    throw new Response("Stale Dodo webhook timestamp.", { status: 400 });
+  }
+
   const expectedSignature = await signDodoWebhookPayload(env, webhookId, webhookTimestamp, rawBody);
   if (!signatureMatches(webhookSignature, expectedSignature)) {
     throw new Response("Invalid Dodo webhook signature.", { status: 401 });
   }
+}
+
+export function isDodoWebhookTimestampFresh(
+  webhookTimestamp: string,
+  now: number = Date.now(),
+) {
+  const trimmed = webhookTimestamp.trim();
+  // Svix sends unix seconds; tolerate ISO strings for canaries and tests.
+  const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) * 1000 : Date.parse(trimmed);
+  if (!Number.isFinite(numeric)) return false;
+
+  return Math.abs(now - numeric) <= DODO_WEBHOOK_TOLERANCE_SECONDS * 1000;
 }
 
 export async function signDodoWebhookPayload(
@@ -184,17 +204,32 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
 	  };
 	}
 
+// Hard lifecycle ends: the customer (or Dodo) terminated the subscription.
 const DODO_REVOCATION_EVENT_TYPES = new Set([
   "subscription.cancelled",
   "subscription.expired",
+]);
+
+// Dunning states: a renewal payment hiccuped and Dodo is retrying. The
+// customer keeps their paid plan during this window; we only record the
+// payment issue so the app can warn them. Revoking here would silently
+// strip a paying customer over a transient card failure.
+const DODO_PAYMENT_ISSUE_EVENT_TYPES = new Set([
   "subscription.failed",
   "subscription.on_hold",
 ]);
 
+export type DodoLifecycleAction = "revoke" | "payment_issue";
+
 export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
   const envelope = objectOrEmpty(payload);
   const eventType = readString(envelope, "type") || readString(envelope, "event");
-  if (!DODO_REVOCATION_EVENT_TYPES.has(eventType)) return null;
+  const action: DodoLifecycleAction | null = DODO_REVOCATION_EVENT_TYPES.has(eventType)
+    ? "revoke"
+    : DODO_PAYMENT_ISSUE_EVENT_TYPES.has(eventType)
+      ? "payment_issue"
+      : null;
+  if (!action) return null;
 
   const root = paymentPayloadFromWebhookPayload(payload);
   const brandId = readString(root, "brand_id");
@@ -217,11 +252,43 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
 
   return {
     eventType,
+    action,
     userId,
     customerEmail,
     subscriptionId,
     status: readString(root, "status") || eventType,
     revokedAt,
+    metadata: root,
+  };
+}
+
+export function extractDodoRefund(env: AppEnv, payload: unknown) {
+  const envelope = objectOrEmpty(payload);
+  const eventType = readString(envelope, "type") || readString(envelope, "event");
+  if (eventType !== "refund.succeeded") return null;
+
+  const root = paymentPayloadFromWebhookPayload(payload);
+  const brandId = readString(root, "brand_id");
+  const configuredBrandId = dodo0509BrandId(env);
+  if (configuredBrandId && brandId && brandId !== configuredBrandId) return null;
+
+  const paymentId = readString(root, "payment_id");
+  if (!paymentId) return null;
+
+  // Partial refunds keep access; only a full refund revokes what was paid for.
+  const isPartial = readValue(root, "is_partial") === true;
+  if (isPartial) return null;
+
+  const refundedAt =
+    readString(root, "created_at") ||
+    readString(root, "updated_at") ||
+    new Date().toISOString();
+
+  return {
+    eventType,
+    paymentId,
+    refundId: readString(root, "refund_id") || readString(root, "id") || null,
+    refundedAt,
     metadata: root,
   };
 }
