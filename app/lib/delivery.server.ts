@@ -1205,6 +1205,77 @@ function isUsableWhatsAppTarget(target: DeliveryTargetRecord) {
   );
 }
 
+export async function sendPasswordResetEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    resetUrl: string;
+  },
+) {
+  // Transactional and user-initiated: this must reach unsubscribed addresses
+  // too, so it carries no List-Unsubscribe header — but it still goes through
+  // the shared Cloudflare Email path and records a delivery_attempt like
+  // every other send. The reset URL contains a secret token and is therefore
+  // never written to the payload snapshot.
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: "Reset your Five to Nine password",
+    html: renderPasswordResetHtml(input),
+    tag: "password-reset",
+    unsubscribeUrl: null,
+  });
+
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "password_reset",
+    eventIds: [],
+    payloadSnapshot: { kind: "password_reset" },
+    idempotencyKey: `password-reset:${input.userId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  if (providerResult.status === "failed") {
+    throw new Error(providerResult.errorMessage ?? "Password reset email failed to send.");
+  }
+}
+
+function renderPasswordResetHtml(input: { name: string | null; resetUrl: string }) {
+  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+
+  return `
+    <div style="font-family: Inter, system-ui, sans-serif; color: #1d2433; font-size: 15px; line-height: 1.6;">
+      <p style="margin: 0 0 12px;">${greeting}</p>
+      <p style="margin: 0 0 16px;">
+        Someone asked to reset the password for this Five to Nine account. If that was you, use the
+        button below — the link works for one hour.
+      </p>
+      <p style="margin: 0 0 20px;">
+        <a href="${escapeHtml(input.resetUrl)}" style="display: inline-block; background: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+          Reset password
+        </a>
+      </p>
+      <p style="margin: 0; color: #5b6577; font-size: 13px;">
+        If you didn't ask for this, you can ignore this email — your password stays unchanged.
+      </p>
+    </div>
+  `;
+}
+
 async function sendDigestEmail(
   env: AppEnv,
   input: {
