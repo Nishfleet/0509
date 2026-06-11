@@ -27,11 +27,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchEvents,
     listWatchlists,
   } = await import("~/lib/data.server");
-  const { getProofUsageSummary, getUserPlan } = await import("~/lib/plan.server");
+  const { getProofUsageSummary } = await import("~/lib/plan.server");
+  const { getUserPlanBillingInfo } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const checkoutReturn = new URL(request.url).searchParams.get("checkout") === "dodo";
-  const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection, proofUsage, plan] = await Promise.all([
+  const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection, proofUsage, billingInfo] = await Promise.all([
     listSavedQueries(env, session.user.id),
     listCollections(env, session.user.id),
     listWatchlists(env, session.user.id),
@@ -39,8 +40,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     resolveCommercialAdSourceStatus(env),
     getCustomerMetaConnection(env, session.user.id),
     getProofUsageSummary(env, session.user.id),
-    getUserPlan(env, session.user.id),
+    getUserPlanBillingInfo(env, session.user.id),
   ]);
+  const plan = billingInfo.plan;
+  const hasPaymentIssue =
+    plan !== "free" &&
+    (billingInfo.dodoStatus === "subscription.failed" ||
+      billingInfo.dodoStatus === "subscription.on_hold");
   const [recentEvents, recentProofCaptures, deliveryTargets] = await Promise.all([
     Promise.all(watchlists.slice(0, 6).map((watchlist) => listWatchEvents(env, watchlist.id, 6))).then((groups) =>
       groups
@@ -63,6 +69,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     metaStatus,
     proofUsage,
     plan,
+    hasPaymentIssue,
     checkoutReturn,
     customerMetaConnection: customerMetaConnection
       ? {
@@ -249,6 +256,24 @@ export default function AppDashboardRoute() {
   return (
     <section className="f9-app-stack">
       {data.checkoutReturn ? <CheckoutReturnBanner plan={data.plan} /> : null}
+      {data.hasPaymentIssue ? (
+        <article className="f9-checkout-banner is-pending" aria-live="polite">
+          <div>
+            <span className="f9-app-kicker">Payment issue</span>
+            <h2>Your last renewal payment didn't go through.</h2>
+            <p>
+              Your plan stays active while the payment provider retries. Check the card on your Dodo
+              Payments receipt email, or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
+              help before anything is interrupted.
+            </p>
+          </div>
+          <div className="f9-checkout-banner-actions">
+            <Link className="f9-secondary-button" to="/app/billing">
+              Plan &amp; billing
+            </Link>
+          </div>
+        </article>
+      ) : null}
       <section className="f9-market-desk" aria-label="Five to Nine market moves dashboard">
         <div className="f9-market-desk-top">
           <strong>Five to Nine</strong>

@@ -33,6 +33,7 @@ export default [
     route("collections", "routes/app.collections.tsx"),
     route("watchlists", "routes/app.watchlists.tsx"),
     route("digests", "routes/app.digests.tsx"),
+    route("billing", "routes/app.billing.tsx"),
     route("sources", "routes/app.sources.tsx"),
     route("ops", "routes/app.ops.tsx"),
     route("reports/:id", "routes/app.reports.tsx"),

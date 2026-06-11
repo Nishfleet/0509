@@ -1,0 +1,279 @@
+import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+
+const session = {
+  user: {
+    id: "user-1",
+    email: "owner@example.com",
+    name: "Owner",
+    onboardedAt: "2026-04-02 18:30:00",
+  },
+  session: {
+    id: "session-1",
+    userId: "user-1",
+    expiresAt: "2026-04-03T00:00:00.000Z",
+  },
+};
+
+beforeEach(() => {
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+  vi.doUnmock("react-router");
+  vi.doUnmock("~/lib/auth.server");
+  vi.doUnmock("~/lib/context.server");
+  vi.doUnmock("~/lib/data.server");
+  vi.doUnmock("~/lib/plan.server");
+});
+
+function mockBillingLoaderDependencies(input: {
+  billing: Record<string, unknown>;
+}) {
+  vi.doMock("~/lib/auth.server", () => ({
+    requireSession: vi.fn().mockResolvedValue(session),
+  }));
+  vi.doMock("~/lib/context.server", () => ({
+    getEnv: vi.fn(() => ({})),
+  }));
+  vi.doMock("~/lib/data.server", () => ({
+    getUserPlanBillingInfo: vi.fn().mockResolvedValue(input.billing),
+  }));
+  vi.doMock("~/lib/plan.server", () => ({
+    PLAN_LIMITS: {
+      free: { watchlists: 0, collections: 0, digests: false, digestCadence: "none", proofCapturesPerMonth: 0 },
+      starter: { watchlists: 10, collections: 25, digests: true, digestCadence: "weekly", proofCapturesPerMonth: 250 },
+    },
+    checkPlanLimit: vi.fn(async (_env: unknown, _userId: string, resource: string) =>
+      resource === "watchlists"
+        ? { allowed: true, limit: 10, current: 3 }
+        : { allowed: true, limit: 25, current: 5 },
+    ),
+    getProofUsageSummary: vi.fn().mockResolvedValue({
+      plan: "starter",
+      used: 40,
+      baseLimit: 250,
+      extraCredits: 0,
+      limit: 250,
+      remaining: 210,
+      usageRatio: 0.16,
+      warningLevel: "ok",
+      upgradeTarget: "Agency",
+    }),
+  }));
+}
+
+function mockReactRouterRender(loaderData: unknown) {
+  vi.doMock("react-router", async () => {
+    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const React = await import("react");
+
+    return {
+      ...actual,
+      Link: ({ children, to, ...props }: MockLinkProps) =>
+        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      useLoaderData: vi.fn().mockReturnValue(loaderData),
+    };
+  });
+}
+
+describe("billing page", () => {
+  it("loads plan, usage, and billing status for a paying customer", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "starter",
+        dodoStatus: "succeeded",
+        dodoProductId: "prod_starter_monthly",
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.in/app/billing"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      email: "owner@example.com",
+      billing: { plan: "starter", dodoStatus: "succeeded" },
+      watchlistUsage: { current: 3, limit: 10 },
+      collectionUsage: { current: 5, limit: 25 },
+      proofUsage: { used: 40, limit: 250 },
+      blockedCheckout: false,
+    });
+  });
+
+  it("flags a blocked duplicate checkout from the query string", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "starter",
+        dodoStatus: "succeeded",
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.in/app/billing?checkout=already-subscribed"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ blockedCheckout: true });
+  });
+
+  it("renders the payment-issue banner and support path for a dunning customer", async () => {
+    mockReactRouterRender({
+      email: "owner@example.com",
+      billing: {
+        plan: "starter",
+        dodoStatus: "subscription.on_hold",
+        dodoProductId: null,
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+      proofUsage: { used: 40, limit: 250, extraCredits: 0 },
+      watchlistUsage: { current: 3, limit: 10 },
+      collectionUsage: { current: 5, limit: 25 },
+      planLimits: { digestCadence: "weekly" },
+      blockedCheckout: false,
+    });
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Payment issue");
+    expect(markup).toContain("still active");
+    expect(markup).toContain("support@0509.in");
+    expect(markup).toContain("Cancellation");
+    expect(markup).toContain("payment retry in progress");
+  });
+
+  it("points free users at pricing and never shows a cancel-needed state", async () => {
+    mockReactRouterRender({
+      email: "owner@example.com",
+      billing: { plan: "free", dodoStatus: null, dodoProductId: null, planUpdatedAt: null },
+      proofUsage: { used: 0, limit: 0, extraCredits: 0 },
+      watchlistUsage: { current: 0, limit: 0 },
+      collectionUsage: { current: 0, limit: 0 },
+      planLimits: { digestCadence: "none" },
+      blockedCheckout: false,
+    });
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("View plans");
+    expect(markup).toContain("/#pricing");
+    expect(markup).toContain("Free workspace");
+    expect(markup).not.toContain("Payment issue");
+  });
+});
+
+describe("Dodo checkout double-subscription guard", () => {
+  function mockCheckoutDependencies(currentPlan: string) {
+    const createDodo0509CheckoutSession = vi.fn().mockResolvedValue({
+      checkoutUrl: "https://checkout.dodo.example/session",
+      sessionId: "sess_1",
+    });
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue(currentPlan),
+    }));
+    vi.doMock("~/lib/dodo-billing.server", () => ({
+      createDodo0509CheckoutSession,
+    }));
+    return { createDodo0509CheckoutSession };
+  }
+
+  function checkoutRequest(body: Record<string, string>) {
+    return new Request("https://0509.in/api/billing/dodo/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(body).toString(),
+    });
+  }
+
+  afterEach(() => {
+    vi.doUnmock("~/lib/dodo-billing.server");
+  });
+
+  it("redirects an already-subscribed user to billing instead of opening a second checkout", async () => {
+    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("starter");
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    try {
+      await action({
+        context: {},
+        request: checkoutRequest({ plan: "agency", cycle: "monthly" }),
+        params: {},
+      } as never);
+      throw new Error("expected redirect");
+    } catch (response) {
+      expect(response).toBeInstanceOf(Response);
+      expect((response as Response).status).toBe(303);
+      expect((response as Response).headers.get("Location")).toBe(
+        "/app/billing?checkout=already-subscribed",
+      );
+    }
+
+    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("lets a free user start a plan checkout", async () => {
+    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("free");
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    try {
+      await action({
+        context: {},
+        request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
+        params: {},
+      } as never);
+      throw new Error("expected redirect");
+    } catch (response) {
+      expect((response as Response).status).toBe(303);
+      expect((response as Response).headers.get("Location")).toBe(
+        "https://checkout.dodo.example/session",
+      );
+    }
+
+    expect(createDodo0509CheckoutSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("still lets a subscriber buy usage bundles", async () => {
+    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("starter");
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    try {
+      await action({
+        context: {},
+        request: checkoutRequest({ bundle: "proof_500" }),
+        params: {},
+      } as never);
+      throw new Error("expected redirect");
+    } catch (response) {
+      expect((response as Response).status).toBe(303);
+      expect((response as Response).headers.get("Location")).toBe(
+        "https://checkout.dodo.example/session",
+      );
+    }
+
+    expect(createDodo0509CheckoutSession).toHaveBeenCalledTimes(1);
+  });
+});
