@@ -1,40 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const postmarkEnv = {
-  POSTMARK_SERVER_TOKEN: "pm_123",
-  POSTMARK_FROM_EMAIL: "alerts@0509.in",
+let emailSend = vi.fn();
+
+const emailEnv = {
+  get EMAIL() {
+    return { send: emailSend };
+  },
+  EMAIL_FROM_EMAIL: "alerts@0509.in",
 };
 
-function mockPostmarkSend(messageId = "msg_1") {
-  const fetchMock = vi.fn().mockResolvedValue(
-    new Response(JSON.stringify({ ErrorCode: 0, Message: "OK", MessageID: messageId }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+function mockEmailSend(messageId = "msg_1") {
+  emailSend = vi.fn().mockResolvedValue({ messageId });
+  return emailSend;
 }
 
-function postmarkRequestBody(fetchMock: ReturnType<typeof vi.fn>) {
-  const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
-  return JSON.parse(String(init?.body));
-}
-
-function expectPostmarkEmailRequest(fetchMock: ReturnType<typeof vi.fn>) {
-  expect(fetchMock).toHaveBeenCalledWith(
-    "https://api.postmarkapp.com/email",
-    expect.objectContaining({
-      method: "POST",
-      headers: expect.objectContaining({
-        "X-Postmark-Server-Token": "pm_123",
-      }),
-    }),
-  );
+function emailSendPayload(sendMock: ReturnType<typeof vi.fn>) {
+  return sendMock.mock.calls[0]?.[0];
 }
 
 beforeEach(() => {
   vi.resetModules();
+  emailSend = vi.fn();
 });
 
 afterEach(() => {
@@ -46,7 +32,7 @@ afterEach(() => {
 
 describe("deliverWeeklyDigest", () => {
   it("auto-provisions the account email target and records the email attempt", async () => {
-    const postmarkFetch = mockPostmarkSend("msg_1");
+    const sendMock = mockEmailSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const upsertDigestDelivery = vi.fn();
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
@@ -101,7 +87,11 @@ describe("deliverWeeklyDigest", () => {
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
     const result = await deliverWeeklyDigest(
-      postmarkEnv as never,
+      {
+        ...emailEnv,
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.in",
+      } as never,
       {
         userId: "user-1",
         userName: "Owner",
@@ -133,20 +123,22 @@ describe("deliverWeeklyDigest", () => {
         },
       ],
     });
-    expectPostmarkEmailRequest(postmarkFetch);
-    expect(postmarkRequestBody(postmarkFetch)).toMatchObject({
-      From: "alerts@0509.in",
-      To: "owner@example.com",
-      Subject: "Five to Nine weekly digest: 1 competitor changes",
-      HtmlBody: expect.stringContaining("Five to Nine weekly digest"),
-      MessageStream: "outbound",
-      Tag: "weekly-digest",
-      Metadata: {
-        kind: "weekly_digest",
-        item_count: "1",
-        cadence: "weekly",
-      },
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(emailSendPayload(sendMock)).toMatchObject({
+      from: "alerts@0509.in",
+      to: "owner@example.com",
+      subject: "Five to Nine weekly digest: 1 competitor changes",
+      html: expect.stringContaining("Five to Nine weekly digest"),
+      text: expect.stringContaining("Five to Nine weekly digest"),
+      headers: expect.objectContaining({
+        "X-0509-Tag": "weekly-digest",
+        "List-Unsubscribe": expect.stringContaining(
+          "https://0509.in/unsubscribe?u=user-1&t=email-target-1&sig=",
+        ),
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      }),
     });
+    expect(emailSendPayload(sendMock).html).toContain("Unsubscribe");
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -167,9 +159,8 @@ describe("deliverWeeklyDigest", () => {
     );
   });
 
-  it("records a failed email attempt when Postmark network send rejects", async () => {
-    const postmarkFetch = vi.fn().mockRejectedValue(new Error("network timeout"));
-    vi.stubGlobal("fetch", postmarkFetch);
+  it("records a failed email attempt when the email send rejects", async () => {
+    emailSend = vi.fn().mockRejectedValue(new Error("network timeout"));
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const upsertDigestDelivery = vi.fn();
 
@@ -225,7 +216,7 @@ describe("deliverWeeklyDigest", () => {
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
     const result = await deliverWeeklyDigest(
-      postmarkEnv as never,
+      emailEnv as never,
       {
         userId: "user-1",
         userName: "Owner",
@@ -254,7 +245,7 @@ describe("deliverWeeklyDigest", () => {
           channel: "email",
           status: "failed",
           targetValue: "owner@example.com",
-          errorMessage: "Postmark send failed: network timeout.",
+          errorMessage: "Cloudflare Email send failed: network timeout.",
         },
       ],
     });
@@ -263,7 +254,7 @@ describe("deliverWeeklyDigest", () => {
       expect.objectContaining({
         channel: "email",
         status: "failed",
-        errorMessage: "Postmark send failed: network timeout.",
+        errorMessage: "Cloudflare Email send failed: network timeout.",
       }),
     );
     expect(upsertDigestDelivery).toHaveBeenCalledWith(
@@ -272,13 +263,13 @@ describe("deliverWeeklyDigest", () => {
       expect.objectContaining({
         status: "failed",
         recipientEmail: "owner@example.com",
-        errorMessage: "Postmark send failed: network timeout.",
+        errorMessage: "Cloudflare Email send failed: network timeout.",
       }),
     );
   });
 
   it("keeps email as the baseline when customer WhatsApp fails readiness checks", async () => {
-    const postmarkFetch = mockPostmarkSend("msg_1");
+    const sendMock = mockEmailSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
       id: "email-target-1",
@@ -370,7 +361,7 @@ describe("deliverWeeklyDigest", () => {
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
     const result = await deliverWeeklyDigest(
-      postmarkEnv as never,
+      emailEnv as never,
       {
         userId: "user-1",
         userName: "Owner",
@@ -407,7 +398,7 @@ describe("deliverWeeklyDigest", () => {
         },
       ],
     });
-    expect(postmarkFetch).toHaveBeenCalledTimes(1);
+    expect(sendMock).toHaveBeenCalledTimes(1);
     expect(sendDigestWhatsApp).toHaveBeenCalledTimes(1);
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
@@ -420,7 +411,7 @@ describe("deliverWeeklyDigest", () => {
   });
 
   it("does not send digests to pending WhatsApp setup targets", async () => {
-    const postmarkFetch = mockPostmarkSend("msg_1");
+    const sendMock = mockEmailSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const sendDigestWhatsApp = vi.fn();
 
@@ -501,7 +492,7 @@ describe("deliverWeeklyDigest", () => {
     }));
 
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-    const result = await deliverWeeklyDigest(postmarkEnv as never, {
+    const result = await deliverWeeklyDigest(emailEnv as never, {
       userId: "user-1",
       userName: "Owner",
       accountEmail: "owner@example.com",
@@ -524,7 +515,7 @@ describe("deliverWeeklyDigest", () => {
       attempts: 1,
       channels: ["email"],
     });
-    expect(postmarkFetch).toHaveBeenCalledTimes(1);
+    expect(sendMock).toHaveBeenCalledTimes(1);
     expect(sendDigestWhatsApp).not.toHaveBeenCalled();
   });
 
@@ -599,7 +590,7 @@ describe("deliverWeeklyDigest", () => {
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
     const result = await deliverWeeklyDigest(
-      postmarkEnv as never,
+      emailEnv as never,
       {
         userId: "user-1",
         userName: "Owner",
@@ -668,8 +659,7 @@ describe("deliverWeeklyDigest", () => {
   });
 
   it("reuses an existing idempotent email attempt instead of sending twice", async () => {
-    const postmarkFetch = vi.fn();
-    vi.stubGlobal("fetch", postmarkFetch);
+    const sendMock = mockEmailSend("msg_1");
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi
@@ -748,7 +738,7 @@ describe("deliverWeeklyDigest", () => {
     const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
 
     const result = await deliverWeeklyDigest(
-      postmarkEnv as never,
+      emailEnv as never,
       {
         userId: "user-1",
         userName: "Owner",
@@ -780,13 +770,94 @@ describe("deliverWeeklyDigest", () => {
         },
       ],
     });
-    expect(postmarkFetch).not.toHaveBeenCalled();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("skips opted-out email targets and never re-provisions the account email", async () => {
+    const sendMock = mockEmailSend("msg_1");
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([
+        {
+          id: "email-target-1",
+          userId: "user-1",
+          watchlistId: null,
+          channel: "email",
+          targetValue: "owner@example.com",
+          validationStatus: "validated",
+          isValidated: true,
+          isOptedIn: false,
+          optInSource: "account_email",
+          optedInAt: "2026-04-19T00:00:00.000Z",
+          isPaused: true,
+          pausedAt: "2026-05-01T00:00:00.000Z",
+          optedOutAt: "2026-05-01T00:00:00.000Z",
+          templateEligible: false,
+          lastSuccessfulDeliveryAt: null,
+          lastSuccessfulAttemptId: null,
+          providerIdentifier: null,
+          metadata: {},
+          createdAt: "2026-04-19T00:00:00.000Z",
+          updatedAt: "2026-05-01T00:00:00.000Z",
+        },
+      ]),
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const result = await deliverWeeklyDigest(emailEnv as never, {
+      userId: "user-1",
+      userName: "Owner",
+      accountEmail: "owner@example.com",
+      digestRunId: "digest-1",
+      periodStart: "2026-04-12T00:00:00.000Z",
+      periodEnd: "2026-04-19T00:00:00.000Z",
+      items: [
+        {
+          eventId: "event-1",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Landing page offer changed",
+          summary: "Offer changed on the landing page.",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      attempts: 0,
+      channels: [],
+    });
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 });
 
 describe("deliverWatchlistAlerts", () => {
   it("sends instant alerts for confirmed watch events that clear delivery policy", async () => {
-    const postmarkFetch = mockPostmarkSend("msg_instant_1");
+    const sendMock = mockEmailSend("msg_instant_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-instant-1");
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
       id: "email-target-1",
@@ -844,7 +915,8 @@ describe("deliverWatchlistAlerts", () => {
 
     const result = await deliverWatchlistAlerts(
       {
-        ...postmarkEnv,
+        ...emailEnv,
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
         BETTER_AUTH_URL: "https://0509.in",
       } as never,
       {
@@ -887,14 +959,16 @@ describe("deliverWatchlistAlerts", () => {
       attempts: 1,
       channels: ["email"],
     });
-    expectPostmarkEmailRequest(postmarkFetch);
-    expect(postmarkRequestBody(postmarkFetch)).toMatchObject({
-      From: "alerts@0509.in",
-      To: "owner@example.com",
-      Subject: "Landing page URL changed: Nykaa",
-      HtmlBody: expect.stringContaining("Five to Nine alert"),
-      MessageStream: "outbound",
-      Tag: "instant-alert",
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(emailSendPayload(sendMock)).toMatchObject({
+      from: "alerts@0509.in",
+      to: "owner@example.com",
+      subject: "Landing page URL changed: Nykaa",
+      html: expect.stringContaining("Five to Nine alert"),
+      headers: expect.objectContaining({
+        "X-0509-Tag": "instant-alert",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      }),
     });
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
@@ -912,7 +986,7 @@ describe("deliverWatchlistAlerts", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-18T18:30:00.000Z"));
 
-    const postmarkFetch = mockPostmarkSend("msg_after_quiet_hours");
+    const sendMock = mockEmailSend("msg_after_quiet_hours");
     const attemptsByKey = new Map<string, { status: string; idempotencyKey: string }>();
     const createDeliveryAttempt = vi.fn().mockImplementation(async (_env, attempt) => {
       attemptsByKey.set(attempt.idempotencyKey, {
@@ -1047,7 +1121,7 @@ describe("deliverWatchlistAlerts", () => {
 
     await deliverWatchlistAlerts(
       {
-        ...postmarkEnv,
+        ...emailEnv,
         BETTER_AUTH_URL: "https://0509.in",
       } as never,
       input,
@@ -1056,7 +1130,7 @@ describe("deliverWatchlistAlerts", () => {
     vi.setSystemTime(new Date("2026-04-18T06:30:00.000Z"));
     const result = await deliverWatchlistAlerts(
       {
-        ...postmarkEnv,
+        ...emailEnv,
         BETTER_AUTH_URL: "https://0509.in",
       } as never,
       input,
@@ -1066,7 +1140,7 @@ describe("deliverWatchlistAlerts", () => {
       attempts: 1,
       channels: ["email"],
     });
-    expect(postmarkFetch).toHaveBeenCalledTimes(1);
+    expect(sendMock).toHaveBeenCalledTimes(1);
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

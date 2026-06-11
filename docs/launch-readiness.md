@@ -6,7 +6,7 @@ Last checked: 2026-06-04
 
 Five to Nine is ready to onboard the first paid customer.
 
-The app has real product surface: public competitor website search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo local-pricing preview/checkout, Postmark email delivery, and proof-first monitoring infrastructure.
+The app has real product surface: public competitor website search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo local-pricing preview/checkout, Cloudflare Email Service email delivery, and proof-first monitoring infrastructure.
 
 No first-customer onboarding blocker was found in the 2026-06-04 production pass. Meta ads tracking still stays labeled beta until the historical reliability gate graduates.
 
@@ -16,7 +16,7 @@ No first-customer onboarding blocker was found in the 2026-06-04 production pass
 - Production health passes on `https://0509.in`, `https://www.0509.in`, and `https://api.0509.in`.
 - `npm run canary:prod` passes health, fresh-live bypass, ops readiness, and current Meta ads beta checks.
 - `npm run provider:bakeoff:launch` proves fresh live Ad Library results through the current 0509 path.
-- A fresh private launch-readiness canary captured browser-rendered proof and sent a Postmark email digest.
+- A fresh private launch-readiness canary captured browser-rendered proof and sent an email digest (sent via Postmark on the 2026-06-04 pass; email now goes through the Cloudflare Email Service binding and needs a fresh canary pass before launch).
 - A fresh disposable customer flow passed: account creation, paid unlock via signed Dodo webhook canary, onboarding watchlist creation, competitor website watch setup, watchlist edit, delivery target add, refresh, and share page.
 - Dodo checkout creation works for a fresh account and returns a hosted Dodo checkout URL before payment.
 

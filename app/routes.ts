@@ -9,6 +9,7 @@ export default [
   route("search", "routes/search.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
+  route("unsubscribe", "routes/unsubscribe.tsx"),
   route("auth/login", "routes/auth.login.tsx"),
   route("auth/signup", "routes/auth.signup.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),

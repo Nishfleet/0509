@@ -1,3 +1,15 @@
+export interface EmailSendingBinding {
+  send(message: {
+    from: string;
+    to: string;
+    subject: string;
+    html?: string;
+    text?: string;
+    replyTo?: string;
+    headers?: Record<string, string>;
+  }): Promise<{ messageId: string } | undefined>;
+}
+
 export interface AppEnv {
   AI?: Ai;
   APP_NAME?: string;
@@ -29,6 +41,8 @@ export interface AppEnv {
   DODO_0509_WEBHOOK_SECRET?: string;
   DODO_API_KEY?: string;
   DODO_PAYMENTS_API_KEY?: string;
+  EMAIL?: EmailSendingBinding;
+  EMAIL_FROM_EMAIL?: string;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   LAUNCH_CANARY_EMAIL?: string;
   ALLOW_PLATFORM_META_API_FALLBACK?: string;
@@ -44,11 +58,6 @@ export interface AppEnv {
   RAZORPAY_PLAN_STARTER_MONTHLY?: string;
   RAZORPAY_PLAN_STARTER_YEARLY?: string;
   RAZORPAY_WEBHOOK_SECRET?: string;
-  POSTMARK_ACCOUNT_TOKEN?: string;
-  POSTMARK_FROM_EMAIL?: string;
-  POSTMARK_MESSAGE_STREAM?: string;
-  POSTMARK_SERVER_TOKEN?: string;
-  POSTMARK_WEBHOOK_SECRET?: string;
   WHATSAPP_ACCESS_TOKEN?: string;
   WHATSAPP_APP_SECRET?: string;
   WHATSAPP_DELIVERY_ENABLED?: string;
@@ -103,16 +112,12 @@ function parseEnvFlag(value: string | undefined) {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-export function postmarkFromEmail(env: AppEnv) {
-  return env.POSTMARK_FROM_EMAIL?.trim() || "";
+export function emailFromAddress(env: AppEnv) {
+  return env.EMAIL_FROM_EMAIL?.trim() || "";
 }
 
-export function postmarkMessageStream(env: AppEnv) {
-  return env.POSTMARK_MESSAGE_STREAM?.trim() || "outbound";
-}
-
-export function isPostmarkConfigured(env: AppEnv) {
-  return Boolean(env.POSTMARK_SERVER_TOKEN?.trim() && postmarkFromEmail(env));
+export function isEmailSendingConfigured(env: AppEnv) {
+  return Boolean(env.EMAIL && emailFromAddress(env));
 }
 
 export function isWhatsAppProviderConfigured(env: AppEnv) {
