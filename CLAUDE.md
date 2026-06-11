@@ -82,7 +82,7 @@ Last local verification on 2026-06-11:
 - `https://api.0509.in` also serves the same app through a Cloudflare Worker custom domain
 - Cloudflare deploy state as of 2026-06-11:
   - D1 database `0509` created and bound in `wrangler.jsonc`
-  - remote migrations applied through `0017_share_link_report_resource.sql`; **`0018_customer_api_keys.sql` and `0019_slack_delivery.sql` are NOT yet applied remotely** (verified via `wrangler d1 migrations list 0509 --remote` on 2026-06-11) — customer API keys and Slack delivery will fail in prod until they are
+  - remote migrations fully applied through `0019_slack_delivery.sql` — `wrangler d1 migrations list 0509 --remote` reports "No migrations to apply" (verified 2026-06-11). Note: 0019's schema had been applied out-of-band without a ledger row; it was verified column-by-column and reconciled into `d1_migrations` on 2026-06-11.
   - `BETTER_AUTH_SECRET` uploaded to the Cloudflare Worker
   - R2 bucket `0509-landing-page-artifacts` created and bound as `LANDING_PAGE_ARTIFACTS`
   - `BROWSER` (Browser Rendering), `AI` (Workers AI), and a `MonitoringWorkflow` workflow binding exist in `wrangler.jsonc`
@@ -121,6 +121,7 @@ This project is managed by Paperclip under company Swish.
 - Immutability: create new objects, never mutate existing ones.
 - File organization: 200-400 lines typical, 800 max.
 - D1 queries: always use parameterized `.bind()` — never string interpolation.
+- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. `npm run deploy` enforces this via `scripts/check-d1-migrations-synced.mjs`, which fails the deploy while remote D1 is behind `migrations/`. (Lesson from the 0019_slack_delivery drift incident, 2026-06-11: schema was changed out-of-band, the migration ledger lied, and the next apply crashed on it.)
 
 ## Design System
 

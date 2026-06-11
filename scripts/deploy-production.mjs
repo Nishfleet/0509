@@ -48,6 +48,7 @@ try {
   }
 
   run("node", ["scripts/check-public-home-current.mjs", "--source-only"]);
+  run("node", ["scripts/check-d1-migrations-synced.mjs"]);
   run("npm", ["run", "build"]);
   run("node", ["scripts/check-public-home-current.mjs"]);
   run("wrangler", ["deploy"]);
