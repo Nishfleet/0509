@@ -18,7 +18,8 @@ import {
 } from "~/lib/data.server";
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import type { AppEnv } from "~/lib/env.server";
-import { isPostmarkConfigured, postmarkFromEmail, postmarkMessageStream } from "~/lib/env.server";
+import { emailFromAddress, isEmailSendingConfigured } from "~/lib/env.server";
+import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
   DeliveryChannel,
   DeliveryAttemptRecord,
@@ -36,8 +37,7 @@ import {
 } from "~/lib/slack-webhook.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
-const EMAIL_PROVIDER = "postmark" as const;
-const POSTMARK_EMAIL_API_URL = "https://api.postmarkapp.com/email";
+const EMAIL_PROVIDER = "cloudflare_email" as const;
 
 interface DigestAttemptSummary {
   channel: DeliveryChannel;
@@ -455,6 +455,10 @@ async function deliverDigestToEmailTarget(
     items: input.items,
     subject,
     cadence: input.cadence,
+    unsubscribeUrl: await buildUnsubscribeUrl(env, {
+      userId: target.userId,
+      targetId: target.id,
+    }),
   });
 
   const attemptId = await createDeliveryAttempt(env, {
@@ -567,6 +571,10 @@ async function deliverInstantEmailBatch(
     email: input.deliveryTarget.targetValue,
     subject: input.content.subject,
     html: input.content.html,
+    unsubscribeUrl: await buildUnsubscribeUrl(env, {
+      userId: input.deliveryTarget.userId,
+      targetId: input.deliveryTarget.id,
+    }),
   });
 
   const attemptId = await createDeliveryAttempt(env, {
@@ -989,17 +997,20 @@ async function resolveDigestEmailTargets(
   userId: string,
   accountEmail: string | null,
 ) {
-  const configuredTargets = (await listDeliveryTargets(env, userId, {
+  const allTargets = await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "email",
     limit: 10,
-  })).filter((target) => !target.isPaused && target.validationStatus !== "invalid");
+  });
+  const configuredTargets = allTargets.filter(isUsableEmailTarget);
 
   if (configuredTargets.length > 0) {
     return configuredTargets;
   }
 
-  if (!accountEmail) {
+  // Never re-provision an address the recipient unsubscribed or paused —
+  // upsertDeliveryTarget would reset those flags.
+  if (!accountEmail || hasEmailTargetForAddress(allTargets, accountEmail)) {
     return [];
   }
 
@@ -1027,7 +1038,7 @@ async function resolveAlertEmailTargets(
   watchlistId: string,
   accountEmail: string | null,
 ) {
-  const combinedTargets = dedupeTargetsByValue([
+  const allTargets = dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
       watchlistId,
       channel: "email",
@@ -1038,13 +1049,16 @@ async function resolveAlertEmailTargets(
       channel: "email",
       limit: 10,
     })),
-  ]).filter((target) => !target.isPaused && target.validationStatus !== "invalid");
+  ]);
+  const combinedTargets = allTargets.filter(isUsableEmailTarget);
 
   if (combinedTargets.length > 0) {
     return combinedTargets;
   }
 
-  if (!accountEmail) {
+  // Never re-provision an address the recipient unsubscribed or paused —
+  // upsertDeliveryTarget would reset those flags.
+  if (!accountEmail || hasEmailTargetForAddress(allTargets, accountEmail)) {
     return [];
   }
 
@@ -1112,6 +1126,15 @@ async function resolveAlertSlackTargets(env: AppEnv, userId: string, watchlistId
   ]).filter(isUsableSlackTarget);
 }
 
+function isUsableEmailTarget(target: DeliveryTargetRecord) {
+  return !target.isPaused && !target.optedOutAt && target.validationStatus !== "invalid";
+}
+
+function hasEmailTargetForAddress(targets: DeliveryTargetRecord[], address: string) {
+  const normalized = address.trim().toLowerCase();
+  return targets.some((target) => target.targetValue.trim().toLowerCase() === normalized);
+}
+
 function isUsableSlackTarget(target: DeliveryTargetRecord) {
   return (
     !target.isPaused &&
@@ -1143,20 +1166,9 @@ async function sendDigestEmail(
     items: DigestDeliveryItem[];
     subject: string;
     cadence?: DigestCadence;
+    unsubscribeUrl: string | null;
   },
 ): Promise<EmailProviderResult> {
-  if (!isPostmarkConfigured(env)) {
-    return {
-      provider: EMAIL_PROVIDER,
-      status: "failed",
-      webhookStatus: "provider_unknown",
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      errorMessage: "Postmark is not configured for this environment.",
-      deliveredAt: null,
-    };
-  }
-
   const html = renderDigestHtml({
     name: input.name,
     periodStart: input.periodStart,
@@ -1164,17 +1176,12 @@ async function sendDigestEmail(
     items: input.items,
     cadence: input.cadence,
   });
-  return sendPostmarkEmail(env, {
+  return sendCloudflareEmail(env, {
     to: input.email,
     subject: input.subject,
     html,
-    text: stripHtml(html),
     tag: "weekly-digest",
-    metadata: {
-      kind: "weekly_digest",
-      item_count: String(input.items.length),
-      cadence: input.cadence ?? "weekly",
-    },
+    unsubscribeUrl: input.unsubscribeUrl,
   });
 }
 
@@ -1184,61 +1191,69 @@ async function sendInstantEmail(
     email: string;
     subject: string;
     html: string;
+    unsubscribeUrl: string | null;
   },
 ) {
-  if (!isPostmarkConfigured(env)) {
-    return {
-      provider: EMAIL_PROVIDER,
-      status: "failed" as const,
-      webhookStatus: "provider_unknown" as const,
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      errorMessage: "Postmark is not configured for this environment.",
-      deliveredAt: null,
-    };
-  }
-
-  return sendPostmarkEmail(env, {
+  return sendCloudflareEmail(env, {
     to: input.email,
     subject: input.subject,
     html: input.html,
-    text: stripHtml(input.html),
     tag: "instant-alert",
+    unsubscribeUrl: input.unsubscribeUrl,
   });
 }
 
-async function sendPostmarkEmail(
+async function sendCloudflareEmail(
   env: AppEnv,
   input: {
     to: string;
     subject: string;
     html: string;
-    text: string;
     tag: string;
-    metadata?: Record<string, string>;
+    unsubscribeUrl: string | null;
   },
 ): Promise<EmailProviderResult> {
+  if (!isEmailSendingConfigured(env)) {
+    return {
+      provider: EMAIL_PROVIDER,
+      status: "failed",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      errorMessage: "Email sending is not configured for this environment.",
+      deliveredAt: null,
+    };
+  }
+
   const statusSeenAt = new Date().toISOString();
-  let response: Response;
+  const html = appendEmailFooter(input.html, input.unsubscribeUrl);
+  const headers: Record<string, string> = {
+    "X-0509-Tag": input.tag,
+  };
+  if (input.unsubscribeUrl) {
+    headers["List-Unsubscribe"] = `<${input.unsubscribeUrl}>`;
+    headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
+  }
+
   try {
-    response = await fetch(POSTMARK_EMAIL_API_URL, {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "X-Postmark-Server-Token": env.POSTMARK_SERVER_TOKEN!.trim(),
-      },
-      body: JSON.stringify({
-        From: postmarkFromEmail(env),
-        To: input.to,
-        Subject: input.subject,
-        HtmlBody: input.html,
-        TextBody: input.text,
-        MessageStream: postmarkMessageStream(env),
-        Tag: input.tag,
-        Metadata: input.metadata ?? {},
-      }),
+    const result = await env.EMAIL!.send({
+      from: emailFromAddress(env),
+      to: input.to,
+      subject: input.subject,
+      html,
+      text: stripHtml(html),
+      headers,
     });
+
+    return {
+      provider: EMAIL_PROVIDER,
+      status: "sent" as const,
+      webhookStatus: "provider_unknown" as const,
+      providerMessageId: result?.messageId ?? null,
+      providerStatusLastSeenAt: statusSeenAt,
+      errorMessage: null,
+      deliveredAt: statusSeenAt,
+    };
   } catch (error) {
     return {
       provider: EMAIL_PROVIDER,
@@ -1246,37 +1261,23 @@ async function sendPostmarkEmail(
       webhookStatus: "failed" as const,
       providerMessageId: null,
       providerStatusLastSeenAt: statusSeenAt,
-      errorMessage: `Postmark send failed: ${error instanceof Error ? error.message : "network error"}.`,
+      errorMessage: `Cloudflare Email send failed: ${error instanceof Error ? error.message : "unknown error"}.`,
       deliveredAt: null,
     };
   }
-  const payload = await response.json().catch(() => ({})) as {
-    ErrorCode?: number;
-    Message?: string;
-    MessageID?: string;
-  };
+}
 
-  if (!response.ok || (typeof payload.ErrorCode === "number" && payload.ErrorCode !== 0)) {
-    return {
-      provider: EMAIL_PROVIDER,
-      status: "failed" as const,
-      webhookStatus: "failed" as const,
-      providerMessageId: null,
-      providerStatusLastSeenAt: statusSeenAt,
-      errorMessage: payload.Message ?? `Postmark send failed with HTTP ${response.status}.`,
-      deliveredAt: null,
-    };
-  }
+function appendEmailFooter(html: string, unsubscribeUrl: string | null) {
+  const unsubscribeLink = unsubscribeUrl
+    ? ` · <a href="${unsubscribeUrl}" style="color: #5b6577;">Unsubscribe</a>`
+    : "";
 
-  return {
-    provider: EMAIL_PROVIDER,
-    status: "sent" as const,
-    webhookStatus: "pending" as const,
-    providerMessageId: payload.MessageID ?? null,
-    providerStatusLastSeenAt: statusSeenAt,
-    errorMessage: null,
-    deliveredAt: statusSeenAt,
-  };
+  return `${html}
+    <hr style="margin: 28px 0 14px; border: none; border-top: 1px solid #e4e7ec;" />
+    <p style="font-family: Inter, system-ui, sans-serif; margin: 0; color: #98a2b3; font-size: 12px; line-height: 1.5;">
+      Five to Nine · <a href="https://0509.in" style="color: #5b6577;">0509.in</a> · You're receiving this because email delivery is configured for your workspace${unsubscribeLink}
+    </p>
+  `;
 }
 
 async function persistDeliveryTargetSuccess(
