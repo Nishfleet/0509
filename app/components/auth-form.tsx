@@ -118,6 +118,12 @@ export function AuthForm({ mode, redirectTo }: AuthFormProps) {
           />
         </label>
 
+        {!isSignup ? (
+          <p className="f9-auth-switch">
+            <Link to="/auth/forgot-password">Forgot your password?</Link>
+          </p>
+        ) : null}
+
         {error ? <p className="f9-message is-error">{error}</p> : null}
 
         <button className="f9-primary-button" disabled={pending} type="submit">

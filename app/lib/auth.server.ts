@@ -57,6 +57,16 @@ export function createAuth(env: AppEnv, request: Request) {
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
+      resetPasswordTokenExpiresIn: 60 * 60,
+      sendResetPassword: async ({ user, url }) => {
+        const { sendPasswordResetEmail } = await import("~/lib/delivery.server");
+        await sendPasswordResetEmail(env, {
+          userId: user.id,
+          email: user.email,
+          name: user.name ?? null,
+          resetUrl: url,
+        });
+      },
     },
   });
 }
