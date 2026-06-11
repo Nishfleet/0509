@@ -16,6 +16,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const session = await requireSession(env, request);
   const formData = await request.formData();
   const target = parseCheckoutTarget(formData);
+
+  if (target.kind === "plan") {
+    // A subscriber clicking another plan button must never end up with two
+    // overlapping live subscriptions. Plan switches go through support until
+    // self-serve plan changes exist; usage bundles stay purchasable.
+    const { getUserPlan } = await import("~/lib/plan.server");
+    const currentPlan = await getUserPlan(env, session.user.id);
+    if (currentPlan !== "free") {
+      throw redirect("/app/billing?checkout=already-subscribed", { status: 303 });
+    }
+  }
+
   const checkout = await createDodo0509CheckoutSession({
     env,
     request,
