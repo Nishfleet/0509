@@ -6,6 +6,28 @@ import {
   extractCreativeTextFromSnapshotHtml,
 } from "~/lib/creative-text.server";
 
+const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
+
+// The SSRF guard resolves every hostname through DNS-over-HTTPS before
+// fetching, so fetch mocks must answer DNS queries with a public address.
+function mockFetchWithDns(handler: (url: string) => Response | Promise<Response>) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.startsWith(DNS_JSON_ENDPOINT)) {
+      const parsed = new URL(url);
+      const type = parsed.searchParams.get("type") === "AAAA" ? "AAAA" : "A";
+      const addresses = type === "A" ? ["93.184.216.34"] : [];
+      return new Response(
+        JSON.stringify({
+          Answer: addresses.map((address) => ({ data: address, type: type === "A" ? 1 : 28 })),
+        }),
+        { status: 200, headers: { "content-type": "application/dns-json" } },
+      );
+    }
+    return handler(url);
+  });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -63,9 +85,10 @@ describe("extractCreativeTextFromSnapshotHtml", () => {
 
 describe("captureCreativeText", () => {
   it("fetches the ad snapshot and returns best-effort creative text metadata", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        `
+    mockFetchWithDns(
+      () =>
+        new Response(
+          `
           <html>
             <body>
               <div>Sponsored</div>
@@ -75,8 +98,8 @@ describe("captureCreativeText", () => {
             </body>
           </html>
         `,
-        { status: 200 },
-      ),
+          { status: 200 },
+        ),
     );
 
     const result = await captureCreativeText(
@@ -108,10 +131,18 @@ describe("captureCreativeText", () => {
       description: "Launch Sale\nFlat ₹400 Off",
     });
 
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          `
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: {
+            "content-type": "image/jpeg",
+          },
+        });
+      }
+
+      return new Response(
+        `
             <html>
               <head>
                 <meta property="og:image" content="https://cdn.example.com/creative.jpg" />
@@ -123,22 +154,14 @@ describe("captureCreativeText", () => {
               </body>
             </html>
           `,
-          {
-            status: 200,
-            headers: {
-              "content-type": "text/html; charset=utf-8",
-            },
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(Uint8Array.from([255, 216, 255, 217]), {
+        {
           status: 200,
           headers: {
-            "content-type": "image/jpeg",
+            "content-type": "text/html; charset=utf-8",
           },
-        }),
+        },
       );
+    });
 
     const result = await captureCreativeText(
       {
