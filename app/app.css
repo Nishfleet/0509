@@ -2177,6 +2177,70 @@ img {
   color: #07725f;
 }
 
+.f9-checkout-banner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 20px 22px;
+  border-radius: 18px;
+  border: 1px solid var(--f9-search-line);
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(6, 22, 41, 0.08);
+}
+
+.f9-checkout-banner.is-active {
+  border-color: rgba(7, 114, 95, 0.35);
+  background: linear-gradient(135deg, #f3fdf9 0%, #fff 55%);
+}
+
+.f9-checkout-banner h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 6px;
+  font-size: 20px;
+}
+
+.f9-checkout-banner.is-active h2 {
+  color: #07725f;
+}
+
+.f9-checkout-banner p {
+  margin: 0;
+  max-width: 56ch;
+  color: #475467;
+}
+
+.f9-checkout-banner-actions {
+  display: flex;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.f9-checkout-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2563eb;
+  animation: f9-checkout-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes f9-checkout-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.78);
+  }
+}
+
 .f9-message.is-error {
   color: #b42318;
 }
@@ -3032,6 +3096,20 @@ img {
 .f9-app-sidebar-footer {
   order: 5;
   margin-top: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.f9-app-support-link {
+  font-size: 13px;
+  color: #5b6577;
+  text-decoration: none;
+}
+
+.f9-app-support-link:hover {
+  color: var(--f9-search-ink);
+  text-decoration: underline;
 }
 
 .f9-sign-out-button {

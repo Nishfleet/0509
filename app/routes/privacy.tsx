@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const privacyDescription =
   "How Five to Nine handles account, search, monitoring, evidence, and delivery data.";
@@ -58,8 +59,9 @@ export default function PrivacyRoute() {
 
           <LegalBlock title="Support">
             <p>
-              For access, correction, deletion, billing, or security questions, use the support or account contact path
-              that gave you access.
+              For access, correction, deletion, billing, or security questions, email{" "}
+              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the address on the account. Account deletion
+              requests are honored through the same channel.
             </p>
           </LegalBlock>
         </article>

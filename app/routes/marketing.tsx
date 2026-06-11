@@ -7,6 +7,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { demoProof } from "~/lib/demo-proof";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { RootLoaderData } from "~/root";
 
 const marketingDescription =
@@ -506,6 +507,7 @@ export default function MarketingRoute() {
           <nav aria-label="Footer">
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>
           </nav>
         </div>
       </footer>

@@ -11,10 +11,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     extractDodoPlanGrant,
+    extractDodoPlanRevocation,
     extractDodoProofCreditGrant,
     verifyDodoWebhookRequest,
   } = await import("~/lib/dodo-billing.server");
-  const { grantDodoPlanAccess, grantProofUsageCredit } = await import("~/lib/data.server");
+  const {
+    getUserIdByEmail,
+    grantDodoPlanAccess,
+    grantProofUsageCredit,
+    revokeDodoPlanAccess,
+  } = await import("~/lib/data.server");
   const env = getEnv(context);
   const rawBody = await request.text();
 
@@ -33,6 +39,24 @@ export async function action({ context, request }: ActionFunctionArgs) {
       metadata: planGrant.metadata,
     });
     return Response.json({ ok: true });
+  }
+
+  const revocation = extractDodoPlanRevocation(env, payload);
+  if (revocation) {
+    const userId =
+      revocation.userId ??
+      (revocation.customerEmail ? await getUserIdByEmail(env, revocation.customerEmail) : null);
+    if (!userId) {
+      return Response.json({ ok: true, ignored: true, reason: "no_user_match" });
+    }
+
+    await revokeDodoPlanAccess(env, {
+      userId,
+      providerSubscriptionId: revocation.subscriptionId,
+      status: revocation.eventType,
+      revokedAt: revocation.revokedAt,
+    });
+    return Response.json({ ok: true, revoked: true });
   }
 
   const grant = extractDodoProofCreditGrant(env, payload);
