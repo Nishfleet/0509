@@ -1,5 +1,6 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
 import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
+import { chunkForBoundParams } from "~/lib/d1-chunk.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
 
@@ -77,19 +78,25 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
     return [];
   }
 
-  const placeholders = uniqueIds.map(() => "?").join(", ");
-  const rows = await many<AdLookupRow>(
-    env,
-    `
-      SELECT id, raw_json
-      FROM ad
-      WHERE id IN (${placeholders})
-    `,
-    ...uniqueIds,
+  // Chunked lookups keep each statement under D1's 100-bound-parameter cap;
+  // a single large scan can reference more than 100 unique ads.
+  const chunkedRows = await Promise.all(
+    chunkForBoundParams(uniqueIds).map((chunk) => {
+      const placeholders = chunk.map(() => "?").join(", ");
+      return many<AdLookupRow>(
+        env,
+        `
+          SELECT id, raw_json
+          FROM ad
+          WHERE id IN (${placeholders})
+        `,
+        ...chunk,
+      );
+    }),
   );
   const adsById = new Map<string, AdRecord>();
 
-  for (const row of rows) {
+  for (const row of chunkedRows.flat()) {
     const ad = parseJson<AdRecord | null>(row.raw_json, null);
     if (ad) {
       adsById.set(row.id, ad);
