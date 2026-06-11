@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
+  claimDodoWebhookEvent,
   claimRazorpayWebhookEvent,
   createDeliveryAttempt,
   createDiscoveryFetchLog,
@@ -9,6 +10,8 @@ import {
   createProofCapture,
   createWatchEvent,
   grantDodoPlanAccess,
+  markDodoPlanPaymentIssue,
+  revokeDodoAccessForRefundedPayment,
   revokeDodoPlanAccess,
   getDiscoveryCacheEntry,
   getLaunchReadinessSignals,
@@ -343,6 +346,99 @@ describe("Dodo billing persistence", () => {
       "subscription.cancelled",
       "2026-07-01T00:00:00.000Z",
     ]);
+  });
+
+  it("records a payment issue without touching the plan column", async () => {
+    const mock = createMockDb();
+
+    await markDodoPlanPaymentIssue(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        status: "subscription.on_hold",
+        occurredAt: "2026-07-01T00:00:00.000Z",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "dodo_status");
+
+    expect(statement?.sql).not.toContain("plan = ");
+    expect(statement?.sql).toContain("plan != 'free'");
+    expect(statement?.sql).toContain("julianday(?) >= julianday(plan_updated_at)");
+    expect(statement?.bindings).toEqual([
+      "subscription.on_hold",
+      "2026-07-01T00:00:00.000Z",
+      "user-1",
+      "2026-07-01T00:00:00.000Z",
+    ]);
+  });
+
+  it("revokes plan access and expires usage credits for a refunded payment", async () => {
+    const mock = createMockDb();
+
+    await revokeDodoAccessForRefundedPayment(
+      { DB: mock.db } as never,
+      {
+        paymentId: "pay_123",
+        refundedAt: "2026-07-05T00:00:00.000Z",
+      },
+    );
+
+    const planStatement = findStatement(mock.statements, "UPDATE user_plan", "'refunded'");
+    expect(planStatement?.sql).toContain("plan = 'free'");
+    expect(planStatement?.sql).toContain("WHERE dodo_payment_id = ?");
+    expect(planStatement?.sql).toContain("julianday(?) >= julianday(plan_updated_at)");
+    expect(planStatement?.bindings).toEqual([
+      "2026-07-05T00:00:00.000Z",
+      "pay_123",
+      "2026-07-05T00:00:00.000Z",
+    ]);
+
+    const creditStatement = findStatement(mock.statements, "UPDATE proof_usage_credit", "expires_at");
+    expect(creditStatement?.sql).toContain("WHERE provider_payment_id = ?");
+    expect(creditStatement?.bindings).toEqual([
+      "2026-07-05T00:00:00.000Z",
+      "pay_123",
+      "2026-07-05T00:00:00.000Z",
+    ]);
+  });
+
+  it("dedupes Dodo webhook events and allows failed events to be reclaimed", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const changes = [1, 0, 1];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async run() {
+                  return { success: true, meta: { changes: changes.shift() ?? 0 } };
+                },
+                async all<T>() {
+                  return { results: [] as T[] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    const input = {
+      eventId: "evt-1",
+      eventType: "payment.succeeded",
+      userId: null,
+      payloadTimestamp: "1765459200",
+    };
+
+    expect(await claimDodoWebhookEvent({ DB: mock.db } as never, input)).toBe(true);
+    expect(await claimDodoWebhookEvent({ DB: mock.db } as never, input)).toBe(false);
+    expect(await claimDodoWebhookEvent({ DB: mock.db } as never, input)).toBe(true);
+
+    const claim = statements.find((statement) => statement.sql.includes("INSERT INTO dodo_webhook_event"));
+    expect(claim?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
   });
 });
 
