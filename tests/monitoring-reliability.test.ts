@@ -228,6 +228,90 @@ describe("scheduled monitoring error isolation", () => {
     expect(result.inlineFailures).toBe(1);
   });
 
+  it("runs digests before the scan loop so a mid-scan kill cannot lose the day's digests", async () => {
+    const watchlists = [buildWatchlist(1, "adspy")];
+    const callOrder: string[] = [];
+    const mocks = mockReliabilityDependencies({
+      watchlists,
+      digestUsers: [{ id: "user-1", email: "owner@example.com", name: "Owner" }],
+    });
+
+    mocks.deliverWeeklyDigest.mockImplementation(async () => {
+      callOrder.push("digest");
+      return {
+        attempts: 1,
+        channels: ["email"],
+        details: [],
+      };
+    });
+    mocks.createWatchlistRun.mockImplementation(async (_env: unknown, watchlistId: string) => {
+      callOrder.push("scan");
+      return `run-${watchlistId}`;
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: true,
+      digestCadence: "weekly",
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(result.digests).toBe(1);
+    expect(result.inlineRuns).toBe(1);
+    expect(callOrder[0]).toBe("digest");
+    expect(callOrder).toContain("scan");
+  });
+
+  it("skips scans entirely when includeScans is false but still delivers digests", async () => {
+    const watchlists = [buildWatchlist(1, "adspy"), buildWatchlist(2, "bigspy")];
+    const mocks = mockReliabilityDependencies({
+      watchlists,
+      digestUsers: [{ id: "user-1", email: "owner@example.com", name: "Owner" }],
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeScans: false,
+      includeDigests: true,
+      digestCadence: "weekly",
+      scheduledTime: Date.parse("2026-06-15T05:00:00.000Z"),
+    });
+
+    expect(result.digests).toBe(1);
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledTimes(1);
+    expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
+    expect(result.inlineRuns).toBe(0);
+  });
+
+  it("stops starting new scans once the time budget is exhausted and reports the skipped count", async () => {
+    const watchlists = [
+      buildWatchlist(1, "adspy"),
+      buildWatchlist(2, "bigspy"),
+      buildWatchlist(3, "poweradspy"),
+    ];
+    const mocks = mockReliabilityDependencies({ watchlists });
+
+    const realNow = Date.now;
+    let elapsed = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => realNow.call(Date) + elapsed);
+    // First scan consumes the whole budget; the remaining two must be skipped,
+    // not silently killed by the runtime wall limit.
+    mocks.createWatchlistRun.mockImplementation(async (_env: unknown, watchlistId: string) => {
+      elapsed += 13 * 60 * 1000;
+      return `run-${watchlistId}`;
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: false,
+      scheduledTime: realNow.call(Date),
+    });
+
+    expect(result.inlineRuns).toBe(1);
+    expect(result.skippedForBudget).toBe(2);
+    expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(1);
+  });
+
   it("does not let one user's digest failure abort other users' digests", async () => {
     const listWatchlists = vi.fn(async (_env: unknown, userId: string) => {
       if (userId === "user-1") {

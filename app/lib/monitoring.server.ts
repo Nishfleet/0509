@@ -110,12 +110,18 @@ export interface MonitoringWorkflowParams {
 }
 
 interface RunScheduledMonitoringOptions {
+  includeScans?: boolean;
   includeDigests?: boolean;
   cron?: string;
   digestCadence?: DigestCadence;
   digestLookbackDays?: number;
   scheduledTime?: number;
 }
+
+// Cloudflare kills scheduled invocations at the 15-minute wall limit. Stop
+// starting new watchlist scans before that so the in-flight scan can finish
+// and the kill never silently swallows work.
+const SCHEDULED_MONITORING_TIME_BUDGET_MS = 12 * 60 * 1000;
 
 interface RunWeeklyDigestsOptions {
   cadence?: DigestCadence;
@@ -128,68 +134,15 @@ export async function runScheduledMonitoring(
   options: RunScheduledMonitoringOptions = {},
 ) {
   if (!env.DB) {
-    return { queued: 0, duplicates: 0, inlineRuns: 0, inlineFailures: 0, digests: 0 };
+    return { queued: 0, duplicates: 0, inlineRuns: 0, inlineFailures: 0, skippedForBudget: 0, digests: 0 };
   }
 
-  const watchlists = await listActiveWatchlists(env, {
-    includeScout: shouldIncludeScoutInScheduledMonitoring(options),
-  });
-  let queued = 0;
-  let duplicates = 0;
-  let inlineRuns = 0;
-  let inlineFailures = 0;
+  const deadlineAt = Date.now() + SCHEDULED_MONITORING_TIME_BUDGET_MS;
 
-  const workflowBinding = getMonitoringWorkflowBinding(env);
-  const shouldBypassWorkflow = shouldRunScheduledMonitoringInline(env);
-
-  if (workflowBinding && !shouldBypassWorkflow) {
-    const scheduledTime = options.scheduledTime ?? Date.now();
-    const scanCache = new Map<string, Promise<ScanPayload>>();
-
-    for (const watchlist of watchlists) {
-      const executionKey = buildWatchlistExecutionIdempotencyKey({
-        watchlistId: watchlist.id,
-        triggerType: "scheduled",
-        scheduledTime,
-        cron: options.cron,
-      });
-
-      try {
-        await workflowBinding.create({
-          id: executionKey,
-          params: {
-            watchlistId: watchlist.id,
-            triggerType: "scheduled",
-            executionKey,
-            proofCaptureRequestKeyPrefix: `proof:${executionKey}`,
-            queuedAt: new Date(scheduledTime).toISOString(),
-          },
-        });
-        queued += 1;
-      } catch (error) {
-        if (isDuplicateWorkflowCreateError(error)) {
-          duplicates += 1;
-          continue;
-        }
-
-        try {
-          const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
-          inlineRuns += ranInline ? 1 : 0;
-        } catch (inlineError) {
-          inlineFailures += 1;
-          console.error(
-            `Scheduled scan failed for watchlist ${watchlist.id}; continuing with remaining watchlists.`,
-            inlineError,
-          );
-        }
-      }
-    }
-  } else {
-    const inlineResult = await runScheduledMonitoringInline(env, watchlists);
-    inlineRuns = inlineResult.inlineRuns;
-    inlineFailures = inlineResult.inlineFailures;
-  }
-
+  // Digests run BEFORE the scan loop. The digest period ends at the cron's
+  // scheduled time, so it never depends on tonight's scan results — and a
+  // runtime kill mid-scan can no longer wipe out the day's digests for every
+  // user (a digest run that is never created is invisible to the retry sweep).
   const digests = options.includeDigests
     ? await runDigests(env, {
         cadence: options.digestCadence ?? "weekly",
@@ -198,11 +151,88 @@ export async function runScheduledMonitoring(
       })
     : 0;
 
+  let queued = 0;
+  let duplicates = 0;
+  let inlineRuns = 0;
+  let inlineFailures = 0;
+  let skippedForBudget = 0;
+
+  if (options.includeScans !== false) {
+    const watchlists = await listActiveWatchlists(env, {
+      includeScout: shouldIncludeScoutInScheduledMonitoring(options),
+    });
+
+    const workflowBinding = getMonitoringWorkflowBinding(env);
+    const shouldBypassWorkflow = shouldRunScheduledMonitoringInline(env);
+
+    if (workflowBinding && !shouldBypassWorkflow) {
+      const scheduledTime = options.scheduledTime ?? Date.now();
+      const scanCache = new Map<string, Promise<ScanPayload>>();
+
+      for (let index = 0; index < watchlists.length; index += 1) {
+        if (Date.now() > deadlineAt) {
+          skippedForBudget = watchlists.length - index;
+          break;
+        }
+
+        const watchlist = watchlists[index]!;
+        const executionKey = buildWatchlistExecutionIdempotencyKey({
+          watchlistId: watchlist.id,
+          triggerType: "scheduled",
+          scheduledTime,
+          cron: options.cron,
+        });
+
+        try {
+          await workflowBinding.create({
+            id: executionKey,
+            params: {
+              watchlistId: watchlist.id,
+              triggerType: "scheduled",
+              executionKey,
+              proofCaptureRequestKeyPrefix: `proof:${executionKey}`,
+              queuedAt: new Date(scheduledTime).toISOString(),
+            },
+          });
+          queued += 1;
+        } catch (error) {
+          if (isDuplicateWorkflowCreateError(error)) {
+            duplicates += 1;
+            continue;
+          }
+
+          try {
+            const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
+            inlineRuns += ranInline ? 1 : 0;
+          } catch (inlineError) {
+            inlineFailures += 1;
+            console.error(
+              `Scheduled scan failed for watchlist ${watchlist.id}; continuing with remaining watchlists.`,
+              inlineError,
+            );
+          }
+        }
+      }
+    } else {
+      const inlineResult = await runScheduledMonitoringInline(env, watchlists, deadlineAt);
+      inlineRuns = inlineResult.inlineRuns;
+      inlineFailures = inlineResult.inlineFailures;
+      skippedForBudget = inlineResult.skippedForBudget;
+    }
+
+    if (skippedForBudget > 0) {
+      console.error(
+        `Scheduled monitoring hit its time budget with ${skippedForBudget} of ${watchlists.length} watchlists left unscanned; scan capacity must grow before more watchlists are added.`,
+      );
+    }
+  }
+
   return {
     queued,
     duplicates,
     inlineRuns,
     inlineFailures,
+    skippedForBudget,
     digests,
   };
 }
@@ -942,19 +972,30 @@ function shouldRunScheduledMonitoringInline(env: AppEnv) {
 async function runScheduledMonitoringInline(
   env: AppEnv,
   watchlists: WatchlistRecord[],
+  deadlineAt: number,
 ) {
   const scanCache = new Map<string, Promise<ScanPayload>>();
   let inlineRuns = 0;
   let inlineFailures = 0;
+  let skippedForBudget = 0;
 
-  for (const watchlist of watchlists) {
+  for (let index = 0; index < watchlists.length; index += 1) {
+    if (Date.now() > deadlineAt) {
+      // Stop before the runtime's wall limit kills the invocation mid-scan;
+      // skipped watchlists are reported by the caller instead of vanishing.
+      skippedForBudget = watchlists.length - index;
+      break;
+    }
+
+    const watchlist = watchlists[index]!;
+
     try {
       const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
       inlineRuns += ranInline ? 1 : 0;
     } catch (error) {
       // One watchlist failure must never abort the rest of the nightly run
-      // (or the digests that follow). The run itself is already recorded as
-      // failed by runWatchlist before it rethrows.
+      // (or the digests that precede it). The run itself is already recorded
+      // as failed by runWatchlist before it rethrows.
       inlineFailures += 1;
       console.error(
         `Scheduled scan failed for watchlist ${watchlist.id}; continuing with remaining watchlists.`,
@@ -963,7 +1004,7 @@ async function runScheduledMonitoringInline(
     }
   }
 
-  return { inlineRuns, inlineFailures };
+  return { inlineRuns, inlineFailures, skippedForBudget };
 }
 
 async function runScheduledWatchlistInline(
