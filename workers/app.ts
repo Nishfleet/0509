@@ -104,6 +104,7 @@ export default {
 
     ctx.waitUntil(
       runScheduledMonitoring(env, {
+        includeScans: scheduledTask.includeScans,
         includeDigests: scheduledTask.includeDigests,
         digestCadence: scheduledTask.digestCadence,
         digestLookbackDays: scheduledTask.digestLookbackDays,
