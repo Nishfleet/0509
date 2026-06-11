@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const termsDescription =
   "Terms for Five to Nine, including billing, acceptable use, and tracking limits.";
@@ -38,7 +39,9 @@ export default function TermsRoute() {
           <LegalBlock title="Billing">
             <p>
               Paid access, subscription changes, cancellations, and refunds should follow the confirmed payment path or
-              written order connected to the account.
+              written order connected to the account. To cancel or request a refund, email{" "}
+              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the account email; cancellation stops future renewals
+              and access ends when the paid period ends.
             </p>
           </LegalBlock>
 
@@ -59,7 +62,9 @@ export default function TermsRoute() {
 
           <LegalBlock title="Support">
             <p>
-              Support, cancellation, and refund handling happen through the contact path connected to the account.
+              For support, billing, cancellation, and refund requests, email{" "}
+              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the address on the account. We aim to respond within
+              two business days.
             </p>
           </LegalBlock>
         </article>

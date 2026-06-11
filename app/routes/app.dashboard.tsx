@@ -4,11 +4,14 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useRevalidator,
 } from "react-router";
+import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { buildSearchParams } from "~/lib/normalize";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -24,10 +27,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchEvents,
     listWatchlists,
   } = await import("~/lib/data.server");
-  const { getProofUsageSummary } = await import("~/lib/plan.server");
+  const { getProofUsageSummary, getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection, proofUsage] = await Promise.all([
+  const checkoutReturn = new URL(request.url).searchParams.get("checkout") === "dodo";
+  const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection, proofUsage, plan] = await Promise.all([
     listSavedQueries(env, session.user.id),
     listCollections(env, session.user.id),
     listWatchlists(env, session.user.id),
@@ -35,6 +39,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     resolveCommercialAdSourceStatus(env),
     getCustomerMetaConnection(env, session.user.id),
     getProofUsageSummary(env, session.user.id),
+    getUserPlan(env, session.user.id),
   ]);
   const [recentEvents, recentProofCaptures, deliveryTargets] = await Promise.all([
     Promise.all(watchlists.slice(0, 6).map((watchlist) => listWatchEvents(env, watchlist.id, 6))).then((groups) =>
@@ -57,6 +62,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     deliveryTargets: deliveryTargets.map(toPublicDeliveryTarget),
     metaStatus,
     proofUsage,
+    plan,
+    checkoutReturn,
     customerMetaConnection: customerMetaConnection
       ? {
           status: customerMetaConnection.status,
@@ -241,6 +248,7 @@ export default function AppDashboardRoute() {
 
   return (
     <section className="f9-app-stack">
+      {data.checkoutReturn ? <CheckoutReturnBanner plan={data.plan} /> : null}
       <section className="f9-market-desk" aria-label="Five to Nine market moves dashboard">
         <div className="f9-market-desk-top">
           <strong>Five to Nine</strong>
@@ -515,6 +523,81 @@ export default function AppDashboardRoute() {
         </article>
       </div>
     </section>
+  );
+}
+
+const CHECKOUT_ACTIVATION_POLL_LIMIT = 10;
+
+function CheckoutReturnBanner(props: { plan: string }) {
+  const revalidator = useRevalidator();
+  const planActive = props.plan !== "free";
+  const [pollCount, setPollCount] = useState(0);
+
+  useEffect(() => {
+    if (planActive || pollCount >= CHECKOUT_ACTIVATION_POLL_LIMIT) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setPollCount((count) => count + 1);
+      revalidator.revalidate();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [planActive, pollCount, revalidator]);
+
+  if (planActive) {
+    const planLabel = props.plan.charAt(0).toUpperCase() + props.plan.slice(1);
+    return (
+      <article className="f9-checkout-banner is-active" aria-live="polite">
+        <div>
+          <span className="f9-app-kicker">Payment received</span>
+          <h2>Your {planLabel} plan is live.</h2>
+          <p>Monitoring, digests, and evidence checks are unlocked. Add your next competitor while the trail is warm.</p>
+        </div>
+        <div className="f9-checkout-banner-actions">
+          <Link className="f9-primary-button" to="/search">
+            Add a competitor
+          </Link>
+          <Link className="f9-secondary-button" to="/app">
+            Dismiss
+          </Link>
+        </div>
+      </article>
+    );
+  }
+
+  if (pollCount >= CHECKOUT_ACTIVATION_POLL_LIMIT) {
+    return (
+      <article className="f9-checkout-banner is-pending" aria-live="polite">
+        <div>
+          <span className="f9-app-kicker">Payment received</span>
+          <h2>Activation is taking longer than usual.</h2>
+          <p>
+            Your payment went through and the plan will activate as soon as Dodo confirms it. If this page still
+            shows the free plan in a few minutes, email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll sort
+            it out.
+          </p>
+        </div>
+        <div className="f9-checkout-banner-actions">
+          <Link className="f9-secondary-button" to="/app?checkout=dodo">
+            Check again
+          </Link>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="f9-checkout-banner is-pending" aria-live="polite">
+      <div>
+        <span className="f9-app-kicker">Payment received</span>
+        <h2>
+          <span className="f9-checkout-pulse" aria-hidden="true" />
+          Activating your plan…
+        </h2>
+        <p>Dodo is confirming the payment. This usually takes under a minute — no need to refresh.</p>
+      </div>
+    </article>
   );
 }
 

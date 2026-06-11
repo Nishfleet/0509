@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createDodo0509CheckoutSession,
   extractDodoPlanGrant,
+  extractDodoPlanRevocation,
   extractDodoProofCreditGrant,
 } from "~/lib/dodo-billing.server";
 
@@ -234,5 +235,89 @@ describe("Dodo billing", () => {
 
     expect(extractDodoPlanGrant(env, failedPlanPayment)).toBeNull();
     expect(extractDodoProofCreditGrant(env, processingCreditPayment)).toBeNull();
+  });
+});
+
+describe("Dodo subscription lifecycle", () => {
+  const lifecycleEnv = {
+    DODO_0509_BRAND_ID: "brand_0509",
+  } as never;
+
+  function subscriptionEnvelope(type: string, overrides: Record<string, unknown> = {}) {
+    return {
+      type,
+      data: {
+        payload_type: "Subscription",
+        subscription_id: "sub_123",
+        brand_id: "brand_0509",
+        status: "cancelled",
+        cancelled_at: "2026-07-01T00:00:00.000Z",
+        created_at: "2026-06-01T00:00:00.000Z",
+        metadata: {
+          user_id: "user-1",
+          plan: "starter",
+        },
+        customer: {
+          customer_id: "cus_1",
+          email: "owner@example.com",
+          name: "Owner",
+        },
+        ...overrides,
+      },
+    };
+  }
+
+  it("extracts a revocation from subscription.cancelled", () => {
+    const revocation = extractDodoPlanRevocation(
+      lifecycleEnv,
+      subscriptionEnvelope("subscription.cancelled"),
+    );
+
+    expect(revocation).toMatchObject({
+      eventType: "subscription.cancelled",
+      userId: "user-1",
+      customerEmail: "owner@example.com",
+      subscriptionId: "sub_123",
+      revokedAt: "2026-07-01T00:00:00.000Z",
+    });
+  });
+
+  it("extracts revocations for expired, failed, and on-hold subscriptions", () => {
+    for (const type of ["subscription.expired", "subscription.failed", "subscription.on_hold"]) {
+      expect(extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope(type))).toMatchObject({
+        eventType: type,
+        userId: "user-1",
+      });
+    }
+  });
+
+  it("falls back to the customer email when metadata has no user id", () => {
+    const revocation = extractDodoPlanRevocation(
+      lifecycleEnv,
+      subscriptionEnvelope("subscription.cancelled", { metadata: {} }),
+    );
+
+    expect(revocation).toMatchObject({
+      userId: null,
+      customerEmail: "owner@example.com",
+    });
+  });
+
+  it("ignores non-lifecycle events and foreign brands", () => {
+    expect(
+      extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope("subscription.renewed")),
+    ).toBeNull();
+    expect(
+      extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope("subscription.active")),
+    ).toBeNull();
+    expect(
+      extractDodoPlanRevocation(lifecycleEnv, { type: "payment.succeeded", data: {} }),
+    ).toBeNull();
+    expect(
+      extractDodoPlanRevocation(
+        lifecycleEnv,
+        subscriptionEnvelope("subscription.cancelled", { brand_id: "brand_other" }),
+      ),
+    ).toBeNull();
   });
 });

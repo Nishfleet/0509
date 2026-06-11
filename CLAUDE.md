@@ -63,11 +63,13 @@ npm run dev
 The checked-in Cloudflare app is the active production runtime and billing is wired:
 
 - onboarding, collections, watchlists, digests, reports, share/export flows, customer API keys, and MCP endpoint exist in `app/`
-- **billing IS live via Dodo Payments**: `api.billing.dodo.checkout.ts` (303 to hosted checkout) + `api.webhooks.dodo.ts` (signed, idempotent). Only `payment.succeeded` is handled — there is NO cancellation/refund/renewal-failure handling yet, no plan expiry, and no in-app billing management UI. Do not describe billing as "not live."
+- **billing IS live via Dodo Payments**: `api.billing.dodo.checkout.ts` (303 to hosted checkout) + `api.webhooks.dodo.ts` (signed, idempotent). `payment.succeeded` grants plans/credits; `subscription.cancelled/expired/failed/on_hold` revoke to free with the same monotonic-timestamp ordering (2026-06-11). The Dodo dashboard webhook must have subscription events enabled. Still missing: in-app billing management UI (plan display/cancel/invoices) and refund-event handling. Do not describe billing as "not live."
+- `/app?checkout=dodo` shows a checkout-return banner that polls plan activation (`CheckoutReturnBanner` in `app.dashboard.tsx`)
+- support contact is `support@0509.in` (`app/lib/support.ts`), surfaced on marketing footer, app sidebar, /terms, /privacy, /unsubscribe, and email footers; inbound routing is Cloudflare Email Routing (dashboard-configured)
 - legacy Razorpay routes (`api.billing.razorpay.subscription.ts`, `api.webhooks.razorpay.ts`) still exist; Dodo is the active processor. Stripe was never wired; tests assert no Stripe route exposure.
 - region-aware pricing was REMOVED in `migrations/0016_drop_region_pricing.sql`; pricing is live-loaded from Dodo (`app/lib/dodo-pricing.server.ts`, `/api/pricing-preview`)
 - plan gating is enforced at creation time (`checkPlanLimit`); known gaps: manual watchlist refresh is ungated, downgrades don't deactivate over-limit watchlists
-- a full launch audit (security, code, architecture, DB, business) was completed 2026-06-11; launch blockers include: no support contact, no email unsubscribe headers, no subscription lifecycle, cron loop lacks per-watchlist error isolation, failed digests are never retried, SSRF gap in `creative-text.server.ts`, open redirect on auth `redirectTo`, `listDigests` D1 100-param limit
+- a full launch audit (security, code, architecture, DB, business) was completed 2026-06-11. RESOLVED since: support contact, email unsubscribe headers, subscription lifecycle revocation, cron per-watchlist error isolation, digest retry, checkout-return UX. STILL OPEN: SSRF gap in `creative-text.server.ts`, open redirect on auth `redirectTo`, `listDigests` D1 100-param limit, missing D1 indexes/retention, share-link expiry, refund-policy depth, in-app billing management UI
 
 Last local verification on 2026-06-11:
 

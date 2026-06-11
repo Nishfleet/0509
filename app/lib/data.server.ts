@@ -1086,6 +1086,54 @@ export async function grantDodoPlanAccess(
   );
 }
 
+export async function revokeDodoPlanAccess(
+  env: AppEnv,
+  input: {
+    userId: string;
+    providerSubscriptionId: string;
+    status: string;
+    revokedAt?: string;
+  },
+) {
+  const planUpdatedAt = validIsoTimestamp(input.revokedAt) ?? nowIso();
+
+  // Mirrors grantDodoPlanAccess's monotonic guard so a late-arriving older
+  // payment webhook can never resurrect a newer cancellation (and vice versa).
+  await run(
+    env,
+    `
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_payment_id,
+        dodo_status,
+        plan_updated_at
+      )
+      VALUES (?, 'free', ?, ?, ?)
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        plan = 'free',
+        dodo_payment_id = excluded.dodo_payment_id,
+        dodo_status = excluded.dodo_status,
+        plan_updated_at = excluded.plan_updated_at
+      WHERE julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+    `,
+    input.userId,
+    input.providerSubscriptionId,
+    input.status,
+    planUpdatedAt,
+  );
+}
+
+export async function getUserIdByEmail(env: AppEnv, email: string) {
+  const row = await one<{ id: string }>(
+    env,
+    "SELECT id FROM user WHERE email = ? COLLATE NOCASE LIMIT 1",
+    email.trim(),
+  );
+  return row?.id ?? null;
+}
+
 function validIsoTimestamp(value: string | undefined) {
   if (!value) return null;
   const timestamp = Date.parse(value);

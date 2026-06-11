@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { Form, Link, useLoaderData } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const meta: MetaFunction = () => [
   { title: "Unsubscribe | Five to Nine" },
@@ -128,7 +129,8 @@ export default function UnsubscribeRoute() {
               <h1>This unsubscribe link is not valid.</h1>
               <p>
                 The link may be incomplete or expired. Open the latest email from Five to Nine and use its
-                unsubscribe link, or manage delivery targets from your workspace settings.
+                unsubscribe link, manage delivery targets from your workspace settings, or email{" "}
+                <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
               </p>
             </>
           ) : data.alreadyUnsubscribed ? (
