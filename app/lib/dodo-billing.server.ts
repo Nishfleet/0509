@@ -180,29 +180,95 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
   const product = firstProduct(root);
   const productId = readString(product, "product_id");
   const planMatch = productId ? dodo0509PlanForProductId(env, productId) : null;
-  const metadataPlan = readString(metadata, "plan");
-  const metadataCycle = readString(metadata, "cycle");
-  const plan =
-    planMatch?.plan ??
-    (metadataPlan === "scout" || metadataPlan === "starter" || metadataPlan === "agency"
-      ? metadataPlan
-      : null);
-  const cycle =
-    planMatch?.cycle ??
-    (metadataCycle === "monthly" || metadataCycle === "yearly" ? metadataCycle : "monthly");
-  if (!plan || !productId) return null;
+  const plan = planMatch?.plan ?? planFromMetadata(metadata);
+  const cycle = planMatch?.cycle ?? cycleFromMetadata(metadata);
 
-	  return {
-	    userId,
-	    paymentId,
-	    productId,
-	    plan,
-	    cycle,
-	    status: readString(root, "status") || "payment.succeeded",
-	    grantedAt: readDodoPaymentGrantTimestamp(root),
-	    metadata: root,
-	  };
-	}
+  // Real subscription payments arrive with product_cart: null (verified
+  // against live Dodo payloads — the cart is only populated for one-time
+  // purchases). The checkout metadata still carries plan/cycle/user_id, so
+  // metadata alone must be sufficient to grant; requiring a product id here
+  // silently ignored every real subscription payment.
+  if (!plan) return null;
+
+  // Don't let a plan-purchase payment that ALSO matches a usage bundle fall
+  // through ambiguously: bundle payments carry the bundle product id and no
+  // plan metadata, so reaching this point with a plan means a plan purchase.
+  return {
+    userId,
+    paymentId,
+    productId: productId || null,
+    plan,
+    cycle,
+    status: readString(root, "status") || "payment.succeeded",
+    grantedAt: readDodoPaymentGrantTimestamp(root),
+    subscriptionId: readString(root, "subscription_id") || null,
+    customerId: readString(objectOrEmpty(root.customer), "customer_id") || null,
+    metadata: root,
+  };
+}
+
+const DODO_SUBSCRIPTION_GRANT_EVENT_TYPES = new Set([
+  "subscription.active",
+  "subscription.renewed",
+]);
+
+// Subscription lifecycle grants: subscription.active fires on first
+// activation, subscription.renewed on every successful renewal (and dunning
+// recovery). Handling these keeps the plan fresh across months and clears a
+// stale payment-issue flag once the customer's card recovers. The payload is
+// the subscription object: product_id, checkout metadata, next_billing_date.
+export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
+  const envelope = objectOrEmpty(payload);
+  const eventType = readString(envelope, "type") || readString(envelope, "event");
+  if (!DODO_SUBSCRIPTION_GRANT_EVENT_TYPES.has(eventType)) return null;
+
+  const root = paymentPayloadFromWebhookPayload(payload);
+  const brandId = readString(root, "brand_id");
+  const configuredBrandId = dodo0509BrandId(env);
+  if (configuredBrandId && brandId && brandId !== configuredBrandId) return null;
+
+  const metadata = objectOrEmpty(root.metadata);
+  const userId = readString(metadata, "user_id") || readString(metadata, "userId");
+  const subscriptionId = readString(root, "subscription_id");
+  if (!userId || !subscriptionId) return null;
+
+  const productId = readString(root, "product_id");
+  const planMatch = productId ? dodo0509PlanForProductId(env, productId) : null;
+  const plan = planMatch?.plan ?? planFromMetadata(metadata);
+  const cycle = planMatch?.cycle ?? cycleFromMetadata(metadata);
+  if (!plan) return null;
+
+  const grantedAt =
+    readString(root, "previous_billing_date") ||
+    readString(root, "created_at") ||
+    new Date().toISOString();
+
+  return {
+    eventType,
+    userId,
+    subscriptionId,
+    customerId: readString(objectOrEmpty(root.customer), "customer_id") || null,
+    productId: productId || null,
+    plan,
+    cycle,
+    status: "active",
+    grantedAt,
+    nextBillingAt: readString(root, "next_billing_date") || null,
+    metadata: root,
+  };
+}
+
+function planFromMetadata(metadata: Record<string, unknown>) {
+  const metadataPlan = readString(metadata, "plan");
+  return metadataPlan === "scout" || metadataPlan === "starter" || metadataPlan === "agency"
+    ? metadataPlan
+    : null;
+}
+
+function cycleFromMetadata(metadata: Record<string, unknown>) {
+  const metadataCycle = readString(metadata, "cycle");
+  return metadataCycle === "monthly" || metadataCycle === "yearly" ? metadataCycle : "monthly";
+}
 
 // Hard lifecycle ends: the customer (or Dodo) terminated the subscription.
 const DODO_REVOCATION_EVENT_TYPES = new Set([

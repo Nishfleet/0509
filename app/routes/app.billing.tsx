@@ -93,6 +93,12 @@ export default function BillingRoute() {
             <strong>Status</strong>
             <span>{formatBillingStatus(billing.plan, billing.dodoStatus)}</span>
           </div>
+          {isPaid && billing.dodoNextBillingAt ? (
+            <div className="f9-work-row">
+              <strong>Renews on</strong>
+              <span>{formatDate(billing.dodoNextBillingAt)}</span>
+            </div>
+          ) : null}
           {billing.planUpdatedAt ? (
             <div className="f9-work-row">
               <strong>Last billing change</strong>
