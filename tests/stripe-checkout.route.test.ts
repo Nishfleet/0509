@@ -103,6 +103,7 @@ describe("marketing route", () => {
           React.createElement("form", props, children),
         Link: ({ children, to, ...props }: MockLinkProps) =>
           React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
         useRouteLoaderData: vi.fn().mockReturnValue({
           pricingPlans: [
             {

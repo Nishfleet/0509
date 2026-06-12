@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { Form, Link, useLoaderData } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { SubmitButton } from "~/components/submit-button";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const meta: MetaFunction = () => [
@@ -149,9 +150,9 @@ export default function UnsubscribeRoute() {
                 workspace.
               </p>
               <Form method="post">
-                <button type="submit" className="f9-button f9-button-primary">
+                <SubmitButton className="f9-button f9-button-primary" pendingLabel="Working…">
                   Unsubscribe
-                </button>
+                </SubmitButton>
               </Form>
             </>
           )}

@@ -1,6 +1,7 @@
 import { Form, Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
+import { SubmitButton } from "~/components/submit-button";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const PAYMENT_ISSUE_STATUSES = new Set(["subscription.failed", "subscription.on_hold"]);
@@ -175,9 +176,9 @@ export default function BillingRoute() {
               <span>
                 Update your card, download invoices, or cancel — self-serve, takes a minute.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
-                  <button className="f9-secondary-button" type="submit">
+                  <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
                     Open billing portal
-                  </button>
+                  </SubmitButton>
                 </Form>
               </span>
             </div>

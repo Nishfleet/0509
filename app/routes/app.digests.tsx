@@ -9,6 +9,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { SubmitButton } from "~/components/submit-button";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -234,9 +235,9 @@ export default function DigestsRoute() {
                     <Form method="post">
                       <input name="intent" type="hidden" value="share-digest" />
                       <input name="digestId" type="hidden" value={data.selectedDigest.id} />
-                      <button className="f9-primary-button" type="submit">
+                      <SubmitButton className="f9-primary-button" intent="share-digest" pendingLabel="Creating…">
                         Share snapshot
-                      </button>
+                      </SubmitButton>
                     </Form>
                   </div>
                 </div>

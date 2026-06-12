@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { SubmitButton } from "~/components/submit-button";
 import {
   buildSearchParams,
   fingerprintSavedQuery,
@@ -173,9 +174,14 @@ export default function AppOnboardRoute() {
                   />
                 </label>
                 <div className="f9-action-row">
-                  <button className="f9-secondary-button" disabled={!trimmedWebsite} type="submit">
+                  <SubmitButton
+                    className="f9-secondary-button"
+                    disabled={!trimmedWebsite}
+                    getAction="/search"
+                    pendingLabel="Searching…"
+                  >
                     Search competitor ads
-                  </button>
+                  </SubmitButton>
                   <small className="f9-muted-copy">
                     You can edit the brand name on the search page.
                   </small>
@@ -195,9 +201,14 @@ export default function AppOnboardRoute() {
                   <Form className="f9-auth-form" method="post">
                     <input name="intent" type="hidden" value="create-watchlist" />
                     <input name="website" type="hidden" value={trimmedWebsite} />
-                    <button className="f9-primary-button" disabled={!trimmedWebsite} type="submit">
+                    <SubmitButton
+                      className="f9-primary-button"
+                      disabled={!trimmedWebsite}
+                      intent="create-watchlist"
+                      pendingLabel="Creating…"
+                    >
                       Create watchlist for {competitor.query || "this competitor"}
-                    </button>
+                    </SubmitButton>
                   </Form>
                 </>
               ) : (
@@ -220,9 +231,9 @@ export default function AppOnboardRoute() {
           <div className="f9-onboard-actions">
             <Form method="post">
               <input name="intent" type="hidden" value="finish" />
-              <button className="f9-secondary-button" type="submit">
+              <SubmitButton className="f9-secondary-button" intent="finish" pendingLabel="Working…">
                 Skip for now
-              </button>
+              </SubmitButton>
             </Form>
             <Link className="f9-text-link" to={previewParams ? `/search?${previewParams}` : "/search"}>
               Go straight to search instead
