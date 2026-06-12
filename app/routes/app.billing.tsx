@@ -17,11 +17,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const portalNotice = url.searchParams.get("portal");
 
   const { dailyProofCapForPlan } = await import("~/lib/monitoring.server");
-  const [billing, proofUsage, watchlistUsage, collectionUsage] = await Promise.all([
+  const { listActiveProofCreditGrants } = await import("~/lib/plan.server");
+  const [billing, proofUsage, watchlistUsage, collectionUsage, creditGrants] = await Promise.all([
     getUserPlanBillingInfo(env, session.user.id),
     getProofUsageSummary(env, session.user.id),
     checkPlanLimit(env, session.user.id, "watchlists"),
     checkPlanLimit(env, session.user.id, "collections"),
+    listActiveProofCreditGrants(env, session.user.id),
   ]);
 
   return {
@@ -32,6 +34,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     collectionUsage,
     planLimits: PLAN_LIMITS[billing.plan],
     dailyProofCap: dailyProofCapForPlan(billing.plan, proofUsage.extraCredits),
+    creditGrants,
     blockedCheckout: checkoutNotice === "already-subscribed",
     portalUnavailable: portalNotice === "unavailable",
     hasPortal: Boolean(billing.dodoCustomerId),
@@ -142,6 +145,15 @@ export default function BillingRoute() {
                 : ""}
             </span>
           </div>
+          {data.creditGrants.map((grant) => (
+            <div className="f9-work-row" key={grant.expiresAt}>
+              <strong>Purchased credits</strong>
+              <span>
+                {grant.credits} evidence checks expire on {formatDate(grant.expiresAt)} — unused
+                credits lapse, so spend them on busy weeks.
+              </span>
+            </div>
+          ))}
           <div className="f9-work-row">
             <strong>Digest schedule</strong>
             <span>{digestCadenceLabel}</span>

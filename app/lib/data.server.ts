@@ -1855,7 +1855,9 @@ export async function listActiveWatchlists(
           user_plan.plan IN ('starter', 'agency')
           OR (? = 1 AND user_plan.plan = 'scout')
         )
-      ORDER BY watchlist.updated_at ASC
+      ORDER BY
+        CASE user_plan.plan WHEN 'agency' THEN 0 WHEN 'starter' THEN 1 ELSE 2 END ASC,
+        watchlist.updated_at ASC
     `,
     options.includeScout ? 1 : 0,
   );
