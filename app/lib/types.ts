@@ -189,6 +189,7 @@ export interface AdRecord {
   source: AdDiscoverySource;
   analysisFields: AnalysisFieldInput[];
   creativeText?: string | null;
+  creativeImageUrl?: string | null;
   creativeTextCaptureMethod?: CreativeTextCaptureMethod | null;
   creativeTextMetadata?: Record<string, unknown> | null;
   landingPage?: LandingPageSnapshotData | null;

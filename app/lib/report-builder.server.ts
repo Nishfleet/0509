@@ -154,7 +154,9 @@ function buildReportRow(
     cta: ad?.cta ?? "CTA unavailable",
     formatLabel: ad?.format ?? "unknown",
     languageLabel: ad?.languageLabel ?? "Language unavailable",
-    previewImageUrl: ad?.adSnapshotUrl ?? null,
+    // Prefer the actual captured creative image; the snapshot URL is only a
+    // legacy fallback (it may point at an Ad Library page rather than media).
+    previewImageUrl: ad?.creativeImageUrl ?? ad?.adSnapshotUrl ?? null,
     creativeText: creativeText || "Creative text unavailable",
     translatedText: findAnalysisFieldValue(ad, "translated_text") || "Translation unavailable",
     landingPage: {

@@ -7,6 +7,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { AdThumb } from "~/components/ad-thumb";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
@@ -421,9 +422,12 @@ export default function CollectionsRoute() {
                   {data.items.map((item) => (
                     <article className="f9-work-row" key={item.id}>
                       <div className="f9-panel-toolbar">
-                        <div>
-                          <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
-                          <p className="f9-muted-copy">{item.ad.hook}</p>
+                        <div className="f9-ad-thumb-row">
+                          <AdThumb ad={item.ad} />
+                          <div>
+                            <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
+                            <p className="f9-muted-copy">{item.ad.hook}</p>
+                          </div>
                         </div>
                         <span className="f9-status-pill">{item.ad.platforms?.[0] ?? item.ad.format}</span>
                       </div>

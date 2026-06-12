@@ -59,6 +59,7 @@ describe("deliverWeeklyDigest", () => {
     });
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -165,6 +166,7 @@ describe("deliverWeeklyDigest", () => {
     const upsertDigestDelivery = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -304,6 +306,7 @@ describe("deliverWeeklyDigest", () => {
     });
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -416,6 +419,7 @@ describe("deliverWeeklyDigest", () => {
     const sendDigestWhatsApp = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -533,6 +537,7 @@ describe("deliverWeeklyDigest", () => {
     });
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -661,6 +666,7 @@ describe("deliverWeeklyDigest", () => {
   it("reuses an existing idempotent email attempt instead of sending twice", async () => {
     const sendMock = mockEmailSend("msg_1");
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi
         .fn()
@@ -780,6 +786,7 @@ describe("deliverWeeklyDigest", () => {
     const upsertDigestDelivery = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       updateDeliveryAttemptResult,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
@@ -906,6 +913,7 @@ describe("deliverWeeklyDigest", () => {
     const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -1011,6 +1019,7 @@ describe("deliverWatchlistAlerts", () => {
     });
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -1108,6 +1117,126 @@ describe("deliverWatchlistAlerts", () => {
         eventIds: ["event-1"],
       }),
     );
+    // The referenced ad had no captured creative, so no image is embedded.
+    expect(String(emailSendPayload(sendMock).html)).not.toContain("<img");
+  });
+
+  it("embeds the primary event's creative image when the referenced ad has one captured", async () => {
+    const sendMock = mockEmailSend("msg_instant_creative");
+    const listAdsByIds = vi.fn().mockResolvedValue([
+      {
+        metaAdId: "meta-1",
+        advertiser: "Nykaa",
+        creativeImageUrl: "https://cdn.example.com/creative-1.jpg?sig=\"x\"&v=1",
+      },
+    ]);
+
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds,
+      createDeliveryAttempt: vi.fn().mockResolvedValue("attempt-instant-creative"),
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: true,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      upsertDeliveryTarget: vi.fn().mockResolvedValue({
+        id: "email-target-1",
+        userId: "user-1",
+        watchlistId: null,
+        channel: "email",
+        targetValue: "owner@example.com",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "account_email",
+        optedInAt: "2026-04-19T00:00:00.000Z",
+        isPaused: false,
+        pausedAt: null,
+        optedOutAt: null,
+        templateEligible: false,
+        lastSuccessfulDeliveryAt: null,
+        lastSuccessfulAttemptId: null,
+        providerIdentifier: null,
+        metadata: {},
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+    const result = await deliverWatchlistAlerts(
+      {
+        ...emailEnv,
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.in",
+      } as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        watchlist: {
+          id: "watch-1",
+          userId: "user-1",
+          name: "Nykaa watch",
+        },
+        events: [
+          {
+            id: "event-1",
+            watchlistId: "watch-1",
+            runId: "run-1",
+            eventType: "ad_new",
+            status: "confirmed",
+            importanceScore: 90,
+            adId: "meta-1",
+            baselineFromRunId: null,
+            candidateId: "candidate-1",
+            proofCaptureId: "proof-1",
+            title: "New ad detected",
+            summary: "Nykaa launched a new ad.",
+            metadata: {
+              advertiser: "Nykaa",
+            },
+            confirmedAt: "2026-04-19T00:00:00.000Z",
+            suppressedAt: null,
+            invalidatedAt: null,
+            lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+            createdAt: "2026-04-19T00:00:00.000Z",
+          },
+        ],
+      },
+    );
+
+    expect(result).toEqual({
+      attempts: 1,
+      channels: ["email"],
+    });
+    expect(listAdsByIds).toHaveBeenCalledTimes(1);
+    expect(listAdsByIds).toHaveBeenCalledWith(expect.anything(), ["meta-1"]);
+    const html = String(emailSendPayload(sendMock).html);
+    expect(html).toContain(
+      '<img src="https://cdn.example.com/creative-1.jpg?sig=&quot;x&quot;&amp;v=1" alt="Ad creative" width="280"',
+    );
+    expect(html).toContain("max-width: 280px; border-radius: 8px; border: 1px solid #e4e7ec; margin: 12px 0;");
   });
 
   it("sends after quiet hours when the earlier deferral used the same alert batch", async () => {
@@ -1180,6 +1309,7 @@ describe("deliverWatchlistAlerts", () => {
     });
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey,
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -1317,6 +1447,7 @@ describe("reconcileDeliveryStatus", () => {
     const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi.fn(),
       getDeliveryTargetById: vi.fn().mockResolvedValue(whatsappTarget()),
@@ -1394,6 +1525,7 @@ describe("reconcileDeliveryStatus", () => {
     const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi.fn(),
       getDeliveryTargetById: vi.fn().mockResolvedValue(
@@ -1453,6 +1585,7 @@ describe("reconcileDeliveryStatus", () => {
     const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi.fn(),
       getDeliveryTargetById: vi.fn().mockResolvedValue(whatsappTarget()),
@@ -1511,6 +1644,7 @@ describe("reconcileDeliveryStatus", () => {
     const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi.fn(),
       getDeliveryTargetById: vi.fn().mockResolvedValue(
@@ -1577,6 +1711,7 @@ describe("reconcileDeliveryStatus", () => {
     const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
       getDeliveryAttemptByIdempotencyKey: vi.fn(),
       getDeliveryTargetById: vi.fn(),
@@ -1682,6 +1817,7 @@ describe("instant alert failed-send retry", () => {
     };
 
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
       updateDeliveryAttemptResult,
       getDeliveryAttemptByIdempotencyKey: vi.fn(async (_env: unknown, key: string) =>
@@ -1792,6 +1928,7 @@ describe("alert email content quality", () => {
   it("renders the before/now diff and evidence link in single-event instant emails", async () => {
     const sendMock = mockEmailSend("msg_diff_1");
     vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn().mockResolvedValue("attempt-1"),
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({

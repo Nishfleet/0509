@@ -14,6 +14,7 @@ import {
   getWatchlistDeliveryConfig,
   getWorkspaceDeliveryConfig,
   legacyWorkspaceDeliveryDefaults,
+  listAdsByIds,
   listDeliveryTargets,
   reconcileDeliveryAttemptByProviderMessageId,
   updateDeliveryAttemptResult,
@@ -25,6 +26,7 @@ import type { AppEnv } from "~/lib/env.server";
 import { emailFromAddress, isEmailSendingConfigured } from "~/lib/env.server";
 import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
+  AdRecord,
   DeliveryChannel,
   DeliveryAttemptRecord,
   DeliveryTargetRecord,
@@ -205,10 +207,23 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     ? await resolveAlertSlackTargets(env, input.userId, input.watchlist.id)
     : [];
 
+  // One batched lookup so alert emails can show the primary event's captured
+  // creative. Only fetched when an email will actually render it.
+  const alertAdsById =
+    emailTargets.length > 0
+      ? await loadAlertAdsById(env, input.events)
+      : new Map<string, AdRecord>();
+
   const attempts: DigestAttemptSummary[] = [];
 
   for (const batch of batches) {
-    const content = buildInstantAlertContent(input.watchlist, batch.events, batch.provisional, env);
+    const content = buildInstantAlertContent(
+      input.watchlist,
+      batch.events,
+      batch.provisional,
+      env,
+      alertAdsById,
+    );
 
     if (batch.allowedChannels.includes("email")) {
       for (const target of emailTargets) {
@@ -2049,15 +2064,51 @@ function renderEventDiffText(event: WatchEventRecord) {
   return from && to ? ` — was "${from}", now "${to}"` : "";
 }
 
+// Fetches the ads referenced by alert events in one batched call. A missing
+// thumbnail must never block an alert, so lookup failures degrade to no image.
+async function loadAlertAdsById(env: AppEnv, events: WatchEventRecord[]) {
+  const adIds = events
+    .map((event) => event.adId)
+    .filter((adId): adId is string => Boolean(adId));
+
+  if (adIds.length === 0) {
+    return new Map<string, AdRecord>();
+  }
+
+  try {
+    const ads = await listAdsByIds(env, adIds);
+    return new Map(ads.map((ad) => [ad.metaAdId, ad]));
+  } catch {
+    return new Map<string, AdRecord>();
+  }
+}
+
+// One creative image per alert email: the primary event's, only when a real
+// https creative URL was captured. Silent skip otherwise — no placeholders.
+function renderCreativeImageHtml(
+  event: WatchEventRecord,
+  adsById: Map<string, AdRecord> | undefined,
+) {
+  const ad = event.adId ? adsById?.get(event.adId) : null;
+  const imageUrl = ad?.creativeImageUrl?.trim();
+  if (!imageUrl || !/^https:\/\//i.test(imageUrl)) {
+    return "";
+  }
+
+  return `<img src="${escapeHtml(imageUrl)}" alt="Ad creative" width="280" style="display: block; max-width: 280px; border-radius: 8px; border: 1px solid #e4e7ec; margin: 12px 0;">`;
+}
+
 function buildInstantAlertContent(
   watchlist: Pick<WatchlistRecord, "id" | "name">,
   events: WatchEventRecord[],
   provisional: boolean,
   env: AppEnv,
+  adsById?: Map<string, AdRecord>,
 ): InstantAlertContent {
   const primaryEvent = events[0];
   const competitor = readCompetitorLabel(primaryEvent) ?? watchlist.name;
   const watchlistUrl = buildWatchlistUrl(env, watchlist.id);
+  const creativeImageHtml = renderCreativeImageHtml(primaryEvent, adsById);
 
   if (events.length === 1) {
     const isBaseline =
@@ -2082,6 +2133,7 @@ function buildInstantAlertContent(
           <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
           <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
           ${renderEventDiffHtml(primaryEvent)}
+          ${creativeImageHtml}
           ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">See the evidence</a></p>` : ""}
         </div>
       `,
@@ -2101,6 +2153,7 @@ function buildInstantAlertContent(
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
         <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
         <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
+        ${creativeImageHtml}
         <ul style="padding-left: 18px;">
           ${events
             .map(
