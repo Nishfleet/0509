@@ -56,6 +56,8 @@ function mockReliabilityDependencies(input: {
   listWatchEventsBetweenImpl?: ReturnType<typeof vi.fn>;
   retryableDigestRuns?: Array<Record<string, unknown>>;
   retryableInstantAttempts?: Array<Record<string, unknown>>;
+  runStats?: { runs: number; watchlistsChecked: number; adsSeen: number };
+  observationsForRun?: Array<Record<string, unknown>>;
   getDigestImpl?: ReturnType<typeof vi.fn>;
 }) {
   const createWatchlistRun = vi.fn(
@@ -102,6 +104,7 @@ function mockReliabilityDependencies(input: {
   const listRetryableDigestRuns = vi
     .fn()
     .mockResolvedValue(input.retryableDigestRuns ?? []);
+  const createWatchEvent = vi.fn(async () => `event-${Math.floor(1e6 * 0.5)}`);
   const createDigestRun = vi.fn().mockResolvedValue("digest-run-current");
 
   vi.doMock("~/lib/analysis.server", () => ({
@@ -130,20 +133,25 @@ function mockReliabilityDependencies(input: {
     createDigestRun,
     createEventCandidate: vi.fn(),
     createProofCapture: vi.fn(),
-    createWatchEvent: vi.fn(),
+    createWatchEvent,
     createWatchlistRun,
     finishWatchlistRun,
     getDigest,
     getDigestByPeriod: vi.fn().mockResolvedValue(null),
     getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
     getSavedQuery: vi.fn(),
+    getSuccessfulRunStatsForUserBetween: vi
+      .fn()
+      .mockResolvedValue(input.runStats ?? { runs: 0, watchlistsChecked: 0, adsSeen: 0 }),
     getUserDeliveryProfile: vi.fn().mockResolvedValue({ name: "Owner", email: "owner@example.com" }),
     getWatchlist: vi.fn(async (_env: unknown, watchlistId: string) =>
       input.watchlists.find((candidate) => candidate.id === watchlistId) ?? null,
     ),
     hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: unknown[]) => ads),
     listActiveWatchlists: vi.fn().mockResolvedValue(input.watchlists),
-    listObservationsForRun: vi.fn().mockResolvedValue([]),
+    listObservationsForRun: vi.fn(async (_env: unknown, runId: string) =>
+      runId.startsWith("run-") ? (input.observationsForRun ?? []) : [],
+    ),
     listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listRetryableDigestRuns,
@@ -186,6 +194,7 @@ function mockReliabilityDependencies(input: {
 
   return {
     env,
+    createWatchEvent,
     createWatchlistRun,
     finishWatchlistRun,
     searchAdsViaSourceResolver,
@@ -520,5 +529,80 @@ describe("instant alert flush", () => {
 
     expect(result.groups).toBe(0);
     expect(mocks.deliverWatchlistAlerts).not.toHaveBeenCalled();
+  });
+});
+
+describe("all-quiet heartbeat digests", () => {
+  it("sends an all-quiet digest when the period had successful scans but no events", async () => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      digestUsers: [{ id: "user-1", email: "owner@example.com", name: "Owner" }],
+      listWatchEventsBetweenImpl: vi.fn().mockResolvedValue([]),
+      runStats: { runs: 7, watchlistsChecked: 1, adsSeen: 84 },
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeScans: false,
+      includeDigests: true,
+      digestCadence: "weekly",
+      scheduledTime: Date.parse("2026-06-15T05:00:00.000Z"),
+    });
+
+    expect(result.digests).toBe(1);
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledTimes(1);
+    const call = mocks.deliverWeeklyDigest.mock.calls[0]?.[1] as {
+      items: unknown[];
+      heartbeat: { runs: number; adsSeen: number } | null;
+    };
+    expect(call.items).toHaveLength(0);
+    expect(call.heartbeat).toMatchObject({ runs: 7, adsSeen: 84 });
+  });
+
+  it("stays silent when there were neither events nor successful scans", async () => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      digestUsers: [{ id: "user-1", email: "owner@example.com", name: "Owner" }],
+      listWatchEventsBetweenImpl: vi.fn().mockResolvedValue([]),
+      runStats: { runs: 0, watchlistsChecked: 0, adsSeen: 0 },
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeScans: false,
+      includeDigests: true,
+      digestCadence: "weekly",
+      scheduledTime: Date.parse("2026-06-15T05:00:00.000Z"),
+    });
+
+    expect(result.digests).toBe(0);
+    expect(mocks.deliverWeeklyDigest).not.toHaveBeenCalled();
+  });
+});
+
+describe("first-scan baseline event", () => {
+  it("records one baseline event instead of an ad_new flood on the first scan", async () => {
+    const observations = Array.from({ length: 3 }, (_, index) => ({
+      id: `obs-${index}`,
+      ad_id: `ad-${index}`,
+      landing_page_url: null,
+      metadata_json: "{}",
+    }));
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      observationsForRun: observations,
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: false,
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    // one event for the whole baseline, not three ad_new events
+    expect(mocks.createWatchEvent).toHaveBeenCalledTimes(1);
+    const draft = (mocks.createWatchEvent.mock.calls[0] as unknown[])[1] as Record<string, unknown>;
+    expect(String(draft.title)).toContain("Baseline captured: 3 active ads");
+    expect((draft.metadata as Record<string, unknown>).kind).toBe("baseline");
   });
 });
