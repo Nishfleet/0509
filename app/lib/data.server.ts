@@ -341,6 +341,8 @@ interface ShareLinkRow {
   is_snapshot: number;
   snapshot_payload_json: string | null;
   created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
 }
 
 interface MetaLogRow {
@@ -3969,6 +3971,8 @@ export async function listRetryableDigestRuns(
   }));
 }
 
+export const SHARE_LINK_DEFAULT_TTL_DAYS = 90;
+
 export async function createShareLink(
   env: AppEnv,
   session: AppSession,
@@ -3977,10 +3981,15 @@ export async function createShareLink(
     resourceId: string;
     isSnapshot: boolean;
     snapshotPayload?: JsonRecord | null;
+    expiresAt?: string | null;
   },
 ) {
   const id = createId();
   const token = crypto.randomUUID().replaceAll("-", "");
+  const expiresAt =
+    input.expiresAt !== undefined
+      ? input.expiresAt
+      : new Date(Date.now() + SHARE_LINK_DEFAULT_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
   await run(
     env,
     `
@@ -3992,9 +4001,10 @@ export async function createShareLink(
         resource_id,
         is_snapshot,
         snapshot_payload_json,
-        created_at
+        created_at,
+        expires_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     id,
     token,
@@ -4004,22 +4014,75 @@ export async function createShareLink(
     input.isSnapshot ? 1 : 0,
     input.snapshotPayload ? jsonValue(input.snapshotPayload) : null,
     nowIso(),
+    expiresAt,
   );
 
-  return { id, token };
+  return { id, token, expiresAt };
 }
 
 export async function getShareLink(env: AppEnv, token: string) {
+  // Share tokens are bearer credentials; expired or revoked links must
+  // behave exactly like links that never existed. expires_at NULL is legacy
+  // (pre-expiry links customers already sent out).
   const row = await one<ShareLinkRow>(
     env,
-    "SELECT * FROM share_link WHERE token = ?",
+    `
+      SELECT *
+      FROM share_link
+      WHERE token = ?
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ?)
+    `,
     token,
+    nowIso(),
   );
 
   if (!row) {
     return null;
   }
 
+  return toShareLinkRecord(row);
+}
+
+export async function listActiveShareLinks(env: AppEnv, userId: string, limit = 50) {
+  const rows = await many<ShareLinkRow>(
+    env,
+    `
+      SELECT *
+      FROM share_link
+      WHERE user_id = ?
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ?)
+      ORDER BY created_at DESC
+      LIMIT ?
+    `,
+    userId,
+    nowIso(),
+    limit,
+  );
+
+  return rows.map(toShareLinkRecord);
+}
+
+export async function revokeShareLink(env: AppEnv, userId: string, shareLinkId: string) {
+  const db = ensureDb(env);
+  const result = await db
+    .prepare(
+      `
+        UPDATE share_link
+        SET revoked_at = ?
+        WHERE id = ?
+          AND user_id = ?
+          AND revoked_at IS NULL
+      `,
+    )
+    .bind(nowIso(), shareLinkId, userId)
+    .run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+function toShareLinkRecord(row: ShareLinkRow): ShareLinkRecord {
   return {
     id: row.id,
     token: row.token,
@@ -4029,6 +4092,8 @@ export async function getShareLink(env: AppEnv, token: string) {
     isSnapshot: row.is_snapshot === 1,
     snapshotPayload: parseJson<JsonRecord | null>(row.snapshot_payload_json, null),
     createdAt: row.created_at,
+    expiresAt: row.expires_at ?? null,
+    revokedAt: row.revoked_at ?? null,
   } satisfies ShareLinkRecord;
 }
 
