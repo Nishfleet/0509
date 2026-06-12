@@ -30,6 +30,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/plan.server");
+  vi.doUnmock("~/lib/monitoring.server");
 });
 
 function mockBillingLoaderDependencies(input: {
@@ -44,6 +45,9 @@ function mockBillingLoaderDependencies(input: {
   vi.doMock("~/lib/data.server", () => ({
     getUserPlanBillingInfo: vi.fn().mockResolvedValue(input.billing),
   }));
+  vi.doMock("~/lib/monitoring.server", () => ({
+    dailyProofCapForPlan: vi.fn(() => 40),
+  }));
   vi.doMock("~/lib/plan.server", () => ({
     PLAN_LIMITS: {
       free: { watchlists: 0, collections: 0, digests: false, digestCadence: "none", proofCapturesPerMonth: 0 },
@@ -54,6 +58,7 @@ function mockBillingLoaderDependencies(input: {
         ? { allowed: true, limit: 10, current: 3 }
         : { allowed: true, limit: 25, current: 5 },
     ),
+    listActiveProofCreditGrants: vi.fn().mockResolvedValue([]),
     getProofUsageSummary: vi.fn().mockResolvedValue({
       plan: "starter",
       used: 40,
@@ -143,6 +148,8 @@ describe("billing page", () => {
       watchlistUsage: { current: 3, limit: 10 },
       collectionUsage: { current: 5, limit: 25 },
       planLimits: { digestCadence: "weekly" },
+      dailyProofCap: 40,
+      creditGrants: [],
       blockedCheckout: false,
     });
 
@@ -164,6 +171,8 @@ describe("billing page", () => {
       watchlistUsage: { current: 0, limit: 0 },
       collectionUsage: { current: 0, limit: 0 },
       planLimits: { digestCadence: "none" },
+      dailyProofCap: 0,
+      creditGrants: [],
       blockedCheckout: false,
     });
 
