@@ -66,6 +66,7 @@ const SCRIPT_PATTERNS = {
   hiragana: /[\u3040-\u309F]/g,
   katakana: /[\u30A0-\u30FF]/g,
   hangul: /[\uAC00-\uD7AF]/g,
+  ethiopic: /[\u1200-\u137F]/g,
 } as const;
 
 const INDIC_SCRIPTS = [
@@ -89,9 +90,108 @@ const GLOBAL_SCRIPTS = [
   "hiragana",
   "katakana",
   "hangul",
+  "ethiopic",
 ] as const;
 
-export type LanguageLabel = "English" | "Hinglish" | "Hindi" | "Regional" | "Global" | "Unknown";
+interface LatinLanguageProfile {
+  label: LatinLanguageLabel;
+  cues: readonly string[];
+  chars?: RegExp;
+}
+
+const LATIN_LANGUAGE_PROFILES: readonly LatinLanguageProfile[] = [
+  {
+    label: "Spanish",
+    cues: ["que", "para", "con", "por", "ahora", "hoy", "descuento", "envio", "gratis", "oferta", "tienda", "nuevo", "mejor", "precio", "compra"],
+    chars: /[ñ¿¡]/g,
+  },
+  {
+    label: "Portuguese",
+    cues: ["nao", "voce", "para", "com", "mais", "hoje", "desconto", "frete", "gratis", "oferta", "loja", "novo", "melhor", "preco", "agora", "compre"],
+    chars: /[ãõç]/g,
+  },
+  {
+    label: "French",
+    cues: ["vous", "votre", "avec", "pour", "dans", "livraison", "gratuite", "maintenant", "offre", "remise", "achetez", "nouveau", "prix", "des", "chez"],
+    chars: /[éèêàçœ]/g,
+  },
+  {
+    label: "German",
+    cues: ["und", "fur", "mit", "jetzt", "heute", "kostenlos", "versand", "kaufen", "angebot", "rabatt", "nicht", "mehr", "neu", "preis", "ihre", "sichern"],
+    chars: /[äöüß]/g,
+  },
+  {
+    label: "Italian",
+    cues: ["che", "con", "ora", "oggi", "sconto", "spedizione", "gratuita", "acquista", "offerta", "piu", "nuovo", "prezzo", "della", "sulla"],
+    chars: /[àèéìòù]/g,
+  },
+  {
+    label: "Dutch",
+    cues: ["het", "een", "voor", "vandaag", "korting", "verzending", "koop", "aanbieding", "alleen", "meer", "nieuw", "prijs", "jouw", "bestel", "ontdek"],
+  },
+  {
+    label: "Turkish",
+    cues: ["icin", "simdi", "bugun", "indirim", "ucretsiz", "kargo", "satin", "firsat", "sadece", "daha", "yeni", "fiyat", "hemen", "alin"],
+    chars: /[şğıçöüİ]/g,
+  },
+  {
+    label: "Polish",
+    cues: ["dla", "teraz", "dzis", "znizka", "darmowa", "dostawa", "oferta", "tylko", "wiecej", "nowy", "cena", "kup", "sklep", "sprawdz"],
+    chars: /[ąćęłńśźż]/g,
+  },
+  {
+    label: "Indonesian",
+    cues: ["yang", "dan", "untuk", "dengan", "sekarang", "hari", "diskon", "gratis", "ongkir", "beli", "promo", "hanya", "lebih", "baru", "harga", "belanja"],
+  },
+  {
+    label: "Vietnamese",
+    cues: ["cho", "ngay", "giam", "gia", "mien", "phi", "mua", "moi", "chi", "khuyen", "mai"],
+    chars: /[đàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/g,
+  },
+  {
+    label: "Swahili",
+    cues: ["kwa", "sasa", "leo", "punguzo", "bure", "nunua", "ofa", "zaidi", "bei", "duka", "pata", "kila", "bidhaa", "haraka"],
+  },
+  {
+    label: "Afrikaans",
+    cues: ["vir", "nou", "vandag", "afslag", "koop", "aanbod", "meer", "nuwe", "prys", "jou", "ons", "baie", "gratis", "kry"],
+  },
+  {
+    label: "Hausa",
+    cues: ["yanzu", "yau", "rangwame", "kyauta", "saya", "tayin", "kawai", "sabon", "farashi", "samu", "duba"],
+  },
+  {
+    label: "Yoruba",
+    cues: ["ati", "bayi", "loni", "tuntun", "owo", "gbogbo", "ninu", "wakati", "ra"],
+    chars: /[ẹọṣ]/g,
+  },
+] as const;
+
+
+export type LatinLanguageLabel =
+  | "Spanish"
+  | "Portuguese"
+  | "French"
+  | "German"
+  | "Italian"
+  | "Dutch"
+  | "Turkish"
+  | "Polish"
+  | "Indonesian"
+  | "Vietnamese"
+  | "Swahili"
+  | "Afrikaans"
+  | "Hausa"
+  | "Yoruba";
+
+export type LanguageLabel =
+  | "English"
+  | "Hinglish"
+  | "Hindi"
+  | "Regional"
+  | "Global"
+  | LatinLanguageLabel
+  | "Unknown";
 
 export interface LanguageClassification {
   label: LanguageLabel;
@@ -155,10 +255,38 @@ export function classifyLanguage(input: {
   }
 
   if (scriptSignals.latin >= 10) {
+    const best = bestLatinProfile(sample);
+    if (best) {
+      return buildResult(best.label, best.confidence, sampleLength, scriptSignals, cueMatches, "latin_language_cues");
+    }
     return buildResult("English", 0.79, sampleLength, scriptSignals, cueMatches, "latin_without_hinglish_cues");
   }
 
   return buildResult("Unknown", 0.35, sampleLength, scriptSignals, cueMatches, "conflicting_or_weak_signal");
+}
+
+function bestLatinProfile(sample: string): { label: LatinLanguageLabel; confidence: number } | null {
+  const lower = sample.toLowerCase();
+  let winner: { label: LatinLanguageLabel; score: number } | null = null;
+
+  for (const profile of LATIN_LANGUAGE_PROFILES) {
+    const cueHits = profile.cues.reduce((total, word) => {
+      const matches = lower.match(new RegExp(`\\b${escapeRegex(word)}\\b`, "gi"));
+      return total + (matches?.length ?? 0);
+    }, 0);
+    const charHits = Math.min(6, profile.chars ? (sample.match(profile.chars)?.length ?? 0) : 0);
+    const score = cueHits + charHits * 2;
+
+    if (score >= 3 && (!winner || score > winner.score)) {
+      winner = { label: profile.label, score };
+    }
+  }
+
+  if (!winner) {
+    return null;
+  }
+
+  return { label: winner.label, confidence: Math.min(0.93, 0.6 + winner.score * 0.04) };
 }
 
 function buildResult(
