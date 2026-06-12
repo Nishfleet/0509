@@ -2197,6 +2197,11 @@ img {
   background: linear-gradient(135deg, #f3fdf9 0%, #fff 55%);
 }
 
+.f9-checkout-banner.is-pending {
+  border-color: rgba(37, 99, 235, 0.3);
+  background: linear-gradient(135deg, #f4f8ff 0%, #fff 55%);
+}
+
 .f9-checkout-banner h2 {
   display: flex;
   align-items: center;
@@ -3804,6 +3809,19 @@ button[aria-busy="true"] {
   min-width: 0;
 }
 
+.f9-numbered-guide {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  color: #425466;
+  font-size: 0.92rem;
+}
+
+.f9-copy-button {
+  white-space: nowrap;
+}
+
 .f9-panel-toolbar {
   justify-content: space-between;
   gap: 16px;
@@ -4474,5 +4492,31 @@ button[aria-busy="true"] {
   .report-card {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (max-width: 640px) {
+  .f9-panel-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .f9-panel-toolbar .f9-action-row {
+    flex-wrap: wrap;
+  }
+
+  .f9-action-row {
+    flex-wrap: wrap;
   }
 }

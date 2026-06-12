@@ -7,6 +7,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { ReportView } from "~/components/report-view";
+import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
 import { parseReportId } from "~/lib/report";
 
@@ -69,12 +70,15 @@ export default function ReportsRoute() {
       {actionData?.message ? (
         <p className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           {actionData.ok && actionData.message.startsWith("http") ? (
-            <a href={actionData.message} rel="noreferrer" target="_blank">
-              {actionData.message}
-            </a>
-          ) : (
-            actionData.message
-          )}
+            <>
+              <a href={actionData.message} rel="noreferrer" target="_blank">
+                {actionData.message}
+              </a>{" "}
+              <CopyButton value={actionData.message} />
+            </>
+            ) : (
+              actionData.message
+            )}
         </p>
       ) : null}
 
