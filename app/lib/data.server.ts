@@ -1766,19 +1766,77 @@ async function ensureTags(env: AppEnv, userId: string, labels: string[]) {
   return ids;
 }
 
-export async function listWatchlists(env: AppEnv, userId: string) {
+export async function listWatchlists(
+  env: AppEnv,
+  userId: string,
+  options: { includeInactive?: boolean } = {},
+) {
+  // Paused watchlists default to hidden (digests, dashboard counts), but the
+  // watchlists page opts in: after a cancellation auto-paused everything, an
+  // invisible watchlist looked like a deleted one — a returning subscriber
+  // found an "empty" product with no way to resume.
   const rows = await many<WatchlistRow>(
     env,
-	    `
-	      SELECT *
-	      FROM watchlist
-	      WHERE user_id = ?
-	        AND is_active = 1
-	      ORDER BY updated_at DESC
-	    `,
+    options.includeInactive
+      ? `
+        SELECT *
+        FROM watchlist
+        WHERE user_id = ?
+        ORDER BY is_active DESC, updated_at DESC
+      `
+      : `
+        SELECT *
+        FROM watchlist
+        WHERE user_id = ?
+          AND is_active = 1
+        ORDER BY updated_at DESC
+      `,
     userId,
   );
   return rows.map(toWatchlistRecord);
+}
+
+export async function reactivateWatchlistsUpToPlanLimit(
+  env: AppEnv,
+  userId: string,
+  limit: number,
+) {
+  // Inverse of deactivateWatchlistsBeyondPlanLimit: when a plan is granted
+  // (first purchase, renewal, resubscribe), bring the most recently active
+  // paused watchlists back — up to the plan limit, counting current actives.
+  const db = ensureDb(env);
+  const activeRow = await one<{ count: number }>(
+    env,
+    "SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1",
+    userId,
+  );
+  const slots = Math.max(0, Math.floor(limit) - Number(activeRow?.count ?? 0));
+  if (slots === 0) {
+    return 0;
+  }
+
+  const result = await db
+    .prepare(
+      `
+        UPDATE watchlist
+        SET is_active = 1,
+            updated_at = ?
+        WHERE user_id = ?
+          AND is_active = 0
+          AND id IN (
+            SELECT id
+            FROM watchlist
+            WHERE user_id = ?
+              AND is_active = 0
+            ORDER BY updated_at DESC
+            LIMIT ?
+          )
+      `,
+    )
+    .bind(nowIso(), userId, userId, slots)
+    .run();
+
+  return Number(result.meta?.changes ?? 0);
 }
 
 export async function listActiveWatchlists(
