@@ -606,3 +606,70 @@ describe("first-scan baseline event", () => {
     expect((draft.metadata as Record<string, unknown>).kind).toBe("baseline");
   });
 });
+
+describe("stale-cache scan honesty", () => {
+  it("records a failed run and detects nothing when discovery served stale cache", async () => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+    });
+    mocks.searchAdsViaSourceResolver.mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "stale",
+      discoveryStatus: "cache_only",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: false,
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(result.inlineFailures).toBe(1);
+    // no fabricated events from days-old cached data
+    expect(mocks.createWatchEvent).not.toHaveBeenCalled();
+    const finishStatuses = mocks.finishWatchlistRun.mock.calls.map(
+      (call) => (call[2] as { status: string }).status,
+    );
+    expect(finishStatuses).toContain("failed");
+  });
+});
+
+describe("canonical URL diffing", () => {
+  function observation(adId: string, url: string | null) {
+    return {
+      id: `obs-${adId}-${url ?? "none"}`,
+      ad_id: adId,
+      landing_page_url: url,
+      metadata_json: "{}",
+    };
+  }
+
+  it("ignores tracking-parameter churn but catches real destination changes", async () => {
+    mockReliabilityDependencies({ watchlists: [] });
+    const { diffWatchlistObservations } = await import("~/lib/monitoring.server");
+    const watchlist = buildWatchlist(1, "adspy");
+
+    const trackingOnly = diffWatchlistObservations(
+      watchlist as never,
+      [observation("ad-1", "https://example.com/sale?utm_content=v2&fbclid=abc")] as never,
+      [observation("ad-1", "https://example.com/sale?utm_content=v1")] as never,
+      [] as never,
+    );
+    expect(trackingOnly).toEqual([]);
+
+    const realChange = diffWatchlistObservations(
+      watchlist as never,
+      [observation("ad-1", "https://example.com/new-landing")] as never,
+      [observation("ad-1", "https://example.com/sale")] as never,
+      [] as never,
+    );
+    expect(realChange).toEqual([
+      expect.objectContaining({ eventType: "landing_page_url_changed" }),
+    ]);
+  });
+});
