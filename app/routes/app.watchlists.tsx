@@ -1,14 +1,17 @@
+import { useEffect, useState } from "react";
 import {
   Form,
   Link,
   redirect,
   useActionData,
   useLoaderData,
+  useRevalidator,
   useSearchParams,
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
 import {
   emptyCompetitorWebsite,
@@ -630,9 +633,9 @@ export default function WatchlistsRoute() {
                   <Form method="post">
                     <input name="intent" type="hidden" value="share-watchlist" />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <button className="f9-secondary-button" type="submit">
+                    <SubmitButton className="f9-secondary-button" intent="share-watchlist" pendingLabel="Sharing…">
                       Share summary
-                    </button>
+                    </SubmitButton>
                   </Form>
                   <Form method="post">
                     <input
@@ -641,21 +644,29 @@ export default function WatchlistsRoute() {
                       value={data.selectedWatchlist.isActive ? "pause-watchlist" : "resume-watchlist"}
                     />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <button className="f9-secondary-button" type="submit">
+                    <SubmitButton
+                      className="f9-secondary-button"
+                      intent={data.selectedWatchlist.isActive ? "pause-watchlist" : "resume-watchlist"}
+                      pendingLabel={data.selectedWatchlist.isActive ? "Pausing…" : "Resuming…"}
+                    >
                       {data.selectedWatchlist.isActive ? "Pause tracking" : "Resume tracking"}
-                    </button>
+                    </SubmitButton>
                   </Form>
                   {data.selectedWatchlist.isActive ? (
                     <Form method="post">
                       <input name="intent" type="hidden" value="refresh-watchlist" />
                       <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                      <button className="f9-primary-button" type="submit">
+                      <SubmitButton className="f9-primary-button" intent="refresh-watchlist" pendingLabel="Scanning live…">
                         Refresh now
-                      </button>
+                      </SubmitButton>
                     </Form>
                   ) : null}
                 </div>
               </div>
+
+              {data.selectedWatchlist.isActive && !data.selectedWatchlist.lastScannedAt ? (
+                <FirstScanBanner watchlistId={data.selectedWatchlist.id} />
+              ) : null}
 
               {consecutiveFailedRuns >= 3 ? (
         <div className="f9-message is-error">
@@ -707,9 +718,9 @@ export default function WatchlistsRoute() {
                         type="text"
                       />
                     </label>
-                    <button className="f9-secondary-button" type="submit">
+                    <SubmitButton className="f9-secondary-button" intent="update-watchlist" pendingLabel="Saving…">
                       Save watchlist
-                    </button>
+                    </SubmitButton>
                   </Form>
                 </section>
 
@@ -935,9 +946,9 @@ export default function WatchlistsRoute() {
                           <input defaultChecked={data.effectiveDeliveryConfig.slackEnabled} name="slackEnabled" type="checkbox" />
                           <span>Slack enabled</span>
                         </label>
-                        <button className="f9-primary-button" type="submit">
+                        <SubmitButton className="f9-primary-button" intent="save-delivery-config" pendingLabel="Saving…">
                           Save delivery settings
-                        </button>
+                        </SubmitButton>
                       </Form>
                     </article>
                   </div>
@@ -973,9 +984,14 @@ export default function WatchlistsRoute() {
                             <Form method="post">
                               <input name="intent" type="hidden" value="send-test-email" />
                               <input name="targetId" type="hidden" value={target.id} />
-                              <button className="f9-secondary-button" type="submit">
+                              <SubmitButton
+                                className="f9-secondary-button"
+                                intent="send-test-email"
+                                match={{ targetId: target.id }}
+                                pendingLabel="Sending…"
+                              >
                                 Send test
-                              </button>
+                              </SubmitButton>
                             </Form>
                           ) : null}
                           <Form method="post">
@@ -984,9 +1000,14 @@ export default function WatchlistsRoute() {
                             <input name="channel" type="hidden" value={target.channel} />
                             <input name="targetValue" type="hidden" value={target.targetValue} />
                             <input name="isPaused" type="hidden" value={target.isPaused ? "false" : "true"} />
-                            <button className="f9-secondary-button" type="submit">
+                            <SubmitButton
+                              className="f9-secondary-button"
+                              intent="toggle-delivery-target"
+                              match={{ targetValue: target.targetValue }}
+                              pendingLabel={target.isPaused ? "Resuming…" : "Pausing…"}
+                            >
                               {target.isPaused ? "Resume" : "Pause"}
-                            </button>
+                            </SubmitButton>
                           </Form>
                         </div>
                       </div>
@@ -1022,9 +1043,9 @@ export default function WatchlistsRoute() {
                       <input defaultChecked name="explicitOptIn" type="checkbox" />
                       <span>Explicit opt-in confirmed</span>
                     </label>
-                    <button className="f9-secondary-button" type="submit">
+                    <SubmitButton className="f9-secondary-button" intent="add-delivery-target" pendingLabel="Adding…">
                       Add delivery target
-                    </button>
+                    </SubmitButton>
                   </Form>
 
                   {data.workspaceDeliveryTargets.length > 0 ? (
@@ -1379,4 +1400,49 @@ function formatNumericSummaryPart(
 ) {
   const value = summary[key];
   return typeof value === "number" ? `${value} ${label}` : null;
+}
+
+const FIRST_SCAN_POLL_LIMIT = 30;
+
+// The first scan runs in a background waitUntil right after creation; without
+// this the page just says "never scanned" and the customer's first minutes
+// look broken. Polls until lastScannedAt flips (loader revalidation), capped.
+function FirstScanBanner(props: { watchlistId: string }) {
+  const revalidator = useRevalidator();
+  const [pollCount, setPollCount] = useState(0);
+
+  useEffect(() => {
+    setPollCount(0);
+  }, [props.watchlistId]);
+
+  useEffect(() => {
+    if (pollCount >= FIRST_SCAN_POLL_LIMIT) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setPollCount((count) => count + 1);
+      if (revalidator.state === "idle") {
+        revalidator.revalidate();
+      }
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [pollCount, revalidator]);
+
+  return (
+    <article className="f9-checkout-banner is-pending" aria-live="polite">
+      <div>
+        <span className="f9-app-kicker">First scan</span>
+        <h2>
+          <span className="f9-checkout-pulse" aria-hidden="true" />
+          Scanning this competitor now…
+        </h2>
+        <p>
+          {pollCount >= FIRST_SCAN_POLL_LIMIT
+            ? "The first scan is taking longer than usual — it's still queued, and the nightly scan covers it either way. Check back in a bit."
+            : "First results usually land within a couple of minutes. This page updates by itself — no need to refresh."}
+        </p>
+      </div>
+    </article>
+  );
 }

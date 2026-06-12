@@ -1,6 +1,8 @@
 import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { SubmitButton } from "~/components/submit-button";
+
 const RESOURCE_LABELS: Record<string, string> = {
   collection: "Collection",
   watchlist: "Watchlist",
@@ -99,9 +101,14 @@ export default function SharesRoute() {
                 <Form method="post">
                   <input name="intent" type="hidden" value="revoke-share" />
                   <input name="shareLinkId" type="hidden" value={share.id} />
-                  <button className="f9-secondary-button" type="submit">
+                  <SubmitButton
+                    className="f9-secondary-button"
+                    intent="revoke-share"
+                    match={{ shareLinkId: share.id }}
+                    pendingLabel="Removing…"
+                  >
                     Revoke
-                  </button>
+                  </SubmitButton>
                 </Form>
               </div>
             ))}

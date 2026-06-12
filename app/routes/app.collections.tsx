@@ -8,6 +8,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { SubmitButton } from "~/components/submit-button";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
 import { proofLinkForAd } from "~/lib/proof-link";
@@ -239,9 +240,9 @@ export default function CollectionsRoute() {
               <span>Description</span>
               <textarea name="description" placeholder="Optional context for the team" rows={3} />
             </label>
-            <button className="f9-primary-button" type="submit">
+            <SubmitButton className="f9-primary-button" intent="create-collection" pendingLabel="Creating…">
               Create collection
-            </button>
+            </SubmitButton>
           </Form>
 
           <div className="f9-work-list is-compact">
@@ -302,9 +303,9 @@ export default function CollectionsRoute() {
                   <Form method="post">
                     <input name="intent" type="hidden" value="share-collection" />
                     <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
-                    <button className="f9-primary-button" type="submit">
+                    <SubmitButton className="f9-primary-button" intent="share-collection" pendingLabel="Creating…">
                       Create share link
-                    </button>
+                    </SubmitButton>
                   </Form>
                   <Form
                     method="post"
@@ -316,9 +317,9 @@ export default function CollectionsRoute() {
                   >
                     <input name="intent" type="hidden" value="delete-collection" />
                     <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
-                    <button className="f9-secondary-button" type="submit">
+                    <SubmitButton className="f9-secondary-button" intent="delete-collection" pendingLabel="Deleting…">
                       Delete collection
-                    </button>
+                    </SubmitButton>
                   </Form>
                 </div>
               </div>
@@ -396,9 +397,9 @@ export default function CollectionsRoute() {
                   <span>Note</span>
                   <textarea name="note" placeholder="Optional team context" rows={2} />
                 </label>
-                <button className="f9-secondary-button" type="submit">
+                <SubmitButton className="f9-secondary-button" intent="add-external-proof" pendingLabel="Saving…">
                   Save proof link
-                </button>
+                </SubmitButton>
               </Form>
 
               {data.items.length === 0 ? (
@@ -442,16 +443,26 @@ export default function CollectionsRoute() {
                           <span>Tags</span>
                           <input defaultValue={item.tags.join(", ")} name="tags" />
                         </label>
-                        <button className="f9-secondary-button" type="submit">
+                        <SubmitButton
+                          className="f9-secondary-button"
+                          intent="update-item"
+                          match={{ itemId: item.id }}
+                          pendingLabel="Updating…"
+                        >
                           Update item
-                        </button>
+                        </SubmitButton>
                       </Form>
                       <Form method="post">
                         <input name="intent" type="hidden" value="remove-item" />
                         <input name="itemId" type="hidden" value={item.id} />
-                        <button className="f9-secondary-button" type="submit">
+                        <SubmitButton
+                          className="f9-secondary-button"
+                          intent="remove-item"
+                          match={{ itemId: item.id }}
+                          pendingLabel="Removing…"
+                        >
                           Remove from collection
-                        </button>
+                        </SubmitButton>
                       </Form>
                     </article>
                   ))}

@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { SubmitButton } from "~/components/submit-button";
 import { demoProof } from "~/lib/demo-proof";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
@@ -198,7 +199,7 @@ export default function MarketingRoute() {
               ) : (
                 <input aria-label="Work email" name="email" placeholder="Work email" type="email" />
               )}
-              <button type="submit">{primaryLabel}</button>
+              <SubmitButton getAction={primaryCta} pendingLabel="Redirecting…">{primaryLabel}</SubmitButton>
             </Form>
           </div>
 
@@ -451,14 +452,18 @@ export default function MarketingRoute() {
                           <Form method="post" action="/api/billing/dodo/checkout">
                             <input type="hidden" name="plan" value={plan.slug} />
                             <input type="hidden" name="cycle" value="monthly" />
-                            <button type="submit">Start monthly</button>
+                            <SubmitButton match={{ plan: plan.slug, cycle: "monthly" }} pendingLabel="Redirecting…">
+                              Start monthly
+                            </SubmitButton>
                           </Form>
                         ) : null}
                         {yearlyReady ? (
                           <Form method="post" action="/api/billing/dodo/checkout">
                             <input type="hidden" name="plan" value={plan.slug} />
                             <input type="hidden" name="cycle" value="yearly" />
-                            <button type="submit">Annual</button>
+                            <SubmitButton match={{ plan: plan.slug, cycle: "yearly" }} pendingLabel="Redirecting…">
+                              Annual
+                            </SubmitButton>
                           </Form>
                         ) : null}
                       </div>
@@ -491,7 +496,9 @@ export default function MarketingRoute() {
                   {rootData.session && hasBundlePrice(localPricing, bundle.slug) ? (
                     <Form method="post" action="/api/billing/dodo/checkout">
                       <input type="hidden" name="bundle" value={bundle.slug} />
-                      <button type="submit">Buy pack</button>
+                      <SubmitButton match={{ bundle: bundle.slug }} pendingLabel="Redirecting…">
+                        Buy pack
+                      </SubmitButton>
                     </Form>
                   ) : null}
                 </article>
