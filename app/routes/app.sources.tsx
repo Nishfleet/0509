@@ -389,7 +389,7 @@ export default function AppSourcesRoute() {
           <section className="f9-app-panel f9-source-guide">
             <span className="f9-app-kicker">Add backup Meta access</span>
             <h3>Where to get the token</h3>
-            <ol className="numbered-guide">
+            <ol className="f9-numbered-guide">
               <li>
                 Open Meta's{" "}
                 <a href="https://www.facebook.com/ads/library/api/" rel="noreferrer" target="_blank">
@@ -433,7 +433,7 @@ export default function AppSourcesRoute() {
             </Form>
 
             {data.connection ? (
-              <div className="f9-action-row source-actions">
+              <div className="f9-action-row">
                 <Form method="post">
                   <input name="intent" type="hidden" value="retest-meta-token" />
                   <SubmitButton className="f9-secondary-button" intent="retest-meta-token" pendingLabel="Testing…">
@@ -530,7 +530,7 @@ export default function AppSourcesRoute() {
         <div className="f9-work-list">
           {data.apiKeys.length > 0 ? (
             data.apiKeys.map((apiKey) => (
-              <article className="f9-work-item" key={apiKey.id}>
+              <article className="f9-work-row" key={apiKey.id}>
                 <div>
                   <strong>{apiKey.name}</strong>
                   <p>
@@ -564,7 +564,7 @@ export default function AppSourcesRoute() {
               </article>
             ))
           ) : (
-            <article className="f9-work-item">
+            <article className="f9-work-row">
               <div>
                 <strong>No API keys yet</strong>
                 <p>Create one when you are ready to connect a tool or agent workflow.</p>
@@ -640,7 +640,7 @@ export default function AppSourcesRoute() {
         <div className="f9-work-list">
           {data.slackTargets.length > 0 ? (
             data.slackTargets.map((target) => (
-              <article className="f9-work-item" key={target.id}>
+              <article className="f9-work-row" key={target.id}>
                 <div>
                   <strong>{target.displayName}</strong>
                   <p>
@@ -671,7 +671,7 @@ export default function AppSourcesRoute() {
               </article>
             ))
           ) : (
-            <article className="f9-work-item">
+            <article className="f9-work-row">
               <div>
                 <strong>No Slack channel connected</strong>
                 <p>Add a webhook when you want digests and important changes posted to Slack.</p>
@@ -783,7 +783,7 @@ export default function AppSourcesRoute() {
         <div className="f9-work-list">
           {data.whatsappTargets.length > 0 ? (
             data.whatsappTargets.map((target) => (
-              <article className="f9-work-item" key={target.id}>
+              <article className="f9-work-row" key={target.id}>
                 <div>
                   <strong>{target.displayName}</strong>
                   <p>
@@ -800,7 +800,7 @@ export default function AppSourcesRoute() {
               </article>
             ))
           ) : (
-            <article className="f9-work-item">
+            <article className="f9-work-row">
               <div>
                 <strong>No WhatsApp recipient connected</strong>
                 <p>Add an opted-in recipient after WhatsApp provider and webhook setup are ready.</p>

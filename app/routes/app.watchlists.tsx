@@ -11,6 +11,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { CopyButton } from "~/components/copy-button";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
@@ -537,12 +538,15 @@ export default function WatchlistsRoute() {
       {actionData?.message ? (
         <p className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           {actionData.ok && actionData.message.startsWith("http") ? (
-            <a href={actionData.message} rel="noreferrer" target="_blank">
-              {actionData.message}
-            </a>
-          ) : (
-            actionData.message
-          )}
+            <>
+              <a href={actionData.message} rel="noreferrer" target="_blank">
+                {actionData.message}
+              </a>{" "}
+              <CopyButton value={actionData.message} />
+            </>
+            ) : (
+              actionData.message
+            )}
         </p>
       ) : null}
 
@@ -616,6 +620,9 @@ export default function WatchlistsRoute() {
                     ) : (
                       "never"
                     )}
+                    {data.selectedWatchlist.isActive
+                      ? ` · next scan ${formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)}`
+                      : null}
                   </p>
                 </div>
                 <div className="f9-action-row">
@@ -1084,7 +1091,7 @@ export default function WatchlistsRoute() {
                           <div className="f9-panel-toolbar">
                             <div>
                               <p className="f9-app-kicker">
-                                {run.status} · {run.triggerType}
+                                {formatRunStatusLabel(run.status)} · {formatRunTriggerLabel(run.triggerType)}
                               </p>
                               <h3>
                                 Started <LocalTime iso={run.startedAt} />
@@ -1464,4 +1471,18 @@ function FirstScanBanner(props: { watchlistId: string }) {
       </div>
     </article>
   );
+}
+
+function formatRunStatusLabel(status: string) {
+  if (status === "succeeded") return "Succeeded";
+  if (status === "failed") return "Failed";
+  if (status === "running" || status === "pending") return "Running";
+  return status;
+}
+
+function formatRunTriggerLabel(triggerType: string) {
+  if (triggerType === "manual") return "Manual refresh";
+  if (triggerType === "scheduled") return "Nightly scan";
+  if (triggerType === "workflow") return "Background scan";
+  return triggerType;
 }

@@ -2,6 +2,7 @@ import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
+import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
 
 const RESOURCE_LABELS: Record<string, string> = {
@@ -103,8 +104,10 @@ export default function SharesRoute() {
                     )}
                   </small>
                 </div>
-                <Form method="post">
-                  <input name="intent" type="hidden" value="revoke-share" />
+                <div className="f9-action-row">
+                  <CopyButton value={share.url} />
+                  <Form method="post">
+                    <input name="intent" type="hidden" value="revoke-share" />
                   <input name="shareLinkId" type="hidden" value={share.id} />
                   <SubmitButton
                     className="f9-secondary-button"
@@ -114,7 +117,8 @@ export default function SharesRoute() {
                   >
                     Revoke
                   </SubmitButton>
-                </Form>
+                  </Form>
+                </div>
               </div>
             ))}
           </div>

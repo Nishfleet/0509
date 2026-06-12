@@ -130,23 +130,43 @@ export default function BillingRoute() {
           <div className="f9-work-row">
             <strong>Competitor watchlists</strong>
             <span>
-              {data.watchlistUsage.current} of {data.watchlistUsage.limit} used
+              {data.watchlistUsage.limit > 0 ? (
+                `${data.watchlistUsage.current} of ${data.watchlistUsage.limit} used`
+              ) : (
+                <>
+                  Not included on this plan — <Link to="/#pricing">view plans</Link>
+                </>
+              )}
             </span>
           </div>
           <div className="f9-work-row">
             <strong>Collections</strong>
             <span>
-              {data.collectionUsage.current} of {data.collectionUsage.limit} used
+              {data.collectionUsage.limit > 0 ? (
+                `${data.collectionUsage.current} of ${data.collectionUsage.limit} used`
+              ) : (
+                <>
+                  Not included on this plan — <Link to="/#pricing">view plans</Link>
+                </>
+              )}
             </span>
           </div>
           <div className="f9-work-row">
             <strong>Evidence checks (30 days)</strong>
             <span>
-              {data.proofUsage.used} of {data.proofUsage.limit} used · up to {data.dailyProofCap}{" "}
-              per day
-              {data.proofUsage.extraCredits > 0
-                ? ` (includes ${data.proofUsage.extraCredits} purchased credits)`
-                : ""}
+              {data.proofUsage.limit > 0 ? (
+                <>
+                  {data.proofUsage.used} of {data.proofUsage.limit} used · up to {data.dailyProofCap}{" "}
+                  per day
+                  {data.proofUsage.extraCredits > 0
+                    ? ` (includes ${data.proofUsage.extraCredits} purchased credits)`
+                    : ""}
+                </>
+              ) : (
+                <>
+                  Not included on this plan — <Link to="/#pricing">view plans</Link>
+                </>
+              )}
             </span>
           </div>
           {data.creditGrants.map((grant) => (

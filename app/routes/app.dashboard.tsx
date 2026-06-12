@@ -13,6 +13,7 @@ import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { buildSearchParams } from "~/lib/normalize";
+import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const meta = () => [{ title: "Dashboard | Five to Nine" }];
@@ -32,7 +33,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchlists,
   } = await import("~/lib/data.server");
   const { getProofUsageSummary } = await import("~/lib/plan.server");
-  const { getUserPlanBillingInfo } = await import("~/lib/data.server");
+  const { getSuccessfulRunStatsForUserBetween, getUserPlanBillingInfo } = await import(
+    "~/lib/data.server"
+  );
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const checkoutReturn = new URL(request.url).searchParams.get("checkout") === "dodo";
@@ -51,7 +54,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     plan !== "free" &&
     (billingInfo.dodoStatus === "subscription.failed" ||
       billingInfo.dodoStatus === "subscription.on_hold");
-  const [recentEvents, recentProofCaptures, deliveryTargets] = await Promise.all([
+  const overnightSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const [recentEvents, recentProofCaptures, deliveryTargets, overnightStats] = await Promise.all([
     Promise.all(watchlists.slice(0, 6).map((watchlist) => listWatchEvents(env, watchlist.id, 6))).then((groups) =>
       groups
         .flat()
@@ -60,6 +64,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ),
     listRecentWorkspaceProofCaptures(env, session.user.id, 8),
     listDeliveryTargets(env, session.user.id, { limit: 12 }),
+    getSuccessfulRunStatsForUserBetween(env, session.user.id, overnightSince, new Date().toISOString()),
   ]);
 
   return {
@@ -72,6 +77,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     deliveryTargets: deliveryTargets.map(toPublicDeliveryTarget),
     metaStatus,
     proofUsage,
+    overnightStats,
     plan,
     hasPaymentIssue,
     checkoutReturn,
@@ -180,6 +186,12 @@ export default function AppDashboardRoute() {
   const competitorCount = watchlists.length;
   const activeWatchlists = watchlists.filter((watchlist) => watchlist.isActive).length;
   const confirmedChanges = recentEvents.filter((event) => event.status === "confirmed" || event.status === "detected").length;
+  const overnightCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const overnightMoves = recentEvents.filter(
+    (event) =>
+      (event.status === "confirmed" || event.status === "detected") &&
+      Date.parse(event.createdAt) >= overnightCutoff,
+  ).length;
   const successfulProofs = recentProofCaptures.filter((capture) => capture.status === "succeeded").length;
   const sentDigests = digests.filter((digest) => digest.delivery?.status === "sent").length;
   const latestScanAt = watchlists
@@ -242,11 +254,15 @@ export default function AppDashboardRoute() {
     : firstCompetitorReady
       ? "Watching for the first change"
       : "Add your first competitor";
+  const overnightAdsSeen = data.overnightStats?.adsSeen ?? 0;
+  const overnightWatchlists = data.overnightStats?.watchlistsChecked ?? 0;
   const briefSummary = confirmedChanges > 0
     ? recentEvents.slice(0, 3).map((event) => event.title).join(". ")
-    : firstCompetitorReady
-      ? "Your watchlist is ready. Refresh tracking to capture proof when the landing page or offer changes."
-      : "Paste a competitor website and Five to Nine will create the first market watch.";
+    : overnightAdsSeen > 0
+      ? `All quiet — ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightWatchlists} competitor${overnightWatchlists === 1 ? "" : "s"} in the last day. No changes worth your time.`
+      : firstCompetitorReady
+        ? "Your watchlist is ready. Refresh tracking to capture proof when the landing page or offer changes."
+        : "Paste a competitor website and Five to Nine will create the first market watch.";
   const boardRows = recentEvents.length > 0
     ? recentEvents.slice(0, 4).map((event) => ({
         name: event.title,
@@ -320,8 +336,16 @@ export default function AppDashboardRoute() {
           <div className="f9-market-board">
             <div className="f9-market-board-head">
               <div>
-                <span className="f9-app-kicker">Market moves</span>
-                <h2>{firstCompetitorReady ? "Competitor changes" : "Add your first competitor"}</h2>
+                <span className="f9-app-kicker">
+                  <WakeGreeting />
+                </span>
+                <h2>
+                  {overnightMoves > 0
+                    ? `${overnightMoves} move${overnightMoves === 1 ? "" : "s"} found while you slept`
+                    : firstCompetitorReady
+                      ? "Competitor changes"
+                      : "Add your first competitor"}
+                </h2>
               </div>
               <span className="f9-board-time">05:09</span>
             </div>
@@ -510,6 +534,11 @@ export default function AppDashboardRoute() {
             <div>
               <span className="f9-app-kicker">Competitor watches</span>
               <h2>Who is being watched</h2>
+              {watchlists.length > 0 ? (
+                <p className="f9-muted-copy">
+                  Next scheduled scan: {formatNextScanLabel(data.plan)}
+                </p>
+              ) : null}
             </div>
             <Link className="f9-secondary-button" to="/app/watchlists">
               Open watchlists
@@ -659,4 +688,20 @@ function formatTrackingStatusSummary(summary: string | null | undefined) {
     .replace(/cached live results/gi, "recent results")
     .replace(/cached results/gi, "recent results")
     .replace(/demo mode/gi, "sample mode");
+}
+
+// Viewer-local greeting: SSR renders a neutral fallback, the browser swaps in
+// the time-of-day version after mount (same hydration-safe pattern as LocalTime).
+function WakeGreeting() {
+  const [greeting, setGreeting] = useState("Welcome back");
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 5) setGreeting("Working late");
+    else if (hour < 12) setGreeting("Good morning");
+    else if (hour < 17) setGreeting("Good afternoon");
+    else setGreeting("Good evening");
+  }, []);
+
+  return <>{greeting}</>;
 }
