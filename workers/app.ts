@@ -3,6 +3,7 @@
 import { createRequestHandler } from "react-router";
 
 import {
+  flushDeferredInstantAlerts,
   runScheduledDiscoveryWarmup,
   runScheduledMonitoring,
 } from "../app/lib/monitoring.server";
@@ -99,6 +100,23 @@ export default {
 
     if (scheduledTask.kind === "discovery_warmup") {
       ctx.waitUntil(runScheduledDiscoveryWarmup(env));
+      // The six-hourly warmup also hosts the instant-alert flush: alerts
+      // deferred by quiet hours get sent once the window ends, and failed
+      // instant sends get retried.
+      ctx.waitUntil(
+        flushDeferredInstantAlerts(env).then(
+          (result) => {
+            if (result.groups > 0) {
+              console.log("instant alert flush completed", result);
+            }
+          },
+          (error) => {
+            console.error("instant alert flush failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
+        ),
+      );
       return;
     }
 

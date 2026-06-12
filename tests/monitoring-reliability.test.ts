@@ -55,6 +55,7 @@ function mockReliabilityDependencies(input: {
   listWatchlistsImpl?: ReturnType<typeof vi.fn>;
   listWatchEventsBetweenImpl?: ReturnType<typeof vi.fn>;
   retryableDigestRuns?: Array<Record<string, unknown>>;
+  retryableInstantAttempts?: Array<Record<string, unknown>>;
   getDigestImpl?: ReturnType<typeof vi.fn>;
 }) {
   const createWatchlistRun = vi.fn(
@@ -136,14 +137,20 @@ function mockReliabilityDependencies(input: {
     getDigestByPeriod: vi.fn().mockResolvedValue(null),
     getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
     getSavedQuery: vi.fn(),
-    getUserDeliveryProfile: vi.fn().mockResolvedValue(null),
-    getWatchlist: vi.fn(),
+    getUserDeliveryProfile: vi.fn().mockResolvedValue({ name: "Owner", email: "owner@example.com" }),
+    getWatchlist: vi.fn(async (_env: unknown, watchlistId: string) =>
+      input.watchlists.find((candidate) => candidate.id === watchlistId) ?? null,
+    ),
     hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: unknown[]) => ads),
     listActiveWatchlists: vi.fn().mockResolvedValue(input.watchlists),
     listObservationsForRun: vi.fn().mockResolvedValue([]),
     listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listRetryableDigestRuns,
+    listRetryableInstantAttempts: vi.fn().mockResolvedValue(input.retryableInstantAttempts ?? []),
+    listWatchEventsByIds: vi.fn(async (_env: unknown, watchlistId: string, eventIds: string[]) =>
+      eventIds.map(() => buildConfirmedEvent(watchlistId)),
+    ),
     listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween,
@@ -154,8 +161,9 @@ function mockReliabilityDependencies(input: {
     upsertAd: vi.fn(),
     upsertProofTarget: vi.fn(),
   }));
+  const deliverWatchlistAlerts = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
   vi.doMock("~/lib/delivery.server", () => ({
-    deliverWatchlistAlerts: vi.fn().mockResolvedValue({ attempts: 0, channels: [] }),
+    deliverWatchlistAlerts,
     deliverWeeklyDigest,
   }));
   vi.doMock("~/lib/landing-pages.server", () => ({
@@ -181,9 +189,14 @@ function mockReliabilityDependencies(input: {
     createWatchlistRun,
     finishWatchlistRun,
     searchAdsViaSourceResolver,
+    deliverWatchlistAlerts,
     deliverWeeklyDigest,
     listWatchlists,
     listRetryableDigestRuns,
+    listRetryableInstantAttempts: vi.fn().mockResolvedValue(input.retryableInstantAttempts ?? []),
+    listWatchEventsByIds: vi.fn(async (_env: unknown, watchlistId: string, eventIds: string[]) =>
+      eventIds.map(() => buildConfirmedEvent(watchlistId)),
+    ),
     getDigest,
   };
 }
@@ -449,5 +462,63 @@ describe("digest retry sweep", () => {
 
     expect(mocks.deliverWeeklyDigest).not.toHaveBeenCalled();
     expect(result.digests).toBe(0);
+  });
+});
+
+describe("instant alert flush", () => {
+  it("re-delivers deferred or failed instant alerts grouped by watchlist", async () => {
+    const watchlists = [buildWatchlist(1, "adspy")];
+    const mocks = mockReliabilityDependencies({
+      watchlists,
+      retryableInstantAttempts: [
+        {
+          id: "attempt-1",
+          watchlistId: "watch-1",
+          eventIds: ["event-a", "event-b"],
+          status: "skipped_due_to_quiet_hours",
+        },
+        {
+          id: "attempt-2",
+          watchlistId: "watch-1",
+          eventIds: ["event-b"],
+          status: "failed",
+        },
+      ],
+    });
+
+    const { flushDeferredInstantAlerts } = await import("~/lib/monitoring.server");
+    const result = await flushDeferredInstantAlerts(mocks.env as never);
+
+    expect(result.groups).toBe(1);
+    expect(mocks.deliverWatchlistAlerts).toHaveBeenCalledTimes(1);
+    const call = mocks.deliverWatchlistAlerts.mock.calls[0]?.[1] as {
+      watchlist: { id: string };
+      events: unknown[];
+      lane: string;
+    };
+    expect(call.watchlist.id).toBe("watch-1");
+    // event ids deduped across the two pending attempts
+    expect(call.events).toHaveLength(2);
+    expect(call.lane).toBe("customer");
+  });
+
+  it("skips watchlists that are gone or paused", async () => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [],
+      retryableInstantAttempts: [
+        {
+          id: "attempt-1",
+          watchlistId: "watch-missing",
+          eventIds: ["event-a"],
+          status: "failed",
+        },
+      ],
+    });
+
+    const { flushDeferredInstantAlerts } = await import("~/lib/monitoring.server");
+    const result = await flushDeferredInstantAlerts(mocks.env as never);
+
+    expect(result.groups).toBe(0);
+    expect(mocks.deliverWatchlistAlerts).not.toHaveBeenCalled();
   });
 });
