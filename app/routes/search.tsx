@@ -75,6 +75,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
   }
 
+  if (session && parsed.filters.query && !forceLive) {
+    const { enforceAuthenticatedSearchRateLimit } = await import("~/lib/rate-limit.server");
+    const rateLimitResponse = await enforceAuthenticatedSearchRateLimit(
+      request,
+      env,
+      session.user.id,
+      context.cloudflare?.ctx,
+    );
+    if (rateLimitResponse) {
+      throw rateLimitResponse;
+    }
+  }
+
   const collections = session ? await listCollections(env, session.user.id) : [];
 
   if (!parsed.filters.query) {

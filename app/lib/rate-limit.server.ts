@@ -6,6 +6,9 @@ type RateLimitPolicy = {
   windowSeconds: number;
   failClosed: boolean;
   keyByIpOnly?: boolean;
+  // When set, the rate-limit key is derived from this value instead of
+  // IP/user-agent — e.g. a user id, so rotating IPs can't reset the bucket.
+  keySeed?: string;
 };
 
 const CLEANUP_WINDOW_SECONDS = 2 * 60 * 60;
@@ -30,6 +33,30 @@ export async function enforcePublicSearchRateLimit(
     request,
     env,
     { scope: "public-search", limit: 20, windowSeconds: 10 * 60, failClosed: false, keyByIpOnly: true },
+    ctx,
+  );
+}
+
+// Signed-in live search drives usage-billed Browser Rendering scrapes, and
+// signup is free — without a per-account ceiling a scripted free account
+// could fire unlimited distinct live queries. Keyed by user id so rotating
+// IPs doesn't reset the bucket.
+export async function enforceAuthenticatedSearchRateLimit(
+  request: Request,
+  env: AppEnv,
+  userId: string,
+  ctx?: ExecutionContext,
+): Promise<Response | null> {
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    {
+      scope: "account-search",
+      limit: 60,
+      windowSeconds: 10 * 60,
+      failClosed: false,
+      keySeed: userId,
+    },
     ctx,
   );
 }
@@ -122,7 +149,11 @@ async function requestKeyHash(request: Request, policy: RateLimitPolicy) {
     "unknown";
   const userAgent = request.headers.get("user-agent") || "";
   const input = new TextEncoder().encode(
-    policy.keyByIpOnly ? `${policy.scope}|${ip}` : `${policy.scope}|${ip}|${userAgent}`,
+    policy.keySeed
+      ? `${policy.scope}|${policy.keySeed}`
+      : policy.keyByIpOnly
+        ? `${policy.scope}|${ip}`
+        : `${policy.scope}|${ip}|${userAgent}`,
   );
   const digest = await crypto.subtle.digest("SHA-256", input);
   return [...new Uint8Array(digest)]

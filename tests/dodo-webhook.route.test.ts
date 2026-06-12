@@ -18,12 +18,14 @@ function mockWebhookDependencies(overrides: {
 } = {}) {
   const data = {
     claimDodoWebhookEvent: vi.fn().mockResolvedValue(true),
+    deactivateWatchlistsBeyondPlanLimit: vi.fn().mockResolvedValue(0),
     markDodoWebhookEventFinished: vi.fn().mockResolvedValue(undefined),
     markDodoPlanPaymentIssue: vi.fn().mockResolvedValue(undefined),
     revokeDodoAccessForRefundedPayment: vi.fn().mockResolvedValue(undefined),
     grantDodoPlanAccess: vi.fn().mockResolvedValue(undefined),
     grantProofUsageCredit: vi.fn().mockResolvedValue(undefined),
     getUserIdByEmail: vi.fn().mockResolvedValue(null),
+    getUserIdForDodoPayment: vi.fn().mockResolvedValue(null),
     revokeDodoPlanAccess: vi.fn().mockResolvedValue(undefined),
     ...overrides.data,
   };
@@ -130,7 +132,43 @@ describe("Dodo webhook route", () => {
         revokedAt: "2026-07-01T00:00:00.000Z",
       }),
     );
+    // free plan allows 0 watchlists — all of them stop scanning on revocation
+    expect(data.deactivateWatchlistsBeyondPlanLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      0,
+    );
     expect(data.getUserIdByEmail).not.toHaveBeenCalled();
+  });
+
+  it("deactivates over-limit watchlists when a plan switch is a downgrade", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanGrant: vi.fn(() => ({
+          userId: "user-1",
+          plan: "scout",
+          paymentId: "pay-downgrade",
+          productId: "prod_scout_monthly",
+          status: "succeeded",
+          grantedAt: "2026-07-01T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-downgrade", { type: "payment.succeeded" }),
+      params: {},
+    } as never);
+
+    // scout keeps its newest 3 watchlists scanning; the rest pause
+    expect(data.deactivateWatchlistsBeyondPlanLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      3,
+    );
   });
 
   it("keeps the paid plan and records a payment issue for on-hold/failed renewals", async () => {
@@ -180,6 +218,9 @@ describe("Dodo webhook route", () => {
           metadata: {},
         })),
       },
+      data: {
+        getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
+      },
     });
 
     const { action } = await import("~/routes/api.webhooks.dodo");
@@ -196,6 +237,11 @@ describe("Dodo webhook route", () => {
         paymentId: "pay-refunded",
         refundedAt: "2026-07-05T00:00:00.000Z",
       }),
+    );
+    expect(data.deactivateWatchlistsBeyondPlanLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-refund",
+      0,
     );
   });
 
