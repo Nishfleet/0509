@@ -41,6 +41,7 @@ export async function prepareSearchResultSelection(
       ...selectedAdBase,
       landingPage: snapshot ?? selectedAdBase.landingPage ?? null,
       creativeText: creativeText?.text ?? selectedAdBase.creativeText ?? null,
+      creativeImageUrl: creativeText?.imageUrl ?? selectedAdBase.creativeImageUrl ?? null,
       creativeTextCaptureMethod:
         creativeText?.captureMethod ?? selectedAdBase.creativeTextCaptureMethod ?? null,
       creativeTextMetadata:

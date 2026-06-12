@@ -2134,6 +2134,7 @@ async function enrichAdForCheapScan(env: AppEnv, ad: AdRecord) {
   const nextAd = {
     ...ad,
     creativeText: capturedCreativeText?.text ?? ad.creativeText ?? null,
+    creativeImageUrl: capturedCreativeText?.imageUrl ?? ad.creativeImageUrl ?? null,
     creativeTextCaptureMethod:
       capturedCreativeText?.captureMethod ?? ad.creativeTextCaptureMethod ?? null,
     creativeTextMetadata:

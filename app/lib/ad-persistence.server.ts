@@ -126,6 +126,7 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
       : null;
     const hasStoredCreative = Boolean(
       storedAd?.creativeText
+      ?? storedAd?.creativeImageUrl
       ?? storedAd?.creativeTextCaptureMethod
       ?? storedAd?.creativeTextMetadata,
     );
@@ -137,6 +138,7 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
     return {
       ...ad,
       creativeText: ad.creativeText ?? storedAd.creativeText ?? null,
+      creativeImageUrl: ad.creativeImageUrl ?? storedAd.creativeImageUrl ?? null,
       creativeTextCaptureMethod:
         ad.creativeTextCaptureMethod ?? storedAd.creativeTextCaptureMethod ?? null,
       creativeTextMetadata:

@@ -1,6 +1,7 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
+import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
 import { ReportView } from "~/components/report-view";
@@ -158,9 +159,14 @@ export default function ShareRoute() {
             <div className="f9-work-list">
               {data.items.map((item) => (
                 <div className="f9-work-row" key={item.id}>
-                  <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
-                  <p>{item.ad.hook}</p>
-                  <p className="f9-muted-copy">{item.tags.join(", ") || "No tags"}</p>
+                  <div className="f9-ad-thumb-row">
+                    <AdThumb ad={item.ad} />
+                    <div>
+                      <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
+                      <p>{item.ad.hook}</p>
+                      <p className="f9-muted-copy">{item.tags.join(", ") || "No tags"}</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

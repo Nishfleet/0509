@@ -41,6 +41,9 @@ export interface CreativeTextCaptureResult {
   text: string | null;
   captureMethod: "ad_snapshot_fetch";
   extractorVersion: string;
+  // Best https creative image mined from the snapshot — used as the ad
+  // thumbnail. data: URLs are excluded (megabytes of base64 in raw_json).
+  imageUrl: string | null;
   metadata: Record<string, unknown>;
 }
 
@@ -97,12 +100,17 @@ export async function captureCreativeText(
     }
 
     const html = await response.text();
+    const creativeImageUrl =
+      extractCreativeImageCandidates(html, response.url || url).find(
+        (candidate) => !candidate.startsWith("data:"),
+      ) ?? null;
     const extractedFromHtml = extractCreativeTextFromSnapshotHtml(html, ad);
     if (extractedFromHtml) {
       return {
         text: extractedFromHtml,
         captureMethod: "ad_snapshot_fetch",
         extractorVersion: CREATIVE_TEXT_EXTRACTOR_VERSION,
+        imageUrl: creativeImageUrl,
         metadata: {
           fetchStatus: response.status,
           extractionPath: "snapshot_html",
@@ -124,6 +132,7 @@ export async function captureCreativeText(
       text: extractedFromImage.text,
       captureMethod: "ad_snapshot_fetch",
       extractorVersion: CREATIVE_TEXT_EXTRACTOR_VERSION,
+      imageUrl: creativeImageUrl,
       metadata: {
         fetchStatus: response.status,
         extractionPath: "snapshot_image_ocr",

@@ -2616,8 +2616,9 @@ button[aria-busy="true"] {
 
 .f9-result-card {
   position: relative;
-  display: grid;
-  gap: 10px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
   padding: 18px;
   border: 1px solid rgba(6, 22, 41, 0.08);
   border-radius: 18px;
@@ -2626,6 +2627,50 @@ button[aria-busy="true"] {
     border-color 160ms ease,
     box-shadow 160ms ease,
     transform 160ms ease;
+}
+
+.f9-result-card-body {
+  display: grid;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.f9-ad-thumb {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  background: #f6f8fa;
+}
+
+/* Doubled class keeps the muted fallback styling ahead of contextual span
+   rules like `.f9-result-card span` (teal uppercase kickers). */
+.f9-ad-thumb-fallback.f9-ad-thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  overflow: hidden;
+  color: var(--f9-search-soft, #64788d);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.f9-ad-thumb-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.f9-ad-thumb-row > div {
+  min-width: 0;
 }
 
 .f9-result-card:hover,
