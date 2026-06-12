@@ -127,13 +127,19 @@ describe("marketing rebuild", () => {
     );
   });
 
-  it("uses Stripe-grade typography and motion primitives", () => {
+  it("uses the caught-in-the-act typography and motion primitives", () => {
     expect(rootRoute).toContain("family=Inter");
     expect(appCss).toContain('--f9-font: "Inter"');
-    expect(marketingRoute).toContain("signalRays");
-    expect(marketingRoute).toContain('className="f9-backbone-section"');
-    expect(appCss).toContain("@keyframes f9-burst-drift");
-    expect(appCss).toContain("@keyframes f9-wave-drift");
+    expect(marketingRoute).toContain("Bricolage+Grotesque");
+    expect(marketingRoute).toContain("IBM+Plex+Mono");
+    expect(marketingRoute).toContain('className="ld-ticker"');
+    expect(marketingRoute).toContain('className="ld-wall"');
+    expect(marketingRoute).toContain("Sample case file");
+    expect(marketingRoute).toContain('action="/search"');
+    expect(marketingRoute).toContain("Catch them in the act");
+    expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');
+    expect(appCss).toContain("@keyframes ld-roll");
+    expect(appCss).toContain("@keyframes ld-blink");
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
   });
 });
