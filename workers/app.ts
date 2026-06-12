@@ -15,6 +15,7 @@ import {
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
+import { runRetentionSweep } from "../app/lib/retention.server";
 import { resolveScheduledTask } from "./schedule";
 import { withSecurityHeaders } from "./security-headers";
 export { MonitoringWorkflow } from "./monitoring-workflow";
@@ -112,6 +113,23 @@ export default {
           },
           (error) => {
             console.error("instant alert flush failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
+        ),
+      );
+      // ...and the bounded retention sweep that keeps D1 tables from
+      // growing forever.
+      ctx.waitUntil(
+        runRetentionSweep(env).then(
+          (result) => {
+            const total = Object.values(result.deleted).reduce((sum, count) => sum + count, 0);
+            if (total > 0) {
+              console.log("retention sweep completed", result.deleted);
+            }
+          },
+          (error) => {
+            console.error("retention sweep failed", {
               error: error instanceof Error ? error.message : String(error),
             });
           },
