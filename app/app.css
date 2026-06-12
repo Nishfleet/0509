@@ -3409,29 +3409,6 @@ one signal-green accent.
   font-weight: 600;
 }
 
-.ld-deck {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: clamp(24px, 4vw, 60px);
-  margin-top: clamp(22px, 3vw, 34px);
-}
-
-.ld-deck > p {
-  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
-  line-height: 1.5;
-  font-weight: 500;
-  max-width: 540px;
-  margin: 0;
-}
-
-.ld-deck > p b {
-  background: var(--ld-ink);
-  color: var(--ld-bone);
-  padding: 1px 8px;
-  font-weight: 600;
-}
-
 .ld-receipt {
   font-family: var(--ld-mono);
   font-size: 0.74rem;
@@ -4573,4 +4550,195 @@ one signal-green accent.
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ld-green-ink);
+}
+
+/* Hero radar — "we work while you sleep" as an instrument (2026-06-12) */
+
+.ld-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+  gap: clamp(28px, 4vw, 64px);
+  align-items: center;
+}
+
+.ld-hero-grid .ld-wall {
+  font-size: clamp(2.7rem, 6.6vw, 5.9rem);
+}
+
+.ld-deck-copy {
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  line-height: 1.5;
+  font-weight: 500;
+  max-width: 540px;
+  margin: clamp(22px, 3vw, 34px) 0 0;
+}
+
+.ld-deck-copy b {
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  padding: 1px 8px;
+  font-weight: 600;
+}
+
+.ld-hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  align-items: center;
+}
+
+.ld-hero-side .ld-receipt {
+  max-width: 340px;
+  width: 100%;
+}
+
+.ld-radar {
+  position: relative;
+  width: min(100%, 380px);
+  aspect-ratio: 1;
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 50%;
+  background-color: var(--ld-card);
+  background-image:
+    linear-gradient(var(--ld-line), var(--ld-line)),
+    linear-gradient(var(--ld-line), var(--ld-line)),
+    repeating-radial-gradient(
+      circle at center,
+      transparent 0,
+      transparent 19%,
+      var(--ld-line) calc(19% + 1.5px),
+      transparent calc(19% + 3px)
+    );
+  background-size:
+    100% 1.5px,
+    1.5px 100%,
+    100% 100%;
+  background-position:
+    center,
+    center,
+    center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
+.ld-radar-sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(22, 196, 127, 0.34) 0deg,
+    rgba(22, 196, 127, 0.1) 52deg,
+    transparent 70deg
+  );
+  animation: ld-spin 9s linear infinite;
+}
+
+@keyframes ld-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ld-radar-tick {
+  position: absolute;
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--ld-ink-faint);
+  background: var(--ld-card);
+  padding: 1px 6px;
+}
+
+.ld-tick-n { top: 6px; left: 50%; transform: translateX(-50%); }
+.ld-tick-e { right: 6px; top: 50%; transform: translateY(-50%); }
+.ld-tick-s { bottom: 6px; left: 50%; transform: translateX(-50%); }
+.ld-tick-w { left: 6px; top: 50%; transform: translateY(-50%); }
+
+.ld-blip {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ld-blip i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ld-green);
+  box-shadow: 0 0 0 3px rgba(22, 196, 127, 0.25);
+  animation: ld-blip-pulse 3s ease-out infinite;
+}
+
+.ld-blip em {
+  font-style: normal;
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ld-green-ink);
+  background: var(--ld-green-wash);
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.ld-blip-1 { top: 24%; left: 14%; }
+.ld-blip-2 { top: 56%; left: 58%; }
+.ld-blip-2 i { animation-delay: 1s; }
+.ld-blip-3 { top: 74%; left: 22%; }
+.ld-blip-3 i { animation-delay: 2s; }
+
+@keyframes ld-blip-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(22, 196, 127, 0.45); }
+  40% { box-shadow: 0 0 0 12px rgba(22, 196, 127, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(22, 196, 127, 0); }
+}
+
+.ld-radar-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  text-align: center;
+  padding: 10px 16px;
+  border-radius: 12px;
+}
+
+.ld-radar-core b {
+  display: block;
+  font-family: var(--ld-display);
+  font-weight: 800;
+  font-size: 1.3rem;
+  letter-spacing: 0.01em;
+  color: var(--ld-green);
+}
+
+.ld-radar-core span {
+  font-family: var(--ld-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #b9b4a6;
+}
+
+@media (max-width: 1100px) {
+  .ld-hero-grid { grid-template-columns: 1fr; }
+  .ld-hero-side {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .ld-radar { width: min(100%, 300px); }
+}
+
+@media (max-width: 760px) {
+  .ld-radar { display: none; }
+  .ld-hero-side .ld-receipt { max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ld-radar-sweep { animation: none; opacity: 0.5; }
+  .ld-blip i { animation: none; }
 }

@@ -216,27 +216,54 @@ export default function MarketingRoute() {
           <span>Sample case file № 59 — birchandstone.example — last night</span>
         </p>
 
-        <h1 className="ld-wall">
-          <span className="ld-row">They cut</span>
-          <span className="ld-row">
-            the price <s className="ld-del">₹2,400</s>
-          </span>
-          <span className="ld-row ld-row-indent">
-            <ins className="ld-ins">
-              ₹1,999<i className="ld-flag">03:47 AM</i>
-            </ins>{" "}
-            last
-          </span>
-          <span className="ld-row">night.</span>
-        </h1>
+        <div className="ld-hero-grid">
+          <div className="ld-hero-copy">
+            <h1 className="ld-wall">
+              <span className="ld-row">They cut</span>
+              <span className="ld-row">
+                the price <s className="ld-del">₹2,400</s>
+              </span>
+              <span className="ld-row ld-row-indent">
+                <ins className="ld-ins">
+                  ₹1,999<i className="ld-flag">03:47 AM</i>
+                </ins>{" "}
+                last
+              </span>
+              <span className="ld-row">night.</span>
+            </h1>
 
-        <div className="ld-deck">
-          <p>
-            Your sales team would&rsquo;ve walked in blind. Five to Nine catches the change, saves
-            the screenshots, and files the brief — <b>before your alarm goes off.</b>
-          </p>
+            <p className="ld-deck-copy">
+              Your sales team would&rsquo;ve walked in blind. Five to Nine catches the change,
+              saves the screenshots, and files the brief — <b>before your alarm goes off.</b>
+            </p>
+          </div>
 
-          <aside className="ld-receipt" aria-label="Sample brief">
+          <div className="ld-hero-side">
+            <div className="ld-radar" aria-hidden="true">
+              <div className="ld-radar-sweep" />
+              <span className="ld-radar-tick ld-tick-n">00:00</span>
+              <span className="ld-radar-tick ld-tick-e">03:00</span>
+              <span className="ld-radar-tick ld-tick-s">06:00</span>
+              <span className="ld-radar-tick ld-tick-w">21:00</span>
+              <span className="ld-blip ld-blip-1">
+                <i />
+                <em>02:14 ad set</em>
+              </span>
+              <span className="ld-blip ld-blip-2">
+                <i />
+                <em>03:47 price</em>
+              </span>
+              <span className="ld-blip ld-blip-3">
+                <i />
+                <em>04:58 form</em>
+              </span>
+              <div className="ld-radar-core">
+                <b>05:09</b>
+                <span>on watch</span>
+              </div>
+            </div>
+
+            <aside className="ld-receipt" aria-label="Sample brief">
             <span className="ld-receipt-head">Sample brief — 3 changes to review</span>
             <ul>
               {sampleBriefRows.map(([change, evidence]) => (
@@ -247,7 +274,8 @@ export default function MarketingRoute() {
               ))}
             </ul>
             <small>Evidence on file. No screenshots, no claim.</small>
-          </aside>
+            </aside>
+          </div>
         </div>
 
         <Form className="ld-command" method="get" action="/search" aria-label="Free live search">
