@@ -28,10 +28,12 @@ import {
   listProofCapturesForTarget,
   listRecentWorkspaceProofCaptures,
   listRetryableDigestRuns,
+  listRetryableInstantAttempts,
   listSuccessfulProofCapturesForAd,
   listObservationsForRun,
   listWatchEvents,
   listWatchEventsBetween,
+  listWatchEventsByIds,
   listWatchlists,
   logMetaIntegrationStatus,
   touchWatchlistScanned,
@@ -235,6 +237,78 @@ export async function runScheduledMonitoring(
     skippedForBudget,
     digests,
   };
+}
+
+const INSTANT_ALERT_FLUSH_LOOKBACK_HOURS = 48;
+const INSTANT_ALERT_FLUSH_LIMIT = 50;
+
+// Quiet-hours deferral records a skipped attempt but nothing ever sent it
+// once the window ended, and a transient provider failure lost the alert
+// forever. This pass (hosted on the six-hourly warmup cron) re-runs delivery
+// for those events; the attempt-kind idempotency keys make re-delivery safe —
+// already-sent batches dedupe, still-quiet batches stay deferred.
+export async function flushDeferredInstantAlerts(env: AppEnv) {
+  if (!env.DB) {
+    return { groups: 0, attempts: 0 };
+  }
+
+  const since = new Date(
+    Date.now() - INSTANT_ALERT_FLUSH_LOOKBACK_HOURS * 60 * 60 * 1000,
+  ).toISOString();
+  const pending = await listRetryableInstantAttempts(env, {
+    since,
+    limit: INSTANT_ALERT_FLUSH_LIMIT,
+  });
+
+  const groups = new Map<string, Set<string>>();
+  for (const attempt of pending) {
+    if (!attempt.watchlistId) {
+      continue;
+    }
+    const eventIds = groups.get(attempt.watchlistId) ?? new Set<string>();
+    for (const eventId of attempt.eventIds) {
+      eventIds.add(eventId);
+    }
+    groups.set(attempt.watchlistId, eventIds);
+  }
+
+  let flushedGroups = 0;
+  let attempts = 0;
+
+  for (const [watchlistId, eventIds] of groups) {
+    try {
+      const watchlist = await getWatchlist(env, watchlistId);
+      if (!watchlist || !watchlist.isActive) {
+        continue;
+      }
+
+      const events = await listWatchEventsByIds(env, watchlistId, [...eventIds]);
+      if (events.length === 0) {
+        continue;
+      }
+
+      const profile = await getUserDeliveryProfile(env, watchlist.userId);
+      const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+      const delivery = await deliverWatchlistAlerts(env, {
+        userId: watchlist.userId,
+        userName: profile?.name ?? watchlist.name,
+        accountEmail: profile?.email ?? null,
+        watchlist,
+        events,
+        lane: "customer",
+      });
+
+      flushedGroups += 1;
+      attempts += delivery.attempts;
+    } catch (error) {
+      console.error(
+        `Instant alert flush failed for watchlist ${watchlistId}; continuing with remaining watchlists.`,
+        error,
+      );
+    }
+  }
+
+  return { groups: flushedGroups, attempts };
 }
 
 export async function runScheduledDiscoveryWarmup(env: AppEnv) {
