@@ -1252,6 +1252,12 @@ img {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* Zero-noise proof points reuse the intel cards in a three-up row. */
+.f9-quiet-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-self: start;
+}
+
 .f9-demo-intel-grid li {
   display: flex;
   align-items: center;
@@ -1394,6 +1400,11 @@ img {
   color: rgba(210, 218, 242, 0.72);
   font-size: 1.14rem;
   line-height: 1.48;
+}
+
+.f9-growth-pricing-note a {
+  color: #8df0d1;
+  font-weight: 700;
 }
 
 .f9-commerce-grid {
@@ -4269,6 +4280,33 @@ button[aria-busy="true"] {
 
 .f9-share-header .f9-app-brand small {
   color: var(--f9-search-muted);
+}
+
+.f9-share-prepared-by {
+  margin: 0 0 18px;
+  color: var(--f9-search-muted, #40546a);
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+.f9-share-prepared-by strong {
+  color: var(--f9-search-ink, #061629);
+  font-weight: 700;
+}
+
+.f9-share-footer {
+  margin-top: 28px;
+  color: var(--f9-search-soft, #64788d);
+  font-size: 0.85rem;
+}
+
+.f9-share-footer p {
+  margin: 0;
+}
+
+.f9-share-footer a {
+  color: var(--f9-search-muted, #40546a);
+  font-weight: 650;
 }
 
 .f9-legal-nav {

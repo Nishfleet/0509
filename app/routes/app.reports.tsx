@@ -14,12 +14,20 @@ import { parseReportId } from "~/lib/report";
 export const meta = () => [{ title: "Reports | Five to Nine" }];
 
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
+  const { requireSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const { getWorkspaceBranding } = await import("~/lib/data.server");
+  const env = getEnv(context);
+  const session = await requireSession(env, request);
+  const branding = await getWorkspaceBranding(env, session.user.id);
+
   return {
     report: await loadReport({
       context,
       request,
       reportId: params.id,
     }),
+    preparedBy: branding.brandName,
   };
 }
 
@@ -58,7 +66,7 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
 }
 
 export default function ReportsRoute() {
-  const { report } = useLoaderData<typeof loader>();
+  const { report, preparedBy } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const backHref =
     report.resourceType === "collection"
@@ -108,6 +116,12 @@ export default function ReportsRoute() {
             </button>
           </div>
         </div>
+
+        {preparedBy ? (
+          <p className="f9-share-prepared-by">
+            Prepared by <strong>{preparedBy}</strong>
+          </p>
+        ) : null}
 
         <ReportView report={report} />
       </article>
