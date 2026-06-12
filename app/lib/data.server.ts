@@ -1,4 +1,5 @@
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
+import { chunkForBoundParams } from "~/lib/d1-chunk.server";
 import {
   hydrateAdsWithPersistedCreatives as hydrateAdsWithPersistedCreativesImpl,
   listAdsByIds,
@@ -2118,6 +2119,67 @@ export async function listWatchEvents(
   );
 
   return rows.map(toWatchEventRecord);
+}
+
+export async function listWatchEventsByIds(
+  env: AppEnv,
+  watchlistId: string,
+  eventIds: string[],
+) {
+  const uniqueIds = [...new Set(eventIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const chunkedRows = await Promise.all(
+    chunkForBoundParams(uniqueIds, 80).map((chunk) => {
+      const placeholders = chunk.map(() => "?").join(", ");
+      return many<WatchEventRow>(
+        env,
+        `
+          SELECT *
+          FROM watch_event
+          WHERE watchlist_id = ?
+            AND id IN (${placeholders})
+          ORDER BY created_at ASC
+        `,
+        watchlistId,
+        ...chunk,
+      );
+    }),
+  );
+
+  return chunkedRows.flat().map(toWatchEventRecord);
+}
+
+export async function listRetryableInstantAttempts(
+  env: AppEnv,
+  input: {
+    since: string;
+    limit: number;
+  },
+) {
+  // Instant alerts that were deferred by quiet hours (and never flushed) or
+  // failed at the provider. Successful re-sends update or supersede these
+  // rows, so they naturally drop out of this query.
+  const rows = await many<DeliveryAttemptRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_attempt
+      WHERE lane = 'customer'
+        AND watchlist_id IS NOT NULL
+        AND digest_run_id IS NULL
+        AND created_at >= ?
+        AND status IN ('skipped_due_to_quiet_hours', 'failed')
+      ORDER BY created_at ASC
+      LIMIT ?
+    `,
+    input.since,
+    input.limit,
+  );
+
+  return rows.map(toDeliveryAttemptRecord);
 }
 
 export async function listEventCandidates(

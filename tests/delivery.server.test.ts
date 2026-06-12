@@ -1650,3 +1650,140 @@ function whatsappTarget(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe("instant alert failed-send retry", () => {
+  it("retries a failed instant email in place instead of treating it as a duplicate", async () => {
+    const sendMock = mockEmailSend("msg_instant_retry");
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-new");
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(undefined);
+    const failedAttempt = {
+      id: "attempt-failed-1",
+      userId: "user-1",
+      watchlistId: "watch-1",
+      digestRunId: null,
+      deliveryTargetId: "email-target-1",
+      lane: "customer",
+      channel: "email",
+      provider: "cloudflare_email",
+      status: "failed",
+      webhookStatus: "failed",
+      targetValue: "owner@example.com",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: null,
+      eventIds: ["event-1"],
+      payloadSnapshot: {},
+      idempotencyKey: "ignored",
+      errorMessage: "smtp down",
+      sentAt: null,
+      failedAt: "2026-06-11T04:00:00.000Z",
+      createdAt: "2026-06-11T04:00:00.000Z",
+      updatedAt: "2026-06-11T04:00:00.000Z",
+    };
+
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn(async (_env: unknown, key: string) =>
+        key.endsWith(":send") ? failedAttempt : null,
+      ),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: true,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      upsertDeliveryTarget: vi.fn().mockResolvedValue({
+        id: "email-target-1",
+        userId: "user-1",
+        watchlistId: null,
+        channel: "email",
+        targetValue: "owner@example.com",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "account_email",
+        optedInAt: "2026-04-19T00:00:00.000Z",
+        isPaused: false,
+        pausedAt: null,
+        optedOutAt: null,
+        templateEligible: false,
+        lastSuccessfulDeliveryAt: null,
+        lastSuccessfulAttemptId: null,
+        providerIdentifier: null,
+        metadata: {},
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+    const result = await deliverWatchlistAlerts(
+      {
+        ...emailEnv,
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.in",
+      } as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        watchlist: {
+          id: "watch-1",
+          userId: "user-1",
+          name: "Nykaa watch",
+        },
+        events: [
+          {
+            id: "event-1",
+            watchlistId: "watch-1",
+            runId: "run-1",
+            eventType: "landing_page_url_changed",
+            status: "confirmed",
+            importanceScore: 90,
+            adId: "meta-1",
+            baselineFromRunId: null,
+            candidateId: "candidate-1",
+            proofCaptureId: "proof-1",
+            title: "Landing page URL changed",
+            summary: "The landing page URL changed.",
+            metadata: { advertiser: "Nykaa" },
+            confirmedAt: "2026-04-19T00:00:00.000Z",
+            suppressedAt: null,
+            invalidatedAt: null,
+            lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+            createdAt: "2026-04-19T00:00:00.000Z",
+          },
+        ],
+      } as never,
+    );
+
+    expect(result.attempts).toBe(1);
+    // the alert was re-sent and the failed attempt row updated in place
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-failed-1",
+      expect.objectContaining({ status: "sent" }),
+    );
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+  });
+});
