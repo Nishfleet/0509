@@ -1266,6 +1266,71 @@ function isUsableWhatsAppTarget(target: DeliveryTargetRecord) {
   );
 }
 
+// One nightly "customer-at-risk" email to the operator when monitoring or
+// delivery is degrading for paying customers — the ops dashboard is
+// pull-only and nobody is paged to it. Day-keyed idempotency: max one/day.
+export async function sendOperatorAlertEmail(
+  env: AppEnv,
+  input: {
+    subject: string;
+    lines: string[];
+  },
+) {
+  const recipient = env.LAUNCH_CANARY_EMAIL?.trim();
+  if (!recipient) {
+    return false;
+  }
+
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const idempotencyKey = `operator-alert:${dayKey}`;
+  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+  if (duplicate) {
+    return false;
+  }
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: recipient,
+    subject: input.subject,
+    html: `
+      <div style="font-family: Inter, system-ui, sans-serif; color: #1d2433; font-size: 14px; line-height: 1.6;">
+        <p style="margin: 0 0 12px;"><strong>Customer-at-risk signals from last night's run:</strong></p>
+        <ul style="margin: 0 0 12px; padding-left: 18px;">
+          ${input.lines.map((line) => `<li style="margin: 0 0 6px;">${escapeHtml(line)}</li>`).join("")}
+        </ul>
+        <p style="margin: 0; color: #5b6577; font-size: 12px;">
+          Details: https://0509.in/app/ops
+        </p>
+      </div>
+    `,
+    tag: "operator-alert",
+    unsubscribeUrl: null,
+  });
+
+  await createDeliveryAttempt(env, {
+    userId: "operator",
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "internal",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: recipient,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "operator_alert",
+    eventIds: [],
+    payloadSnapshot: { kind: "operator_alert", lines: input.lines },
+    idempotencyKey,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  return providerResult.status === "sent";
+}
+
 export async function sendDeliveryTestEmail(
   env: AppEnv,
   input: {

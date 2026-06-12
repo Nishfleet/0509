@@ -6,6 +6,7 @@ import {
   flushDeferredInstantAlerts,
   runScheduledDiscoveryWarmup,
   runScheduledMonitoring,
+  sendCustomerAtRiskAlert,
 } from "../app/lib/monitoring.server";
 import {
   isPublicMarkdownPage,
@@ -147,11 +148,21 @@ export default {
         cron: controller.cron,
         scheduledTime: controller.scheduledTime,
       }).then(
-        (result) => {
+        async (result) => {
           console.log("scheduled monitoring completed", {
             cron: controller.cron,
             ...result,
           });
+          try {
+            const alert = await sendCustomerAtRiskAlert(env);
+            if (alert.sent) {
+              console.log("customer-at-risk alert sent", alert);
+            }
+          } catch (error) {
+            console.error("customer-at-risk alert failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         },
         (error) => {
           console.error("scheduled monitoring run failed", {

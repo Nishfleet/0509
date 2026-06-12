@@ -2286,6 +2286,102 @@ export async function listWatchEventsByIds(
   return chunkedRows.flat().map(toWatchEventRecord);
 }
 
+export interface OperatorRiskSummary {
+  troubleWatchlists: Array<{
+    id: string;
+    name: string;
+    userEmail: string;
+    consecutiveFailures: number;
+  }>;
+  deliveryFailures24h: number;
+  stuckRuns: number;
+}
+
+// Targeted "customer-at-risk" signals for the nightly operator alert —
+// deliberately cheaper than the full operator snapshot.
+export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskSummary> {
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  const recentlyFailed = await many<{ id: string; name: string; user_email: string }>(
+    env,
+    `
+      SELECT DISTINCT watchlist.id, watchlist.name, user.email AS user_email
+      FROM watchlist_run
+      INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
+      INNER JOIN user ON user.id = watchlist.user_id
+      WHERE watchlist_run.status = 'failed'
+        AND watchlist_run.started_at >= ?
+        AND watchlist.is_active = 1
+      LIMIT 20
+    `,
+    dayAgo,
+  );
+
+  const troubleWatchlists: OperatorRiskSummary["troubleWatchlists"] = [];
+  for (const candidate of recentlyFailed) {
+    const lastRuns = await many<{ status: string }>(
+      env,
+      `
+        SELECT status
+        FROM watchlist_run
+        WHERE watchlist_id = ?
+        ORDER BY started_at DESC
+        LIMIT 3
+      `,
+      candidate.id,
+    );
+    const consecutiveFailures = countLeadingFailures(lastRuns.map((run) => run.status));
+    if (consecutiveFailures >= 3) {
+      troubleWatchlists.push({
+        id: candidate.id,
+        name: candidate.name,
+        userEmail: candidate.user_email,
+        consecutiveFailures,
+      });
+    }
+  }
+
+  const [deliveryRow, stuckRow] = await Promise.all([
+    one<{ count: number }>(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM delivery_attempt
+        WHERE status = 'failed'
+          AND lane = 'customer'
+          AND created_at >= ?
+      `,
+      dayAgo,
+    ),
+    one<{ count: number }>(
+      env,
+      `
+        SELECT COUNT(*) AS count
+        FROM watchlist_run
+        WHERE status IN ('pending', 'running')
+          AND started_at < ?
+      `,
+      hourAgo,
+    ),
+  ]);
+
+  return {
+    troubleWatchlists,
+    deliveryFailures24h: Number(deliveryRow?.count ?? 0),
+    stuckRuns: Number(stuckRow?.count ?? 0),
+  };
+}
+
+export function countLeadingFailures(statuses: string[]) {
+  let count = 0;
+  for (const status of statuses) {
+    if (status !== "failed") break;
+    count += 1;
+  }
+  return count;
+}
+
 export async function getSuccessfulRunStatsForUserBetween(
   env: AppEnv,
   userId: string,

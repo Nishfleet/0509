@@ -20,6 +20,7 @@ import {
   getDigest,
   getDigestByPeriod,
   getRecentSuccessfulRuns,
+  getOperatorRiskSummary,
   getSavedQuery,
   getSuccessfulRunStatsForUserBetween,
   getUserDeliveryProfile,
@@ -311,6 +312,42 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
   }
 
   return { groups: flushedGroups, attempts };
+}
+
+// Runs after the nightly monitoring cron: when paying customers' scans or
+// deliveries are degrading, the operator hears about it instead of finding
+// out from a churn email.
+export async function sendCustomerAtRiskAlert(env: AppEnv) {
+  if (!env.DB) {
+    return { sent: false, reason: "no_db" };
+  }
+
+  const summary = await getOperatorRiskSummary(env);
+  const lines: string[] = [];
+
+  for (const watchlist of summary.troubleWatchlists) {
+    lines.push(
+      `Watchlist "${watchlist.name}" (${watchlist.userEmail}) has failed ${watchlist.consecutiveFailures} scans in a row.`,
+    );
+  }
+  if (summary.deliveryFailures24h > 0) {
+    lines.push(`${summary.deliveryFailures24h} customer delivery attempt(s) failed in the last 24h.`);
+  }
+  if (summary.stuckRuns > 0) {
+    lines.push(`${summary.stuckRuns} watchlist run(s) look stuck (pending/running for over an hour).`);
+  }
+
+  if (lines.length === 0) {
+    return { sent: false, reason: "all_clear" };
+  }
+
+  const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+  const sent = await sendOperatorAlertEmail(env, {
+    subject: `0509 customer-at-risk: ${lines.length} signal${lines.length === 1 ? "" : "s"}`,
+    lines,
+  });
+
+  return { sent, signals: lines.length };
 }
 
 export async function runScheduledDiscoveryWarmup(env: AppEnv) {
