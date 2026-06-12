@@ -68,7 +68,9 @@ describe("workspace cleanup persistence", () => {
     const update = mock.statements.find((statement) => statement.sql.includes("UPDATE watchlist"));
     expect(update?.sql).toContain("AND user_id = ?");
     expect(update?.bindings[0]).toBe(0);
-    expect(update?.bindings.slice(2)).toEqual(["watch-1", "user-1"]);
+    // a deliberate user pause is stamped so renewals never force-resume it
+    expect(update?.bindings[1]).toBe("user");
+    expect(update?.bindings.slice(3)).toEqual(["watch-1", "user-1"]);
 
     const noMatch = createCapturingDb(0);
     expect(await setWatchlistActive({ DB: noMatch.db } as never, "user-2", "watch-1", true)).toBe(false);
@@ -375,5 +377,74 @@ describe("operator alert FK attribution", () => {
     expect(sent).toBe(true);
     expect(emailSend).toHaveBeenCalledTimes(1);
     expect(createDeliveryAttempt).not.toHaveBeenCalled();
+  });
+});
+
+describe("paused_reason semantics", () => {
+  it("reactivation targets only plan-limit pauses, never user pauses or retargets", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            statements.push({ sql, bindings });
+            return {
+              async run() {
+                return { success: true, meta: { changes: 1 } };
+              },
+              async all<T>() {
+                if (sql.includes("COUNT(*)")) return { results: [{ count: 0 }] as T[] };
+                return { results: [] as T[] };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const { reactivateWatchlistsUpToPlanLimit } = await import("~/lib/data.server");
+    await reactivateWatchlistsUpToPlanLimit({ DB: db } as never, "user-1", 3);
+
+    const update = statements.find((statement) => statement.sql.includes("SET is_active = 1"));
+    expect(update?.sql).toContain("paused_reason = 'plan_limit' OR paused_reason IS NULL");
+    expect(update?.sql).toContain("paused_reason = NULL");
+  });
+});
+
+describe("migrateAutoProvisionedEmailTargets", () => {
+  it("retargets only auto-provisioned, non-opted-out email rows and cleans twins", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            statements.push({ sql, bindings });
+            return {
+              async run() {
+                return { success: true, meta: { changes: 1 } };
+              },
+              async all<T>() {
+                return { results: [] as T[] };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const { migrateAutoProvisionedEmailTargets } = await import("~/lib/data.server");
+    const changed = await migrateAutoProvisionedEmailTargets(
+      { DB: db } as never,
+      "user-1",
+      "new@example.com",
+    );
+
+    expect(changed).toBe(1);
+    const update = statements.find((statement) => statement.sql.includes("UPDATE OR IGNORE delivery_target"));
+    expect(update?.sql).toContain("opt_in_source = 'account_email'");
+    expect(update?.sql).toContain("opted_out_at IS NULL");
+    expect(update?.bindings[0]).toBe("new@example.com");
+    const cleanup = statements.find((statement) => statement.sql.includes("DELETE FROM delivery_target"));
+    expect(cleanup?.sql).toContain("opt_in_source = 'account_email'");
   });
 });
