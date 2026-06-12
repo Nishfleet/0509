@@ -92,6 +92,7 @@ function mockMonitoringDependencies(input: {
     getDigestByPeriod: vi.fn(),
     getDigest: vi.fn().mockResolvedValue(null),
     listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+    hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
     getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
     getSavedQuery: vi.fn(),
     getUserDeliveryProfile: vi.fn().mockResolvedValue(null),

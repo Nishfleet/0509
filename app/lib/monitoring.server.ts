@@ -23,6 +23,7 @@ import {
   getOperatorRiskSummary,
   getSavedQuery,
   getSuccessfulRunStatsForUserBetween,
+  hasInFlightWatchlistRun,
   getUserDeliveryProfile,
   getWatchlist,
   hydrateAdsWithPersistedCreatives,
@@ -317,13 +318,28 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
 // Runs after the nightly monitoring cron: when paying customers' scans or
 // deliveries are degrading, the operator hears about it instead of finding
 // out from a churn email.
-export async function sendCustomerAtRiskAlert(env: AppEnv) {
+export async function sendCustomerAtRiskAlert(
+  env: AppEnv,
+  options: { skippedForBudget?: number } = {},
+) {
   if (!env.DB) {
     return { sent: false, reason: "no_db" };
   }
 
   const summary = await getOperatorRiskSummary(env);
   const lines: string[] = [];
+
+  if ((options.skippedForBudget ?? 0) > 0) {
+    lines.push(
+      `${options.skippedForBudget} watchlist(s) were SKIPPED last night because the scan window filled — capacity must grow before adding more watchlists (revive the Workflow path).`,
+    );
+  }
+
+  for (const watchlist of summary.staleWatchlists) {
+    lines.push(
+      `Watchlist "${watchlist.name}" (${watchlist.userEmail}) has not been scanned since ${watchlist.lastScannedAt ?? "creation"} — likely budget-skipped or cron trouble.`,
+    );
+  }
 
   for (const watchlist of summary.troubleWatchlists) {
     lines.push(
@@ -470,7 +486,7 @@ export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord
     env,
     watchlist,
     "manual",
-    (async () => {
+    async () => {
       const query = await resolveWatchlistQuery(env, watchlist);
       if (!query) {
         throw new Error("The watchlist target could not be resolved.");
@@ -478,7 +494,7 @@ export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord
       return performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
         customerMetaAdLibraryToken,
       });
-    })(),
+    },
     {
       customerMetaAdLibraryToken,
     },
@@ -514,9 +530,10 @@ export async function runWatchlistWorkflowJob(
     env,
     watchlist,
     params.triggerType,
-    performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
-      customerMetaAdLibraryToken,
-    }),
+    () =>
+      performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+        customerMetaAdLibraryToken,
+      }),
     {
       customerMetaAdLibraryToken,
     },
@@ -534,9 +551,21 @@ export async function runWatchlist(
   env: AppEnv,
   watchlist: WatchlistRecord,
   triggerType: WatchlistRunRecord["triggerType"],
-  scanPromise: Promise<ScanPayload>,
+  // Lazy: the scan must not start until the in-flight guard below has
+  // cleared, or a blocked duplicate still burns a Browser Rendering session.
+  scan: () => Promise<ScanPayload>,
   options: ScanOptions = {},
 ) {
+  // One scan at a time per watchlist: the first-scan waitUntil, an eager
+  // "Refresh now" click, and the nightly cron can otherwise overlap — double
+  // Browser Rendering spend and duplicate baseline events.
+  const inFlightCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  if (await hasInFlightWatchlistRun(env, watchlist.id, inFlightCutoff)) {
+    throw new Error(
+      "A scan for this watchlist is already running. Fresh results land in a couple of minutes.",
+    );
+  }
+
   const recentRuns = await getRecentSuccessfulRuns(env, watchlist.id, 3);
   const baselineRun = recentRuns[0] ?? null;
   const priorRun = recentRuns[1] ?? null;
@@ -549,7 +578,7 @@ export async function runWatchlist(
   );
 
   try {
-    const { ads, pagesScanned, degraded } = await scanPromise;
+    const { ads, pagesScanned, degraded } = await scan();
 
     if (degraded) {
       // Stale-cache honesty: nothing live was fetched, so no diff runs, the
@@ -1192,20 +1221,21 @@ async function runScheduledWatchlistInline(
   const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
   const scanCacheKey = `${watchlist.userId}:${watchlist.targetFingerprint}`;
 
-  if (!scanCache.has(scanCacheKey)) {
-    scanCache.set(
-      scanCacheKey,
-      performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
-        customerMetaAdLibraryToken,
-      }),
-    );
-  }
-
   await runWatchlist(
     env,
     watchlist,
     "scheduled",
-    scanCache.get(scanCacheKey)!,
+    () => {
+      if (!scanCache.has(scanCacheKey)) {
+        scanCache.set(
+          scanCacheKey,
+          performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+            customerMetaAdLibraryToken,
+          }),
+        );
+      }
+      return scanCache.get(scanCacheKey)!;
+    },
     {
       customerMetaAdLibraryToken,
     },
