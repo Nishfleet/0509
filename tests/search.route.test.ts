@@ -196,6 +196,7 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -278,6 +279,7 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -332,6 +334,7 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -374,6 +377,7 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -435,6 +439,7 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -513,6 +518,7 @@ describe("search loader", () => {
     }));
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
