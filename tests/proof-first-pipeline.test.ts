@@ -235,6 +235,7 @@ function installSharedMocks(input: {
       email: "owner@example.com",
       name: "Owner",
     }),
+    hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
     getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-0" }]),
     getSavedQuery: vi.fn(),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),

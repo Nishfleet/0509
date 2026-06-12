@@ -95,6 +95,7 @@ describe("runWatchlistManual OCR reuse", () => {
         email: "owner@example.com",
         name: "Owner",
       }),
+      hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
       getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
       getSavedQuery: vi.fn(),
       getWatchlist: vi.fn(),

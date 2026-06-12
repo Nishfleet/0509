@@ -2047,9 +2047,13 @@ function buildInstantAlertContent(
   const watchlistUrl = buildWatchlistUrl(env, watchlist.id);
 
   if (events.length === 1) {
+    const isBaseline =
+      ((primaryEvent.metadata ?? {}) as Record<string, unknown>).kind === "baseline";
     const subject = provisional
       ? `Possible change detected: ${competitor}`
-      : buildInstantSubject(primaryEvent.eventType, competitor, primaryEvent.title);
+      : isBaseline
+        ? primaryEvent.title
+        : buildInstantSubject(primaryEvent.eventType, competitor, primaryEvent.title);
     const shortChange = provisional
       ? "Possible change detected"
       : primaryEvent.title;
