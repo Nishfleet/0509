@@ -27,6 +27,7 @@ import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/d
 import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { createReportId } from "~/lib/report";
 import type {
   DeliveryAttemptRecord,
@@ -505,6 +506,11 @@ export default function WatchlistsRoute() {
   );
   const lastAttemptByEventId = buildLastAttemptByEventId(data.recentDeliveryAttempts);
   const insightDepth = data.selectedWatchlist ? buildWatchlistInsightDepth(data.events) : null;
+  let consecutiveFailedRuns = 0;
+  for (const run of data.runs as Array<{ status: string }>) {
+    if (run.status !== "failed") break;
+    consecutiveFailedRuns += 1;
+  }
 
   return (
     <section className="f9-app-stack">
@@ -641,7 +647,18 @@ export default function WatchlistsRoute() {
                 </div>
               </div>
 
-              {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
+              {consecutiveFailedRuns >= 3 ? (
+        <div className="f9-message is-error">
+          <p>
+            We're having trouble checking this competitor — the last {consecutiveFailedRuns} checks
+            failed. We keep retrying every night; recent errors are listed under Recent checks. If
+            this persists for a few days, email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
+            we'll dig in.
+          </p>
+        </div>
+      ) : null}
+
+      {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
               <div className="f9-work-list">
                 <section>
