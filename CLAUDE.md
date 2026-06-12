@@ -102,7 +102,7 @@ Last local verification on 2026-06-11:
 This project is managed by Paperclip under company Swish.
 - **Project:** 0509.in (URL key: `0509-in`)
 - **SaaS Builder** handles implementation tasks
-- **SaaS Reviewer** + **Codex Reviewer** review completed work
+- **SaaS Reviewer** reviews completed work (Codex Reviewer retired 2026-06-12)
 
 ## Product Shape
 
