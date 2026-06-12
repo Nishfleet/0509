@@ -13,7 +13,7 @@ export const meta: MetaFunction = () => [
 ];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
@@ -30,18 +30,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { slackTargetDisplayName } = await import("~/lib/slack.server");
   const { whatsappTargetDisplayName } = await import("~/lib/whatsapp.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const [connection, discoveryStatus, betaReadiness, apiKeys, slackTargets, whatsappTargets] = await Promise.all([
-    getCustomerMetaConnection(env, session.user.id),
+    getCustomerMetaConnection(env, workspaceUserId),
     resolveCommercialAdSourceStatus(env),
     getMetaAdsBetaReadiness(env),
-    listCustomerApiKeys(env, session.user.id),
-    listDeliveryTargets(env, session.user.id, {
+    listCustomerApiKeys(env, workspaceUserId),
+    listDeliveryTargets(env, workspaceUserId, {
       watchlistId: null,
       channel: "slack",
       limit: 10,
     }),
-    listDeliveryTargets(env, session.user.id, {
+    listDeliveryTargets(env, workspaceUserId, {
       channel: "whatsapp",
       limit: 100,
     }),
@@ -111,7 +111,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
     disconnectCustomerMetaToken,
@@ -119,13 +119,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
     saveCustomerMetaToken,
   } = await import("~/lib/customer-meta.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "connect-meta-token") {
     const token = String(formData.get("metaToken") ?? "");
-    const result = await saveCustomerMetaToken(env, session.user.id, token);
+    const result = await saveCustomerMetaToken(env, workspaceUserId, token);
 
     return {
       ok: result.ok,
@@ -134,7 +134,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "retest-meta-token") {
-    const result = await retestSavedCustomerMetaToken(env, session.user.id);
+    const result = await retestSavedCustomerMetaToken(env, workspaceUserId);
 
     return {
       ok: result.ok,
@@ -143,7 +143,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "disconnect-meta-token") {
-    await disconnectCustomerMetaToken(env, session.user.id);
+    await disconnectCustomerMetaToken(env, workspaceUserId);
     return {
       ok: true,
       message: "Backup Meta access disconnected.",
@@ -153,7 +153,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "create-api-key") {
     const { createCustomerApiKey } = await import("~/lib/api-keys.server");
     const name = String(formData.get("apiKeyName") ?? "");
-    const result = await createCustomerApiKey(env, session.user.id, name);
+    const result = await createCustomerApiKey(env, workspaceUserId, name);
 
     return {
       ok: true,
@@ -167,7 +167,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { revokeCustomerApiKey } = await import("~/lib/data.server");
     const apiKeyId = String(formData.get("apiKeyId") ?? "");
     await revokeCustomerApiKey(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       apiKeyId,
     });
 
@@ -188,7 +188,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const name = String(formData.get("slackDestinationName") ?? "");
     try {
       await saveSlackWebhookTarget(env, {
-        userId: session.user.id,
+        userId: workspaceUserId,
         webhookUrl,
         name,
       });
@@ -202,12 +202,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
       throw error;
     }
-    const existingConfig = await getWorkspaceDeliveryConfig(env, session.user.id);
+    const existingConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
     const defaults = legacyWorkspaceDeliveryDefaults({
       hasEmail: Boolean(session.user.email),
     });
     await upsertWorkspaceDeliveryConfig(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
       instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
       digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
@@ -237,7 +237,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const explicitOptIn = formData.has("whatsappExplicitOptIn");
     try {
       await saveWhatsAppDeliveryTarget(env, {
-        userId: session.user.id,
+        userId: workspaceUserId,
         targetValue,
         name,
         explicitOptIn,
@@ -252,12 +252,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
       throw error;
     }
-    const existingConfig = await getWorkspaceDeliveryConfig(env, session.user.id);
+    const existingConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
     const defaults = legacyWorkspaceDeliveryDefaults({
       hasEmail: Boolean(session.user.email),
     });
     await upsertWorkspaceDeliveryConfig(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
       instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
       digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
@@ -279,7 +279,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { pauseSlackWebhookTarget } = await import("~/lib/slack.server");
     const targetId = String(formData.get("slackTargetId") ?? "");
     const paused = await pauseSlackWebhookTarget(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       targetId,
     });
 
@@ -293,7 +293,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { resumeSlackWebhookTarget } = await import("~/lib/slack.server");
     const targetId = String(formData.get("slackTargetId") ?? "");
     const resumed = await resumeSlackWebhookTarget(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       targetId,
     });
 

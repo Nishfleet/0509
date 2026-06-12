@@ -58,7 +58,7 @@ const PLANS: PricingPlan[] = [
       "Your agency name on shared reports",
       "Read-only API + MCP endpoint for your tools and agents",
       "Email + Slack delivery",
-      "Team seats coming soon — today every workspace is single-seat",
+      "3 team seats — teammates share watchlists, boards, and briefs",
     ],
   },
 ];
