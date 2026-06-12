@@ -42,12 +42,6 @@ const tickerEvents = [
   ["05:09", "Morning brief delivered — 3 changes, 9 pieces of evidence", "sample watch"],
 ] as const;
 
-const sampleBriefRows = [
-  ["Visible offer text changed", "screenshot"],
-  ["CTA changed on the destination page", "page text"],
-  ["A lead form appeared", "original link"],
-] as const;
-
 const howSteps = [
   {
     step: "01",
@@ -239,41 +233,75 @@ export default function MarketingRoute() {
           </div>
 
           <div className="ld-hero-side">
-            <div className="ld-radar" aria-hidden="true">
-              <div className="ld-radar-sweep" />
-              <span className="ld-radar-tick ld-tick-n">00:00</span>
-              <span className="ld-radar-tick ld-tick-e">03:00</span>
-              <span className="ld-radar-tick ld-tick-s">06:00</span>
-              <span className="ld-radar-tick ld-tick-w">21:00</span>
-              <span className="ld-blip ld-blip-1">
-                <i />
-                <em>02:14 ad set</em>
-              </span>
-              <span className="ld-blip ld-blip-2">
-                <i />
-                <em>03:47 price</em>
-              </span>
-              <span className="ld-blip ld-blip-3">
-                <i />
-                <em>04:58 form</em>
-              </span>
-              <div className="ld-radar-core">
-                <b>05:09</b>
-                <span>on watch</span>
+            <div className="ld-stack" aria-hidden="true">
+              <svg className="ld-thread" viewBox="0 0 420 560" aria-hidden="true">
+                <path
+                  d="M190 80 C 300 120, 310 190, 260 250 M 240 340 C 160 390, 150 430, 180 470"
+                  stroke="#E0442C"
+                  strokeWidth="1.5"
+                  fill="none"
+                  strokeDasharray="5 4"
+                />
+              </svg>
+              <div className="ld-shot ld-shot-before">
+                <span className="ld-stamp ld-stamp-red">Before — 21:00</span>
+                <div className="ld-shot-bar">
+                  <i />
+                  <i />
+                  <i />
+                  <span>birchandstone.example/pricing</span>
+                </div>
+                <div className="ld-shot-body">
+                  <div className="ld-sk ld-sk-h" />
+                  <div className="ld-sk" />
+                  <div className="ld-sk ld-sk-s" />
+                  <p className="ld-shot-price ld-price-old">₹2,400/mo</p>
+                  <div className="ld-sk ld-sk-s" />
+                </div>
               </div>
+              <div className="ld-shot ld-shot-after">
+                <span className="ld-stamp ld-stamp-green">After — 03:47 · screenshot saved</span>
+                <div className="ld-shot-bar">
+                  <i />
+                  <i />
+                  <i />
+                  <span>birchandstone.example/pricing</span>
+                </div>
+                <div className="ld-shot-body">
+                  <div className="ld-sk ld-sk-h" />
+                  <div className="ld-sk" />
+                  <div className="ld-sk ld-sk-s" />
+                  <p className="ld-shot-price">
+                    <em>₹1,999/mo</em>
+                  </p>
+                  <div className="ld-sk ld-sk-s" />
+                </div>
+              </div>
+              <div className="ld-shot ld-shot-form">
+                <span className="ld-stamp ld-stamp-green">04:58 · new</span>
+                <div className="ld-shot-bar">
+                  <i />
+                  <i />
+                  <i />
+                  <span>campaign landing page</span>
+                </div>
+                <div className="ld-shot-body">
+                  <div className="ld-sk" />
+                  <div className="ld-sk ld-sk-s" />
+                  <p className="ld-form-row">+ lead form appeared here</p>
+                </div>
+              </div>
+              <span className="ld-diff-clip">Diff: −₹401</span>
             </div>
 
-            <aside className="ld-receipt" aria-label="Sample brief">
-            <span className="ld-receipt-head">Sample brief — 3 changes to review</span>
-            <ul>
-              {sampleBriefRows.map(([change, evidence]) => (
-                <li key={change}>
-                  <span>{change}</span>
-                  <em>{evidence}</em>
-                </li>
-              ))}
-            </ul>
-            <small>Evidence on file. No screenshots, no claim.</small>
+            <aside className="ld-brief-strip" aria-label="Sample brief">
+              <b>Sample brief — 3 changes to review</b>
+              <ul>
+                <li>Visible offer text changed</li>
+                <li>CTA changed on the destination page</li>
+                <li>A lead form appeared</li>
+              </ul>
+              <small>Evidence on file. No screenshots, no claim.</small>
             </aside>
           </div>
         </div>
