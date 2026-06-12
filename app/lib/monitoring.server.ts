@@ -1156,7 +1156,9 @@ async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {
   if (watchlist.targetType === "advertiser") {
     return normalizeSavedQuery("advertiser", {
       query: watchlist.targetLabel,
-      country: "India",
+      // Legacy watchlists (created before target_country existed) were all
+      // scanned as India; keep that behavior so their diffs stay coherent.
+      country: watchlist.targetCountry ?? "India",
     });
   }
 

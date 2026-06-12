@@ -1,3 +1,4 @@
+import { safeTimeZone } from "~/lib/safe-timezone";
 import type { WatchEventRecord, WatchEventType } from "~/lib/types";
 
 export type DigestCadence = "daily" | "weekly";
@@ -13,11 +14,14 @@ export function digestCadenceLabel(cadence: DigestCadence | undefined) {
   return cadence === "daily" ? "daily brief" : "weekly digest";
 }
 
+// Proof-trail timestamps default to UTC (global-first product); pass the
+// workspace's delivery timezone when one is available at the call site.
 export function buildChangeIntelligenceSummary(
   event: Pick<
     WatchEventRecord,
     "eventType" | "importanceScore" | "metadata" | "proofCaptureId" | "confirmedAt" | "createdAt"
   >,
+  timeZone?: string | null,
 ): ChangeIntelligenceSummary {
   const priorityScore = Number.isFinite(event.importanceScore)
     ? event.importanceScore
@@ -34,13 +38,13 @@ export function buildChangeIntelligenceSummary(
     recommendedAction: isBaseline
       ? "No action needed — this is your starting snapshot. Future alerts only cover real changes."
       : recommendAction(event.eventType, priorityScore),
-    proofTrail: buildProofTrail(event),
+    proofTrail: buildProofTrail(event, timeZone),
   };
 }
 
-export function digestMetadataForEvent(event: WatchEventRecord) {
+export function digestMetadataForEvent(event: WatchEventRecord, timeZone?: string | null) {
   return {
-    ...buildChangeIntelligenceSummary(event),
+    ...buildChangeIntelligenceSummary(event, timeZone),
     proofCaptureId: event.proofCaptureId,
     confirmedAt: event.confirmedAt,
     sourceStatus: event.proofCaptureId ? "proof_backed" : "scan_backed",
@@ -112,6 +116,7 @@ function recommendAction(eventType: WatchEventType, priorityScore: number | null
 
 function buildProofTrail(
   event: Pick<WatchEventRecord, "metadata" | "proofCaptureId" | "confirmedAt" | "createdAt">,
+  timeZone?: string | null,
 ) {
   const timestamp = event.confirmedAt ?? event.createdAt;
   // Customer language, not pipeline language: "proof capture · source-backed
@@ -124,14 +129,15 @@ function buildProofTrail(
   const diff = from && to ? ` · "${from}" → "${to}"` : "";
   const timestampMs = Date.parse(timestamp ?? "");
   const when = Number.isFinite(timestampMs)
-    ? `${new Intl.DateTimeFormat("en-IN", {
+    ? new Intl.DateTimeFormat("en-GB", {
         day: "numeric",
         month: "short",
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
-        timeZone: "Asia/Kolkata",
-      }).format(new Date(timestampMs))} IST`
+        timeZone: safeTimeZone(timeZone),
+        timeZoneName: "short",
+      }).format(new Date(timestampMs))
     : "time unknown";
 
   return `${source} · ${when}${diff}`;

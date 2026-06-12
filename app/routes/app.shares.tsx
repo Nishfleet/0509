@@ -1,6 +1,7 @@
 import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 
 const RESOURCE_LABELS: Record<string, string> = {
@@ -95,9 +96,11 @@ export default function SharesRoute() {
                   </p>
                   <small>
                     Created {formatDate(share.createdAt)} ·{" "}
-                    {share.expiresAt
-                      ? `Expires ${formatDate(share.expiresAt)}`
-                      : "No expiry (created before expiry rollout)"}
+                    {share.expiresAt ? (
+                      <>Expires {formatDate(share.expiresAt)}</>
+                    ) : (
+                      "No expiry (created before expiry rollout)"
+                    )}
                   </small>
                 </div>
                 <Form method="post">
@@ -127,12 +130,5 @@ export default function SharesRoute() {
 }
 
 function formatDate(value: string) {
-  const time = new Date(value).getTime();
-  if (!Number.isFinite(time)) return value;
-
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(time));
+  return <LocalTime fallback={value} iso={value} mode="date" />;
 }

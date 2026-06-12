@@ -10,6 +10,7 @@ const watchlist: WatchlistRecord = {
   targetId: "boAt",
   targetFingerprint: "fp-boat",
   targetLabel: "boAt",
+  targetCountry: null,
   isActive: true,
   lastScannedAt: null,
   createdAt: "2026-03-01T00:00:00.000Z",

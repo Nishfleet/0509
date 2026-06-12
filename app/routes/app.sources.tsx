@@ -1,6 +1,7 @@
 import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 
 export const meta: MetaFunction = () => [
@@ -338,9 +339,11 @@ export default function AppSourcesRoute() {
             {data.connection ? (
               <p className="f9-muted-copy">
                 Connected token ends in {data.connection.tokenLastFour}
-                {data.connection.lastCheckedAt
-                  ? ` · tested ${new Date(data.connection.lastCheckedAt).toLocaleString("en-IN")}`
-                  : ""}
+                {data.connection.lastCheckedAt ? (
+                  <> · tested <LocalTime iso={data.connection.lastCheckedAt} /></>
+                ) : (
+                  ""
+                )}
               </p>
             ) : (
               <p className="f9-muted-copy">No backup Meta access is connected yet.</p>
@@ -360,9 +363,11 @@ export default function AppSourcesRoute() {
             <p className="f9-muted-copy">
               {data.betaReadiness.samples}/{data.betaReadiness.sampleTarget} fresh checks in the last{" "}
               {data.betaReadiness.windowDays} days · {formatSuccessRate(data.betaReadiness.successRate)} successful
-              {data.betaReadiness.latestSuccessAt
-                ? ` · last success ${new Date(data.betaReadiness.latestSuccessAt).toLocaleString("en-IN")}`
-                : " · no recent success yet"}
+              {data.betaReadiness.latestSuccessAt ? (
+                <> · last success <LocalTime iso={data.betaReadiness.latestSuccessAt} /></>
+              ) : (
+                " · no recent success yet"
+              )}
             </p>
           </div>
           {data.betaReadiness.blockers.length > 0 ? (
@@ -530,10 +535,16 @@ export default function AppSourcesRoute() {
                   <strong>{apiKey.name}</strong>
                   <p>
                     {apiKey.keyPrefix}...
-                    {apiKey.lastUsedAt
-                      ? ` · last used ${new Date(apiKey.lastUsedAt).toLocaleString("en-IN")}`
-                      : " · never used"}
-                    {apiKey.revokedAt ? ` · revoked ${new Date(apiKey.revokedAt).toLocaleString("en-IN")}` : ""}
+                    {apiKey.lastUsedAt ? (
+                      <> · last used <LocalTime iso={apiKey.lastUsedAt} /></>
+                    ) : (
+                      " · never used"
+                    )}
+                    {apiKey.revokedAt ? (
+                      <> · revoked <LocalTime iso={apiKey.revokedAt} /></>
+                    ) : (
+                      ""
+                    )}
                   </p>
                 </div>
                 {apiKey.revokedAt ? null : (
@@ -634,9 +645,11 @@ export default function AppSourcesRoute() {
                   <strong>{target.displayName}</strong>
                   <p>
                     {target.isPaused ? "Paused" : "Active"}
-                    {target.lastSuccessfulDeliveryAt
-                      ? ` · last sent ${new Date(target.lastSuccessfulDeliveryAt).toLocaleString("en-IN")}`
-                      : " · no sends yet"}
+                    {target.lastSuccessfulDeliveryAt ? (
+                      <> · last sent <LocalTime iso={target.lastSuccessfulDeliveryAt} /></>
+                    ) : (
+                      " · no sends yet"
+                    )}
                   </p>
                 </div>
                 <Form method="post">
@@ -758,9 +771,11 @@ export default function AppSourcesRoute() {
           <div>
             <dt>Last sent</dt>
             <dd>
-              {data.whatsappDelivery.lastSuccessfulDeliveryAt
-                ? new Date(data.whatsappDelivery.lastSuccessfulDeliveryAt).toLocaleString("en-IN")
-                : "No successful send yet"}
+              {data.whatsappDelivery.lastSuccessfulDeliveryAt ? (
+                <LocalTime iso={data.whatsappDelivery.lastSuccessfulDeliveryAt} />
+              ) : (
+                "No successful send yet"
+              )}
             </dd>
           </div>
         </dl>
@@ -775,9 +790,11 @@ export default function AppSourcesRoute() {
                     {target.validationStatus === "validated" && target.templateEligible
                       ? "Template-ready"
                       : "Needs validation"}
-                    {target.lastSuccessfulDeliveryAt
-                      ? ` · last sent ${new Date(target.lastSuccessfulDeliveryAt).toLocaleString("en-IN")}`
-                      : " · no delivered proof yet"}
+                    {target.lastSuccessfulDeliveryAt ? (
+                      <> · last sent <LocalTime iso={target.lastSuccessfulDeliveryAt} /></>
+                    ) : (
+                      " · no delivered proof yet"
+                    )}
                   </p>
                 </div>
               </article>

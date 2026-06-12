@@ -1,4 +1,5 @@
 import type { InsightDepthSummary, InsightTimelineItem } from "~/lib/insight-depth";
+import { LocalTime } from "~/components/local-time";
 
 export function InsightDepthPanel({ summary }: { summary: InsightDepthSummary }) {
   return (
@@ -86,7 +87,9 @@ function InsightTimeline({
               <div>
                 <h4 style={{ marginBottom: "0.25rem" }}>{item.label}</h4>
                 <p className="f9-muted-copy">{item.detail}</p>
-                <p className="f9-muted-copy">{new Date(item.timestamp).toLocaleDateString("en-IN")}</p>
+                <p className="f9-muted-copy">
+                  <LocalTime iso={item.timestamp} mode="date" />
+                </p>
               </div>
             </div>
           ))

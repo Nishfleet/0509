@@ -147,7 +147,7 @@ describe("search loader", () => {
     expect(result).toMatchObject({
       filters: {
         query: "",
-        country: "India",
+        country: "all",
       },
       result: {
         ads: [],
@@ -223,7 +223,7 @@ describe("search loader", () => {
         mode: "advertiser",
         filters: expect.objectContaining({
           query: "nykaa",
-          country: "India",
+          country: "all",
         }),
       }),
       null,
@@ -300,7 +300,7 @@ describe("search loader", () => {
         mode: "advertiser",
         filters: expect.objectContaining({
           query: "nykaa",
-          country: "India",
+          country: "all",
         }),
       }),
       null,
@@ -460,7 +460,7 @@ describe("search loader", () => {
         mode: "advertiser",
         filters: expect.objectContaining({
           query: "nykaa",
-          country: "India",
+          country: "all",
         }),
       }),
       null,

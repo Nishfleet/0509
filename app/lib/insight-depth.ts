@@ -449,7 +449,10 @@ function sortTimelineDesc(a: InsightTimelineItem, b: InsightTimelineItem) {
   return Date.parse(b.timestamp) - Date.parse(a.timestamp);
 }
 
+// Markdown exports must stay locale-neutral: UTC day boundary, en-GB format.
 function dateLabel(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-IN");
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(date);
 }

@@ -1,3 +1,4 @@
+import { safeTimeZone } from "~/lib/safe-timezone";
 import type { AppEnv } from "~/lib/env.server";
 import {
   isCustomerWhatsAppReady,
@@ -50,6 +51,7 @@ interface SendDigestWhatsAppInput {
   itemCount: number;
   periodStart: string;
   periodEnd: string;
+  timeZone?: string | null;
 }
 
 interface SendInstantWhatsAppInput {
@@ -222,7 +224,10 @@ export async function sendDigestWhatsApp(
   return sendWhatsAppTemplate(env, {
     targetValue: input.target.targetValue,
     templateName,
-    bodyParameters: [formatPeriodRange(input.periodStart, input.periodEnd), String(input.itemCount)],
+    bodyParameters: [
+      formatPeriodRange(input.periodStart, input.periodEnd, input.timeZone),
+      String(input.itemCount),
+    ],
   });
 }
 
@@ -318,10 +323,13 @@ function validateInstantTarget(env: AppEnv, input: SendInstantWhatsAppInput) {
   return null;
 }
 
-function formatPeriodRange(periodStart: string, periodEnd: string) {
-  const formatter = new Intl.DateTimeFormat("en-IN", {
+// Period dates are formatted in the workspace's configured delivery timezone
+// when one exists, otherwise UTC. Locale-neutral en-GB — recipients are global.
+function formatPeriodRange(periodStart: string, periodEnd: string, timeZone?: string | null) {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
     month: "short",
     day: "numeric",
+    timeZone: safeTimeZone(timeZone),
   });
 
   return `${formatter.format(new Date(periodStart))} to ${formatter.format(new Date(periodEnd))}`;

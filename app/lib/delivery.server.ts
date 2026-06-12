@@ -3,6 +3,7 @@ import {
   digestCadenceLabel,
   readDigestIntelligence,
 } from "~/lib/change-intelligence";
+import { safeTimeZone } from "~/lib/safe-timezone";
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
@@ -134,16 +135,18 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
 
   const attempts: DigestAttemptSummary[] = [];
 
+  const digestTimeZone = config.timezone ?? null;
+
   for (const target of emailTargets) {
-    attempts.push(await deliverDigestToEmailTarget(env, input, lane, target));
+    attempts.push(await deliverDigestToEmailTarget(env, input, lane, target, digestTimeZone));
   }
 
   for (const target of whatsappTargets) {
-    attempts.push(await deliverDigestToWhatsAppTarget(env, input, lane, target));
+    attempts.push(await deliverDigestToWhatsAppTarget(env, input, lane, target, digestTimeZone));
   }
 
   for (const target of slackTargets) {
-    attempts.push(await deliverDigestToSlackTarget(env, input, lane, target));
+    attempts.push(await deliverDigestToSlackTarget(env, input, lane, target, digestTimeZone));
   }
 
   const digestStatusAttempt = selectDigestStatusAttempt(attempts);
@@ -441,6 +444,7 @@ async function deliverDigestToEmailTarget(
   input: DeliverWeeklyDigestInput,
   lane: DeliveryLane,
   target: DeliveryTargetRecord,
+  timeZone: string | null,
 ): Promise<DigestAttemptSummary> {
   const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
     digestRunId: input.digestRunId,
@@ -475,6 +479,7 @@ async function deliverDigestToEmailTarget(
     heartbeat: input.heartbeat ?? null,
     subject,
     cadence: input.cadence,
+    timeZone,
     unsubscribeUrl: await buildUnsubscribeUrl(env, {
       userId: target.userId,
       targetId: target.id,
@@ -927,6 +932,7 @@ async function deliverDigestToWhatsAppTarget(
   input: DeliverWeeklyDigestInput,
   lane: DeliveryLane,
   target: DeliveryTargetRecord,
+  timeZone: string | null,
 ): Promise<DigestAttemptSummary> {
   const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
     digestRunId: input.digestRunId,
@@ -953,6 +959,7 @@ async function deliverDigestToWhatsAppTarget(
     itemCount: input.items.length,
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
+    timeZone,
   });
   let attemptId: string;
   if (duplicate) {
@@ -1017,6 +1024,7 @@ async function deliverDigestToSlackTarget(
   input: DeliverWeeklyDigestInput,
   lane: DeliveryLane,
   target: DeliveryTargetRecord,
+  timeZone: string | null,
 ): Promise<DigestAttemptSummary> {
   const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
     digestRunId: input.digestRunId,
@@ -1044,6 +1052,7 @@ async function deliverDigestToSlackTarget(
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       items: input.items,
+      timeZone,
     }),
   });
   let attemptId: string;
@@ -1558,6 +1567,7 @@ async function sendDigestEmail(
     heartbeat?: DigestHeartbeat | null;
     subject: string;
     cadence?: DigestCadence;
+    timeZone?: string | null;
     unsubscribeUrl: string | null;
   },
 ): Promise<EmailProviderResult> {
@@ -1568,6 +1578,7 @@ async function sendDigestEmail(
     items: input.items,
     heartbeat: input.heartbeat ?? null,
     cadence: input.cadence,
+    timeZone: input.timeZone ?? null,
   });
   return sendCloudflareEmail(env, {
     to: input.email,
@@ -1837,6 +1848,7 @@ function renderDigestHtml(input: {
   items: DigestDeliveryItem[];
   heartbeat?: DigestHeartbeat | null;
   cadence?: DigestCadence;
+  timeZone?: string | null;
 }) {
   if (input.items.length === 0 && input.heartbeat) {
     const cadenceLabel = digestCadenceLabel(input.cadence);
@@ -1845,7 +1857,7 @@ function renderDigestHtml(input: {
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, all quiet on your competitors.</h1>
       <p style="margin: 0 0 16px; color: #475467;">
-        ${formatDate(input.periodStart)} to ${formatDate(input.periodEnd)}
+        ${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}
       </p>
       <p style="margin: 0 0 16px;">
         We ran ${input.heartbeat.runs} check${input.heartbeat.runs === 1 ? "" : "s"} across
@@ -1873,7 +1885,7 @@ function renderDigestHtml(input: {
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, here’s what changed on Meta.</h1>
       <p style="margin: 0 0 24px; color: #475467;">
-        ${formatDate(input.periodStart)} to ${formatDate(input.periodEnd)} · ${input.items.length} tracked changes
+        ${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)} · ${input.items.length} tracked changes
       </p>
       ${Object.entries(groups)
         .map(
@@ -1920,10 +1932,11 @@ function renderDigestSlackText(input: {
   periodStart: string;
   periodEnd: string;
   items: DigestDeliveryItem[];
+  timeZone?: string | null;
 }) {
   const lines = [
     `*Five to Nine ${escapeSlackText(input.cadenceLabel)}: ${input.items.length} competitor changes*`,
-    `${formatDate(input.periodStart)} to ${formatDate(input.periodEnd)}`,
+    `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`,
   ];
 
   if (input.items.length === 0) {
@@ -2168,9 +2181,13 @@ function dedupeTargetsByValue(targets: DeliveryTargetRecord[]) {
   return [...deduped.values()];
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-IN", {
+// Digest period dates are formatted in the workspace's configured delivery
+// timezone when one exists, otherwise UTC. Locale-neutral en-GB on purpose —
+// recipients are global, so no regional locale default.
+function formatDate(value: string, timeZone?: string | null) {
+  return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
+    timeZone: safeTimeZone(timeZone),
   }).format(new Date(value));
 }
 

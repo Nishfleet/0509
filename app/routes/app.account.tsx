@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
+import { LocalTime } from "~/components/local-time";
 import { authClient } from "~/lib/auth-client";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
@@ -239,13 +240,5 @@ export default function AccountRoute() {
 }
 
 function formatDate(value: string) {
-  const time = new Date(value).getTime();
-  if (!Number.isFinite(time)) return value;
-
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Kolkata",
-  }).format(new Date(time));
+  return <LocalTime fallback={value} iso={value} mode="date" />;
 }

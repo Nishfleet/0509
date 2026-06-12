@@ -106,6 +106,7 @@ interface WatchlistRow {
   target_id: string;
   target_fingerprint: string;
   target_label: string;
+  target_country: string | null;
   is_active: number;
   last_scanned_at: string | null;
   created_at: string;
@@ -591,6 +592,7 @@ function toWatchlistRecord(row: WatchlistRow): WatchlistRecord {
     targetId: row.target_id,
     targetFingerprint: row.target_fingerprint,
     targetLabel: row.target_label,
+    targetCountry: row.target_country ?? null,
     isActive: row.is_active === 1,
     lastScannedAt: row.last_scanned_at,
     createdAt: row.created_at,
@@ -1970,6 +1972,7 @@ export async function createWatchlist(
     targetId: string;
     targetFingerprint: string;
     targetLabel: string;
+    targetCountry?: string | null;
   },
 ) {
   const existing = await one<WatchlistRow>(
@@ -2004,11 +2007,12 @@ export async function createWatchlist(
         target_id,
         target_fingerprint,
         target_label,
+        target_country,
         is_active,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `,
     id,
     userId,
@@ -2017,6 +2021,7 @@ export async function createWatchlist(
     input.targetId,
     input.targetFingerprint,
     input.targetLabel,
+    input.targetCountry ?? null,
     timestamp,
     timestamp,
   );
@@ -2054,6 +2059,7 @@ export async function updateWatchlist(
     targetId: string;
     targetFingerprint: string;
     targetLabel: string;
+    targetCountry?: string | null;
   },
 ) {
   const existing = await getWatchlist(env, watchlistId, userId);
