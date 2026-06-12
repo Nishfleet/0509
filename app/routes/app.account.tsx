@@ -204,9 +204,11 @@ export default function AccountRoute() {
         </div>
         <p>
           Permanently removes your account, watchlists, history, and evidence. We email a
-          confirmation link first; nothing is deleted until you click it. Active subscriptions
-          should be cancelled first from <a href="/app/billing">Plan &amp; billing</a> — or email{" "}
-          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll handle both.
+          confirmation link first; nothing is deleted until you click it. Deletion is blocked
+          while a subscription is active — cancel first from{" "}
+          <a href="/app/billing">Plan &amp; billing</a> (you keep access until the end of the
+          period you've paid for), or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
+          we'll handle both.
         </p>
         <button
           className="f9-secondary-button"

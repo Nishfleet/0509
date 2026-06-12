@@ -1325,6 +1325,14 @@ export async function deactivateWatchlistsBeyondPlanLimit(
   return Number(result.meta?.changes ?? 0);
 }
 
+export async function getOldestUserId(env: AppEnv) {
+  const row = await one<{ id: string }>(
+    env,
+    "SELECT id FROM user ORDER BY created_at ASC LIMIT 1",
+  );
+  return row?.id ?? null;
+}
+
 export async function getUserIdByEmail(env: AppEnv, email: string) {
   const row = await one<{ id: string }>(
     env,
