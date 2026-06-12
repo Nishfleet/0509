@@ -1965,6 +1965,58 @@ export async function updateWatchlist(
   return getWatchlist(env, watchlistId, userId);
 }
 
+export async function setWatchlistActive(
+  env: AppEnv,
+  userId: string,
+  watchlistId: string,
+  isActive: boolean,
+) {
+  // Pausing frees the plan slot (limits count active watchlists) and stops
+  // scheduled scans; nothing is deleted, so resuming brings the history back.
+  const db = ensureDb(env);
+  const result = await db
+    .prepare(
+      `
+        UPDATE watchlist
+        SET is_active = ?,
+            updated_at = ?
+        WHERE id = ?
+          AND user_id = ?
+      `,
+    )
+    .bind(isActive ? 1 : 0, nowIso(), watchlistId, userId)
+    .run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function deleteCollection(env: AppEnv, userId: string, collectionId: string) {
+  const db = ensureDb(env);
+  // collection_item and collection_item_tag rows cascade.
+  const result = await db
+    .prepare("DELETE FROM collection WHERE id = ? AND user_id = ?")
+    .bind(collectionId, userId)
+    .run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function deleteCollectionItem(env: AppEnv, userId: string, itemId: string) {
+  const db = ensureDb(env);
+  const result = await db
+    .prepare(
+      `
+        DELETE FROM collection_item
+        WHERE id = ?
+          AND collection_id IN (SELECT id FROM collection WHERE user_id = ?)
+      `,
+    )
+    .bind(itemId, userId)
+    .run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
 export async function createWatchlistRun(
   env: AppEnv,
   watchlistId: string,

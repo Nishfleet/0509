@@ -1250,6 +1250,62 @@ function isUsableWhatsAppTarget(target: DeliveryTargetRecord) {
   );
 }
 
+export async function sendDeliveryTestEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+  },
+) {
+  // Cloudflare Email has no bounce webhooks, so a typo'd address shows
+  // "sent" forever while the customer receives nothing. This send gives
+  // them a way to prove the address works end-to-end.
+  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: "Test email from Five to Nine",
+    html: `
+      <div style="font-family: Inter, system-ui, sans-serif; color: #1d2433; font-size: 15px; line-height: 1.6;">
+        <p style="margin: 0 0 12px;">${greeting}</p>
+        <p style="margin: 0 0 12px;">
+          This is a test from Five to Nine. If you're reading it, competitor alerts and digests can
+          reach this address.
+        </p>
+        <p style="margin: 0; color: #5b6577; font-size: 13px;">
+          Nothing else changes — this was requested from your workspace delivery settings.
+        </p>
+      </div>
+    `,
+    tag: "delivery-test",
+    unsubscribeUrl: null,
+  });
+
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "delivery_test",
+    eventIds: [],
+    payloadSnapshot: { kind: "delivery_test" },
+    idempotencyKey: `delivery-test:${input.userId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  return providerResult.status === "sent";
+}
+
 export async function sendPasswordResetEmail(
   env: AppEnv,
   input: {
