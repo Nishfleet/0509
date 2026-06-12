@@ -21,6 +21,7 @@ import {
   getDigestByPeriod,
   getRecentSuccessfulRuns,
   getSavedQuery,
+  getSuccessfulRunStatsForUserBetween,
   getUserDeliveryProfile,
   getWatchlist,
   hydrateAdsWithPersistedCreatives,
@@ -524,6 +525,7 @@ export async function runWatchlist(
       currentObservations,
       baselineObservations,
       priorObservations,
+      baselineRun !== null,
     );
 
     const recentWatchEvents = await listWatchEvents(env, watchlist.id, 80);
@@ -902,8 +904,22 @@ async function runDigests(
         }
       }
 
+      // Zero changes is still a result the customer pays for. If we scanned
+      // successfully this period, send an "all quiet" heartbeat instead of
+      // going silent — silence is indistinguishable from a dead product.
+      let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
       if (digestItems.length === 0) {
-        continue;
+        const runStats = await getSuccessfulRunStatsForUserBetween(
+          env,
+          user.id,
+          periodStartIso,
+          periodEndIso,
+        );
+        if (runStats.runs === 0) {
+          // Nothing scanned either — there is nothing honest to report.
+          continue;
+        }
+        heartbeat = runStats;
       }
 
       const existingDigest = await getDigestByPeriod(env, user.id, periodStartIso, periodEndIso);
@@ -936,6 +952,7 @@ async function runDigests(
 
       const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
       const delivery = await deliverWeeklyDigest(env, {
+        heartbeat,
         userId: user.id,
         userName: user.name,
         accountEmail: user.email,
@@ -1190,7 +1207,34 @@ function buildScanNativeEventDrafts(
   current: ObservationRecord[],
   baseline: ObservationRecord[],
   prior: ObservationRecord[],
+  hasBaselineRun: boolean,
 ) {
+  if (!hasBaselineRun) {
+    // First successful scan: there is nothing to diff against, and reporting
+    // every existing ad as "New ad detected" floods the first digest with
+    // false positives — teaching the customer from day one that alerts are
+    // noise. One honest baseline event replaces the flood. (Rides the ad_new
+    // type because watch_event.event_type is CHECK-constrained; metadata.kind
+    // distinguishes it wherever it renders.)
+    if (current.length === 0) {
+      return [];
+    }
+
+    const count = current.length;
+    return [
+      {
+        eventType: "ad_new" as const,
+        adId: null,
+        title: `Baseline captured: ${count} active ad${count === 1 ? "" : "s"}`,
+        summary: `We recorded ${count} active ad${count === 1 ? "" : "s"} for ${watchlist.name} as your starting point. From the next scan onward, you'll only hear about real changes.`,
+        metadata: {
+          kind: "baseline",
+          adsSeen: count,
+        },
+      },
+    ];
+  }
+
   return diffWatchlistObservations(watchlist, current, baseline, prior);
 }
 

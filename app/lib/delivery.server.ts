@@ -69,6 +69,12 @@ export interface DigestDeliveryItem {
   metadata?: Record<string, unknown>;
 }
 
+export interface DigestHeartbeat {
+  runs: number;
+  watchlistsChecked: number;
+  adsSeen: number;
+}
+
 export interface DeliverWeeklyDigestInput {
   userId: string;
   userName: string;
@@ -77,6 +83,9 @@ export interface DeliverWeeklyDigestInput {
   periodStart: string;
   periodEnd: string;
   items: DigestDeliveryItem[];
+  // Present when the period had zero changes but successful scans: the
+  // digest becomes an "all quiet" heartbeat (email only).
+  heartbeat?: DigestHeartbeat | null;
   cadence?: DigestCadence;
   lane?: DeliveryLane;
 }
@@ -108,13 +117,16 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   }
 
   const lane = input.lane ?? "customer";
+  const isHeartbeat = input.items.length === 0 && Boolean(input.heartbeat);
   const emailTargets = config.emailEnabled
     ? await resolveDigestEmailTargets(env, input.userId, input.accountEmail)
     : [];
-  const whatsappTargets = config.whatsappEnabled
+  // "All quiet" heartbeats stay email-only: a WhatsApp template or Slack
+  // ping saying nothing happened reads as noise on those channels.
+  const whatsappTargets = !isHeartbeat && config.whatsappEnabled
     ? await resolveDigestWhatsAppTargets(env, input.userId)
     : [];
-  const slackTargets = config.slackEnabled
+  const slackTargets = !isHeartbeat && config.slackEnabled
     ? await resolveDigestSlackTargets(env, input.userId)
     : [];
 
@@ -448,13 +460,17 @@ async function deliverDigestToEmailTarget(
   }
 
   const cadenceLabel = digestCadenceLabel(input.cadence);
-  const subject = `Five to Nine ${cadenceLabel}: ${input.items.length} competitor changes`;
+  const isHeartbeat = input.items.length === 0 && Boolean(input.heartbeat);
+  const subject = isHeartbeat
+    ? `Five to Nine ${cadenceLabel}: all quiet — ${input.heartbeat!.adsSeen} ads checked`
+    : `Five to Nine ${cadenceLabel}: ${input.items.length} competitor changes`;
   const providerResult = await sendDigestEmail(env, {
     email: target.targetValue,
     name: input.userName,
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
     items: input.items,
+    heartbeat: input.heartbeat ?? null,
     subject,
     cadence: input.cadence,
     unsubscribeUrl: await buildUnsubscribeUrl(env, {
@@ -1385,6 +1401,7 @@ async function sendDigestEmail(
     periodStart: string;
     periodEnd: string;
     items: DigestDeliveryItem[];
+    heartbeat?: DigestHeartbeat | null;
     subject: string;
     cadence?: DigestCadence;
     unsubscribeUrl: string | null;
@@ -1395,6 +1412,7 @@ async function sendDigestEmail(
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
     items: input.items,
+    heartbeat: input.heartbeat ?? null,
     cadence: input.cadence,
   });
   return sendCloudflareEmail(env, {
@@ -1657,8 +1675,32 @@ function renderDigestHtml(input: {
   periodStart: string;
   periodEnd: string;
   items: DigestDeliveryItem[];
+  heartbeat?: DigestHeartbeat | null;
   cadence?: DigestCadence;
 }) {
+  if (input.items.length === 0 && input.heartbeat) {
+    const cadenceLabel = digestCadenceLabel(input.cadence);
+    return `
+    <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
+      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, all quiet on your competitors.</h1>
+      <p style="margin: 0 0 16px; color: #475467;">
+        ${formatDate(input.periodStart)} to ${formatDate(input.periodEnd)}
+      </p>
+      <p style="margin: 0 0 16px;">
+        We ran ${input.heartbeat.runs} check${input.heartbeat.runs === 1 ? "" : "s"} across
+        ${input.heartbeat.watchlistsChecked} competitor${input.heartbeat.watchlistsChecked === 1 ? "" : "s"}
+        and reviewed ${input.heartbeat.adsSeen} ad${input.heartbeat.adsSeen === 1 ? "" : "s"} —
+        no visible changes to offers, headlines, CTAs, forms, or destinations.
+      </p>
+      <p style="margin: 0; color: #475467;">
+        No news is a result too: your competitors held position this period. We keep watching —
+        the moment something moves, you'll hear about it.
+      </p>
+    </div>
+  `;
+  }
+
   const groups = input.items.reduce<Record<string, DigestDeliveryItem[]>>((accumulator, item) => {
     accumulator[item.watchlistName] = accumulator[item.watchlistName] ?? [];
     accumulator[item.watchlistName].push(item);

@@ -2228,6 +2228,42 @@ export async function listWatchEventsByIds(
   return chunkedRows.flat().map(toWatchEventRecord);
 }
 
+export async function getSuccessfulRunStatsForUserBetween(
+  env: AppEnv,
+  userId: string,
+  startIso: string,
+  endIso: string,
+) {
+  const row = await one<{
+    runs: number;
+    watchlists_checked: number;
+    ads_seen: number | null;
+  }>(
+    env,
+    `
+      SELECT
+        COUNT(*) AS runs,
+        COUNT(DISTINCT watchlist_run.watchlist_id) AS watchlists_checked,
+        SUM(COALESCE(json_extract(watchlist_run.summary_json, '$.adsSeen'), 0)) AS ads_seen
+      FROM watchlist_run
+      INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
+      WHERE watchlist.user_id = ?
+        AND watchlist_run.status = 'succeeded'
+        AND watchlist_run.started_at >= ?
+        AND watchlist_run.started_at < ?
+    `,
+    userId,
+    startIso,
+    endIso,
+  );
+
+  return {
+    runs: Number(row?.runs ?? 0),
+    watchlistsChecked: Number(row?.watchlists_checked ?? 0),
+    adsSeen: Number(row?.ads_seen ?? 0),
+  };
+}
+
 export async function listRetryableInstantAttempts(
   env: AppEnv,
   input: {
