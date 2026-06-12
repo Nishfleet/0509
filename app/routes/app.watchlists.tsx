@@ -61,7 +61,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const session = await requireSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
   const [watchlists, discoveryStatus, plan] = await Promise.all([
-    listWatchlists(env, session.user.id),
+    listWatchlists(env, session.user.id, { includeInactive: true }),
     resolveCommercialAdSourceStatus(env),
     getUserPlan(env, session.user.id),
   ]);
@@ -548,11 +548,14 @@ export default function WatchlistsRoute() {
                   <h3>{watchlist.name}</h3>
                   <p className="f9-muted-copy">
                     {watchlist.targetType.replace("_", " ")} · {watchlist.targetLabel}
+                    {watchlist.isActive ? "" : " · Paused"}
                   </p>
                   <p className="f9-muted-copy">
                     {watchlist.lastScannedAt
                       ? `Last scanned ${new Date(watchlist.lastScannedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`
-                      : "First scan in progress — results land in a few minutes"}
+                      : watchlist.isActive
+                        ? "First scan in progress — results land in a few minutes"
+                        : "Paused before its first scan"}
                   </p>
                 </div>
               </a>

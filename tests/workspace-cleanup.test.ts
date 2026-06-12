@@ -92,6 +92,68 @@ describe("workspace cleanup persistence", () => {
   });
 });
 
+describe("reactivateWatchlistsUpToPlanLimit", () => {
+  it("resumes the newest paused watchlists only up to the free slots", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            statements.push({ sql, bindings });
+            return {
+              async run() {
+                return { success: true, meta: { changes: 2 } };
+              },
+              async all<T>() {
+                if (sql.includes("COUNT(*)")) {
+                  return { results: [{ count: 1 }] as T[] };
+                }
+                return { results: [] as T[] };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const { reactivateWatchlistsUpToPlanLimit } = await import("~/lib/data.server");
+    const resumed = await reactivateWatchlistsUpToPlanLimit({ DB: db } as never, "user-1", 3);
+
+    expect(resumed).toBe(2);
+    const update = statements.find((statement) => statement.sql.includes("SET is_active = 1"));
+    // 1 already active of 3 allowed → 2 slots
+    expect(update?.bindings.slice(1)).toEqual(["user-1", "user-1", 2]);
+    expect(update?.sql).toContain("ORDER BY updated_at DESC");
+  });
+
+  it("does nothing when the plan is already at its limit", async () => {
+    const statements: string[] = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind() {
+            return {
+              async run() {
+                statements.push(sql);
+                return { success: true, meta: { changes: 9 } };
+              },
+              async all<T>() {
+                return { results: [{ count: 3 }] as T[] };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const { reactivateWatchlistsUpToPlanLimit } = await import("~/lib/data.server");
+    const resumed = await reactivateWatchlistsUpToPlanLimit({ DB: db } as never, "user-1", 3);
+
+    expect(resumed).toBe(0);
+    expect(statements.some((sql) => sql.includes("SET is_active = 1"))).toBe(false);
+  });
+});
+
 describe("watchlist pause/resume action", () => {
   it("blocks resume at the plan limit so paused watchlists cannot bypass it", async () => {
     const setWatchlistActiveMock = vi.fn();

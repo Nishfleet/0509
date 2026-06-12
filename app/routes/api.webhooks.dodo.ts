@@ -20,6 +20,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const {
     claimDodoWebhookEvent,
     deactivateWatchlistsBeyondPlanLimit,
+    reactivateWatchlistsUpToPlanLimit,
     getUserIdByEmail,
     getUserIdForDodoPayment,
     grantDodoPlanAccess,
@@ -92,9 +93,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
         grantedAt: planGrant.grantedAt,
         metadata: planGrant.metadata,
       });
-      // A plan switch can be a downgrade (e.g. agency → scout): watchlists
-      // beyond the new plan's limit stop scanning so the scheduled monitoring
-      // cost matches what is being paid for.
+      // Reconcile watchlists with the granted plan in both directions: a
+      // resubscribe brings auto-paused watchlists back (newest first), and a
+      // downgrade pauses anything beyond the new limit.
+      await reactivateWatchlistsUpToPlanLimit(
+        env,
+        planGrant.userId,
+        PLAN_LIMITS[planGrant.plan].watchlists,
+      );
       await deactivateWatchlistsBeyondPlanLimit(
         env,
         planGrant.userId,
@@ -126,6 +132,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
         grantedAt: subscriptionGrant.grantedAt,
         metadata: subscriptionGrant.metadata,
       });
+      await reactivateWatchlistsUpToPlanLimit(
+        env,
+        subscriptionGrant.userId,
+        PLAN_LIMITS[subscriptionGrant.plan].watchlists,
+      );
       await deactivateWatchlistsBeyondPlanLimit(
         env,
         subscriptionGrant.userId,
