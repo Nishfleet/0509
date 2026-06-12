@@ -13,6 +13,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
 import type { AppEnv } from "~/lib/env.server";
 import { pricingPlans, usageBundles } from "~/lib/pricing";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
 
 export interface RootLoaderData {
@@ -101,6 +102,10 @@ export function ErrorBoundary({ error }: { error: unknown }) {
           <span className="f9-app-kicker">Five to Nine</span>
           <h1>{message}</h1>
           <p>{details}</p>
+          <p>
+            <a href="/app">Back to your workspace</a> · If this keeps happening, email{" "}
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll fix it.
+          </p>
         </section>
       </div>
       {stack && (

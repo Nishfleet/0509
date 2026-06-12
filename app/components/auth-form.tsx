@@ -6,12 +6,13 @@ import { authClient } from "~/lib/auth-client";
 interface AuthFormProps {
   mode: "login" | "signup";
   redirectTo: string;
+  initialEmail?: string;
 }
 
-export function AuthForm({ mode, redirectTo }: AuthFormProps) {
+export function AuthForm({ mode, redirectTo, initialEmail }: AuthFormProps) {
   const navigate = useNavigate();
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);

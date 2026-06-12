@@ -74,7 +74,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: false,
       error: "plan_limit_exceeded",
-      message: "Proof-backed digests are not available in the current workspace.",
+      message: "Digests are included in paid plans — upgrade to turn them on.",
     };
   }
 
@@ -152,10 +152,14 @@ export default function DigestsRoute() {
       {!data.canAccessDigests ? (
         <article className="f9-app-panel f9-empty-panel">
           <span className="f9-app-kicker">Digest history</span>
-          <h2>Proof-backed digests are not available in the current workspace.</h2>
+          <h2>Digests are included in paid plans.</h2>
           <p>
-            Use watchlists and collections to keep competitor monitoring organized until digests are unlocked.
+            Upgrade to get daily or weekly competitor change reports — with proof attached — in your
+            inbox. Until then, watchlists and collections keep your research organized.
           </p>
+          <Link className="f9-primary-button" to="/#pricing">
+            View plans
+          </Link>
         </article>
       ) : (
         <div className="f9-dashboard-grid">

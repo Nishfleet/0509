@@ -55,6 +55,7 @@ describe("auth signup loader", () => {
 
     expect(result).toEqual({
       redirectTo: "/app/onboard",
+      prefillEmail: "",
     });
   });
 });

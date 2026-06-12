@@ -356,7 +356,7 @@ describe("pricing CTA rendering", () => {
     });
   }
 
-  it("does not render a pricing CTA on the digests route", async () => {
+  it("points gated digest users at plans instead of a dead end", async () => {
     await mockRouter({
       actionData: undefined,
       loaderData: {
@@ -369,11 +369,12 @@ describe("pricing CTA rendering", () => {
     const { default: DigestsRoute } = await import("~/routes/app.digests");
     const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
-    expect(markup).not.toContain("View pricing");
-    expect(markup).toContain("Proof-backed digests are not available in the current workspace.");
+    expect(markup).toContain("Digests are included in paid plans.");
+    expect(markup).toContain("View plans");
+    expect(markup).toContain("/#pricing");
   });
 
-  it("does not render a pricing CTA on dashboard plan-limit errors", async () => {
+  it("offers an upgrade path on dashboard plan-limit errors", async () => {
     await mockRouter({
       actionData: {
         ok: false,
@@ -400,10 +401,11 @@ describe("pricing CTA rendering", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("You have reached your workspace watchlist limit.");
-    expect(markup).not.toContain("View pricing");
+    expect(markup).toContain("View plans");
+    expect(markup).toContain("/#pricing");
   });
 
-  it("does not render a pricing CTA on collections plan-limit errors", async () => {
+  it("offers an upgrade path on collections plan-limit errors", async () => {
     await mockRouter({
       actionData: {
         ok: false,
@@ -421,7 +423,8 @@ describe("pricing CTA rendering", () => {
     const markup = renderToStaticMarkup(createElement(CollectionsRoute));
 
     expect(markup).toContain("You have reached your workspace collection limit.");
-    expect(markup).not.toContain("View pricing");
+    expect(markup).toContain("View plans");
+    expect(markup).toContain("/#pricing");
   });
 
   it("renders the external proof form inside collections", async () => {

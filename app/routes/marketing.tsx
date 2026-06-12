@@ -139,8 +139,7 @@ export default function MarketingRoute() {
           <nav className="f9-nav-links" aria-label="Primary">
             <a href="#demo">Demo</a>
             <Link to={publicSearchTrialPath}>Live search</Link>
-            <a href="#platform">Products</a>
-            <a href="#platform">Signals</a>
+            <a href="#platform">Platform</a>
             <a href="#pricing">Pricing</a>
           </nav>
 
@@ -162,7 +161,7 @@ export default function MarketingRoute() {
         <div className="f9-container f9-hero-layout">
           <div className="f9-hero-copy">
             <Link className="f9-announcement" to={publicSearchTrialPath}>
-              <strong>Readiness-gated beta</strong>
+              <strong>Early access</strong>
               <span>Preview live search before creating an account</span>
               <em aria-hidden="true" />
             </Link>
@@ -182,10 +181,10 @@ export default function MarketingRoute() {
             </div>
 
             <div className="f9-public-status-note" role="note">
-              <strong>Launch status: readiness-gated.</strong>
+              <strong>Honest by design.</strong>
               <span>
-                Billing is verified; broad launch stays gated by fresh proof capture, digest delivery,
-                and provider canaries.
+                Results are always labeled live, recent, or sample — and Meta ads tracking stays
+                marked beta until it proves itself on your competitors.
               </span>
             </div>
 

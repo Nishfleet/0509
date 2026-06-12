@@ -380,7 +380,15 @@ export default function SearchRoute() {
         <div className="f9-container">
           {actionData?.message ? (
             <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-              <p>{actionData.message}</p>
+              <p>
+                {actionData.message}
+                {"error" in actionData && actionData.error === "plan_limit_exceeded" ? (
+                  <>
+                    {" "}
+                    <Link to="/#pricing">View plans</Link> to raise the limit.
+                  </>
+                ) : null}
+              </p>
             </div>
           ) : null}
 
