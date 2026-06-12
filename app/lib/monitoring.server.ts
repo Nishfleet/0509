@@ -392,6 +392,31 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
   };
 }
 
+// First scan on creation: a new watchlist must show value within minutes,
+// not after the next nightly cron (which can be up to a day away — or six
+// for scout). Runs in the background; a failure is non-fatal because the
+// scheduled scan still covers the watchlist.
+export function queueFirstWatchlistScan(
+  env: AppEnv,
+  ctx: ExecutionContext | undefined,
+  watchlist: WatchlistRecord | null | undefined,
+) {
+  if (!ctx || !watchlist || watchlist.lastScannedAt) {
+    return false;
+  }
+
+  ctx.waitUntil(
+    runWatchlistManual(env, watchlist).catch((error) => {
+      console.error(
+        `First scan failed for watchlist ${watchlist.id}; the scheduled scan will retry.`,
+        error,
+      );
+    }),
+  );
+
+  return true;
+}
+
 export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord) {
   if (
     watchlist.lastScannedAt &&
