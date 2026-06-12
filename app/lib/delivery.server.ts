@@ -6,6 +6,8 @@ import {
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
+  getOldestUserId,
+  getUserIdByEmail,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
   getWatchlistDeliveryConfig,
@@ -1274,6 +1276,7 @@ export async function sendOperatorAlertEmail(
   input: {
     subject: string;
     lines: string[];
+    idempotencyKey?: string;
   },
 ) {
   const recipient = env.LAUNCH_CANARY_EMAIL?.trim();
@@ -1282,7 +1285,7 @@ export async function sendOperatorAlertEmail(
   }
 
   const dayKey = new Date().toISOString().slice(0, 10);
-  const idempotencyKey = `operator-alert:${dayKey}`;
+  const idempotencyKey = input.idempotencyKey ?? `operator-alert:${dayKey}`;
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
   if (duplicate) {
     return false;
@@ -1306,8 +1309,21 @@ export async function sendOperatorAlertEmail(
     unsubscribeUrl: null,
   });
 
+  // delivery_attempt.user_id carries a foreign key to user(id), so the
+  // attempt must be attributed to a REAL user row: the operator's own account
+  // when it exists, else the oldest account (the founder's). Without this the
+  // nightly insert violated the FK — the email sent but the dedupe row never
+  // persisted and the logs claimed failure.
+  const attemptUserId =
+    (await getUserIdByEmail(env, recipient)) ?? (await getOldestUserId(env));
+  if (!attemptUserId) {
+    // Empty user table (fresh environment): nothing to attribute to — the
+    // email went out, skip the ledger row.
+    return providerResult.status === "sent";
+  }
+
   await createDeliveryAttempt(env, {
-    userId: "operator",
+    userId: attemptUserId,
     watchlistId: null,
     digestRunId: null,
     deliveryTargetId: null,
