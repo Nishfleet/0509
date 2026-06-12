@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createShareLink,
+  deactivateWatchlistsBeyondPlanLimit,
   getShareLink,
   listActiveShareLinks,
   revokeShareLink,
@@ -139,6 +140,25 @@ describe("share link persistence", () => {
     expect(select?.sql).toContain("WHERE user_id = ?");
     expect(select?.sql).toContain("revoked_at IS NULL");
     expect(select?.bindings[0]).toBe("user-1");
+  });
+});
+
+describe("deactivateWatchlistsBeyondPlanLimit", () => {
+  it("pauses everything past the new plan's limit, keeping the newest active", async () => {
+    const mock = createCapturingDb([], 4);
+
+    const changed = await deactivateWatchlistsBeyondPlanLimit(
+      { DB: mock.db } as never,
+      "user-1",
+      3,
+    );
+
+    expect(changed).toBe(4);
+    const update = mock.statements.find((statement) => statement.sql.includes("UPDATE watchlist"));
+    expect(update?.sql).toContain("SET is_active = 0");
+    expect(update?.sql).toContain("ORDER BY created_at DESC");
+    expect(update?.sql).toContain("LIMIT ?");
+    expect(update?.bindings.slice(1)).toEqual(["user-1", "user-1", 3]);
   });
 });
 

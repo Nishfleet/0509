@@ -18,7 +18,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   } = await import("~/lib/dodo-billing.server");
   const {
     claimDodoWebhookEvent,
+    deactivateWatchlistsBeyondPlanLimit,
     getUserIdByEmail,
+    getUserIdForDodoPayment,
     grantDodoPlanAccess,
     grantProofUsageCredit,
     markDodoPlanPaymentIssue,
@@ -26,6 +28,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     revokeDodoAccessForRefundedPayment,
     revokeDodoPlanAccess,
   } = await import("~/lib/data.server");
+  const { PLAN_LIMITS } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const rawBody = await request.text();
 
@@ -86,6 +89,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
         grantedAt: planGrant.grantedAt,
         metadata: planGrant.metadata,
       });
+      // A plan switch can be a downgrade (e.g. agency → scout): watchlists
+      // beyond the new plan's limit stop scanning so the scheduled monitoring
+      // cost matches what is being paid for.
+      await deactivateWatchlistsBeyondPlanLimit(
+        env,
+        planGrant.userId,
+        PLAN_LIMITS[planGrant.plan].watchlists,
+      );
       return {
         outcome: "processed",
         metadata: { action: "plan_grant", userId: planGrant.userId, plan: planGrant.plan },
@@ -127,6 +138,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         status: revocation.eventType,
         revokedAt: revocation.revokedAt,
       });
+      await deactivateWatchlistsBeyondPlanLimit(env, userId, PLAN_LIMITS.free.watchlists);
       return {
         outcome: "processed",
         metadata: { action: "revoke", userId, eventType: revocation.eventType },
@@ -136,10 +148,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const refund = extractDodoRefund(env, payload);
     if (refund) {
+      // Resolve the owner before the revocation clears the payment linkage.
+      const refundedUserId = await getUserIdForDodoPayment(env, refund.paymentId);
       await revokeDodoAccessForRefundedPayment(env, {
         paymentId: refund.paymentId,
         refundedAt: refund.refundedAt,
       });
+      if (refundedUserId) {
+        await deactivateWatchlistsBeyondPlanLimit(env, refundedUserId, PLAN_LIMITS.free.watchlists);
+      }
       return {
         outcome: "processed",
         metadata: { action: "refund", paymentId: refund.paymentId },

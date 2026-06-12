@@ -1268,6 +1268,48 @@ export async function revokeDodoAccessForRefundedPayment(
   );
 }
 
+export async function getUserIdForDodoPayment(env: AppEnv, paymentId: string) {
+  const row = await one<{ user_id: string }>(
+    env,
+    "SELECT user_id FROM user_plan WHERE dodo_payment_id = ? LIMIT 1",
+    paymentId,
+  );
+  return row?.user_id ?? null;
+}
+
+export async function deactivateWatchlistsBeyondPlanLimit(
+  env: AppEnv,
+  userId: string,
+  keepActive: number,
+) {
+  // On downgrade/revocation, watchlists beyond the new plan's limit stop
+  // scanning (newest stay active). Rows are deactivated, never deleted, so
+  // re-subscribing brings the history back.
+  const db = ensureDb(env);
+  const result = await db
+    .prepare(
+      `
+        UPDATE watchlist
+        SET is_active = 0,
+            updated_at = ?
+        WHERE user_id = ?
+          AND is_active = 1
+          AND id NOT IN (
+            SELECT id
+            FROM watchlist
+            WHERE user_id = ?
+              AND is_active = 1
+            ORDER BY created_at DESC
+            LIMIT ?
+          )
+      `,
+    )
+    .bind(nowIso(), userId, userId, Math.max(0, Math.floor(keepActive)))
+    .run();
+
+  return Number(result.meta?.changes ?? 0);
+}
+
 export async function getUserIdByEmail(env: AppEnv, email: string) {
   const row = await one<{ id: string }>(
     env,

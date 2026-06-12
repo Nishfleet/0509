@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  enforceAuthenticatedSearchRateLimit,
   enforcePublicSearchRateLimit,
   enforceRequestRateLimit,
   rateLimitPolicyFor,
@@ -109,6 +110,45 @@ describe("enforceRequestRateLimit", () => {
       env,
     );
     expect(blocked?.status).toBe(429);
+  });
+});
+
+describe("enforceAuthenticatedSearchRateLimit", () => {
+  it("blocks a signed-in account after the limit even when it rotates IPs", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+
+    // 60 searches from 60 different IPs: same account, same bucket.
+    for (let index = 0; index < 60; index += 1) {
+      const request = new Request("https://0509.in/search?query=nykaa", {
+        headers: {
+          "cf-connecting-ip": `203.0.113.${index % 250}`,
+          "user-agent": `rotating-agent-${index}`,
+        },
+      });
+      await expect(
+        enforceAuthenticatedSearchRateLimit(request, env, "user-1"),
+      ).resolves.toBeNull();
+    }
+
+    const blocked = await enforceAuthenticatedSearchRateLimit(
+      new Request("https://0509.in/search?query=nykaa", {
+        headers: { "cf-connecting-ip": "198.51.100.99", "user-agent": "fresh" },
+      }),
+      env,
+      "user-1",
+    );
+    expect(blocked?.status).toBe(429);
+
+    // a different account is unaffected
+    await expect(
+      enforceAuthenticatedSearchRateLimit(
+        new Request("https://0509.in/search?query=nykaa", {
+          headers: { "cf-connecting-ip": "198.51.100.99", "user-agent": "fresh" },
+        }),
+        env,
+        "user-2",
+      ),
+    ).resolves.toBeNull();
   });
 });
 

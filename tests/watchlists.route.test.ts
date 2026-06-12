@@ -355,6 +355,42 @@ describe("watchlists route loader", () => {
 });
 
 describe("watchlists route actions", () => {
+  it("blocks manual refresh on the free plan and points at plans", async () => {
+    const runWatchlistManual = vi.fn();
+    vi.doMock("~/lib/ad-source.server", () => ({
+      CommercialDiscoveryError: class extends Error {},
+    }));
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("free"),
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      runWatchlistManual,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "refresh-watchlist");
+    formData.set("watchlistId", "watch-1");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: false, error: "plan_limit_exceeded" });
+    // the usage-billed live scan must never run for a free workspace
+    expect(runWatchlistManual).not.toHaveBeenCalled();
+  });
+
   it("returns a friendly message when manual refresh is rate limited", async () => {
     class MockCommercialDiscoveryError extends Error {
       failureClass = "rate_limited" as const;
@@ -374,6 +410,9 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual: vi
@@ -422,6 +461,9 @@ describe("watchlists route actions", () => {
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
     }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+    }));
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual: vi
         .fn()
@@ -461,6 +503,9 @@ describe("watchlists route actions", () => {
         ...watchlist,
         isActive: false,
       }),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual,

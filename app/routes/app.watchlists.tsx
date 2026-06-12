@@ -155,12 +155,24 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "refresh-watchlist") {
     const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
     const { getWatchlist } = await import("~/lib/data.server");
+    const { getUserPlan } = await import("~/lib/plan.server");
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
     const watchlist = await getWatchlist(env, watchlistId, session.user.id);
 
     if (!watchlist || !watchlist.isActive) {
       return { ok: false, message: "Watchlist not found." };
+    }
+
+    // Manual refresh triggers a usage-billed live scan; without this gate a
+    // downgraded account keeps a working paid feature on a 10-minute timer.
+    const plan = await getUserPlan(env, session.user.id);
+    if (plan === "free") {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded",
+        message: "Fresh checks are included in paid plans — upgrade to refresh this watchlist.",
+      };
     }
 
     try {
