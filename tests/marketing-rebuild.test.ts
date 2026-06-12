@@ -130,8 +130,8 @@ describe("marketing rebuild", () => {
   it("uses the caught-in-the-act typography and motion primitives", () => {
     expect(rootRoute).toContain("family=Inter");
     expect(appCss).toContain('--f9-font: "Inter"');
-    expect(marketingRoute).toContain("Bricolage+Grotesque");
-    expect(marketingRoute).toContain("IBM+Plex+Mono");
+    expect(rootRoute).toContain("Bricolage+Grotesque");
+    expect(rootRoute).toContain("IBM+Plex+Mono");
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
     expect(marketingRoute).toContain("Sample case file");
