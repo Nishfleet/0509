@@ -1,6 +1,7 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
+import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
@@ -154,8 +155,8 @@ export default function ShareRoute() {
           </article>
         ) : data.resourceType === "collection" ? (
           <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared collection</p>
-            <h1>{data.collection?.name ?? "Collection unavailable"}</h1>
+            <p className="f9-app-kicker">Shared board</p>
+            <h1>{data.collection?.name ?? "Board unavailable"}</h1>
             <div className="f9-work-list">
               {data.items.map((item) => (
                 <div className="f9-work-row" key={item.id}>
@@ -163,6 +164,7 @@ export default function ShareRoute() {
                     <AdThumb ad={item.ad} />
                     <div>
                       <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
+                      <AdLongevityPill ad={item.ad} />
                       <p>{item.ad.hook}</p>
                       <p className="f9-muted-copy">{item.tags.join(", ") || "No tags"}</p>
                     </div>

@@ -23,6 +23,7 @@ import {
   getOperatorRiskSummary,
   getSavedQuery,
   getSuccessfulRunStatsForUserBetween,
+  getWeeklyBusinessSummary,
   hasInFlightWatchlistRun,
   getUserDeliveryProfile,
   getWatchlist,
@@ -318,6 +319,45 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
 // Runs after the nightly monitoring cron: when paying customers' scans or
 // deliveries are degrading, the operator hears about it instead of finding
 // out from a churn email.
+export function buildWeeklyBusinessLines(
+  summary: Awaited<ReturnType<typeof getWeeklyBusinessSummary>>,
+) {
+  const paying =
+    summary.payingByPlan.length > 0
+      ? summary.payingByPlan.map((entry) => `${entry.plan}: ${entry.count}`).join(", ")
+      : "none yet";
+  const digestRate =
+    summary.digestAttempts7d > 0
+      ? `${Math.round((summary.digestSent7d / summary.digestAttempts7d) * 100)}% (${summary.digestSent7d}/${summary.digestAttempts7d})`
+      : "no digests sent";
+
+  return [
+    `Signups (7d): ${summary.signups7d} — activated onboarding: ${summary.activated7d}`,
+    `Paying customers: ${paying}`,
+    `Dunning (payment trouble, plan kept): ${summary.dunningCount}`,
+    `Dropped to free (7d, had billing history): ${summary.revokedToFree7d}`,
+    `Digest delivery success (7d): ${digestRate}`,
+    `Oldest active paid-watchlist scan: ${summary.oldestActivePaidScanAt ?? "n/a"}`,
+  ];
+}
+
+export async function sendWeeklyBusinessNumbers(env: AppEnv) {
+  if (!env.DB) {
+    return { sent: false, reason: "no_db" };
+  }
+
+  const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+  const summary = await getWeeklyBusinessSummary(env);
+  const weekStamp = new Date().toISOString().slice(0, 10);
+  const sent = await sendOperatorAlertEmail(env, {
+    subject: "Five to Nine — weekly business numbers",
+    lines: buildWeeklyBusinessLines(summary),
+    idempotencyKey: `business-weekly:${weekStamp}`,
+  });
+
+  return { sent };
+}
+
 export async function sendCustomerAtRiskAlert(
   env: AppEnv,
   options: { skippedForBudget?: number } = {},

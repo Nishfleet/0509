@@ -14,9 +14,9 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Competitor monitoring for growth teams.
 - Public read-only live search trial and Public sample proof loop at /api/demo-proof for buyer evaluation, including an example tracked competitor and digest preview before signup.
 - Account-gated saved search, retained monitoring, and reusable saved evidence.
-- Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
-- Authenticated collection, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
-- Signed-in collections can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
+- Saving competitor results, saved queries, watchlists, boards, reports, and delivery require an account.
+- Authenticated board, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
+- Signed-in boards can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
 - Customer API keys can read account-owned collection, watchlist, and digest exports at /api/v1.
 - Customer API keys can also use the read-only MCP endpoint at /api/mcp for account-owned collection, watchlist, and digest exports.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires at least one configured Slack target with successful live delivery proof.
@@ -42,9 +42,9 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Pricing display is localized from checkout preview for the buyer location.
 - There is no free retained-monitoring plan. Public live search is read-only; saved monitoring requires an account.
 - Starter is the recommended plan for retained competitor monitoring.
-- Scout is the entry plan after the public read-only search and sample proof loop: 3 watchlists, 10 collections, account-gated research, weekly digest delivery, and 50 evidence checks/month.
-- Starter includes 10 watchlists, 25 collections, weekly digest delivery, and 250 evidence checks/month.
-- Agency includes 75 watchlists, 250 collections, daily and weekly briefs, and 2,500 evidence checks/month.
+- Scout is the entry plan after the public read-only search and sample proof loop: 3 watchlists, 10 boards, account-gated research, weekly digest delivery, and 50 evidence checks/month.
+- Starter includes 10 watchlists, 25 boards, weekly digest delivery, and 250 evidence checks/month.
+- Agency includes 75 watchlists, 250 boards, daily and weekly briefs, and 2,500 evidence checks/month.
 - Usage bundles add extra evidence checks for 30-day spikes. They do not make monitoring unlimited.
 - Accounts warn after 80% evidence-check usage and hard-stop when paid capacity is exhausted.
 - Tracking reliability stays visible in the account.
@@ -73,7 +73,7 @@ Current product truth:
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
-- Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved collections, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
+- Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved boards, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
 - Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
 - Customer API keys support read-only /api/v1 collection, watchlist, and digest exports for account-owned data.
 - Customer API keys support the read-only /api/mcp endpoint for agent access to account-owned collection, watchlist, and digest exports.

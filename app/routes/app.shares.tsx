@@ -6,7 +6,7 @@ import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
 
 const RESOURCE_LABELS: Record<string, string> = {
-  collection: "Collection",
+  collection: "Board",
   watchlist: "Watchlist",
   digest: "Digest",
   report: "Report",
@@ -79,7 +79,7 @@ export default function SharesRoute() {
 
         {data.shares.length === 0 ? (
           <p>
-            No active share links. Share a watchlist, collection, digest, or report and it will
+            No active share links. Share a watchlist, board, digest, or report and it will
             appear here so you can revoke it any time.
           </p>
         ) : (

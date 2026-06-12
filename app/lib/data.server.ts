@@ -2460,6 +2460,95 @@ export interface OperatorRiskSummary {
 
 // Targeted "customer-at-risk" signals for the nightly operator alert —
 // deliberately cheaper than the full operator snapshot.
+export interface WeeklyBusinessSummary {
+  signups7d: number;
+  activated7d: number;
+  payingByPlan: Array<{ plan: string; count: number }>;
+  dunningCount: number;
+  revokedToFree7d: number;
+  digestAttempts7d: number;
+  digestSent7d: number;
+  oldestActivePaidScanAt: string | null;
+}
+
+// Monday operator email: the handful of numbers that say whether the
+// business moved last week. Read-only aggregates, cheap enough for cron.
+export async function getWeeklyBusinessSummary(env: AppEnv): Promise<WeeklyBusinessSummary> {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [signupRow, activatedRow, payingRows, dunningRow, revokedRow, digestRows, staleRow] =
+    await Promise.all([
+      one<{ count: number }>(env, `SELECT COUNT(*) AS count FROM user WHERE created_at >= ?`, weekAgo),
+      one<{ count: number }>(
+        env,
+        `SELECT COUNT(*) AS count FROM user WHERE onboardedAt IS NOT NULL AND onboardedAt >= ?`,
+        weekAgo,
+      ),
+      many<{ plan: string; count: number }>(
+        env,
+        `SELECT plan, COUNT(*) AS count FROM user_plan WHERE plan != 'free' GROUP BY plan ORDER BY plan`,
+      ),
+      one<{ count: number }>(
+        env,
+        `
+          SELECT COUNT(*) AS count
+          FROM user_plan
+          WHERE plan != 'free'
+            AND dodo_status IN ('subscription.failed', 'subscription.on_hold')
+        `,
+      ),
+      one<{ count: number }>(
+        env,
+        `
+          SELECT COUNT(*) AS count
+          FROM user_plan
+          WHERE plan = 'free'
+            AND dodo_status IS NOT NULL
+            AND plan_updated_at >= ?
+        `,
+        weekAgo,
+      ),
+      many<{ status: string; count: number }>(
+        env,
+        `
+          SELECT status, COUNT(*) AS count
+          FROM delivery_attempt
+          WHERE template_name = 'digest'
+            AND created_at >= ?
+          GROUP BY status
+        `,
+        weekAgo,
+      ),
+      one<{ oldest: string | null }>(
+        env,
+        `
+          SELECT MIN(watchlist.last_scanned_at) AS oldest
+          FROM watchlist
+          INNER JOIN user_plan ON user_plan.user_id = watchlist.user_id
+          WHERE watchlist.is_active = 1
+            AND user_plan.plan IN ('starter', 'agency')
+            AND watchlist.last_scanned_at IS NOT NULL
+        `,
+      ),
+    ]);
+
+  const digestAttempts = digestRows.reduce((sum, row) => sum + Number(row.count), 0);
+  const digestSent = digestRows
+    .filter((row) => row.status === "sent" || row.status === "delivered")
+    .reduce((sum, row) => sum + Number(row.count), 0);
+
+  return {
+    signups7d: Number(signupRow?.count ?? 0),
+    activated7d: Number(activatedRow?.count ?? 0),
+    payingByPlan: payingRows.map((row) => ({ plan: row.plan, count: Number(row.count) })),
+    dunningCount: Number(dunningRow?.count ?? 0),
+    revokedToFree7d: Number(revokedRow?.count ?? 0),
+    digestAttempts7d: digestAttempts,
+    digestSent7d: digestSent,
+    oldestActivePaidScanAt: staleRow?.oldest ?? null,
+  };
+}
+
 export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskSummary> {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();

@@ -465,3 +465,60 @@ describe("migrateAutoProvisionedEmailTargets", () => {
     expect(cleanup?.sql).toContain("opt_in_source = 'account_email'");
   });
 });
+
+describe("weekly business numbers", () => {
+  it("formats the operator summary lines and dedupes per week", async () => {
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWeeklyBusinessSummary: vi.fn().mockResolvedValue({
+        signups7d: 5,
+        activated7d: 3,
+        payingByPlan: [
+          { plan: "agency", count: 1 },
+          { plan: "starter", count: 4 },
+        ],
+        dunningCount: 1,
+        revokedToFree7d: 2,
+        digestAttempts7d: 40,
+        digestSent7d: 38,
+        oldestActivePaidScanAt: "2026-06-10T04:00:00.000Z",
+      }),
+    }));
+
+    const { sendWeeklyBusinessNumbers } = await import("~/lib/monitoring.server");
+    const result = await sendWeeklyBusinessNumbers({ DB: {} } as never);
+
+    expect(result.sent).toBe(true);
+    const call = sendOperatorAlertEmail.mock.calls[0]?.[1] as {
+      subject: string;
+      lines: string[];
+      idempotencyKey: string;
+    };
+    expect(call.subject).toContain("weekly business numbers");
+    expect(call.idempotencyKey).toMatch(/^business-weekly:\d{4}-\d{2}-\d{2}$/);
+    expect(call.lines[0]).toContain("Signups (7d): 5");
+    expect(call.lines[0]).toContain("activated onboarding: 3");
+    expect(call.lines[1]).toContain("agency: 1, starter: 4");
+    expect(call.lines[2]).toContain("Dunning");
+    expect(call.lines[4]).toContain("95% (38/40)");
+  });
+
+  it("reports honest empties when there is no traffic yet", async () => {
+    const { buildWeeklyBusinessLines } = await import("~/lib/monitoring.server");
+    const lines = buildWeeklyBusinessLines({
+      signups7d: 0,
+      activated7d: 0,
+      payingByPlan: [],
+      dunningCount: 0,
+      revokedToFree7d: 0,
+      digestAttempts7d: 0,
+      digestSent7d: 0,
+      oldestActivePaidScanAt: null,
+    });
+
+    expect(lines[1]).toContain("none yet");
+    expect(lines[4]).toContain("no digests sent");
+    expect(lines[5]).toContain("n/a");
+  });
+});

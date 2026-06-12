@@ -464,7 +464,7 @@ export default function AppSourcesRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          API keys are read-only and only expose collections, watchlists, digests, proof trails, and export markdown
+          API keys are read-only and only expose boards, watchlists, digests, proof trails, and export markdown
           owned by this account.
         </p>
 
@@ -521,7 +521,7 @@ export default function AppSourcesRoute() {
               </div>
             </dl>
             <p className="f9-muted-copy">
-              This API can read saved manual external proof links in collections, but does not add automated
+              This API can read saved manual external proof links in boards, but does not add automated
               TikTok, Google, LinkedIn, Pinterest, or write access.
             </p>
           </section>

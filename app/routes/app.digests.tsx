@@ -163,7 +163,7 @@ export default function DigestsRoute() {
           <h2>Digests are included in paid plans.</h2>
           <p>
             Upgrade to get daily or weekly competitor change reports — with proof attached — in your
-            inbox. Until then, watchlists and collections keep your research organized.
+            inbox. Until then, watchlists and boards keep your research organized.
           </p>
           <Link className="f9-primary-button" to="/#pricing">
             View plans
