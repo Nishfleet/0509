@@ -6,7 +6,9 @@ import type {
   WatchEventType,
 } from "~/lib/types";
 
-const SUPPRESSION_WINDOW_MS = 6 * 60 * 60 * 1000;
+// Must exceed the 24h scan cadence: with a 6h window every nightly repeat
+// of the same change (A/B tests, countdown headlines) re-alerted forever.
+const SUPPRESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {
   ad_new: 65,
@@ -99,7 +101,10 @@ export function evaluateProofBackedEvents(input: {
         eventType: draft.eventType,
         proofPresent: true,
         sensitivityMode: input.sensitivityMode,
-        burstCount: input.burstCount,
+        // Burst means "several things changed at once on this page", not
+        // "the watchlist observes many ads" — the latter permanently
+        // inflated every event on any busy watchlist.
+        burstCount: candidateDrafts.length,
         indiaSignals: [draft.to].some((value) => hasIndiaSignal(value)),
       }),
       title: buildEventTitle(draft.eventType),
@@ -129,9 +134,10 @@ export function scoreWatchEventImportance(input: {
 }) {
   let score = BASE_IMPORTANCE_BY_EVENT[input.eventType] ?? 50;
 
-  if (input.proofPresent) {
-    score += 5;
-  }
+  // No proof-presence bump: every proof-backed event having +5 pushed all
+  // four landing-page change types over the balanced instant threshold (75),
+  // making "balanced" behave like "aggressive" for exactly the noisiest
+  // event family. Proof is the norm, not a signal of importance.
   if (input.burstCount >= 3) {
     score += 10;
   }
@@ -228,13 +234,15 @@ function hasDuplicateWithinWindow(input: {
   return input.recentWatchEvents.some((event) => {
     const metadata = event.metadata ?? {};
     const sameTarget = metadata.proofTargetIdentity === input.proofTargetIdentity;
-    const sameDiff = metadata.diffHash === input.diffHash;
     const insideWindow = new Date(event.createdAt).getTime() >= cutoff;
+    // Per-FIELD suppression, deliberately ignoring the from→to diff hash:
+    // an A/B page alternating A→B then B→A produces two distinct hashes and
+    // would never dedupe, emailing the customer daily about the same test.
+    // One alert per field per window is the contract.
     return (
       event.eventType === input.eventType &&
       event.status === "confirmed" &&
       sameTarget &&
-      sameDiff &&
       insideWindow
     );
   });

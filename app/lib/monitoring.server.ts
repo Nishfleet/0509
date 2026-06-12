@@ -98,6 +98,7 @@ interface WatchEventDraft {
 interface ScanPayload {
   ads: AdRecord[];
   pagesScanned: number;
+  degraded: boolean;
 }
 
 interface ScanOptions {
@@ -511,7 +512,19 @@ export async function runWatchlist(
   );
 
   try {
-    const { ads, pagesScanned } = await scanPromise;
+    const { ads, pagesScanned, degraded } = await scanPromise;
+
+    if (degraded) {
+      // Stale-cache honesty: nothing live was fetched, so no diff runs, the
+      // run is recorded as failed (cache_only), lastScannedAt stays put, and
+      // integration status reflects reality. The catch path still attempts
+      // direct-website proof, and the next scan retries live.
+      throw new CommercialDiscoveryError(
+        "Live discovery was cooling down; only cached results were available, so change detection was skipped.",
+        "rate_limited",
+      );
+    }
+
     await persistCheapScanObservations(env, runId, ads);
 
     const [currentObservations, baselineObservations, priorObservations] = await Promise.all([
@@ -765,7 +778,13 @@ export function diffWatchlistObservations(
     if (
       observation.landing_page_url &&
       baselineObservation.landing_page_url &&
-      observation.landing_page_url !== baselineObservation.landing_page_url
+      // Compare canonical page identities, not raw strings: rotating
+      // utm_/fbclid tracking params made the highest-severity event in the
+      // system fire nightly on two visually identical URLs.
+      (buildCanonicalPageIdentity(observation.landing_page_url) ??
+        observation.landing_page_url) !==
+        (buildCanonicalPageIdentity(baselineObservation.landing_page_url) ??
+          baselineObservation.landing_page_url)
     ) {
       drafts.push({
         eventType: "landing_page_url_changed",
@@ -1165,6 +1184,7 @@ async function performBoundedScan(
 ): Promise<ScanPayload> {
   let cursor: string | null | undefined = null;
   let pagesScanned = 0;
+  let degraded = false;
   const ads: AdRecord[] = [];
 
   do {
@@ -1178,6 +1198,11 @@ async function performBoundedScan(
       },
     );
     ads.push(...response.ads);
+    // Cooldown fallbacks serve old cached payloads; diffing them fabricates
+    // ad_new/ad_inactive events about ads that never changed.
+    if (response.discoveryStatus === "cache_only" || response.cacheStatus === "stale") {
+      degraded = true;
+    }
     cursor = response.nextCursor;
     pagesScanned += 1;
   } while (cursor && pagesScanned < pageBudget);
@@ -1187,6 +1212,7 @@ async function performBoundedScan(
   return {
     ads: hydratedAds,
     pagesScanned,
+    degraded,
   };
 }
 
@@ -1436,7 +1462,7 @@ async function evaluateSelectiveProofCandidates(
       workspaceMonthlyCap,
       workspaceRecentAttempts,
       activeCaptureCount: 0,
-      burstCount: input.currentObservations.length,
+      burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
       proofRequestDuplicate,
       recentFailureCountForTarget,
     });
@@ -1544,7 +1570,7 @@ async function evaluateSelectiveProofCandidates(
       lastSuccessfulProof,
       recentWatchEvents: proofAwareRecentEvents,
       sensitivityMode: "balanced",
-      burstCount: input.currentObservations.length,
+      burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
     });
 
     for (const event of evaluated.events) {

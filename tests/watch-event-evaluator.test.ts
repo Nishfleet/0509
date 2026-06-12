@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateProofBackedEvents,
   selectLastSuccessfulProofCapture,
+  scoreWatchEventImportance,
 } from "~/lib/watch-event-evaluator.server";
 import type { ProofCaptureRecord, WatchEventRecord } from "~/lib/types";
 
@@ -266,5 +267,97 @@ describe("watch event evaluator", () => {
         reconciliationSuccessRate: 0.99,
       }),
     ).toBe(false);
+  });
+});
+
+describe("signal-quality hardening (2026-06-12)", () => {
+  it("suppresses A/B flip-flops: same field, different from→to, within the window", () => {
+    // Prior alert was hash-b → hash-a; today's change is hash-a → hash-b.
+    // Per-field suppression must catch this even though the diff differs.
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Weekend Sale",
+        normalizedHeadline: "glow serum weekend sale",
+        normalizedHeadlineHash: "hash-b",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+      },
+      lastSuccessfulProof: proofCapture(),
+      recentWatchEvents: [
+        watchEvent({
+          metadata: {
+            proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+            diffHash: "landing_page_headline_changed:hash-b:hash-a",
+          },
+          createdAt: "2026-04-17T00:00:00.000Z",
+        }),
+      ],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("suppressed");
+  });
+
+  it("keeps suppressing daily repeats: a 30-hour-old alert is still inside the window", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Weekend Sale",
+        normalizedHeadline: "glow serum weekend sale",
+        normalizedHeadlineHash: "hash-b",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499",
+        formPresent: true,
+      },
+      lastSuccessfulProof: proofCapture(),
+      recentWatchEvents: [
+        watchEvent({
+          metadata: {
+            proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+            diffHash: "landing_page_headline_changed:hash-a:hash-b",
+          },
+          createdAt: "2026-04-16T18:00:00.000Z", // 30h before now
+        }),
+      ],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("suppressed");
+  });
+
+  it("scores without a proof-presence bump so only headline changes clear the balanced instant bar", () => {
+    expect(
+      scoreWatchEventImportance({
+        eventType: "landing_page_headline_changed",
+        proofPresent: true,
+        sensitivityMode: "balanced",
+        burstCount: 1,
+        indiaSignals: false,
+      }),
+    ).toBe(75);
+    expect(
+      scoreWatchEventImportance({
+        eventType: "landing_page_offer_changed",
+        proofPresent: true,
+        sensitivityMode: "balanced",
+        burstCount: 1,
+        indiaSignals: false,
+      }),
+    ).toBe(74);
+    expect(
+      scoreWatchEventImportance({
+        eventType: "landing_page_cta_changed",
+        proofPresent: true,
+        sensitivityMode: "balanced",
+        burstCount: 1,
+        indiaSignals: false,
+      }),
+    ).toBe(72);
   });
 });
