@@ -8,7 +8,7 @@ import {
 } from "~/lib/resource-export";
 
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCollection,
@@ -18,7 +18,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
     listWatchEvents,
   } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const resourceType = params.resourceType;
   const resourceId = params.resourceId;
   const format = exportFormatForRequest(request);
@@ -28,7 +28,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   }
 
   if (resourceType === "collection") {
-    const collection = await getCollection(env, resourceId, session.user.id);
+    const collection = await getCollection(env, resourceId, workspaceUserId);
     if (!collection) {
       throw new Response("Not found", { status: 404 });
     }
@@ -38,7 +38,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   }
 
   if (resourceType === "watchlist") {
-    const watchlist = await getWatchlist(env, resourceId, session.user.id);
+    const watchlist = await getWatchlist(env, resourceId, workspaceUserId);
     if (!watchlist) {
       throw new Response("Not found", { status: 404 });
     }
@@ -49,7 +49,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 
   if (resourceType === "digest") {
     const digest = await getDigest(env, resourceId);
-    if (!digest || digest.userId !== session.user.id) {
+    if (!digest || digest.userId !== workspaceUserId) {
       throw new Response("Not found", { status: 404 });
     }
 

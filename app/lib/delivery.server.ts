@@ -1500,6 +1500,63 @@ export async function sendAccountActionEmail(
   return providerResult.status === "sent";
 }
 
+export async function sendTeamInviteEmail(
+  env: AppEnv,
+  input: {
+    ownerUserId: string;
+    ownerName: string | null;
+    inviteeEmail: string;
+    acceptUrl: string;
+  },
+) {
+  const inviter = input.ownerName?.trim() ? escapeHtml(input.ownerName.trim()) : "A teammate";
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.inviteeEmail,
+    subject: `${input.ownerName?.trim() || "Your team"} invited you to Five to Nine`,
+    html: `
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
+        <p style="margin: 0 0 12px;">Hi,</p>
+        <p style="margin: 0 0 16px;">${inviter} invited you to their Five to Nine workspace — shared watchlists, boards, and the morning brief on competitor changes.</p>
+        <p style="margin: 0 0 20px;">
+          <a href="${escapeHtml(input.acceptUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+            Join the workspace
+          </a>
+        </p>
+        <p style="margin: 0; color: #5b6577; font-size: 13px;">
+          The invite expires in 7 days. If you weren't expecting this, ignore this email — nothing changes.
+        </p>
+      </div>
+    `,
+    tag: "team-invite",
+    unsubscribeUrl: null,
+  });
+
+  await createDeliveryAttempt(env, {
+    userId: input.ownerUserId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.inviteeEmail,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "team_invite",
+    eventIds: [],
+    payloadSnapshot: { kind: "team_invite" },
+    idempotencyKey: `team-invite:${input.ownerUserId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  return providerResult.status === "sent";
+}
+
 export async function sendPasswordResetEmail(
   env: AppEnv,
   input: {

@@ -1,0 +1,100 @@
+import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+
+import { SubmitButton } from "~/components/submit-button";
+
+export const meta = () => [{ title: "Join workspace | Five to Nine" }];
+
+export async function loader({ context, request }: LoaderFunctionArgs) {
+  const { getOptionalSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const { peekWorkspaceInvite } = await import("~/lib/workspace.server");
+  const env = getEnv(context);
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token") ?? "";
+
+  if (!token) {
+    return { valid: false as const, reason: "This invite link is incomplete.", token: "" };
+  }
+
+  const session = await getOptionalSession(env, request);
+  if (!session) {
+    throw redirect(
+      `/auth/login?redirectTo=${encodeURIComponent(`/team/accept?token=${token}`)}`,
+    );
+  }
+
+  const invite = await peekWorkspaceInvite(env, token);
+  if (!invite) {
+    return {
+      valid: false as const,
+      reason: "This invite link is no longer valid — ask for a fresh one.",
+      token: "",
+    };
+  }
+
+  return {
+    valid: true as const,
+    reason: null,
+    token,
+    ownerName: invite.ownerName,
+  };
+}
+
+export async function action({ context, request }: ActionFunctionArgs) {
+  const { requireSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const { acceptWorkspaceInvite } = await import("~/lib/workspace.server");
+  const env = getEnv(context);
+  const session = await requireSession(env, request);
+  const formData = await request.formData();
+  const token = String(formData.get("token") ?? "");
+
+  const result = await acceptWorkspaceInvite(env, {
+    token,
+    userId: session.user.id,
+    userEmail: session.user.email,
+  });
+
+  if (!result.ok) {
+    return { ok: false as const, reason: result.reason };
+  }
+
+  throw redirect("/app");
+}
+
+export default function TeamAcceptRoute() {
+  const data = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+
+  return (
+    <main className="f9-error-page">
+      <div className="f9-container f9-error-layout">
+        <div className="f9-error-card">
+          {!data.valid ? (
+            <>
+              <h1>Invite not available</h1>
+              <p>{data.reason}</p>
+              <Link className="f9-primary-button" to="/app">
+                Go to your account
+              </Link>
+            </>
+          ) : (
+            <>
+              <h1>Join {data.ownerName ? `${data.ownerName}'s` : "this"} workspace?</h1>
+              <p>
+                You&rsquo;ll share their watchlists, boards, and morning briefs. Your sign-in
+                stays your own, and the workspace owner handles billing.
+              </p>
+              {actionData && !actionData.ok ? <p role="alert">{actionData.reason}</p> : null}
+              <Form method="post">
+                <input type="hidden" name="token" value={data.token} />
+                <SubmitButton pendingLabel="Joining…">Join the workspace</SubmitButton>
+              </Form>
+            </>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
