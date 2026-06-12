@@ -19,6 +19,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     getDigest,
     getShareLink,
     getWatchlist,
+    getWorkspaceBranding,
     listCollectionItems,
     listWatchEvents,
   } = await import("~/lib/data.server");
@@ -34,11 +35,16 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
+  // Co-branding for agency workspaces: the share owner's brand name renders
+  // as "Prepared by …" while Five to Nine stays in the footer.
+  const preparedBy = (await getWorkspaceBranding(env, share.userId)).brandName;
+
   if (share.isSnapshot) {
     return {
       mode: "snapshot" as const,
       resourceType: share.resourceType,
       payload: share.snapshotPayload,
+      preparedBy,
     };
   }
 
@@ -51,6 +57,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       resourceType: "collection" as const,
       collection,
       items,
+      preparedBy,
     };
   }
 
@@ -63,6 +70,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       resourceType: "watchlist" as const,
       watchlist,
       events,
+      preparedBy,
     };
   }
 
@@ -76,6 +84,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     mode: "live" as const,
     resourceType: "digest" as const,
     digest,
+    preparedBy,
   };
 }
 
@@ -95,6 +104,12 @@ export default function ShareRoute() {
             <BrandWordmark meta="Shared proof" />
           </Link>
         </div>
+
+        {data.preparedBy ? (
+          <p className="f9-share-prepared-by">
+            Prepared by <strong>{data.preparedBy}</strong>
+          </p>
+        ) : null}
 
         {reportSnapshot ? (
           <article className="f9-app-panel f9-report-page">
@@ -200,6 +215,12 @@ export default function ShareRoute() {
             </ul>
           </article>
         )}
+
+        <footer className="f9-share-footer">
+          <p>
+            Monitoring and evidence by <Link to="/">Five to Nine</Link>
+          </p>
+        </footer>
       </div>
     </main>
   );
