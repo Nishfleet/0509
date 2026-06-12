@@ -37,6 +37,10 @@ export interface ProofPolicyInput {
   workspaceDailyAttemptCount: number;
   workspaceMonthlyAttemptCount?: number;
   workspaceMonthlyCap?: number;
+  // Per-plan daily ceiling (credits included); falls back to the flat v1
+  // budget. A flat 60/day made the agency tier's 2,500 monthly checks and
+  // every purchased credit pack mathematically unreachable.
+  workspaceDailyCap?: number;
   workspaceRecentAttempts: Array<Pick<{ status: ProofStatus }, "status">>;
   activeCaptureCount: number;
   burstCount: number;
@@ -137,7 +141,7 @@ export function evaluateProofPolicy(input: ProofPolicyInput): ProofPolicyDecisio
     if (
       input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun ||
       input.watchlistDailyAttemptCount >= V1_PROOF_BUDGETS.perWatchlistDay ||
-      input.workspaceDailyAttemptCount >= V1_PROOF_BUDGETS.perWorkspaceDay
+      input.workspaceDailyAttemptCount >= (input.workspaceDailyCap ?? V1_PROOF_BUDGETS.perWorkspaceDay)
     ) {
       return buildSkippedDecision(threshold, score, bucket, false, "skipped_due_to_budget");
     }

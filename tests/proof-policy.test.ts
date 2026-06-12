@@ -161,3 +161,54 @@ describe("proof policy", () => {
     });
   });
 });
+
+describe("per-plan daily proof caps (2026-06-12)", () => {
+  const baseInput = {
+    sensitivityMode: "balanced" as const,
+    triggerEventTypes: ["landing_page_headline_changed" as const],
+    lastSuccessfulProofAt: null,
+    watchlistRunAttemptCount: 0,
+    watchlistDailyAttemptCount: 0,
+    workspaceRecentAttempts: [],
+    activeCaptureCount: 0,
+    burstCount: 1,
+    proofRequestDuplicate: false,
+    recentFailureCountForTarget: 0,
+  };
+
+  it("lets an agency workspace pass the old flat 60/day ceiling", () => {
+    const decision = evaluateProofPolicy({
+      ...baseInput,
+      workspaceDailyAttemptCount: 100,
+      workspaceDailyCap: 120,
+    });
+
+    expect(decision.shouldCapture).toBe(true);
+  });
+
+  it("still budget-skips above the plan's own daily cap", () => {
+    const decision = evaluateProofPolicy({
+      ...baseInput,
+      // forced captures bypass per-day budgets, so use a non-forced trigger
+      triggerEventTypes: ["landing_page_cta_changed" as const],
+      lastSuccessfulProofAt: "2026-06-10T00:00:00.000Z",
+      workspaceDailyAttemptCount: 120,
+      workspaceDailyCap: 120,
+      now: "2026-06-12T00:00:00.000Z",
+    });
+
+    expect(decision.shouldCapture).toBe(false);
+  });
+
+  it("falls back to the flat v1 budget when no cap is provided", () => {
+    const decision = evaluateProofPolicy({
+      ...baseInput,
+      triggerEventTypes: ["landing_page_cta_changed" as const],
+      lastSuccessfulProofAt: "2026-06-10T00:00:00.000Z",
+      workspaceDailyAttemptCount: 60,
+      now: "2026-06-12T00:00:00.000Z",
+    });
+
+    expect(decision.shouldCapture).toBe(false);
+  });
+});

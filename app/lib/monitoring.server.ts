@@ -1374,6 +1374,7 @@ async function evaluateSelectiveProofCandidates(
     now,
   );
   const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
+  const workspaceDailyCap = dailyProofCapForPlan(userPlan, purchasedProofCredits);
   const watchlistDailyAttempts = await countProofCapturesForWatchlistSince(
     env,
     input.watchlist.id,
@@ -1460,6 +1461,7 @@ async function evaluateSelectiveProofCandidates(
       workspaceDailyAttemptCount,
       workspaceMonthlyAttemptCount,
       workspaceMonthlyCap,
+      workspaceDailyCap,
       workspaceRecentAttempts,
       activeCaptureCount: 0,
       burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
@@ -1675,6 +1677,7 @@ async function evaluateDirectWebsiteProofCandidate(
     now,
   );
   const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
+  const workspaceDailyCap = dailyProofCapForPlan(userPlan, purchasedProofCredits);
   const [watchlistDailyAttempts, workspaceDailyAttempts, workspaceMonthlyAttempts] = await Promise.all([
     countProofCapturesForWatchlistSince(env, input.watchlist.id, todayStart),
     countProofCapturesForWorkspaceSince(env, input.watchlist.userId, todayStart),
@@ -1683,7 +1686,7 @@ async function evaluateDirectWebsiteProofCandidate(
 
   if (
     watchlistDailyAttempts >= V1_PROOF_BUDGETS.perWatchlistDay ||
-    workspaceDailyAttempts >= V1_PROOF_BUDGETS.perWorkspaceDay ||
+    workspaceDailyAttempts >= workspaceDailyCap ||
     workspaceMonthlyAttempts >= workspaceMonthlyCap
   ) {
     return emptyProofEvaluation(websiteUrl);
@@ -2170,6 +2173,21 @@ function startOfUtcDayIso() {
 
 function startOfRollingProofWindowIso() {
   return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+}
+
+// Daily proof ceilings sized so each plan's marketed monthly number is
+// actually reachable (cap*30 > monthly), with purchased credit packs adding
+// a pro-rated daily allowance so they are spendable within their 30-day life.
+const DAILY_PROOF_CAP_BY_PLAN: Record<string, number> = {
+  free: 0,
+  scout: 20,
+  starter: 40,
+  agency: 120,
+};
+
+export function dailyProofCapForPlan(plan: string, purchasedCredits: number) {
+  const base = DAILY_PROOF_CAP_BY_PLAN[plan] ?? V1_PROOF_BUDGETS.perWorkspaceDay;
+  return base + Math.ceil(Math.max(0, purchasedCredits) / 30);
 }
 
 function monthlyProofCapForPlan(plan: string) {

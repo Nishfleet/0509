@@ -14,6 +14,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const session = await requireSession(env, request);
   const checkoutNotice = new URL(request.url).searchParams.get("checkout");
 
+  const { dailyProofCapForPlan } = await import("~/lib/monitoring.server");
   const [billing, proofUsage, watchlistUsage, collectionUsage] = await Promise.all([
     getUserPlanBillingInfo(env, session.user.id),
     getProofUsageSummary(env, session.user.id),
@@ -28,6 +29,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     watchlistUsage,
     collectionUsage,
     planLimits: PLAN_LIMITS[billing.plan],
+    dailyProofCap: dailyProofCapForPlan(billing.plan, proofUsage.extraCredits),
     blockedCheckout: checkoutNotice === "already-subscribed",
   };
 }
@@ -120,7 +122,8 @@ export default function BillingRoute() {
           <div className="f9-work-row">
             <strong>Evidence checks (30 days)</strong>
             <span>
-              {data.proofUsage.used} of {data.proofUsage.limit} used
+              {data.proofUsage.used} of {data.proofUsage.limit} used · up to {data.dailyProofCap}{" "}
+              per day
               {data.proofUsage.extraCredits > 0
                 ? ` (includes ${data.proofUsage.extraCredits} purchased credits)`
                 : ""}
