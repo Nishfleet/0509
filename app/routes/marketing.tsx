@@ -1,6 +1,5 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
 import { useEffect, useState } from "react";
-import type { CSSProperties } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
@@ -15,11 +14,18 @@ const marketingDescription =
   "Five to Nine tracks competitor ads, offers, and landing pages so revenue teams can react before deals move.";
 const publicSearchTrialPath = "/search?website=https%3A%2F%2Fnykaa.com";
 
-export const links: LinksFunction = () => canonicalLinks("/");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/"),
+  { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+  {
+    rel: "stylesheet",
+    href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
+  },
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
-    title: "Five to Nine | Market intelligence for revenue teams",
+    title: "Five to Nine | Know when competitors change the offer",
     description: marketingDescription,
     pathname: "/",
   });
@@ -36,24 +42,38 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   };
 }
 
-const marketStats = [
-  { label: "Watched sites", value: "3", detail: "sample setup" },
-  { label: "Fields checked", value: "4", detail: "headline, CTA, offer, form" },
-  { label: "Evidence saved", value: "9", detail: "screenshots and page text" },
-];
+const tickerEvents = [
+  ["02:14", "New Meta ad set — third repeat of the routine-first hook", "ad library"],
+  ["03:47", "Pricing page — plan renamed, anchor price added", "screenshot saved"],
+  ["04:58", "Lead form appeared on the campaign landing page", "page text + link"],
+  ["05:09", "Morning brief delivered — 3 changes, 9 pieces of evidence", "sample watch"],
+] as const;
 
-const signalRows = [
-  ["Competitor page", "Visible offer text changed", "Page evidence", "Review"],
-  ["Landing page", "CTA changed on destination", "Page evidence", "Review"],
-  ["Tracked form", "Lead form appeared", "Page evidence", "Watched"],
-];
+const sampleBriefRows = [
+  ["Visible offer text changed", "screenshot"],
+  ["CTA changed on the destination page", "page text"],
+  ["A lead form appeared", "original link"],
+] as const;
 
-const backboneStats = [
-  { value: "1", label: "competitor website", detail: "turns into a watchlist" },
-  { value: "24h", label: "change checks", detail: "daily on Starter & Agency plans" },
-  { value: "3", label: "saved evidence", detail: "screenshot, page text, original link" },
-  { value: "05:09", label: "morning brief", detail: "what changed and why it matters" },
-];
+const howSteps = [
+  {
+    step: "01",
+    title: "Paste their website",
+    detail: "See a competitor's live ads immediately — free, before any account exists.",
+  },
+  {
+    step: "02",
+    title: "We watch while you sleep",
+    detail:
+      "Five to Nine checks their ads, offers, CTAs, and forms, and saves screenshots, page text, and links for every change.",
+  },
+  {
+    step: "03",
+    title: "The morning brief lands",
+    detail:
+      "What changed and why it matters, before your day starts — every claim backed by evidence on file.",
+  },
+] as const;
 
 const quietSignals = [
   {
@@ -71,14 +91,14 @@ const quietSignals = [
     detail:
       "Quiet periods still send a heartbeat — “All quiet — 24 ads checked” — so silence always means we looked and nothing moved.",
   },
-];
+] as const;
 
-const signalRays = Array.from({ length: 42 }, (_, index) => {
-  const angle = -72 + (index * 144) / 41;
-  const length = 36 + ((index * 17) % 42);
-  const alpha = 0.2 + ((index * 11) % 40) / 100;
-  return { angle, length, alpha };
-});
+const backboneStats = [
+  { value: "1", label: "competitor website", detail: "turns into a watchlist" },
+  { value: "24h", label: "change checks", detail: "daily on Starter & Agency plans" },
+  { value: "3", label: "saved evidence", detail: "screenshot, page text, original link" },
+  { value: "05:09", label: "morning brief", detail: "what changed and why it matters" },
+] as const;
 
 interface LocalPricingPreview {
   available?: boolean;
@@ -147,426 +167,386 @@ export default function MarketingRoute() {
     };
   }, [localPricing?.available]);
 
+  const tickerRun = (
+    <span className="ld-ticker-run">
+      <em>Sample watch</em>
+      {tickerEvents.map(([time, event, evidence]) => (
+        <span className="ld-ticker-item" key={time}>
+          <b>{time}</b> {event} <small>[{evidence}]</small>
+        </span>
+      ))}
+    </span>
+  );
+
   return (
     <main className="f9-home">
-      <header className="f9-nav">
-        <div className="f9-container f9-nav-inner">
-          <Link className="f9-brand" to="/" aria-label="Five to Nine home">
-            <BrandWordmark />
-          </Link>
-
-          <nav className="f9-nav-links" aria-label="Primary">
-            <a href="#demo">Demo</a>
-            <Link to={publicSearchTrialPath}>Live search</Link>
-            <a href="#platform">Platform</a>
-            <a href="#pricing">Pricing</a>
-          </nav>
-
-          <nav className="f9-nav-actions" aria-label="Account">
-            <Link className="f9-link-arrow" to="/auth/login">
-              Sign in
-            </Link>
-            <Link className="f9-nav-pill" to={primaryCta}>
-              {primaryLabel}
-            </Link>
-          </nav>
+      <div className="ld-ticker" aria-hidden="true">
+        <div className="ld-ticker-belt">
+          {tickerRun}
+          {tickerRun}
         </div>
+      </div>
+      <p className="ld-sr-only">
+        A sample capture feed: timestamped competitor changes with saved evidence, ending in the
+        05:09 morning brief.
+      </p>
+
+      <header className="ld-nav">
+        <Link className="ld-brand" to="/" aria-label="Five to Nine home">
+          <BrandWordmark />
+        </Link>
+
+        <nav className="ld-nav-links" aria-label="Primary">
+          <Link to={publicSearchTrialPath}>Live search</Link>
+          <a href="#demo">Proof loop</a>
+          <a href="#pricing">Pricing</a>
+        </nav>
+
+        <nav className="ld-nav-actions" aria-label="Account">
+          <Link className="f9-link-arrow" to="/auth/login">
+            Sign in
+          </Link>
+          <Link className="ld-nav-pill" to={primaryCta}>
+            {primaryLabel}
+          </Link>
+        </nav>
       </header>
 
-      <section className="f9-hero">
-        <div className="f9-gradient" aria-hidden="true" />
-        <div className="f9-white-slice" aria-hidden="true" />
+      <section className="ld-hero">
+        <Link className="f9-announcement" to={publicSearchTrialPath}>
+          <strong>Early access</strong>
+          <span>Preview live search before creating an account</span>
+        </Link>
 
-        <div className="f9-container f9-hero-layout">
-          <div className="f9-hero-copy">
-            <Link className="f9-announcement" to={publicSearchTrialPath}>
-              <strong>Early access</strong>
-              <span>Preview live search before creating an account</span>
-              <em aria-hidden="true" />
-            </Link>
+        <p className="ld-case">
+          <span className="ld-rec">Recording</span>
+          <span>Sample case file № 59 — birchandstone.example — last night</span>
+        </p>
 
-            <h1>Know when competitors change the offer.</h1>
+        <h1 className="ld-wall">
+          <span className="ld-row">They cut</span>
+          <span className="ld-row">
+            the price <s className="ld-del">₹2,400</s>
+          </span>
+          <span className="ld-row ld-row-indent">
+            <ins className="ld-ins">
+              ₹1,999<i className="ld-flag">03:47 AM</i>
+            </ins>{" "}
+            last
+          </span>
+          <span className="ld-row">night.</span>
+        </h1>
 
-            <p>
-              Enter a competitor website to preview live ads. Create an account when you want Five to Nine
-              to save useful examples, watch landing pages, capture evidence, and brief your team when visible
-              offer text, CTAs, forms, or onboarding page copy move.
-            </p>
+        <div className="ld-deck">
+          <p>
+            Your sales team would&rsquo;ve walked in blind. Five to Nine catches the change, saves
+            the screenshots, and files the brief — <b>before your alarm goes off.</b>
+          </p>
 
-            <div className="f9-hero-proof-actions" aria-label="Sample proof before signup">
-              <Link to={publicSearchTrialPath}>Try live search</Link>
-              <a href="#demo">Review sample proof loop</a>
-              <a href="/api/demo-proof?format=markdown">Open markdown proof</a>
-            </div>
-
-            <p className="f9-muted-copy" style={{ margin: "10px 0 0", fontSize: "0.85rem" }}>
-              Why "0509"? Five to Nine — we work while you sleep.
-            </p>
-
-            <div className="f9-public-status-note" role="note">
-              <strong>Honest by design.</strong>
-              <span>
-                Results are always labeled fresh, recent, or sample — and Meta ads tracking stays
-                marked beta until it proves itself on your competitors.
-              </span>
-            </div>
-
-            <Form className="f9-email-cta" method="get" action={primaryCta}>
-              {rootData.session ? (
-                <span className="f9-email-state">Account ready</span>
-              ) : (
-                <input aria-label="Work email" name="email" placeholder="Work email" type="email" />
-              )}
-              <SubmitButton getAction={primaryCta} pendingLabel="Redirecting…">{primaryLabel}</SubmitButton>
-            </Form>
-          </div>
-
-          <aside className="f9-product-stage" aria-label="Five to Nine product preview">
-            <div className="f9-workspace-panel">
-              <div className="f9-workspace-top">
-                <strong>Five to Nine</strong>
-                <span>Competitor watch</span>
-              </div>
-
-              <div className="f9-workspace-card f9-wide-card">
-                <div>
-                  <span>Today</span>
-                  <h2>Competitor changes to review</h2>
-                </div>
-                <p>Evidence captured</p>
-              </div>
-
-              <div className="f9-stat-grid">
-                {marketStats.map((stat) => (
-                  <div className="f9-workspace-card" key={stat.label}>
-                    <span>{stat.label}</span>
-                    <strong>{stat.value}</strong>
-                    <small>{stat.detail}</small>
-                  </div>
-                ))}
-              </div>
-
-              <div className="f9-chart-card" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </div>
-
-              <div className="f9-signal-table">
-                {signalRows.map(([competitor, change, source, state]) => (
-                  <div className="f9-signal-row" key={competitor}>
-                    <strong>{competitor}</strong>
-                    <span>{change}</span>
-                    <small>{source}</small>
-                    <em>{state}</em>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="f9-brief-device">
-              <div className="f9-brief-token" aria-hidden="true">
-                59
-              </div>
-              <span>Sample brief</span>
-              <strong>3 changes to review</strong>
-              <p>
-                Visible offer text changed. CTA changed on the destination page. A lead form appeared.
-              </p>
-              <div>
-                <small>Screenshot</small>
-                <em>ready</em>
-              </div>
-              <div>
-                <small>Page text</small>
-                <em>saved</em>
-              </div>
-              <div>
-                <small>Original link</small>
-                <em>captured</em>
-              </div>
-            </div>
+          <aside className="ld-receipt" aria-label="Sample brief">
+            <span className="ld-receipt-head">Sample brief — 3 changes to review</span>
+            <ul>
+              {sampleBriefRows.map(([change, evidence]) => (
+                <li key={change}>
+                  <span>{change}</span>
+                  <em>{evidence}</em>
+                </li>
+              ))}
+            </ul>
+            <small>Evidence on file. No screenshots, no claim.</small>
           </aside>
         </div>
-      </section>
 
-      <section className="f9-backbone-section" id="platform">
-        <div className="f9-container f9-backbone-shell">
-          <div className="f9-backbone-heading">
-            <span>Why teams use it</span>
-            <h2>Stop finding out after the sales call.</h2>
-          </div>
+        <Form className="ld-command" method="get" action="/search" aria-label="Free live search">
+          <input
+            aria-label="Competitor website"
+            name="website"
+            placeholder="paste-their-website.com"
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+          />
+          <button type="submit">
+            Catch them in the act <span aria-hidden="true">→</span>
+          </button>
+        </Form>
 
-          <div className="f9-backbone-stats" aria-label="Five to Nine signal model">
-            {backboneStats.map((stat) => (
-              <article key={stat.label}>
-                <div className="f9-stat-line">
-                  <strong>{stat.value}</strong>
-                  <span>{stat.label}</span>
-                </div>
-                <p>{stat.detail}</p>
-              </article>
-            ))}
-          </div>
-
-          <div className="f9-signal-visual" aria-label="Market signal map">
-            <div className="f9-visual-controls" aria-hidden="true">
-              <span />
-              <span />
-            </div>
-            <div className="f9-signal-burst" aria-hidden="true">
-              {signalRays.map((ray, index) => (
-                <i
-                  key={`${ray.angle}-${index}`}
-                  style={
-                    {
-                      "--angle": `${ray.angle}deg`,
-                      "--length": `${ray.length}%`,
-                      "--alpha": ray.alpha,
-                    } as CSSProperties
-                  }
-                />
-              ))}
-              <div />
-            </div>
-          </div>
+        <div className="f9-hero-proof-actions" aria-label="Sample proof before signup">
+          <Link to={publicSearchTrialPath}>Try live search</Link>
+          <a href="#demo">Review sample proof loop</a>
+          <a href="/api/demo-proof?format=markdown">Open markdown proof</a>
         </div>
+
+        <p className="ld-honest" role="note">
+          <strong>Honest by design.</strong> The case above is a sample. Live results are always
+          labeled fresh, recent, or sample — and Meta ads tracking stays marked beta until it
+          proves itself on your competitors. Live search is free, no account. Why
+          &ldquo;0509&rdquo;? Five to Nine — we work while you sleep.
+        </p>
       </section>
 
-      <section className="f9-demo-proof-section" id="demo">
-        <div className="f9-container f9-demo-proof-layout">
-          <div className="f9-demo-proof-copy">
-            <span>Sample proof loop</span>
-            <h2>See the proof shape before creating an account.</h2>
-            <p>
-              This is sample data, not the live search result. It shows the buyer moment Five to Nine
-              is built around: one competitor, evidence trail, insight summary, digest preview, and export.
-            </p>
-            <div className="f9-demo-proof-actions">
-              <a href="/api/demo-proof">View JSON</a>
-              <a href="/api/demo-proof?format=markdown">Markdown proof</a>
-            </div>
-          </div>
-
-          <div className="f9-demo-proof-board" aria-label="Sample Five to Nine proof trail">
-            <article className="f9-demo-competitor-card">
-              <span>{demoProof.competitor.market}</span>
-              <h3>{demoProof.competitor.name}</h3>
-              <p>{demoProof.summary}</p>
+      <section className="ld-how" id="platform">
+        <h2>Know when competitors change the offer.</h2>
+        <div className="ld-how-grid">
+          {howSteps.map((item) => (
+            <article key={item.step}>
+              <span className="ld-step">{item.step}</span>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
             </article>
+          ))}
+        </div>
+      </section>
 
-            <div className="f9-demo-proof-grid">
-              <article>
-                <span>Proof trail</span>
-                <ul>
-                  {demoProof.proofTrail.map((item) => (
-                    <li key={item.signal}>
-                      <strong>{item.signal}</strong>
-                      <p>{item.evidence}</p>
-                      <em>{item.source}</em>
-                    </li>
-                  ))}
-                </ul>
-              </article>
+      <section className="ld-proof" id="demo">
+        <div className="ld-section-head">
+          <span className="ld-kicker">Sample proof loop</span>
+          <h2>See the proof shape before creating an account.</h2>
+          <p>
+            This is sample data, not the live search result. It shows the buyer moment Five to
+            Nine is built around: one competitor, evidence trail, insight summary, digest preview,
+            and export.
+          </p>
+          <div className="ld-proof-actions">
+            <a href="/api/demo-proof">View JSON</a>
+            <a href="/api/demo-proof?format=markdown">Markdown proof</a>
+          </div>
+        </div>
 
-              <article>
-                <span>Digest preview</span>
-                <h3>{demoProof.digestPreview.subject}</h3>
-                <p>{demoProof.digestPreview.recommendedMove}</p>
-                <dl>
-                  <div>
-                    <dt>Priority</dt>
-                    <dd>{demoProof.digestPreview.priority}</dd>
-                  </div>
-                  <div>
-                    <dt>Confidence</dt>
-                    <dd>{demoProof.digestPreview.confidence}</dd>
-                  </div>
-                </dl>
-              </article>
-            </div>
+        <div className="ld-caseboard" aria-label="Sample Five to Nine proof trail">
+          <article className="ld-case-lead">
+            <span className="ld-kicker">{demoProof.competitor.market}</span>
+            <h3>{demoProof.competitor.name}</h3>
+            <p>{demoProof.summary}</p>
+          </article>
 
-            <div className="f9-demo-intel-grid" aria-label="Sample insight depth">
-              <article>
-                <span>Top hooks</span>
-                <ul>
-                  {demoProof.insightPreview.topHooks.map((hook) => (
-                    <li key={hook}>{hook}</li>
-                  ))}
-                </ul>
-              </article>
-              <article>
-                <span>Media mix</span>
-                <ul>
-                  {demoProof.insightPreview.mediaMix.map((item) => (
-                    <li key={item.channel}>
-                      <strong>{item.channel}</strong>
-                      <em>{item.share}</em>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-              <article>
-                <span>Timeline</span>
-                <ul>
-                  {demoProof.insightPreview.creativeTimeline.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-              <article>
-                <span>Slack-ready export</span>
-                <p>{demoProof.exports.slackMarkdown}</p>
-              </article>
-            </div>
+          <article className="ld-case-card">
+            <span className="ld-kicker">Proof trail</span>
+            <ul className="ld-trail">
+              {demoProof.proofTrail.map((item) => (
+                <li key={item.signal}>
+                  <strong>{item.signal}</strong>
+                  <p>{item.evidence}</p>
+                  <em>{item.source}</em>
+                </li>
+              ))}
+            </ul>
+          </article>
+
+          <article className="ld-case-card">
+            <span className="ld-kicker">Digest preview</span>
+            <h4>{demoProof.digestPreview.subject}</h4>
+            <p>{demoProof.digestPreview.recommendedMove}</p>
+            <dl>
+              <div>
+                <dt>Priority</dt>
+                <dd>{demoProof.digestPreview.priority}</dd>
+              </div>
+              <div>
+                <dt>Confidence</dt>
+                <dd>{demoProof.digestPreview.confidence}</dd>
+              </div>
+            </dl>
+          </article>
+
+          <div className="ld-intel" aria-label="Sample insight depth">
+            <article>
+              <span className="ld-kicker">Top hooks</span>
+              <ul>
+                {demoProof.insightPreview.topHooks.map((hook) => (
+                  <li key={hook}>{hook}</li>
+                ))}
+              </ul>
+            </article>
+            <article>
+              <span className="ld-kicker">Media mix</span>
+              <ul>
+                {demoProof.insightPreview.mediaMix.map((item) => (
+                  <li key={item.channel}>
+                    <strong>{item.channel}</strong>
+                    <em>{item.share}</em>
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article>
+              <span className="ld-kicker">Timeline</span>
+              <ul>
+                {demoProof.insightPreview.creativeTimeline.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+            <article>
+              <span className="ld-kicker">Slack-ready export</span>
+              <p className="ld-export">{demoProof.exports.slackMarkdown}</p>
+            </article>
           </div>
         </div>
       </section>
 
-      <section className="f9-demo-proof-section" id="signal">
-        <div className="f9-container f9-demo-proof-layout">
-          <div className="f9-demo-proof-copy">
-            <span>Zero-noise monitoring</span>
-            <h2>Signal, not noise.</h2>
-            <p>
-              Ad-spy tools drown teams in “new ad” pings. Five to Nine alerts you when something
-              actually moved — and tells you what it checked when nothing did.
-            </p>
-          </div>
+      <section className="ld-quiet" id="signal">
+        <div className="ld-section-head">
+          <span className="ld-kicker">Zero-noise monitoring</span>
+          <h2>Signal, not noise.</h2>
+          <p>
+            Ad-spy tools drown teams in &ldquo;new ad&rdquo; pings. Five to Nine alerts you when
+            something actually moved — and tells you what it checked when nothing did.
+          </p>
+        </div>
+        <div className="ld-quiet-grid" aria-label="Zero-noise proof points">
+          {quietSignals.map((item) => (
+            <article key={item.title}>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
-          <div className="f9-demo-intel-grid f9-quiet-grid" aria-label="Zero-noise proof points">
-            {quietSignals.map((item) => (
-              <article key={item.title}>
-                <span>{item.title}</span>
-                <p>{item.detail}</p>
-              </article>
-            ))}
-          </div>
+      <section className="ld-stats">
+        <h2>Stop finding out after the sales call.</h2>
+        <div className="ld-stats-belt" aria-label="Five to Nine signal model">
+          {backboneStats.map((stat) => (
+            <article key={stat.label}>
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
+              <p>{stat.detail}</p>
+            </article>
+          ))}
         </div>
       </section>
 
       <section className="f9-growth-pricing" id="pricing">
-        <div className="f9-container">
-          <div className="f9-growth-pricing-head">
-            <div>
-              <span>Plans</span>
-              <h2>Choose the watch depth your team needs.</h2>
-            </div>
-
-            <div className="f9-plan-summary-card" aria-label="Pricing summary">
-              <span>Recommended launch plan</span>
-              <strong>Start with Starter</strong>
-              <p>Weekly change briefs, 10 watchlists, and enough checks for a real sales team.</p>
-            </div>
+        <div className="ld-section-head">
+          <span className="ld-kicker">Plans</span>
+          <h2>Choose the watch depth your team needs.</h2>
+          <div className="ld-plan-summary" aria-label="Pricing summary">
+            <span>Recommended launch plan</span>
+            <strong>Start with Starter</strong>
+            <p>Weekly change briefs, 10 watchlists, and enough checks for a real sales team.</p>
           </div>
-
-          <p className="f9-growth-pricing-note">
-            Review live search and the sample proof loop first. Paid plans add account-gated competitor research,
-            watchlists, page checks, saved boards, and clear caps. Save winning ads to boards — and see how long
-            each ad has been running when the Ad Library shares dates.
+          <p className="ld-pricing-note">
+            Review live search and the sample proof loop first. Paid plans add account-gated
+            competitor research, watchlists, page checks, saved boards, and clear caps. Save
+            winning ads to boards — and see how long each ad has been running when the Ad Library
+            shares dates.
           </p>
+        </div>
 
-          <div className="f9-commerce-grid">
-            {rootData.pricingPlans.map((plan) => {
-              const monthlyReady = hasPrice(localPricing, plan.slug, "monthly");
-              const yearlyReady = hasPrice(localPricing, plan.slug, "yearly");
+        <div className="f9-commerce-grid">
+          {rootData.pricingPlans.map((plan) => {
+            const monthlyReady = hasPrice(localPricing, plan.slug, "monthly");
+            const yearlyReady = hasPrice(localPricing, plan.slug, "yearly");
 
-              return (
-                <article
-                  className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}
-                  key={plan.name}
-                >
-                  <span>{plan.name}</span>
-                  {plan.slug === "starter" ? <em className="f9-plan-badge">Recommended</em> : null}
-                  <h3>{priceLabel(localPricing, plan.slug, "monthly", plan.monthlyLabel)}</h3>
-                  <small>{priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)}</small>
-                  <p>{plan.detail}</p>
-                  <ul className="f9-plan-feature-list">
-                    {plan.features?.map((feature) => (
-                      <li key={feature}>{feature}</li>
-                    ))}
-                  </ul>
-                  {rootData.session ? (
-                    monthlyReady || yearlyReady ? (
-                      <div className="f9-plan-actions">
-                        {monthlyReady ? (
-                          <Form method="post" action="/api/billing/dodo/checkout">
-                            <input type="hidden" name="plan" value={plan.slug} />
-                            <input type="hidden" name="cycle" value="monthly" />
-                            <SubmitButton match={{ plan: plan.slug, cycle: "monthly" }} pendingLabel="Redirecting…">
-                              Start monthly
-                            </SubmitButton>
-                          </Form>
-                        ) : null}
-                        {yearlyReady ? (
-                          <Form method="post" action="/api/billing/dodo/checkout">
-                            <input type="hidden" name="plan" value={plan.slug} />
-                            <input type="hidden" name="cycle" value="yearly" />
-                            <SubmitButton match={{ plan: plan.slug, cycle: "yearly" }} pendingLabel="Redirecting…">
-                              Annual
-                            </SubmitButton>
-                          </Form>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="f9-price-sync">Prices loading</span>
-                    )
+            return (
+              <article
+                className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}
+                key={plan.name}
+              >
+                <span>{plan.name}</span>
+                {plan.slug === "starter" ? <em className="f9-plan-badge">Recommended</em> : null}
+                <h3>{priceLabel(localPricing, plan.slug, "monthly", plan.monthlyLabel)}</h3>
+                <small>{priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)}</small>
+                <p>{plan.detail}</p>
+                <ul className="f9-plan-feature-list">
+                  {plan.features?.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+                {rootData.session ? (
+                  monthlyReady || yearlyReady ? (
+                    <div className="f9-plan-actions">
+                      {monthlyReady ? (
+                        <Form method="post" action="/api/billing/dodo/checkout">
+                          <input type="hidden" name="plan" value={plan.slug} />
+                          <input type="hidden" name="cycle" value="monthly" />
+                          <SubmitButton match={{ plan: plan.slug, cycle: "monthly" }} pendingLabel="Redirecting…">
+                            Start monthly
+                          </SubmitButton>
+                        </Form>
+                      ) : null}
+                      {yearlyReady ? (
+                        <Form method="post" action="/api/billing/dodo/checkout">
+                          <input type="hidden" name="plan" value={plan.slug} />
+                          <input type="hidden" name="cycle" value="yearly" />
+                          <SubmitButton match={{ plan: plan.slug, cycle: "yearly" }} pendingLabel="Redirecting…">
+                            Annual
+                          </SubmitButton>
+                        </Form>
+                      ) : null}
+                    </div>
                   ) : (
-                    <Link to={primaryCta}>{primaryLabel}</Link>
-                  )}
-                </article>
-              );
-            })}
+                    <span className="f9-price-sync">Prices loading</span>
+                  )
+                ) : (
+                  <Link to={primaryCta}>{primaryLabel}</Link>
+                )}
+              </article>
+            );
+          })}
+        </div>
+
+        <p className="ld-pricing-note">
+          Coming from MagicBrief or another tool that&rsquo;s winding down? Your boards and
+          watchlists set up in an afternoon — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>{" "}
+          and we&rsquo;ll help you move.
+        </p>
+
+        <div className="ld-bundles" aria-label="Extra check packs">
+          <div className="ld-bundles-head">
+            <span className="ld-kicker">Extra check capacity</span>
+            <p>
+              Add page checks for launch weeks or big campaigns without changing the team&rsquo;s
+              plan.
+            </p>
           </div>
-
-          <p className="f9-growth-pricing-note">
-            Coming from MagicBrief or another tool that's winding down? Your boards and watchlists
-            set up in an afternoon — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
-            help you move.
-          </p>
-
-          <div className="f9-usage-bundles" aria-label="Extra check packs">
-            <div className="f9-usage-bundles-head">
-              <span>Extra check capacity</span>
-              <p>
-                Add page checks for launch weeks or big campaigns without changing the team's
-                plan.
-              </p>
-            </div>
-            <div className="f9-usage-bundle-grid">
-              {(rootData.usageBundles ?? []).map((bundle) => (
-                <article className="f9-usage-bundle-card" key={bundle.slug}>
-                  <span>{bundle.creditLabel}</span>
-                  <h3>{bundle.name}</h3>
-                  <strong>{bundlePriceLabel(localPricing, bundle.slug, bundle.priceLabel)}</strong>
-                  <p>{bundle.detail}</p>
-                  {rootData.session && hasBundlePrice(localPricing, bundle.slug) ? (
-                    <Form method="post" action="/api/billing/dodo/checkout">
-                      <input type="hidden" name="bundle" value={bundle.slug} />
-                      <SubmitButton match={{ bundle: bundle.slug }} pendingLabel="Redirecting…">
-                        Buy pack
-                      </SubmitButton>
-                    </Form>
-                  ) : null}
-                </article>
-              ))}
-            </div>
+          <div className="ld-bundle-grid">
+            {(rootData.usageBundles ?? []).map((bundle) => (
+              <article className="ld-bundle-card" key={bundle.slug}>
+                <span className="ld-kicker">{bundle.creditLabel}</span>
+                <h3>{bundle.name}</h3>
+                <strong>{bundlePriceLabel(localPricing, bundle.slug, bundle.priceLabel)}</strong>
+                <p>{bundle.detail}</p>
+                {rootData.session && hasBundlePrice(localPricing, bundle.slug) ? (
+                  <Form method="post" action="/api/billing/dodo/checkout">
+                    <input type="hidden" name="bundle" value={bundle.slug} />
+                    <SubmitButton match={{ bundle: bundle.slug }} pendingLabel="Redirecting…">
+                      Buy pack
+                    </SubmitButton>
+                  </Form>
+                ) : null}
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-      <footer className="f9-footer">
-        <div className="f9-container">
-          <Link className="f9-footer-brand" to="/" aria-label="Five to Nine home">
-            <BrandWordmark meta="Market intelligence" />
-          </Link>
-          <p>Five to Nine helps teams see competitor offer and landing-page changes before the next sales call.</p>
-          <nav aria-label="Footer">
-            <Link to="/privacy">Privacy</Link>
-            <Link to="/terms">Terms</Link>
-            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>
-          </nav>
-        </div>
+      <section className="ld-final">
+        <h2>
+          Start the watch <span aria-hidden="true">→</span>
+        </h2>
+        <Form className="f9-email-cta" method="get" action={primaryCta}>
+          {rootData.session ? (
+            <span className="f9-email-state">Account ready</span>
+          ) : (
+            <input aria-label="Work email" name="email" placeholder="Work email" type="email" />
+          )}
+          <SubmitButton getAction={primaryCta} pendingLabel="Redirecting…">{primaryLabel}</SubmitButton>
+        </Form>
+        <p>Live search is free — no account. Five to Nine — we work while you sleep.</p>
+      </section>
+
+      <footer className="ld-footer">
+        <Link className="ld-footer-brand" to="/" aria-label="Five to Nine home">
+          <BrandWordmark meta="Market intelligence" />
+        </Link>
+        <p>Five to Nine helps teams see competitor offer and landing-page changes before the next sales call.</p>
+        <nav aria-label="Footer">
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>
+        </nav>
       </footer>
     </main>
   );
