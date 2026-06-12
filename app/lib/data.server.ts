@@ -2017,6 +2017,12 @@ export async function updateWatchlist(
 	      watchlistId,
 	      userId,
 	    );
+
+    // Retargeting silently reset alert preferences: carry the per-watchlist
+    // delivery config and targets over to the replacement so the customer's
+    // settings survive a competitor rebrand/domain change.
+    await copyWatchlistDeliverySettings(env, userId, watchlistId, replacement.id);
+
 	    return replacement;
 	  }
 
@@ -2045,6 +2051,62 @@ export async function updateWatchlist(
   );
 
   return getWatchlist(env, watchlistId, userId);
+}
+
+async function copyWatchlistDeliverySettings(
+  env: AppEnv,
+  userId: string,
+  fromWatchlistId: string,
+  toWatchlistId: string,
+) {
+  const timestamp = nowIso();
+
+  await run(
+    env,
+    `
+      INSERT INTO watchlist_delivery_config (
+        id, watchlist_id, user_id, sensitivity_mode, instant_enabled,
+        digest_enabled, email_enabled, whatsapp_enabled, slack_enabled,
+        quiet_hours_json, timezone, created_at, updated_at
+      )
+      SELECT ?, ?, user_id, sensitivity_mode, instant_enabled,
+             digest_enabled, email_enabled, whatsapp_enabled, slack_enabled,
+             quiet_hours_json, timezone, ?, ?
+      FROM watchlist_delivery_config
+      WHERE watchlist_id = ?
+    `,
+    createId(),
+    toWatchlistId,
+    timestamp,
+    timestamp,
+    fromWatchlistId,
+  );
+
+  await run(
+    env,
+    `
+      INSERT INTO delivery_target (
+        id, user_id, watchlist_id, channel, target_value, validation_status,
+        is_validated, is_opted_in, opt_in_source, opted_in_at, is_paused,
+        paused_at, opted_out_at, template_eligible, last_successful_delivery_at,
+        last_successful_attempt_id, provider_identifier, metadata_json,
+        created_at, updated_at
+      )
+      SELECT lower(hex(randomblob(16))), user_id, ?, channel, target_value,
+             validation_status, is_validated, is_opted_in, opt_in_source,
+             opted_in_at, is_paused, paused_at, opted_out_at, template_eligible,
+             NULL, NULL, provider_identifier, metadata_json, ?, ?
+      FROM delivery_target
+      WHERE watchlist_id = ?
+        AND user_id = ?
+        AND opted_out_at IS NULL
+    `,
+    toWatchlistId,
+    timestamp,
+    timestamp,
+    fromWatchlistId,
+    userId,
+  );
 }
 
 export async function setWatchlistActive(

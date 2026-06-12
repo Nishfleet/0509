@@ -114,13 +114,27 @@ function buildProofTrail(
   event: Pick<WatchEventRecord, "metadata" | "proofCaptureId" | "confirmedAt" | "createdAt">,
 ) {
   const timestamp = event.confirmedAt ?? event.createdAt;
-  const source = event.proofCaptureId ? "proof capture" : "watchlist scan";
-  const confidence = event.proofCaptureId ? "source-backed" : "scan-backed";
+  // Customer language, not pipeline language: "proof capture · source-backed
+  // · 12/6/2026, 4:00:00 am" read like an engine log inside a client email.
+  const source = event.proofCaptureId
+    ? "Verified from a page snapshot"
+    : "Spotted in the scheduled scan";
   const from = stringOr((event.metadata as Record<string, unknown> | undefined)?.from, null);
   const to = stringOr((event.metadata as Record<string, unknown> | undefined)?.to, null);
-  const diff = from && to ? ` · ${from} -> ${to}` : "";
+  const diff = from && to ? ` · "${from}" → "${to}"` : "";
+  const timestampMs = Date.parse(timestamp ?? "");
+  const when = Number.isFinite(timestampMs)
+    ? `${new Intl.DateTimeFormat("en-IN", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Kolkata",
+      }).format(new Date(timestampMs))} IST`
+    : "time unknown";
 
-  return `${source} · ${confidence} · ${new Date(timestamp).toLocaleString("en-IN")}${diff}`;
+  return `${source} · ${when}${diff}`;
 }
 
 function stringOr(value: unknown, fallback: string): string;
