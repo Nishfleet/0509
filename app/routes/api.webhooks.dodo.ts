@@ -14,6 +14,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     extractDodoPlanRevocation,
     extractDodoProofCreditGrant,
     extractDodoRefund,
+    extractDodoSubscriptionGrant,
     verifyDodoWebhookRequest,
   } = await import("~/lib/dodo-billing.server");
   const {
@@ -85,6 +86,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
         plan: planGrant.plan,
         providerPaymentId: planGrant.paymentId,
         providerProductId: planGrant.productId,
+        providerSubscriptionId: planGrant.subscriptionId,
+        providerCustomerId: planGrant.customerId,
         status: planGrant.status,
         grantedAt: planGrant.grantedAt,
         metadata: planGrant.metadata,
@@ -100,6 +103,42 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         outcome: "processed",
         metadata: { action: "plan_grant", userId: planGrant.userId, plan: planGrant.plan },
+        body: { ok: true },
+      };
+    }
+
+    // subscription.active (first activation) and subscription.renewed (every
+    // successful renewal, including dunning recovery). These keep the plan
+    // fresh month over month and clear a stale payment-issue flag — real
+    // subscription payment.succeeded events carry no product_cart, so this
+    // lane is what keeps long-lived subscriptions healthy.
+    const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);
+    if (subscriptionGrant) {
+      await grantDodoPlanAccess(env, {
+        userId: subscriptionGrant.userId,
+        plan: subscriptionGrant.plan,
+        providerPaymentId: null,
+        providerProductId: subscriptionGrant.productId,
+        providerSubscriptionId: subscriptionGrant.subscriptionId,
+        providerCustomerId: subscriptionGrant.customerId,
+        nextBillingAt: subscriptionGrant.nextBillingAt,
+        status: subscriptionGrant.status,
+        grantedAt: subscriptionGrant.grantedAt,
+        metadata: subscriptionGrant.metadata,
+      });
+      await deactivateWatchlistsBeyondPlanLimit(
+        env,
+        subscriptionGrant.userId,
+        PLAN_LIMITS[subscriptionGrant.plan].watchlists,
+      );
+      return {
+        outcome: "processed",
+        metadata: {
+          action: "subscription_grant",
+          userId: subscriptionGrant.userId,
+          plan: subscriptionGrant.plan,
+          eventType: subscriptionGrant.eventType,
+        },
         body: { ok: true },
       };
     }

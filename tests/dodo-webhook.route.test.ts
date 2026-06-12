@@ -35,6 +35,7 @@ function mockWebhookDependencies(overrides: {
     extractDodoPlanRevocation: vi.fn(() => null),
     extractDodoPlanGrant: vi.fn(() => null),
     extractDodoRefund: vi.fn(() => null),
+    extractDodoSubscriptionGrant: vi.fn(() => null),
     ...overrides.billing,
   };
 
@@ -139,6 +140,52 @@ describe("Dodo webhook route", () => {
       0,
     );
     expect(data.getUserIdByEmail).not.toHaveBeenCalled();
+  });
+
+  it("grants and refreshes the plan from subscription.renewed (real subscriptions carry no product_cart)", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoSubscriptionGrant: vi.fn(() => ({
+          eventType: "subscription.renewed",
+          userId: "user-1",
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+          productId: "pdt_starter_monthly",
+          plan: "starter",
+          cycle: "monthly",
+          status: "active",
+          grantedAt: "2026-07-12T00:00:00.000Z",
+          nextBillingAt: "2026-08-12T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-renewal", { type: "subscription.renewed" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true });
+    expect(data.grantDodoPlanAccess).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        plan: "starter",
+        providerSubscriptionId: "sub_123",
+        providerCustomerId: "cus_123",
+        nextBillingAt: "2026-08-12T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-07-12T00:00:00.000Z",
+      }),
+    );
+    expect(data.markDodoWebhookEventFinished).toHaveBeenCalledWith(
+      expect.anything(),
+      "evt-renewal",
+      expect.objectContaining({ outcome: "processed" }),
+    );
   });
 
   it("deactivates over-limit watchlists when a plan switch is a downgrade", async () => {

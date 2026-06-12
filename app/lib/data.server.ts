@@ -1048,8 +1048,11 @@ export async function grantDodoPlanAccess(
   input: {
     userId: string;
     plan: "scout" | "starter" | "agency";
-    providerPaymentId: string;
-    providerProductId: string;
+    providerPaymentId: string | null;
+    providerProductId: string | null;
+    providerSubscriptionId?: string | null;
+    providerCustomerId?: string | null;
+    nextBillingAt?: string | null;
     status: string;
     grantedAt?: string;
     metadata?: JsonRecord;
@@ -1057,6 +1060,8 @@ export async function grantDodoPlanAccess(
 ) {
   const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
 
+  // COALESCE keeps existing linkage when an event doesn't carry it: payment
+  // events lack next_billing_date, subscription events lack a payment id.
   await run(
     env,
     `
@@ -1065,25 +1070,34 @@ export async function grantDodoPlanAccess(
         plan,
         dodo_payment_id,
         dodo_product_id,
+        dodo_subscription_id,
+        dodo_customer_id,
+        dodo_next_billing_at,
         dodo_status,
         plan_updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET
         plan = excluded.plan,
-        dodo_payment_id = excluded.dodo_payment_id,
-	        dodo_product_id = excluded.dodo_product_id,
-	        dodo_status = excluded.dodo_status,
-	        plan_updated_at = excluded.plan_updated_at
-	      WHERE
-	        user_plan.dodo_payment_id = excluded.dodo_payment_id
-	        OR julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
-	    `,
+        dodo_payment_id = COALESCE(excluded.dodo_payment_id, user_plan.dodo_payment_id),
+        dodo_product_id = COALESCE(excluded.dodo_product_id, user_plan.dodo_product_id),
+        dodo_subscription_id = COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id),
+        dodo_customer_id = COALESCE(excluded.dodo_customer_id, user_plan.dodo_customer_id),
+        dodo_next_billing_at = COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at),
+        dodo_status = excluded.dodo_status,
+        plan_updated_at = excluded.plan_updated_at
+      WHERE
+        (excluded.dodo_payment_id IS NOT NULL AND user_plan.dodo_payment_id = excluded.dodo_payment_id)
+        OR julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+    `,
     input.userId,
     input.plan,
-    input.providerPaymentId,
-    input.providerProductId,
+    input.providerPaymentId ?? null,
+    input.providerProductId ?? null,
+    input.providerSubscriptionId ?? null,
+    input.providerCustomerId ?? null,
+    input.nextBillingAt ?? null,
     input.status,
     planUpdatedAt,
   );
@@ -1324,6 +1338,9 @@ export interface UserPlanBillingInfo {
   plan: "free" | "scout" | "starter" | "agency";
   dodoStatus: string | null;
   dodoProductId: string | null;
+  dodoSubscriptionId: string | null;
+  dodoCustomerId: string | null;
+  dodoNextBillingAt: string | null;
   planUpdatedAt: string | null;
 }
 
@@ -1335,11 +1352,15 @@ export async function getUserPlanBillingInfo(
     plan: string | null;
     dodo_status: string | null;
     dodo_product_id: string | null;
+    dodo_subscription_id: string | null;
+    dodo_customer_id: string | null;
+    dodo_next_billing_at: string | null;
     plan_updated_at: string | null;
   }>(
     env,
     `
-      SELECT plan, dodo_status, dodo_product_id, plan_updated_at
+      SELECT plan, dodo_status, dodo_product_id, dodo_subscription_id,
+             dodo_customer_id, dodo_next_billing_at, plan_updated_at
       FROM user_plan
       WHERE user_id = ?
     `,
@@ -1355,6 +1376,9 @@ export async function getUserPlanBillingInfo(
     plan,
     dodoStatus: row?.dodo_status ?? null,
     dodoProductId: row?.dodo_product_id ?? null,
+    dodoSubscriptionId: row?.dodo_subscription_id ?? null,
+    dodoCustomerId: row?.dodo_customer_id ?? null,
+    dodoNextBillingAt: row?.dodo_next_billing_at ?? null,
     planUpdatedAt: row?.plan_updated_at ?? null,
   };
 }
