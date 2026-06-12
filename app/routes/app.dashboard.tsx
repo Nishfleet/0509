@@ -364,7 +364,7 @@ export default function AppDashboardRoute() {
       <section className="f9-dashboard-setup-row">
       <aside className="f9-setup-card" aria-label="Account setup status">
           <div>
-            <span className="f9-app-kicker">Launch checklist</span>
+            <span className="f9-app-kicker">Setup checklist</span>
             <h3>{readyCount} of {setupItems.length} ready</h3>
           </div>
           <div className="f9-setup-list">
@@ -410,7 +410,15 @@ export default function AppDashboardRoute() {
 
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-          <p>{actionData.message}</p>
+          <p>
+            {actionData.message}
+            {"error" in actionData && actionData.error === "plan_limit_exceeded" ? (
+              <>
+                {" "}
+                <Link to="/#pricing">View plans</Link> to raise the limit.
+              </>
+            ) : null}
+          </p>
         </div>
       ) : null}
 
@@ -474,7 +482,7 @@ export default function AppDashboardRoute() {
             <div>
               <span className={`f9-status-dot ${proofUsage.remaining > 0 ? "is-good" : "is-attention"}`} />
               <strong>Evidence checks</strong>
-              <p>{proofUsage.limit ? `${proofUsage.remaining} of ${proofUsage.limit} checks left.` : "Evidence-check capacity is not configured."}</p>
+              <p>{proofUsage.limit ? `${proofUsage.remaining} of ${proofUsage.limit} checks left.` : "Evidence checks unlock on a paid plan."}</p>
             </div>
             <div>
               <span className={`f9-status-dot ${hasEmailDelivery ? "is-good" : "is-attention"}`} />
@@ -595,7 +603,7 @@ function CheckoutReturnBanner(props: { plan: string }) {
     return (
       <article className="f9-checkout-banner is-pending" aria-live="polite">
         <div>
-          <span className="f9-app-kicker">Payment received</span>
+          <span className="f9-app-kicker">Finishing checkout</span>
           <h2>Activation is taking longer than usual.</h2>
           <p>
             Your payment went through and the plan will activate as soon as Dodo confirms it. If this page still
@@ -615,7 +623,7 @@ function CheckoutReturnBanner(props: { plan: string }) {
   return (
     <article className="f9-checkout-banner is-pending" aria-live="polite">
       <div>
-        <span className="f9-app-kicker">Payment received</span>
+        <span className="f9-app-kicker">Finishing checkout</span>
         <h2>
           <span className="f9-checkout-pulse" aria-hidden="true" />
           Activating your plan…

@@ -39,8 +39,10 @@ describe("marketing rebuild", () => {
   });
 
   it("labels the public beta and keeps search preview read-only before account", () => {
-    expect(marketingRoute).toContain("Readiness-gated beta");
-    expect(marketingRoute).toContain("Launch status: readiness-gated.");
+    expect(marketingRoute).toContain("Early access");
+    expect(marketingRoute).toContain("Honest by design.");
+    expect(marketingRoute).not.toContain("provider canaries");
+    expect(marketingRoute).not.toContain("Readiness-gated");
     expect(marketingRoute).toContain("Preview live search before creating an account");
     expect(marketingRoute).toContain("Try live search");
     expect(marketingRoute).toContain("/search?website=https%3A%2F%2Fnykaa.com");
