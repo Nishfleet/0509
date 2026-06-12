@@ -1,6 +1,7 @@
 import type { ReportDocument } from "~/lib/report";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { safeInsightDepthSummary } from "~/lib/insight-depth";
+import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 
 export function ReportView({ report }: { report: ReportDocument }) {
   const reportSnapshot = report as ReportDocument & { insightDepth?: unknown };
@@ -41,7 +42,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
             <div className="report-card-header">
               <div>
                 <p className="f9-app-kicker">{row.formatLabel}</p>
-                <h2>{row.advertiser}</h2>
+                <h2>{formatAdvertiserLabel(row.advertiser)}</h2>
                 <p className="f9-muted-copy">{row.previewHeadline}</p>
               </div>
               <div className="report-card-meta">
@@ -52,7 +53,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
             {row.previewImageUrl ? (
               <img
-                alt={`${row.advertiser} creative preview`}
+                alt={`${formatAdvertiserLabel(row.advertiser)} creative preview`}
                 className="report-preview"
                 src={row.previewImageUrl}
               />

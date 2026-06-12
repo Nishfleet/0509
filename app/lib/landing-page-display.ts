@@ -7,6 +7,14 @@ import type {
   WatchEventType,
 } from "~/lib/types";
 
+// Browser-scraped cards sometimes fail to extract the advertiser name; the
+// scraper stores an empty string instead of guessing (a wrong attribution is
+// worse than an honest gap). Label that state explicitly wherever it renders.
+export function formatAdvertiserLabel(advertiser: string | null | undefined) {
+  const trimmed = advertiser?.trim();
+  return trimmed ? trimmed : "Advertiser unconfirmed";
+}
+
 export function formatCaptureMethodLabel(captureMethod: CaptureMethod | null | undefined) {
   if (captureMethod === "landing_page_fetch") {
     return "Page text checked";
