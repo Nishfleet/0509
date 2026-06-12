@@ -14,6 +14,8 @@ import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { buildSearchParams } from "~/lib/normalize";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
+export const meta = () => [{ title: "Dashboard | Five to Nine" }];
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");

@@ -10,6 +10,8 @@ const RESOURCE_LABELS: Record<string, string> = {
   report: "Report",
 };
 
+export const meta = () => [{ title: "Shared links | Five to Nine" }];
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");

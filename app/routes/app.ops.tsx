@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
+export const meta = () => [{ title: "Ops | Five to Nine" }];
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");

@@ -6,6 +6,8 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const PAYMENT_ISSUE_STATUSES = new Set(["subscription.failed", "subscription.on_hold"]);
 
+export const meta = () => [{ title: "Plan & billing | Five to Nine" }];
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");

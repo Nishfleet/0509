@@ -12,6 +12,8 @@ import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { SubmitButton } from "~/components/submit-button";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
 
+export const meta = () => [{ title: "Digests | Five to Nine" }];
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");

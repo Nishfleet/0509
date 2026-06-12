@@ -1,5 +1,7 @@
 import { Link } from "react-router";
 
+export const meta = () => [{ title: "Page not found | Five to Nine" }];
+
 export function loader() {
   return new Response(null, { status: 404 });
 }
