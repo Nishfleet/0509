@@ -4581,7 +4581,7 @@ one signal-green accent.
   width: 72%;
   box-shadow: 6px 6px 0 rgba(14, 13, 10, 0.12);
   opacity: 0;
-  animation: ld-cycle-card 14s ease-in-out infinite;
+  animation: ld-cycle-card 9s ease-in-out infinite;
 }
 
 .ld-shot-before {
@@ -4589,7 +4589,7 @@ one signal-green accent.
   left: 6%;
   --tilt: -5deg;
   z-index: 1;
-  animation-delay: 0.15s;
+  animation-delay: 0.1s;
 }
 
 .ld-shot-after {
@@ -4598,7 +4598,7 @@ one signal-green accent.
   --tilt: 2.5deg;
   z-index: 3;
   border-width: 2.5px;
-  animation-delay: 0.45s;
+  animation-delay: 0.35s;
 }
 
 .ld-shot-form {
@@ -4607,7 +4607,7 @@ one signal-green accent.
   --tilt: -2deg;
   z-index: 2;
   width: 66%;
-  animation-delay: 0.75s;
+  animation-delay: 0.6s;
 }
 
 @keyframes ld-cycle-card {
@@ -4712,7 +4712,7 @@ one signal-green accent.
   font-weight: 600;
   z-index: 2;
   opacity: 0;
-  animation: ld-cycle-stamp 14s ease-out infinite;
+  animation: ld-cycle-stamp 9s ease-out infinite;
 }
 
 .ld-shot-before .ld-stamp { top: -10px; right: 14px; transform: rotate(2deg); animation-delay: 0.6s; }
@@ -4743,7 +4743,7 @@ one signal-green accent.
   padding: 6px 12px;
   transform: rotate(3deg);
   opacity: 0;
-  animation: ld-cycle-stamp 14s ease-out 1.05s infinite;
+  animation: ld-cycle-stamp 9s ease-out 0.85s infinite;
 }
 
 .ld-brief-strip {
@@ -4795,4 +4795,132 @@ one signal-green accent.
     animation: none;
     opacity: 1;
   }
+}
+
+/* "Alive" pass — fluid motion across the landing (2026-06-12) */
+
+.ld-motion .ld-reveal:not(.is-seen) > * { opacity: 0; }
+
+.ld-motion .ld-reveal.is-seen > * {
+  animation: ld-reveal-in 0.65s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+.ld-motion .ld-reveal.is-seen > *:nth-child(2) { animation-delay: 0.09s; }
+.ld-motion .ld-reveal.is-seen > *:nth-child(3) { animation-delay: 0.18s; }
+.ld-motion .ld-reveal.is-seen > *:nth-child(4) { animation-delay: 0.27s; }
+.ld-motion .ld-reveal.is-seen > *:nth-child(5) { animation-delay: 0.36s; }
+.ld-motion .ld-reveal.is-seen > *:nth-child(6) { animation-delay: 0.45s; }
+
+@keyframes ld-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.f9-home .f9-commerce-card { animation: none; }
+
+.ld-del::after {
+  transform-origin: left center;
+  animation: ld-strike 9s cubic-bezier(0.7, 0, 0.3, 1) infinite;
+}
+
+@keyframes ld-strike {
+  0% { transform: rotate(-1.6deg) scaleX(0); }
+  6%, 88% { transform: rotate(-1.6deg) scaleX(1); }
+  94%, 100% { transform: rotate(-1.6deg) scaleX(0); }
+}
+
+.ld-flag {
+  animation: ld-wiggle 5s ease-in-out infinite;
+}
+
+@keyframes ld-wiggle {
+  0%, 100% { transform: rotate(3deg); }
+  50% { transform: rotate(0.5deg); }
+}
+
+.ld-step {
+  animation: ld-step-glow 4.5s ease-in-out infinite;
+}
+
+.ld-how-grid article:nth-child(2) .ld-step { animation-delay: 1.5s; }
+.ld-how-grid article:nth-child(3) .ld-step { animation-delay: 3s; }
+
+@keyframes ld-step-glow {
+  0%, 38%, 100% {
+    background: var(--ld-green-wash);
+    color: var(--ld-green-ink);
+  }
+  8%, 28% {
+    background: var(--ld-green);
+    color: var(--ld-ink);
+  }
+}
+
+.f9-home .ld-command button span {
+  display: inline-block;
+  animation: ld-nudge 2.4s ease-in-out infinite;
+}
+
+@keyframes ld-nudge {
+  0%, 100% { transform: translateX(0); }
+  12% { transform: translateX(5px); }
+  24% { transform: translateX(0); }
+}
+
+.ld-how-grid article,
+.ld-quiet-grid article,
+.ld-case-lead,
+.ld-case-card,
+.ld-intel article,
+.ld-bundle-card,
+.f9-home .f9-commerce-card {
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.ld-how-grid article:hover,
+.ld-quiet-grid article:hover { transform: translateY(-4px); }
+
+.ld-case-lead:hover,
+.ld-case-card:hover,
+.ld-intel article:hover,
+.ld-bundle-card:hover,
+.f9-home .f9-commerce-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 7px 9px 0 rgba(14, 13, 10, 0.1);
+}
+
+.ld-ticker:hover .ld-ticker-belt { animation-play-state: paused; }
+
+.f9-home .ld-nav-pill,
+.f9-home .ld-command button,
+.f9-home .ld-final .f9-email-cta button {
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), background 0.25s;
+}
+
+.f9-home .ld-nav-pill:hover,
+.f9-home .ld-command button:hover,
+.f9-home .ld-final .f9-email-cta button:hover { transform: translateY(-2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ld-del::after,
+  .ld-flag,
+  .ld-step,
+  .f9-home .ld-command button span { animation: none; }
+
+  .ld-how-grid article,
+  .ld-quiet-grid article,
+  .ld-case-lead,
+  .ld-case-card,
+  .ld-intel article,
+  .ld-bundle-card,
+  .f9-home .f9-commerce-card,
+  .f9-home .ld-nav-pill,
+  .f9-home .ld-command button,
+  .f9-home .ld-final .f9-email-cta button { transition: none; }
 }
