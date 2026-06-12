@@ -7,6 +7,7 @@ import {
   runScheduledDiscoveryWarmup,
   runScheduledMonitoring,
   sendCustomerAtRiskAlert,
+  sendWeeklyBusinessNumbers,
 } from "../app/lib/monitoring.server";
 import {
   isPublicMarkdownPage,
@@ -17,7 +18,7 @@ import {
 import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
-import { resolveScheduledTask } from "./schedule";
+import { resolveScheduledTask, WEEKLY_DIGEST_CRON } from "./schedule";
 import { withSecurityHeaders } from "./security-headers";
 export { MonitoringWorkflow } from "./monitoring-workflow";
 
@@ -99,6 +100,26 @@ export default {
   },
   async scheduled(controller, env, ctx) {
     const scheduledTask = resolveScheduledTask(controller.cron);
+
+    if (controller.cron === WEEKLY_DIGEST_CRON) {
+      // Monday morning: the operator gets last week's business numbers
+      // alongside the weekly digests. Idempotency-keyed per day, so a cron
+      // retry cannot double-send.
+      ctx.waitUntil(
+        sendWeeklyBusinessNumbers(env).then(
+          (result) => {
+            if (result.sent) {
+              console.log("weekly business numbers sent");
+            }
+          },
+          (error) => {
+            console.error("weekly business numbers failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
+        ),
+      );
+    }
 
     if (scheduledTask.kind === "discovery_warmup") {
       ctx.waitUntil(runScheduledDiscoveryWarmup(env));

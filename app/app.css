@@ -3971,6 +3971,29 @@ button[aria-busy="true"] {
   color: #b13c30;
 }
 
+/* Doubled class keeps the longevity badge styling ahead of contextual span
+   rules like `.f9-result-card span` and `.f9-panel-head span`. */
+.f9-longevity-pill.f9-longevity-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(10, 169, 130, 0.1);
+  color: #087764;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.f9-longevity-pill.f9-longevity-pill.is-strong {
+  background: rgba(10, 169, 130, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(8, 119, 100, 0.26);
+  font-weight: 900;
+}
+
 .f9-muted-copy {
   color: var(--f9-search-muted);
   line-height: 1.58;

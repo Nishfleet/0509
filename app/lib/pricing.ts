@@ -15,7 +15,7 @@ const PLANS: PricingPlan[] = [
       "Sample proof review before signup",
       "3 active watchlists",
       "Weekly competitor scan (every Monday) + on-demand fresh checks",
-      "10 saved collections",
+      "10 saved boards",
       "Account-gated competitor research",
       "Weekly evidence-backed digest",
       "50 evidence checks per month",
@@ -31,7 +31,7 @@ const PLANS: PricingPlan[] = [
     features: [
       "10 active watchlists",
       "Daily competitor scans + on-demand fresh checks",
-      "25 saved collections",
+      "25 saved boards",
       "Daily and weekly evidence-backed digests",
       "High-priority change alerts",
       "250 evidence checks per month",
@@ -50,7 +50,7 @@ const PLANS: PricingPlan[] = [
     features: [
       "75 active watchlists",
       "Daily competitor scans, first in the nightly queue",
-      "250 saved collections",
+      "250 saved boards",
       "Daily and weekly evidence-backed briefs",
       "High-priority change alerts",
       "2,500 evidence checks per month",

@@ -46,7 +46,7 @@ export function collectionExportResponse(
     return slackResponse(
       "collection.slack.md",
       [
-        `*Five to Nine collection: ${collection.name}*`,
+        `*Five to Nine board: ${collection.name}*`,
         collection.description ? collection.description : null,
         formatInsightDepthMarkdown(payload.insightDepth),
         items.length === 0 ? "No saved proof yet." : "Saved proof:",

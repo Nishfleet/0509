@@ -422,7 +422,8 @@ export default function MarketingRoute() {
 
           <p className="f9-growth-pricing-note">
             Review live search and the sample proof loop first. Paid plans add account-gated competitor research,
-            watchlists, page checks, saved collections, and clear caps.
+            watchlists, page checks, saved boards, and clear caps. Save winning ads to boards — and see how long
+            each ad has been running when the Ad Library shares dates.
           </p>
 
           <div className="f9-commerce-grid">
