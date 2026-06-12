@@ -248,3 +248,50 @@ describe("sendDeliveryTestEmail", () => {
     expect(attempt.status).toBe("sent");
   });
 });
+
+describe("customer-at-risk operator alert", () => {
+  it("counts only LEADING failures as consecutive", async () => {
+    const { countLeadingFailures } = await import("~/lib/data.server");
+
+    expect(countLeadingFailures(["failed", "failed", "failed"])).toBe(3);
+    expect(countLeadingFailures(["failed", "succeeded", "failed"])).toBe(1);
+    expect(countLeadingFailures(["succeeded", "failed", "failed"])).toBe(0);
+    expect(countLeadingFailures([])).toBe(0);
+  });
+
+  it("sends one alert with all signals, and nothing when all clear", async () => {
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+    vi.doMock("~/lib/data.server", () => ({
+      getOperatorRiskSummary: vi.fn().mockResolvedValue({
+        troubleWatchlists: [
+          { id: "w1", name: "Nykaa watch", userEmail: "owner@example.com", consecutiveFailures: 4 },
+        ],
+        deliveryFailures24h: 2,
+        stuckRuns: 0,
+      }),
+    }));
+
+    const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
+    const result = await sendCustomerAtRiskAlert({ DB: {} } as never);
+
+    expect(result.sent).toBe(true);
+    const call = sendOperatorAlertEmail.mock.calls[0]?.[1] as { subject: string; lines: string[] };
+    expect(call.lines).toHaveLength(2);
+    expect(call.lines[0]).toContain("Nykaa watch");
+    expect(call.lines[0]).toContain("4 scans in a row");
+
+    vi.resetModules();
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+    vi.doMock("~/lib/data.server", () => ({
+      getOperatorRiskSummary: vi.fn().mockResolvedValue({
+        troubleWatchlists: [],
+        deliveryFailures24h: 0,
+        stuckRuns: 0,
+      }),
+    }));
+    const fresh = await import("~/lib/monitoring.server");
+    const quiet = await fresh.sendCustomerAtRiskAlert({ DB: {} } as never);
+    expect(quiet).toMatchObject({ sent: false, reason: "all_clear" });
+  });
+});
