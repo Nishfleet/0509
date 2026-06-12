@@ -1,6 +1,6 @@
 # Project Memory Layer
 
-Use this file as the Codex instruction entrypoint for this repo.
+Use this file as the instruction entrypoint for non-Claude coding agents in this repo.
 
 ## How To Use This
 
