@@ -4977,3 +4977,10 @@ one signal-green accent.
   .f9-app-panel,
   .f9-work-row { transition: none; }
 }
+
+.ld-wall-compact {
+  font-size: clamp(2.2rem, 5.2vw, 4.6rem);
+  text-transform: none;
+  letter-spacing: -0.03em;
+  max-width: 18ch;
+}
