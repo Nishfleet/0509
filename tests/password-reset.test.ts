@@ -155,3 +155,88 @@ describe("password reset pages", () => {
     expect(markup).toContain("Forgot your password?");
   });
 });
+
+describe("account page", () => {
+  function mockAccountPage() {
+    vi.doMock("~/lib/auth-client", () => ({
+      authClient: {
+        changePassword: vi.fn(),
+        changeEmail: vi.fn(),
+        revokeOtherSessions: vi.fn(),
+        deleteUser: vi.fn(),
+      },
+    }));
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      return {
+        ...actual,
+        useLoaderData: vi.fn().mockReturnValue({
+          email: "owner@example.com",
+          name: "Owner",
+          currentSessionId: "session-1",
+          sessions: [
+            { id: "session-1", createdAt: "2026-06-01T00:00:00.000Z", userAgent: "Safari" },
+            { id: "session-2", createdAt: "2026-05-01T00:00:00.000Z", userAgent: "Chrome" },
+          ],
+        }),
+      };
+    });
+  }
+
+  it("renders password, email, sessions, and deletion sections", async () => {
+    mockAccountPage();
+
+    const { default: AccountRoute } = await import("~/routes/app.account");
+    const markup = renderToStaticMarkup(createElement(AccountRoute));
+
+    expect(markup).toContain("Change password");
+    expect(markup).toContain("Change email");
+    expect(markup).toContain("Active sessions");
+    expect(markup).toContain("This device");
+    expect(markup).toContain("Other device");
+    expect(markup).toContain("Sign out other devices");
+    expect(markup).toContain("Delete this account");
+    expect(markup).toContain("support@0509.in");
+  });
+
+  it("sends account-action emails through the shared path without storing the secret URL", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_account_1" });
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getDeliveryTargetById: vi.fn(),
+      getDeliveryTargetByProviderIdentifier: vi.fn(),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn(),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+
+    const { sendAccountActionEmail } = await import("~/lib/delivery.server");
+    const sent = await sendAccountActionEmail(
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.in" } as never,
+      {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+        kind: "delete_account",
+        actionUrl: "https://0509.in/api/auth/delete-user/callback?token=secret-delete-token",
+      },
+    );
+
+    expect(sent).toBe(true);
+    const payload = emailSend.mock.calls[0]?.[0];
+    expect(payload.subject).toContain("deletion");
+    expect(payload.html).toContain("secret-delete-token");
+    expect(payload.headers["List-Unsubscribe"]).toBeUndefined();
+
+    const attempt = createDeliveryAttempt.mock.calls[0]?.[1];
+    expect(attempt.templateName).toBe("account_delete_account");
+    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain("secret-delete-token");
+  });
+});

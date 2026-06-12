@@ -1387,6 +1387,79 @@ export async function sendDeliveryTestEmail(
   return providerResult.status === "sent";
 }
 
+// Account-action verification emails (change email, delete account).
+// Transactional: no unsubscribe header, still recorded as delivery attempts;
+// action URLs carry secrets and are never persisted in payload snapshots.
+export async function sendAccountActionEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    kind: "change_email" | "delete_account";
+    actionUrl: string;
+  },
+) {
+  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+  const copy =
+    input.kind === "change_email"
+      ? {
+          subject: "Confirm your new email for Five to Nine",
+          body: "Someone asked to change the email on this Five to Nine account. If that was you, confirm with the button below.",
+          action: "Confirm email change",
+        }
+      : {
+          subject: "Confirm account deletion — Five to Nine",
+          body: "Someone asked to permanently delete this Five to Nine account, including watchlists, history, and evidence. If that was you, confirm below. This cannot be undone.",
+          action: "Delete my account",
+        };
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: copy.subject,
+    html: `
+      <div style="font-family: Inter, system-ui, sans-serif; color: #1d2433; font-size: 15px; line-height: 1.6;">
+        <p style="margin: 0 0 12px;">${greeting}</p>
+        <p style="margin: 0 0 16px;">${copy.body}</p>
+        <p style="margin: 0 0 20px;">
+          <a href="${escapeHtml(input.actionUrl)}" style="display: inline-block; background: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+            ${copy.action}
+          </a>
+        </p>
+        <p style="margin: 0; color: #5b6577; font-size: 13px;">
+          If you didn't ask for this, ignore this email — nothing changes.
+        </p>
+      </div>
+    `,
+    tag: `account-${input.kind.replace("_", "-")}`,
+    unsubscribeUrl: null,
+  });
+
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: `account_${input.kind}`,
+    eventIds: [],
+    payloadSnapshot: { kind: `account_${input.kind}` },
+    idempotencyKey: `account-${input.kind}:${input.userId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  return providerResult.status === "sent";
+}
+
 export async function sendPasswordResetEmail(
   env: AppEnv,
   input: {
