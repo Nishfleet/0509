@@ -52,7 +52,7 @@ npm run dev
 - `app/lib/dodo-billing.server.ts` — Dodo webhook verification + plan/credit grants
 - `app/lib/analysis.server.ts` — ad analysis (hook, offer, destination, language)
 - `app/lib/landing-page-signals.server.ts` — CTA, price, form extraction
-- `app/lib/language-classifier.ts` — Hindi/Hinglish/English/Regional detection
+- `app/lib/language-classifier.ts` — 34-language detection: English/Hindi/Hinglish, 8 Indic scripts ("Regional"), 10 global scripts incl. Ethiopic ("Global"), and 14 Latin-script languages via cue-word profiles (es/pt/fr/de/it/nl/tr/pl/id/vi/sw/af/ha/yo). Short ambiguous Latin copy falls back to English; `translation.server.ts` then runs a Workers AI detect-and-translate fallback (llama-3.2-3b) at selection time. All non-English labels auto-translate via m2m100.
 - `app/lib/creative-text.server.ts` — creative text OCR (HTML + Workers AI)
 - `app/lib/plan.server.ts` — user plan lookup and free/starter/agency gating
 - `app/lib/rate-limit.server.ts` — D1-backed rate limiting (public search, auth, writes)

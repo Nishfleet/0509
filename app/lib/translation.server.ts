@@ -5,7 +5,15 @@ import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
 export const TRANSLATION_MODEL = "@cf/meta/m2m100-1.2b";
 export const TRANSLATION_EXTRACTOR_VERSION = "translated-text-v1";
 
+export const LANGUAGE_DETECT_MODEL = "@cf/meta/llama-3.2-3b-instruct";
+
 const TARGET_LANGUAGE_CODE = "en";
+const AMBIGUOUS_LATIN_DIACRITICS = /[\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F\u1E00-\u1EFF]/;
+const AMBIGUOUS_SHORT_SAMPLE_LENGTH = 80;
+const OBVIOUS_ENGLISH_WORDS =
+  /\b(?:the|and|your|you|with|off|now|get|free|our|for|this|today|new|shop|sale|buy|save|only|all)\b/i;
+const DETECTION_CACHE_LIMIT = 500;
+const detectionCache = new Map<string, string | null>();
 const MAX_TRANSLATION_INPUT_LENGTH = 1600;
 const REGIONAL_SCRIPT_LANGUAGE_CODES: Record<string, string> = {
   bengali: "bn",
@@ -48,6 +56,13 @@ const LATIN_LABEL_LANGUAGE_CODES: Record<string, string> = {
   Yoruba: "yo",
 };
 
+const SUPPORTED_DETECTED_CODES = new Set([
+  "hi",
+  ...Object.values(REGIONAL_SCRIPT_LANGUAGE_CODES),
+  ...Object.values(GLOBAL_SCRIPT_LANGUAGE_CODES),
+  ...Object.values(LATIN_LABEL_LANGUAGE_CODES),
+]);
+
 type TranslationCandidateAd = Pick<
   AdRecord,
   | "analysisFields"
@@ -68,7 +83,7 @@ export async function translateAdText(
   env: Pick<AppEnv, "AI">,
   ad: TranslationCandidateAd,
 ): Promise<TranslationResult | null> {
-  if (!env.AI || !shouldTranslateAd(ad)) {
+  if (!env.AI || findTranslatedAnalysisField(ad.analysisFields)) {
     return null;
   }
 
@@ -77,7 +92,19 @@ export async function translateAdText(
     return null;
   }
 
-  const sourceLanguageCode = resolveSourceLanguageCode(ad, sourceText);
+  let sourceLanguageCode: string | null = null;
+  let detectionProvider: string | null = null;
+
+  if (shouldTranslateAd(ad)) {
+    sourceLanguageCode = resolveSourceLanguageCode(ad, sourceText);
+  } else if (ad.languageLabel === "English" && hasAmbiguousLatinSignals(sourceText)) {
+    const detected = await detectLanguageCode(env, sourceText);
+    if (detected && detected !== TARGET_LANGUAGE_CODE && SUPPORTED_DETECTED_CODES.has(detected)) {
+      sourceLanguageCode = detected;
+      detectionProvider = LANGUAGE_DETECT_MODEL;
+    }
+  }
+
   if (!sourceLanguageCode) {
     return null;
   }
@@ -102,6 +129,7 @@ export async function translateAdText(
         sourceLanguageCode,
         sourceLanguageLabel: ad.languageLabel,
         targetLanguageCode: TARGET_LANGUAGE_CODE,
+        ...(detectionProvider ? { languageDetectionModel: detectionProvider } : {}),
       },
     };
   } catch {
@@ -141,11 +169,63 @@ export function withTranslatedAnalysisField(
 }
 
 function shouldTranslateAd(ad: TranslationCandidateAd) {
-  if (findTranslatedAnalysisField(ad.analysisFields)) {
-    return false;
+  return ad.languageLabel !== "English" && ad.languageLabel !== "Unknown";
+}
+
+export function hasAmbiguousLatinSignals(sample: string) {
+  if (AMBIGUOUS_LATIN_DIACRITICS.test(sample)) {
+    return true;
   }
 
-  return ad.languageLabel !== "English" && ad.languageLabel !== "Unknown";
+  const compact = sample.replace(/\s+/g, " ").trim();
+  return compact.length < AMBIGUOUS_SHORT_SAMPLE_LENGTH && !OBVIOUS_ENGLISH_WORDS.test(compact);
+}
+
+async function detectLanguageCode(env: Pick<AppEnv, "AI">, sample: string) {
+  if (!env.AI) {
+    return null;
+  }
+
+  const cacheKey = sample.slice(0, 200);
+  if (detectionCache.has(cacheKey)) {
+    return detectionCache.get(cacheKey) ?? null;
+  }
+
+  try {
+    const response = await env.AI.run(LANGUAGE_DETECT_MODEL, {
+      messages: [
+        {
+          role: "system",
+          content:
+            "You identify the primary language of advertising text. Respond with ONLY the two-letter ISO 639-1 language code, nothing else.",
+        },
+        { role: "user", content: sample.slice(0, 400) },
+      ],
+      max_tokens: 5,
+    });
+    const raw =
+      typeof response === "string"
+        ? response
+        : typeof (response as { response?: unknown }).response === "string"
+          ? ((response as { response: string }).response)
+          : "";
+    const match = raw.trim().toLowerCase().match(/^[a-z]{2}/);
+    const detected = match ? match[0] : null;
+    rememberDetection(cacheKey, detected);
+    return detected;
+  } catch {
+    return null;
+  }
+}
+
+function rememberDetection(key: string, value: string | null) {
+  if (detectionCache.size >= DETECTION_CACHE_LIMIT) {
+    const oldest = detectionCache.keys().next().value;
+    if (oldest !== undefined) {
+      detectionCache.delete(oldest);
+    }
+  }
+  detectionCache.set(key, value);
 }
 
 function buildTranslationInput(ad: TranslationCandidateAd) {
