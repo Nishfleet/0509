@@ -1,3 +1,22 @@
+# Design Context
+
+## Two design systems (since 2026-06-12)
+
+**Public surfaces** (landing `/`, `/search`, `/auth/*`, legal, errors) use the
+**"Caught in the act"** system — see `docs/design/landing-caught-brief.md`:
+bone ground `#F4F1E8`, ink `#0E0D0A`, ONE signal-green accent `#16C47F`
+(red `#E0442C` only as diff-deletion semantic), Bricolage Grotesque 800
+uppercase display + Inter body + IBM Plex Mono evidence/timestamps,
+2-2.5px ink borders, zero gradients, case-file/evidence framing, scrolling
+capture ticker. Mobbin-referenced; never let it drift back toward generic
+SaaS gradients.
+
+**Logged-in workspace** (`/app/*`) keeps the Vercel-inspired system below —
+a daily-use tool wants calm restraint, not a poster. The wordmark and green
+accent are the bridge between the two.
+
+---
+
 # Design System Inspiration of Vercel
 
 ## 1. Visual Theme & Atmosphere
