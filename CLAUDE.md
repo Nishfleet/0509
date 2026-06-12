@@ -33,7 +33,7 @@ npm run dev
 - `workers/app.ts` — Cloudflare Worker entry with scheduled event handler
 - `workers/monitoring-workflow.ts` — Cloudflare Workflow for watchlist scans (currently dead code in prod: `shouldRunScheduledMonitoringInline` always selects the inline loop when `BROWSER` is bound)
 - `workers/schedule.ts` — cron string → scheduled task mapping
-- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0019`)
+- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0022`)
 - `tests/` — Vitest coverage for search, monitoring, analysis, onboarding, plan limits, reporting, billing webhooks, and route exposure
 - `scripts/` — deploy, prod canaries, launch-readiness canary, D1 backup
 - `docs/launch-readiness.md` — launch gate definition (accurate, maintained)
@@ -63,13 +63,13 @@ npm run dev
 The checked-in Cloudflare app is the active production runtime and billing is wired:
 
 - onboarding, collections, watchlists, digests, reports, share/export flows, customer API keys, and MCP endpoint exist in `app/`
-- **billing IS live via Dodo Payments**: `api.billing.dodo.checkout.ts` (303 to hosted checkout) + `api.webhooks.dodo.ts` (signed, idempotent). `payment.succeeded` grants plans/credits; `subscription.cancelled/expired/failed/on_hold` revoke to free with the same monotonic-timestamp ordering (2026-06-11). The Dodo dashboard webhook must have subscription events enabled. Still missing: in-app billing management UI (plan display/cancel/invoices) and refund-event handling. Do not describe billing as "not live."
+- **billing IS live via Dodo Payments**: `api.billing.dodo.checkout.ts` (303 to hosted checkout) + `api.webhooks.dodo.ts` (signed, idempotent). `payment.succeeded` grants plans/credits; `subscription.cancelled/expired/failed/on_hold` revoke to free with the same monotonic-timestamp ordering (2026-06-11). The Dodo dashboard webhook must have subscription events enabled (including refund events). As of 2026-06-12: `subscription.failed/on_hold` are a dunning grace state (plan kept, `dodo_status` flagged, banner shown) — only `cancelled/expired` revoke; `refund.succeeded` revokes plan + expires credits; a `dodo_webhook_event` ledger dedupes redeliveries; a ±5min replay window is enforced; `/app/billing` shows plan/usage/cancel guidance; checkout blocks double-subscriptions. Do not describe billing as "not live."
 - `/app?checkout=dodo` shows a checkout-return banner that polls plan activation (`CheckoutReturnBanner` in `app.dashboard.tsx`)
 - support contact is `support@0509.in` (`app/lib/support.ts`), surfaced on marketing footer, app sidebar, /terms, /privacy, /unsubscribe, and email footers; inbound routing is Cloudflare Email Routing (dashboard-configured)
 - legacy Razorpay routes (`api.billing.razorpay.subscription.ts`, `api.webhooks.razorpay.ts`) still exist; Dodo is the active processor. Stripe was never wired; tests assert no Stripe route exposure.
 - region-aware pricing was REMOVED in `migrations/0016_drop_region_pricing.sql`; pricing is live-loaded from Dodo (`app/lib/dodo-pricing.server.ts`, `/api/pricing-preview`)
-- plan gating is enforced at creation time (`checkPlanLimit`); known gaps: manual watchlist refresh is ungated, downgrades don't deactivate over-limit watchlists
-- a full launch audit (security, code, architecture, DB, business) was completed 2026-06-11. RESOLVED since: support contact, email unsubscribe headers, subscription lifecycle revocation, cron per-watchlist error isolation, digest retry, checkout-return UX. STILL OPEN: SSRF gap in `creative-text.server.ts`, open redirect on auth `redirectTo`, `listDigests` D1 100-param limit, missing D1 indexes/retention, share-link expiry, refund-policy depth, in-app billing management UI
+- plan gating is enforced at creation time (`checkPlanLimit`), on manual refresh (free plan blocked), on watchlist resume, and on downgrade/revocation/refund (over-limit watchlists auto-pause, newest kept); authenticated live search is rate-limited per account (60/10min)
+- a full launch audit (security, code, architecture, DB, business) was completed 2026-06-11 and a 13-PR hardening program (#138-#158) landed 2026-06-12 resolving: SSRF in creative-text, open redirect on auth `redirectTo`, D1 100-param crashes, missing indexes (0022) + retention sweep, share-link expiry/revocation (+ `/app/shares`), password reset, billing page + double-subscription guard, dunning grace + refund handling + Dodo event ledger, digests-before-scans + cron deadline guard, digest-only Mondays, scraper advertiser/CTA honesty, instant-alert retry + quiet-hours flush, watchlist pause/resume + collection delete + send-test-email, cost gates. STILL OPEN (operational, not code): WhatsApp provider + Slack delivery not configured in prod (ops-readiness canary flags this); homepage launch framing, refund-policy wording in /terms, and brand name (Five to Nine vs 0509.in) await Nish's decisions; Workflow-based scan capacity is post-launch
 
 Last local verification on 2026-06-11:
 
@@ -84,11 +84,11 @@ Last local verification on 2026-06-11:
 - `https://api.0509.in` also serves the same app through a Cloudflare Worker custom domain
 - Cloudflare deploy state as of 2026-06-11:
   - D1 database `0509` created and bound in `wrangler.jsonc`
-  - remote migrations fully applied through `0019_slack_delivery.sql` — `wrangler d1 migrations list 0509 --remote` reports "No migrations to apply" (verified 2026-06-11). Note: 0019's schema had been applied out-of-band without a ledger row; it was verified column-by-column and reconciled into `d1_migrations` on 2026-06-11.
+  - remote migrations fully applied through `0022_hot_path_indexes.sql` (verified 2026-06-12) — `wrangler d1 migrations list 0509 --remote` reports "No migrations to apply" (verified 2026-06-11). Note: 0019's schema had been applied out-of-band without a ledger row; it was verified column-by-column and reconciled into `d1_migrations` on 2026-06-11.
   - `BETTER_AUTH_SECRET` uploaded to the Cloudflare Worker
   - R2 bucket `0509-landing-page-artifacts` created and bound as `LANDING_PAGE_ARTIFACTS`
   - `BROWSER` (Browser Rendering), `AI` (Workers AI), and a `MonitoringWorkflow` workflow binding exist in `wrangler.jsonc`
-  - crons: `17 */6 * * *` (warmup), `0 4 * * *` (daily monitoring), `0 5 * * MON` (weekly — currently maps to a full monitoring task, so Mondays double-scan)
+  - crons: `17 */6 * * *` (warmup), `0 4 * * *` (daily monitoring), `0 5 * * MON` (weekly — digest-only since 2026-06-12; scout watchlists get their weekly scan inside the Monday 04:00 daily run). The warmup cron also hosts the instant-alert flush and the D1 retention sweep.
   - Cloudflare preview is live at `https://0509.nishant345.workers.dev`
   - `0509.in`, `www.0509.in`, and `api.0509.in` are attached as Worker custom domains
 - scheduled monitoring runs INLINE in the main Worker (sequential loop in `ctx.waitUntil`), not via the Workflow — capacity ceiling is roughly 15–40 watchlists per nightly run
