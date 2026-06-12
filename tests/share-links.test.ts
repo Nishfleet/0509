@@ -166,6 +166,12 @@ describe("/app/shares route", () => {
   it("lists active share links with absolute URLs", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: "user-1",
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
@@ -214,6 +220,12 @@ describe("/app/shares route", () => {
     const revokeShareLinkMock = vi.fn().mockResolvedValue(true);
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: "user-1",
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),

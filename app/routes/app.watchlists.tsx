@@ -49,7 +49,7 @@ import type {
 export const meta = () => [{ title: "Watchlists | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
@@ -66,19 +66,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   } = await import("~/lib/data.server");
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
   const { isWhatsAppProviderConfigured } = await import("~/lib/env.server");
   const whatsappAvailable = isWhatsAppProviderConfigured(env);
   const [watchlists, discoveryStatus, plan] = await Promise.all([
-    listWatchlists(env, session.user.id, { includeInactive: true }),
+    listWatchlists(env, workspaceUserId, { includeInactive: true }),
     resolveCommercialAdSourceStatus(env),
-    getUserPlan(env, session.user.id),
+    getUserPlan(env, workspaceUserId),
   ]);
   const url = new URL(request.url);
   const selectedWatchlistId = url.searchParams.get("watchlist") ?? watchlists[0]?.id ?? null;
   const selectedWatchlist = selectedWatchlistId
-    ? await getWatchlist(env, selectedWatchlistId, session.user.id)
+    ? await getWatchlist(env, selectedWatchlistId, workspaceUserId)
     : null;
 
   if (!selectedWatchlist) {
@@ -88,9 +88,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       eventCandidates: [] as EventCandidateRecord[],
       events: [] as WatchEventRecord[],
       runs: [],
-      workspaceDeliveryConfig: buildLegacyWorkspaceConfig(session.user.id, Boolean(session.user.email)),
+      workspaceDeliveryConfig: buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email)),
       watchlistDeliveryConfig: null,
-      effectiveDeliveryConfig: buildLegacyWorkspaceConfig(session.user.id, Boolean(session.user.email)),
+      effectiveDeliveryConfig: buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email)),
       deliveryTargets: [] as PublicDeliveryTargetRecord[],
       workspaceDeliveryTargets: [] as PublicDeliveryTargetRecord[],
       recentDeliveryAttempts: [] as DeliveryAttemptRecord[],
@@ -116,18 +116,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
     listWatchlistRuns(env, selectedWatchlist.id, 12),
-    getWorkspaceDeliveryConfig(env, session.user.id),
+    getWorkspaceDeliveryConfig(env, workspaceUserId),
     getWatchlistDeliveryConfig(env, selectedWatchlist.id),
-    listDeliveryTargets(env, session.user.id, {
+    listDeliveryTargets(env, workspaceUserId, {
       watchlistId: selectedWatchlist.id,
       limit: 12,
     }),
-    listDeliveryTargets(env, session.user.id, {
+    listDeliveryTargets(env, workspaceUserId, {
       watchlistId: null,
       limit: 8,
     }),
     listDeliveryAttempts(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       watchlistId: selectedWatchlist.id,
       limit: 16,
     }),
@@ -136,7 +136,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const workspaceDeliveryConfig =
     workspaceDeliveryConfigRecord ??
-    buildLegacyWorkspaceConfig(session.user.id, Boolean(session.user.email));
+    buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
 
   return {
     watchlists,
@@ -162,10 +162,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
@@ -175,7 +175,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { getUserPlan } = await import("~/lib/plan.server");
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
-    const watchlist = await getWatchlist(env, watchlistId, session.user.id);
+    const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
 
     if (!watchlist || !watchlist.isActive) {
       return { ok: false, message: "Watchlist not found." };
@@ -183,7 +183,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     // Manual refresh triggers a usage-billed live scan; without this gate a
     // downgraded account keeps a working paid feature on a 10-minute timer.
-    const plan = await getUserPlan(env, session.user.id);
+    const plan = await getUserPlan(env, workspaceUserId);
     if (plan === "free") {
       return {
         ok: false,
@@ -226,11 +226,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "share-watchlist") {
     const { createShareLink, getWatchlist } = await import("~/lib/data.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
-    const watchlist = await getWatchlist(env, watchlistId, session.user.id);
+    const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
     if (!watchlist) {
       return { ok: false, message: "Watchlist not found." };
     }
-    const share = await createShareLink(env, session, {
+    const share = await createShareLink(
+      env,
+      { ...session, user: { ...session.user, id: workspaceUserId } },
+      {
       resourceType: "watchlist",
       resourceId: watchlist.id,
       isSnapshot: false,
@@ -244,7 +247,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "update-watchlist") {
     const { getWatchlist, updateWatchlist } = await import("~/lib/data.server");
-    const watchlist = await getOwnedWatchlist(env, session.user.id, formData, getWatchlist);
+    const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
     const name = readOptionalString(formData.get("name"));
     const targetLabel = readOptionalString(formData.get("targetLabel"));
 
@@ -289,7 +292,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           };
 
     try {
-      const updatedWatchlist = await updateWatchlist(env, session.user.id, watchlist.id, {
+      const updatedWatchlist = await updateWatchlist(env, workspaceUserId, watchlist.id, {
         name,
         ...targetUpdate,
       });
@@ -323,20 +326,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
       getWorkspaceDeliveryConfig,
       upsertWatchlistDeliveryConfig,
     } = await import("~/lib/data.server");
-    const watchlist = await getOwnedWatchlist(env, session.user.id, formData, getWatchlist);
+    const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
       return { ok: false, message: "Watchlist not found." };
     }
 
     const workspaceConfig =
-      (await getWorkspaceDeliveryConfig(env, session.user.id)) ??
-      buildLegacyWorkspaceConfig(session.user.id, Boolean(session.user.email));
+      (await getWorkspaceDeliveryConfig(env, workspaceUserId)) ??
+      buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
     const sensitivityMode = normalizeSensitivityMode(String(formData.get("sensitivityMode") ?? ""));
 
     await upsertWatchlistDeliveryConfig(env, {
       watchlistId: watchlist.id,
-      userId: session.user.id,
+      userId: workspaceUserId,
       sensitivityMode,
       instantEnabled: formData.has("instantEnabled"),
       digestEnabled: formData.has("digestEnabled"),
@@ -355,7 +358,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "add-delivery-target") {
     const { getWatchlist, upsertDeliveryTarget } = await import("~/lib/data.server");
-    const watchlist = await getOwnedWatchlist(env, session.user.id, formData, getWatchlist);
+    const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
       return { ok: false, message: "Watchlist not found." };
@@ -374,7 +377,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const explicitOptIn = formData.has("explicitOptIn") || channel === "email";
 
     await upsertDeliveryTarget(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       watchlistId: watchlist.id,
       channel,
       targetValue,
@@ -400,7 +403,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "pause-watchlist") {
     const { setWatchlistActive } = await import("~/lib/data.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
-    const paused = await setWatchlistActive(env, session.user.id, watchlistId, false);
+    const paused = await setWatchlistActive(env, workspaceUserId, watchlistId, false);
 
     return paused
       ? {
@@ -416,7 +419,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { checkPlanLimit } = await import("~/lib/plan.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
 
-    const watchlistLimit = await checkPlanLimit(env, session.user.id, "watchlists");
+    const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
     if (!watchlistLimit.allowed) {
       return {
         ok: false,
@@ -427,7 +430,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    const resumed = await setWatchlistActive(env, session.user.id, watchlistId, true);
+    const resumed = await setWatchlistActive(env, workspaceUserId, watchlistId, true);
 
     return resumed
       ? { ok: true, message: "Watchlist resumed. It rejoins the next scheduled scan." }
@@ -439,16 +442,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
     const targetId = String(formData.get("targetId") ?? "");
     const target = await getDeliveryTargetById(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       targetId,
     });
 
-    if (!target || target.userId !== session.user.id || target.channel !== "email") {
+    if (!target || target.userId !== workspaceUserId || target.channel !== "email") {
       return { ok: false, message: "Email delivery target not found." };
     }
 
     const sent = await sendDeliveryTestEmail(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       email: target.targetValue,
       name: session.user.name ?? null,
     });
@@ -466,7 +469,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "toggle-delivery-target") {
     const { getWatchlist, upsertDeliveryTarget } = await import("~/lib/data.server");
-    const watchlist = await getOwnedWatchlist(env, session.user.id, formData, getWatchlist);
+    const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
       return { ok: false, message: "Watchlist not found." };
@@ -484,7 +487,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     await upsertDeliveryTarget(env, {
-      userId: session.user.id,
+      userId: workspaceUserId,
       watchlistId: watchlist.id,
       channel,
       targetValue,

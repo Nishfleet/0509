@@ -17,13 +17,13 @@ import { buildDigestInsightDepth } from "~/lib/insight-depth";
 export const meta = () => [{ title: "Digests | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { PLAN_LIMITS, getUserPlan } = await import("~/lib/plan.server");
   const { getDigest, listDeliveryAttempts, listDigests } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
-  const plan = await getUserPlan(env, session.user.id);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const plan = await getUserPlan(env, workspaceUserId);
 
   if (!PLAN_LIMITS[plan].digests) {
     return {
@@ -33,16 +33,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
-  const digests = await listDigests(env, session.user.id);
+  const digests = await listDigests(env, workspaceUserId);
   const recentDeliveryAttempts = await listDeliveryAttempts(env, {
-    userId: session.user.id,
+    userId: workspaceUserId,
     limit: 80,
   });
   const url = new URL(request.url);
   const selectedDigestId = url.searchParams.get("digest") ?? digests[0]?.id ?? null;
   const selectedDigestCandidate = selectedDigestId ? await getDigest(env, selectedDigestId) : null;
   const selectedDigest =
-    selectedDigestCandidate?.userId === session.user.id ? selectedDigestCandidate : null;
+    selectedDigestCandidate?.userId === workspaceUserId ? selectedDigestCandidate : null;
 
   return {
     digests,
@@ -65,13 +65,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { PLAN_LIMITS, getUserPlan } = await import("~/lib/plan.server");
   const { createShareLink, getDigest } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
-  const plan = await getUserPlan(env, session.user.id);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const plan = await getUserPlan(env, workspaceUserId);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
@@ -87,14 +87,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const digestId = String(formData.get("digestId") ?? "");
     const digest = await getDigest(env, digestId);
 
-    if (!digest || digest.userId !== session.user.id) {
+    if (!digest || digest.userId !== workspaceUserId) {
       return {
         ok: false,
         message: "Digest not found.",
       };
     }
 
-    const share = await createShareLink(env, session, {
+    const share = await createShareLink(
+      env,
+      { ...session, user: { ...session.user, id: workspaceUserId } },
+      {
       resourceType: "digest",
       resourceId: digest.id,
       isSnapshot: true,

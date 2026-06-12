@@ -19,7 +19,7 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 export const meta = () => [{ title: "Dashboard | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
@@ -37,17 +37,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     "~/lib/data.server"
   );
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const checkoutReturn = new URL(request.url).searchParams.get("checkout") === "dodo";
   const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection, proofUsage, billingInfo] = await Promise.all([
-    listSavedQueries(env, session.user.id),
-    listCollections(env, session.user.id),
-    listWatchlists(env, session.user.id),
-    listDigests(env, session.user.id),
+    listSavedQueries(env, workspaceUserId),
+    listCollections(env, workspaceUserId),
+    listWatchlists(env, workspaceUserId),
+    listDigests(env, workspaceUserId),
     resolveCommercialAdSourceStatus(env),
-    getCustomerMetaConnection(env, session.user.id),
-    getProofUsageSummary(env, session.user.id),
-    getUserPlanBillingInfo(env, session.user.id),
+    getCustomerMetaConnection(env, workspaceUserId),
+    getProofUsageSummary(env, workspaceUserId),
+    getUserPlanBillingInfo(env, workspaceUserId),
   ]);
   const plan = billingInfo.plan;
   const hasPaymentIssue =
@@ -62,9 +62,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 8),
     ),
-    listRecentWorkspaceProofCaptures(env, session.user.id, 8),
-    listDeliveryTargets(env, session.user.id, { limit: 12 }),
-    getSuccessfulRunStatsForUserBetween(env, session.user.id, overnightSince, new Date().toISOString()),
+    listRecentWorkspaceProofCaptures(env, workspaceUserId, 8),
+    listDeliveryTargets(env, workspaceUserId, { limit: 12 }),
+    getSuccessfulRunStatsForUserBetween(env, workspaceUserId, overnightSince, new Date().toISOString()),
   ]);
 
   return {
@@ -92,18 +92,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const { createWatchlist, getSavedQuery, touchSavedQueryRun } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "run-saved-query") {
     const savedQueryId = String(formData.get("savedQueryId") ?? "");
-    const savedQuery = await getSavedQuery(env, savedQueryId, session.user.id);
+    const savedQuery = await getSavedQuery(env, savedQueryId, workspaceUserId);
 
     if (!savedQuery) {
       return {
@@ -118,7 +118,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "track-saved-query") {
     const savedQueryId = String(formData.get("savedQueryId") ?? "");
-    const savedQuery = await getSavedQuery(env, savedQueryId, session.user.id);
+    const savedQuery = await getSavedQuery(env, savedQueryId, workspaceUserId);
 
     if (!savedQuery) {
       return {
@@ -127,7 +127,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    const watchlistLimit = await checkPlanLimit(env, session.user.id, "watchlists");
+    const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
     if (!watchlistLimit.allowed) {
       return {
         ok: false,
@@ -138,7 +138,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    const watchlist = await createWatchlist(env, session.user.id, {
+    const watchlist = await createWatchlist(env, workspaceUserId, {
       name: `${savedQuery.name} watch`,
       targetType: "saved_query",
       targetId: savedQuery.id,

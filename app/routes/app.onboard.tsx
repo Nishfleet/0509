@@ -21,19 +21,25 @@ export const meta: MetaFunction = () => [
 ];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit, getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
+
+  if (isMember) {
+    const { completeUserOnboarding } = await import("~/lib/data.server");
+    await completeUserOnboarding(env, session.user.id);
+    throw redirect("/app");
+  }
 
   if (session.user.onboardedAt) {
     throw redirect("/app");
   }
 
   const [plan, watchlistLimit] = await Promise.all([
-    getUserPlan(env, session.user.id),
-    checkPlanLimit(env, session.user.id, "watchlists"),
+    getUserPlan(env, workspaceUserId),
+    checkPlanLimit(env, workspaceUserId, "watchlists"),
   ]);
 
   return {
@@ -48,12 +54,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const { completeUserOnboarding, createWatchlist } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
+
+  if (isMember) {
+    const { completeUserOnboarding } = await import("~/lib/data.server");
+    await completeUserOnboarding(env, session.user.id);
+    throw redirect("/app");
+  }
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   const competitorInput = String(formData.get("website") ?? formData.get("query") ?? "").trim();
@@ -68,7 +80,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    const watchlistLimit = await checkPlanLimit(env, session.user.id, "watchlists");
+    const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
     if (!watchlistLimit.allowed) {
       const isZeroLimit = watchlistLimit.limit === 0;
 
@@ -101,7 +113,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           }),
         )
       : fingerprintSavedQuery(normalizedQuery);
-    const watchlist = await createWatchlist(env, session.user.id, {
+    const watchlist = await createWatchlist(env, workspaceUserId, {
       name: `${query} watch`,
       targetType: "advertiser",
       targetId: competitor.targetId || query,

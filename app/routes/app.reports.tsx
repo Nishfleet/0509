@@ -14,12 +14,12 @@ import { parseReportId } from "~/lib/report";
 export const meta = () => [{ title: "Reports | Five to Nine" }];
 
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { getWorkspaceBranding } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
-  const branding = await getWorkspaceBranding(env, session.user.id);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const branding = await getWorkspaceBranding(env, workspaceUserId);
 
   return {
     report: await loadReport({
@@ -32,11 +32,11 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, params, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { createShareLink } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const report = await loadReport({
     context,
     request,
@@ -46,7 +46,10 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "share-report") {
-    const share = await createShareLink(env, session, {
+    const share = await createShareLink(
+      env,
+      { ...session, user: { ...session.user, id: workspaceUserId } },
+      {
       resourceType: "report",
       resourceId: report.reportId,
       isSnapshot: true,
@@ -134,7 +137,7 @@ async function loadReport(input: {
   request: Request;
   reportId: string | undefined;
 }) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCollection,
@@ -154,10 +157,10 @@ async function loadReport(input: {
   }
 
   const env = getEnv(input.context);
-  const session = await requireSession(env, input.request);
+  const { workspaceUserId } = await requireWorkspaceSession(env, input.request);
 
   if (parsedReport.resourceType === "collection") {
-    const collection = await getCollection(env, parsedReport.resourceId, session.user.id);
+    const collection = await getCollection(env, parsedReport.resourceId, workspaceUserId);
     if (!collection) {
       throw new Response("Not found", { status: 404 });
     }
@@ -170,7 +173,7 @@ async function loadReport(input: {
     });
   }
 
-  const watchlist = await getWatchlist(env, parsedReport.resourceId, session.user.id);
+  const watchlist = await getWatchlist(env, parsedReport.resourceId, workspaceUserId);
   if (!watchlist) {
     throw new Response("Not found", { status: 404 });
   }

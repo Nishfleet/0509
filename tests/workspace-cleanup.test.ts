@@ -161,6 +161,12 @@ describe("watchlist pause/resume action", () => {
     const setWatchlistActiveMock = vi.fn();
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       setWatchlistActive: setWatchlistActiveMock,
@@ -187,6 +193,12 @@ describe("watchlist pause/resume action", () => {
     const sendDeliveryTestEmail = vi.fn();
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getDeliveryTargetById: vi.fn().mockResolvedValue({

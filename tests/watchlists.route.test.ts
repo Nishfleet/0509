@@ -305,6 +305,12 @@ describe("watchlists route loader", () => {
   it("returns bounded proof, delivery, and candidate state for the selected watchlist", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
@@ -368,6 +374,12 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -413,6 +425,12 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -463,6 +481,12 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -503,6 +527,12 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue({
@@ -542,6 +572,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -604,6 +640,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -656,6 +698,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -697,6 +745,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue({
@@ -759,6 +813,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(savedQueryWatchlist),
@@ -804,6 +864,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -836,6 +902,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -880,6 +952,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),

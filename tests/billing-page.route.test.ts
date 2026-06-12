@@ -38,6 +38,12 @@ function mockBillingLoaderDependencies(input: {
 }) {
   vi.doMock("~/lib/auth.server", () => ({
     requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
   }));
   vi.doMock("~/lib/context.server", () => ({
     getEnv: vi.fn(() => ({})),
@@ -194,6 +200,12 @@ describe("Dodo checkout double-subscription guard", () => {
     });
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
@@ -295,6 +307,12 @@ describe("Dodo customer portal route", () => {
   it("303s into a fresh portal session for a linked customer", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
@@ -331,6 +349,12 @@ describe("Dodo customer portal route", () => {
   it("falls back to the billing page when no Dodo customer is linked", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),

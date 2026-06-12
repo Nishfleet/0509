@@ -15,14 +15,14 @@ const RESOURCE_LABELS: Record<string, string> = {
 export const meta = () => [{ title: "Shared links | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { listActiveShareLinks } = await import("~/lib/data.server");
   const { appOrigin } = await import("~/lib/env.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const origin = appOrigin(env, request);
-  const shares = await listActiveShareLinks(env, session.user.id);
+  const shares = await listActiveShareLinks(env, workspaceUserId);
 
   return {
     shares: shares.map((share) => ({
@@ -37,17 +37,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { revokeShareLink } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "revoke-share") {
     const shareLinkId = String(formData.get("shareLinkId") ?? "");
-    const revoked = await revokeShareLink(env, session.user.id, shareLinkId);
+    const revoked = await revokeShareLink(env, workspaceUserId, shareLinkId);
 
     return revoked
       ? { ok: true, message: "Share link revoked. The URL stops working immediately." }

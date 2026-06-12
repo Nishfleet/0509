@@ -54,6 +54,12 @@ describe("ops route", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getOperatorSnapshot,
@@ -113,6 +119,12 @@ describe("ops route", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getOperatorSnapshot,
@@ -136,6 +148,12 @@ describe("ops route", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getOperatorSnapshot,

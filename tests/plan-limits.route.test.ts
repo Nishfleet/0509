@@ -42,6 +42,19 @@ describe("search watchlist limit", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({
@@ -91,6 +104,19 @@ describe("collection limit", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({
@@ -142,6 +168,19 @@ describe("collection limit", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn(),
@@ -213,6 +252,19 @@ describe("digest access", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("free"),
@@ -249,6 +301,19 @@ describe("digest access", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("scout"),
@@ -290,6 +355,19 @@ describe("dashboard watchlist limit", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({

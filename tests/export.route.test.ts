@@ -216,6 +216,12 @@ function setupMocks(input: { collectionItems?: CollectionItemRecord[] } = {}) {
   const env = { DB: {} };
   vi.doMock("~/lib/auth.server", () => ({
     requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
   }));
   vi.doMock("~/lib/context.server", () => ({
     getEnv: vi.fn(() => env),

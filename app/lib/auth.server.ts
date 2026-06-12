@@ -162,6 +162,32 @@ export async function getOptionalSession(
   return session as AppSession | null;
 }
 
+export interface WorkspaceSession {
+  session: Awaited<ReturnType<typeof requireSession>>;
+  workspaceUserId: string;
+  isMember: boolean;
+  ownerName: string | null;
+}
+
+// Data routes call this instead of requireSession: members of an Agency
+// workspace operate on the owner's data; everyone else gets their own id.
+// Billing and account routes must keep using requireSession directly.
+export async function requireWorkspaceSession(
+  env: AppEnv,
+  request: Request,
+): Promise<WorkspaceSession> {
+  const session = await requireSession(env, request);
+  const { resolveWorkspace } = await import("~/lib/workspace.server");
+  const workspace = await resolveWorkspace(env, session.user.id);
+
+  return {
+    session,
+    workspaceUserId: workspace.workspaceUserId,
+    isMember: workspace.isMember,
+    ownerName: workspace.ownerName,
+  };
+}
+
 export async function requireSession(env: AppEnv, request: Request) {
   const session = await getOptionalSession(env, request);
 

@@ -79,6 +79,13 @@ describe("search loader", () => {
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession,
     }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
     }));
@@ -120,6 +127,13 @@ describe("search loader", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
@@ -187,6 +201,13 @@ describe("search loader", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
@@ -268,6 +289,13 @@ describe("search loader", () => {
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(appSession),
     }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
     }));
@@ -326,6 +354,13 @@ describe("search loader", () => {
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(null),
     }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
     }));
@@ -368,6 +403,13 @@ describe("search loader", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
@@ -427,6 +469,13 @@ describe("search loader", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
@@ -509,6 +558,13 @@ describe("search loader", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),
@@ -623,7 +679,14 @@ describe("search actions", () => {
           },
         }),
       }));
-      vi.doMock("~/lib/context.server", () => ({
+      vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
         getEnv: vi.fn(() => env),
       }));
       vi.doMock("~/lib/plan.server", () => ({
@@ -689,6 +752,13 @@ describe("search actions", () => {
           expiresAt: "2026-04-03T00:00:00.000Z",
         },
       }),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => env),

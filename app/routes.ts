@@ -29,6 +29,7 @@ export default [
   route("api/launch-readiness", "routes/api.launch-readiness.ts"),
   route("api/launch-readiness/canary", "routes/api.launch-readiness.canary.ts"),
   route("app/onboard", "routes/app.onboard.tsx"),
+  route("team/accept", "routes/team.accept.tsx"),
   route("share/:token", "routes/share.$token.tsx"),
   route("export/:resourceType/:resourceId", "routes/export.$resourceType.$resourceId.tsx"),
   route("app", "routes/app-layout.tsx", [
@@ -39,6 +40,7 @@ export default [
     route("shares", "routes/app.shares.tsx"),
     route("billing", "routes/app.billing.tsx"),
     route("account", "routes/app.account.tsx"),
+    route("team", "routes/app.team.tsx"),
     route("sources", "routes/app.sources.tsx"),
     route("ops", "routes/app.ops.tsx"),
     route("reports/:id", "routes/app.reports.tsx"),

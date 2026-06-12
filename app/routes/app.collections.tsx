@@ -30,16 +30,16 @@ const externalProofChannels = [
 export const meta = () => [{ title: "Boards | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { getCollection, listCollectionItems, listCollections } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
-  const collections = await listCollections(env, session.user.id);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const collections = await listCollections(env, workspaceUserId);
   const url = new URL(request.url);
   const selectedCollectionId = url.searchParams.get("collection") ?? collections[0]?.id ?? null;
   const selectedCollection = selectedCollectionId
-    ? await getCollection(env, selectedCollectionId, session.user.id)
+    ? await getCollection(env, selectedCollectionId, workspaceUserId)
     : null;
   const items = selectedCollection ? await listCollectionItems(env, selectedCollection.id) : [];
 
@@ -51,7 +51,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const {
@@ -62,7 +62,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     updateCollectionItem,
   } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
@@ -74,7 +74,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Board name is required." };
     }
 
-    const collectionLimit = await checkPlanLimit(env, session.user.id, "collections");
+    const collectionLimit = await checkPlanLimit(env, workspaceUserId, "collections");
     if (!collectionLimit.allowed) {
       return {
         ok: false,
@@ -85,7 +85,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    const collection = await createCollection(env, session.user.id, {
+    const collection = await createCollection(env, workspaceUserId, {
       name,
       description,
     });
@@ -104,7 +104,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    await updateCollectionItem(env, session.user.id, itemId, {
+    await updateCollectionItem(env, workspaceUserId, itemId, {
       note: note || null,
       tags,
     });
@@ -133,7 +133,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    const ad = await addExternalProofToCollection(env, session.user.id, collectionId, {
+    const ad = await addExternalProofToCollection(env, workspaceUserId, collectionId, {
       advertiser,
       proofUrl,
       channel,
@@ -157,7 +157,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "delete-collection") {
     const { deleteCollection } = await import("~/lib/data.server");
     const collectionId = String(formData.get("collectionId") ?? "");
-    const deleted = await deleteCollection(env, session.user.id, collectionId);
+    const deleted = await deleteCollection(env, workspaceUserId, collectionId);
 
     return deleted
       ? { ok: true, message: "Board deleted. The plan slot is free again." }
@@ -167,7 +167,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "remove-item") {
     const { deleteCollectionItem } = await import("~/lib/data.server");
     const itemId = String(formData.get("itemId") ?? "");
-    const removed = await deleteCollectionItem(env, session.user.id, itemId);
+    const removed = await deleteCollectionItem(env, workspaceUserId, itemId);
 
     return removed
       ? { ok: true, message: "Removed from the board." }
@@ -176,11 +176,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "share-collection") {
     const collectionId = String(formData.get("collectionId") ?? "");
-    const collection = await getCollection(env, collectionId, session.user.id);
+    const collection = await getCollection(env, collectionId, workspaceUserId);
     if (!collection) {
       return { ok: false, message: "Board not found." };
     }
-    const share = await createShareLink(env, session, {
+    const share = await createShareLink(
+      env,
+      { ...session, user: { ...session.user, id: workspaceUserId } },
+      {
       resourceType: "collection",
       resourceId: collection.id,
       isSnapshot: false,

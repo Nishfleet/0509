@@ -54,6 +54,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { listCollections } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
+  const workspaceUserId = session
+    ? (await (await import("~/lib/workspace.server")).resolveWorkspace(env, session.user.id)).workspaceUserId
+    : null;
   const url = new URL(request.url);
   const visitorCountry = defaultCountryForVisitor(
     (context.cloudflare as { country?: string | null } | undefined)?.country ??
@@ -100,7 +103,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
   }
 
-  const collections = session ? await listCollections(env, session.user.id) : [];
+  const collections = session ? await listCollections(env, workspaceUserId!) : [];
 
   if (!parsed.filters.query) {
     return {
@@ -118,7 +121,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
   const customerMetaAdLibraryToken = session
-    ? await (await import("~/lib/customer-meta.server")).getCustomerMetaAdLibraryToken(env, session.user.id)
+    ? await (await import("~/lib/customer-meta.server")).getCustomerMetaAdLibraryToken(env, workspaceUserId!)
     : null;
   const result = await searchAdsViaSourceResolver(
     env,
@@ -159,6 +162,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { addAdToCollection, createSavedQuery, createWatchlist } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
+  const workspaceUserId = (
+    await (await import("~/lib/workspace.server")).resolveWorkspace(env, session.user.id)
+  ).workspaceUserId;
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   const competitorWebsite = normalizeCompetitorWebsiteInput(
@@ -195,7 +201,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Give the saved search a name first." };
     }
 
-    await createSavedQuery(env, session.user.id, {
+    await createSavedQuery(env, workspaceUserId!, {
       name,
       mode: normalizedQuery.mode,
       filters: normalizedQuery.filters,
@@ -208,7 +214,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const inferredName = (competitorWebsite.displayName ?? normalizedQuery.filters.query) || "Competitor";
     const queryName = String(formData.get("name") ?? "").trim() || `${inferredName} watch`;
     const shouldUseAdvertiserMode = canCreateAdvertiserWatchlist(normalizedQuery);
-    const watchlistLimit = await checkPlanLimit(env, session.user.id, "watchlists");
+    const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
 
     if (!watchlistLimit.allowed) {
       return {
@@ -222,7 +228,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     let watchlist: Awaited<ReturnType<typeof createWatchlist>> = null;
     if (shouldUseAdvertiserMode) {
-      watchlist = await createWatchlist(env, session.user.id, {
+      watchlist = await createWatchlist(env, workspaceUserId!, {
         name: queryName,
         targetType: "advertiser",
         targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
@@ -231,7 +237,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetCountry: normalizedQuery.filters.country,
       });
     } else {
-      const savedQuery = await createSavedQuery(env, session.user.id, {
+      const savedQuery = await createSavedQuery(env, workspaceUserId!, {
         name: `${queryName} source`,
         mode: normalizedQuery.mode,
         filters: normalizedQuery.filters,
@@ -241,7 +247,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         return { ok: false, message: "Could not prepare this competitor for tracking." };
       }
 
-      watchlist = await createWatchlist(env, session.user.id, {
+      watchlist = await createWatchlist(env, workspaceUserId!, {
         name: queryName,
         targetType: "saved_query",
         targetId: savedQuery.id,
@@ -276,7 +282,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const ad = JSON.parse(adJson) as AdRecord;
     await addAdToCollection(
       env,
-      session.user.id,
+      workspaceUserId!,
       collectionId,
       ad,
       String(formData.get("note") ?? "").trim() || null,

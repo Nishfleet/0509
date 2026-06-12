@@ -40,6 +40,18 @@ afterEach(() => {
   vi.resetModules();
 });
 
+function authModuleFromSession(session: unknown) {
+  return {
+    requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn(async () => ({
+      session,
+      workspaceUserId: (session as { user: { id: string } }).user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+  };
+}
+
 describe("auth signup loader", () => {
   it("defaults new signups to the onboarding flow", async () => {
     vi.doMock("~/lib/auth.server", () => ({
@@ -63,6 +75,14 @@ describe("auth signup loader", () => {
 describe("onboarding route", () => {
   it("redirects unauthenticated users to login", async () => {
     vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockImplementation(() => {
+        throw new Response(null, {
+          headers: {
+            Location: "/auth/login?redirectTo=%2Fapp%2Fonboard",
+          },
+          status: 302,
+        });
+      }),
       requireSession: vi.fn().mockImplementation(() => {
         throw new Response(null, {
           headers: {
@@ -86,8 +106,7 @@ describe("onboarding route", () => {
   });
 
   it("redirects completed users away from onboarding", async () => {
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue({
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
           id: "user-1",
           email: "owner@example.com",
@@ -99,8 +118,7 @@ describe("onboarding route", () => {
           userId: "user-1",
           expiresAt: "2026-04-03T00:00:00.000Z",
         },
-      }),
-    }));
+      }));
 
     const { loader } = await import("~/routes/app.onboard");
 
@@ -115,8 +133,7 @@ describe("onboarding route", () => {
   });
 
   it("redirects unfinished users from the workspace to onboarding", async () => {
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue({
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
           id: "user-1",
           email: "owner@example.com",
@@ -128,8 +145,7 @@ describe("onboarding route", () => {
           userId: "user-1",
           expiresAt: "2026-04-03T00:00:00.000Z",
         },
-      }),
-    }));
+      }));
 
     const { loader } = await import("~/routes/app-layout");
 
@@ -149,8 +165,7 @@ describe("onboarding route", () => {
       id: "watch-1",
     });
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue({
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
           id: "user-1",
           email: "owner@example.com",
@@ -162,8 +177,7 @@ describe("onboarding route", () => {
           userId: "user-1",
           expiresAt: "2026-04-03T00:00:00.000Z",
         },
-      }),
-    }));
+      }));
     vi.doMock("~/lib/data.server", () => ({
       completeUserOnboarding,
       createSavedQuery: vi.fn(),
@@ -211,8 +225,7 @@ describe("onboarding route", () => {
     const completeUserOnboarding = vi.fn();
     const createWatchlist = vi.fn();
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue({
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
           id: "user-1",
           email: "owner@example.com",
@@ -224,8 +237,7 @@ describe("onboarding route", () => {
           userId: "user-1",
           expiresAt: "2026-04-03T00:00:00.000Z",
         },
-      }),
-    }));
+      }));
     vi.doMock("~/lib/data.server", () => ({
       completeUserOnboarding,
       createWatchlist,
@@ -266,8 +278,7 @@ describe("onboarding route", () => {
   it("marks the user onboarded when they skip setup", async () => {
     const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue({
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
           id: "user-1",
           email: "owner@example.com",
@@ -279,8 +290,7 @@ describe("onboarding route", () => {
           userId: "user-1",
           expiresAt: "2026-04-03T00:00:00.000Z",
         },
-      }),
-    }));
+      }));
     vi.doMock("~/lib/data.server", () => ({
       completeUserOnboarding,
       createSavedQuery: vi.fn(),
