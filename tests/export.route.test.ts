@@ -361,7 +361,7 @@ describe("authenticated export route", () => {
     expect(body).toContain("_Landing-page history_");
     expect(body).toContain("Priority: Medium priority (84/100)");
     expect(body).toContain("Next move: Next review:");
-    expect(body).toContain("Evidence: proof capture");
+    expect(body).toContain("Evidence: Verified from a page snapshot");
   });
 
   it("returns digest JSON with priority and proof trail intelligence", async () => {

@@ -1735,6 +1735,12 @@ function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttempt
   };
 }
 
+function watchlistUrlFor(item: DigestDeliveryItem | undefined) {
+  return item?.watchlistId
+    ? `https://0509.in/app/watchlists?watchlist=${encodeURIComponent(item.watchlistId)}`
+    : null;
+}
+
 function renderDigestHtml(input: {
   name: string;
   periodStart: string;
@@ -1784,7 +1790,11 @@ function renderDigestHtml(input: {
         .map(
           ([watchlistName, items]) => `
             <section style="margin-bottom: 24px; padding: 18px; border: 1px solid #d7dce5; border-radius: 18px;">
-              <h2 style="margin: 0 0 12px; font-size: 18px;">${escapeHtml(watchlistName)}</h2>
+              <h2 style="margin: 0 0 12px; font-size: 18px;">${
+                watchlistUrlFor(items[0])
+                  ? `<a href="${watchlistUrlFor(items[0])}" style="color: #0b1220; text-decoration: none;">${escapeHtml(watchlistName)}</a>`
+                  : escapeHtml(watchlistName)
+              }</h2>
               <ul style="margin: 0; padding-left: 18px;">
                 ${items
                   .map(
@@ -1907,6 +1917,36 @@ function buildInstantAlertBatches(input: {
   return [...batches.values()];
 }
 
+function renderEventDiffHtml(event: WatchEventRecord) {
+  const metadata = (event.metadata ?? {}) as Record<string, unknown>;
+  const from = typeof metadata.from === "string" ? metadata.from.trim() : "";
+  const to = typeof metadata.to === "string" ? metadata.to.trim() : "";
+  if (!from || !to) {
+    return "";
+  }
+
+  // The one fact the customer actually wants: what it said before, and now.
+  return `
+    <table style="margin: 0 0 16px; border-collapse: collapse; font-size: 14px;">
+      <tr>
+        <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Before</td>
+        <td style="padding: 4px 0; color: #475467;">${escapeHtml(from)}</td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Now</td>
+        <td style="padding: 4px 0; color: #0b1220;"><strong>${escapeHtml(to)}</strong></td>
+      </tr>
+    </table>
+  `;
+}
+
+function renderEventDiffText(event: WatchEventRecord) {
+  const metadata = (event.metadata ?? {}) as Record<string, unknown>;
+  const from = typeof metadata.from === "string" ? metadata.from.trim() : "";
+  const to = typeof metadata.to === "string" ? metadata.to.trim() : "";
+  return from && to ? ` — was "${from}", now "${to}"` : "";
+}
+
 function buildInstantAlertContent(
   watchlist: Pick<WatchlistRecord, "id" | "name">,
   events: WatchEventRecord[],
@@ -1935,7 +1975,8 @@ function buildInstantAlertContent(
           <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
           <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
           <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
-          ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}">View watchlist</a></p>` : ""}
+          ${renderEventDiffHtml(primaryEvent)}
+          ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}">See the evidence</a></p>` : ""}
         </div>
       `,
     };
@@ -1960,7 +2001,7 @@ function buildInstantAlertContent(
               (event) => `
                 <li style="margin-bottom: 10px;">
                   <strong>${escapeHtml(event.title)}</strong><br />
-                  <span style="color: #475467;">${escapeHtml(event.summary)}</span>
+                  <span style="color: #475467;">${escapeHtml(event.summary)}${escapeHtml(renderEventDiffText(event))}</span>
                 </li>
               `,
             )
@@ -1978,7 +2019,9 @@ function renderInstantSlackText(content: InstantAlertContent, events: WatchEvent
   ];
 
   for (const event of events.slice(0, 6)) {
-    lines.push(`• ${escapeSlackText(event.title)}: ${escapeSlackText(event.summary)}`);
+    lines.push(
+      `• ${escapeSlackText(event.title)}: ${escapeSlackText(event.summary)}${escapeSlackText(renderEventDiffText(event))}`,
+    );
   }
 
   if (events.length > 6) {
