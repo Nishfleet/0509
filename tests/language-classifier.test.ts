@@ -37,6 +37,88 @@ describe("classifyLanguage", () => {
     expect(result.confidence).toBeGreaterThan(0.65);
   });
 
+  it("classifies Spanish ad copy as Spanish", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Solo hoy: envío gratis",
+      body: "Compra ahora y consigue un descuento en toda la tienda",
+    });
+
+    expect(result.label).toBe("Spanish");
+    expect(result.metadata.decisionReason).toBe("latin_language_cues");
+  });
+
+  it("classifies Portuguese ad copy as Portuguese", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Frete grátis só hoje",
+      body: "Compre agora com desconto e não perca a oferta da loja",
+    });
+
+    expect(result.label).toBe("Portuguese");
+  });
+
+  it("classifies French ad copy as French", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Livraison gratuite pour vous",
+      body: "Achetez maintenant et profitez de votre remise chez nous",
+    });
+
+    expect(result.label).toBe("French");
+  });
+
+  it("classifies German ad copy as German", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Jetzt kaufen und sparen",
+      body: "Kostenloser Versand heute — sichern Sie sich Ihre Rabatt-Angebot mit mehr Auswahl",
+    });
+
+    expect(result.label).toBe("German");
+  });
+
+  it("classifies Turkish ad copy as Turkish", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Bugün için büyük indirim",
+      body: "Şimdi satın alın, ücretsiz kargo fırsatını kaçırmayın",
+    });
+
+    expect(result.label).toBe("Turkish");
+  });
+
+  it("classifies Swahili ad copy as Swahili", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Punguzo kubwa leo",
+      body: "Nunua sasa kwa bei nzuri na pata ofa zaidi kila siku dukani",
+    });
+
+    expect(result.label).toBe("Swahili");
+  });
+
+  it("classifies Indonesian ad copy as Indonesian", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Diskon besar hari ini",
+      body: "Beli sekarang dengan gratis ongkir untuk semua promo belanja yang baru",
+    });
+
+    expect(result.label).toBe("Indonesian");
+  });
+
+  it("classifies Vietnamese ad copy as Vietnamese", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Giảm giá hôm nay",
+      body: "Mua ngay để nhận miễn phí vận chuyển cho mọi đơn hàng mới",
+    });
+
+    expect(result.label).toBe("Vietnamese");
+  });
+
+  it("keeps plain English copy as English despite shared words", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Get free shipping this weekend",
+      body: "Shop the new collection today and save more on every order",
+    });
+
+    expect(result.label).toBe("English");
+  });
+
   it("uses Global for Arabic script copy", () => {
     const result = classifyLanguage({
       previewHeadline: "عرض اليوم فقط",
