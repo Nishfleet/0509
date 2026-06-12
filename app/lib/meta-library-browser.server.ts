@@ -240,7 +240,9 @@ async function searchMetaLibraryViaSessions(
             adSnapshotUrl: new URL(href, location.origin).toString(),
             landingPageUrl: externalLink,
             platforms,
-            active: !/inactive/i.test(text),
+            // Status is a standalone "Inactive" line on the card; matching the
+            // word anywhere flags ads whose creative copy merely contains it.
+            active: !text.split("\n").some((line) => /^inactive$/i.test(line.trim())),
           };
         })
         .filter(Boolean);
@@ -783,7 +785,7 @@ function buildQuickActionExtractionScript() {
         adSnapshotUrl: new URL(href, location.origin).toString(),
         landingPageUrl: externalLink,
         platforms,
-        active: !/inactive/i.test(text),
+        active: !text.split("\\n").some((line) => /^inactive$/i.test(line.trim())),
       };
     })
     .filter(Boolean);
@@ -944,7 +946,7 @@ function extractQuickActionPayloadFromScrape(
       adSnapshotUrl: absolutizeMetaAdUrl(href),
       landingPageUrl: extractExternalLink(html),
       platforms: inferPlatforms(text),
-      active: !/inactive/i.test(text),
+      active: !hasStandaloneInactiveLine(stripHtmlPreservingLines(html)),
     });
   }
 
@@ -1003,7 +1005,7 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
       adSnapshotUrl: absolutizeMetaAdUrl(href),
       landingPageUrl,
       platforms: inferPlatforms(body),
-      active: !/inactive/i.test(body),
+      active: !hasStandaloneInactiveLine(stripHtmlPreservingLines(contextHtml)),
     });
   }
 
@@ -1182,6 +1184,13 @@ function stripHtml(value: string) {
   );
 }
 
+// The Ad Library shows ad status as its own "Active"/"Inactive" line at the
+// top of each card. Only a standalone line counts: matching the word anywhere
+// marked ads inactive whenever their creative copy contained "inactive".
+function hasStandaloneInactiveLine(text: string) {
+  return text.split("\n").some((line) => /^inactive$/i.test(line.trim()));
+}
+
 function stripHtmlPreservingLines(value: string) {
   return decodeHtmlEntity(
     value
@@ -1265,7 +1274,11 @@ function normalizeRetryAfterSeconds(value: number | null | undefined) {
 }
 
 function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQuery): AdRecord {
-  const advertiser = card.advertiser || query.filters.query || "Unknown advertiser";
+  // Never back-fill the advertiser with the customer's search term or the CTA
+  // with a guessed default: presenting extraction gaps as scraped facts can
+  // attribute ads to brands that never ran them. Empty means "unconfirmed"
+  // and the display layer labels it that way.
+  const advertiser = card.advertiser || "";
   const body = card.body || advertiser;
   const previewHeadline = card.previewHeadline || advertiser;
   const previewSubhead = card.previewSubhead || body.slice(0, 120);
@@ -1278,7 +1291,7 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
     previewSubhead,
     hook: previewHeadline,
     offer: body,
-    cta: card.cta || "Learn more",
+    cta: card.cta || "",
     format: "image",
     languageLabel: inferLanguageLabel(`${previewHeadline} ${body}`),
     destinationType: inferDestinationType(card.landingPageUrl),

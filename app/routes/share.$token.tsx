@@ -4,6 +4,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { ReportView } from "~/components/report-view";
 import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
+import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { isReportDocument } from "~/lib/report";
 
 export async function loader({ context, params }: LoaderFunctionArgs) {
@@ -154,7 +155,7 @@ export default function ShareRoute() {
             <div className="f9-work-list">
               {data.items.map((item) => (
                 <div className="f9-work-row" key={item.id}>
-                  <h3>{item.ad.advertiser}</h3>
+                  <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
                   <p>{item.ad.hook}</p>
                   <p className="f9-muted-copy">{item.tags.join(", ") || "No tags"}</p>
                 </div>
