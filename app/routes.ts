@@ -29,6 +29,7 @@ export default [
   route("api/launch-readiness", "routes/api.launch-readiness.ts"),
   route("api/launch-readiness/canary", "routes/api.launch-readiness.canary.ts"),
   route("app/onboard", "routes/app.onboard.tsx"),
+  route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
   route("team/accept", "routes/team.accept.tsx"),
   route("share/:token", "routes/share.$token.tsx"),
   route("export/:resourceType/:resourceId", "routes/export.$resourceType.$resourceId.tsx"),

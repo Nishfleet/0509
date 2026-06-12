@@ -561,7 +561,8 @@ export default function MarketingRoute() {
         </div>
 
         <p className="ld-pricing-note">
-          Coming from MagicBrief or another tool that&rsquo;s winding down? Your boards and
+          Coming from MagicBrief or another tool that&rsquo;s winding down? See the{" "}
+          <Link to="/compare/magicbrief">migration guide</Link>. Your boards and
           watchlists set up in an afternoon — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>{" "}
           and we&rsquo;ll help you move.
         </p>
