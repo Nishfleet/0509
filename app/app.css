@@ -4542,7 +4542,7 @@ one signal-green accent.
   align-items: center;
 }
 
-.ld-hero-side @media (max-width: 1100px) {
+@media (max-width: 1100px) {
   .ld-hero-grid { grid-template-columns: 1fr; }
   .ld-hero-side {
     flex-direction: row;
