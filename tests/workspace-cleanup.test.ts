@@ -295,3 +295,85 @@ describe("customer-at-risk operator alert", () => {
     expect(quiet).toMatchObject({ sent: false, reason: "all_clear" });
   });
 });
+
+describe("account deletion billing guard", () => {
+  it("blocks deletion for any non-free plan and allows settled accounts", async () => {
+    const { assertAccountDeletable } = await import("~/lib/auth.server");
+
+    for (const plan of ["scout", "starter", "agency"]) {
+      expect(() => assertAccountDeletable({ plan, dodoStatus: "active" })).toThrow(
+        /subscription is still active/i,
+      );
+    }
+    expect(() =>
+      assertAccountDeletable({ plan: "starter", dodoStatus: "subscription.on_hold" }),
+    ).toThrow();
+    expect(() => assertAccountDeletable({ plan: "free", dodoStatus: null })).not.toThrow();
+    expect(() => assertAccountDeletable({ plan: "free", dodoStatus: "refunded" })).not.toThrow();
+    expect(() =>
+      assertAccountDeletable({ plan: "free", dodoStatus: "subscription.cancelled" }),
+    ).not.toThrow();
+  });
+});
+
+describe("operator alert FK attribution", () => {
+  function deliveryDataMock(userByEmail: string | null, oldest: string | null) {
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getOldestUserId: vi.fn().mockResolvedValue(oldest),
+      getUserIdByEmail: vi.fn().mockResolvedValue(userByEmail),
+      getDeliveryTargetById: vi.fn(),
+      getDeliveryTargetByProviderIdentifier: vi.fn(),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn(),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    return createDeliveryAttempt;
+  }
+
+  it("attributes the ledger row to a REAL user id, never a synthetic one", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_op_1" });
+    const createDeliveryAttempt = deliveryDataMock(null, "founder-user-id");
+
+    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+    const sent = await sendOperatorAlertEmail(
+      {
+        EMAIL: { send: emailSend },
+        EMAIL_FROM_EMAIL: "alerts@0509.in",
+        LAUNCH_CANARY_EMAIL: "me@inish.in",
+      } as never,
+      { subject: "test", lines: ["signal"] },
+    );
+
+    expect(sent).toBe(true);
+    const attempt = createDeliveryAttempt.mock.calls[0]?.[1];
+    expect(attempt.userId).toBe("founder-user-id");
+    expect(attempt.userId).not.toBe("operator");
+  });
+
+  it("still sends (without a ledger row) when no user exists, and honors a custom idempotency key", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_op_2" });
+    const createDeliveryAttempt = deliveryDataMock(null, null);
+
+    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+    const sent = await sendOperatorAlertEmail(
+      {
+        EMAIL: { send: emailSend },
+        EMAIL_FROM_EMAIL: "alerts@0509.in",
+        LAUNCH_CANARY_EMAIL: "me@inish.in",
+      } as never,
+      { subject: "test", lines: ["signal"], idempotencyKey: "operator-deletion:user-9" },
+    );
+
+    expect(sent).toBe(true);
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+  });
+});

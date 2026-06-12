@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { redirect } from "react-router";
 
 import { appOrigin, type AppEnv } from "~/lib/env.server";
@@ -80,6 +81,27 @@ export function createAuth(env: AppEnv, request: Request) {
       },
       deleteUser: {
         enabled: true,
+        beforeDelete: async (user: { id: string; email: string }) => {
+          const { getUserPlanBillingInfo } = await import("~/lib/data.server");
+          const billing = await getUserPlanBillingInfo(env, user.id);
+          assertAccountDeletable(billing);
+
+          // Free account, but a Dodo subscription was linked at some point —
+          // tell the operator so a dangling subscription can be double-checked
+          // in the Dodo dashboard before the linkage disappears with the row.
+          if (billing.dodoSubscriptionId) {
+            const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+            await sendOperatorAlertEmail(env, {
+              subject: "0509 account deleted — verify Dodo subscription is closed",
+              lines: [
+                `Account ${user.email} (${user.id}) was deleted.`,
+                `Linked Dodo subscription: ${billing.dodoSubscriptionId} (last status: ${billing.dodoStatus ?? "unknown"}).`,
+                "Confirm it is cancelled in the Dodo dashboard.",
+              ],
+              idempotencyKey: `operator-deletion:${user.id}`,
+            }).catch(() => {});
+          }
+        },
         sendDeleteAccountVerification: async ({ user, url }) => {
           const { sendAccountActionEmail } = await import("~/lib/delivery.server");
           await sendAccountActionEmail(env, {
@@ -134,4 +156,20 @@ export async function requireSession(env: AppEnv, request: Request) {
   }
 
   return session;
+}
+
+// A deleted account cannot cancel its own subscription, and deletion destroys
+// the row linking the user to their Dodo subscription — they would keep being
+// charged with no account and no way for us to find the subscription. Block
+// deletion until billing is settled.
+export function assertAccountDeletable(billing: {
+  plan: string;
+  dodoStatus: string | null;
+}) {
+  if (billing.plan !== "free") {
+    throw new APIError("BAD_REQUEST", {
+      message:
+        "Your subscription is still active. Cancel it first from Plan & billing (Open billing portal) — you keep access until the end of the period you've paid for, and can delete the account after that.",
+    });
+  }
 }
