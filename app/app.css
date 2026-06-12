@@ -4581,7 +4581,7 @@ one signal-green accent.
   width: 72%;
   box-shadow: 6px 6px 0 rgba(14, 13, 10, 0.12);
   opacity: 0;
-  animation: ld-develop 0.6s ease-out forwards, ld-floaty 7s ease-in-out 1.2s infinite alternate;
+  animation: ld-cycle-card 14s ease-in-out infinite;
 }
 
 .ld-shot-before {
@@ -4589,7 +4589,7 @@ one signal-green accent.
   left: 6%;
   --tilt: -5deg;
   z-index: 1;
-  animation-delay: 0.15s, 1.2s;
+  animation-delay: 0.15s;
 }
 
 .ld-shot-after {
@@ -4598,7 +4598,7 @@ one signal-green accent.
   --tilt: 2.5deg;
   z-index: 3;
   border-width: 2.5px;
-  animation-delay: 0.45s, 1.6s;
+  animation-delay: 0.45s;
 }
 
 .ld-shot-form {
@@ -4607,23 +4607,25 @@ one signal-green accent.
   --tilt: -2deg;
   z-index: 2;
   width: 66%;
-  animation-delay: 0.75s, 2s;
+  animation-delay: 0.75s;
 }
 
-@keyframes ld-develop {
-  from {
+@keyframes ld-cycle-card {
+  0% {
     opacity: 0;
     transform: rotate(var(--tilt)) translateY(18px);
   }
-  to {
+  4% {
     opacity: 1;
     transform: rotate(var(--tilt)) translateY(0);
   }
-}
-
-@keyframes ld-floaty {
-  from { transform: rotate(var(--tilt)) translateY(0); }
-  to { transform: rotate(var(--tilt)) translateY(-6px); }
+  45% { transform: rotate(var(--tilt)) translateY(-6px); }
+  80% { transform: rotate(var(--tilt)) translateY(0); }
+  90% { opacity: 1; }
+  95%, 100% {
+    opacity: 0;
+    transform: rotate(var(--tilt)) translateY(18px);
+  }
 }
 
 .ld-shot-bar {
@@ -4710,16 +4712,18 @@ one signal-green accent.
   font-weight: 600;
   z-index: 2;
   opacity: 0;
-  animation: ld-slap 0.3s ease-out forwards;
+  animation: ld-cycle-stamp 14s ease-out infinite;
 }
 
 .ld-shot-before .ld-stamp { top: -10px; right: 14px; transform: rotate(2deg); animation-delay: 0.6s; }
 .ld-shot-after .ld-stamp { bottom: -10px; right: 16px; transform: rotate(-2deg); animation-delay: 0.9s; }
 .ld-shot-form .ld-stamp { top: -10px; left: 14px; transform: rotate(-1.5deg); animation-delay: 1.2s; }
 
-@keyframes ld-slap {
-  from { opacity: 0; scale: 1.6; }
-  to { opacity: 1; scale: 1; }
+@keyframes ld-cycle-stamp {
+  0% { opacity: 0; scale: 1.6; }
+  2.5% { opacity: 1; scale: 1; }
+  90% { opacity: 1; scale: 1; }
+  95%, 100% { opacity: 0; scale: 1; }
 }
 
 .ld-stamp-red { border: 1.5px solid var(--ld-red); color: var(--ld-red); }
@@ -4739,7 +4743,7 @@ one signal-green accent.
   padding: 6px 12px;
   transform: rotate(3deg);
   opacity: 0;
-  animation: ld-slap 0.3s ease-out 1.05s forwards;
+  animation: ld-cycle-stamp 14s ease-out 1.05s infinite;
 }
 
 .ld-brief-strip {
