@@ -425,3 +425,68 @@ describe("Dodo webhook route", () => {
     );
   });
 });
+
+describe("scheduled cancellation safety", () => {
+  it("keeps the plan when subscription.cancelled is effective in the future", async () => {
+    const futureIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanRevocation: vi.fn(() => ({
+          eventType: "subscription.cancelled",
+          action: "revoke",
+          userId: "user-1",
+          customerEmail: "owner@example.com",
+          subscriptionId: "sub_123",
+          status: "cancelled",
+          revokedAt: futureIso,
+          effectiveAt: futureIso,
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-scheduled-cancel", { type: "subscription.cancelled" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, cancellationScheduled: true });
+    // the customer keeps what they paid for until period end
+    expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
+    expect(data.deactivateWatchlistsBeyondPlanLimit).not.toHaveBeenCalled();
+    expect(data.markDodoPlanPaymentIssue).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: "cancellation_scheduled" }),
+    );
+  });
+
+  it("revokes immediately when the cancellation is already effective", async () => {
+    const pastIso = "2026-06-01T00:00:00.000Z";
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanRevocation: vi.fn(() => ({
+          eventType: "subscription.cancelled",
+          action: "revoke",
+          userId: "user-1",
+          customerEmail: "owner@example.com",
+          subscriptionId: "sub_123",
+          status: "cancelled",
+          revokedAt: pastIso,
+          effectiveAt: pastIso,
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-immediate-cancel", { type: "subscription.cancelled" }),
+      params: {},
+    } as never);
+
+    expect(data.revokeDodoPlanAccess).toHaveBeenCalled();
+  });
+});

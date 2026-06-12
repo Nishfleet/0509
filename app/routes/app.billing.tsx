@@ -1,4 +1,4 @@
-import { Link, useLoaderData } from "react-router";
+import { Form, Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -12,7 +12,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { PLAN_LIMITS, checkPlanLimit, getProofUsageSummary } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const checkoutNotice = new URL(request.url).searchParams.get("checkout");
+  const url = new URL(request.url);
+  const checkoutNotice = url.searchParams.get("checkout");
+  const portalNotice = url.searchParams.get("portal");
 
   const { dailyProofCapForPlan } = await import("~/lib/monitoring.server");
   const [billing, proofUsage, watchlistUsage, collectionUsage] = await Promise.all([
@@ -31,6 +33,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     planLimits: PLAN_LIMITS[billing.plan],
     dailyProofCap: dailyProofCapForPlan(billing.plan, proofUsage.extraCredits),
     blockedCheckout: checkoutNotice === "already-subscribed",
+    portalUnavailable: portalNotice === "unavailable",
+    hasPortal: Boolean(billing.dodoCustomerId),
   };
 }
 
@@ -56,6 +60,15 @@ export default function BillingRoute() {
             would have started a second, overlapping subscription. To switch plans or change billing,
             email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email} and we'll handle it
             the same day.
+          </p>
+        </div>
+      ) : null}
+
+      {data.portalUnavailable ? (
+        <div className="f9-message is-error">
+          <p>
+            We couldn't open your billing portal just now. Email{" "}
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll handle the change directly.
           </p>
         </div>
       ) : null}
@@ -144,11 +157,27 @@ export default function BillingRoute() {
           </div>
         </div>
         <div className="f9-work-list is-compact">
+          {isPaid && data.hasPortal ? (
+            <div className="f9-work-row">
+              <strong>Manage subscription</strong>
+              <span>
+                Update your card, download invoices, or cancel — self-serve, takes a minute.{" "}
+                <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
+                  <button className="f9-secondary-button" type="submit">
+                    Open billing portal
+                  </button>
+                </Form>
+              </span>
+            </div>
+          ) : null}
           <div className="f9-work-row">
             <strong>Change or cancel your plan</strong>
             <span>
-              Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email}. Cancellation
-              stops future renewals — you keep access until the end of the period you've paid for.
+              {isPaid && data.hasPortal
+                ? "Prefer a human? Email "
+                : "Email "}
+              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email}. Cancellation stops
+              future renewals — you keep access until the end of the period you've paid for.
             </span>
           </div>
           <div className="f9-work-row">
@@ -181,6 +210,10 @@ function formatBillingStatus(plan: string, dodoStatus: string | null) {
 
   if (dodoStatus && PAYMENT_ISSUE_STATUSES.has(dodoStatus)) {
     return "Active — payment retry in progress";
+  }
+
+  if (dodoStatus === "cancellation_scheduled") {
+    return "Active — cancels at the end of this billing period";
   }
 
   return "Active";
