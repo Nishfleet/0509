@@ -19,6 +19,7 @@ function mockWebhookDependencies(overrides: {
   const data = {
     claimDodoWebhookEvent: vi.fn().mockResolvedValue(true),
     deactivateWatchlistsBeyondPlanLimit: vi.fn().mockResolvedValue(0),
+    reactivateWatchlistsUpToPlanLimit: vi.fn().mockResolvedValue(0),
     markDodoWebhookEventFinished: vi.fn().mockResolvedValue(undefined),
     markDodoPlanPaymentIssue: vi.fn().mockResolvedValue(undefined),
     revokeDodoAccessForRefundedPayment: vi.fn().mockResolvedValue(undefined),
@@ -185,6 +186,12 @@ describe("Dodo webhook route", () => {
       expect.anything(),
       "evt-renewal",
       expect.objectContaining({ outcome: "processed" }),
+    );
+    // resubscribe/renewal brings auto-paused watchlists back up to the limit
+    expect(data.reactivateWatchlistsUpToPlanLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      10,
     );
   });
 
