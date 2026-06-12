@@ -10,6 +10,7 @@ import {
   normalizeSavedQuery,
   stableStringify,
 } from "~/lib/normalize";
+import { defaultCountryForVisitor } from "~/lib/countries";
 
 export const meta: MetaFunction = () => [
   { title: "Set up your account | Five to Nine" },
@@ -35,7 +36,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     checkPlanLimit(env, session.user.id, "watchlists"),
   ]);
 
-  return { session, plan, watchlistLimit };
+  return {
+    session,
+    plan,
+    watchlistLimit,
+    visitorCountry: defaultCountryForVisitor(
+      (context.cloudflare as { country?: string | null } | undefined)?.country ??
+        request.headers.get("cf-ipcountry"),
+    ),
+  };
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
@@ -75,8 +84,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
+    const visitorCountry = defaultCountryForVisitor(
+      (context.cloudflare as { country?: string | null } | undefined)?.country ??
+        request.headers.get("cf-ipcountry"),
+    );
     const normalizedQuery = normalizeSavedQuery("advertiser", {
       query,
+      country: visitorCountry,
     });
     const targetFingerprint = competitor.targetId
       ? hashString(
@@ -93,6 +107,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       targetId: competitor.targetId || query,
       targetFingerprint,
       targetLabel: query,
+      targetCountry: normalizedQuery.filters.country,
     });
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
@@ -125,6 +140,7 @@ export default function AppOnboardRoute() {
   const previewParams = buildSearchParams(
     normalizeSavedQuery("advertiser", {
       query: competitor.query,
+      country: data.visitorCountry,
     }),
   );
   if (trimmedWebsite) {
@@ -159,7 +175,7 @@ export default function AppOnboardRoute() {
               <h2>Paste the site you want to watch</h2>
               <Form action="/search" className="f9-auth-form" method="get">
                 <input name="mode" type="hidden" value="advertiser" />
-                <input name="country" type="hidden" value="India" />
+                <input name="country" type="hidden" value={data.visitorCountry} />
                 <input name="platform" type="hidden" value="all" />
                 <input name="creativeType" type="hidden" value="all" />
                 <input name="status" type="hidden" value="all" />

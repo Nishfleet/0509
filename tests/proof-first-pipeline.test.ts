@@ -10,6 +10,7 @@ const watchlist: WatchlistRecord = {
   targetId: "nykaa",
   targetFingerprint: "fp-nykaa",
   targetLabel: "Nykaa",
+  targetCountry: null,
   isActive: true,
   lastScannedAt: null,
   createdAt: "2026-04-10T00:00:00.000Z",

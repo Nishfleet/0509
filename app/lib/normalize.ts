@@ -12,10 +12,16 @@ export function normalizeHeadline(value: string) {
   };
 }
 
-export function normalizeSearchFilters(filters: Partial<SearchFilters>): SearchFilters {
+// Country falls back to "all", not any single market — Five to Nine is
+// global-first; visitor-geo defaults are applied by the routes, not here.
+export function normalizeSearchFilters(
+  filters: Partial<SearchFilters>,
+  defaults: { country?: string } = {},
+): SearchFilters {
+  const fallbackCountry = defaults.country ?? "all";
   return {
     query: (filters.query ?? "").trim(),
-    country: (filters.country ?? "India").trim() || "India",
+    country: (filters.country ?? fallbackCountry).trim() || fallbackCountry,
     platform: (filters.platform ?? "all").trim() || "all",
     creativeType: filters.creativeType ?? "all",
     status: filters.status ?? "all",
@@ -27,10 +33,11 @@ export function normalizeSearchFilters(filters: Partial<SearchFilters>): SearchF
 export function normalizeSavedQuery(
   mode: SearchMode,
   filters: Partial<SearchFilters>,
+  defaults: { country?: string } = {},
 ): NormalizedSavedQuery {
   return {
     mode,
-    filters: normalizeSearchFilters(filters),
+    filters: normalizeSearchFilters(filters, defaults),
   };
 }
 
@@ -54,11 +61,14 @@ export function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function parseSearchParams(searchParams: URLSearchParams) {
+export function parseSearchParams(
+  searchParams: URLSearchParams,
+  defaults: { country?: string } = {},
+) {
   const mode = (searchParams.get("mode") === "keyword" ? "keyword" : "advertiser") as SearchMode;
   const filters = normalizeSearchFilters({
     query: searchParams.get("query") ?? "",
-    country: searchParams.get("country") ?? "India",
+    country: searchParams.get("country") ?? defaults.country ?? "all",
     platform: searchParams.get("platform") ?? "all",
     creativeType: (searchParams.get("creativeType") ?? "all") as SearchFilters["creativeType"],
     status: (searchParams.get("status") ?? "all") as SearchFilters["status"],

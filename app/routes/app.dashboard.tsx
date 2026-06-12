@@ -9,6 +9,7 @@ import {
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { buildSearchParams } from "~/lib/normalize";
@@ -137,6 +138,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       targetId: savedQuery.id,
       targetFingerprint: savedQuery.fingerprint,
       targetLabel: savedQuery.name,
+      targetCountry: savedQuery.normalizedQuery.filters.country,
     });
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
@@ -458,7 +460,7 @@ export default function AppDashboardRoute() {
                   <div>
                     <h3>{event.title}</h3>
                     <p className="f9-muted-copy">{event.summary}</p>
-                    <small>{event.eventType.replaceAll("_", " ")} · {new Date(event.createdAt).toLocaleString("en-IN")}</small>
+                    <small>{event.eventType.replaceAll("_", " ")} · <LocalTime iso={event.createdAt} /></small>
                   </div>
                   <span className="f9-status-pill">{event.status.replaceAll("_", " ")}</span>
                 </article>
@@ -483,7 +485,7 @@ export default function AppDashboardRoute() {
             <div>
               <span className={`f9-status-dot ${firstCompetitorReady ? "is-good" : "is-attention"}`} />
               <strong>{firstCompetitorReady ? "Tracking is configured" : "No competitor watch yet"}</strong>
-              <p>{latestScanAt ? `Last scan ${new Date(latestScanAt).toLocaleString("en-IN")}.` : "Add a competitor to start monitoring."}</p>
+              <p>{latestScanAt ? <>Last scan <LocalTime iso={latestScanAt} />.</> : "Add a competitor to start monitoring."}</p>
             </div>
             <div>
               <span className={`f9-status-dot ${proofUsage.remaining > 0 ? "is-good" : "is-attention"}`} />
@@ -526,7 +528,7 @@ export default function AppDashboardRoute() {
                     <h3>{watchlist.name}</h3>
                     <p className="f9-muted-copy">{watchlist.targetType.replace("_", " ")} · {watchlist.targetLabel}</p>
                   </div>
-                  <small>{watchlist.lastScannedAt ? `Last scan ${new Date(watchlist.lastScannedAt).toLocaleDateString("en-IN")}` : "Not scanned yet"}</small>
+                  <small>{watchlist.lastScannedAt ? <>Last scan <LocalTime iso={watchlist.lastScannedAt} mode="date" /></> : "Not scanned yet"}</small>
                 </div>
               ))}
             </div>

@@ -11,6 +11,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
 import {
@@ -269,6 +270,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             targetId: watchlist.targetId,
             targetFingerprint: watchlist.targetFingerprint,
             targetLabel: watchlist.targetLabel,
+            targetCountry: watchlist.targetCountry,
           }
         : {
             targetType: "advertiser" as const,
@@ -280,6 +282,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
               competitorWebsite,
             ),
             targetLabel: targetLabel ?? watchlist.targetLabel,
+            // Retargeting changes the competitor, not the market — the
+            // replacement watchlist keeps scanning the same country.
+            targetCountry: watchlist.targetCountry,
           };
 
     try {
@@ -572,11 +577,15 @@ export default function WatchlistsRoute() {
                     {watchlist.isActive ? "" : " · Paused"}
                   </p>
                   <p className="f9-muted-copy">
-                    {watchlist.lastScannedAt
-                      ? `Last scanned ${new Date(watchlist.lastScannedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`
-                      : watchlist.isActive
-                        ? "First scan in progress — results land in a few minutes"
-                        : "Paused before its first scan"}
+                    {watchlist.lastScannedAt ? (
+                      <>
+                        Last scanned <LocalTime iso={watchlist.lastScannedAt} />
+                      </>
+                    ) : watchlist.isActive ? (
+                      "First scan in progress — results land in a few minutes"
+                    ) : (
+                      "Paused before its first scan"
+                    )}
                   </p>
                 </div>
               </a>
@@ -602,9 +611,11 @@ export default function WatchlistsRoute() {
                   <h2>{data.selectedWatchlist.name}</h2>
                   <p className="f9-muted-copy">
                     {data.selectedWatchlist.targetLabel} · last scanned{" "}
-                    {data.selectedWatchlist.lastScannedAt
-                      ? new Date(data.selectedWatchlist.lastScannedAt).toLocaleString("en-IN")
-                      : "never"}
+                    {data.selectedWatchlist.lastScannedAt ? (
+                      <LocalTime iso={data.selectedWatchlist.lastScannedAt} />
+                    ) : (
+                      "never"
+                    )}
                   </p>
                 </div>
                 <div className="f9-action-row">
@@ -759,9 +770,11 @@ export default function WatchlistsRoute() {
                         <div className="f9-work-row">
                           <p className="f9-app-kicker">Last check</p>
                           <p className="f9-muted-copy">
-                            {data.discoveryStatus.lastCheckedAt
-                              ? new Date(data.discoveryStatus.lastCheckedAt).toLocaleString("en-IN")
-                              : "No recent check yet"}
+                            {data.discoveryStatus.lastCheckedAt ? (
+                              <LocalTime iso={data.discoveryStatus.lastCheckedAt} />
+                            ) : (
+                              "No recent check yet"
+                            )}
                           </p>
                         </div>
                       </div>
@@ -777,7 +790,7 @@ export default function WatchlistsRoute() {
                   {data.events.length === 0 ? (
                     <p className="f9-muted-copy">
                       {data.selectedWatchlist.lastScannedAt
-                        ? `No confirmed changes yet — we'll flag the next one. Next scheduled scan: ${formatNextScanLabel(data.plan)}.`
+                        ? `No confirmed changes yet — we'll flag the next one. Next scheduled scan: ${formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)}.`
                         : "Your first scan is running now. Results appear here in a couple of minutes — refresh to check."}
                     </p>
                   ) : (
@@ -905,7 +918,7 @@ export default function WatchlistsRoute() {
                         <label className="f9-field">
                           <span>Timezone</span>
                           <input
-                            defaultValue={data.effectiveDeliveryConfig.timezone ?? "Asia/Kolkata"}
+                            defaultValue={data.effectiveDeliveryConfig.timezone ?? "UTC"}
                             name="timezone"
                             type="text"
                           />
@@ -1074,15 +1087,19 @@ export default function WatchlistsRoute() {
                                 {run.status} · {run.triggerType}
                               </p>
                               <h3>
-                                Started {new Date(run.startedAt).toLocaleString("en-IN")}
+                                Started <LocalTime iso={run.startedAt} />
                               </h3>
                             </div>
                             <span className="f9-status-pill">{run.pagesScanned} pages</span>
                           </div>
                           <p className="f9-muted-copy">
-                            {run.finishedAt
-                              ? `Finished ${new Date(run.finishedAt).toLocaleString("en-IN")}`
-                              : "Still running"}
+                            {run.finishedAt ? (
+                              <>
+                                Finished <LocalTime iso={run.finishedAt} />
+                              </>
+                            ) : (
+                              "Still running"
+                            )}
                             {run.baselineFromRunId ? ` · baseline ${run.baselineFromRunId.slice(0, 8)}` : ""}
                           </p>
                           {formatRunSummary(run.summary) ? (

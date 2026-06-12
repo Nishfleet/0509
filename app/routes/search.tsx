@@ -23,6 +23,7 @@ import {
   normalizeSavedQuery,
   parseSearchParams,
 } from "~/lib/normalize";
+import { defaultCountryForVisitor, SUPPORTED_COUNTRIES } from "~/lib/countries";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -52,8 +53,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
+  const visitorCountry = defaultCountryForVisitor(
+    (context.cloudflare as { country?: string | null } | undefined)?.country ??
+      request.headers.get("cf-ipcountry"),
+  );
   const competitorWebsite = normalizeCompetitorWebsiteInput(url.searchParams.get("website") ?? "");
-  const parsed = applyWebsiteSearchFallback(parseSearchParams(url.searchParams), competitorWebsite);
+  const parsed = applyWebsiteSearchFallback(
+    parseSearchParams(url.searchParams, { country: visitorCountry }),
+    competitorWebsite,
+  );
   const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
 
   if (!session && request.method.toUpperCase() === "HEAD" && parsed.filters.query) {
@@ -159,7 +167,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
     (String(formData.get("mode") ?? "advertiser") === "keyword" ? "keyword" : "advertiser"),
     {
       query: String(formData.get("query") ?? ""),
-      country: String(formData.get("country") ?? "India"),
+      country:
+        String(formData.get("country") ?? "") ||
+        defaultCountryForVisitor(
+          (context.cloudflare as { country?: string | null } | undefined)?.country ??
+            request.headers.get("cf-ipcountry"),
+        ),
       platform: String(formData.get("platform") ?? "all"),
       creativeType: String(formData.get("creativeType") ?? "all") as SearchFilters["creativeType"],
       status: String(formData.get("status") ?? "all") as SearchFilters["status"],
@@ -213,6 +226,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
         targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
         targetLabel: normalizedQuery.filters.query,
+        targetCountry: normalizedQuery.filters.country,
       });
     } else {
       const savedQuery = await createSavedQuery(env, session.user.id, {
@@ -231,6 +245,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetId: savedQuery.id,
         targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
         targetLabel: normalizedQuery.filters.query || savedQuery.name,
+        targetCountry: normalizedQuery.filters.country,
       });
     }
 
@@ -467,8 +482,12 @@ export default function SearchRoute() {
                   <label className="f9-field">
                     <span>Country</span>
                     <select defaultValue={data.filters.country} name="country">
-                      <option value="India">India</option>
                       <option value="all">All countries</option>
+                      {SUPPORTED_COUNTRIES.map((country) => (
+                        <option key={country.code} value={country.name}>
+                          {country.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="f9-field">

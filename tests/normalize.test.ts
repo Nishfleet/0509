@@ -56,9 +56,18 @@ describe("parseSearchParams", () => {
     expect(parseSearchParams(paramsInvalid).mode).toBe("advertiser");
   });
 
-  it("applies India default for country", () => {
+  it("applies the global-neutral 'all' default for country", () => {
     const params = new URLSearchParams({ query: "test" });
-    expect(parseSearchParams(params).filters.country).toBe("India");
+    expect(parseSearchParams(params).filters.country).toBe("all");
+  });
+
+  it("uses the caller-provided default country (visitor geo)", () => {
+    const params = new URLSearchParams({ query: "test" });
+    expect(parseSearchParams(params, { country: "United States" }).filters.country).toBe(
+      "United States",
+    );
+    const explicit = new URLSearchParams({ query: "test", country: "India" });
+    expect(parseSearchParams(explicit, { country: "United States" }).filters.country).toBe("India");
   });
 
   it("applies all default for platform", () => {
@@ -188,11 +197,11 @@ describe("parseSearchParams + buildSearchParams round-trip", () => {
     });
 
     const parsed = parseSearchParams(originalParams);
-    expect(parsed.filters.country).toBe("India");
+    expect(parsed.filters.country).toBe("all");
     expect(parsed.filters.platform).toBe("all");
 
     const rebuilt = buildSearchParams(parsed);
-    expect(rebuilt.get("country")).toBe("India");
+    expect(rebuilt.get("country")).toBe("all");
     expect(rebuilt.get("platform")).toBe("all");
   });
 });

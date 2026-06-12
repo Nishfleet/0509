@@ -39,6 +39,7 @@ const watchlist: WatchlistRecord = {
   targetId: "nykaa",
   targetFingerprint: "fp-nykaa",
   targetLabel: "Nykaa",
+  targetCountry: null,
   isActive: true,
   lastScannedAt: "2026-04-18T09:00:00.000Z",
   createdAt: "2026-04-10T00:00:00.000Z",
@@ -598,6 +599,7 @@ describe("watchlists route actions", () => {
       name: "Mamaearth launch watch",
       targetId: "Mamaearth",
       targetLabel: "Mamaearth",
+      targetCountry: null,
     });
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -636,6 +638,7 @@ describe("watchlists route actions", () => {
         targetType: "advertiser",
         targetId: "Mamaearth",
         targetLabel: "Mamaearth",
+        targetCountry: null,
       }),
     );
     expect(updateWatchlist.mock.calls[0][3].targetFingerprint).toMatch(/^fnv1a-/);
@@ -648,6 +651,7 @@ describe("watchlists route actions", () => {
       name: "Mamaearth launch watch",
       targetId: "Mamaearth",
       targetLabel: "Mamaearth",
+      targetCountry: null,
     });
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -688,6 +692,7 @@ describe("watchlists route actions", () => {
       name: "Nykaa launch watch",
       targetId: "https://nykaa.com",
       targetLabel: "Nykaa",
+      targetCountry: null,
     });
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -698,6 +703,7 @@ describe("watchlists route actions", () => {
         ...watchlist,
         targetId: "https://nykaa.com",
         targetLabel: "Nykaa",
+        targetCountry: null,
       }),
       updateWatchlist,
     }));
@@ -731,6 +737,7 @@ describe("watchlists route actions", () => {
         targetType: "advertiser",
         targetId: "https://nykaa.com",
         targetLabel: "Nykaa",
+        targetCountry: null,
       }),
     );
     expect(updateWatchlist.mock.calls[0][3].targetFingerprint).toMatch(/^fnv1a-/);
@@ -743,6 +750,7 @@ describe("watchlists route actions", () => {
       targetId: "saved-query-1",
       targetFingerprint: "saved-query-fingerprint",
       targetLabel: "Nykaa launch searches",
+      targetCountry: null,
     };
     const updateWatchlist = vi.fn().mockResolvedValue({
       ...savedQueryWatchlist,
@@ -786,6 +794,7 @@ describe("watchlists route actions", () => {
         targetId: "saved-query-1",
         targetFingerprint: "saved-query-fingerprint",
         targetLabel: "Nykaa launch searches",
+        targetCountry: null,
       }),
     );
   });

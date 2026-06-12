@@ -8,6 +8,7 @@ import {
   captureBrowserRunQuickActionScrape,
   hasBrowserRunQuickActions,
 } from "~/lib/browser-run.server";
+import { isoFromCountryName } from "~/lib/countries";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   AdRecord,
@@ -1298,7 +1299,7 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
     landingPageUrl: card.landingPageUrl,
     adSnapshotUrl:
       card.adSnapshotUrl || `https://www.facebook.com/ads/library/?id=${card.libraryId}`,
-    countries: [query.filters.country || "India"],
+    countries: [query.filters.country || "all"],
     platforms: card.platforms,
     firstSeenAt: null,
     lastSeenAt: null,
@@ -1327,19 +1328,8 @@ function buildSearchUrl(query: NormalizedSavedQuery) {
 
 function countryCode(country: string | undefined) {
   if (!country) {
-    return "IN";
+    return "ALL";
   }
 
-  const normalized = country.trim().toLowerCase();
-  if (normalized === "india") {
-    return "IN";
-  }
-  if (normalized === "united states" || normalized === "usa" || normalized === "us") {
-    return "US";
-  }
-  if (normalized === "united kingdom" || normalized === "uk") {
-    return "GB";
-  }
-
-  return country.toUpperCase();
+  return isoFromCountryName(country) ?? country.toUpperCase();
 }

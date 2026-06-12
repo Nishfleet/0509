@@ -264,6 +264,7 @@ export interface WatchlistRecord {
   targetId: string;
   targetFingerprint: string;
   targetLabel: string;
+  targetCountry: string | null;
   isActive: boolean;
   lastScannedAt: string | null;
   createdAt: string;

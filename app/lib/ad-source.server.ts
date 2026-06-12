@@ -318,7 +318,7 @@ export async function searchAdsViaSourceResolver(
   const cacheKey = buildDiscoveryCacheKey({
     provider,
     fingerprint: fingerprintSavedQuery(query),
-    country: query.filters.country || "India",
+    country: query.filters.country || "all",
     cursor,
   });
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
@@ -494,7 +494,7 @@ export async function searchAdsViaSourceResolver(
           provider,
           routeContext,
           queryFingerprint: fingerprintSavedQuery(query),
-          country: query.filters.country || "India",
+          country: query.filters.country || "all",
           cursor: cursor ?? null,
           payload: {
             ...liveResult,
@@ -509,7 +509,7 @@ export async function searchAdsViaSourceResolver(
           provider,
           routeContext,
           queryFingerprint: fingerprintSavedQuery(query),
-          country: query.filters.country || "India",
+          country: query.filters.country || "all",
           status: "succeeded",
           cacheStatus: usableCached ? "stale" : "miss",
           failureClass: null,
@@ -564,7 +564,7 @@ export async function searchAdsViaSourceResolver(
         provider,
         routeContext,
         queryFingerprint: fingerprintSavedQuery(query),
-        country: query.filters.country || "India",
+        country: query.filters.country || "all",
         status: "failed",
         cacheStatus: usableCached ? "stale" : "miss",
         failureClass,
@@ -665,7 +665,7 @@ async function tryMetaApiFallback(
   };
   const hasCustomerMetaToken = Boolean(input.customerMetaAdLibraryToken?.trim());
   const queryFingerprint = fingerprintSavedQuery(query);
-  const country = query.filters.country || "India";
+  const country = query.filters.country || "all";
   const providerState =
     metaApiEnv.DB && !hasCustomerMetaToken
       ? await getDiscoveryProviderState(metaApiEnv, "meta_api")

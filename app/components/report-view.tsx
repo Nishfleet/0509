@@ -2,6 +2,7 @@ import type { ReportDocument } from "~/lib/report";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { safeInsightDepthSummary } from "~/lib/insight-depth";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
+import { LocalTime } from "~/components/local-time";
 
 export function ReportView({ report }: { report: ReportDocument }) {
   const reportSnapshot = report as ReportDocument & { insightDepth?: unknown };
@@ -19,7 +20,9 @@ export function ReportView({ report }: { report: ReportDocument }) {
         </div>
         <div className="report-meta">
           <p className="f9-app-kicker">Generated</p>
-          <p>{new Date(report.generatedAt).toLocaleString("en-IN")}</p>
+          <p>
+            <LocalTime iso={report.generatedAt} />
+          </p>
         </div>
       </section>
 
@@ -82,7 +85,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
                   </div>
                 </dl>
                 <p className="f9-muted-copy">
-                  {new Date(row.event.createdAt).toLocaleString("en-IN")}
+                  <LocalTime iso={row.event.createdAt} />
                 </p>
               </section>
             ) : null}
