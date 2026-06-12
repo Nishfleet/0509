@@ -49,7 +49,7 @@ const signalRows = [
 
 const backboneStats = [
   { value: "1", label: "competitor website", detail: "turns into a watchlist" },
-  { value: "24h", label: "change checks", detail: "visible offers, CTAs, forms" },
+  { value: "24h", label: "change checks", detail: "daily on Starter & Agency plans" },
   { value: "3", label: "saved evidence", detail: "screenshot, page text, original link" },
   { value: "05:09", label: "morning brief", detail: "what changed and why it matters" },
 ];
@@ -183,7 +183,7 @@ export default function MarketingRoute() {
             <div className="f9-public-status-note" role="note">
               <strong>Honest by design.</strong>
               <span>
-                Results are always labeled live, recent, or sample — and Meta ads tracking stays
+                Results are always labeled fresh, recent, or sample — and Meta ads tracking stays
                 marked beta until it proves itself on your competitors.
               </span>
             </div>

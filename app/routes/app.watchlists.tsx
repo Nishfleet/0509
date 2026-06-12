@@ -61,6 +61,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
+  const { isWhatsAppProviderConfigured } = await import("~/lib/env.server");
+  const whatsappAvailable = isWhatsAppProviderConfigured(env);
   const [watchlists, discoveryStatus, plan] = await Promise.all([
     listWatchlists(env, session.user.id, { includeInactive: true }),
     resolveCommercialAdSourceStatus(env),
@@ -89,6 +91,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       proofSummary: emptyProofSummary(),
       discoveryStatus,
       plan,
+      whatsappAvailable,
     };
   }
 
@@ -147,6 +150,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     proofSummary: buildProofSummary(recentProofCaptures),
     discoveryStatus,
     plan,
+    whatsappAvailable,
   };
 }
 
@@ -907,7 +911,7 @@ export default function WatchlistsRoute() {
                         </div>
                         <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.instantEnabled} name="instantEnabled" type="checkbox" />
-                          <span>Instant alerts</span>
+                          <span>High-priority alerts (sent as soon as a scan confirms a major change)</span>
                         </label>
                         <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.digestEnabled} name="digestEnabled" type="checkbox" />
@@ -951,9 +955,11 @@ export default function WatchlistsRoute() {
                           <p className="f9-muted-copy">
                             {target.isPaused
                               ? "Paused"
-                              : target.channel === "whatsapp" && !target.templateEligible
-                                ? "Waiting on template readiness"
-                                : "Ready"}
+                              : target.channel === "whatsapp" && !data.whatsappAvailable
+                                ? "Not yet available — WhatsApp delivery isn't live"
+                                : target.channel === "whatsapp" && !target.templateEligible
+                                  ? "Waiting on template readiness"
+                                  : "Ready"}
                           </p>
                         </div>
                         <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -993,7 +999,13 @@ export default function WatchlistsRoute() {
                       <span>Channel</span>
                       <select defaultValue="email" name="channel">
                         <option value="email">Email</option>
-                        <option value="whatsapp">WhatsApp</option>
+                        {data.whatsappAvailable ? (
+                          <option value="whatsapp">WhatsApp</option>
+                        ) : (
+                          <option disabled value="whatsapp">
+                            WhatsApp — not yet available
+                          </option>
+                        )}
                       </select>
                     </label>
                     <label className="f9-field">
