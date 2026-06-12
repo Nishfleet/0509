@@ -37,7 +37,7 @@ const PLANS: PricingPlan[] = [
       "250 evidence checks per month",
       "Landing-page evidence for material changes",
       "Email + Slack delivery",
-      "Reads creative text in Hindi, Hinglish, and English",
+      "Reads ad text in 19 languages and scripts — auto-translated into English",
       "CSV, JSON, and Slack-ready exports",
     ],
   },

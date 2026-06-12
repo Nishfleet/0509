@@ -18,6 +18,18 @@ const REGIONAL_SCRIPT_LANGUAGE_CODES: Record<string, string> = {
   telugu: "te",
 };
 
+const GLOBAL_SCRIPT_LANGUAGE_CODES: Record<string, string> = {
+  arabic: "ar",
+  hebrew: "he",
+  cyrillic: "ru",
+  greek: "el",
+  thai: "th",
+  han: "zh",
+  hiragana: "ja",
+  katakana: "ja",
+  hangul: "ko",
+};
+
 type TranslationCandidateAd = Pick<
   AdRecord,
   | "analysisFields"
@@ -115,7 +127,12 @@ function shouldTranslateAd(ad: TranslationCandidateAd) {
     return false;
   }
 
-  return ad.languageLabel === "Hindi" || ad.languageLabel === "Hinglish" || ad.languageLabel === "Regional";
+  return (
+    ad.languageLabel === "Hindi" ||
+    ad.languageLabel === "Hinglish" ||
+    ad.languageLabel === "Regional" ||
+    ad.languageLabel === "Global"
+  );
 }
 
 function buildTranslationInput(ad: TranslationCandidateAd) {
@@ -168,20 +185,30 @@ function resolveSourceLanguageCode(ad: TranslationCandidateAd, sample: string) {
     return "hi";
   }
 
-  if (ad.languageLabel !== "Regional") {
+  if (ad.languageLabel !== "Regional" && ad.languageLabel !== "Global") {
     return null;
   }
 
+  const scriptCodes =
+    ad.languageLabel === "Regional" ? REGIONAL_SCRIPT_LANGUAGE_CODES : GLOBAL_SCRIPT_LANGUAGE_CODES;
   const classification = classifyLanguage({
     previewHeadline: sample,
     body: sample,
   });
   const scriptSignals = classification.metadata.scriptSignals;
-  const regionalScript = Object.entries(REGIONAL_SCRIPT_LANGUAGE_CODES)
+
+  if (
+    ad.languageLabel === "Global" &&
+    (scriptSignals.hiragana ?? 0) + (scriptSignals.katakana ?? 0) > 0
+  ) {
+    return "ja";
+  }
+
+  const matchedScript = Object.entries(scriptCodes)
     .sort((left, right) => (scriptSignals[right[0]] ?? 0) - (scriptSignals[left[0]] ?? 0))
     .find(([script]) => (scriptSignals[script] ?? 0) > 0)?.[0];
 
-  return regionalScript ? REGIONAL_SCRIPT_LANGUAGE_CODES[regionalScript] : null;
+  return matchedScript ? scriptCodes[matchedScript] : null;
 }
 
 function normalizeTranslationResponse(response: unknown) {

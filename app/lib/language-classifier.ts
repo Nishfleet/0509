@@ -57,9 +57,41 @@ const SCRIPT_PATTERNS = {
   telugu: /[\u0C00-\u0C7F]/g,
   kannada: /[\u0C80-\u0CFF]/g,
   malayalam: /[\u0D00-\u0D7F]/g,
+  arabic: /[\u0600-\u06FF]/g,
+  hebrew: /[\u0590-\u05FF]/g,
+  cyrillic: /[\u0400-\u04FF]/g,
+  greek: /[\u0370-\u03FF]/g,
+  thai: /[\u0E00-\u0E7F]/g,
+  han: /[\u4E00-\u9FFF]/g,
+  hiragana: /[\u3040-\u309F]/g,
+  katakana: /[\u30A0-\u30FF]/g,
+  hangul: /[\uAC00-\uD7AF]/g,
 } as const;
 
-export type LanguageLabel = "English" | "Hinglish" | "Hindi" | "Regional" | "Unknown";
+const INDIC_SCRIPTS = [
+  "bengali",
+  "gurmukhi",
+  "gujarati",
+  "odia",
+  "tamil",
+  "telugu",
+  "kannada",
+  "malayalam",
+] as const;
+
+const GLOBAL_SCRIPTS = [
+  "arabic",
+  "hebrew",
+  "cyrillic",
+  "greek",
+  "thai",
+  "han",
+  "hiragana",
+  "katakana",
+  "hangul",
+] as const;
+
+export type LanguageLabel = "English" | "Hinglish" | "Hindi" | "Regional" | "Global" | "Unknown";
 
 export interface LanguageClassification {
   label: LanguageLabel;
@@ -91,26 +123,9 @@ export function classifyLanguage(input: {
   const cueMatches = findCueMatches(sample);
   const cueScore = countCueEvidence(sample);
   const sampleLength = sample.replace(/\s+/g, " ").trim().length;
-  const totalAlpha =
-    scriptSignals.latin +
-    scriptSignals.devanagari +
-    scriptSignals.bengali +
-    scriptSignals.gurmukhi +
-    scriptSignals.gujarati +
-    scriptSignals.odia +
-    scriptSignals.tamil +
-    scriptSignals.telugu +
-    scriptSignals.kannada +
-    scriptSignals.malayalam;
-  const regionalSignals =
-    scriptSignals.bengali +
-    scriptSignals.gurmukhi +
-    scriptSignals.gujarati +
-    scriptSignals.odia +
-    scriptSignals.tamil +
-    scriptSignals.telugu +
-    scriptSignals.kannada +
-    scriptSignals.malayalam;
+  const regionalSignals = INDIC_SCRIPTS.reduce((total, script) => total + (scriptSignals[script] ?? 0), 0);
+  const globalSignals = GLOBAL_SCRIPTS.reduce((total, script) => total + (scriptSignals[script] ?? 0), 0);
+  const totalAlpha = scriptSignals.latin + scriptSignals.devanagari + regionalSignals + globalSignals;
 
   if (sampleLength < 15 || totalAlpha < 8) {
     return buildResult("Unknown", 0.24, sampleLength, scriptSignals, cueMatches, "insufficient_signal");
@@ -118,6 +133,15 @@ export function classifyLanguage(input: {
 
   if (regionalSignals >= 3 && regionalSignals > scriptSignals.devanagari && regionalSignals >= scriptSignals.latin / 5) {
     return buildResult("Regional", 0.88, sampleLength, scriptSignals, cueMatches, "regional_script_detected");
+  }
+
+  if (
+    globalSignals >= 3 &&
+    globalSignals > scriptSignals.devanagari &&
+    globalSignals > regionalSignals &&
+    globalSignals >= scriptSignals.latin / 5
+  ) {
+    return buildResult("Global", 0.88, sampleLength, scriptSignals, cueMatches, "global_script_detected");
   }
 
   if (scriptSignals.devanagari >= 4 && scriptSignals.devanagari >= regionalSignals) {
