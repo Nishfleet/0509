@@ -313,11 +313,17 @@ describe("Dodo billing persistence", () => {
 
     expect(statement?.sql).toContain("julianday(excluded.plan_updated_at)");
     expect(statement?.sql).toContain("user_plan.dodo_payment_id = excluded.dodo_payment_id");
+    // COALESCE keeps linkage fields when an event doesn't carry them
+    expect(statement?.sql).toContain("COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id)");
+    expect(statement?.sql).toContain("COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at)");
     expect(statement?.bindings).toEqual([
       "user-1",
       "starter",
       "pay_123",
       "prod_starter_monthly",
+      null,
+      null,
+      null,
       "succeeded",
       "2026-06-04T12:00:00.000Z",
     ]);

@@ -6,6 +6,7 @@ import {
   extractDodoPlanRevocation,
   extractDodoProofCreditGrant,
   extractDodoRefund,
+  extractDodoSubscriptionGrant,
   isDodoWebhookTimestampFresh,
 } from "~/lib/dodo-billing.server";
 
@@ -128,6 +129,75 @@ describe("Dodo billing", () => {
       cycle: "monthly",
       status: "succeeded",
     });
+  });
+
+  it("grants from metadata when product_cart is absent — the real subscription payment shape", () => {
+    // Verified against live Dodo payloads (2026-06-12): subscription
+    // payment.succeeded events carry product_cart: null; only checkout
+    // metadata identifies the plan.
+    const grant = extractDodoPlanGrant(
+      {
+        DODO_0509_BRAND_ID: "brand_0509",
+      },
+      {
+        type: "payment.succeeded",
+        data: {
+          payload_type: "Payment",
+          payment_id: "pay_real_sub",
+          brand_id: "brand_0509",
+          status: "succeeded",
+          subscription_id: "sub_123",
+          product_cart: null,
+          metadata: {
+            app: "0509",
+            user_id: "user-1",
+            target_kind: "plan",
+            plan: "scout",
+            cycle: "monthly",
+          },
+          customer: {
+            customer_id: "cus_123",
+            email: "owner@example.com",
+          },
+          created_at: "2026-06-12T05:30:00.000Z",
+        },
+      },
+    );
+
+    expect(grant).toMatchObject({
+      userId: "user-1",
+      paymentId: "pay_real_sub",
+      productId: null,
+      plan: "scout",
+      cycle: "monthly",
+      subscriptionId: "sub_123",
+      customerId: "cus_123",
+    });
+  });
+
+  it("does not treat a usage-bundle payment as a plan grant when the cart is absent", () => {
+    const grant = extractDodoPlanGrant(
+      { DODO_0509_BRAND_ID: "brand_0509" },
+      {
+        type: "payment.succeeded",
+        data: {
+          payload_type: "Payment",
+          payment_id: "pay_bundle",
+          brand_id: "brand_0509",
+          status: "succeeded",
+          product_cart: null,
+          metadata: {
+            app: "0509",
+            user_id: "user-1",
+            target_kind: "usage_bundle",
+            bundle: "proof_500",
+            credits: "500",
+          },
+        },
+      },
+    );
+
+    expect(grant).toBeNull();
   });
 
   it("extracts paid grants from current Dodo envelope payloads", () => {
@@ -369,6 +439,83 @@ describe("Dodo subscription lifecycle", () => {
       extractDodoPlanRevocation(
         lifecycleEnv,
         subscriptionEnvelope("subscription.cancelled", { brand_id: "brand_other" }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("extractDodoSubscriptionGrant", () => {
+  const env = {
+    DODO_0509_BRAND_ID: "brand_0509",
+    DODO_0509_PRODUCT_STARTER_MONTHLY_ID: "pdt_starter_monthly",
+  } as never;
+
+  function subscriptionPayload(type: string, overrides: Record<string, unknown> = {}) {
+    // Shape verified against the live Dodo subscriptions API (2026-06-12).
+    return {
+      type,
+      data: {
+        payload_type: "Subscription",
+        subscription_id: "sub_123",
+        product_id: "pdt_starter_monthly",
+        brand_id: "brand_0509",
+        status: "active",
+        metadata: {
+          app: "0509",
+          user_id: "user-1",
+          target_kind: "plan",
+          plan: "starter",
+          cycle: "monthly",
+        },
+        customer: {
+          customer_id: "cus_123",
+          email: "owner@example.com",
+        },
+        previous_billing_date: "2026-07-12T05:30:00.000Z",
+        next_billing_date: "2026-08-12T05:30:00.000Z",
+        created_at: "2026-06-12T05:30:00.000Z",
+        cancel_at_next_billing_date: false,
+        ...overrides,
+      },
+    };
+  }
+
+  it("grants from subscription.active and subscription.renewed", () => {
+    for (const type of ["subscription.active", "subscription.renewed"]) {
+      expect(extractDodoSubscriptionGrant(env, subscriptionPayload(type))).toMatchObject({
+        eventType: type,
+        userId: "user-1",
+        subscriptionId: "sub_123",
+        customerId: "cus_123",
+        plan: "starter",
+        cycle: "monthly",
+        status: "active",
+        grantedAt: "2026-07-12T05:30:00.000Z",
+        nextBillingAt: "2026-08-12T05:30:00.000Z",
+      });
+    }
+  });
+
+  it("falls back to metadata when the product id is unknown", () => {
+    const grant = extractDodoSubscriptionGrant(
+      { DODO_0509_BRAND_ID: "brand_0509" } as never,
+      subscriptionPayload("subscription.renewed", { product_id: "pdt_unmapped" }),
+    );
+
+    expect(grant).toMatchObject({ plan: "starter", cycle: "monthly" });
+  });
+
+  it("ignores other lifecycle events and foreign brands", () => {
+    expect(
+      extractDodoSubscriptionGrant(env, subscriptionPayload("subscription.cancelled")),
+    ).toBeNull();
+    expect(
+      extractDodoSubscriptionGrant(env, subscriptionPayload("subscription.on_hold")),
+    ).toBeNull();
+    expect(
+      extractDodoSubscriptionGrant(
+        env,
+        subscriptionPayload("subscription.renewed", { brand_id: "brand_other" }),
       ),
     ).toBeNull();
   });
