@@ -5,6 +5,8 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authClient } from "~/lib/auth-client";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
+export const meta = () => [{ title: "Account | Five to Nine" }];
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { createAuth, requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");

@@ -24,6 +24,8 @@ const externalProofChannels = [
   "Other",
 ];
 
+export const meta = () => [{ title: "Collections | Five to Nine" }];
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");

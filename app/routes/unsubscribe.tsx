@@ -150,7 +150,7 @@ export default function UnsubscribeRoute() {
                 workspace.
               </p>
               <Form method="post">
-                <SubmitButton className="f9-button f9-button-primary" pendingLabel="Working…">
+                <SubmitButton className="f9-primary-button" pendingLabel="Working…">
                   Unsubscribe
                 </SubmitButton>
               </Form>

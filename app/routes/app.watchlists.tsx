@@ -44,6 +44,8 @@ import type {
   WorkspaceDeliveryConfigRecord,
 } from "~/lib/types";
 
+export const meta = () => [{ title: "Watchlists | Five to Nine" }];
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");

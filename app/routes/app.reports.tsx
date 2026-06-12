@@ -10,6 +10,8 @@ import { ReportView } from "~/components/report-view";
 import { SubmitButton } from "~/components/submit-button";
 import { parseReportId } from "~/lib/report";
 
+export const meta = () => [{ title: "Reports | Five to Nine" }];
+
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
   return {
     report: await loadReport({

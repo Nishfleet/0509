@@ -7,6 +7,8 @@ import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-i
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { isReportDocument } from "~/lib/report";
 
+export const meta = () => [{ title: "Shared report | Five to Nine" }];
+
 export async function loader({ context, params }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
