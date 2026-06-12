@@ -571,7 +571,7 @@ export default function AppDashboardRoute() {
               <h2>Useful examples for reuse</h2>
             </div>
             <Link className="f9-secondary-button" to="/app/collections">
-              Open collections
+              Open boards
             </Link>
           </div>
           <div className="f9-work-list is-compact">

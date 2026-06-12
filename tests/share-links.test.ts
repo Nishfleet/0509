@@ -202,7 +202,7 @@ describe("/app/shares route", () => {
       {
         id: "share-1",
         url: "https://0509.in/share/token-abc",
-        resourceLabel: "Collection",
+        resourceLabel: "Board",
         mode: "Snapshot",
         createdAt: "2026-06-01T00:00:00.000Z",
         expiresAt: "2026-09-01T00:00:00.000Z",

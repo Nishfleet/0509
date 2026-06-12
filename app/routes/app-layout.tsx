@@ -47,7 +47,7 @@ export default function AppLayoutRoute() {
           <NavLink end to="/app">
             Dashboard
           </NavLink>
-          <NavLink to="/app/collections">Collections</NavLink>
+          <NavLink to="/app/collections">Boards</NavLink>
           <NavLink to="/app/watchlists">Watchlists</NavLink>
           <NavLink to="/app/digests">Digests</NavLink>
           <NavLink to="/app/shares">Shared links</NavLink>

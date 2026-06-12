@@ -8,6 +8,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { SubmitButton } from "~/components/submit-button";
@@ -269,7 +270,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       .filter(Boolean);
 
     if (!collectionId || !adJson) {
-      return { ok: false, message: "Choose a collection and ad before saving." };
+      return { ok: false, message: "Choose a board and ad before saving." };
     }
 
     const ad = JSON.parse(adJson) as AdRecord;
@@ -282,7 +283,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       tags,
     );
 
-    return { ok: true, message: `Saved ${ad.advertiser?.trim() || "the ad"} to your collection.` };
+    return { ok: true, message: `Saved ${ad.advertiser?.trim() || "the ad"} to your board.` };
   }
 
   return { ok: false, message: "Unknown search action." };
@@ -662,6 +663,7 @@ export default function SearchRoute() {
                         <div>
                           <span>{formatAdvertiserLabel(ad.advertiser)}</span>
                           <h3>{ad.previewHeadline}</h3>
+                          <AdLongevityPill ad={ad} />
                         </div>
                         <p>{ad.hook}</p>
                         <small>
@@ -690,6 +692,7 @@ export default function SearchRoute() {
                     <div>
                       <span>Ad details</span>
                       <h2>{formatAdvertiserLabel(data.selectedAd.advertiser)}</h2>
+                      <AdLongevityPill ad={data.selectedAd} />
                     </div>
                     <em className={data.selectedAd.active ? "is-active" : ""}>
                       {data.selectedAd.active ? "Active" : "Inactive"}
@@ -765,7 +768,7 @@ export default function SearchRoute() {
                       <input name="intent" type="hidden" value="save-to-collection" />
                       <input name="adJson" type="hidden" value={JSON.stringify(data.selectedAd)} />
                       <label className="f9-field">
-                        <span>Collection</span>
+                        <span>Board</span>
                         <select name="collectionId" required>
                           {data.collections.map((collection) => (
                             <option key={collection.id} value={collection.id}>
@@ -783,14 +786,14 @@ export default function SearchRoute() {
                         <input name="tags" placeholder="discount, COD, creator-led" />
                       </label>
                       <SubmitButton className="f9-primary-button" intent="save-to-collection" pendingLabel="Saving…">
-                        Save to collection
+                        Save to board
                       </SubmitButton>
                     </Form>
                   ) : data.session ? (
                     <div className="f9-side-note">
-                      <p>Create a collection first, then save ads from search.</p>
+                      <p>Create a board first, then save ads from search.</p>
                       <Link className="f9-secondary-button" to="/app/collections">
-                        Open collections
+                        Open boards
                       </Link>
                     </div>
                   ) : null}
