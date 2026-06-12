@@ -1,6 +1,8 @@
 import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { SubmitButton } from "~/components/submit-button";
+
 export const meta: MetaFunction = () => [
   { title: "Tracking access | Five to Nine" },
   {
@@ -420,24 +422,24 @@ export default function AppSourcesRoute() {
                   rows={5}
                 />
               </label>
-              <button className="f9-primary-button" type="submit">
+              <SubmitButton className="f9-primary-button" intent="connect-meta-token" pendingLabel="Saving…">
                 Test and save access
-              </button>
+              </SubmitButton>
             </Form>
 
             {data.connection ? (
               <div className="f9-action-row source-actions">
                 <Form method="post">
                   <input name="intent" type="hidden" value="retest-meta-token" />
-                  <button className="f9-secondary-button" type="submit">
+                  <SubmitButton className="f9-secondary-button" intent="retest-meta-token" pendingLabel="Testing…">
                     Retest saved access
-                  </button>
+                  </SubmitButton>
                 </Form>
                 <Form method="post">
                   <input name="intent" type="hidden" value="disconnect-meta-token" />
-                  <button className="f9-secondary-button" type="submit">
+                  <SubmitButton className="f9-secondary-button" intent="disconnect-meta-token" pendingLabel="Removing…">
                     Disconnect
-                  </button>
+                  </SubmitButton>
                 </Form>
               </div>
             ) : null}
@@ -486,9 +488,9 @@ export default function AppSourcesRoute() {
                   type="text"
                 />
               </label>
-              <button className="f9-primary-button" type="submit">
+              <SubmitButton className="f9-primary-button" intent="create-api-key" pendingLabel="Creating…">
                 Create API key
-              </button>
+              </SubmitButton>
             </Form>
           </section>
 
@@ -538,9 +540,14 @@ export default function AppSourcesRoute() {
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-api-key" />
                     <input name="apiKeyId" type="hidden" value={apiKey.id} />
-                    <button className="f9-secondary-button" type="submit">
+                    <SubmitButton
+                      className="f9-secondary-button"
+                      intent="revoke-api-key"
+                      match={{ apiKeyId: apiKey.id }}
+                      pendingLabel="Removing…"
+                    >
                       Revoke
-                    </button>
+                    </SubmitButton>
                   </Form>
                 )}
               </article>
@@ -593,9 +600,9 @@ export default function AppSourcesRoute() {
                   type="password"
                 />
               </label>
-              <button className="f9-primary-button" type="submit">
+              <SubmitButton className="f9-primary-button" intent="save-slack-webhook" pendingLabel="Saving…">
                 Save Slack delivery
-              </button>
+              </SubmitButton>
             </Form>
           </section>
 
@@ -639,9 +646,14 @@ export default function AppSourcesRoute() {
                     value={target.isPaused ? "resume-slack-webhook" : "pause-slack-webhook"}
                   />
                   <input name="slackTargetId" type="hidden" value={target.id} />
-                  <button className="f9-secondary-button" type="submit">
+                  <SubmitButton
+                    className="f9-secondary-button"
+                    intent={target.isPaused ? "resume-slack-webhook" : "pause-slack-webhook"}
+                    match={{ slackTargetId: target.id }}
+                    pendingLabel="Updating…"
+                  >
                     {target.isPaused ? "Resume" : "Pause"}
-                  </button>
+                  </SubmitButton>
                 </Form>
               </article>
             ))
@@ -698,9 +710,9 @@ export default function AppSourcesRoute() {
                 <input name="whatsappExplicitOptIn" type="checkbox" value="yes" />
                 <span>Recipient has opted in to receive Five to Nine WhatsApp updates.</span>
               </label>
-              <button className="f9-primary-button" type="submit">
+              <SubmitButton className="f9-primary-button" intent="save-whatsapp-target" pendingLabel="Saving…">
                 Save WhatsApp delivery
-              </button>
+              </SubmitButton>
             </Form>
           </section>
 

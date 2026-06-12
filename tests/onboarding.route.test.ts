@@ -340,6 +340,7 @@ describe("onboarding route", () => {
             limit: 0,
           },
         }),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       };
     });
 

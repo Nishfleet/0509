@@ -9,6 +9,7 @@ import {
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { SubmitButton } from "~/components/submit-button";
 import {
   applyWebsiteSearchFallback,
   emptyCompetitorWebsite,
@@ -355,9 +356,9 @@ export default function SearchRoute() {
                 />
               </label>
               <div className="f9-action-row">
-                <button className="f9-primary-button" type="submit">
+                <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
                   See competitor ads
-                </button>
+                </SubmitButton>
                 {!rootData.session ? (
                   <Link className="f9-secondary-button" to={signupTrackingPath}>
                     Create account to track
@@ -374,9 +375,9 @@ export default function SearchRoute() {
                   mode={data.mode}
                 />
                 <input name="name" type="hidden" value={`${inferredWatchlistName} watch`} />
-                <button className="f9-secondary-button" type="submit">
+                <SubmitButton className="f9-secondary-button" intent="create-watchlist" pendingLabel="Creating…">
                   Track this competitor
-                </button>
+                </SubmitButton>
               </Form>
             ) : null}
             <p
@@ -510,9 +511,9 @@ export default function SearchRoute() {
                 </div>
 
                 <div className="f9-action-row">
-                  <button className="f9-primary-button" type="submit">
+                  <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
                     Search ads
-                  </button>
+                  </SubmitButton>
                   <Link
                     className="f9-secondary-button"
                     to={`/search?mode=${data.mode}&query=${encodeURIComponent(sampleQueries[data.mode][0])}`}
@@ -552,9 +553,9 @@ export default function SearchRoute() {
                         mode={data.mode}
                       />
                       <input name="name" placeholder="Save this search as..." required />
-                      <button className="f9-secondary-button" type="submit">
+                      <SubmitButton className="f9-secondary-button" intent="save-query" pendingLabel="Saving…">
                         Save search
-                      </button>
+                      </SubmitButton>
                     </Form>
 
                     <Form className="f9-inline-save" method="post">
@@ -569,9 +570,9 @@ export default function SearchRoute() {
                         name="name"
                         placeholder="Watchlist name"
                       />
-                      <button className="f9-primary-button" type="submit">
+                      <SubmitButton className="f9-primary-button" intent="create-watchlist" pendingLabel="Creating…">
                         Track this competitor
-                      </button>
+                      </SubmitButton>
                     </Form>
                   </div>
                 ) : (
@@ -753,9 +754,9 @@ export default function SearchRoute() {
                         <span>Tags</span>
                         <input name="tags" placeholder="discount, COD, creator-led" />
                       </label>
-                      <button className="f9-primary-button" type="submit">
+                      <SubmitButton className="f9-primary-button" intent="save-to-collection" pendingLabel="Saving…">
                         Save to collection
-                      </button>
+                      </SubmitButton>
                     </Form>
                   ) : data.session ? (
                     <div className="f9-side-note">

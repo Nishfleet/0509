@@ -2229,6 +2229,29 @@ img {
   animation: f9-checkout-pulse 1.4s ease-in-out infinite;
 }
 
+.f9-button-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 7px;
+  vertical-align: -1px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.85;
+  animation: f9-button-spin 0.7s linear infinite;
+}
+
+@keyframes f9-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+button[aria-busy="true"] {
+  cursor: progress;
+}
+
 @keyframes f9-checkout-pulse {
   0%,
   100% {

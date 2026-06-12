@@ -70,6 +70,7 @@ async function mockRouter(loaderData: unknown, actionData?: unknown) {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       useActionData: vi.fn().mockReturnValue(actionData),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
+      useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
     };
   });
 }

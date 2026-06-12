@@ -9,6 +9,7 @@ import {
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { buildSearchParams } from "~/lib/normalize";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -288,7 +289,7 @@ export default function AppDashboardRoute() {
 	              placeholder="Search market moves or paste competitor website"
 	              type="text"
 	            />
-            <button type="submit">Track</button>
+            <SubmitButton getAction="/search" pendingLabel="Searching…">Track</SubmitButton>
           </Form>
         </div>
 

@@ -281,6 +281,8 @@ async function mockRouter(overrides: {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       useActionData: vi.fn().mockReturnValue(overrides.actionData),
       useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
+      useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+      useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
       useSearchParams: vi.fn().mockReturnValue([
         overrides.searchParams ?? new URLSearchParams("watchlist=watch-1"),
         vi.fn(),

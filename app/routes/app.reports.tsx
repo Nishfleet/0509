@@ -7,6 +7,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { ReportView } from "~/components/report-view";
+import { SubmitButton } from "~/components/submit-button";
 import { parseReportId } from "~/lib/report";
 
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
@@ -88,9 +89,9 @@ export default function ReportsRoute() {
             </Link>
             <Form method="post">
               <input name="intent" type="hidden" value="share-report" />
-              <button className="f9-secondary-button" type="submit">
+              <SubmitButton className="f9-secondary-button" intent="share-report" pendingLabel="Creating…">
                 Share snapshot
-              </button>
+              </SubmitButton>
             </Form>
             <button
               className="f9-primary-button"
