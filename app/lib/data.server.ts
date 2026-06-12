@@ -1306,6 +1306,7 @@ export async function deactivateWatchlistsBeyondPlanLimit(
       `
         UPDATE watchlist
         SET is_active = 0,
+            paused_reason = 'plan_limit',
             updated_at = ?
         WHERE user_id = ?
           AND is_active = 1
@@ -1323,6 +1324,56 @@ export async function deactivateWatchlistsBeyondPlanLimit(
     .run();
 
   return Number(result.meta?.changes ?? 0);
+}
+
+// After a verified email change, the auto-provisioned delivery target still
+// points at the OLD address — and because any usable target short-circuits
+// auto-provisioning, the customer's digests/alerts would silently keep going
+// to an inbox they may have lost. Retarget those rows to the new address.
+export async function migrateAutoProvisionedEmailTargets(
+  env: AppEnv,
+  userId: string,
+  newEmail: string,
+) {
+  const db = ensureDb(env);
+  const timestamp = nowIso();
+
+  // UPDATE OR IGNORE skips rows whose new-address twin already exists
+  // (unique indexes on user/watchlist/channel/value)…
+  const updated = await db
+    .prepare(
+      `
+        UPDATE OR IGNORE delivery_target
+        SET target_value = ?,
+            validation_status = 'validated',
+            is_validated = 1,
+            updated_at = ?
+        WHERE user_id = ?
+          AND channel = 'email'
+          AND opt_in_source = 'account_email'
+          AND opted_out_at IS NULL
+          AND target_value != ?
+      `,
+    )
+    .bind(newEmail, timestamp, userId, newEmail)
+    .run();
+
+  // …and any stale row that couldn't be updated (twin existed) is removed.
+  await db
+    .prepare(
+      `
+        DELETE FROM delivery_target
+        WHERE user_id = ?
+          AND channel = 'email'
+          AND opt_in_source = 'account_email'
+          AND opted_out_at IS NULL
+          AND target_value != ?
+      `,
+    )
+    .bind(userId, newEmail)
+    .run();
+
+  return Number(updated.meta?.changes ?? 0);
 }
 
 export async function getOldestUserId(env: AppEnv) {
@@ -1828,14 +1879,17 @@ export async function reactivateWatchlistsUpToPlanLimit(
       `
         UPDATE watchlist
         SET is_active = 1,
+            paused_reason = NULL,
             updated_at = ?
         WHERE user_id = ?
           AND is_active = 0
+          AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
           AND id IN (
             SELECT id
             FROM watchlist
             WHERE user_id = ?
               AND is_active = 0
+              AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
             ORDER BY updated_at DESC
             LIMIT ?
           )
@@ -2018,6 +2072,7 @@ export async function updateWatchlist(
 	      `
 	        UPDATE watchlist
 	        SET is_active = 0,
+	            paused_reason = 'retargeted',
 	            updated_at = ?
 	        WHERE id = ?
 	          AND user_id = ?
@@ -2133,12 +2188,13 @@ export async function setWatchlistActive(
       `
         UPDATE watchlist
         SET is_active = ?,
+            paused_reason = ?,
             updated_at = ?
         WHERE id = ?
           AND user_id = ?
       `,
     )
-    .bind(isActive ? 1 : 0, nowIso(), watchlistId, userId)
+    .bind(isActive ? 1 : 0, isActive ? null : "user", nowIso(), watchlistId, userId)
     .run();
 
   return Number(result.meta?.changes ?? 0) > 0;

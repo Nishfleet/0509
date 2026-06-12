@@ -46,6 +46,21 @@ export function createAuth(env: AppEnv, request: Request) {
         httpOnly: true,
       },
     },
+    databaseHooks: {
+      user: {
+        update: {
+          after: async (user: { id: string; email: string }) => {
+            // Fires on every user update; the WHERE clauses inside make this
+            // a no-op unless the account email actually changed and stale
+            // auto-provisioned delivery targets exist.
+            const { migrateAutoProvisionedEmailTargets } = await import("~/lib/data.server");
+            await migrateAutoProvisionedEmailTargets(env, user.id, user.email).catch((error) => {
+              console.error("delivery-target email migration failed", error);
+            });
+          },
+        },
+      },
+    },
     user: {
       additionalFields: {
         onboardedAt: {
