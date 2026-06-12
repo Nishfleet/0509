@@ -1376,6 +1376,27 @@ export async function migrateAutoProvisionedEmailTargets(
   return Number(updated.meta?.changes ?? 0);
 }
 
+export async function hasInFlightWatchlistRun(
+  env: AppEnv,
+  watchlistId: string,
+  sinceIso: string,
+) {
+  const row = await one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM watchlist_run
+      WHERE watchlist_id = ?
+        AND status IN ('pending', 'running')
+        AND started_at >= ?
+      LIMIT 1
+    `,
+    watchlistId,
+    sinceIso,
+  );
+  return Boolean(row);
+}
+
 export async function getOldestUserId(env: AppEnv) {
   const row = await one<{ id: string }>(
     env,
@@ -2421,6 +2442,12 @@ export interface OperatorRiskSummary {
     userEmail: string;
     consecutiveFailures: number;
   }>;
+  staleWatchlists: Array<{
+    id: string;
+    name: string;
+    userEmail: string;
+    lastScannedAt: string | null;
+  }>;
   deliveryFailures24h: number;
   stuckRuns: number;
 }
@@ -2448,18 +2475,25 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
 
   const troubleWatchlists: OperatorRiskSummary["troubleWatchlists"] = [];
   for (const candidate of recentlyFailed) {
-    const lastRuns = await many<{ status: string }>(
+    const lastRuns = await many<{ status: string; error_code: string | null }>(
       env,
       `
-        SELECT status
+        SELECT status, error_code
         FROM watchlist_run
         WHERE watchlist_id = ?
         ORDER BY started_at DESC
-        LIMIT 3
+        LIMIT 5
       `,
       candidate.id,
     );
-    const consecutiveFailures = countLeadingFailures(lastRuns.map((run) => run.status));
+    // Provider cooldowns (rate_limited/cache_only) are soft: one rate-limit
+    // event fails a whole tail of the night's sequential scans — counting
+    // those as customer-at-risk produced alarm noise for both sides.
+    const consecutiveFailures = countLeadingFailures(
+      lastRuns
+        .filter((run) => !isSoftScanFailure(run.status, run.error_code))
+        .map((run) => run.status),
+    );
     if (consecutiveFailures >= 3) {
       troubleWatchlists.push({
         id: candidate.id,
@@ -2469,6 +2503,35 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
       });
     }
   }
+
+  // Budget-skipped watchlists never create a run row, so failure counting
+  // can't see them — staleness can: an active paid watchlist that hasn't
+  // been scanned in 36h means the nightly window is overflowing (or the
+  // cron is broken). This is the capacity canary.
+  const staleCutoff = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+  const staleRows = await many<{
+    id: string;
+    name: string;
+    user_email: string;
+    last_scanned_at: string | null;
+  }>(
+    env,
+    `
+      SELECT watchlist.id, watchlist.name, user.email AS user_email,
+             watchlist.last_scanned_at
+      FROM watchlist
+      INNER JOIN user_plan ON user_plan.user_id = watchlist.user_id
+      INNER JOIN user ON user.id = watchlist.user_id
+      WHERE watchlist.is_active = 1
+        AND user_plan.plan IN ('starter', 'agency')
+        AND watchlist.created_at < ?
+        AND (watchlist.last_scanned_at IS NULL OR watchlist.last_scanned_at < ?)
+      ORDER BY watchlist.last_scanned_at ASC
+      LIMIT 10
+    `,
+    staleCutoff,
+    staleCutoff,
+  );
 
   const [deliveryRow, stuckRow] = await Promise.all([
     one<{ count: number }>(
@@ -2496,9 +2559,19 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
 
   return {
     troubleWatchlists,
+    staleWatchlists: staleRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      userEmail: row.user_email,
+      lastScannedAt: row.last_scanned_at,
+    })),
     deliveryFailures24h: Number(deliveryRow?.count ?? 0),
     stuckRuns: Number(stuckRow?.count ?? 0),
   };
+}
+
+export function isSoftScanFailure(status: string, errorCode: string | null | undefined) {
+  return status === "failed" && (errorCode === "rate_limited" || errorCode === "cache_only");
 }
 
 export function countLeadingFailures(statuses: string[]) {
@@ -2531,6 +2604,7 @@ export async function getSuccessfulRunStatsForUserBetween(
       INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
       WHERE watchlist.user_id = ?
         AND watchlist_run.status = 'succeeded'
+        AND COALESCE(json_extract(watchlist_run.summary_json, '$.scanStatus'), '') != 'degraded'
         AND watchlist_run.started_at >= ?
         AND watchlist_run.started_at < ?
     `,

@@ -154,7 +154,9 @@ export default {
             ...result,
           });
           try {
-            const alert = await sendCustomerAtRiskAlert(env);
+            const alert = await sendCustomerAtRiskAlert(env, {
+              skippedForBudget: result.skippedForBudget,
+            });
             if (alert.sent) {
               console.log("customer-at-risk alert sent", alert);
             }

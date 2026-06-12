@@ -261,6 +261,16 @@ describe("customer-at-risk operator alert", () => {
     expect(countLeadingFailures([])).toBe(0);
   });
 
+  it("treats provider-cooldown failures as soft so they don't trip the streak", async () => {
+    const { isSoftScanFailure } = await import("~/lib/data.server");
+
+    expect(isSoftScanFailure("failed", "rate_limited")).toBe(true);
+    expect(isSoftScanFailure("failed", "cache_only")).toBe(true);
+    expect(isSoftScanFailure("failed", "browser_crash")).toBe(false);
+    expect(isSoftScanFailure("failed", null)).toBe(false);
+    expect(isSoftScanFailure("succeeded", "rate_limited")).toBe(false);
+  });
+
   it("sends one alert with all signals, and nothing when all clear", async () => {
     const sendOperatorAlertEmail = vi.fn().mockResolvedValue(true);
     vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
@@ -269,25 +279,32 @@ describe("customer-at-risk operator alert", () => {
         troubleWatchlists: [
           { id: "w1", name: "Nykaa watch", userEmail: "owner@example.com", consecutiveFailures: 4 },
         ],
+        staleWatchlists: [
+          { id: "w2", name: "Mamaearth watch", userEmail: "owner@example.com", lastScannedAt: null },
+        ],
         deliveryFailures24h: 2,
         stuckRuns: 0,
       }),
     }));
 
     const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
-    const result = await sendCustomerAtRiskAlert({ DB: {} } as never);
+    const result = await sendCustomerAtRiskAlert({ DB: {} } as never, { skippedForBudget: 3 });
 
     expect(result.sent).toBe(true);
     const call = sendOperatorAlertEmail.mock.calls[0]?.[1] as { subject: string; lines: string[] };
-    expect(call.lines).toHaveLength(2);
-    expect(call.lines[0]).toContain("Nykaa watch");
-    expect(call.lines[0]).toContain("4 scans in a row");
+    expect(call.lines).toHaveLength(4);
+    expect(call.lines[0]).toContain("3 watchlist(s) were SKIPPED");
+    expect(call.lines[1]).toContain("Mamaearth watch");
+    expect(call.lines[1]).toContain("not been scanned");
+    expect(call.lines[2]).toContain("Nykaa watch");
+    expect(call.lines[2]).toContain("4 scans in a row");
 
     vi.resetModules();
     vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
     vi.doMock("~/lib/data.server", () => ({
       getOperatorRiskSummary: vi.fn().mockResolvedValue({
         troubleWatchlists: [],
+        staleWatchlists: [],
         deliveryFailures24h: 0,
         stuckRuns: 0,
       }),

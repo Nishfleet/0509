@@ -198,6 +198,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       if (
         error instanceof Error &&
         (error.message.includes("refreshed recently") ||
+          error.message.includes("already running") ||
           error.message.includes("could not be resolved"))
       ) {
         return {
@@ -511,7 +512,12 @@ export default function WatchlistsRoute() {
   const lastAttemptByEventId = buildLastAttemptByEventId(data.recentDeliveryAttempts);
   const insightDepth = data.selectedWatchlist ? buildWatchlistInsightDepth(data.events) : null;
   let consecutiveFailedRuns = 0;
-  for (const run of data.runs as Array<{ status: string }>) {
+  for (const run of data.runs as Array<{ status: string; errorCode?: string | null }>) {
+    // Provider cooldowns are soft failures — skip them rather than alarming
+    // the customer about a watchlist that is actually fine.
+    if (run.status === "failed" && (run.errorCode === "rate_limited" || run.errorCode === "cache_only")) {
+      continue;
+    }
     if (run.status !== "failed") break;
     consecutiveFailedRuns += 1;
   }

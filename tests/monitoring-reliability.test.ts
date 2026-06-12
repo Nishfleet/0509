@@ -138,6 +138,7 @@ function mockReliabilityDependencies(input: {
     finishWatchlistRun,
     getDigest,
     getDigestByPeriod: vi.fn().mockResolvedValue(null),
+    hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
     getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
     getSavedQuery: vi.fn(),
     getSuccessfulRunStatsForUserBetween: vi
@@ -604,6 +605,23 @@ describe("first-scan baseline event", () => {
     const draft = (mocks.createWatchEvent.mock.calls[0] as unknown[])[1] as Record<string, unknown>;
     expect(String(draft.title)).toContain("Baseline captured: 3 active ads");
     expect((draft.metadata as Record<string, unknown>).kind).toBe("baseline");
+  });
+});
+
+describe("concurrent-scan guard", () => {
+  it("refuses to start a scan while another run for the watchlist is in flight", async () => {
+    const watchlist = buildWatchlist(1, "adspy");
+    const mocks = mockReliabilityDependencies({ watchlists: [watchlist] });
+    const data = await import("~/lib/data.server");
+    vi.mocked(data.hasInFlightWatchlistRun).mockResolvedValue(true);
+
+    const { runWatchlistManual } = await import("~/lib/monitoring.server");
+    await expect(runWatchlistManual(mocks.env as never, watchlist)).rejects.toThrow(
+      /already running/,
+    );
+    // no second run row, no second browser scan
+    expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
+    expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
   });
 });
 
