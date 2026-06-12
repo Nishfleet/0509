@@ -182,6 +182,32 @@ export async function action({ context, request }: ActionFunctionArgs) {
         };
       }
 
+      // "You keep access until the end of the period you've paid for" must
+      // hold regardless of which cancel button support clicks in Dodo: a
+      // cancellation effective in the future schedules (status flag only);
+      // the eventual subscription.expired performs the actual revoke.
+      const effectiveAtMs = Date.parse(revocation.effectiveAt ?? "");
+      if (
+        revocation.eventType === "subscription.cancelled" &&
+        Number.isFinite(effectiveAtMs) &&
+        effectiveAtMs > Date.now() + 60_000
+      ) {
+        await markDodoPlanPaymentIssue(env, {
+          userId,
+          status: "cancellation_scheduled",
+          occurredAt: new Date().toISOString(),
+        });
+        return {
+          outcome: "processed",
+          metadata: {
+            action: "cancellation_scheduled",
+            userId,
+            effectiveAt: revocation.effectiveAt,
+          },
+          body: { ok: true, cancellationScheduled: true },
+        };
+      }
+
       await revokeDodoPlanAccess(env, {
         userId,
         providerSubscriptionId: revocation.subscriptionId,

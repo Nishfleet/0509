@@ -78,6 +78,34 @@ export async function createDodo0509CheckoutSession({
   };
 }
 
+export async function createDodoCustomerPortalSession(
+  env: AppEnv,
+  customerId: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string | null> {
+  const apiKey = dodo0509ApiKey(env);
+  if (!apiKey) return null;
+
+  try {
+    const response = await fetcher(
+      `${dodo0509BaseUrl(env)}/customers/${encodeURIComponent(customerId)}/customer-portal/session`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+      },
+    );
+    if (!response.ok) return null;
+
+    const payload = objectOrEmpty(await response.json().catch(() => ({})));
+    return readString(payload, "link") || readString(payload, "url") || null;
+  } catch {
+    return null;
+  }
+}
+
 // Standard Svix/Dodo replay tolerance: signed events older (or newer) than
 // this are rejected so a captured-but-valid webhook cannot be replayed later.
 export const DODO_WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
@@ -324,6 +352,10 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
     subscriptionId,
     status: readString(root, "status") || eventType,
     revokedAt,
+    // When support uses Dodo's cancel-at-next-billing-date, the cancelled
+    // event can carry a future effective timestamp; revoking immediately
+    // would eat the period the customer already paid for.
+    effectiveAt: readString(root, "cancelled_at") || revokedAt,
     metadata: root,
   };
 }
