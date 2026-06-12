@@ -202,8 +202,10 @@ export default function BillingRoute() {
           <div className="f9-work-row">
             <strong>Refunds</strong>
             <span>
-              Refund requests follow the <Link to="/terms">terms of service</Link>. Email support and
-              include the receipt — refunded plans revert to the free workspace.
+              Five to Nine is a digital product delivered immediately, so purchases are final and we
+              don't offer refunds (<Link to="/terms">terms</Link>). Something not working as
+              expected? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll sort it out —
+              we're committed to 100% customer satisfaction.
             </span>
           </div>
         </div>

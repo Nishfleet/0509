@@ -38,10 +38,16 @@ export default function TermsRoute() {
 
           <LegalBlock title="Billing">
             <p>
-              Paid access, subscription changes, cancellations, and refunds should follow the confirmed payment path or
-              written order connected to the account. To cancel or request a refund, email{" "}
+              Paid access and subscription changes follow the confirmed payment path connected to the account. To
+              cancel, use the billing portal on the Plan &amp; billing page or email{" "}
               <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the account email; cancellation stops future renewals
-              and access ends when the paid period ends.
+              and access continues until the end of the period you have paid for.
+            </p>
+            <p>
+              Five to Nine is a digital product delivered immediately, so purchases are final and refunds cannot be
+              made. If something isn't working the way you expected, email{" "}
+              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will sort things out for you — we are committed to
+              100% customer satisfaction.
             </p>
           </LegalBlock>
 
