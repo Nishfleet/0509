@@ -9,6 +9,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
 
@@ -182,7 +183,7 @@ export default function DigestsRoute() {
                   key={digest.id}
                 >
                   <div>
-                    <h3>{new Date(digest.periodEnd).toLocaleDateString("en-IN")}</h3>
+                    <h3><LocalTime iso={digest.periodEnd} mode="date" /></h3>
                     <p className="f9-muted-copy">
                       {digest.items.length} proof-backed changes ready for review
                     </p>
@@ -211,8 +212,8 @@ export default function DigestsRoute() {
                   <div>
                     <span className="f9-app-kicker">Selected digest</span>
                     <h2>
-                      {new Date(data.selectedDigest.periodStart).toLocaleDateString("en-IN")} to{" "}
-                      {new Date(data.selectedDigest.periodEnd).toLocaleDateString("en-IN")}
+                      <LocalTime iso={data.selectedDigest.periodStart} mode="date" /> to{" "}
+                      <LocalTime iso={data.selectedDigest.periodEnd} mode="date" />
                     </h2>
                   </div>
                   <div className="f9-action-row">

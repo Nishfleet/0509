@@ -306,8 +306,11 @@ function priorityLabel(priorityBand: string, priorityScore: number | null) {
   return priorityScore === null ? priorityBand : `${priorityBand} (${priorityScore}/100)`;
 }
 
+// Exports must stay locale-neutral: UTC day boundary, en-GB format.
 function dateLabel(value: string) {
-  return new Date(value).toLocaleDateString("en-IN");
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(
+    new Date(value),
+  );
 }
 
 function stringValue(value: unknown) {

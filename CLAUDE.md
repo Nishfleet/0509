@@ -117,6 +117,8 @@ The product is **Five to Nine**; **0509.in** is its domain (05:09 = five-to-nine
 
 ## Conventions
 
+- **Global-first (Nish, 2026-06-12): no IST/India defaults anywhere.** 0509 may be India-first in marketing motion, but the product is built for the global market. UI timestamps render in the viewer's browser timezone/locale (`app/components/local-time.tsx`); emails use the workspace delivery timezone else UTC-labeled; search country defaults to the visitor's `cf-ipcountry` geo (`app/lib/countries.ts`) else "all" — never a hardcoded country; watchlists persist `target_country` at creation (migration 0025; NULL legacy rows keep their original India scan country so diffs stay coherent). Pricing is already served in the visitor's local currency via Dodo adaptive currency.
+
 - Keep new work in the Cloudflare app unless explicitly touching legacy reference code.
 - Favor honest product behavior over optimistic marketing claims.
 - If a live discovery provider is configured (browser scraping or Meta token) and live search fails, monitoring must fail honestly rather than silently degrading into demo-backed success. Demo mode is only for the explicitly unconfigured state and must always be labeled. Caution: `searchAds` in `meta-api.server.ts` still *defaults* to demo fallback — production callers must pass `allowDemoFallback: false`.

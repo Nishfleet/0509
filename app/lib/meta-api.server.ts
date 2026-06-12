@@ -1,5 +1,6 @@
 import { demoAds } from "~/lib/demo-data";
 import { deriveHook, deriveOffer, inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
+import { countryNameFromIso, isoFromCountryName } from "~/lib/countries";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord, NormalizedSavedQuery, SearchMode, SearchResponse } from "~/lib/types";
 
@@ -252,10 +253,12 @@ function matchesAd(ad: AdRecord, mode: SearchMode, filters: NormalizedSavedQuery
       ? ad.advertiser.toLowerCase().includes(query)
       : searchable.includes(query);
 
+  // Demo ads are sample data — they should demo for every visitor country,
+  // not only the market they were authored in.
   const countryMatch =
-    filters.country === "all" || filters.country === "India"
-      ? true
-      : ad.countries.includes(filters.country);
+    filters.country === "all" ||
+    ad.source === "demo" ||
+    ad.countries.includes(filters.country);
   const platformMatch = filters.platform === "all" || ad.platforms.includes(filters.platform);
   const creativeMatch = filters.creativeType === "all" || ad.format === filters.creativeType;
   const statusMatch =
@@ -304,18 +307,9 @@ function displayPlatform(value: string) {
 }
 
 function countryCode(value: string) {
-  const normalized = value.toLowerCase();
-  if (normalized === "india") return "IN";
-  if (normalized === "united states") return "US";
-  if (normalized === "united kingdom") return "GB";
-  if (normalized === "all") return "ALL";
-  return value.toUpperCase();
+  return isoFromCountryName(value) ?? value.toUpperCase();
 }
 
 function countryNameFromCode(value: string) {
-  const normalized = value.toUpperCase();
-  if (normalized === "IN") return "India";
-  if (normalized === "US") return "United States";
-  if (normalized === "GB") return "United Kingdom";
-  return value;
+  return countryNameFromIso(value) ?? value;
 }

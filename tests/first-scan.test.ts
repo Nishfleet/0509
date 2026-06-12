@@ -29,10 +29,20 @@ describe("nextScheduledScanAt", () => {
     expect(next.getUTCDay()).toBe(1);
   });
 
-  it("formats the label in IST", () => {
+  it("formats the label in UTC by default", () => {
     const label = formatNextScanLabel("starter", new Date("2026-06-10T01:00:00.000Z"));
-    expect(label).toContain("9:30");
-    expect(label).toContain("IST");
+    expect(label).toContain("4:00");
+    expect(label).toContain("UTC");
+  });
+
+  it("formats the label in the workspace timezone when provided", () => {
+    const label = formatNextScanLabel(
+      "starter",
+      new Date("2026-06-10T01:00:00.000Z"),
+      "America/New_York",
+    );
+    expect(label).toContain("12:00");
+    expect(label).toMatch(/EDT|GMT-4/);
   });
 });
 

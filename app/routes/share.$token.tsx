@@ -2,6 +2,7 @@ import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { LocalTime } from "~/components/local-time";
 import { ReportView } from "~/components/report-view";
 import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
@@ -116,8 +117,8 @@ export default function ShareRoute() {
               <div>
                 <p className="f9-app-kicker">Shared digest snapshot</p>
                 <h1>
-                  {new Date(digestSnapshot.periodStart).toLocaleDateString("en-IN")} to{" "}
-                  {new Date(digestSnapshot.periodEnd).toLocaleDateString("en-IN")}
+                  <LocalTime iso={digestSnapshot.periodStart} mode="date" /> to{" "}
+                  <LocalTime iso={digestSnapshot.periodEnd} mode="date" />
                 </h1>
               </div>
               <button

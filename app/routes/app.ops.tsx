@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useLoaderData } from "react-router";
+import { LocalTime } from "~/components/local-time";
 import type { LoaderFunctionArgs } from "react-router";
 
 export const meta = () => [{ title: "Ops | Five to Nine" }];
@@ -166,11 +167,13 @@ export default function OpsRoute() {
                 <h3>{formatDiscoveryStatus(item.status)}</h3>
                 <p>{item.summary}</p>
                 <p className="f9-muted-copy">
-                  {item.lastFailureAt
-                    ? `Last failure ${formatTimestamp(item.lastFailureAt)}`
-                    : item.lastSuccessAt
-                      ? `Last success ${formatTimestamp(item.lastSuccessAt)}`
-                      : `Last updated ${formatTimestamp(item.updatedAt)}`}
+                  {item.lastFailureAt ? (
+                    <>Last failure {formatTimestamp(item.lastFailureAt)}</>
+                  ) : item.lastSuccessAt ? (
+                    <>Last success {formatTimestamp(item.lastSuccessAt)}</>
+                  ) : (
+                    <>Last updated {formatTimestamp(item.updatedAt)}</>
+                  )}
                   {item.failureClass ? ` · ${item.failureClass}` : ""}
                 </p>
               </>
@@ -255,7 +258,7 @@ function describeBlockedTarget(item: {
 }
 
 function formatTimestamp(value: string) {
-  return new Date(value).toLocaleString("en-IN");
+  return <LocalTime iso={value} />;
 }
 
 function formatDiscoveryProvider(provider: string) {

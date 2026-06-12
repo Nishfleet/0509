@@ -10,6 +10,7 @@ const watchlist: WatchlistRecord = {
   targetId: "nykaa",
   targetFingerprint: "fp-nykaa",
   targetLabel: "Nykaa",
+  targetCountry: null,
   isActive: true,
   lastScannedAt: null,
   createdAt: "2026-03-01T00:00:00.000Z",
@@ -1010,6 +1011,7 @@ describe("runWatchlistManual cheap scan path", () => {
       targetId: "https://competitor.example/onboarding",
       targetFingerprint: "fp-competitor-website",
       targetLabel: "Competitor",
+      targetCountry: null,
     };
     const previousProofAt = new Date(Date.now() - 21 * 60 * 60 * 1000).toISOString();
     const captureLandingPageSnapshot = vi.fn().mockResolvedValue({
@@ -1242,6 +1244,7 @@ describe("runWatchlistManual cheap scan path", () => {
       targetId: "https://competitor.example/onboarding",
       targetFingerprint: "fp-competitor-website",
       targetLabel: "Competitor",
+      targetCountry: null,
     };
     const captureLandingPageSnapshot = vi.fn().mockResolvedValue({
       rawUrl: "https://competitor.example/onboarding",
@@ -1425,6 +1428,7 @@ describe("runWatchlistManual cheap scan path", () => {
 	    targetId: "https://competitor.example/onboarding",
 	    targetFingerprint: "fp-competitor-website",
 	    targetLabel: "Competitor",
+	    targetCountry: null,
 	  };
 
 	  vi.doMock("~/lib/analysis.server", () => ({
@@ -1581,6 +1585,7 @@ describe("runWatchlistManual cheap scan path", () => {
       targetId: "https://competitor.example/onboarding",
       targetFingerprint: "fp-competitor-website",
       targetLabel: "Competitor",
+      targetCountry: null,
     };
 
     vi.doMock("~/lib/analysis.server", () => ({
@@ -1755,6 +1760,7 @@ describe("runWatchlistManual cheap scan path", () => {
       targetId: "https://competitor.example/onboarding",
       targetFingerprint: "fp-competitor-website",
       targetLabel: "Competitor",
+      targetCountry: null,
     };
     const captureLandingPageSnapshot = vi.fn().mockResolvedValue({
       rawUrl: "https://competitor.example/onboarding",
