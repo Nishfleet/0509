@@ -137,6 +137,30 @@ export default function MarketingRoute() {
   );
 
   useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    const root = document.documentElement;
+    root.classList.add("ld-motion");
+    const targets = Array.from(document.querySelectorAll(".ld-reveal"));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-seen");
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.08 },
+    );
+    targets.forEach((el) => observer.observe(el));
+    return () => {
+      observer.disconnect();
+      root.classList.remove("ld-motion");
+    };
+  }, []);
+
+  useEffect(() => {
     if (localPricing?.available) return undefined;
 
     let active = true;
@@ -336,7 +360,7 @@ export default function MarketingRoute() {
 
       <section className="ld-how" id="platform">
         <h2>Know when competitors change the offer.</h2>
-        <div className="ld-how-grid">
+        <div className="ld-how-grid ld-reveal">
           {howSteps.map((item) => (
             <article key={item.step}>
               <span className="ld-step">{item.step}</span>
@@ -362,7 +386,7 @@ export default function MarketingRoute() {
           </div>
         </div>
 
-        <div className="ld-caseboard" aria-label="Sample Five to Nine proof trail">
+        <div className="ld-caseboard ld-reveal" aria-label="Sample Five to Nine proof trail">
           <article className="ld-case-lead">
             <span className="ld-kicker">{demoProof.competitor.market}</span>
             <h3>{demoProof.competitor.name}</h3>
@@ -443,7 +467,7 @@ export default function MarketingRoute() {
             something actually moved — and tells you what it checked when nothing did.
           </p>
         </div>
-        <div className="ld-quiet-grid" aria-label="Zero-noise proof points">
+        <div className="ld-quiet-grid ld-reveal" aria-label="Zero-noise proof points">
           {quietSignals.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
@@ -455,7 +479,7 @@ export default function MarketingRoute() {
 
       <section className="ld-stats">
         <h2>Stop finding out after the sales call.</h2>
-        <div className="ld-stats-belt" aria-label="Five to Nine signal model">
+        <div className="ld-stats-belt ld-reveal" aria-label="Five to Nine signal model">
           {backboneStats.map((stat) => (
             <article key={stat.label}>
               <strong>{stat.value}</strong>
@@ -483,7 +507,7 @@ export default function MarketingRoute() {
           </p>
         </div>
 
-        <div className="f9-commerce-grid">
+        <div className="f9-commerce-grid ld-reveal">
           {rootData.pricingPlans.map((plan) => {
             const monthlyReady = hasPrice(localPricing, plan.slug, "monthly");
             const yearlyReady = hasPrice(localPricing, plan.slug, "yearly");
@@ -550,7 +574,7 @@ export default function MarketingRoute() {
               plan.
             </p>
           </div>
-          <div className="ld-bundle-grid">
+          <div className="ld-bundle-grid ld-reveal">
             {(rootData.usageBundles ?? []).map((bundle) => (
               <article className="ld-bundle-card" key={bundle.slug}>
                 <span className="ld-kicker">{bundle.creditLabel}</span>
