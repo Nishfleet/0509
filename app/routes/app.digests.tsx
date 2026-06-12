@@ -8,6 +8,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
+import { CopyButton } from "~/components/copy-button";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
@@ -143,12 +144,15 @@ export default function DigestsRoute() {
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>
             {actionData.ok && actionData.message.startsWith("http") ? (
-              <a href={actionData.message} rel="noreferrer" target="_blank">
-                {actionData.message}
-              </a>
-          ) : (
-              actionData.message
-            )}
+              <>
+                <a href={actionData.message} rel="noreferrer" target="_blank">
+                  {actionData.message}
+                </a>{" "}
+                <CopyButton value={actionData.message} />
+              </>
+              ) : (
+                actionData.message
+              )}
           </p>
         </div>
       ) : null}

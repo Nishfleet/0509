@@ -1304,7 +1304,7 @@ export async function sendOperatorAlertEmail(
     to: recipient,
     subject: input.subject,
     html: `
-      <div style="font-family: Inter, system-ui, sans-serif; color: #1d2433; font-size: 14px; line-height: 1.6;">
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 14px; line-height: 1.6;">
         <p style="margin: 0 0 12px;"><strong>Customer-at-risk signals from last night's run:</strong></p>
         <ul style="margin: 0 0 12px; padding-left: 18px;">
           ${input.lines.map((line) => `<li style="margin: 0 0 6px;">${escapeHtml(line)}</li>`).join("")}
@@ -1372,7 +1372,7 @@ export async function sendDeliveryTestEmail(
     to: input.email,
     subject: "Test email from Five to Nine",
     html: `
-      <div style="font-family: Inter, system-ui, sans-serif; color: #1d2433; font-size: 15px; line-height: 1.6;">
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
         <p style="margin: 0 0 12px;">${greeting}</p>
         <p style="margin: 0 0 12px;">
           This is a test from Five to Nine. If you're reading it, competitor alerts and digests can
@@ -1443,11 +1443,11 @@ export async function sendAccountActionEmail(
     to: input.email,
     subject: copy.subject,
     html: `
-      <div style="font-family: Inter, system-ui, sans-serif; color: #1d2433; font-size: 15px; line-height: 1.6;">
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
         <p style="margin: 0 0 12px;">${greeting}</p>
         <p style="margin: 0 0 16px;">${copy.body}</p>
         <p style="margin: 0 0 20px;">
-          <a href="${escapeHtml(input.actionUrl)}" style="display: inline-block; background: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+          <a href="${escapeHtml(input.actionUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
             ${copy.action}
           </a>
         </p>
@@ -1538,14 +1538,14 @@ function renderPasswordResetHtml(input: { name: string | null; resetUrl: string 
   const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
 
   return `
-    <div style="font-family: Inter, system-ui, sans-serif; color: #1d2433; font-size: 15px; line-height: 1.6;">
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
       <p style="margin: 0 0 12px;">${greeting}</p>
       <p style="margin: 0 0 16px;">
         Someone asked to reset the password for this Five to Nine account. If that was you, use the
         button below — the link works for one hour.
       </p>
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.resetUrl)}" style="display: inline-block; background: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+        <a href="${escapeHtml(input.resetUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
           Reset password
         </a>
       </p>
@@ -1673,13 +1673,13 @@ async function sendCloudflareEmail(
 
 function appendEmailFooter(html: string, unsubscribeUrl: string | null) {
   const unsubscribeLink = unsubscribeUrl
-    ? ` · <a href="${unsubscribeUrl}" style="color: #5b6577;">Unsubscribe</a>`
+    ? ` · <a href="${unsubscribeUrl}" style="color: #5b6577; text-decoration: underline;">Unsubscribe</a>`
     : "";
 
   return `${html}
     <hr style="margin: 28px 0 14px; border: none; border-top: 1px solid #e4e7ec;" />
-    <p style="font-family: Inter, system-ui, sans-serif; margin: 0; color: #98a2b3; font-size: 12px; line-height: 1.5;">
-      Five to Nine · <a href="https://0509.in" style="color: #5b6577;">0509.in</a> · Questions? <a href="mailto:support@0509.in" style="color: #5b6577;">support@0509.in</a> · You're receiving this because email delivery is configured for your workspace${unsubscribeLink}
+    <p style="font-family: Inter, system-ui, sans-serif; margin: 0; background-color: #ffffff; color: #98a2b3; font-size: 12px; line-height: 1.5;">
+      Five to Nine · <a href="https://0509.in" style="color: #5b6577; text-decoration: underline;">0509.in</a> · Questions? <a href="mailto:support@0509.in" style="color: #5b6577; text-decoration: underline;">support@0509.in</a> · You're receiving this because email delivery is configured for your workspace${unsubscribeLink}
     </p>
   `;
 }
@@ -1853,7 +1853,7 @@ function renderDigestHtml(input: {
   if (input.items.length === 0 && input.heartbeat) {
     const cadenceLabel = digestCadenceLabel(input.cadence);
     return `
-    <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, all quiet on your competitors.</h1>
       <p style="margin: 0 0 16px; color: #475467;">
@@ -1881,7 +1881,7 @@ function renderDigestHtml(input: {
   const cadenceLabel = digestCadenceLabel(input.cadence);
 
   return `
-    <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, here’s what changed on Meta.</h1>
       <p style="margin: 0 0 24px; color: #475467;">
@@ -1893,7 +1893,7 @@ function renderDigestHtml(input: {
             <section style="margin-bottom: 24px; padding: 18px; border: 1px solid #d7dce5; border-radius: 18px;">
               <h2 style="margin: 0 0 12px; font-size: 18px;">${
                 watchlistUrlFor(items[0])
-                  ? `<a href="${watchlistUrlFor(items[0])}" style="color: #0b1220; text-decoration: none;">${escapeHtml(watchlistName)}</a>`
+                  ? `<a href="${watchlistUrlFor(items[0])}" style="color: #0b1220; text-decoration: underline;">${escapeHtml(watchlistName)}</a>`
                   : escapeHtml(watchlistName)
               }</h2>
               <ul style="margin: 0; padding-left: 18px;">
@@ -2029,7 +2029,7 @@ function renderEventDiffHtml(event: WatchEventRecord) {
 
   // The one fact the customer actually wants: what it said before, and now.
   return `
-    <table style="margin: 0 0 16px; border-collapse: collapse; font-size: 14px;">
+    <table style="margin: 0 0 16px; border-collapse: collapse; font-size: 14px; background-color: #ffffff; color: #0b1220;">
       <tr>
         <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Before</td>
         <td style="padding: 4px 0; color: #475467;">${escapeHtml(from)}</td>
@@ -2077,12 +2077,12 @@ function buildInstantAlertContent(
       subject,
       watchlistUrl,
       html: `
-        <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
+        <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
           <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
           <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
           <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
           ${renderEventDiffHtml(primaryEvent)}
-          ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}">See the evidence</a></p>` : ""}
+          ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">See the evidence</a></p>` : ""}
         </div>
       `,
     };
@@ -2098,7 +2098,7 @@ function buildInstantAlertContent(
     subject,
     watchlistUrl,
     html: `
-      <div style="font-family: Inter, system-ui, sans-serif; color: #0b1220; line-height: 1.5;">
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
         <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
         <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
         <ul style="padding-left: 18px;">
@@ -2113,7 +2113,7 @@ function buildInstantAlertContent(
             )
             .join("")}
         </ul>
-        ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}">View watchlist</a></p>` : ""}
+        ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">View watchlist</a></p>` : ""}
       </div>
     `,
   };

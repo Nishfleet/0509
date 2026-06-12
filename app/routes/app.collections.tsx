@@ -8,6 +8,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
@@ -207,12 +208,15 @@ export default function CollectionsRoute() {
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>
             {actionData.ok && actionData.message.startsWith("http") ? (
-              <a href={actionData.message} rel="noreferrer" target="_blank">
-                {actionData.message}
-              </a>
-          ) : (
-              actionData.message
-            )}
+              <>
+                <a href={actionData.message} rel="noreferrer" target="_blank">
+                  {actionData.message}
+                </a>{" "}
+                <CopyButton value={actionData.message} />
+              </>
+              ) : (
+                actionData.message
+              )}
             {"error" in actionData && actionData.error === "plan_limit_exceeded" ? (
               <>
                 {" "}
