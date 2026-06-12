@@ -26,6 +26,7 @@ import {
 import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
 import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import { formatNextScanLabel } from "~/lib/schedule-display";
 import { createReportId } from "~/lib/report";
 import type {
   DeliveryAttemptRecord,
@@ -58,9 +59,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const [watchlists, discoveryStatus] = await Promise.all([
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const [watchlists, discoveryStatus, plan] = await Promise.all([
     listWatchlists(env, session.user.id),
     resolveCommercialAdSourceStatus(env),
+    getUserPlan(env, session.user.id),
   ]);
   const url = new URL(request.url);
   const selectedWatchlistId = url.searchParams.get("watchlist") ?? watchlists[0]?.id ?? null;
@@ -84,6 +87,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       recentProofCaptures: [] as ProofCaptureRecord[],
       proofSummary: emptyProofSummary(),
       discoveryStatus,
+      plan,
     };
   }
 
@@ -141,6 +145,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     recentProofCaptures,
     proofSummary: buildProofSummary(recentProofCaptures),
     discoveryStatus,
+    plan,
   };
 }
 
@@ -546,8 +551,8 @@ export default function WatchlistsRoute() {
                   </p>
                   <p className="f9-muted-copy">
                     {watchlist.lastScannedAt
-                      ? `Last scanned ${new Date(watchlist.lastScannedAt).toLocaleString("en-IN")}`
-                      : "Never scanned yet"}
+                      ? `Last scanned ${new Date(watchlist.lastScannedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`
+                      : "First scan in progress — results land in a few minutes"}
                   </p>
                 </div>
               </a>
@@ -728,7 +733,9 @@ export default function WatchlistsRoute() {
                   <p className="f9-app-kicker">See what changed</p>
                   {data.events.length === 0 ? (
                     <p className="f9-muted-copy">
-                      No confirmed changes yet. Run the watchlist or wait for the next scheduled scan.
+                      {data.selectedWatchlist.lastScannedAt
+                        ? `No confirmed changes yet — we'll flag the next one. Next scheduled scan: ${formatNextScanLabel(data.plan)}.`
+                        : "Your first scan is running now. Results appear here in a couple of minutes — refresh to check."}
                     </p>
                   ) : (
                     <ul className="event-list">

@@ -94,6 +94,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
       targetLabel: query,
     });
 
+    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+
     await completeUserOnboarding(env, session.user.id);
 
     throw redirect(watchlist ? `/app/watchlists?watchlist=${watchlist.id}` : "/app/watchlists");

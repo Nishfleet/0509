@@ -233,6 +233,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
       });
     }
 
+    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+
     if (!watchlist) {
       return { ok: false, message: "Could not create this watchlist." };
     }

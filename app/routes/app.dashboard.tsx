@@ -128,7 +128,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    await createWatchlist(env, session.user.id, {
+    const watchlist = await createWatchlist(env, session.user.id, {
       name: `${savedQuery.name} watch`,
       targetType: "saved_query",
       targetId: savedQuery.id,
@@ -136,9 +136,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
       targetLabel: savedQuery.name,
     });
 
+    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+
     return {
       ok: true,
-      message: `Now tracking ${savedQuery.name}.`,
+      message: `Now tracking ${savedQuery.name}. First scan is running now.`,
     };
   }
 
