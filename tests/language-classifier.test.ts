@@ -37,6 +37,36 @@ describe("classifyLanguage", () => {
     expect(result.confidence).toBeGreaterThan(0.65);
   });
 
+  it("uses Global for Arabic script copy", () => {
+    const result = classifyLanguage({
+      previewHeadline: "عرض اليوم فقط",
+      body: "اشتر الآن واحصل على خصم كبير على كل المنتجات",
+    });
+
+    expect(result.label).toBe("Global");
+    expect(result.metadata.decisionReason).toBe("global_script_detected");
+  });
+
+  it("uses Global for Japanese script copy", () => {
+    const result = classifyLanguage({
+      previewHeadline: "本日限定セール",
+      body: "今すぐ購入して大きな割引をゲットしよう",
+    });
+
+    expect(result.label).toBe("Global");
+    expect(result.metadata.decisionReason).toBe("global_script_detected");
+  });
+
+  it("uses Global for Cyrillic script copy", () => {
+    const result = classifyLanguage({
+      previewHeadline: "Скидка только сегодня",
+      body: "Купите сейчас и получите бесплатную доставку по всей стране",
+    });
+
+    expect(result.label).toBe("Global");
+    expect(result.metadata.decisionReason).toBe("global_script_detected");
+  });
+
   it("uses Regional for non-Devanagari Indic script", () => {
     const result = classifyLanguage({
       previewHeadline: "আজই অর্ডার করুন",
