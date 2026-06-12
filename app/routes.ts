@@ -38,6 +38,7 @@ export default [
     route("digests", "routes/app.digests.tsx"),
     route("shares", "routes/app.shares.tsx"),
     route("billing", "routes/app.billing.tsx"),
+    route("account", "routes/app.account.tsx"),
     route("sources", "routes/app.sources.tsx"),
     route("ops", "routes/app.ops.tsx"),
     route("reports/:id", "routes/app.reports.tsx"),
