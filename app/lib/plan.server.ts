@@ -164,6 +164,26 @@ export async function getProofUsageSummary(env: AppEnv, userId: string) {
   };
 }
 
+export async function listActiveProofCreditGrants(env: AppEnv, userId: string) {
+  try {
+    const rows = await many<{ credits: number; expires_at: string }>(
+      env,
+      `
+        SELECT credits, expires_at
+        FROM proof_usage_credit
+        WHERE user_id = ?
+          AND expires_at > ?
+        ORDER BY expires_at ASC
+      `,
+      userId,
+      new Date().toISOString(),
+    );
+    return rows.map((row) => ({ credits: Number(row.credits), expiresAt: row.expires_at }));
+  } catch {
+    return [];
+  }
+}
+
 function startOfRollingProofWindowIso() {
   return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 }

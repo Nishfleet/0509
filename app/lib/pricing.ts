@@ -36,6 +36,9 @@ const PLANS: PricingPlan[] = [
       "High-priority change alerts",
       "250 evidence checks per month",
       "Landing-page evidence for material changes",
+      "Email + Slack delivery",
+      "Reads creative text in Hindi, Hinglish, and English",
+      "CSV, JSON, and Slack-ready exports",
     ],
   },
   {
@@ -46,10 +49,14 @@ const PLANS: PricingPlan[] = [
     detail: "For agencies and growth teams watching crowded categories.",
     features: [
       "75 active watchlists",
+      "Daily competitor scans, first in the nightly queue",
       "250 saved collections",
       "Daily and weekly evidence-backed briefs",
+      "High-priority change alerts",
       "2,500 evidence checks per month",
-      "Priority tracking access support",
+      "Client-ready proof reports (share link + PDF print)",
+      "Read-only API + MCP endpoint for your tools and agents",
+      "Email + Slack delivery",
     ],
   },
 ];
