@@ -23,6 +23,7 @@ import {
   parseSearchParams,
 } from "~/lib/normalize";
 import {
+  formatAdvertiserLabel,
   formatCaptureMethodLabel,
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
@@ -261,7 +262,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       tags,
     );
 
-    return { ok: true, message: `Saved ${ad.advertiser} to your collection.` };
+    return { ok: true, message: `Saved ${ad.advertiser?.trim() || "the ad"} to your collection.` };
   }
 
   return { ok: false, message: "Unknown search action." };
@@ -633,7 +634,7 @@ export default function SearchRoute() {
                       ).toString()}`}
                     >
                       <div>
-                        <span>{ad.advertiser}</span>
+                        <span>{formatAdvertiserLabel(ad.advertiser)}</span>
                         <h3>{ad.previewHeadline}</h3>
                       </div>
                       <p>{ad.hook}</p>
@@ -661,7 +662,7 @@ export default function SearchRoute() {
                   <div className="f9-panel-head">
                     <div>
                       <span>Ad details</span>
-                      <h2>{data.selectedAd.advertiser}</h2>
+                      <h2>{formatAdvertiserLabel(data.selectedAd.advertiser)}</h2>
                     </div>
                     <em className={data.selectedAd.active ? "is-active" : ""}>
                       {data.selectedAd.active ? "Active" : "Inactive"}

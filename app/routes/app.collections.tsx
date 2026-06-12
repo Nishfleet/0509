@@ -8,6 +8,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
 import { proofLinkForAd } from "~/lib/proof-link";
 import { createReportId } from "~/lib/report";
@@ -380,7 +381,7 @@ export default function CollectionsRoute() {
                     <article className="f9-work-row" key={item.id}>
                       <div className="f9-panel-toolbar">
                         <div>
-                          <h3>{item.ad.advertiser}</h3>
+                          <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
                           <p className="f9-muted-copy">{item.ad.hook}</p>
                         </div>
                         <span className="f9-status-pill">{item.ad.platforms?.[0] ?? item.ad.format}</span>

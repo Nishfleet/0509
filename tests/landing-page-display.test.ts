@@ -114,3 +114,16 @@ describe("formatDeliveryAttemptStatusLabel", () => {
     expect(formatDeliveryAttemptStatusLabel("skipped_due_to_quiet_hours", "email")).toBe("Deferred by quiet hours");
   });
 });
+
+describe("formatAdvertiserLabel", () => {
+  it("labels missing advertisers honestly instead of guessing", async () => {
+    const { formatAdvertiserLabel } = await import("~/lib/landing-page-display");
+
+    expect(formatAdvertiserLabel("Nykaa")).toBe("Nykaa");
+    expect(formatAdvertiserLabel("  Nykaa  ")).toBe("Nykaa");
+    expect(formatAdvertiserLabel("")).toBe("Advertiser unconfirmed");
+    expect(formatAdvertiserLabel("   ")).toBe("Advertiser unconfirmed");
+    expect(formatAdvertiserLabel(null)).toBe("Advertiser unconfirmed");
+    expect(formatAdvertiserLabel(undefined)).toBe("Advertiser unconfirmed");
+  });
+});

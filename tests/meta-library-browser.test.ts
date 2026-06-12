@@ -317,7 +317,7 @@ describe("searchMetaLibraryByBrowser", () => {
       ads: [
         expect.objectContaining({
           metaAdId: "1234567890",
-          advertiser: "nykaa",
+          advertiser: "",
           landingPageUrl: "https://www.nykaa.com/glow-sale",
           source: "meta_library_browser",
         }),
@@ -469,7 +469,7 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.ads).toEqual([
       expect.objectContaining({
         metaAdId: "1234567890",
-        advertiser: "nykaa",
+        advertiser: "",
       }),
     ]);
   });
@@ -1009,7 +1009,7 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.ads).toEqual([
       expect.objectContaining({
         metaAdId: "1234567890",
-        advertiser: "nykaa",
+        advertiser: "",
         adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
         landingPageUrl: "https://www.nykaa.com/glow-sale",
         platforms: expect.arrayContaining(["Instagram", "Facebook"]),
@@ -1095,7 +1095,7 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.ads).toEqual([
       expect.objectContaining({
         metaAdId: "1234567890",
-        advertiser: "nykaa",
+        advertiser: "",
         adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
         platforms: expect.arrayContaining(["Instagram", "Facebook"]),
         source: "meta_library_browser",
