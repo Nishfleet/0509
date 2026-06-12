@@ -347,6 +347,12 @@ interface ShareLinkRow {
   revoked_at: string | null;
 }
 
+interface WorkspaceBrandingRow {
+  user_id: string;
+  brand_name: string | null;
+  updated_at: string;
+}
+
 interface MetaLogRow {
   status: MetaIntegrationStatus["status"];
   summary: string;
@@ -4747,6 +4753,51 @@ export async function revokeShareLink(env: AppEnv, userId: string, shareLinkId: 
     .run();
 
   return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export const WORKSPACE_BRAND_NAME_MAX_LENGTH = 60;
+
+function normalizeWorkspaceBrandName(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim().slice(0, WORKSPACE_BRAND_NAME_MAX_LENGTH).trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export async function getWorkspaceBranding(env: AppEnv, userId: string) {
+  const row = await one<WorkspaceBrandingRow>(
+    env,
+    `
+      SELECT user_id, brand_name, updated_at
+      FROM workspace_branding
+      WHERE user_id = ?
+    `,
+    userId,
+  );
+
+  return { brandName: row?.brand_name ?? null };
+}
+
+export async function upsertWorkspaceBranding(
+  env: AppEnv,
+  userId: string,
+  input: { brandName: string | null | undefined },
+) {
+  const brandName = normalizeWorkspaceBrandName(input.brandName);
+
+  await run(
+    env,
+    `
+      INSERT INTO workspace_branding (user_id, brand_name, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        brand_name = excluded.brand_name,
+        updated_at = excluded.updated_at
+    `,
+    userId,
+    brandName,
+    nowIso(),
+  );
+
+  return { brandName };
 }
 
 function toShareLinkRecord(row: ShareLinkRow): ShareLinkRecord {

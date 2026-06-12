@@ -168,12 +168,19 @@ describe("account page", () => {
     }));
     vi.doMock("react-router", async () => {
       const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
       return {
         ...actual,
+        Form: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        useActionData: vi.fn().mockReturnValue(undefined),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
         useLoaderData: vi.fn().mockReturnValue({
           email: "owner@example.com",
           name: "Owner",
           currentSessionId: "session-1",
+          plan: "agency",
+          brandName: null,
           sessions: [
             { id: "session-1", createdAt: "2026-06-01T00:00:00.000Z", userAgent: "Safari" },
             { id: "session-2", createdAt: "2026-05-01T00:00:00.000Z", userAgent: "Chrome" },
@@ -197,6 +204,8 @@ describe("account page", () => {
     expect(markup).toContain("Sign out other devices");
     expect(markup).toContain("Delete this account");
     expect(markup).toContain("support@0509.in");
+    expect(markup).toContain("Report branding");
+    expect(markup).toContain("save-report-branding");
   });
 
   it("sends account-action emails through the shared path without storing the secret URL", async () => {

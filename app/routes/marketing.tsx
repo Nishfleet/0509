@@ -55,6 +55,24 @@ const backboneStats = [
   { value: "05:09", label: "morning brief", detail: "what changed and why it matters" },
 ];
 
+const quietSignals = [
+  {
+    title: "Baseline first",
+    detail:
+      "Your first scan records what is already running as a baseline — no alert flood for ads that existed before you started watching.",
+  },
+  {
+    title: "One change, one alert",
+    detail:
+      "When a field moves you hear about it once. The same field stays quiet for 48 hours unless it changes again.",
+  },
+  {
+    title: "Silence you can trust",
+    detail:
+      "Quiet periods still send a heartbeat — “All quiet — 24 ads checked” — so silence always means we looked and nothing moved.",
+  },
+];
+
 const signalRays = Array.from({ length: 42 }, (_, index) => {
   const angle = -72 + (index * 144) / 41;
   const length = 36 + ((index * 17) % 42);
@@ -405,6 +423,28 @@ export default function MarketingRoute() {
         </div>
       </section>
 
+      <section className="f9-demo-proof-section" id="signal">
+        <div className="f9-container f9-demo-proof-layout">
+          <div className="f9-demo-proof-copy">
+            <span>Zero-noise monitoring</span>
+            <h2>Signal, not noise.</h2>
+            <p>
+              Ad-spy tools drown teams in “new ad” pings. Five to Nine alerts you when something
+              actually moved — and tells you what it checked when nothing did.
+            </p>
+          </div>
+
+          <div className="f9-demo-intel-grid f9-quiet-grid" aria-label="Zero-noise proof points">
+            {quietSignals.map((item) => (
+              <article key={item.title}>
+                <span>{item.title}</span>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="f9-growth-pricing" id="pricing">
         <div className="f9-container">
           <div className="f9-growth-pricing-head">
@@ -478,6 +518,12 @@ export default function MarketingRoute() {
               );
             })}
           </div>
+
+          <p className="f9-growth-pricing-note">
+            Coming from MagicBrief or another tool that's winding down? Your boards and watchlists
+            set up in an afternoon — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
+            help you move.
+          </p>
 
           <div className="f9-usage-bundles" aria-label="Extra check packs">
             <div className="f9-usage-bundles-head">
