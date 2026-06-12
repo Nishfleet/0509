@@ -53,6 +53,44 @@ export function createAuth(env: AppEnv, request: Request) {
           input: false,
         },
       },
+      changeEmail: {
+        enabled: true,
+        sendChangeEmailVerification: async ({
+          user,
+          newEmail,
+          url,
+        }: {
+          user: { id: string; email: string; name?: string | null };
+          newEmail: string;
+          url: string;
+          token: string;
+        }) => {
+          const { sendAccountActionEmail } = await import("~/lib/delivery.server");
+          // Verification goes to the CURRENT address so a hijacked session
+          // can't silently move the account.
+          await sendAccountActionEmail(env, {
+            userId: user.id,
+            email: user.email,
+            name: user.name ?? null,
+            kind: "change_email",
+            actionUrl: url,
+          });
+          void newEmail;
+        },
+      },
+      deleteUser: {
+        enabled: true,
+        sendDeleteAccountVerification: async ({ user, url }) => {
+          const { sendAccountActionEmail } = await import("~/lib/delivery.server");
+          await sendAccountActionEmail(env, {
+            userId: user.id,
+            email: user.email,
+            name: user.name ?? null,
+            kind: "delete_account",
+            actionUrl: url,
+          });
+        },
+      },
     },
     emailAndPassword: {
       enabled: true,
