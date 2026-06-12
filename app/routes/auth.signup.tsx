@@ -32,6 +32,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     redirectTo,
+    // The marketing hero's email-capture form lands here with ?email=…
+    prefillEmail: url.searchParams.get("email")?.trim() || "",
   };
 }
 
@@ -72,7 +74,11 @@ export default function SignupRoute() {
           </div>
         </section>
 
-        <AuthForm mode="signup" redirectTo={loaderData.redirectTo} />
+        <AuthForm
+          initialEmail={loaderData.prefillEmail}
+          mode="signup"
+          redirectTo={loaderData.redirectTo}
+        />
       </div>
     </main>
   );
