@@ -28,6 +28,24 @@ const GLOBAL_SCRIPT_LANGUAGE_CODES: Record<string, string> = {
   hiragana: "ja",
   katakana: "ja",
   hangul: "ko",
+  ethiopic: "am",
+};
+
+const LATIN_LABEL_LANGUAGE_CODES: Record<string, string> = {
+  Spanish: "es",
+  Portuguese: "pt",
+  French: "fr",
+  German: "de",
+  Italian: "it",
+  Dutch: "nl",
+  Turkish: "tr",
+  Polish: "pl",
+  Indonesian: "id",
+  Vietnamese: "vi",
+  Swahili: "sw",
+  Afrikaans: "af",
+  Hausa: "ha",
+  Yoruba: "yo",
 };
 
 type TranslationCandidateAd = Pick<
@@ -127,12 +145,7 @@ function shouldTranslateAd(ad: TranslationCandidateAd) {
     return false;
   }
 
-  return (
-    ad.languageLabel === "Hindi" ||
-    ad.languageLabel === "Hinglish" ||
-    ad.languageLabel === "Regional" ||
-    ad.languageLabel === "Global"
-  );
+  return ad.languageLabel !== "English" && ad.languageLabel !== "Unknown";
 }
 
 function buildTranslationInput(ad: TranslationCandidateAd) {
@@ -183,6 +196,11 @@ function normalizeLineForDedup(value: string) {
 function resolveSourceLanguageCode(ad: TranslationCandidateAd, sample: string) {
   if (ad.languageLabel === "Hindi" || ad.languageLabel === "Hinglish") {
     return "hi";
+  }
+
+  const latinCode = LATIN_LABEL_LANGUAGE_CODES[ad.languageLabel];
+  if (latinCode) {
+    return latinCode;
   }
 
   if (ad.languageLabel !== "Regional" && ad.languageLabel !== "Global") {
