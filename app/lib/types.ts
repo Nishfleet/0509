@@ -517,6 +517,8 @@ export interface ShareLinkRecord {
   isSnapshot: boolean;
   snapshotPayload: Record<string, unknown> | null;
   createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
 }
 
 export interface PricingPlan {
