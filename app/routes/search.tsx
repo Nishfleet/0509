@@ -8,6 +8,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { SubmitButton } from "~/components/submit-button";
 import {
@@ -656,15 +657,18 @@ export default function SearchRoute() {
                         ad.metaAdId,
                       ).toString()}`}
                     >
-                      <div>
-                        <span>{formatAdvertiserLabel(ad.advertiser)}</span>
-                        <h3>{ad.previewHeadline}</h3>
+                      <AdThumb ad={ad} />
+                      <div className="f9-result-card-body">
+                        <div>
+                          <span>{formatAdvertiserLabel(ad.advertiser)}</span>
+                          <h3>{ad.previewHeadline}</h3>
+                        </div>
+                        <p>{ad.hook}</p>
+                        <small>
+                          {ad.offer} · {ad.destinationType} · {ad.languageLabel}
+                        </small>
+                        <em>{ad.format}</em>
                       </div>
-                      <p>{ad.hook}</p>
-                      <small>
-                        {ad.offer} · {ad.destinationType} · {ad.languageLabel}
-                      </small>
-                      <em>{ad.format}</em>
                     </Link>
                   ))
                 ) : (
@@ -693,8 +697,13 @@ export default function SearchRoute() {
                   </div>
 
                   <div className="f9-detail-hero">
-                    <h3>{data.selectedAd.previewHeadline}</h3>
-                    <p>{data.selectedAd.body}</p>
+                    <div className="f9-ad-thumb-row">
+                      <AdThumb ad={data.selectedAd} />
+                      <div>
+                        <h3>{data.selectedAd.previewHeadline}</h3>
+                        <p>{data.selectedAd.body}</p>
+                      </div>
+                    </div>
                   </div>
 
                   <dl className="f9-detail-grid">
