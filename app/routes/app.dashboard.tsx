@@ -79,6 +79,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     proofUsage,
     overnightStats,
     plan,
+    nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
     hasPaymentIssue,
     checkoutReturn,
     customerMetaConnection: customerMetaConnection
@@ -279,6 +280,25 @@ export default function AppDashboardRoute() {
 
   return (
     <section className="f9-app-stack">
+      <div className="f9-watch-strip" role="status">
+        <span className="f9-watch-dot" aria-hidden="true" />
+        <strong>
+          {activeWatchlists > 0
+            ? `On watch — ${activeWatchlists} competitor${activeWatchlists === 1 ? "" : "s"}`
+            : competitorCount > 0
+              ? "Watch paused"
+              : "Watch idle — add a competitor to start"}
+        </strong>
+        <span className="f9-watch-strip-detail">
+          {overnightAdsSeen > 0
+            ? `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked in the last day — silence means we looked`
+            : activeWatchlists > 0
+              ? `Next sweep: ${data.nextScanLabel}`
+              : competitorCount > 0
+                ? "All watchlists paused — resume one to keep watch"
+                : "Your first sweep is scheduled the moment you add one"}
+        </span>
+      </div>
       {data.checkoutReturn ? <CheckoutReturnBanner plan={data.plan} /> : null}
       {data.hasPaymentIssue ? (
         <article className="f9-checkout-banner is-pending" aria-live="polite">

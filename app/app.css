@@ -4924,3 +4924,56 @@ one signal-green accent.
   .f9-home .ld-command button,
   .f9-home .ld-final .f9-email-cta button { transition: none; }
 }
+
+/* App delight pass (2026-06-13): the watch strip + calm micro-motion. */
+
+.f9-watch-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #0b1117;
+  color: #e8edf2;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 0.92rem;
+}
+
+.f9-watch-strip strong {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.f9-watch-strip-detail {
+  color: #97a5af;
+  font-size: 0.85rem;
+}
+
+.f9-watch-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #16c47f;
+  align-self: center;
+  animation: f9-watch-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes f9-watch-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(22, 196, 127, 0.45); }
+  50% { box-shadow: 0 0 0 7px rgba(22, 196, 127, 0); }
+}
+
+.f9-app-panel,
+.f9-work-row {
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.f9-work-row:hover {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-watch-dot { animation: none; }
+  .f9-app-panel,
+  .f9-work-row { transition: none; }
+}
