@@ -375,6 +375,73 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
+  if (intent === "pause-watchlist") {
+    const { setWatchlistActive } = await import("~/lib/data.server");
+    const watchlistId = String(formData.get("watchlistId") ?? "");
+    const paused = await setWatchlistActive(env, session.user.id, watchlistId, false);
+
+    return paused
+      ? {
+          ok: true,
+          message:
+            "Watchlist paused. Scans and alerts stop, the history stays, and the plan slot is free.",
+        }
+      : { ok: false, message: "Watchlist not found." };
+  }
+
+  if (intent === "resume-watchlist") {
+    const { setWatchlistActive } = await import("~/lib/data.server");
+    const { checkPlanLimit } = await import("~/lib/plan.server");
+    const watchlistId = String(formData.get("watchlistId") ?? "");
+
+    const watchlistLimit = await checkPlanLimit(env, session.user.id, "watchlists");
+    if (!watchlistLimit.allowed) {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded",
+        limit: watchlistLimit.limit,
+        current: watchlistLimit.current,
+        message: "You have reached your competitor tracking limit — pause another watchlist first.",
+      };
+    }
+
+    const resumed = await setWatchlistActive(env, session.user.id, watchlistId, true);
+
+    return resumed
+      ? { ok: true, message: "Watchlist resumed. It rejoins the next scheduled scan." }
+      : { ok: false, message: "Watchlist not found." };
+  }
+
+  if (intent === "send-test-email") {
+    const { getDeliveryTargetById } = await import("~/lib/data.server");
+    const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
+    const targetId = String(formData.get("targetId") ?? "");
+    const target = await getDeliveryTargetById(env, {
+      userId: session.user.id,
+      targetId,
+    });
+
+    if (!target || target.userId !== session.user.id || target.channel !== "email") {
+      return { ok: false, message: "Email delivery target not found." };
+    }
+
+    const sent = await sendDeliveryTestEmail(env, {
+      userId: session.user.id,
+      email: target.targetValue,
+      name: session.user.name ?? null,
+    });
+
+    return sent
+      ? {
+          ok: true,
+          message: `Test email sent to ${target.targetValue} — if it doesn't arrive within a few minutes, check the address and spam folder.`,
+        }
+      : {
+          ok: false,
+          message: `The test email to ${target.targetValue} failed to send. Check the address or email ${"support@0509.in"}.`,
+        };
+  }
+
   if (intent === "toggle-delivery-target") {
     const { getWatchlist, upsertDeliveryTarget } = await import("~/lib/data.server");
     const watchlist = await getOwnedWatchlist(env, session.user.id, formData, getWatchlist);
@@ -544,12 +611,25 @@ export default function WatchlistsRoute() {
                     </button>
                   </Form>
                   <Form method="post">
-                    <input name="intent" type="hidden" value="refresh-watchlist" />
+                    <input
+                      name="intent"
+                      type="hidden"
+                      value={data.selectedWatchlist.isActive ? "pause-watchlist" : "resume-watchlist"}
+                    />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <button className="f9-primary-button" type="submit">
-                      Refresh now
+                    <button className="f9-secondary-button" type="submit">
+                      {data.selectedWatchlist.isActive ? "Pause tracking" : "Resume tracking"}
                     </button>
                   </Form>
+                  {data.selectedWatchlist.isActive ? (
+                    <Form method="post">
+                      <input name="intent" type="hidden" value="refresh-watchlist" />
+                      <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
+                      <button className="f9-primary-button" type="submit">
+                        Refresh now
+                      </button>
+                    </Form>
+                  ) : null}
                 </div>
               </div>
 
@@ -849,16 +929,27 @@ export default function WatchlistsRoute() {
                                 : "Ready"}
                           </p>
                         </div>
-                        <Form method="post">
-                          <input name="intent" type="hidden" value="toggle-delivery-target" />
-                          <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                          <input name="channel" type="hidden" value={target.channel} />
-                          <input name="targetValue" type="hidden" value={target.targetValue} />
-                          <input name="isPaused" type="hidden" value={target.isPaused ? "false" : "true"} />
-                          <button className="f9-secondary-button" type="submit">
-                            {target.isPaused ? "Resume" : "Pause"}
-                          </button>
-                        </Form>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          {target.channel === "email" ? (
+                            <Form method="post">
+                              <input name="intent" type="hidden" value="send-test-email" />
+                              <input name="targetId" type="hidden" value={target.id} />
+                              <button className="f9-secondary-button" type="submit">
+                                Send test
+                              </button>
+                            </Form>
+                          ) : null}
+                          <Form method="post">
+                            <input name="intent" type="hidden" value="toggle-delivery-target" />
+                            <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
+                            <input name="channel" type="hidden" value={target.channel} />
+                            <input name="targetValue" type="hidden" value={target.targetValue} />
+                            <input name="isPaused" type="hidden" value={target.isPaused ? "false" : "true"} />
+                            <button className="f9-secondary-button" type="submit">
+                              {target.isPaused ? "Resume" : "Pause"}
+                            </button>
+                          </Form>
+                        </div>
                       </div>
                     ))}
                     {data.deliveryTargets.length === 0 ? (

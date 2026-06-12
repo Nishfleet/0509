@@ -148,6 +148,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
+  if (intent === "delete-collection") {
+    const { deleteCollection } = await import("~/lib/data.server");
+    const collectionId = String(formData.get("collectionId") ?? "");
+    const deleted = await deleteCollection(env, session.user.id, collectionId);
+
+    return deleted
+      ? { ok: true, message: "Collection deleted. The plan slot is free again." }
+      : { ok: false, message: "Collection not found." };
+  }
+
+  if (intent === "remove-item") {
+    const { deleteCollectionItem } = await import("~/lib/data.server");
+    const itemId = String(formData.get("itemId") ?? "");
+    const removed = await deleteCollectionItem(env, session.user.id, itemId);
+
+    return removed
+      ? { ok: true, message: "Removed from the collection." }
+      : { ok: false, message: "Collection item not found." };
+  }
+
   if (intent === "share-collection") {
     const collectionId = String(formData.get("collectionId") ?? "");
     const collection = await getCollection(env, collectionId, session.user.id);
@@ -286,6 +306,20 @@ export default function CollectionsRoute() {
                       Create share link
                     </button>
                   </Form>
+                  <Form
+                    method="post"
+                    onSubmit={(event) => {
+                      if (!confirm("Delete this collection and everything saved in it?")) {
+                        event.preventDefault();
+                      }
+                    }}
+                  >
+                    <input name="intent" type="hidden" value="delete-collection" />
+                    <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
+                    <button className="f9-secondary-button" type="submit">
+                      Delete collection
+                    </button>
+                  </Form>
                 </div>
               </div>
 
@@ -410,6 +444,13 @@ export default function CollectionsRoute() {
                         </label>
                         <button className="f9-secondary-button" type="submit">
                           Update item
+                        </button>
+                      </Form>
+                      <Form method="post">
+                        <input name="intent" type="hidden" value="remove-item" />
+                        <input name="itemId" type="hidden" value={item.id} />
+                        <button className="f9-secondary-button" type="submit">
+                          Remove from collection
                         </button>
                       </Form>
                     </article>

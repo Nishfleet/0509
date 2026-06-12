@@ -1,0 +1,188 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  deleteCollection,
+  deleteCollectionItem,
+  setWatchlistActive,
+} from "~/lib/data.server";
+
+const session = {
+  user: {
+    id: "user-1",
+    email: "owner@example.com",
+    name: "Owner",
+    onboardedAt: "2026-04-02 18:30:00",
+  },
+  session: {
+    id: "session-1",
+    userId: "user-1",
+    expiresAt: "2026-04-03T00:00:00.000Z",
+  },
+};
+
+function createCapturingDb(changes = 1) {
+  const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+  return {
+    statements,
+    db: {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            statements.push({ sql, bindings });
+            return {
+              async run() {
+                return { success: true, meta: { changes } };
+              },
+              async all<T>() {
+                return { results: [] as T[] };
+              },
+            };
+          },
+        };
+      },
+    },
+  };
+}
+
+beforeEach(() => {
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+  vi.doUnmock("~/lib/auth.server");
+  vi.doUnmock("~/lib/data.server");
+  vi.doUnmock("~/lib/delivery.server");
+  vi.doUnmock("~/lib/plan.server");
+  vi.doUnmock("~/lib/monitoring.server");
+  vi.doUnmock("~/lib/ad-source.server");
+});
+
+describe("workspace cleanup persistence", () => {
+  it("pauses and resumes watchlists scoped to the owner", async () => {
+    const mock = createCapturingDb();
+
+    expect(await setWatchlistActive({ DB: mock.db } as never, "user-1", "watch-1", false)).toBe(true);
+
+    const update = mock.statements.find((statement) => statement.sql.includes("UPDATE watchlist"));
+    expect(update?.sql).toContain("AND user_id = ?");
+    expect(update?.bindings[0]).toBe(0);
+    expect(update?.bindings.slice(2)).toEqual(["watch-1", "user-1"]);
+
+    const noMatch = createCapturingDb(0);
+    expect(await setWatchlistActive({ DB: noMatch.db } as never, "user-2", "watch-1", true)).toBe(false);
+  });
+
+  it("deletes collections and items only for the owning user", async () => {
+    const mock = createCapturingDb();
+
+    expect(await deleteCollection({ DB: mock.db } as never, "user-1", "collection-1")).toBe(true);
+    expect(await deleteCollectionItem({ DB: mock.db } as never, "user-1", "item-1")).toBe(true);
+
+    const collectionDelete = mock.statements.find((statement) =>
+      statement.sql.includes("DELETE FROM collection "),
+    );
+    expect(collectionDelete?.sql).toContain("AND user_id = ?");
+
+    const itemDelete = mock.statements.find((statement) =>
+      statement.sql.includes("DELETE FROM collection_item"),
+    );
+    expect(itemDelete?.sql).toContain("SELECT id FROM collection WHERE user_id = ?");
+  });
+});
+
+describe("watchlist pause/resume action", () => {
+  it("blocks resume at the plan limit so paused watchlists cannot bypass it", async () => {
+    const setWatchlistActiveMock = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      setWatchlistActive: setWatchlistActiveMock,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({ allowed: false, limit: 3, current: 3 }),
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "resume-watchlist");
+    formData.set("watchlistId", "watch-1");
+
+    const result = await action({
+      context: { cloudflare: { env: {} } },
+      request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: false, error: "plan_limit_exceeded" });
+    expect(setWatchlistActiveMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses to send a test email to another user's target", async () => {
+    const sendDeliveryTestEmail = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDeliveryTargetById: vi.fn().mockResolvedValue({
+        id: "target-1",
+        userId: "someone-else",
+        channel: "email",
+        targetValue: "victim@example.com",
+      }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      sendDeliveryTestEmail,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "send-test-email");
+    formData.set("targetId", "target-1");
+
+    const result = await action({
+      context: { cloudflare: { env: {} } },
+      request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: false });
+    expect(sendDeliveryTestEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendDeliveryTestEmail", () => {
+  it("sends through the shared email path and records a delivery_test attempt", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_test_1" });
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getDeliveryTargetById: vi.fn(),
+      getDeliveryTargetByProviderIdentifier: vi.fn(),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn(),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+
+    const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
+    const sent = await sendDeliveryTestEmail(
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.in" } as never,
+      { userId: "user-1", email: "owner@example.com", name: "Owner" },
+    );
+
+    expect(sent).toBe(true);
+    const payload = emailSend.mock.calls[0]?.[0];
+    expect(payload.to).toBe("owner@example.com");
+    expect(payload.subject).toContain("Test email");
+
+    const attempt = createDeliveryAttempt.mock.calls[0]?.[1];
+    expect(attempt.templateName).toBe("delivery_test");
+    expect(attempt.status).toBe("sent");
+  });
+});
