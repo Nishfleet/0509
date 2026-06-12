@@ -180,6 +180,10 @@ export default function MarketingRoute() {
               <a href="/api/demo-proof?format=markdown">Open markdown proof</a>
             </div>
 
+            <p className="f9-muted-copy" style={{ margin: "10px 0 0", fontSize: "0.85rem" }}>
+              Why "0509"? Five to Nine — we work while you sleep.
+            </p>
+
             <div className="f9-public-status-note" role="note">
               <strong>Honest by design.</strong>
               <span>

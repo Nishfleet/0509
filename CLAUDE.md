@@ -105,6 +105,10 @@ This project is managed by Paperclip under company Swish.
 - **SaaS Builder** handles implementation tasks
 - **SaaS Reviewer** reviews completed work (Codex Reviewer retired 2026-06-12)
 
+## Brand
+
+The product is **Five to Nine**; **0509.in** is its domain (05:09 = five-to-nine — "we work while you sleep", which the nightly scanning genuinely does). Use "Five to Nine" in customer-facing prose and the wordmark; 0509/0509.in is the short handle and domain. Refunds: Nish's global no-refunds policy applies (digital product, purchases final, paired with the 100%-satisfaction support promise) — see global CLAUDE.md; keep refund-webhook revocation code in place for goodwill/dispute cases.
+
 ## Product Shape
 
 - Analysis is the hook.
