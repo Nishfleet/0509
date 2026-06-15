@@ -251,7 +251,7 @@ describe("onboarding route", () => {
     const { action } = await import("~/routes/app.onboard");
     const formData = new FormData();
     formData.set("intent", "create-watchlist");
-    formData.set("website", "seoitis");
+    formData.set("website", "samplebrand");
 
     const result = await action({
       context: createContext(),
@@ -263,7 +263,7 @@ describe("onboarding route", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "That website looks incomplete. Add the full domain, like seoitis.com.",
+      message: "That website looks incomplete. Add the full domain, like brand.com.",
     });
     expect(checkPlanLimit).not.toHaveBeenCalled();
     expect(createWatchlist).not.toHaveBeenCalled();

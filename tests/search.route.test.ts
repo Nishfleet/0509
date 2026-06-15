@@ -304,7 +304,7 @@ describe("search loader", () => {
     const { loader } = await import("~/routes/search");
     const result = await loader({
       context: createContext(env),
-      request: new Request("http://localhost/search?website=https://www.seoitis.com"),
+      request: new Request("http://localhost/search?website=https://www.samplebrand.com"),
     } as never);
 
     expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
@@ -312,7 +312,7 @@ describe("search loader", () => {
       expect.objectContaining({
         mode: "advertiser",
         filters: expect.objectContaining({
-          query: "seoitis",
+          query: "samplebrand",
         }),
       }),
       null,
@@ -321,8 +321,8 @@ describe("search loader", () => {
     expect(result).toMatchObject({
       inputError: null,
       competitorWebsite: {
-        normalizedUrl: "https://seoitis.com",
-        searchTerm: "seoitis",
+        normalizedUrl: "https://samplebrand.com",
+        searchTerm: "samplebrand",
       },
     });
   });
@@ -355,13 +355,13 @@ describe("search loader", () => {
     const { loader } = await import("~/routes/search");
     const result = await loader({
       context: createContext(env),
-      request: new Request("http://localhost/search?website=seoitis&query=seoitis"),
+      request: new Request("http://localhost/search?website=samplebrand&query=samplebrand"),
     } as never);
 
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
     expect(result).toMatchObject({
-      inputError: "That website looks incomplete. Add the full domain, like seoitis.com.",
+      inputError: "That website looks incomplete. Add the full domain, like brand.com.",
       result: {
         discoveryStatus: "disabled",
       },
@@ -950,8 +950,8 @@ describe("search actions", () => {
     const formData = new FormData();
     formData.set("intent", "create-watchlist");
     formData.set("mode", "advertiser");
-    formData.set("query", "seoitis");
-    formData.set("competitorWebsite", "seoitis");
+    formData.set("query", "samplebrand");
+    formData.set("competitorWebsite", "samplebrand");
     formData.set("country", "India");
     formData.set("platform", "all");
     formData.set("creativeType", "all");
@@ -967,7 +967,7 @@ describe("search actions", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "That website looks incomplete. Add the full domain, like seoitis.com.",
+      message: "That website looks incomplete. Add the full domain, like brand.com.",
     });
     expect(checkPlanLimit).not.toHaveBeenCalled();
     expect(createSavedQuery).not.toHaveBeenCalled();
@@ -1013,7 +1013,7 @@ describe("search actions", () => {
     formData.set("trackingRole", "self");
     formData.set("mode", "advertiser");
     formData.set("query", "");
-    formData.set("competitorWebsite", "seoitis.com");
+    formData.set("competitorWebsite", "samplebrand.com");
     formData.set("country", "India");
     formData.set("platform", "all");
     formData.set("creativeType", "all");
@@ -1037,9 +1037,9 @@ describe("search actions", () => {
       env,
       "user-1",
       expect.objectContaining({
-        name: "Seoitis watch",
-        targetId: "https://seoitis.com",
-        targetLabel: "seoitis",
+        name: "Samplebrand watch",
+        targetId: "https://samplebrand.com",
+        targetLabel: "samplebrand",
         trackingRole: "self",
       }),
     );
