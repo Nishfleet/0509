@@ -446,6 +446,50 @@ describe("Dodo billing persistence", () => {
     const claim = statements.find((statement) => statement.sql.includes("INSERT INTO dodo_webhook_event"));
     expect(claim?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
   });
+
+  it("falls back when an existing Dodo webhook ledger lacks payload timestamps", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async run() {
+                  if (sql.includes("payload_timestamp")) {
+                    throw new Error(
+                      "D1_ERROR: table dodo_webhook_event has no column named payload_timestamp: SQLITE_ERROR",
+                    );
+                  }
+                  return { success: true, meta: { changes: 1 } };
+                },
+                async all<T>() {
+                  return { results: [] as T[] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    const claimed = await claimDodoWebhookEvent(
+      { DB: mock.db } as never,
+      {
+        eventId: "evt-1",
+        eventType: "payment.succeeded",
+        userId: null,
+        payloadTimestamp: "1765459200",
+      },
+    );
+
+    expect(claimed).toBe(true);
+    expect(statements).toHaveLength(2);
+    expect(statements[0]?.sql).toContain("payload_timestamp");
+    expect(statements[1]?.sql).not.toContain("payload_timestamp");
+    expect(statements[1]?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
+  });
 });
 
 describe("scheduled watchlist selection", () => {

@@ -1160,10 +1160,13 @@ export async function claimDodoWebhookEvent(
   },
 ) {
   const db = ensureDb(env);
+  const receivedAt = nowIso();
   // Mirrors claimRazorpayWebhookEvent: first delivery claims the event;
   // redeliveries of processed events are skipped; failed events may be
   // reclaimed so processing can retry.
-  const result = await db.prepare(`
+  let result: D1Result;
+  try {
+    result = await db.prepare(`
       INSERT INTO dodo_webhook_event (
         event_id,
         event_type,
@@ -1188,11 +1191,49 @@ export async function claimDodoWebhookEvent(
       input.eventId,
       input.eventType,
       input.userId,
-      nowIso(),
+      receivedAt,
       input.payloadTimestamp,
     ).run();
+  } catch (error) {
+    if (!isMissingDodoPayloadTimestampColumnError(error)) {
+      throw error;
+    }
+
+    result = await db.prepare(`
+        INSERT INTO dodo_webhook_event (
+          event_id,
+          event_type,
+          user_id,
+          received_at,
+          outcome,
+          metadata_json
+        )
+        VALUES (?, ?, ?, ?, 'received', '{}')
+        ON CONFLICT(event_id)
+        DO UPDATE SET
+          event_type = excluded.event_type,
+          user_id = excluded.user_id,
+          received_at = excluded.received_at,
+          processed_at = NULL,
+          outcome = 'received',
+          metadata_json = '{}'
+        WHERE dodo_webhook_event.outcome = 'failed'
+      `).bind(
+        input.eventId,
+        input.eventType,
+        input.userId,
+        receivedAt,
+      ).run();
+  }
 
   return Number(result.meta?.changes ?? 0) > 0;
+}
+
+function isMissingDodoPayloadTimestampColumnError(error: unknown) {
+  return (
+    error instanceof Error &&
+    /dodo_webhook_event has no column named payload_timestamp/i.test(error.message)
+  );
 }
 
 export async function markDodoWebhookEventFinished(
