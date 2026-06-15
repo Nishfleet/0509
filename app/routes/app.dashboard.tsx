@@ -37,9 +37,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     "~/lib/data.server"
   );
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const checkoutReturn = new URL(request.url).searchParams.get("checkout") === "dodo";
-  const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection, proofUsage, billingInfo] = await Promise.all([
+  const { listWorkspaceMembers } = await import("~/lib/workspace.server");
+  const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection, proofUsage, billingInfo, workspaceMembers] = await Promise.all([
     listSavedQueries(env, workspaceUserId),
     listCollections(env, workspaceUserId),
     listWatchlists(env, workspaceUserId),
@@ -48,6 +49,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getCustomerMetaConnection(env, workspaceUserId),
     getProofUsageSummary(env, workspaceUserId),
     getUserPlanBillingInfo(env, workspaceUserId),
+    listWorkspaceMembers(env, workspaceUserId),
   ]);
   const plan = billingInfo.plan;
   const hasPaymentIssue =
@@ -79,6 +81,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     proofUsage,
     overnightStats,
     plan,
+    teamMemberCount: workspaceMembers.length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
     hasPaymentIssue,
     checkoutReturn,
@@ -174,6 +177,11 @@ export default function AppDashboardRoute() {
   const recentProofCaptures = data.recentProofCaptures ?? [];
   const deliveryTargets = data.deliveryTargets ?? [];
   const proofUsage = data.proofUsage ?? { warningLevel: "ok", used: 0, limit: 0, remaining: 0, plan: "free" };
+  const plan = data.plan ?? "free";
+  const nextScanLabel = data.nextScanLabel ?? formatNextScanLabel(plan);
+  const hasPaymentIssue = Boolean(data.hasPaymentIssue);
+  const teamMemberCount = data.teamMemberCount ?? 0;
+  const checkoutReturn = Boolean(data.checkoutReturn);
   const metaHeading =
     data.metaStatus.status === "healthy"
       ? "Ready to track competitors"
@@ -202,31 +210,107 @@ export default function AppDashboardRoute() {
   const hasEmailDelivery = deliveryTargets.some(
     (target) => target.channel === "email" && target.isOptedIn && !target.isPaused && !target.optedOutAt,
   );
+  const hasSlackDelivery = deliveryTargets.some(
+    (target) =>
+      target.channel === "slack" &&
+      target.isOptedIn &&
+      !target.isPaused &&
+      !target.optedOutAt &&
+      Boolean(target.lastSuccessfulDeliveryAt),
+  );
+  const slackNeedsProof = deliveryTargets.some(
+    (target) => target.channel === "slack" && !target.isPaused && !target.lastSuccessfulDeliveryAt,
+  );
   const firstCompetitorReady = competitorCount > 0;
+  const firstSearchReady = savedQueries.length > 0 || firstCompetitorReady;
   const proofReady = successfulProofs > 0 || proofUsage.used > 0;
   const sourceReady = data.metaStatus.status === "healthy";
   const setupItems = [
     {
-      label: "Add competitor",
-      detail: firstCompetitorReady ? `${competitorCount} competitor${competitorCount === 1 ? "" : "s"} tracked` : "Paste a competitor website to start.",
-      done: firstCompetitorReady,
+      label: "First competitor",
+      detail: firstSearchReady ? "Competitor search exists." : "Paste a competitor website to start.",
+      done: firstSearchReady,
+      href: "/search",
     },
     {
-      label: "Save evidence",
+      label: "First watchlist",
+      detail: firstCompetitorReady ? `${competitorCount} competitor${competitorCount === 1 ? "" : "s"} tracked` : "Create one retained watchlist.",
+      done: firstCompetitorReady,
+      href: "/app/watchlists",
+    },
+    {
+      label: "First proof",
       detail: proofReady ? `${successfulProofs || proofUsage.used} evidence check${successfulProofs === 1 || proofUsage.used === 1 ? "" : "s"} recorded` : "Refresh a watchlist to capture landing-page evidence.",
       done: proofReady,
+      href: "/app/watchlists",
     },
     {
-      label: "Email delivery",
-      detail: hasEmailDelivery ? "Email target is ready for alerts." : "Add a delivery email on the watchlist.",
-      done: hasEmailDelivery,
-    },
-    {
-      label: "Digest trail",
+      label: "First digest",
       detail: sentDigests > 0 ? `${sentDigests} digest${sentDigests === 1 ? "" : "s"} sent` : "Digest history appears after monitored changes.",
       done: sentDigests > 0,
+      href: "/app/digests",
+    },
+    {
+      label: "Slack setup",
+      detail: hasSlackDelivery ? "Slack has delivery proof." : "Connect Slack when the team wants channel delivery.",
+      done: hasSlackDelivery,
+      href: "/app/sources",
+    },
+    {
+      label: "Teammate invite",
+      detail: teamMemberCount > 0 ? `${teamMemberCount} teammate${teamMemberCount === 1 ? "" : "s"} invited` : "Agency teams can invite teammates.",
+      done: teamMemberCount > 0,
+      href: "/app/team",
+    },
+    {
+      label: "Billing awareness",
+      detail: proofUsage.limit > 0 ? `${proofUsage.remaining} evidence checks left this month` : "Choose a plan before retained monitoring.",
+      done: proofUsage.limit > 0,
+      href: "/app/billing",
     },
   ];
+  const lifecycleNudges = [
+    !firstCompetitorReady
+      ? {
+          title: "No first watchlist yet",
+          detail: "Add one competitor so the first sweep and proof trail can start.",
+          href: "/search",
+        }
+      : null,
+    firstCompetitorReady && sentDigests === 0
+      ? {
+          title: "No first digest yet",
+          detail: "Open Digests after the first monitored change or quiet check to confirm the delivery trail.",
+          href: "/app/digests",
+        }
+      : null,
+    proofUsage.warningLevel !== "ok"
+      ? {
+          title: "Usage near cap",
+          detail: `${proofUsage.used} of ${proofUsage.limit} evidence checks are used.`,
+          href: "/app/billing",
+        }
+      : null,
+    slackNeedsProof
+      ? {
+          title: "Slack delivery needs proof",
+          detail: "A Slack destination exists but has no successful delivery yet.",
+          href: "/app/sources",
+        }
+      : null,
+    hasPaymentIssue
+      ? {
+          title: "Payment issue",
+          detail: "Dodo is retrying the last renewal payment. Review billing before access is affected.",
+          href: "/app/billing",
+        }
+      : null,
+    {
+      title: "Cancellation and help path",
+      detail: "Plan changes, cancellation, receipts, invoices, and support are centralized in Plan & billing.",
+      href: "/app/billing",
+    },
+  ].filter((item): item is { title: string; detail: string; href: string } => Boolean(item));
   const statusCards = [
     {
       label: "Competitors watched",
@@ -293,14 +377,14 @@ export default function AppDashboardRoute() {
           {overnightAdsSeen > 0
             ? `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked in the last day — silence means we looked`
             : activeWatchlists > 0
-              ? `Next sweep: ${data.nextScanLabel}`
+              ? `Next sweep: ${nextScanLabel}`
               : competitorCount > 0
                 ? "All watchlists paused — resume one to keep watch"
                 : "Your first sweep is scheduled the moment you add one"}
         </span>
       </div>
-      {data.checkoutReturn ? <CheckoutReturnBanner plan={data.plan} /> : null}
-      {data.hasPaymentIssue ? (
+      {checkoutReturn ? <CheckoutReturnBanner plan={plan} /> : null}
+      {hasPaymentIssue ? (
         <article className="f9-checkout-banner is-pending" aria-live="polite">
           <div>
             <span className="f9-app-kicker">Payment issue</span>
@@ -425,6 +509,7 @@ export default function AppDashboardRoute() {
                 <span>{item.done ? "Done" : "Next"}</span>
                 <strong>{item.label}</strong>
                 <p>{item.detail}</p>
+                <Link to={item.href}>{item.done ? "Review" : "Open"}</Link>
               </div>
             ))}
           </div>
@@ -437,6 +522,28 @@ export default function AppDashboardRoute() {
           <Link to="/app/watchlists">Open watchlists</Link>
         </div>
       </section>
+
+      <article className="f9-app-panel">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Lifecycle nudges</span>
+            <h2>What to unblock next</h2>
+          </div>
+        </div>
+        <div className="f9-work-list is-compact">
+          {lifecycleNudges.map((nudge) => (
+            <div className="f9-work-row" key={nudge.title}>
+              <div>
+                <strong>{nudge.title}</strong>
+                <p className="f9-muted-copy">{nudge.detail}</p>
+              </div>
+              <Link className="f9-secondary-button" to={nudge.href}>
+                Open
+              </Link>
+            </div>
+          ))}
+        </div>
+      </article>
 
       {proofUsage.warningLevel !== "ok" ? (
         <article className={`f9-app-panel f9-proof-usage-alert is-${proofUsage.warningLevel}`}>
@@ -556,7 +663,7 @@ export default function AppDashboardRoute() {
               <h2>Who is being watched</h2>
               {watchlists.length > 0 ? (
                 <p className="f9-muted-copy">
-                  Next scheduled scan: {formatNextScanLabel(data.plan)}
+                  Next scheduled scan: {formatNextScanLabel(plan)}
                 </p>
               ) : null}
             </div>

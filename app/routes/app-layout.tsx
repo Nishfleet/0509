@@ -60,6 +60,12 @@ export default function AppLayoutRoute() {
         </nav>
 
         <div className="f9-app-sidebar-footer">
+          <Link className="f9-app-support-link" to="/help">
+            Help
+          </Link>
+          <Link className="f9-app-support-link" to="/docs">
+            Docs
+          </Link>
           <a className="f9-app-support-link" href={SUPPORT_MAILTO}>
             {SUPPORT_EMAIL}
           </a>
@@ -71,6 +77,9 @@ export default function AppLayoutRoute() {
         <header className="f9-app-topbar">
           <Link className="f9-app-search-entry" to="/search">
             Search competitor ads
+          </Link>
+          <Link className="f9-secondary-button" to="/help">
+            Help
           </Link>
           <Link className="f9-primary-button f9-app-new-search" to="/search">
             Add competitor
