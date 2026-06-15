@@ -818,9 +818,9 @@ describe("watchlists route actions", () => {
     const formData = new FormData();
     formData.set("intent", "update-watchlist");
     formData.set("watchlistId", "watch-1");
-    formData.set("name", "Seoitis watch");
-    formData.set("competitorWebsite", "seoitis");
-    formData.set("targetLabel", "Seoitis");
+    formData.set("name", "Samplebrand watch");
+    formData.set("competitorWebsite", "samplebrand");
+    formData.set("targetLabel", "Samplebrand");
 
     const result = await action({
       context: createContext(),
@@ -831,7 +831,7 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "That website looks incomplete. Add the full domain, like seoitis.com.",
+      message: "That website looks incomplete. Add the full domain, like brand.com.",
       ok: false,
     });
     expect(updateWatchlist).not.toHaveBeenCalled();
@@ -840,10 +840,10 @@ describe("watchlists route actions", () => {
   it("passes self tracking through watchlist edits", async () => {
     const updateWatchlist = vi.fn().mockResolvedValue({
       ...watchlist,
-      name: "Seoitis watch",
+      name: "Samplebrand watch",
       trackingRole: "self",
-      targetId: "https://seoitis.com",
-      targetLabel: "Seoitis",
+      targetId: "https://samplebrand.com",
+      targetLabel: "Samplebrand",
       targetCountry: null,
     });
 
@@ -866,9 +866,9 @@ describe("watchlists route actions", () => {
     formData.set("intent", "update-watchlist");
     formData.set("watchlistId", "watch-1");
     formData.set("trackingRole", "self");
-    formData.set("name", "Seoitis watch");
-    formData.set("competitorWebsite", "seoitis.com");
-    formData.set("targetLabel", "Seoitis");
+    formData.set("name", "Samplebrand watch");
+    formData.set("competitorWebsite", "samplebrand.com");
+    formData.set("targetLabel", "Samplebrand");
 
     const result = await action({
       context: createContext(),
@@ -887,9 +887,9 @@ describe("watchlists route actions", () => {
       "user-1",
       "watch-1",
       expect.objectContaining({
-        name: "Seoitis watch",
-        targetId: "https://seoitis.com",
-        targetLabel: "Seoitis",
+        name: "Samplebrand watch",
+        targetId: "https://samplebrand.com",
+        targetLabel: "Samplebrand",
         trackingRole: "self",
       }),
     );
@@ -898,9 +898,9 @@ describe("watchlists route actions", () => {
   it("keeps the existing fingerprint when only the tracking role changes", async () => {
     const countryWatchlist = {
       ...watchlist,
-      targetId: "https://seoitis.com",
+      targetId: "https://samplebrand.com",
       targetFingerprint: "existing-us-fingerprint",
-      targetLabel: "Seoitis",
+      targetLabel: "Samplebrand",
       targetCountry: "US",
     };
     const updateWatchlist = vi.fn().mockResolvedValue({
@@ -927,9 +927,9 @@ describe("watchlists route actions", () => {
     formData.set("intent", "update-watchlist");
     formData.set("watchlistId", "watch-1");
     formData.set("trackingRole", "self");
-    formData.set("name", "Seoitis watch");
-    formData.set("competitorWebsite", "seoitis.com");
-    formData.set("targetLabel", "Seoitis");
+    formData.set("name", "Samplebrand watch");
+    formData.set("competitorWebsite", "samplebrand.com");
+    formData.set("targetLabel", "Samplebrand");
 
     const result = await action({
       context: createContext(),

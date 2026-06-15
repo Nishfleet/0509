@@ -86,7 +86,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (!query) {
       return {
         ok: false,
-        message: "Enter a full website address first, like seoitis.com.",
+        message: "Enter a full website address first, like brand.com.",
       };
     }
 

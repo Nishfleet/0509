@@ -24,15 +24,15 @@ export function normalizeCompetitorWebsiteInput(value: string): CompetitorWebsit
   try {
     const url = new URL(candidate);
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return invalidCompetitorWebsite(raw, "Use a normal website address, like seoitis.com.");
+      return invalidCompetitorWebsite(raw, "Use a normal website address, like brand.com.");
     }
     if (url.username || url.password) {
-      return invalidCompetitorWebsite(raw, "Enter the website domain only, like seoitis.com.");
+      return invalidCompetitorWebsite(raw, "Enter the website domain only, like brand.com.");
     }
 
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
     if (!isPublicDomainLikeHost(host)) {
-      return invalidCompetitorWebsite(raw, "That website looks incomplete. Add the full domain, like seoitis.com.");
+      return invalidCompetitorWebsite(raw, "That website looks incomplete. Add the full domain, like brand.com.");
     }
 
     url.hash = "";
@@ -49,7 +49,7 @@ export function normalizeCompetitorWebsiteInput(value: string): CompetitorWebsit
       error: null,
     };
   } catch {
-    return invalidCompetitorWebsite(raw, "Enter a valid website address, like seoitis.com.");
+    return invalidCompetitorWebsite(raw, "Enter a valid website address, like brand.com.");
   }
 }
 
