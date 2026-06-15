@@ -35,6 +35,12 @@ describe("search rebuild", () => {
     expect(searchRoute).not.toMatch(/pilot|beta|manual|fit review|self-serve|not live/i);
   });
 
+  it("describes search as public before account-gated saved tracking", () => {
+    expect(searchRoute).toContain("Preview live competitor Meta ads before creating an account");
+    expect(searchRoute).toContain("sign in only when you want to save examples and track offer changes");
+    expect(searchRoute).not.toContain("Sign in to search competitor Meta ads");
+  });
+
   it("uses the Five to Nine wordmark in the search header", () => {
     expect(searchRoute).toContain("<BrandWordmark />");
   });
