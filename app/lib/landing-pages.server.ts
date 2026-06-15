@@ -54,7 +54,7 @@ async function captureLandingPageSnapshotAt(
     const response = await fetch(resolvedUrl.toString(), {
       redirect: "manual",
       headers: {
-        "user-agent": "0509-bot/1.0 (+https://0509.in)",
+        "user-agent": "0509-bot/1.0 (+https://0509.io)",
       },
     });
 

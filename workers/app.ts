@@ -18,6 +18,7 @@ import {
 import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
+import { primaryDomainRedirect } from "./primary-domain";
 import { resolveScheduledTask, WEEKLY_DIGEST_CRON } from "./schedule";
 import { withSecurityHeaders } from "./security-headers";
 export { MonitoringWorkflow } from "./monitoring-workflow";
@@ -67,6 +68,11 @@ function publicFileResponse(request: Request, file: NonNullable<ReturnType<typeo
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const primaryDomainResponse = primaryDomainRedirect(request);
+    if (primaryDomainResponse) {
+      return withSecurityHeaders(primaryDomainResponse);
+    }
+
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {
       return publicFileResponse(request, publicSeoFile);

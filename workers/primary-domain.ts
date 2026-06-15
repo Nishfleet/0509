@@ -1,0 +1,32 @@
+const PRIMARY_HOST = "0509.io";
+const APEX_REDIRECT_HOSTS = new Set(["0509.in", "www.0509.in", "www.0509.io"]);
+const API_REDIRECT_HOSTS = new Set(["api.0509.in"]);
+const REDIRECT_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const PROVIDER_CHALLENGE_PATHS = new Set(["/api/delivery-status/whatsapp"]);
+
+export function primaryDomainRedirect(request: Request): Response | null {
+  if (!REDIRECT_METHODS.has(request.method.toUpperCase())) {
+    return null;
+  }
+
+  const url = new URL(request.url);
+  if (PROVIDER_CHALLENGE_PATHS.has(url.pathname)) {
+    return null;
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  if (!APEX_REDIRECT_HOSTS.has(hostname) && !API_REDIRECT_HOSTS.has(hostname)) {
+    return null;
+  }
+
+  url.protocol = "https:";
+  url.hostname = API_REDIRECT_HOSTS.has(hostname) ? `api.${PRIMARY_HOST}` : PRIMARY_HOST;
+
+  return new Response(null, {
+    status: 308,
+    headers: {
+      "cache-control": "public, max-age=3600",
+      location: url.toString(),
+    },
+  });
+}

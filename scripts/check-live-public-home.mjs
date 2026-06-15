@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const baseUrl = process.env.PUBLIC_HOME_URL ?? "https://0509.in";
+const baseUrl = process.env.PUBLIC_HOME_URL ?? "https://0509.io";
 const staleSignals = [
   "The market moves after you log off",
   "After-hours market intelligence",
