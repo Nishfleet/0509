@@ -43,7 +43,7 @@ import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
 
 const searchDescription =
-  "Sign in to search competitor Meta ads, save useful examples, and track visible offer changes over time.";
+  "Preview live competitor Meta ads before creating an account; sign in only when you want to save examples and track offer changes over time.";
 
 export const links: LinksFunction = () => canonicalLinks("/search");
 
