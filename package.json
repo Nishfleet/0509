@@ -22,21 +22,21 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
-    "better-auth": "^1.5.6",
-    "isbot": "^5.1.36",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-router": "^7.16.0"
+    "better-auth": "^1.6.17",
+    "isbot": "^5.1.42",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router": "^7.17.0"
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "1.1.0",
-    "@cloudflare/vite-plugin": "^1.30.2",
-    "@react-router/dev": "^7.16.0",
-    "@types/node": "^24.6.1",
-    "@types/react": "^19.2.2",
+    "@cloudflare/vite-plugin": "^1.40.0",
+    "@react-router/dev": "^7.17.0",
+    "@types/node": "^24.13.1",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.2",
-    "typescript": "5.9.2",
-    "vite": "^7.1.7",
+    "typescript": "5.9.3",
+    "vite": "^7.3.5",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.1.8",
     "wrangler": "^4.78.0"
