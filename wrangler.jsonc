@@ -19,6 +19,18 @@
   ],
   "routes": [
     {
+      "pattern": "0509.io",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.0509.io",
+      "custom_domain": true
+    },
+    {
+      "pattern": "api.0509.io",
+      "custom_domain": true
+    },
+    {
       "pattern": "0509.in",
       "custom_domain": true
     },
@@ -44,7 +56,7 @@
   },
   "vars": {
     "APP_NAME": "0509",
-    "BETTER_AUTH_URL": "https://0509.in",
+    "BETTER_AUTH_URL": "https://0509.io",
     "DODO_0509_ADAPTIVE_CURRENCY": "true",
     "DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE": "true",
     "DODO_0509_ENVIRONMENT": "live",
@@ -75,8 +87,8 @@
   // - DODO_0509_PRODUCT_PROOF_PACK_7500_ID
   // - META_TOKEN_ENCRYPTION_SECRET
   // Email sending uses the Cloudflare Email Service `send_email` binding above —
-  // no API key secret; the sending domain (0509.in) must be onboarded to Email
-  // Service in the Cloudflare dashboard.
+  // no API key secret. Email currently sends from the verified 0509.in sending
+  // domain until 0509.io is separately onboarded to Email Service.
   "d1_databases": [
     {
       "binding": "DB",

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const DEFAULT_BASE_URL = "https://0509.in";
+const DEFAULT_BASE_URL = "https://0509.io";
 
 /**
  * @param {string[]} args

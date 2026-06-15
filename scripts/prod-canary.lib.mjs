@@ -6,9 +6,9 @@ import {
   findBlockingFreshLiveCurrent0509Failures,
 } from "./provider-bakeoff.lib.mjs";
 
-export const DEFAULT_CANARY_BASE_URL = "https://0509.in";
-export const DEFAULT_CANARY_WWW_BASE_URL = "https://www.0509.in";
-export const DEFAULT_CANARY_API_BASE_URL = "https://api.0509.in";
+export const DEFAULT_CANARY_BASE_URL = "https://0509.io";
+export const DEFAULT_CANARY_WWW_BASE_URL = "https://www.0509.io";
+export const DEFAULT_CANARY_API_BASE_URL = "https://api.0509.io";
 export const DEFAULT_CANARY_HEALTH_BASE_URLS = Object.freeze([
   DEFAULT_CANARY_BASE_URL,
   DEFAULT_CANARY_WWW_BASE_URL,

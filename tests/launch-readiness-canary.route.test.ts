@@ -60,8 +60,8 @@ function mockLandingPageCapture(snapshot: Record<string, unknown> | null = creat
 
 function createSnapshot() {
   return {
-    rawUrl: "https://0509.in/",
-    canonicalUrl: "https://0509.in/",
+    rawUrl: "https://0509.io/",
+    canonicalUrl: "https://0509.io/",
     rawHeadline: "Five to Nine",
     normalizedHeadline: "five to nine",
     normalizedHeadlineHash: "hash-0509",
@@ -188,11 +188,11 @@ describe("launch readiness canary route", () => {
         status: "succeeded",
         extractedFields: expect.objectContaining({
           rawHeadline: "Five to Nine",
-          canonicalUrl: "https://0509.in/",
+          canonicalUrl: "https://0509.io/",
         }),
         captureMetadata: expect.objectContaining({
           kind: "launch_readiness_real_capture",
-          proofUrl: "https://0509.in/",
+          proofUrl: "https://0509.io/",
         }),
       }),
     );
@@ -545,7 +545,7 @@ describe("launch readiness canary route", () => {
 
     expect(captureBrowserlessProofSnapshot).toHaveBeenCalledWith(
       expect.anything(),
-      "https://0509.in/",
+      "https://0509.io/",
     );
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
