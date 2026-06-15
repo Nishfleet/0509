@@ -477,7 +477,7 @@ export default function AppSourcesRoute() {
             <span className="f9-app-kicker">Customer API</span>
             <h2>Use Five to Nine from your tools</h2>
           </div>
-          <a className="f9-secondary-button" href="/api/v1" target="_blank" rel="noreferrer">
+          <a className="f9-secondary-button" href="/api/docs" target="_blank" rel="noreferrer">
             API docs
           </a>
         </div>
@@ -717,35 +717,46 @@ export default function AppSourcesRoute() {
           <section className="f9-app-panel f9-source-guide">
             <span className="f9-app-kicker">Connect recipient</span>
             <h3>Validate WhatsApp</h3>
-            <Form className="f9-auth-form" method="post">
-              <input name="intent" type="hidden" value="save-whatsapp-target" />
-              <label className="f9-field">
-                <span>Recipient label</span>
-                <input
-                  autoComplete="off"
-                  name="whatsappDestinationName"
-                  placeholder="Founder, growth lead..."
-                  type="text"
-                />
-              </label>
-              <label className="f9-field">
-                <span>WhatsApp number</span>
-                <input
-                  autoComplete="off"
-                  inputMode="tel"
-                  name="whatsappTargetValue"
-                  placeholder="+919876543210"
-                  type="tel"
-                />
-              </label>
-              <label className="f9-checkbox-row">
-                <input name="whatsappExplicitOptIn" type="checkbox" value="yes" />
-                <span>Recipient has opted in to receive Five to Nine WhatsApp updates.</span>
-              </label>
-              <SubmitButton className="f9-primary-button" intent="save-whatsapp-target" pendingLabel="Saving…">
-                Save WhatsApp delivery
-              </SubmitButton>
-            </Form>
+            {data.whatsappDelivery.providerConfigured &&
+            data.whatsappDelivery.customerReady &&
+            data.whatsappDelivery.webhookConfigured ? (
+              <Form className="f9-auth-form" method="post">
+                <input name="intent" type="hidden" value="save-whatsapp-target" />
+                <label className="f9-field">
+                  <span>Recipient label</span>
+                  <input
+                    autoComplete="off"
+                    name="whatsappDestinationName"
+                    placeholder="Founder, growth lead..."
+                    type="text"
+                  />
+                </label>
+                <label className="f9-field">
+                  <span>WhatsApp number</span>
+                  <input
+                    autoComplete="off"
+                    inputMode="tel"
+                    name="whatsappTargetValue"
+                    placeholder="+919876543210"
+                    type="tel"
+                  />
+                </label>
+                <label className="f9-checkbox-row">
+                  <input name="whatsappExplicitOptIn" type="checkbox" value="yes" />
+                  <span>Recipient has opted in to receive Five to Nine WhatsApp updates.</span>
+                </label>
+                <SubmitButton className="f9-primary-button" intent="save-whatsapp-target" pendingLabel="Saving…">
+                  Save WhatsApp delivery
+                </SubmitButton>
+              </Form>
+            ) : (
+              <div className="f9-message is-error">
+                <p>
+                  WhatsApp is not available for customer setup yet. Use email or Slack until the
+                  provider, customer lane, templates, webhook, and delivered proof are verified.
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="f9-app-panel f9-source-guide">

@@ -16,7 +16,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Pricing is Dodo-backed and should be read from the live pricing/checkout preview, not hardcoded.
 - Billing webhooks are verified by signed Dodo canaries.
 - Broad self-serve launch still requires a configured Slack target with recent successful Slack delivery proof.
-- WhatsApp delivery is not ready to claim until provider setup, opt-in, templates, webhook readiness, and delivered proof are all verified.
+- WhatsApp delivery is not launch-scoped or ready to claim until provider setup, opt-in, templates, webhook readiness, and delivered proof are all verified.
 
 ## Not Live
 
@@ -27,9 +27,13 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 
 ## Entry Points
 
-- Home: https://0509.in/
-- Customer API: https://0509.in/api/v1
-- Demo proof: https://0509.in/api/demo-proof
-- Privacy: https://0509.in/privacy
-- Terms: https://0509.in/terms
-- Support: support@0509.in
+- Home: https://0509.io/
+- Help: https://0509.io/help
+- Docs: https://0509.io/docs
+- Customer API: https://0509.io/api/v1
+- API docs: https://0509.io/api/docs
+- Demo proof: https://0509.io/api/demo-proof
+- Status: https://0509.io/status
+- Privacy: https://0509.io/privacy
+- Terms: https://0509.io/terms
+- Support: support@0509.io

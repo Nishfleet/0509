@@ -1,4 +1,14 @@
-const PUBLIC_MARKDOWN_PATHS = new Set(["/", "/privacy", "/terms"]);
+const PUBLIC_MARKDOWN_PATHS = new Set([
+  "/",
+  "/help",
+  "/docs",
+  "/api/docs",
+  "/status",
+  "/changelog",
+  "/trust",
+  "/privacy",
+  "/terms",
+]);
 
 export const PUBLIC_MARKDOWN = `---
 title: Five to Nine
@@ -19,6 +29,8 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Signed-in boards can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
 - Customer API keys can read account-owned collection, watchlist, and digest exports at /api/v1.
 - Customer API keys can also use the read-only MCP endpoint at /api/mcp for account-owned collection, watchlist, and digest exports.
+- Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
+- Email delivery uses Cloudflare Email Service through the app's send_email binding.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires at least one configured Slack target with successful live delivery proof.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
@@ -29,13 +41,13 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Account access uses verified access paths.
 - Public demo proof is sample-only, including the example tracked competitor and digest preview. Public live search is read-only; retained monitoring and saved evidence require an account.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
-- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, any configured WhatsApp delivery proof, and provider-canary success.
+- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, and provider-canary success.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Observed campaign duration is based on first-seen and last-observed proof only. Manual external proof links can store user-supplied visible spend, impression, and reach values, but automated spend, reach, impression, and unsupported-channel benchmarks are not live.
-- Customer WhatsApp delivery stays behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
+- Customer WhatsApp delivery is not launch-scoped today; it stays behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
 
 ## Pricing
 
@@ -67,7 +79,8 @@ Current product truth:
 - Public read-only live search is available for buyer evaluation, and public demo proof is sample-only at /api/demo-proof with an example tracked competitor and digest preview.
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
-- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, any configured WhatsApp delivery proof, and provider-canary success.
+- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, and provider-canary success.
+- Email delivery uses Cloudflare Email Service through the app's send_email binding.
 - Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly briefs plus 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
@@ -79,7 +92,7 @@ Current product truth:
 - Customer API keys support the read-only /api/mcp endpoint for agent access to account-owned collection, watchlist, and digest exports.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires a configured Slack target with successful live delivery proof.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
-- Customer WhatsApp delivery must stay behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
+- Customer WhatsApp delivery is not launch-scoped today and must stay behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
 - Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and public write APIs are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 

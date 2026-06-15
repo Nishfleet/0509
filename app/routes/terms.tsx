@@ -39,7 +39,7 @@ export default function TermsRoute() {
           <LegalBlock title="Billing">
             <p>
               Paid access and subscription changes follow the confirmed payment path connected to the account. To
-              cancel, use the billing portal on the Plan &amp; billing page or email{" "}
+              cancel, use the billing portal on the Plan &amp; billing page when it is available, or email{" "}
               <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the account email; cancellation stops future renewals
               and access continues until the end of the period you have paid for.
             </p>

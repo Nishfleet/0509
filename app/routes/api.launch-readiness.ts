@@ -9,6 +9,24 @@ function hasValidCanaryToken(request: Request, token: string | undefined) {
   return request.headers.get("x-0509-canary-token") === configured;
 }
 
+function isWhatsAppLaunchScoped(input: {
+  providerConfigured: boolean;
+  customerReady: boolean;
+  webhookConfigured: boolean;
+  usableTargets: number;
+  recentAttempts: number;
+  recentSent: number;
+}) {
+  return (
+    input.providerConfigured ||
+    input.customerReady ||
+    input.webhookConfigured ||
+    input.usableTargets > 0 ||
+    input.recentAttempts > 0 ||
+    input.recentSent > 0
+  );
+}
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { getLaunchReadinessSignals } = await import("~/lib/data.server");
@@ -37,6 +55,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getLaunchReadinessSignals(env),
     getMetaAdsBetaReadiness(env),
   ]);
+  const whatsappLaunchScoped = isWhatsAppLaunchScoped(signals.whatsappDelivery);
   const blockers = [
     signals.monitoring.recentSuccessfulRuns > 0 ? null : "no_recent_monitoring_run",
     signals.proof.recentSuccessfulCaptures > 0 ? null : "no_recent_proof_capture",
@@ -44,19 +63,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     signals.digestDelivery.recentSent > 0 ? null : "no_recent_digest_sent",
     signals.slackDelivery.usableTargets > 0 ? null : "no_slack_delivery_target",
     signals.slackDelivery.recentSent > 0 ? null : "no_recent_slack_sent",
-    signals.whatsappDelivery.configuredTargets > 0 && !signals.whatsappDelivery.providerConfigured
+    whatsappLaunchScoped && !signals.whatsappDelivery.providerConfigured
       ? "whatsapp_provider_not_configured"
       : null,
-    signals.whatsappDelivery.configuredTargets > 0 && !signals.whatsappDelivery.customerReady
+    whatsappLaunchScoped && !signals.whatsappDelivery.customerReady
       ? "whatsapp_customer_delivery_not_enabled"
       : null,
-    signals.whatsappDelivery.configuredTargets > 0 && !signals.whatsappDelivery.webhookConfigured
+    whatsappLaunchScoped && !signals.whatsappDelivery.webhookConfigured
       ? "whatsapp_webhook_not_configured"
       : null,
-    signals.whatsappDelivery.configuredTargets > 0 && signals.whatsappDelivery.usableTargets === 0
+    whatsappLaunchScoped && signals.whatsappDelivery.usableTargets === 0
       ? "no_usable_whatsapp_delivery_target"
       : null,
-    signals.whatsappDelivery.configuredTargets > 0 && signals.whatsappDelivery.recentSent === 0
+    whatsappLaunchScoped && signals.whatsappDelivery.recentSent === 0
       ? "no_recent_whatsapp_delivered"
       : null,
     ...metaAdsBeta.blockers.map((blocker) => `meta_ads_beta:${blocker}`),
@@ -67,6 +86,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       ok: blockers.length === 0,
       blockers,
       signals,
+      launchScope: {
+        whatsapp: whatsappLaunchScoped,
+      },
       metaAdsBeta,
     },
     {

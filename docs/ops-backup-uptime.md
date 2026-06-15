@@ -32,7 +32,7 @@ can't reliably monitor itself. Recommended: [UptimeRobot](https://uptimerobot.co
 free tier —
 
 1. Create a free account (no card).
-2. Add an HTTP(s) monitor for `https://0509.in/api/health`, interval 5 min.
+2. Add an HTTP(s) monitor for `https://0509.io/api/health`, interval 5 min.
 3. Add a keyword check that the response contains `ok` (the health endpoint
    returns JSON with a status field).
 4. Alert contact: nishant345@gmail.com (or me@inish.in).

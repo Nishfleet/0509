@@ -9,6 +9,12 @@ describe("public SEO files", () => {
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
 
     expect(sitemap?.body).toContain("https://0509.io/");
+    expect(sitemap?.body).toContain("https://0509.io/help");
+    expect(sitemap?.body).toContain("https://0509.io/docs");
+    expect(sitemap?.body).toContain("https://0509.io/api/docs");
+    expect(sitemap?.body).toContain("https://0509.io/status");
+    expect(sitemap?.body).toContain("https://0509.io/changelog");
+    expect(sitemap?.body).toContain("https://0509.io/trust");
     expect(sitemap?.body).toContain("https://0509.io/privacy");
     expect(sitemap?.body).toContain("https://0509.io/terms");
     expect(sitemap?.body).not.toContain("https://0509.io/search");
@@ -22,5 +28,14 @@ describe("public SEO files", () => {
     expect(rootSecurity).toContain("Contact: mailto:support@0509.io");
     expect(rootSecurity).toContain("Canonical: https://0509.io/.well-known/security.txt");
     expect(rootSecurity).not.toContain("0509.in");
+  });
+
+  it("keeps skill.md entry points on the io domain", () => {
+    const skill = readFileSync("public/.well-known/skill.md", "utf8");
+
+    expect(skill).toContain("https://0509.io/");
+    expect(skill).toContain("https://0509.io/api/docs");
+    expect(skill).toContain("support@0509.io");
+    expect(skill).not.toContain("0509.in");
   });
 });

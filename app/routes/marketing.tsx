@@ -617,6 +617,12 @@ export default function MarketingRoute() {
         </Link>
         <p>Five to Nine helps teams see competitor offer and landing-page changes before the next sales call.</p>
         <nav aria-label="Footer">
+          <Link to="/help">Help</Link>
+          <Link to="/docs">Docs</Link>
+          <Link to="/api/docs">API docs</Link>
+          <Link to="/status">Status</Link>
+          <Link to="/changelog">Changelog</Link>
+          <Link to="/trust">Trust</Link>
           <Link to="/privacy">Privacy</Link>
           <Link to="/terms">Terms</Link>
           <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>

@@ -1,9 +1,9 @@
 # WhatsApp Delivery Setup (production)
 
-Status 2026-06-12: code-side everything is ready and honest-gated (the UI
-shows "not yet available" until the provider is configured). The webhook
-verify token is already uploaded as a Worker secret; the remaining steps
-need Nish's Meta Business account.
+Status 2026-06-15: WhatsApp is not in launch scope. Code-side setup stays
+honest-gated (the UI shows "not available" until provider, customer delivery,
+and webhook readiness are configured). The remaining steps need Nish's Meta
+Business account.
 
 ## What Nish does in Meta (business.facebook.com)
 
@@ -17,7 +17,7 @@ need Nish's Meta Business account.
    user → generate token with `whatsapp_business_messaging` +
    `whatsapp_business_management` → note the **Access Token**.
 5. **Webhook** (App → WhatsApp → Configuration):
-   - Callback URL: `https://0509.in/api/delivery-status/whatsapp`
+   - Callback URL: `https://0509.io/api/delivery-status/whatsapp`
    - Verify token: the value in `~/.config/whatsapp/0509-webhook-verify-token`
      (already uploaded as the Worker secret `WHATSAPP_WEBHOOK_VERIFY_TOKEN`)
    - Subscribe to the `messages` webhook field (delivery statuses).
@@ -46,8 +46,8 @@ npx wrangler secret put WHATSAPP_DELIVERY_ENABLED   # value: true
 - `/app/sources` → WhatsApp section shows "Provider: configured"; add a
   target — it sends a real `proof_digest_customer_v1` test template and
   only saves on success.
-- `npm run canary:prod` — the `whatsapp_*` ops-readiness flags clear after
-  the first delivered sends.
+- `npm run canary:prod` — once WhatsApp is deliberately configured, the
+  `whatsapp_*` ops-readiness flags clear after the first delivered sends.
 
 ## Slack (no platform setup needed)
 
