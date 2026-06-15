@@ -42,7 +42,7 @@ Last updated: 2026-05-20
 - Better Auth (email + OAuth)
 - D1 (SQLite via Cloudflare)
 - Optional R2 (artifact storage retention)
-- Resend (email delivery)
+- Cloudflare Email Service `send_email` binding (digest and instant-alert email delivery)
 - Workers AI (OCR + translation)
 - Pure CSS (no Tailwind)
 - Vitest
