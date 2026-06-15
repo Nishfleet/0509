@@ -11,6 +11,7 @@ export interface CompetitorWebsiteState {
   host: string | null;
   displayName: string | null;
   searchTerm: string | null;
+  error: string | null;
 }
 
 export function normalizeCompetitorWebsiteInput(value: string): CompetitorWebsiteState {
@@ -22,9 +23,16 @@ export function normalizeCompetitorWebsiteInput(value: string): CompetitorWebsit
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
   try {
     const url = new URL(candidate);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return invalidCompetitorWebsite(raw, "Use a normal website address, like seoitis.com.");
+    }
+    if (url.username || url.password) {
+      return invalidCompetitorWebsite(raw, "Enter the website domain only, like seoitis.com.");
+    }
+
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
-    if (!host.includes(".")) {
-      return { ...emptyCompetitorWebsite(), raw };
+    if (!isPublicDomainLikeHost(host)) {
+      return invalidCompetitorWebsite(raw, "That website looks incomplete. Add the full domain, like seoitis.com.");
     }
 
     url.hash = "";
@@ -38,9 +46,10 @@ export function normalizeCompetitorWebsiteInput(value: string): CompetitorWebsit
       host,
       displayName: searchTerm ? titleCase(searchTerm) : host,
       searchTerm: searchTerm || host,
+      error: null,
     };
   } catch {
-    return { ...emptyCompetitorWebsite(), raw };
+    return invalidCompetitorWebsite(raw, "Enter a valid website address, like seoitis.com.");
   }
 }
 
@@ -51,7 +60,20 @@ export function emptyCompetitorWebsite(): CompetitorWebsiteState {
     host: null,
     displayName: null,
     searchTerm: null,
+    error: null,
   };
+}
+
+export function invalidCompetitorWebsite(raw: string, error: string): CompetitorWebsiteState {
+  return {
+    ...emptyCompetitorWebsite(),
+    raw,
+    error,
+  };
+}
+
+export function hasInvalidCompetitorWebsite(competitorWebsite: CompetitorWebsiteState) {
+  return Boolean(competitorWebsite.raw && competitorWebsite.error);
 }
 
 export function applyWebsiteSearchFallback<T extends { mode: "advertiser" | "keyword"; filters: SearchFilters }>(
@@ -114,6 +136,21 @@ function inferSearchTermFromHost(host: string) {
     .replace(/\b(official|store|shop|india|in)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isPublicDomainLikeHost(host: string) {
+  if (!host || host.includes("..") || host.endsWith(".")) {
+    return false;
+  }
+
+  const parts = host.split(".");
+  if (parts.length < 2) {
+    return false;
+  }
+
+  const topLevelDomain = parts[parts.length - 1] ?? "";
+  return parts.every((part) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(part)) &&
+    (/^[a-z]{2,}$/i.test(topLevelDomain) || /^xn--[a-z0-9-]{2,59}$/i.test(topLevelDomain));
 }
 
 function titleCase(value: string) {

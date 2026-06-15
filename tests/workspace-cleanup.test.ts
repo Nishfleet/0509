@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   deleteCollection,
   deleteCollectionItem,
+  deactivateWatchlistsBeyondPlanLimit,
   setWatchlistActive,
 } from "~/lib/data.server";
 
@@ -71,6 +72,11 @@ describe("workspace cleanup persistence", () => {
     // a deliberate user pause is stamped so renewals never force-resume it
     expect(update?.bindings[1]).toBe("user");
     expect(update?.bindings.slice(3)).toEqual(["watch-1", "user-1"]);
+    const mentionSync = mock.statements.find((statement) =>
+      statement.sql.includes("UPDATE web_mention_target"),
+    );
+    expect(mentionSync?.sql).toContain("SELECT watchlist.is_active");
+    expect(mentionSync?.bindings.slice(1)).toEqual(["user-1", "user-1"]);
 
     const noMatch = createCapturingDb(0);
     expect(await setWatchlistActive({ DB: noMatch.db } as never, "user-2", "watch-1", true)).toBe(false);
@@ -126,6 +132,10 @@ describe("reactivateWatchlistsUpToPlanLimit", () => {
     // 1 already active of 3 allowed → 2 slots
     expect(update?.bindings.slice(1)).toEqual(["user-1", "user-1", 2]);
     expect(update?.sql).toContain("ORDER BY updated_at DESC");
+    const mentionSync = statements.find((statement) =>
+      statement.sql.includes("UPDATE web_mention_target"),
+    );
+    expect(mentionSync?.bindings.slice(1)).toEqual(["user-1", "user-1"]);
   });
 
   it("does nothing when the plan is already at its limit", async () => {
@@ -153,6 +163,25 @@ describe("reactivateWatchlistsUpToPlanLimit", () => {
 
     expect(resumed).toBe(0);
     expect(statements.some((sql) => sql.includes("SET is_active = 1"))).toBe(false);
+  });
+});
+
+describe("deactivateWatchlistsBeyondPlanLimit", () => {
+  it("syncs web mention targets after plan-limit pauses", async () => {
+    const mock = createCapturingDb();
+
+    const paused = await deactivateWatchlistsBeyondPlanLimit(
+      { DB: mock.db } as never,
+      "user-1",
+      1,
+    );
+
+    expect(paused).toBe(1);
+    const mentionSync = mock.statements.find((statement) =>
+      statement.sql.includes("UPDATE web_mention_target"),
+    );
+    expect(mentionSync?.sql).toContain("SELECT watchlist.is_active");
+    expect(mentionSync?.bindings.slice(1)).toEqual(["user-1", "user-1"]);
   });
 });
 
