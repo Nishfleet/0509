@@ -1135,15 +1135,29 @@ function extractAdBodyLines(block: string[]) {
   const sponsoredIndex = block.findIndex((line) => /^Sponsored$/i.test(line));
   const afterSponsored = sponsoredIndex >= 0 ? block.slice(sponsoredIndex + 1) : block;
   const bodyLines: string[] = [];
+  const seen = new Set<string>();
 
   for (const line of afterSponsored) {
     if (isTextCardUiLine(line) || /^Sponsored$/i.test(line)) {
       continue;
     }
+    const normalized = normalizeExtractedBodyLine(line);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
     bodyLines.push(line);
   }
 
   return bodyLines;
+}
+
+function normalizeExtractedBodyLine(line: string) {
+  return line
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function isTextCardUiLine(line: string) {
