@@ -789,7 +789,7 @@ export default function WatchlistsRoute() {
                       <input
                         defaultValue={data.selectedWatchlist.targetLabel}
                         name="targetLabel"
-                        placeholder={selectedTrackingRole === "self" ? "Seoitis" : "Nykaa, Mamaearth, skincare serum"}
+                        placeholder={selectedTrackingRole === "self" ? "Samplebrand" : "Nykaa, Mamaearth, skincare serum"}
                         type="text"
                       />
                     </label>

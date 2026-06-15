@@ -12,9 +12,9 @@ describe("normalizeCompetitorWebsiteInput", () => {
   });
 
   it("still rejects incomplete website names without a public suffix", () => {
-    const normalized = normalizeCompetitorWebsiteInput("seoitis");
+    const normalized = normalizeCompetitorWebsiteInput("samplebrand");
 
-    expect(normalized.error).toBe("That website looks incomplete. Add the full domain, like seoitis.com.");
+    expect(normalized.error).toBe("That website looks incomplete. Add the full domain, like brand.com.");
     expect(normalized.normalizedUrl).toBeNull();
   });
 });
