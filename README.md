@@ -26,7 +26,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 - Better Auth on Cloudflare D1 for active auth and sessions
 - D1 for product data
 - Optional R2 for landing-page artifact retention
-- Postmark for digest and instant-alert email delivery
+- Cloudflare Email Service `send_email` binding for digest and instant-alert email delivery
 - Slack incoming-webhook setup for configured digest and instant-alert delivery; broad launch requires a configured Slack target with successful live delivery proof
 - WhatsApp Cloud API delivery is guarded behind provider configuration, customer enablement, opt-in, validation, template eligibility, webhook readiness, and successful delivery proof
 
@@ -68,9 +68,8 @@ Important bindings and secrets:
 - `ALLOW_PLATFORM_META_API_FALLBACK`
 - `META_AD_LIBRARY_TOKEN`
 - `META_AD_LIBRARY_API_VERSION`
-- `POSTMARK_SERVER_TOKEN`
-- `POSTMARK_FROM_EMAIL`
-- `POSTMARK_MESSAGE_STREAM`
+- `EMAIL` Cloudflare Email Service binding
+- `EMAIL_FROM_EMAIL`
 - `META_TOKEN_ENCRYPTION_SECRET` for encrypted customer Meta tokens and Slack webhook URLs
 - `DODO_PAYMENTS_API_KEY` or `DODO_0509_API_KEY`
 - `DODO_0509_BRAND_ID`
