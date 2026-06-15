@@ -65,7 +65,7 @@ describe("production canary", () => {
     });
 
     const health = await checkHealthEndpoint({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       fetchImpl,
     });
 
@@ -74,10 +74,10 @@ describe("production canary", () => {
       status: 200,
       app: "0509",
       expectedApp: "0509",
-      url: "https://0509.in/api/health",
+      url: "https://0509.io/api/health",
     });
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://0509.in/api/health",
+      "https://0509.io/api/health",
       expect.objectContaining({
         headers: expect.objectContaining({
           "user-agent": "0509-prod-canary/1.0",
@@ -97,7 +97,7 @@ describe("production canary", () => {
     });
 
     const health = await checkHealthEndpoint({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       fetchImpl,
     });
 
@@ -115,7 +115,7 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("empty")]);
 
     const report = await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -145,7 +145,7 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("empty")]);
 
     const report = await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -207,7 +207,7 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
 
     const report = await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -245,7 +245,7 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
 
     const report = await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -271,7 +271,7 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
 
     const report = await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -299,7 +299,7 @@ describe("production canary", () => {
     ]);
 
     const report = await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -330,7 +330,7 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
 
     await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -358,7 +358,7 @@ describe("production canary", () => {
     const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
 
     await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -383,7 +383,7 @@ describe("production canary", () => {
     ]);
 
     const report = await runProductionCanary({
-      baseUrl: "https://0509.in",
+      baseUrl: "https://0509.io",
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,

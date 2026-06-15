@@ -174,7 +174,7 @@ describe("provider bakeoff helpers", () => {
         blockedLikely: false,
         degraded: false,
         sourceLabel: "Cached live results",
-        url: "https://0509.in/search?query=nykaa",
+        url: "https://0509.io/search?query=nykaa",
         note: null,
       },
       {
@@ -219,7 +219,7 @@ describe("provider bakeoff helpers", () => {
         degraded: false,
         emptyReason: "no_results",
         sourceLabel: "Live Ad Library capture",
-        url: "https://0509.in/search?query=adflex&fresh=live",
+        url: "https://0509.io/search?query=adflex&fresh=live",
         note: "Tracking path: Live Ad Library capture returned a verified no-results page",
       },
       {
@@ -237,7 +237,7 @@ describe("provider bakeoff helpers", () => {
         blockedLikely: false,
         degraded: false,
         sourceLabel: "Cached live results",
-        url: "https://0509.in/search?query=cached-empty&fresh=live",
+        url: "https://0509.io/search?query=cached-empty&fresh=live",
         note: null,
       },
     ]);

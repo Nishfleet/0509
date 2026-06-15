@@ -58,7 +58,7 @@ describe("customer API keys", () => {
     const { authenticateApiKeyRequest } = await import("~/lib/api-keys.server");
     const result = await authenticateApiKeyRequest(
       { DB: {} } as never,
-      new Request("https://0509.in/api/v1/watchlists/watch-1", {
+      new Request("https://0509.io/api/v1/watchlists/watch-1", {
         headers: {
           Authorization: `Bearer ${fakeApiKey("abcdefghijklmnopqrstuvwxyz")}`,
         },
@@ -74,7 +74,7 @@ describe("customer API keys", () => {
     const { authenticateApiKeyRequest } = await import("~/lib/api-keys.server");
     const result = await authenticateApiKeyRequest(
       { DB: {} } as never,
-      new Request("https://0509.in/api/v1/watchlists/watch-1"),
+      new Request("https://0509.io/api/v1/watchlists/watch-1"),
     );
 
     expect(result.ok).toBe(false);

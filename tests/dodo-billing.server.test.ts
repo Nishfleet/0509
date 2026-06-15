@@ -33,7 +33,7 @@ describe("Dodo billing", () => {
         DODO_0509_API_KEY: "secret",
         DODO_0509_PRODUCT_PROOF_PACK_500_ID: "prod_pack_500",
       },
-      request: new Request("https://0509.in/app"),
+      request: new Request("https://0509.io/app"),
       session,
       target: { kind: "usage_bundle", bundle: "proof_500" },
       fetcher: fetcher as never,

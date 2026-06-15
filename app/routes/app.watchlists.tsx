@@ -492,7 +492,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         }
       : {
           ok: false,
-          message: `The test email to ${target.targetValue} failed to send. Check the address or email ${"support@0509.in"}.`,
+          message: `The test email to ${target.targetValue} failed to send. Check the address or email ${SUPPORT_EMAIL}.`,
         };
   }
 

@@ -157,7 +157,7 @@ describe("Dodo billing canary route", () => {
     await expect(
       action({
         context: createContext(),
-        request: new Request("https://0509.in/api/billing/dodo/canary", {
+        request: new Request("https://0509.io/api/billing/dodo/canary", {
           method: "POST",
         }),
       } as never),
@@ -174,7 +174,7 @@ describe("Dodo billing canary route", () => {
     const { action } = await import("~/routes/api.billing.dodo.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/billing/dodo/canary", {
+      request: new Request("https://0509.io/api/billing/dodo/canary", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -200,7 +200,7 @@ describe("Dodo billing canary route", () => {
       metadata: { user_id: string };
     }> = [];
     const webhookAction = vi.fn(async ({ request }: { request: Request }) => {
-      expect(request.url).toBe("https://0509.in/api/webhooks/dodo");
+      expect(request.url).toBe("https://0509.io/api/webhooks/dodo");
       expect(request.method).toBe("POST");
       expect(request.headers.get("webhook-signature")).toContain("v1=");
       const body = JSON.parse(await request.text());
@@ -220,7 +220,7 @@ describe("Dodo billing canary route", () => {
     const { action } = await import("~/routes/api.billing.dodo.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/billing/dodo/canary", {
+      request: new Request("https://0509.io/api/billing/dodo/canary", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",

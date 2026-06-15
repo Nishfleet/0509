@@ -99,7 +99,7 @@ describe("Dodo 0509 pricing", () => {
         DODO_0509_PRODUCT_STARTER_MONTHLY_ID: "prod_starter_monthly",
         DODO_0509_PRODUCT_PROOF_PACK_500_ID: "prod_pack_500",
       },
-      request: new Request("https://0509.in/api/pricing-preview", {
+      request: new Request("https://0509.io/api/pricing-preview", {
         headers: { "cf-ipcountry": "IN" },
       }),
       fetcher: fetcher as never,
@@ -195,7 +195,7 @@ describe("Dodo 0509 pricing", () => {
 
     await previewDodo0509PlanPrices({
       env,
-      request: new Request("https://0509.in/api/pricing-preview", {
+      request: new Request("https://0509.io/api/pricing-preview", {
         headers: { "cf-ipcountry": "US" },
       }),
       fetcher: fetcher as never,
@@ -203,7 +203,7 @@ describe("Dodo 0509 pricing", () => {
 
     const canaryPreview = await previewDodo0509PlanPrices({
       env,
-      request: new Request("https://0509.in/api/pricing-preview?country=US&pricing-canary=1", {
+      request: new Request("https://0509.io/api/pricing-preview?country=US&pricing-canary=1", {
         headers: { "x-0509-canary-token": "canary-token" },
       }),
       fetcher: fetcher as never,
@@ -228,7 +228,7 @@ describe("Dodo 0509 pricing", () => {
         total_tax: 0,
       }),
     });
-    const request = new Request("https://0509.in/api/pricing-preview?country=US", {
+    const request = new Request("https://0509.io/api/pricing-preview?country=US", {
       headers: {
         "cf-ipcountry": "IN",
         "x-0509-pricing-country": "GB",
@@ -266,7 +266,7 @@ describe("Dodo 0509 pricing", () => {
         total_tax: 0,
       }),
     });
-    const request = new Request("https://0509.in/api/pricing-preview?country=US", {
+    const request = new Request("https://0509.io/api/pricing-preview?country=US", {
       headers: {
         "cf-ipcountry": "IN",
         "x-0509-canary-token": "secret-token",

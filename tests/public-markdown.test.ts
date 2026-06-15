@@ -20,14 +20,14 @@ describe("public markdown", () => {
   it("detects clients asking for markdown", () => {
     expect(
       wantsPublicMarkdown(
-        new Request("https://0509.in/", {
+        new Request("https://0509.io/", {
           headers: {
             Accept: "text/markdown, text/plain;q=0.8",
           },
         }),
       ),
     ).toBe(true);
-    expect(wantsPublicMarkdown(new Request("https://0509.in/"))).toBe(false);
+    expect(wantsPublicMarkdown(new Request("https://0509.io/"))).toBe(false);
   });
 
   it("keeps agent-readable content aligned with launch truth", () => {

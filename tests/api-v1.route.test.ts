@@ -189,7 +189,7 @@ describe("customer API v1", () => {
     const { loader } = await import("~/routes/api.v1");
     const response = await loader({
       context: { cloudflare: { env: {} } },
-      request: new Request("https://0509.in/api/v1"),
+      request: new Request("https://0509.io/api/v1"),
     } as never);
     const body = await response.json() as { endpoints: Array<{ path: string }>; notLiveYet: string[] };
 
@@ -201,7 +201,7 @@ describe("customer API v1", () => {
 
   it("returns account-scoped collection JSON by API key", async () => {
     const mocks = setupMocks();
-    const response = await loadApi("https://0509.in/api/v1/collections/collection-1?format=json");
+    const response = await loadApi("https://0509.io/api/v1/collections/collection-1?format=json");
     const body = await response.json() as {
       resourceType: string;
       insightDepth: { topHooks: Array<{ label: string }> };
@@ -217,7 +217,7 @@ describe("customer API v1", () => {
 
   it("returns Slack-ready markdown by API key", async () => {
     setupMocks();
-    const response = await loadApi("https://0509.in/api/v1/watchlists/watchlist-1?format=slack");
+    const response = await loadApi("https://0509.io/api/v1/watchlists/watchlist-1?format=slack");
     const body = await response.text();
 
     expect(response.headers.get("content-type")).toContain("text/markdown");
@@ -228,7 +228,7 @@ describe("customer API v1", () => {
 
   it("rejects requests without an active API key", async () => {
     setupMocks(false);
-    const response = await loadApi("https://0509.in/api/v1/collections/collection-1");
+    const response = await loadApi("https://0509.io/api/v1/collections/collection-1");
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toMatchObject({ error: "invalid_api_key" });
@@ -237,7 +237,7 @@ describe("customer API v1", () => {
   it("does not expose another user's digest", async () => {
     const mocks = setupMocks();
     mocks.getDigest.mockResolvedValue({ ...digest, userId: "other-user" });
-    const response = await loadApi("https://0509.in/api/v1/digests/digest-1");
+    const response = await loadApi("https://0509.io/api/v1/digests/digest-1");
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({ error: "not_found" });

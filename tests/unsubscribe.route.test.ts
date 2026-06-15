@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const env = {
   BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
-  BETTER_AUTH_URL: "https://0509.in",
+  BETTER_AUTH_URL: "https://0509.io",
 };
 
 const context = { cloudflare: { env } };
@@ -91,7 +91,7 @@ describe("unsubscribe signatures", () => {
   it("returns no signature without BETTER_AUTH_SECRET", async () => {
     const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
     await expect(
-      buildUnsubscribeUrl({ BETTER_AUTH_URL: "https://0509.in" } as never, {
+      buildUnsubscribeUrl({ BETTER_AUTH_URL: "https://0509.io" } as never, {
         userId: "user-1",
         targetId: "email-target-1",
       }),

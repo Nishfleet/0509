@@ -177,7 +177,7 @@ describe("/app/shares route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/env.server", () => ({
-      appOrigin: vi.fn(() => "https://0509.in"),
+      appOrigin: vi.fn(() => "https://0509.io"),
     }));
     vi.doMock("~/lib/data.server", () => ({
       listActiveShareLinks: vi.fn().mockResolvedValue([
@@ -200,14 +200,14 @@ describe("/app/shares route", () => {
     const { loader } = await import("~/routes/app.shares");
     const result = await loader({
       context: {},
-      request: new Request("https://0509.in/app/shares"),
+      request: new Request("https://0509.io/app/shares"),
       params: {},
     } as never);
 
     expect(result.shares).toEqual([
       {
         id: "share-1",
-        url: "https://0509.in/share/token-abc",
+        url: "https://0509.io/share/token-abc",
         resourceLabel: "Board",
         mode: "Snapshot",
         createdAt: "2026-06-01T00:00:00.000Z",
@@ -239,7 +239,7 @@ describe("/app/shares route", () => {
     const body = new URLSearchParams({ intent: "revoke-share", shareLinkId: "share-1" });
     const result = await action({
       context: {},
-      request: new Request("https://0509.in/app/shares", {
+      request: new Request("https://0509.io/app/shares", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: body.toString(),

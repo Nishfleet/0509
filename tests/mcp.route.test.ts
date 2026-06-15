@@ -165,7 +165,7 @@ async function loadDocs() {
   const { loader } = await import("~/routes/api.mcp");
   return loader({
     context: { cloudflare: { env: {} } },
-    request: new Request("https://0509.in/api/mcp"),
+    request: new Request("https://0509.io/api/mcp"),
   } as never);
 }
 
@@ -173,7 +173,7 @@ async function postMcp(body: Record<string, unknown>) {
   const { action } = await import("~/routes/api.mcp");
   return action({
     context: { cloudflare: { env: { DB: {} } } },
-    request: new Request("https://0509.in/api/mcp", {
+    request: new Request("https://0509.io/api/mcp", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${fakeApiKey("test")}`,
@@ -204,7 +204,7 @@ describe("MCP route", () => {
     };
 
     expect(body.status).toBe("live");
-    expect(body.endpoint).toBe("https://0509.in/api/mcp");
+    expect(body.endpoint).toBe("https://0509.io/api/mcp");
     expect(body.tools.map((tool) => tool.name)).toContain("get_digest_export");
     expect(body.notLiveYet).toContain("TikTok ingestion");
     expect(body.notLiveYet).not.toContain("MCP server");
@@ -214,7 +214,7 @@ describe("MCP route", () => {
     const { loader } = await import("~/routes/api.mcp");
     const response = await loader({
       context: { cloudflare: { env: {} } },
-      request: new Request("https://0509.in/api/mcp", {
+      request: new Request("https://0509.io/api/mcp", {
         headers: {
           Accept: "text/event-stream",
         },

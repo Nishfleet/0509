@@ -277,7 +277,7 @@ describe("sendDeliveryTestEmail", () => {
 
     const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
     const sent = await sendDeliveryTestEmail(
-      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.in" } as never,
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
       { userId: "user-1", email: "owner@example.com", name: "Owner" },
     );
 
@@ -406,7 +406,7 @@ describe("operator alert FK attribution", () => {
     const sent = await sendOperatorAlertEmail(
       {
         EMAIL: { send: emailSend },
-        EMAIL_FROM_EMAIL: "alerts@0509.in",
+        EMAIL_FROM_EMAIL: "alerts@0509.io",
         LAUNCH_CANARY_EMAIL: "me@inish.in",
       } as never,
       { subject: "test", lines: ["signal"] },
@@ -426,7 +426,7 @@ describe("operator alert FK attribution", () => {
     const sent = await sendOperatorAlertEmail(
       {
         EMAIL: { send: emailSend },
-        EMAIL_FROM_EMAIL: "alerts@0509.in",
+        EMAIL_FROM_EMAIL: "alerts@0509.io",
         LAUNCH_CANARY_EMAIL: "me@inish.in",
       } as never,
       { subject: "test", lines: ["signal"], idempotencyKey: "operator-deletion:user-9" },

@@ -69,7 +69,7 @@ describe("Razorpay webhook route", () => {
     const { action } = await import("~/routes/api.webhooks.razorpay");
     const response = await action({
       context: createContext({ RAZORPAY_WEBHOOK_SECRET: secret }),
-      request: new Request("https://0509.in/api/webhooks/razorpay", {
+      request: new Request("https://0509.io/api/webhooks/razorpay", {
         method: "POST",
         headers: {
           "x-razorpay-signature": hmac(rawBody, secret),
@@ -118,7 +118,7 @@ describe("Razorpay webhook route", () => {
     const { action } = await import("~/routes/api.webhooks.razorpay");
     const response = await action({
       context: createContext({ RAZORPAY_WEBHOOK_SECRET: secret }),
-      request: new Request("https://0509.in/api/webhooks/razorpay", {
+      request: new Request("https://0509.io/api/webhooks/razorpay", {
         method: "POST",
         headers: {
           "x-razorpay-signature": hmac(rawBody, secret),
@@ -172,7 +172,7 @@ describe("Razorpay webhook route", () => {
           RAZORPAY_WEBHOOK_SECRET: secret,
           RAZORPAY_PLAN_STARTER_MONTHLY: "plan_different",
         }),
-        request: new Request("https://0509.in/api/webhooks/razorpay", {
+        request: new Request("https://0509.io/api/webhooks/razorpay", {
           method: "POST",
           headers: {
             "x-razorpay-signature": hmac(rawBody, secret),

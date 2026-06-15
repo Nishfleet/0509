@@ -6,7 +6,7 @@ const emailEnv = {
   get EMAIL() {
     return { send: emailSend };
   },
-  EMAIL_FROM_EMAIL: "alerts@0509.in",
+  EMAIL_FROM_EMAIL: "alerts@0509.io",
 };
 
 function mockEmailSend(messageId = "msg_1") {
@@ -91,7 +91,7 @@ describe("deliverWeeklyDigest", () => {
       {
         ...emailEnv,
         BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
-        BETTER_AUTH_URL: "https://0509.in",
+        BETTER_AUTH_URL: "https://0509.io",
       } as never,
       {
         userId: "user-1",
@@ -126,7 +126,7 @@ describe("deliverWeeklyDigest", () => {
     });
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(emailSendPayload(sendMock)).toMatchObject({
-      from: "alerts@0509.in",
+      from: "alerts@0509.io",
       to: "owner@example.com",
       subject: "Five to Nine weekly digest: 1 competitor changes",
       html: expect.stringContaining("Five to Nine weekly digest"),
@@ -134,7 +134,7 @@ describe("deliverWeeklyDigest", () => {
       headers: expect.objectContaining({
         "X-0509-Tag": "weekly-digest",
         "List-Unsubscribe": expect.stringContaining(
-          "https://0509.in/unsubscribe?u=user-1&t=email-target-1&sig=",
+          "https://0509.io/unsubscribe?u=user-1&t=email-target-1&sig=",
         ),
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
       }),
@@ -1054,7 +1054,7 @@ describe("deliverWatchlistAlerts", () => {
       {
         ...emailEnv,
         BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
-        BETTER_AUTH_URL: "https://0509.in",
+        BETTER_AUTH_URL: "https://0509.io",
       } as never,
       {
         userId: "user-1",
@@ -1098,7 +1098,7 @@ describe("deliverWatchlistAlerts", () => {
     });
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(emailSendPayload(sendMock)).toMatchObject({
-      from: "alerts@0509.in",
+      from: "alerts@0509.io",
       to: "owner@example.com",
       subject: "Landing page URL changed: Nykaa",
       html: expect.stringContaining("Five to Nine alert"),
@@ -1188,7 +1188,7 @@ describe("deliverWatchlistAlerts", () => {
       {
         ...emailEnv,
         BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
-        BETTER_AUTH_URL: "https://0509.in",
+        BETTER_AUTH_URL: "https://0509.io",
       } as never,
       {
         userId: "user-1",
@@ -1380,7 +1380,7 @@ describe("deliverWatchlistAlerts", () => {
     await deliverWatchlistAlerts(
       {
         ...emailEnv,
-        BETTER_AUTH_URL: "https://0509.in",
+        BETTER_AUTH_URL: "https://0509.io",
       } as never,
       input,
     );
@@ -1389,7 +1389,7 @@ describe("deliverWatchlistAlerts", () => {
     const result = await deliverWatchlistAlerts(
       {
         ...emailEnv,
-        BETTER_AUTH_URL: "https://0509.in",
+        BETTER_AUTH_URL: "https://0509.io",
       } as never,
       input,
     );
@@ -1876,7 +1876,7 @@ describe("instant alert failed-send retry", () => {
       {
         ...emailEnv,
         BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
-        BETTER_AUTH_URL: "https://0509.in",
+        BETTER_AUTH_URL: "https://0509.io",
       } as never,
       {
         userId: "user-1",
@@ -1984,7 +1984,7 @@ describe("alert email content quality", () => {
       {
         ...emailEnv,
         BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
-        BETTER_AUTH_URL: "https://0509.in",
+        BETTER_AUTH_URL: "https://0509.io",
       } as never,
       {
         userId: "user-1",

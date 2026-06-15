@@ -75,7 +75,7 @@ describe("launch readiness route", () => {
     const { loader } = await import("~/routes/api.launch-readiness");
     const response = await loader({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness", {
+      request: new Request("https://0509.io/api/launch-readiness", {
         headers: {
           "x-0509-canary-token": "secret-token",
         },
@@ -148,7 +148,7 @@ describe("launch readiness route", () => {
     const { loader } = await import("~/routes/api.launch-readiness");
     const response = await loader({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness", {
+      request: new Request("https://0509.io/api/launch-readiness", {
         headers: {
           "x-0509-canary-token": "secret-token",
         },
@@ -224,7 +224,7 @@ describe("launch readiness route", () => {
     const { loader } = await import("~/routes/api.launch-readiness");
     const response = await loader({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness", {
+      request: new Request("https://0509.io/api/launch-readiness", {
         headers: {
           "x-0509-canary-token": "secret-token",
         },
