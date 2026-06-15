@@ -4,11 +4,13 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 
 import { SubmitButton } from "~/components/submit-button";
 import {
+  hasInvalidCompetitorWebsite,
+  normalizeCompetitorWebsiteInput,
+  watchlistFingerprint,
+} from "~/lib/competitor-website";
+import {
   buildSearchParams,
-  fingerprintSavedQuery,
-  hashString,
   normalizeSavedQuery,
-  stableStringify,
 } from "~/lib/normalize";
 import { defaultCountryForVisitor } from "~/lib/countries";
 
@@ -68,15 +70,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
-  const competitorInput = String(formData.get("website") ?? formData.get("query") ?? "").trim();
-  const competitor = normalizeOnboardingCompetitorInput(competitorInput);
-  const query = competitor.query;
+  const websiteInput = String(formData.get("website") ?? "").trim();
+  const queryInput = String(formData.get("query") ?? "").trim();
+  const competitorWebsite = normalizeCompetitorWebsiteInput(websiteInput);
+  const query = queryInput || competitorWebsite.searchTerm || "";
 
   if (intent === "create-watchlist") {
+    if (hasInvalidCompetitorWebsite(competitorWebsite)) {
+      return {
+        ok: false,
+        message: competitorWebsite.error,
+      };
+    }
+
     if (!query) {
       return {
         ok: false,
-        message: "Enter a competitor website first.",
+        message: "Enter a full website address first, like seoitis.com.",
       };
     }
 
@@ -104,22 +114,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
       query,
       country: visitorCountry,
     });
-    const targetFingerprint = competitor.targetId
-      ? hashString(
-          stableStringify({
-            kind: "competitor_website",
-            website: competitor.targetId,
-            query: normalizedQuery,
-          }),
-        )
-      : fingerprintSavedQuery(normalizedQuery);
+    const targetFingerprint = watchlistFingerprint(normalizedQuery, competitorWebsite);
+    const targetLabel = competitorWebsite.searchTerm || query;
     const watchlist = await createWatchlist(env, workspaceUserId, {
-      name: `${query} watch`,
+      name: `${competitorWebsite.displayName ?? query} watch`,
       targetType: "advertiser",
-      targetId: competitor.targetId || query,
+      targetId: competitorWebsite.normalizedUrl || query,
       targetFingerprint,
-      targetLabel: query,
+      targetLabel,
       targetCountry: normalizedQuery.filters.country,
+      trackingRole: "competitor",
     });
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
@@ -146,12 +150,13 @@ export default function AppOnboardRoute() {
   const actionData = useActionData<typeof action>();
   const [website, setWebsite] = useState("");
   const trimmedWebsite = website.trim();
-  const competitor = normalizeOnboardingCompetitorInput(trimmedWebsite);
+  const competitorWebsite = normalizeCompetitorWebsiteInput(trimmedWebsite);
+  const competitorQuery = competitorWebsite.searchTerm ?? "";
   const watchlistCapacity = data.watchlistLimit.limit - data.watchlistLimit.current;
   const canCreateWatchlist = data.watchlistLimit.allowed && data.watchlistLimit.limit > 0;
   const previewParams = buildSearchParams(
     normalizeSavedQuery("advertiser", {
-      query: competitor.query,
+      query: competitorQuery,
       country: data.visitorCountry,
     }),
   );
@@ -191,15 +196,16 @@ export default function AppOnboardRoute() {
                 <input name="platform" type="hidden" value="all" />
                 <input name="creativeType" type="hidden" value="all" />
                 <input name="status" type="hidden" value="all" />
-                <input name="query" type="hidden" value={competitor.query} />
+                <input name="query" type="hidden" value={competitorQuery} />
                 <label className="f9-field">
-                  <span>Competitor website</span>
+                  <span>Website to track</span>
                   <input
                     name="website"
                     onChange={(event) => setWebsite(event.currentTarget.value)}
                     placeholder="https://competitor.com"
                     value={website}
                   />
+                  {competitorWebsite.error ? <small>{competitorWebsite.error}</small> : null}
                 </label>
                 <div className="f9-action-row">
                   <SubmitButton
@@ -235,7 +241,7 @@ export default function AppOnboardRoute() {
                       intent="create-watchlist"
                       pendingLabel="Creating…"
                     >
-                      Create watchlist for {competitor.query || "this competitor"}
+                      Create watchlist for {competitorWebsite.displayName ?? (competitorQuery || "this site")}
                     </SubmitButton>
                   </Form>
                 </>
@@ -271,54 +277,4 @@ export default function AppOnboardRoute() {
       </section>
     </main>
   );
-}
-
-function normalizeOnboardingCompetitorInput(value: string) {
-  const raw = value.trim();
-  if (!raw) {
-    return {
-      query: "",
-      targetId: "",
-    };
-  }
-
-  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
-  try {
-    const url = new URL(candidate);
-    const host = url.hostname.toLowerCase().replace(/^www\./, "");
-    if (!host.includes(".")) {
-      return {
-        query: raw,
-        targetId: raw,
-      };
-    }
-
-    url.hash = "";
-    url.search = "";
-    const path = url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "");
-    const root = host.split(".").find((part) => part && part !== "www") ?? host;
-    const query = root
-      .replace(/[-_]+/g, " ")
-      .replace(/\b(official|store|shop|india|in)\b/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    return {
-      query: titleCase(query || host),
-      targetId: `${url.protocol}//${host}${path}`,
-    };
-  } catch {
-    return {
-      query: raw,
-      targetId: raw,
-    };
-  }
-}
-
-function titleCase(value: string) {
-  return value
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
 }

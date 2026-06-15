@@ -14,6 +14,7 @@ import {
 } from "~/lib/env.server";
 import { buildExternalProofAd } from "~/lib/external-proof.server";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
+import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type {
   AdRecord,
   AnalysisFieldInput,
@@ -52,6 +53,7 @@ import type {
   WatchEventRecord,
   WatchEventType,
   WatchTargetType,
+  WatchlistTrackingRole,
   WatchlistDeliveryConfigRecord,
   WatchlistRecord,
   WatchlistRunRecord,
@@ -103,6 +105,7 @@ interface WatchlistRow {
   user_id: string;
   name: string;
   target_type: WatchTargetType;
+  tracking_role?: WatchlistTrackingRole | null;
   target_id: string;
   target_fingerprint: string;
   target_label: string;
@@ -595,6 +598,7 @@ function toWatchlistRecord(row: WatchlistRow): WatchlistRecord {
     userId: row.user_id,
     name: row.name,
     targetType: row.target_type,
+    trackingRole: normalizeWatchlistTrackingRole(row.tracking_role),
     targetId: row.target_id,
     targetFingerprint: row.target_fingerprint,
     targetLabel: row.target_label,
@@ -1468,6 +1472,7 @@ export async function deactivateWatchlistsBeyondPlanLimit(
   // scanning (newest stay active). Rows are deactivated, never deleted, so
   // re-subscribing brings the history back.
   const db = ensureDb(env);
+  const timestamp = nowIso();
   const result = await db
     .prepare(
       `
@@ -1487,10 +1492,14 @@ export async function deactivateWatchlistsBeyondPlanLimit(
           )
       `,
     )
-    .bind(nowIso(), userId, userId, Math.max(0, Math.floor(keepActive)))
+    .bind(timestamp, userId, userId, Math.max(0, Math.floor(keepActive)))
     .run();
 
-  return Number(result.meta?.changes ?? 0);
+  const changed = Number(result.meta?.changes ?? 0);
+  if (changed > 0) {
+    await syncWebMentionTargetsForUser(env, userId, timestamp);
+  }
+  return changed;
 }
 
 // After a verified email change, the auto-provisioned delivery target still
@@ -2062,6 +2071,7 @@ export async function reactivateWatchlistsUpToPlanLimit(
     return 0;
   }
 
+  const timestamp = nowIso();
   const result = await db
     .prepare(
       `
@@ -2083,10 +2093,14 @@ export async function reactivateWatchlistsUpToPlanLimit(
           )
       `,
     )
-    .bind(nowIso(), userId, userId, slots)
+    .bind(timestamp, userId, userId, slots)
     .run();
 
-  return Number(result.meta?.changes ?? 0);
+  const changed = Number(result.meta?.changes ?? 0);
+  if (changed > 0) {
+    await syncWebMentionTargetsForUser(env, userId, timestamp);
+  }
+  return changed;
 }
 
 export async function listActiveWatchlists(
@@ -2138,24 +2152,29 @@ export async function createWatchlist(
     targetFingerprint: string;
     targetLabel: string;
     targetCountry?: string | null;
+    trackingRole?: WatchlistTrackingRole | null;
   },
 ) {
+  const trackingRole = normalizeWatchlistTrackingRole(input.trackingRole);
   const existing = await one<WatchlistRow>(
     env,
     `
       SELECT *
       FROM watchlist
       WHERE user_id = ?
+        AND tracking_role = ?
         AND target_fingerprint = ?
         AND is_active = 1
       ORDER BY updated_at DESC
       LIMIT 1
     `,
     userId,
+    trackingRole,
     input.targetFingerprint,
   );
 
   if (existing) {
+    await ensureWebMentionTargetForWatchlist(env, userId, existing);
     return toWatchlistRecord(existing);
   }
 
@@ -2169,6 +2188,7 @@ export async function createWatchlist(
         user_id,
         name,
         target_type,
+        tracking_role,
         target_id,
         target_fingerprint,
         target_label,
@@ -2177,12 +2197,13 @@ export async function createWatchlist(
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `,
     id,
     userId,
     input.name.trim(),
     input.targetType,
+    trackingRole,
     input.targetId,
     input.targetFingerprint,
     input.targetLabel,
@@ -2193,6 +2214,7 @@ export async function createWatchlist(
 
   const created = await getWatchlist(env, id, userId);
   if (created) {
+    await ensureWebMentionTargetForWatchlist(env, userId, created);
     return created;
   }
 
@@ -2202,16 +2224,113 @@ export async function createWatchlist(
       SELECT *
       FROM watchlist
       WHERE user_id = ?
+        AND tracking_role = ?
         AND target_fingerprint = ?
         AND is_active = 1
       ORDER BY updated_at DESC
       LIMIT 1
     `,
     userId,
+    trackingRole,
     input.targetFingerprint,
   );
 
-  return concurrent ? toWatchlistRecord(concurrent) : null;
+  if (concurrent) {
+    await ensureWebMentionTargetForWatchlist(env, userId, concurrent);
+    return toWatchlistRecord(concurrent);
+  }
+
+  return null;
+}
+
+async function ensureWebMentionTargetForWatchlist(
+  env: AppEnv,
+  userId: string,
+  watchlist: WatchlistRecord | WatchlistRow,
+) {
+  const id = createId();
+  const timestamp = nowIso();
+  const watchlistId = watchlist.id;
+  const isRow = "target_label" in watchlist;
+  const role = normalizeWatchlistTrackingRole(isRow ? watchlist.tracking_role : watchlist.trackingRole);
+  const label = isRow ? watchlist.target_label : watchlist.targetLabel;
+  const isActive = isRow ? watchlist.is_active === 1 : watchlist.isActive;
+
+  await run(
+    env,
+    `
+      INSERT OR IGNORE INTO web_mention_target (
+        id,
+        user_id,
+        watchlist_id,
+        tracking_role,
+        label,
+        query_text,
+        domain,
+        sources_json,
+        is_active,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+    `,
+    id,
+    userId,
+    watchlistId,
+    role,
+    label,
+    label,
+    JSON.stringify(["reddit", "x", "blog", "youtube", "substack", "web"]),
+    isActive ? 1 : 0,
+    timestamp,
+    timestamp,
+  );
+
+  await run(
+    env,
+    `
+      UPDATE web_mention_target
+      SET tracking_role = ?,
+          label = ?,
+          query_text = ?,
+          is_active = ?,
+          updated_at = ?
+      WHERE watchlist_id = ?
+        AND user_id = ?
+    `,
+    role,
+    label,
+    label,
+    isActive ? 1 : 0,
+    timestamp,
+    watchlistId,
+    userId,
+  );
+}
+
+async function syncWebMentionTargetsForUser(env: AppEnv, userId: string, timestamp = nowIso()) {
+  await run(
+    env,
+    `
+      UPDATE web_mention_target
+      SET is_active = (
+            SELECT watchlist.is_active
+            FROM watchlist
+            WHERE watchlist.id = web_mention_target.watchlist_id
+              AND watchlist.user_id = web_mention_target.user_id
+          ),
+          updated_at = ?
+      WHERE user_id = ?
+        AND watchlist_id IN (
+          SELECT id
+          FROM watchlist
+          WHERE user_id = ?
+        )
+    `,
+    timestamp,
+    userId,
+    userId,
+  );
 }
 
 export async function updateWatchlist(
@@ -2225,12 +2344,14 @@ export async function updateWatchlist(
     targetFingerprint: string;
     targetLabel: string;
     targetCountry?: string | null;
+    trackingRole?: WatchlistTrackingRole | null;
   },
 ) {
   const existing = await getWatchlist(env, watchlistId, userId);
   if (!existing) {
     return null;
   }
+  const trackingRole = normalizeWatchlistTrackingRole(input.trackingRole ?? existing.trackingRole);
 
   const duplicate = await one<WatchlistRow>(
     env,
@@ -2238,60 +2359,68 @@ export async function updateWatchlist(
       SELECT *
       FROM watchlist
       WHERE user_id = ?
+        AND tracking_role = ?
         AND target_fingerprint = ?
         AND id != ?
         AND is_active = 1
       LIMIT 1
     `,
     userId,
+    trackingRole,
     input.targetFingerprint,
     watchlistId,
   );
 
-	  if (duplicate) {
-	    throw new Error("watchlist_duplicate_target");
-	  }
+  if (duplicate) {
+    throw new Error("watchlist_duplicate_target");
+  }
 
-	  const timestamp = nowIso();
-	  if (existing.targetFingerprint !== input.targetFingerprint) {
-	    const replacement = await createWatchlist(env, userId, input);
-	    if (!replacement) {
-	      return null;
-	    }
+  const timestamp = nowIso();
+  if (existing.targetFingerprint !== input.targetFingerprint) {
+    const replacement = await createWatchlist(env, userId, {
+      ...input,
+      trackingRole,
+    });
+    if (!replacement) {
+      return null;
+    }
 
-	    await run(
-	      env,
-	      `
-	        UPDATE watchlist
-	        SET is_active = 0,
-	            paused_reason = 'retargeted',
-	            updated_at = ?
-	        WHERE id = ?
-	          AND user_id = ?
-	          AND is_active = 1
-	      `,
-	      timestamp,
-	      watchlistId,
-	      userId,
-	    );
+    await run(
+      env,
+      `
+        UPDATE watchlist
+        SET is_active = 0,
+            paused_reason = 'retargeted',
+            updated_at = ?
+        WHERE id = ?
+          AND user_id = ?
+          AND is_active = 1
+      `,
+      timestamp,
+      watchlistId,
+      userId,
+    );
 
     // Retargeting silently reset alert preferences: carry the per-watchlist
     // delivery config and targets over to the replacement so the customer's
     // settings survive a competitor rebrand/domain change.
     await copyWatchlistDeliverySettings(env, userId, watchlistId, replacement.id);
+    await syncWebMentionTargetsForUser(env, userId, timestamp);
 
-	    return replacement;
-	  }
+    return replacement;
+  }
 
-	  await run(
-	    env,
+  await run(
+    env,
     `
       UPDATE watchlist
       SET name = ?,
           target_type = ?,
+          tracking_role = ?,
           target_id = ?,
           target_fingerprint = ?,
           target_label = ?,
+          target_country = ?,
           updated_at = ?
       WHERE id = ?
         AND user_id = ?
@@ -2299,15 +2428,22 @@ export async function updateWatchlist(
     `,
     input.name.trim(),
     input.targetType,
+    trackingRole,
     input.targetId,
     input.targetFingerprint,
     input.targetLabel,
+    input.targetCountry ?? null,
     timestamp,
     watchlistId,
     userId,
   );
 
-  return getWatchlist(env, watchlistId, userId);
+  const updated = await getWatchlist(env, watchlistId, userId);
+  if (updated) {
+    await ensureWebMentionTargetForWatchlist(env, userId, updated);
+  }
+
+  return updated;
 }
 
 async function copyWatchlistDeliverySettings(
@@ -2375,6 +2511,7 @@ export async function setWatchlistActive(
   // Pausing frees the plan slot (limits count active watchlists) and stops
   // scheduled scans; nothing is deleted, so resuming brings the history back.
   const db = ensureDb(env);
+  const timestamp = nowIso();
   const result = await db
     .prepare(
       `
@@ -2386,10 +2523,14 @@ export async function setWatchlistActive(
           AND user_id = ?
       `,
     )
-    .bind(isActive ? 1 : 0, isActive ? null : "user", nowIso(), watchlistId, userId)
+    .bind(isActive ? 1 : 0, isActive ? null : "user", timestamp, watchlistId, userId)
     .run();
 
-  return Number(result.meta?.changes ?? 0) > 0;
+  const changed = Number(result.meta?.changes ?? 0) > 0;
+  if (changed) {
+    await syncWebMentionTargetsForUser(env, userId, timestamp);
+  }
+  return changed;
 }
 
 export async function deleteCollection(env: AppEnv, userId: string, collectionId: string) {

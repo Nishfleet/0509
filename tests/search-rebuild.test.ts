@@ -39,10 +39,11 @@ describe("search rebuild", () => {
     expect(searchRoute).toContain("<BrandWordmark />");
   });
 
-  it("keeps public search centered on competitor website tracking", () => {
-    expect(searchRoute).toContain("Competitor website");
+  it("keeps public search centered on website-based market tracking", () => {
+    expect(searchRoute).toContain("Market tracking");
     expect(searchRoute).toContain("Website to track");
-    expect(searchRoute).toContain("Track this competitor");
+    expect(searchRoute).toContain("My brand");
+    expect(searchRoute).toContain("Track this {targetNoun}");
     expect(searchRoute).toContain("Example tracked competitor");
     expect(searchRoute).toContain("Digest preview");
     expect(searchRoute).toContain("/api/demo-proof?format=markdown");

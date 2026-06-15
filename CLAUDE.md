@@ -81,9 +81,10 @@ Last local verification on 2026-06-11:
 
 ## Production Reality
 
-- `https://0509.in` now serves the current Cloudflare app under `app/` and `workers/`
+- `https://0509.in` currently serves the current Cloudflare app under `app/` and `workers/`
 - `https://www.0509.in` also serves the same app through a Cloudflare Worker custom domain
 - `https://api.0509.in` also serves the same app through a Cloudflare Worker custom domain
+- `0509.io` has been purchased and is the intended primary domain, but it currently delegates to Porkbun nameservers; do not activate `.io` auth, SEO, Worker routes, or `.in` redirects until the registrar delegates it to Cloudflare
 - Cloudflare deploy state as of 2026-06-11:
   - D1 database `0509` created and bound in `wrangler.jsonc`
   - remote migrations fully applied through `0022_hot_path_indexes.sql` (verified 2026-06-12) — `wrangler d1 migrations list 0509 --remote` reports "No migrations to apply" (verified 2026-06-11). Note: 0019's schema had been applied out-of-band without a ledger row; it was verified column-by-column and reconciled into `d1_migrations` on 2026-06-11.
@@ -97,7 +98,7 @@ Last local verification on 2026-06-11:
 - auth/origin logic should stay proxy-aware for Cloudflare and any future front-door changes:
   - `app/lib/env.server.ts` must respect `Forwarded` and `x-forwarded-*` headers
   - `tests/env.server.test.ts` covers that behavior
-  - `BETTER_AUTH_URL` is set to `https://0509.in` in `wrangler.jsonc` vars (2026-06-11) so auth origin trust and unsubscribe-link generation never derive from client-supplied forwarded headers; note this pins auth to the custom domain, so auth flows on the `workers.dev` preview host are not expected to work
+  - `BETTER_AUTH_URL` is set to `https://0509.in` in `wrangler.jsonc` vars so auth origin trust and unsubscribe-link generation never derive from client-supplied forwarded headers; note this pins auth to the custom domain, so auth flows on the `workers.dev` preview host are not expected to work
 
 ## Paperclip
 
@@ -108,7 +109,7 @@ This project is managed by Paperclip under company Swish.
 
 ## Brand
 
-The product is **Five to Nine**; **0509.in** is its domain (05:09 = five-to-nine — "we work while you sleep", which the nightly scanning genuinely does). Use "Five to Nine" in customer-facing prose and the wordmark; 0509/0509.in is the short handle and domain. Refunds: Nish's global no-refunds policy applies (digital product, purchases final, paired with the 100%-satisfaction support promise) — see global CLAUDE.md; keep refund-webhook revocation code in place for goodwill/dispute cases.
+The product is **Five to Nine**; **0509.in** is its current production domain and **0509.io** is the intended primary domain after Cloudflare delegation (05:09 = five-to-nine — "we work while you sleep", which the nightly scanning genuinely does). Use "Five to Nine" in customer-facing prose and the wordmark; 0509/0509.in is the current short handle and domain until the cutover is complete. Refunds: Nish's global no-refunds policy applies (digital product, purchases final, paired with the 100%-satisfaction support promise) — see global CLAUDE.md; keep refund-webhook revocation code in place for goodwill/dispute cases.
 
 ## Product Shape
 

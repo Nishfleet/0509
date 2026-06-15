@@ -794,7 +794,165 @@ describe("watchlists route actions", () => {
         targetCountry: null,
       }),
     );
-    expect(updateWatchlist.mock.calls[0][3].targetFingerprint).toMatch(/^fnv1a-/);
+    expect(updateWatchlist.mock.calls[0][3].targetFingerprint).toBe("fp-nykaa");
+  });
+
+  it("rejects an incomplete website when editing a watchlist", async () => {
+    const updateWatchlist = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("name", "Seoitis watch");
+    formData.set("competitorWebsite", "seoitis");
+    formData.set("targetLabel", "Seoitis");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "That website looks incomplete. Add the full domain, like seoitis.com.",
+      ok: false,
+    });
+    expect(updateWatchlist).not.toHaveBeenCalled();
+  });
+
+  it("passes self tracking through watchlist edits", async () => {
+    const updateWatchlist = vi.fn().mockResolvedValue({
+      ...watchlist,
+      name: "Seoitis watch",
+      trackingRole: "self",
+      targetId: "https://seoitis.com",
+      targetLabel: "Seoitis",
+      targetCountry: null,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("trackingRole", "self");
+    formData.set("name", "Seoitis watch");
+    formData.set("competitorWebsite", "seoitis.com");
+    formData.set("targetLabel", "Seoitis");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Watchlist updated.",
+      ok: true,
+    });
+    expect(updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watch-1",
+      expect.objectContaining({
+        name: "Seoitis watch",
+        targetId: "https://seoitis.com",
+        targetLabel: "Seoitis",
+        trackingRole: "self",
+      }),
+    );
+  });
+
+  it("keeps the existing fingerprint when only the tracking role changes", async () => {
+    const countryWatchlist = {
+      ...watchlist,
+      targetId: "https://seoitis.com",
+      targetFingerprint: "existing-us-fingerprint",
+      targetLabel: "Seoitis",
+      targetCountry: "US",
+    };
+    const updateWatchlist = vi.fn().mockResolvedValue({
+      ...countryWatchlist,
+      trackingRole: "self",
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(countryWatchlist),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("trackingRole", "self");
+    formData.set("name", "Seoitis watch");
+    formData.set("competitorWebsite", "seoitis.com");
+    formData.set("targetLabel", "Seoitis");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Watchlist updated.",
+      ok: true,
+    });
+    expect(updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watch-1",
+      expect.objectContaining({
+        targetFingerprint: "existing-us-fingerprint",
+        targetCountry: "US",
+        trackingRole: "self",
+      }),
+    );
   });
 
   it("preserves saved-query targets and labels when editing a watchlist name", async () => {
