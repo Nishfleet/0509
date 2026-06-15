@@ -10,6 +10,12 @@ import {
 describe("public markdown", () => {
   it("supports same-url markdown negotiation for public pages", () => {
     expect(isPublicMarkdownPage("/")).toBe(true);
+    expect(isPublicMarkdownPage("/help")).toBe(true);
+    expect(isPublicMarkdownPage("/docs")).toBe(true);
+    expect(isPublicMarkdownPage("/api/docs")).toBe(true);
+    expect(isPublicMarkdownPage("/status")).toBe(true);
+    expect(isPublicMarkdownPage("/changelog")).toBe(true);
+    expect(isPublicMarkdownPage("/trust")).toBe(true);
     expect(isPublicMarkdownPage("/search")).toBe(false);
     expect(isPublicMarkdownPage("/privacy")).toBe(true);
     expect(isPublicMarkdownPage("/terms")).toBe(true);
@@ -42,6 +48,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Slack incoming-webhook setup exists");
     expect(PUBLIC_MARKDOWN).toContain("successful live delivery proof");
     expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned");
+    expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, and trust pages are available");
+    expect(PUBLIC_MARKDOWN).toContain("Email delivery uses Cloudflare Email Service");
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history");
     expect(PUBLIC_MARKDOWN).toContain("Manual external proof links can store user-supplied visible spend, impression, and reach values");
     expect(PUBLIC_MARKDOWN).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
@@ -49,8 +57,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 evidence checks/month");
     expect(PUBLIC_MARKDOWN).toContain("Launch status is readiness-gated");
-    expect(PUBLIC_MARKDOWN).toContain("any configured WhatsApp delivery proof");
-    expect(PUBLIC_MARKDOWN).toContain("Customer WhatsApp delivery stays behind provider configuration");
+    expect(PUBLIC_MARKDOWN).not.toContain("any configured WhatsApp delivery proof");
+    expect(PUBLIC_MARKDOWN).toContain("Customer WhatsApp delivery is not launch-scoped today");
     expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
     expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live proof");
     expect(LLMS_TEXT).toContain("Public read-only live search is available");
@@ -62,7 +70,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("read-only /api/v1");
     expect(LLMS_TEXT).toContain("read-only /api/mcp");
     expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");
-    expect(LLMS_TEXT).toContain("Customer WhatsApp delivery must stay behind provider configuration");
+    expect(LLMS_TEXT).toContain("Email delivery uses Cloudflare Email Service");
+    expect(LLMS_TEXT).toContain("Customer WhatsApp delivery is not launch-scoped today");
     expect(LLMS_TEXT).not.toContain("MCP are not live yet");
     expect(LLMS_TEXT).not.toContain("Slack incoming-webhook delivery is live");
     expect(LLMS_TEXT).not.toContain("Public analysis.");

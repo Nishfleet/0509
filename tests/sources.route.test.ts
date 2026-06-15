@@ -855,7 +855,8 @@ describe("sources route component", () => {
     expect(markup).toContain("encrypted and never shown again");
     expect(markup).toContain("WhatsApp delivery");
     expect(markup).toContain("WhatsApp is guarded until proof exists");
-    expect(markup).toContain("Save WhatsApp delivery");
+    expect(markup).toContain("WhatsApp is not available for customer setup yet");
+    expect(markup).not.toContain("Save WhatsApp delivery");
     expect(markup).toContain("Webhook");
     expect(markup).toContain("0/3 usable");
     expect(markup).toContain("No successful send yet");
