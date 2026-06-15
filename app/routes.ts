@@ -7,6 +7,12 @@ import {
 export default [
   index("routes/marketing.tsx"),
   route("search", "routes/search.tsx"),
+  route("help", "routes/help.tsx"),
+  route("docs", "routes/docs.tsx"),
+  route("api/docs", "routes/api.docs.tsx"),
+  route("status", "routes/status.tsx"),
+  route("changelog", "routes/changelog.tsx"),
+  route("trust", "routes/trust.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
   route("unsubscribe", "routes/unsubscribe.tsx"),

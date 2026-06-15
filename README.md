@@ -35,9 +35,15 @@ Auth runtime decision: `docs/auth-runtime.md`
 ## Routes
 
 - `/` marketing site
+- `/help` public setup, billing, delivery, and support help
+- `/docs` public product and activation docs
+- `/api/docs` public API and MCP docs
+- `/status` public launch and operations status
+- `/changelog` public product changelog
+- `/trust` public trust and security basics
 - `/api/demo-proof` sample public proof payload for buyer and agent evaluation
 - `/api/mcp` read-only MCP JSON-RPC endpoint for account-owned collection, watchlist, and digest exports with a customer API key
-- `/api/v1` customer API docs for read-only account export endpoints
+- `/api/v1` machine-readable customer API index for read-only account export endpoints
 - `/api/v1/:resourceType/:resourceId` customer API-key export endpoint for account-owned collections, watchlists, and digests
 - `/search` public read-only live search trial; save, track, collections, and deeper proof enrichment require an account while private canary probes can force fresh live checks with the configured token
 - `/privacy`
@@ -70,7 +76,7 @@ Important bindings and secrets:
 - `META_AD_LIBRARY_API_VERSION`
 - `EMAIL` Cloudflare Email Service binding
 - `EMAIL_FROM_EMAIL`
-- `META_TOKEN_ENCRYPTION_SECRET` for encrypted customer Meta tokens and Slack webhook URLs
+- `META_TOKEN_ENCRYPTION_SECRET` for encrypted customer Meta tokens, Slack webhook URLs, and delivery targets
 - `DODO_PAYMENTS_API_KEY` or `DODO_0509_API_KEY`
 - `DODO_0509_BRAND_ID`
 - `DODO_0509_ENVIRONMENT`
@@ -111,7 +117,7 @@ Important bindings and secrets:
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.
 - Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the shared Dodo account API key, `DODO_0509_BRAND_ID`, and 0509 product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Buyers can review public read-only search and the sample proof loop before signup. Current caps are Scout: 3 watchlists, 10 collections, weekly digests, 50 proof captures/month; Starter: 10 watchlists, 25 collections, weekly digests, 250 proof captures/month; Agency: 75 watchlists, 250 collections, daily and weekly briefs, 2,500 proof captures/month. Workspaces warn after 80% proof-capture usage. Usage bundles are overflow proof-capture packs, not unlimited monitoring, and Dodo webhooks grant purchased proof credits for 30 days.
-- Broad launch is gated by `npm run launch:readiness`, including the production canary. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can prove it bypassed cache and provider cooldown. The production canary also checks recent monitoring, proof capture, sent digest signals, Slack delivery proof, and WhatsApp proof for any configured WhatsApp targets. Use `npm run canary:proof -- --require-slack --require-whatsapp` to deliberately create fresh proof, digest, Slack, and customer-lane WhatsApp send attempts before rerunning the read-only production canary. WhatsApp is broad-launch ready only after Meta webhook reconciliation marks the customer-lane message delivered. If fresh commercial discovery is cached, degraded, demo, stale, unsent, missing Slack proof, configured WhatsApp proof is missing, or the bypass token is missing, the product should be framed as pilot-readiness rather than broad self-serve launch.
+- Broad launch is gated by `npm run launch:readiness`, including the production canary. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can prove it bypassed cache and provider cooldown. The production canary also checks recent monitoring, proof capture, sent digest signals, Slack delivery proof, and provider-canary success. WhatsApp is not launch-scoped while the provider/customer/webhook lane is disabled; if it is deliberately configured, it becomes launch-gated until Meta webhook reconciliation marks the customer-lane message delivered. Use `npm run canary:proof -- --require-slack` to deliberately create fresh proof, digest, and Slack send attempts before rerunning the read-only production canary. If fresh commercial discovery is cached, degraded, demo, stale, unsent, missing Slack proof, configured launch-scoped WhatsApp proof is missing, or the bypass token is missing, the product should be framed as pilot-readiness rather than broad launch.
 - Use `npm run provider:bakeoff:launch` when comparing discovery providers for launch. The default bakeoff is useful for debugging, but the launch gate requires `current_0509` to return fresh live Ad Library results, not API fallback or cached live results.
 - The old `src/` Next.js app remains in the repo as legacy reference material and is no longer the live production runtime.
 - Production note: as of 2026-06-15, `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains. Legacy `0509.in`, `www.0509.in`, and `api.0509.in` custom domains remain only to redirect old safe requests to the matching `.io` host while preserving signed provider callbacks.
