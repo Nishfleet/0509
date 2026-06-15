@@ -166,7 +166,7 @@ describe("pricing preview route", () => {
     const { loader } = await import("~/routes/api.pricing-preview");
     const response = await loader({
       context: createContext(),
-      request: new Request("https://0509.in/api/pricing-preview"),
+      request: new Request("https://0509.io/api/pricing-preview"),
     } as never);
     const payload = await response.json();
 

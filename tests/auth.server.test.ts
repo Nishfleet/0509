@@ -7,7 +7,7 @@ describe("createAuth", () => {
     expect(() =>
       createAuth(
         { DB: {} as D1Database },
-        new Request("https://0509.in/app"),
+        new Request("https://0509.io/app"),
       ),
     ).toThrow("BETTER_AUTH_SECRET");
   });
@@ -19,7 +19,7 @@ describe("createAuth", () => {
           DB: {} as D1Database,
           BETTER_AUTH_SECRET: "short",
         },
-        new Request("https://0509.in/app"),
+        new Request("https://0509.io/app"),
       ),
     ).toThrow("BETTER_AUTH_SECRET");
   });

@@ -95,7 +95,7 @@ describe("launch readiness canary route", () => {
     await expect(
       action({
         context: createContext(),
-        request: new Request("https://0509.in/api/launch-readiness/canary", {
+        request: new Request("https://0509.io/api/launch-readiness/canary", {
           method: "POST",
         }),
       } as never),
@@ -153,7 +153,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary", {
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
@@ -255,7 +255,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary?requireWhatsApp=1", {
+      request: new Request("https://0509.io/api/launch-readiness/canary?requireWhatsApp=1", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
@@ -330,7 +330,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary?requireWhatsApp=true", {
+      request: new Request("https://0509.io/api/launch-readiness/canary?requireWhatsApp=true", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
@@ -395,7 +395,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary?requireSlack=1", {
+      request: new Request("https://0509.io/api/launch-readiness/canary?requireSlack=1", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
@@ -461,7 +461,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary?requireSlack=true", {
+      request: new Request("https://0509.io/api/launch-readiness/canary?requireSlack=true", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
@@ -535,7 +535,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary?proofProvider=browserless", {
+      request: new Request("https://0509.io/api/launch-readiness/canary?proofProvider=browserless", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
@@ -605,7 +605,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary", {
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
@@ -654,7 +654,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary", {
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",
@@ -688,7 +688,7 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.in/api/launch-readiness/canary", {
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
         method: "POST",
         headers: {
           "x-0509-canary-token": "secret-token",

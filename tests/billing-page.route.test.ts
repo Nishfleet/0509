@@ -107,7 +107,7 @@ describe("billing page", () => {
     const { loader } = await import("~/routes/app.billing");
     const result = await loader({
       context: {},
-      request: new Request("https://0509.in/app/billing"),
+      request: new Request("https://0509.io/app/billing"),
       params: {},
     } as never);
 
@@ -134,7 +134,7 @@ describe("billing page", () => {
     const { loader } = await import("~/routes/app.billing");
     const result = await loader({
       context: {},
-      request: new Request("https://0509.in/app/billing?checkout=already-subscribed"),
+      request: new Request("https://0509.io/app/billing?checkout=already-subscribed"),
       params: {},
     } as never);
 
@@ -154,7 +154,7 @@ describe("billing page", () => {
     const { loader } = await import("~/routes/app.billing");
     const result = await loader({
       context: {},
-      request: new Request("https://0509.in/app/billing?checkout=already-started"),
+      request: new Request("https://0509.io/app/billing?checkout=already-started"),
       params: {},
     } as never);
 
@@ -185,7 +185,7 @@ describe("billing page", () => {
 
     expect(markup).toContain("Payment issue");
     expect(markup).toContain("still active");
-    expect(markup).toContain("support@0509.in");
+    expect(markup).toContain("support@0509.io");
     expect(markup).toContain("Cancellation");
     expect(markup).toContain("payment retry in progress");
   });
@@ -251,7 +251,7 @@ describe("Dodo checkout double-subscription guard", () => {
   }
 
   function checkoutRequest(body: Record<string, string>) {
-    return new Request("https://0509.in/api/billing/dodo/checkout", {
+    return new Request("https://0509.io/api/billing/dodo/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(body).toString(),
@@ -405,7 +405,7 @@ describe("Dodo customer portal route", () => {
     try {
       await action({
         context: {},
-        request: new Request("https://0509.in/api/billing/dodo/portal", { method: "POST" }),
+        request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
         params: {},
       } as never);
       throw new Error("expected redirect");
@@ -446,7 +446,7 @@ describe("Dodo customer portal route", () => {
     try {
       await action({
         context: {},
-        request: new Request("https://0509.in/api/billing/dodo/portal", { method: "POST" }),
+        request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
         params: {},
       } as never);
       throw new Error("expected redirect");

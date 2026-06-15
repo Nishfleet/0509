@@ -18,9 +18,9 @@ Last updated: 2026-05-20
 - Plan gating is scaffolded in code now: `app/lib/plan.server.ts`, `migrations/0006_plan.sql`, and route tests cover unpaid/scout/starter/agency limits plus the onboarding flow.
 - Dodo 0509 pricing preview is wired for subscription products and proof-capture usage bundles. Checkout/webhook routes now exist for Dodo, but billing should still be treated as verified-current only after product ids, webhook secret, remote migration, and live signed webhook proof are confirmed.
 - Current commercial caps are intentionally generous but finite, with no free retained-monitoring plan: Scout has 3 watchlists, 10 collections, weekly digest delivery, and 50 proof captures/month; Starter has 10 watchlists, 25 collections, weekly digest delivery, and 250 proof captures/month; Agency has 75 watchlists, 250 collections, daily and weekly briefs, and 2,500 proof captures/month. Workspaces warn at 80% proof usage. Overflow bundles sell extra proof captures for 30-day spikes instead of unlimited monitoring.
-- Production cutover is now live on direct Cloudflare custom domains: `https://0509.in`, `https://www.0509.in`, and `https://api.0509.in` serve the checked-in Cloudflare app under `app/` (verified from live responses on 2026-04-06).
-- Cloudflare readiness is complete for the current launch shape: D1 database `0509` exists, remote migrations are applied, `BETTER_AUTH_SECRET` is uploaded, the R2 bucket `0509-landing-page-artifacts` is created and bound, the `0509.in` zone is active in Cloudflare, and the Worker preview is live at `https://0509.nishant345.workers.dev`.
-- Registrar state is now correct for Cloudflare: Porkbun still owns the registration, but nameservers delegate to Cloudflare and the old DNSSEC DS record has been removed.
+- Production cutover is live on the primary Cloudflare custom domains: `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` serve the checked-in Cloudflare app under `app/`.
+- Cloudflare readiness is complete for the current launch shape: D1 database `0509` exists, remote migrations are applied, `BETTER_AUTH_SECRET` is uploaded, the R2 bucket `0509-landing-page-artifacts` is created and bound, the `0509.io` zone is active in Cloudflare, and the Worker preview is live at `https://0509.nishant345.workers.dev`.
+- Legacy `0509.in`, `www.0509.in`, and `api.0509.in` are redirect compatibility only while the old domain is retired; do not use `.in` in product copy, outbound email, auth origin, SEO files, or new customer links.
 
 ## Key Library Files
 

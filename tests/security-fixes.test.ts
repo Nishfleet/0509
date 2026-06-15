@@ -46,7 +46,7 @@ describe("auth open-redirect protection", () => {
     try {
       await loader({
         context: {},
-        request: new Request("https://0509.in/auth/login?redirectTo=https%3A%2F%2Fevil.example%2Fphish"),
+        request: new Request("https://0509.io/auth/login?redirectTo=https%3A%2F%2Fevil.example%2Fphish"),
         params: {},
       } as never);
       throw new Error("expected redirect");
@@ -67,7 +67,7 @@ describe("auth open-redirect protection", () => {
     const { loader } = await import("~/routes/auth.signup");
     const result = await loader({
       context: {},
-      request: new Request("https://0509.in/auth/signup?redirectTo=//evil.example"),
+      request: new Request("https://0509.io/auth/signup?redirectTo=//evil.example"),
       params: {},
     } as never);
 

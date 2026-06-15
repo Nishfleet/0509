@@ -265,7 +265,7 @@ afterEach(() => {
 describe("authenticated export route", () => {
   it("keeps CSV as the default collection export", async () => {
     setupMocks();
-    const response = await loadExport("https://0509.in/export/collection/collection-1");
+    const response = await loadExport("https://0509.io/export/collection/collection-1");
     const body = await response.text();
 
     expect(response.headers.get("content-type")).toContain("text/csv");
@@ -289,7 +289,7 @@ describe("authenticated export route", () => {
         },
       ],
     });
-    const response = await loadExport("https://0509.in/export/collection/collection-1");
+    const response = await loadExport("https://0509.io/export/collection/collection-1");
     const body = await response.text();
 
     expect(body).toContain('"\'=HYPERLINK(""https://evil.example"")"');
@@ -300,7 +300,7 @@ describe("authenticated export route", () => {
 
   it("returns account-scoped JSON for collection exports", async () => {
     setupMocks();
-    const response = await loadExport("https://0509.in/export/collection/collection-1?format=json");
+    const response = await loadExport("https://0509.io/export/collection/collection-1?format=json");
     const body = await response.json() as {
       resourceType: string;
       collection: CollectionRecord;
@@ -325,7 +325,7 @@ describe("authenticated export route", () => {
 
   it("includes manual external proof in collection API exports", async () => {
     setupMocks({ collectionItems: [externalCollectionItem] });
-    const response = await loadExport("https://0509.in/export/collection/collection-1?format=json");
+    const response = await loadExport("https://0509.io/export/collection/collection-1?format=json");
     const body = await response.json() as {
       insightDepth: {
         mediaMix: Array<{ label: string; count: number }>;
@@ -372,7 +372,7 @@ describe("authenticated export route", () => {
 
   it("includes manual metric proof in Slack-ready collection exports", async () => {
     setupMocks({ collectionItems: [externalCollectionItem] });
-    const response = await loadExport("https://0509.in/export/collection/collection-1?format=slack");
+    const response = await loadExport("https://0509.io/export/collection/collection-1?format=slack");
     const body = await response.text();
 
     expect(response.headers.get("content-type")).toContain("text/markdown");
@@ -383,7 +383,7 @@ describe("authenticated export route", () => {
 
   it("returns Slack-ready markdown for watchlist exports", async () => {
     setupMocks();
-    const response = await loadExport("https://0509.in/export/watchlist/watchlist-1?format=slack");
+    const response = await loadExport("https://0509.io/export/watchlist/watchlist-1?format=slack");
     const body = await response.text();
 
     expect(response.headers.get("content-type")).toContain("text/markdown");
@@ -397,7 +397,7 @@ describe("authenticated export route", () => {
 
   it("returns digest JSON with priority and proof trail intelligence", async () => {
     setupMocks();
-    const response = await loadExport("https://0509.in/export/digest/digest-1?format=json");
+    const response = await loadExport("https://0509.io/export/digest/digest-1?format=json");
     const body = await response.json() as {
       resourceType: string;
       insightDepth: { landingPageHistory: Array<{ detail: string }> };
@@ -416,7 +416,7 @@ describe("authenticated export route", () => {
 
   it("returns Slack-ready markdown for digest exports", async () => {
     setupMocks();
-    const response = await loadExport("https://0509.in/export/digest/digest-1?format=slack");
+    const response = await loadExport("https://0509.io/export/digest/digest-1?format=slack");
     const body = await response.text();
 
     expect(response.headers.get("content-type")).toContain("text/markdown");

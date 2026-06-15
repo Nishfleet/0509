@@ -8,7 +8,7 @@ describe("demo proof API", () => {
   it("returns sample proof JSON without exposing live search", async () => {
     const { loader } = await import("~/routes/api.demo-proof");
     const response = await loader({
-      request: new Request("https://0509.in/api/demo-proof"),
+      request: new Request("https://0509.io/api/demo-proof"),
     } as never);
     const body = (await response.json()) as DemoProofResponse;
 
@@ -28,7 +28,7 @@ describe("demo proof API", () => {
   it("returns markdown for agent and buyer review", async () => {
     const { loader } = await import("~/routes/api.demo-proof");
     const response = await loader({
-      request: new Request("https://0509.in/api/demo-proof?format=markdown"),
+      request: new Request("https://0509.io/api/demo-proof?format=markdown"),
     } as never);
     const body = await response.text();
 

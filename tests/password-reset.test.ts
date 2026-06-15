@@ -40,7 +40,7 @@ describe("sendPasswordResetEmail", () => {
     const createDeliveryAttempt = mockDeliveryDataServer();
     const env = {
       EMAIL: { send: emailSend },
-      EMAIL_FROM_EMAIL: "alerts@0509.in",
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
     };
 
     const { sendPasswordResetEmail } = await import("~/lib/delivery.server");
@@ -48,7 +48,7 @@ describe("sendPasswordResetEmail", () => {
       userId: "user-1",
       email: "owner@example.com",
       name: "Owner",
-      resetUrl: "https://0509.in/api/auth/reset-password/secret-token?callbackURL=/auth/reset-password",
+      resetUrl: "https://0509.io/api/auth/reset-password/secret-token?callbackURL=/auth/reset-password",
     });
 
     const payload = emailSend.mock.calls[0]?.[0];
@@ -71,7 +71,7 @@ describe("sendPasswordResetEmail", () => {
     const createDeliveryAttempt = mockDeliveryDataServer();
     const env = {
       EMAIL: { send: emailSend },
-      EMAIL_FROM_EMAIL: "alerts@0509.in",
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
     };
 
     const { sendPasswordResetEmail } = await import("~/lib/delivery.server");
@@ -81,7 +81,7 @@ describe("sendPasswordResetEmail", () => {
         userId: "user-1",
         email: "owner@example.com",
         name: null,
-        resetUrl: "https://0509.in/api/auth/reset-password/secret-token",
+        resetUrl: "https://0509.io/api/auth/reset-password/secret-token",
       }),
     ).rejects.toThrow();
 
@@ -203,7 +203,7 @@ describe("account page", () => {
     expect(markup).toContain("Other device");
     expect(markup).toContain("Sign out other devices");
     expect(markup).toContain("Delete this account");
-    expect(markup).toContain("support@0509.in");
+    expect(markup).toContain("support@0509.io");
     expect(markup).toContain("Report branding");
     expect(markup).toContain("save-report-branding");
   });
@@ -228,13 +228,13 @@ describe("account page", () => {
 
     const { sendAccountActionEmail } = await import("~/lib/delivery.server");
     const sent = await sendAccountActionEmail(
-      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.in" } as never,
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
       {
         userId: "user-1",
         email: "owner@example.com",
         name: "Owner",
         kind: "delete_account",
-        actionUrl: "https://0509.in/api/auth/delete-user/callback?token=secret-delete-token",
+        actionUrl: "https://0509.io/api/auth/delete-user/callback?token=secret-delete-token",
       },
     );
 

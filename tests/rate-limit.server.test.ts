@@ -10,27 +10,27 @@ import type { AppEnv } from "~/lib/env.server";
 
 describe("rateLimitPolicyFor", () => {
   it("skips the health check", () => {
-    expect(rateLimitPolicyFor(new Request("https://0509.in/api/health"))).toBeNull();
+    expect(rateLimitPolicyFor(new Request("https://0509.io/api/health"))).toBeNull();
   });
 
   it("protects auth routes with a stricter bucket", () => {
-    expect(rateLimitPolicyFor(new Request("https://0509.in/auth/login", { method: "POST" }))).toMatchObject({
+    expect(rateLimitPolicyFor(new Request("https://0509.io/auth/login", { method: "POST" }))).toMatchObject({
       scope: "auth",
       limit: 20,
     });
   });
 
   it("leaves search queries to the route-level anonymous limiter", () => {
-    expect(rateLimitPolicyFor(new Request("https://0509.in/search"))).toBeNull();
-    expect(rateLimitPolicyFor(new Request("https://0509.in/search?website=https%3A%2F%2Fnykaa.com"))).toBeNull();
-    expect(rateLimitPolicyFor(new Request("https://0509.in/search?query=nykaa", { method: "HEAD" }))).toBeNull();
+    expect(rateLimitPolicyFor(new Request("https://0509.io/search"))).toBeNull();
+    expect(rateLimitPolicyFor(new Request("https://0509.io/search?website=https%3A%2F%2Fnykaa.com"))).toBeNull();
+    expect(rateLimitPolicyFor(new Request("https://0509.io/search?query=nykaa", { method: "HEAD" }))).toBeNull();
   });
 });
 
 describe("enforceRequestRateLimit", () => {
   it("blocks requests after the configured auth limit", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const request = new Request("https://0509.in/auth/login", {
+    const request = new Request("https://0509.io/auth/login", {
       method: "POST",
       headers: {
         "cf-connecting-ip": "203.0.113.10",
@@ -50,7 +50,7 @@ describe("enforceRequestRateLimit", () => {
   it("fails closed for protected writes when the limiter store is unavailable", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await enforceRequestRateLimit(
-      new Request("https://0509.in/auth/login", { method: "POST" }),
+      new Request("https://0509.io/auth/login", { method: "POST" }),
       {} as AppEnv,
     );
 
@@ -61,7 +61,7 @@ describe("enforceRequestRateLimit", () => {
   it("fails closed for protected writes when the migration has not been applied yet", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await enforceRequestRateLimit(
-      new Request("https://0509.in/auth/login", { method: "POST" }),
+      new Request("https://0509.io/auth/login", { method: "POST" }),
       { DB: createMissingTableD1() } as unknown as AppEnv,
     );
 
@@ -71,7 +71,7 @@ describe("enforceRequestRateLimit", () => {
 
   it("blocks anonymous public search after the configured route limit", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const request = new Request("https://0509.in/search?query=nykaa", {
+    const request = new Request("https://0509.io/search?query=nykaa", {
       headers: {
         "cf-connecting-ip": "203.0.113.11",
         "user-agent": "vitest",
@@ -91,7 +91,7 @@ describe("enforceRequestRateLimit", () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
 
     for (let index = 0; index < 20; index += 1) {
-      const request = new Request("https://0509.in/search?query=nykaa", {
+      const request = new Request("https://0509.io/search?query=nykaa", {
         headers: {
           "cf-connecting-ip": "203.0.113.12",
           "user-agent": `rotating-agent-${index}`,
@@ -101,7 +101,7 @@ describe("enforceRequestRateLimit", () => {
     }
 
     const blocked = await enforcePublicSearchRateLimit(
-      new Request("https://0509.in/search?query=nykaa", {
+      new Request("https://0509.io/search?query=nykaa", {
         headers: {
           "cf-connecting-ip": "203.0.113.12",
           "user-agent": "brand-new-agent",
@@ -119,7 +119,7 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
 
     // 60 searches from 60 different IPs: same account, same bucket.
     for (let index = 0; index < 60; index += 1) {
-      const request = new Request("https://0509.in/search?query=nykaa", {
+      const request = new Request("https://0509.io/search?query=nykaa", {
         headers: {
           "cf-connecting-ip": `203.0.113.${index % 250}`,
           "user-agent": `rotating-agent-${index}`,
@@ -131,7 +131,7 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
     }
 
     const blocked = await enforceAuthenticatedSearchRateLimit(
-      new Request("https://0509.in/search?query=nykaa", {
+      new Request("https://0509.io/search?query=nykaa", {
         headers: { "cf-connecting-ip": "198.51.100.99", "user-agent": "fresh" },
       }),
       env,
@@ -142,7 +142,7 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
     // a different account is unaffected
     await expect(
       enforceAuthenticatedSearchRateLimit(
-        new Request("https://0509.in/search?query=nykaa", {
+        new Request("https://0509.io/search?query=nykaa", {
           headers: { "cf-connecting-ip": "198.51.100.99", "user-agent": "fresh" },
         }),
         env,

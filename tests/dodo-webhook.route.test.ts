@@ -51,7 +51,7 @@ function mockWebhookDependencies(overrides: {
 }
 
 function webhookRequest(eventId: string, body: Record<string, unknown>) {
-  return new Request("https://0509.in/api/webhooks/dodo", {
+  return new Request("https://0509.io/api/webhooks/dodo", {
     method: "POST",
     headers: {
       "webhook-id": eventId,
