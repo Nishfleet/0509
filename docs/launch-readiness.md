@@ -18,10 +18,10 @@ The remaining launch blockers are not hidden in code: production has no configur
 - `npm audit --omit=dev --audit-level=moderate` passes with zero vulnerabilities.
 - `npm run canary:billing` passes against production: signed Dodo plan and proof-credit webhooks are accepted, plan cleanup is OK, proof-credit cleanup is OK, and 500 proof credits are granted then cleaned up.
 - `npm run canary:proof -- --require-slack --json` creates a real proof capture and sends email, but fails Slack proof because no Slack target is configured.
-- `npm run canary:prod -- --json` passes health, fresh-live search, and Meta ads beta readiness, but current deployed production still fails launch readiness on Slack and old configured WhatsApp proof until this branch is deployed.
+- `npm run canary:prod -- --json` passes health, fresh-live search, and Meta ads beta readiness, but current deployed production still fails launch readiness on Slack delivery proof.
 - Production health passes on `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io`.
 - Current live search returns fresh Ad Library results for Nykaa, boAt, Mamaearth, Swiggy, Zomato, and Meesho.
-- Meta ads beta shows 841 successful samples, 0 failures, and `Ready to review graduation`.
+- Meta ads beta shows 866 successful samples, 0 failures, and `Ready to review graduation`.
 
 ## Hard Launch Gates
 
@@ -95,4 +95,4 @@ Use this framing for the first customer:
 
 ## Next Slice
 
-Add one real Slack webhook target for Nish's workspace, confirm the Dodo customer portal setting, create the external uptime monitor, then rerun the required delivery canaries and the full production canary after deploy.
+Add one real Slack webhook target for Nish's workspace, confirm the Dodo customer portal setting, create the external uptime monitor, then rerun the required delivery canaries and the full production canary.
