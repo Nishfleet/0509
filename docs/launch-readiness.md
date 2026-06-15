@@ -4,24 +4,24 @@ Last checked: 2026-06-15
 
 ## Current Verdict
 
-Five to Nine is pilot-ready, but not broad self-serve launch-ready until Slack delivery proof is configured and green.
+Five to Nine is pilot-ready, but not broad self-serve launch-ready until Slack delivery proof is configured and green, and WhatsApp is either proven for configured targets or removed from configured delivery targets.
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, and proof-first monitoring all exist.
 
-The remaining launch blocker is not hidden in code: production has no configured Slack delivery target, so the launch-readiness endpoint still reports `no_slack_delivery_target` and `no_recent_slack_sent`.
+The remaining launch blockers are not hidden in code: production has no configured Slack delivery target, and production also has WhatsApp targets without provider/customer/webhook readiness. The launch-readiness endpoint still blocks on Slack and WhatsApp delivery proof.
 
 ## Evidence From 2026-06-15
 
 - `npm run typecheck` passes.
-- `npm test` passes: 87 files and 669 tests.
+- `npm test` passes: 87 files and 670 tests.
 - `npm run build` passes on Vite 8.
 - `npm audit --omit=dev --audit-level=moderate` passes with zero vulnerabilities.
 - `npm run canary:billing` passes against production: signed Dodo plan and proof-credit webhooks are accepted, plan cleanup is OK, proof-credit cleanup is OK, and 500 proof credits are granted then cleaned up.
 - `npm run canary:proof -- --require-slack --json` creates a real proof capture and sends email, but fails Slack proof because no Slack target is configured.
-- `npm run canary:prod -- --json` passes health, fresh-live search, and Meta ads beta readiness, but fails launch readiness on Slack only.
+- `npm run canary:prod -- --json` passes health, fresh-live search, and Meta ads beta readiness, but fails launch readiness on Slack and configured WhatsApp delivery proof.
 - Production health passes on `https://0509.in`, `https://www.0509.in`, and `https://api.0509.in`.
 - Current live search returns fresh Ad Library results for Nykaa, boAt, Mamaearth, Swiggy, Zomato, and Meesho.
-- Meta ads beta shows 703 successful samples, 0 failures, and `Ready to review graduation`.
+- Meta ads beta shows 738 successful samples, 0 failures, and `Ready to review graduation`.
 
 ## Hard Launch Gates
 
@@ -57,6 +57,19 @@ npm run canary:proof -- --require-slack
 npm run canary:prod
 ```
 
+## WhatsApp Blocker
+
+Production readiness currently reports:
+
+- `whatsappDelivery.configuredTargets`: 3
+- `whatsappDelivery.providerConfigured`: false
+- `whatsappDelivery.customerReady`: false
+- `whatsappDelivery.webhookConfigured`: false
+- `whatsappDelivery.usableTargets`: 0
+- `whatsappDelivery.recentSent`: 0
+
+To clear this, either finish the WhatsApp provider/customer/webhook setup and prove one delivered customer-lane WhatsApp send, or remove/delete the configured WhatsApp targets until that channel is intentionally launch-scoped.
+
 ## Pilot-Safe Offer
 
 Use this framing for the first customer:
@@ -65,11 +78,11 @@ Use this framing for the first customer:
 
 ## Not Ready To Claim
 
-- Broad self-serve launch until Slack delivery proof is green.
+- Broad self-serve launch until Slack proof is green and WhatsApp is either proven for configured targets or removed from configured delivery targets.
 - Customer WhatsApp delivery unless opt-in, template readiness, provider sends, and webhook reconciliation are verified.
 - SOC 2, HIPAA, GDPR compliance, zero retention, no training, or similar trust guarantees.
 - Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion, automated spend/reach/impression benchmarks, or public write APIs.
 
 ## Next Slice
 
-Add one real Slack webhook target for Nish's workspace, rerun the Slack-required proof canary, then rerun the full production canary.
+Add one real Slack webhook target for Nish's workspace, decide whether WhatsApp stays in launch scope or the current WhatsApp targets should be removed for launch, then rerun the required delivery canaries and the full production canary.
