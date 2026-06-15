@@ -269,7 +269,7 @@ function csvResponse(filename: string, rows: string[][]) {
   const body = rows
     .map((row) =>
       row
-        .map((cell) => `"${cell.replaceAll('"', '""')}"`)
+        .map((cell) => `"${neutralizeCsvFormula(cell).replaceAll('"', '""')}"`)
         .join(","),
     )
     .join("\n");
@@ -281,6 +281,10 @@ function csvResponse(filename: string, rows: string[][]) {
       "Content-Type": "text/csv; charset=utf-8",
     },
   });
+}
+
+function neutralizeCsvFormula(cell: string) {
+  return /^[\t\r=+\-@]/.test(cell.trimStart()) ? `'${cell}` : cell;
 }
 
 function jsonResponse(filename: string, payload: Record<string, unknown>) {

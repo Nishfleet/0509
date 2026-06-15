@@ -109,7 +109,7 @@ async function enforceRateLimitPolicy(
   } catch (error) {
     console.error("[rate-limit] limiter failed", error);
     if (isMissingRateLimitTableError(error)) {
-      return null;
+      return policy.failClosed ? rateLimitUnavailableResponse() : null;
     }
     return policy.failClosed ? rateLimitUnavailableResponse() : null;
   }

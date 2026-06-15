@@ -1111,6 +1111,67 @@ export async function grantDodoPlanAccess(
   );
 }
 
+// Dodo checkout links are payable for 24 hours by default, so the local lock
+// must last at least as long as the provider session can still be completed.
+export const DODO_PLAN_CHECKOUT_LOCK_MINUTES = 24 * 60;
+
+export async function claimDodoPlanCheckout(
+  env: AppEnv,
+  input: {
+    userId: string;
+    claimedAt?: string;
+    staleAfterMinutes?: number;
+  },
+) {
+  const claimedAt = validIsoTimestamp(input.claimedAt) ?? nowIso();
+  const staleAfterMs =
+    Math.max(
+      DODO_PLAN_CHECKOUT_LOCK_MINUTES,
+      input.staleAfterMinutes ?? DODO_PLAN_CHECKOUT_LOCK_MINUTES,
+    ) *
+    60 *
+    1000;
+  const staleBefore = new Date(Date.parse(claimedAt) - staleAfterMs).toISOString();
+  const db = ensureDb(env);
+  const result = await db.prepare(`
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_status,
+        plan_updated_at
+      )
+      VALUES (?, 'free', 'checkout_pending', ?)
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        dodo_status = 'checkout_pending',
+        plan_updated_at = excluded.plan_updated_at
+      WHERE user_plan.plan = 'free'
+        AND (
+          user_plan.dodo_status IS NULL
+          OR user_plan.dodo_status != 'checkout_pending'
+          OR julianday(user_plan.plan_updated_at) <= julianday(?)
+        )
+    `)
+    .bind(input.userId, claimedAt, staleBefore)
+    .run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function clearDodoPlanCheckout(env: AppEnv, userId: string) {
+  await run(
+    env,
+    `
+      UPDATE user_plan
+      SET dodo_status = NULL
+      WHERE user_id = ?
+        AND plan = 'free'
+        AND dodo_status = 'checkout_pending'
+    `,
+    userId,
+  );
+}
+
 export async function revokeDodoPlanAccess(
   env: AppEnv,
   input: {
@@ -1339,6 +1400,63 @@ export async function getUserIdForDodoPayment(env: AppEnv, paymentId: string) {
     paymentId,
   );
   return row?.user_id ?? null;
+}
+
+export async function getUserIdForDodoLifecycle(
+  env: AppEnv,
+  input: {
+    subscriptionId?: string | null;
+    customerId?: string | null;
+    customerEmail?: string | null;
+  },
+) {
+  const subscriptionId = input.subscriptionId?.trim();
+  if (subscriptionId) {
+    const row = await one<{ user_id: string }>(
+      env,
+      "SELECT user_id FROM user_plan WHERE dodo_subscription_id = ? AND plan != 'free' LIMIT 1",
+      subscriptionId,
+    );
+    if (row?.user_id) return row.user_id;
+  }
+
+  const customerId = input.customerId?.trim();
+  if (customerId) {
+    const row = await one<{ user_id: string }>(
+      env,
+      "SELECT user_id FROM user_plan WHERE dodo_customer_id = ? AND plan != 'free' ORDER BY plan_updated_at DESC LIMIT 1",
+      customerId,
+    );
+    if (row?.user_id) return row.user_id;
+  }
+
+  const customerEmail = input.customerEmail?.trim();
+  if (customerEmail) {
+    const row = await one<{ user_id: string }>(
+      env,
+      `
+        SELECT user.id AS user_id
+        FROM user
+        INNER JOIN user_plan
+          ON user_plan.user_id = user.id
+        WHERE user.email = ? COLLATE NOCASE
+          AND user_plan.plan != 'free'
+          AND (
+            user_plan.dodo_payment_id IS NOT NULL
+            OR user_plan.dodo_product_id IS NOT NULL
+            OR user_plan.dodo_status IS NOT NULL
+            OR user_plan.dodo_subscription_id IS NOT NULL
+            OR user_plan.dodo_customer_id IS NOT NULL
+          )
+        ORDER BY user_plan.plan_updated_at DESC
+        LIMIT 1
+      `,
+      customerEmail,
+    );
+    if (row?.user_id) return row.user_id;
+  }
+
+  return null;
 }
 
 export async function deactivateWatchlistsBeyondPlanLimit(
@@ -2551,6 +2669,7 @@ export async function getWeeklyBusinessSummary(env: AppEnv): Promise<WeeklyBusin
           FROM user_plan
           WHERE plan = 'free'
             AND dodo_status IS NOT NULL
+            AND dodo_status != 'checkout_pending'
             AND plan_updated_at >= ?
         `,
         weekAgo,

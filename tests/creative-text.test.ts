@@ -200,4 +200,79 @@ describe("captureCreativeText", () => {
       },
     });
   });
+
+  it("refuses oversized snapshot HTML before OCR", async () => {
+    const aiRun = vi.fn();
+    mockFetchWithDns(
+      () =>
+        new Response("<html></html>", {
+          status: 200,
+          headers: {
+            "content-length": "750001",
+          },
+        }),
+    );
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "Glow Days are live.",
+        previewHeadline: "Festive glow",
+        previewSubhead: "Upto 50% off.",
+        cta: "Shop now",
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(aiRun).not.toHaveBeenCalled();
+  });
+
+  it("refuses oversized OCR image payloads", async () => {
+    const aiRun = vi.fn();
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            "content-type": "image/jpeg",
+            "content-length": "2000001",
+          },
+        });
+      }
+
+      return new Response(
+        `
+          <html>
+            <head>
+              <meta property="og:image" content="https://cdn.example.com/creative.jpg" />
+            </head>
+            <body><div>Nykaa</div><button>Shop now</button></body>
+          </html>
+        `,
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+          },
+        },
+      );
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "Glow Days are live.",
+        previewHeadline: "Festive glow",
+        previewSubhead: "Upto 50% off.",
+        cta: "Shop now",
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(aiRun).not.toHaveBeenCalled();
+  });
 });

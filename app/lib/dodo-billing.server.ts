@@ -208,14 +208,13 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
   const product = firstProduct(root);
   const productId = readString(product, "product_id");
   const planMatch = productId ? dodo0509PlanForProductId(env, productId) : null;
-  const plan = planMatch?.plan ?? planFromMetadata(metadata);
-  const cycle = planMatch?.cycle ?? cycleFromMetadata(metadata);
+  const metadataPlan = planFromTrustedMetadata(metadata);
+  const plan = planMatch?.plan ?? metadataPlan?.plan ?? null;
+  const cycle = planMatch?.cycle ?? metadataPlan?.cycle ?? "monthly";
 
   // Real subscription payments arrive with product_cart: null (verified
   // against live Dodo payloads — the cart is only populated for one-time
-  // purchases). The checkout metadata still carries plan/cycle/user_id, so
-  // metadata alone must be sufficient to grant; requiring a product id here
-  // silently ignored every real subscription payment.
+  // purchases). Metadata fallback is allowed only for 0509 plan checkouts.
   if (!plan) return null;
 
   // Don't let a plan-purchase payment that ALSO matches a usage bundle fall
@@ -262,8 +261,9 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
 
   const productId = readString(root, "product_id");
   const planMatch = productId ? dodo0509PlanForProductId(env, productId) : null;
-  const plan = planMatch?.plan ?? planFromMetadata(metadata);
-  const cycle = planMatch?.cycle ?? cycleFromMetadata(metadata);
+  const metadataPlan = planFromTrustedMetadata(metadata);
+  const plan = planMatch?.plan ?? metadataPlan?.plan ?? null;
+  const cycle = planMatch?.cycle ?? metadataPlan?.cycle ?? "monthly";
   if (!plan) return null;
 
   const grantedAt =
@@ -286,14 +286,28 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
   };
 }
 
-function planFromMetadata(metadata: Record<string, unknown>) {
+function planFromMetadata(metadata: Record<string, unknown>): PricingPlanSlug | null {
   const metadataPlan = readString(metadata, "plan");
   return metadataPlan === "scout" || metadataPlan === "starter" || metadataPlan === "agency"
     ? metadataPlan
     : null;
 }
 
-function cycleFromMetadata(metadata: Record<string, unknown>) {
+function planFromTrustedMetadata(
+  metadata: Record<string, unknown>,
+): { plan: PricingPlanSlug; cycle: PricingBillingCycle } | null {
+  if (readString(metadata, "app") !== "0509") return null;
+  if (readString(metadata, "target_kind") !== "plan") return null;
+  const plan = planFromMetadata(metadata);
+  if (!plan) return null;
+
+  return {
+    plan,
+    cycle: cycleFromMetadata(metadata),
+  };
+}
+
+function cycleFromMetadata(metadata: Record<string, unknown>): PricingBillingCycle {
   const metadataCycle = readString(metadata, "cycle");
   return metadataCycle === "monthly" || metadataCycle === "yearly" ? metadataCycle : "monthly";
 }
@@ -333,11 +347,16 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
   const metadata = objectOrEmpty(root.metadata);
   const userId = readString(metadata, "user_id") || readString(metadata, "userId") || null;
   const customer = objectOrEmpty(root.customer);
+  const customerId = readString(customer, "customer_id") || null;
   const customerEmail = readString(customer, "email") || null;
-  if (!userId && !customerEmail) return null;
+  const productId = readString(root, "product_id");
+  const planMatch = productId ? dodo0509PlanForProductId(env, productId) : null;
+  const metadataPlan = planFromTrustedMetadata(metadata);
+  const hasPlanProof = Boolean(planMatch || metadataPlan);
+  const rawSubscriptionId = readString(root, "subscription_id") || readString(root, "id");
+  if (!userId && !rawSubscriptionId && !customerId && !hasPlanProof) return null;
 
-  const subscriptionId =
-    readString(root, "subscription_id") || readString(root, "id") || eventType;
+  const subscriptionId = rawSubscriptionId || eventType;
   const revokedAt =
     readString(root, "cancelled_at") ||
     readString(root, "updated_at") ||
@@ -348,7 +367,8 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
     eventType,
     action,
     userId,
-    customerEmail,
+    customerId,
+    customerEmail: hasPlanProof ? customerEmail : null,
     subscriptionId,
     status: readString(root, "status") || eventType,
     revokedAt,

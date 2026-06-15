@@ -27,6 +27,7 @@ function mockWebhookDependencies(overrides: {
     grantProofUsageCredit: vi.fn().mockResolvedValue(undefined),
     getUserIdByEmail: vi.fn().mockResolvedValue(null),
     getUserIdForDodoPayment: vi.fn().mockResolvedValue(null),
+    getUserIdForDodoLifecycle: vi.fn().mockResolvedValue(null),
     revokeDodoPlanAccess: vi.fn().mockResolvedValue(undefined),
     ...overrides.data,
   };
@@ -141,6 +142,7 @@ describe("Dodo webhook route", () => {
       0,
     );
     expect(data.getUserIdByEmail).not.toHaveBeenCalled();
+    expect(data.getUserIdForDodoLifecycle).not.toHaveBeenCalled();
   });
 
   it("grants and refreshes the plan from subscription.renewed (real subscriptions carry no product_cart)", async () => {
@@ -261,6 +263,52 @@ describe("Dodo webhook route", () => {
     expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
   });
 
+  it("resolves payment-issue lifecycle events without metadata user id by Dodo linkage", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanRevocation: vi.fn(() => ({
+          eventType: "subscription.on_hold",
+          action: "payment_issue",
+          userId: null,
+          customerEmail: "owner@example.com",
+          customerId: "cus_123",
+          subscriptionId: "sub_123",
+          status: "on_hold",
+          revokedAt: "2026-07-01T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+      data: {
+        getUserIdForDodoLifecycle: vi.fn().mockResolvedValue("user-linked"),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-on-hold-linked", { type: "subscription.on_hold" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
+    expect(data.markDodoPlanPaymentIssue).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-linked",
+        status: "subscription.on_hold",
+      }),
+    );
+    expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        subscriptionId: "sub_123",
+        customerId: "cus_123",
+        customerEmail: "owner@example.com",
+      },
+    );
+    expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
+  });
+
   it("revokes plan and expires credits when a full refund succeeds", async () => {
     const { data } = mockWebhookDependencies({
       billing: {
@@ -299,7 +347,7 @@ describe("Dodo webhook route", () => {
     );
   });
 
-  it("resolves the user by customer email when subscription metadata lacks a user id", async () => {
+  it("resolves lifecycle events without metadata user id by stored Dodo subscription linkage", async () => {
     const { data } = mockWebhookDependencies({
       billing: {
         extractDodoPlanRevocation: vi.fn(() => ({
@@ -307,6 +355,7 @@ describe("Dodo webhook route", () => {
           action: "revoke",
           userId: null,
           customerEmail: "owner@example.com",
+          customerId: "cus_456",
           subscriptionId: "sub_456",
           status: "expired",
           revokedAt: "2026-07-02T00:00:00.000Z",
@@ -314,7 +363,7 @@ describe("Dodo webhook route", () => {
         })),
       },
       data: {
-        getUserIdByEmail: vi.fn().mockResolvedValue("user-email-match"),
+        getUserIdForDodoLifecycle: vi.fn().mockResolvedValue("user-linked"),
       },
     });
 
@@ -326,10 +375,22 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, revoked: true });
-    expect(data.getUserIdByEmail).toHaveBeenCalledWith(expect.anything(), "owner@example.com");
+    expect(data.getUserIdByEmail).not.toHaveBeenCalled();
+    expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        subscriptionId: "sub_456",
+        customerId: "cus_456",
+        customerEmail: "owner@example.com",
+      },
+    );
     expect(data.revokeDodoPlanAccess).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ userId: "user-email-match" }),
+      expect.objectContaining({
+        userId: "user-linked",
+        providerSubscriptionId: "sub_456",
+        status: "subscription.expired",
+      }),
     );
   });
 
@@ -341,6 +402,7 @@ describe("Dodo webhook route", () => {
           action: "revoke",
           userId: null,
           customerEmail: "stranger@example.com",
+          customerId: "cus_789",
           subscriptionId: "sub_789",
           status: "cancelled",
           revokedAt: "2026-07-03T00:00:00.000Z",
@@ -357,6 +419,14 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, ignored: true });
+    expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        subscriptionId: "sub_789",
+        customerId: "cus_789",
+        customerEmail: "stranger@example.com",
+      },
+    );
     expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
   });
 

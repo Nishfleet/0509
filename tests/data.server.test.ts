@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
+  claimDodoPlanCheckout,
   claimDodoWebhookEvent,
   claimRazorpayWebhookEvent,
   createDeliveryAttempt,
@@ -9,13 +10,16 @@ import {
   createLandingPageSnapshot,
   createProofCapture,
   createWatchEvent,
+  DODO_PLAN_CHECKOUT_LOCK_MINUTES,
   grantDodoPlanAccess,
+  getUserIdForDodoLifecycle,
   markDodoPlanPaymentIssue,
   revokeDodoAccessForRefundedPayment,
   revokeDodoPlanAccess,
   getDiscoveryCacheEntry,
   getLaunchReadinessSignals,
   getOperatorSnapshot,
+  getWeeklyBusinessSummary,
   listActiveWatchlists,
   listCollectionItems,
   listDigests,
@@ -329,6 +333,26 @@ describe("Dodo billing persistence", () => {
     ]);
   });
 
+  it("keeps the pending plan checkout lock for the full Dodo checkout window", async () => {
+    const mock = createMockDb();
+
+    await claimDodoPlanCheckout(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        claimedAt: "2026-06-15T12:00:00.000Z",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "checkout_pending");
+    expect(DODO_PLAN_CHECKOUT_LOCK_MINUTES).toBe(24 * 60);
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "2026-06-15T12:00:00.000Z",
+      "2026-06-14T12:00:00.000Z",
+    ]);
+  });
+
   it("revokes Dodo plan access to free with monotonic timestamp ordering", async () => {
     const mock = createMockDb();
 
@@ -377,6 +401,112 @@ describe("Dodo billing persistence", () => {
       "user-1",
       "2026-07-01T00:00:00.000Z",
     ]);
+  });
+
+  it("resolves Dodo lifecycle events by stored subscription before customer id", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  return { results: [{ user_id: "user-subscription" }] as T[] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await expect(
+      getUserIdForDodoLifecycle(
+        { DB: mock.db } as never,
+        {
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+        },
+      ),
+    ).resolves.toBe("user-subscription");
+
+    expect(statements).toHaveLength(1);
+    expect(statements[0]?.sql).toContain("dodo_subscription_id = ?");
+    expect(statements[0]?.bindings).toEqual(["sub_123"]);
+  });
+
+  it("falls back to stored Dodo customer id for lifecycle events", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const results = [[], [{ user_id: "user-customer" }]];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  return { results: (results.shift() ?? []) as T[] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await expect(
+      getUserIdForDodoLifecycle(
+        { DB: mock.db } as never,
+        {
+          subscriptionId: "sub_missing",
+          customerId: "cus_123",
+        },
+      ),
+    ).resolves.toBe("user-customer");
+
+    expect(statements[0]?.sql).toContain("dodo_subscription_id = ?");
+    expect(statements[1]?.sql).toContain("dodo_customer_id = ?");
+    expect(statements[1]?.bindings).toEqual(["cus_123"]);
+  });
+
+  it("falls back to email only for existing paid Dodo-linked lifecycle rows", async () => {
+    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
+    const results = [[], [], [{ user_id: "user-paid-dodo" }]];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          return {
+            bind(...bindings: unknown[]) {
+              statements.push({ sql, bindings });
+              return {
+                async all<T>() {
+                  return { results: (results.shift() ?? []) as T[] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await expect(
+      getUserIdForDodoLifecycle(
+        { DB: mock.db } as never,
+        {
+          subscriptionId: "sub_missing",
+          customerId: "cus_missing",
+          customerEmail: "Owner@Example.com",
+        },
+      ),
+    ).resolves.toBe("user-paid-dodo");
+
+    expect(statements[2]?.sql).toContain("user.email = ? COLLATE NOCASE");
+    expect(statements[2]?.sql).toContain("user_plan.plan != 'free'");
+    expect(statements[2]?.sql).toContain("user_plan.dodo_payment_id IS NOT NULL");
+    expect(statements[2]?.bindings).toEqual(["Owner@Example.com"]);
   });
 
   it("revokes plan access and expires usage credits for a refunded payment", async () => {
@@ -511,6 +641,22 @@ describe("scheduled watchlist selection", () => {
     await listActiveWatchlists({ DB: mock.db } as never, { includeScout: true });
 
     expect(mock.statements[0]?.bindings).toEqual([1]);
+  });
+});
+
+describe("weekly business summary", () => {
+  it("does not count pending Dodo checkouts as dropped-to-free customers", async () => {
+    const mock = createMockDb();
+
+    await getWeeklyBusinessSummary({ DB: mock.db } as never);
+
+    const statement = findStatement(
+      mock.statements,
+      "FROM user_plan",
+      "plan = 'free'",
+      "plan_updated_at >= ?",
+    );
+    expect(statement?.sql).toContain("dodo_status != 'checkout_pending'");
   });
 });
 

@@ -1,5 +1,10 @@
 import puppeteer from "@cloudflare/puppeteer";
 
+import {
+  base64DecodedLengthExceeds,
+  readResponseTextWithinLimit,
+  utf8ByteLength,
+} from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
   extractLandingPageSignals,
@@ -26,6 +31,9 @@ const MOBILE_VIEWPORT = {
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 const BROWSERLESS_PROOF_RENDER_WAIT_MS = 5_000;
+const MAX_RENDERED_HTML_BYTES = 1_000_000;
+const MAX_RENDERED_SCREENSHOT_BYTES = 3_000_000;
+const MAX_BROWSERLESS_RESPONSE_BYTES = 6_000_000;
 const DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS = new Set([
   "https://0509.in",
   "https://www.0509.in",
@@ -47,7 +55,7 @@ mutation LandingPageProofFallback($url: String!, $userAgent: String!) {
   html {
     html
   }
-	  screenshot(type: jpeg, fullPage: true, quality: 85) {
+	  screenshot(type: jpeg, fullPage: false, quality: 85) {
 	    base64
 	  }
 	  documentRequests: request(type: [document], wait: false) {
@@ -180,10 +188,13 @@ export async function captureBrowserRunSnapshot(
     });
 
     const html = await page.content();
+    if (utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES) {
+      return null;
+    }
     const screenshot = await page.screenshot({
       type: "jpeg",
       quality: 85,
-      fullPage: true,
+      fullPage: false,
     });
     const canonicalUrl = (await resolvePublicHttpUrl(page.url() || targetUrl))?.toString();
     if (!canonicalUrl) {
@@ -282,7 +293,11 @@ export async function captureBrowserlessProofSnapshot(
         },
       }),
     });
-    const payload = (await response.json().catch(() => null)) as
+    const responseText = await readResponseTextWithinLimit(response, MAX_BROWSERLESS_RESPONSE_BYTES);
+    if (!responseText) {
+      return null;
+    }
+    const payload = (JSON.parse(responseText) as
       | {
           data?: {
             html?: {
@@ -299,7 +314,7 @@ export async function captureBrowserlessProofSnapshot(
 	            };
           };
         }
-      | null;
+      | null) ?? null;
 
     const html = payload?.data?.html?.html ?? "";
     const screenshotBase64 = payload?.data?.screenshot?.base64 ?? "";
@@ -314,6 +329,8 @@ export async function captureBrowserlessProofSnapshot(
       !response.ok ||
       !html ||
       !screenshotBase64 ||
+      utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES ||
+      base64DecodedLengthExceeds(screenshotBase64, MAX_RENDERED_SCREENSHOT_BYTES) ||
       !canonicalUrl ||
       publicDocumentUrls.some((requestUrl) => !requestUrl)
     ) {
@@ -413,13 +430,21 @@ function buildBrowserRenderedSnapshot(
     provider: string;
     screenshot: Uint8Array | ArrayBuffer | Buffer;
   },
-): Promise<LandingPageSnapshotData> {
+): Promise<LandingPageSnapshotData | null> {
   const html = input.html;
+  const screenshotBytes = toUint8Array(input.screenshot);
+  if (
+    utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES ||
+    screenshotBytes.byteLength > MAX_RENDERED_SCREENSHOT_BYTES
+  ) {
+    return Promise.resolve(null);
+  }
+
   const signals = extractLandingPageSignals(html);
   const headline = resolveHeadline(html);
   const normalized = normalizeHeadline(headline);
 
-  return persistBrowserArtifacts(env, input.canonicalUrl, html, input.screenshot).then(
+  return persistBrowserArtifacts(env, input.canonicalUrl, html, screenshotBytes).then(
     ({ htmlArtifactKey, screenshotArtifactKey }) => ({
       rawUrl: input.url,
       canonicalUrl: input.canonicalUrl,
@@ -477,7 +502,7 @@ async function persistBrowserArtifacts(
   env: AppEnv,
   canonicalUrl: string,
   html: string,
-  screenshot: Uint8Array | ArrayBuffer | Buffer,
+  screenshot: Uint8Array,
 ) {
   if (!env.LANDING_PAGE_ARTIFACTS) {
     return {

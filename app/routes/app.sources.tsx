@@ -119,9 +119,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
     saveCustomerMetaToken,
   } = await import("~/lib/customer-meta.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+
+  if (isMember && ownerOnlySourceIntents.has(intent)) {
+    return {
+      ok: false,
+      message: "Only the workspace owner can manage integrations, delivery targets, and API keys.",
+    };
+  }
 
   if (intent === "connect-meta-token") {
     const token = String(formData.get("metaToken") ?? "");
@@ -308,6 +315,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
     message: "Unknown source action.",
   };
 }
+
+const ownerOnlySourceIntents = new Set([
+  "connect-meta-token",
+  "retest-meta-token",
+  "disconnect-meta-token",
+  "create-api-key",
+  "revoke-api-key",
+  "save-slack-webhook",
+  "save-whatsapp-target",
+  "pause-slack-webhook",
+  "resume-slack-webhook",
+]);
 
 export default function AppSourcesRoute() {
   const data = useLoaderData<typeof loader>();
