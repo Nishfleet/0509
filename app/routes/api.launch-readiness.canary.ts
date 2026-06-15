@@ -116,7 +116,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const canaryKey = `launch-readiness:${nowIso}`;
   const title = "Launch readiness canary";
   const summary = "Private canary verified the monitoring, proof, and digest delivery pipeline.";
-  const proofUrl = "https://0509.in/";
+  const proofUrl = "https://0509.io/";
   const requestUrl = new URL(request.url);
   const requestedProofProvider = requestUrl.searchParams.get("proofProvider") === "browserless"
     ? "browserless"
@@ -167,7 +167,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const canonicalPageIdentity =
-    buildCanonicalPageIdentity(snapshot.canonicalUrl) ?? buildCanonicalPageIdentity(proofUrl) ?? "0509.in/";
+    buildCanonicalPageIdentity(snapshot.canonicalUrl) ?? buildCanonicalPageIdentity(proofUrl) ?? "0509.io/";
   const proofTargetIdentity = buildProofTargetIdentity({
     watchlistId: target.watchlist_id,
     adId: null,

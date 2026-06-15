@@ -101,7 +101,7 @@ export async function captureCreativeText(
 
   try {
     const response = await fetchPublicCreativeResource(url, {
-      "user-agent": "0509-bot/1.0 (+https://0509.in)",
+      "user-agent": "0509-bot/1.0 (+https://0509.io)",
     });
 
     if (!response?.ok) {
@@ -297,7 +297,7 @@ async function fetchCreativeImagePayload(
   }
 
   const response = await fetchPublicCreativeResource(candidate, {
-    "user-agent": "0509-bot/1.0 (+https://0509.in)",
+    "user-agent": "0509-bot/1.0 (+https://0509.io)",
     accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
     referer: snapshotUrl,
   });

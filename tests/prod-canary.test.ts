@@ -22,7 +22,7 @@ function current0509Result(status: "ok" | "empty", overrides = {}) {
     blockedLikely: false,
     degraded: false,
     sourceLabel: "Live Ad Library capture",
-    url: "https://0509.in/search?query=nykaa",
+    url: "https://0509.io/search?query=nykaa",
     note: null,
     ...overrides,
   };
@@ -170,12 +170,12 @@ describe("production canary", () => {
 
     expect(report.passed).toBe(true);
     expect(report.healthChecks.map((check) => check.url)).toEqual([
-      "https://0509.in/api/health",
-      "https://www.0509.in/api/health",
-      "https://api.0509.in/api/health",
+      "https://0509.io/api/health",
+      "https://www.0509.io/api/health",
+      "https://api.0509.io/api/health",
     ]);
-    expect(formatProductionCanaryReport(report)).toContain("https://www.0509.in/api/health");
-    expect(formatProductionCanaryReport(report)).toContain("https://api.0509.in/api/health");
+    expect(formatProductionCanaryReport(report)).toContain("https://www.0509.io/api/health");
+    expect(formatProductionCanaryReport(report)).toContain("https://api.0509.io/api/health");
     expect(benchmarkImpl).toHaveBeenCalledWith(
       expect.objectContaining({
         forceLive: true,

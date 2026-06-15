@@ -252,7 +252,7 @@ export async function sendInstantWhatsApp(
     };
   }
 
-  const link = input.watchlistUrl ?? "https://0509.in/app/watchlists";
+  const link = input.watchlistUrl ?? "https://0509.io/app/watchlists";
   const bodyParameters =
     input.lane === "internal"
       ? [input.competitor, input.shortChange, input.provisional ? "Possible change" : "Confirmed change", link]

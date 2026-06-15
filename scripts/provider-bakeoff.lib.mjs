@@ -180,7 +180,7 @@ export function buildMetaLibraryUrl(target) {
  * @param {{ query: string, country?: string, mode?: SearchMode, baseUrl?: string, forceLive?: boolean }} target
  */
 export function buildCurrent0509SearchUrl(target) {
-  const url = new URL("/search", target.baseUrl ?? "https://0509.in");
+  const url = new URL("/search", target.baseUrl ?? "https://0509.io");
   url.searchParams.set("query", target.query);
   url.searchParams.set("country", target.country ?? DEFAULT_COUNTRY);
   url.searchParams.set("mode", target.mode ?? DEFAULT_MODE);

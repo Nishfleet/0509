@@ -35,6 +35,8 @@ const MAX_RENDERED_HTML_BYTES = 1_000_000;
 const MAX_RENDERED_SCREENSHOT_BYTES = 3_000_000;
 const MAX_BROWSERLESS_RESPONSE_BYTES = 6_000_000;
 const DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS = new Set([
+  "https://0509.io",
+  "https://www.0509.io",
   "https://0509.in",
   "https://www.0509.in",
 ]);

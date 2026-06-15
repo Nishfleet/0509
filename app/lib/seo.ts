@@ -1,4 +1,4 @@
-const SITE_ORIGIN = "https://0509.in";
+const SITE_ORIGIN = "https://0509.io";
 const SITE_NAME = "Five to Nine";
 // PNG, not SVG: most social scrapers (WhatsApp, Slack, X, iMessage) refuse
 // SVG og:images. The legacy /social-card.svg stays served for cached links.

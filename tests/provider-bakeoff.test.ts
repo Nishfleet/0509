@@ -49,7 +49,7 @@ describe("provider bakeoff helpers", () => {
         country: "India",
         mode: "advertiser",
       }),
-    ).toBe("https://0509.in/search?query=bigspy&country=India&mode=advertiser");
+    ).toBe("https://0509.io/search?query=bigspy&country=India&mode=advertiser");
   });
 
   it("builds the Browserbase session request", () => {
