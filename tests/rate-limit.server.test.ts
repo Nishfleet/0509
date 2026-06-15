@@ -58,14 +58,14 @@ describe("enforceRequestRateLimit", () => {
     consoleError.mockRestore();
   });
 
-  it("fails open when the migration has not been applied yet", async () => {
+  it("fails closed for protected writes when the migration has not been applied yet", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await enforceRequestRateLimit(
       new Request("https://0509.in/auth/login", { method: "POST" }),
       { DB: createMissingTableD1() } as unknown as AppEnv,
     );
 
-    expect(response).toBeNull();
+    expect(response?.status).toBe(503);
     consoleError.mockRestore();
   });
 

@@ -1,4 +1,10 @@
 import type { AppEnv } from "~/lib/env.server";
+import {
+  base64DecodedLengthExceeds,
+  contentLengthExceeds,
+  readResponseBytesWithinLimit,
+  readResponseTextWithinLimit,
+} from "~/lib/bounded-response.server";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -22,6 +28,9 @@ const GENERIC_UI_LINES = new Set([
 ]);
 const OCR_PROMPT =
   "Extract only the ad creative text visible in this image. Return the text as short lines separated by newlines. Ignore buttons, browser chrome, logos, and surrounding UI.";
+const MAX_CREATIVE_SNAPSHOT_HTML_BYTES = 750_000;
+const MAX_CREATIVE_IMAGE_BYTES = 2_000_000;
+const MAX_CREATIVE_IMAGE_CANDIDATES = 5;
 
 type KnownAdText = Pick<
   AdRecord,
@@ -99,7 +108,10 @@ export async function captureCreativeText(
       return null;
     }
 
-    const html = await response.text();
+    const html = await readResponseTextWithinLimit(response, MAX_CREATIVE_SNAPSHOT_HTML_BYTES);
+    if (!html) {
+      return null;
+    }
     const creativeImageUrl =
       extractCreativeImageCandidates(html, response.url || url).find(
         (candidate) => !candidate.startsWith("data:"),
@@ -175,7 +187,7 @@ async function extractCreativeTextFromSnapshotImage(
     return null;
   }
 
-  const candidates = extractCreativeImageCandidates(html, snapshotUrl);
+  const candidates = extractCreativeImageCandidates(html, snapshotUrl).slice(0, MAX_CREATIVE_IMAGE_CANDIDATES);
   for (const candidate of candidates) {
     try {
       const image = await fetchCreativeImagePayload(candidate, snapshotUrl);
@@ -298,13 +310,17 @@ async function fetchCreativeImagePayload(
     return null;
   }
 
-  const buffer = await response.arrayBuffer();
-  if (buffer.byteLength === 0) {
+  if (contentLengthExceeds(response.headers, MAX_CREATIVE_IMAGE_BYTES)) {
+    return null;
+  }
+
+  const bytes = await readResponseBytesWithinLimit(response, MAX_CREATIVE_IMAGE_BYTES);
+  if (!bytes || bytes.byteLength === 0) {
     return null;
   }
 
   return {
-    bytes: new Uint8Array(buffer),
+    bytes,
     contentType,
     imageUrl: response.url || candidate,
     imageFetchStatus: response.status,
@@ -318,9 +334,16 @@ function decodeDataUrl(value: string) {
   }
 
   const contentType = match[1] ?? "application/octet-stream";
+  if (base64DecodedLengthExceeds(match[2], MAX_CREATIVE_IMAGE_BYTES)) {
+    return null;
+  }
+
   const bytes = Uint8Array.from(atob(match[2]), (character) =>
     character.charCodeAt(0),
   );
+  if (bytes.byteLength > MAX_CREATIVE_IMAGE_BYTES) {
+    return null;
+  }
 
   return {
     bytes,

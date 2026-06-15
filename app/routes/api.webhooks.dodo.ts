@@ -21,10 +21,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     claimDodoWebhookEvent,
     deactivateWatchlistsBeyondPlanLimit,
     reactivateWatchlistsUpToPlanLimit,
-    getUserIdByEmail,
     getUserIdForDodoPayment,
     grantDodoPlanAccess,
     grantProofUsageCredit,
+    getUserIdForDodoLifecycle,
     markDodoPlanPaymentIssue,
     markDodoWebhookEventFinished,
     revokeDodoAccessForRefundedPayment,
@@ -158,7 +158,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (revocation) {
       const userId =
         revocation.userId ??
-        (revocation.customerEmail ? await getUserIdByEmail(env, revocation.customerEmail) : null);
+        (await getUserIdForDodoLifecycle(env, {
+          subscriptionId: revocation.subscriptionId,
+          customerId: revocation.customerId,
+          customerEmail: revocation.customerEmail,
+        }));
       if (!userId) {
         return {
           outcome: "ignored",

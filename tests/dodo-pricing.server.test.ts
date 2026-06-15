@@ -164,4 +164,142 @@ describe("Dodo 0509 pricing", () => {
       },
     });
   });
+
+  it("bypasses the preview cache for private pricing canary requests", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          currency: "INR",
+          current_breakup: { total_amount: 99900 },
+          product_cart: [{ tax_inclusive: true }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          currency: "USD",
+          current_breakup: { total_amount: 1100 },
+          product_cart: [{ tax_inclusive: true }],
+        }),
+      });
+    const env = {
+      CANARY_BYPASS_TOKEN: "canary-token",
+      DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE: "true",
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_canary_cache",
+    };
+
+    await previewDodo0509PlanPrices({
+      env,
+      request: new Request("https://0509.in/api/pricing-preview", {
+        headers: { "cf-ipcountry": "US" },
+      }),
+      fetcher: fetcher as never,
+    });
+
+    const canaryPreview = await previewDodo0509PlanPrices({
+      env,
+      request: new Request("https://0509.in/api/pricing-preview?country=US&pricing-canary=1", {
+        headers: { "x-0509-canary-token": "canary-token" },
+      }),
+      fetcher: fetcher as never,
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(canaryPreview.prices.scout?.monthly).toMatchObject({
+      currency: "USD",
+      display: "$11",
+    });
+  });
+
+  it("ignores pricing country overrides without the private canary token", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        currency: "INR",
+        current_breakup: {
+          total_amount: 499900,
+        },
+        product_cart: [{ tax_inclusive: true }],
+        total_tax: 0,
+      }),
+    });
+    const request = new Request("https://0509.in/api/pricing-preview?country=US", {
+      headers: {
+        "cf-ipcountry": "IN",
+        "x-0509-pricing-country": "GB",
+      },
+    });
+
+    const preview = await previewDodo0509PlanPrices({
+      env: {
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DODO_0509_API_KEY: "secret",
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_ENVIRONMENT: "test",
+        DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      },
+      request,
+      fetcher: fetcher as never,
+    });
+
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({
+      billing_address: { country: "IN" },
+    });
+    expect(preview.country).toBe("IN");
+  });
+
+  it("allows tokened canary pricing probes to override Cloudflare country", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        currency: "USD",
+        current_breakup: {
+          total_amount: 5900,
+        },
+        billing_country: "US",
+        product_cart: [{ tax_inclusive: false }],
+        total_tax: 0,
+      }),
+    });
+    const request = new Request("https://0509.in/api/pricing-preview?country=US", {
+      headers: {
+        "cf-ipcountry": "IN",
+        "x-0509-canary-token": "secret-token",
+      },
+    }) as Request & { cf?: { country?: string } };
+    request.cf = { country: "IN" };
+
+    const preview = await previewDodo0509PlanPrices({
+      env: {
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DODO_0509_API_KEY: "secret",
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_ENVIRONMENT: "test",
+        DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      },
+      request,
+      fetcher: fetcher as never,
+    });
+
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({
+      billing_address: { country: "US" },
+    });
+    expect(preview).toMatchObject({
+      country: "US",
+      prices: {
+        scout: {
+          monthly: {
+            billingCountry: "US",
+            currency: "USD",
+            display: "$59",
+          },
+        },
+      },
+    });
+  });
 });

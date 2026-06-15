@@ -1,4 +1,5 @@
 import { captureRenderedLandingPageSnapshot } from "~/lib/browser-run.server";
+import { readResponseTextWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
 import { extractLandingPageSignals } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
@@ -14,6 +15,7 @@ const OG_TITLE_REGEX =
   /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i;
 const H1_REGEX = /<h1[^>]*>(.*?)<\/h1>/i;
 const MAX_LANDING_PAGE_REDIRECTS = 5;
+const MAX_LANDING_PAGE_HTML_BYTES = 1_000_000;
 
 interface CaptureLandingPageSnapshotOptions {
   allowRenderedFallback?: boolean;
@@ -74,7 +76,12 @@ async function captureLandingPageSnapshotAt(
         : captureRenderedLandingPageSnapshot(env, finalUrl.toString());
     }
 
-    const html = await response.text();
+    const html = await readResponseTextWithinLimit(response, MAX_LANDING_PAGE_HTML_BYTES);
+    if (!html) {
+      return options.allowRenderedFallback === false
+        ? null
+        : captureRenderedLandingPageSnapshot(env, finalUrl.toString());
+    }
     const signals = extractLandingPageSignals(html);
     const headline =
       decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "") ||

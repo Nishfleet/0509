@@ -148,7 +148,8 @@ export async function previewDodo0509PlanPrices({
   if (!apiKey) return unavailable("missing_api_key", env, request);
   if (!brandId) return unavailable("missing_brand_id", env, request);
 
-  const country = countryFromRequest(request);
+  const country = countryFromRequest(env, request);
+  const bypassCache = hasValidCanaryToken(env, request);
   const products = dodo0509ProductIds(env);
   const bundles = dodo0509UsageBundleProductIds(env);
   const configuredPlans = Object.entries(products).flatMap(([planId, cycles]) =>
@@ -181,7 +182,9 @@ export async function previewDodo0509PlanPrices({
     configuredBundles.map((item) => `${item.bundleId}:${item.productId}`).join("|"),
   ].join(":");
   const cached = pricePreviewCache.get(cacheKey);
-  if (cached && Date.now() - cached.createdAt < PRICE_PREVIEW_CACHE_MS) return cached.value;
+  if (!bypassCache && cached && Date.now() - cached.createdAt < PRICE_PREVIEW_CACHE_MS) {
+    return cached.value;
+  }
 
   const planEntries = await Promise.all(
     configuredPlans.map(async ({ planId, cycle, productId }) => {
@@ -229,7 +232,9 @@ export async function previewDodo0509PlanPrices({
       : {}),
   };
 
-  pricePreviewCache.set(cacheKey, { createdAt: Date.now(), value });
+  if (!bypassCache) {
+    pricePreviewCache.set(cacheKey, { createdAt: Date.now(), value });
+  }
   return value;
 }
 
@@ -310,7 +315,7 @@ function unavailable(reason: string, env: AppEnv, request: Request): DodoPricing
     available: false,
     provider: "dodo",
     source: "dodo_checkout_preview",
-    country: countryFromRequest(request),
+    country: countryFromRequest(env, request),
     adaptiveCurrency: dodo0509AdaptiveCurrencyEnabled(env),
     feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
     reason,
@@ -319,11 +324,30 @@ function unavailable(reason: string, env: AppEnv, request: Request): DodoPricing
   };
 }
 
-function countryFromRequest(request: Request) {
+function countryFromRequest(env: AppEnv, request: Request) {
+  const canaryCountry = canaryCountryOverride(env, request);
+  if (canaryCountry) return canaryCountry;
+
   const cloudflareCountry = String((request as Request & { cf?: { country?: string } }).cf?.country || "").toUpperCase();
   const headerCountry = String(request.headers.get("cf-ipcountry") || request.headers.get("x-country") || "").toUpperCase();
   const country = cloudflareCountry || headerCountry;
   return /^[A-Z]{2}$/.test(country) && country !== "XX" ? country : "";
+}
+
+function canaryCountryOverride(env: AppEnv, request: Request) {
+  if (!hasValidCanaryToken(env, request)) {
+    return "";
+  }
+
+  const urlCountry = new URL(request.url).searchParams.get("country");
+  const headerCountry = request.headers.get("x-0509-pricing-country");
+  const country = String(urlCountry || headerCountry || "").toUpperCase();
+  return /^[A-Z]{2}$/.test(country) && country !== "XX" ? country : "";
+}
+
+function hasValidCanaryToken(env: AppEnv, request: Request) {
+  const token = env.CANARY_BYPASS_TOKEN?.trim();
+  return Boolean(token && request.headers.get("x-0509-canary-token") === token);
 }
 
 function formatDodoAmount(minorAmount: number | null, currency: string) {

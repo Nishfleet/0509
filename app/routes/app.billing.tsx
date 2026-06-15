@@ -40,6 +40,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     dailyProofCap: dailyProofCapForPlan(billing.plan, proofUsage.extraCredits),
     creditGrants,
     blockedCheckout: checkoutNotice === "already-subscribed",
+    pendingCheckout: checkoutNotice === "already-started",
     portalUnavailable: portalNotice === "unavailable",
     hasPortal: Boolean(billing.dodoCustomerId),
   };
@@ -67,6 +68,16 @@ export default function BillingRoute() {
             would have started a second, overlapping subscription. To switch plans or change billing,
             email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email} and we'll handle it
             the same day.
+          </p>
+        </div>
+      ) : null}
+
+      {data.pendingCheckout ? (
+        <div className="f9-message is-error">
+          <p>
+            A Dodo checkout is already open for this workspace. Finish that checkout, or wait until
+            that payment link expires before starting a new one. If you need help, email{" "}
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email}.
           </p>
         </div>
       ) : null}

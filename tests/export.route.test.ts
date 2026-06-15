@@ -274,6 +274,30 @@ describe("authenticated export route", () => {
     expect(body).toContain('"Nykaa","Routine-first bundle","Bundle and save","Build your routine","","https://facebook.com/ads/library/?id=meta-nykaa-1","beauty|offer","Use in sales deck."');
   });
 
+  it("neutralizes spreadsheet formulas in CSV exports", async () => {
+    setupMocks({
+      collectionItems: [
+        {
+          ...collectionItem,
+          note: "@SUM(1+1)",
+          ad: {
+            ...collectionItem.ad,
+            advertiser: "=HYPERLINK(\"https://evil.example\")",
+            hook: " +SUM(1,1)",
+            offer: "-10% off",
+          },
+        },
+      ],
+    });
+    const response = await loadExport("https://0509.in/export/collection/collection-1");
+    const body = await response.text();
+
+    expect(body).toContain('"\'=HYPERLINK(""https://evil.example"")"');
+    expect(body).toContain('"\' +SUM(1,1)"');
+    expect(body).toContain('"\'-10% off"');
+    expect(body).toContain('"\'@SUM(1+1)"');
+  });
+
   it("returns account-scoped JSON for collection exports", async () => {
     setupMocks();
     const response = await loadExport("https://0509.in/export/collection/collection-1?format=json");

@@ -361,6 +361,50 @@ describe("sources route action", () => {
     });
   });
 
+  it("blocks workspace members from creating owner-owned API keys", async () => {
+    const createCustomerApiKey = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken: vi.fn(),
+    }));
+    vi.doMock("~/lib/api-keys.server", () => ({
+      createCustomerApiKey,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "create-api-key");
+    formData.set("apiKeyName", "Member-created key");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(createCustomerApiKey).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      message: "Only the workspace owner can manage integrations, delivery targets, and API keys.",
+    });
+  });
+
   it("revokes a customer API key", async () => {
     const revokeCustomerApiKey = vi.fn();
 

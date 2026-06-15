@@ -200,6 +200,60 @@ describe("Dodo billing", () => {
     expect(grant).toBeNull();
   });
 
+  it("does not grant metadata-only plan access without the 0509 plan marker", () => {
+    const grant = extractDodoPlanGrant(
+      { DODO_0509_BRAND_ID: "brand_0509" },
+      {
+        type: "payment.succeeded",
+        data: {
+          payload_type: "Payment",
+          payment_id: "pay_other_product",
+          brand_id: "brand_0509",
+          status: "succeeded",
+          subscription_id: "sub_other",
+          product_cart: null,
+          metadata: {
+            user_id: "user-1",
+            plan: "agency",
+            cycle: "monthly",
+          },
+        },
+      },
+    );
+
+    expect(grant).toBeNull();
+  });
+
+  it("still grants configured plan products even when metadata has no app marker", () => {
+    const grant = extractDodoPlanGrant(
+      {
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_PRODUCT_AGENCY_MONTHLY_ID: "prod_agency_monthly",
+      },
+      {
+        type: "payment.succeeded",
+        data: {
+          payload_type: "Payment",
+          payment_id: "pay_product_backed",
+          brand_id: "brand_0509",
+          status: "succeeded",
+          metadata: {
+            user_id: "user-1",
+            plan: "scout",
+          },
+          product_cart: [
+            {
+              product_id: "prod_agency_monthly",
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    );
+
+    expect(grant).toMatchObject({ plan: "agency", cycle: "monthly" });
+  });
+
   it("extracts paid grants from current Dodo envelope payloads", () => {
     const grant = extractDodoPlanGrant(
       {
@@ -326,7 +380,9 @@ describe("Dodo subscription lifecycle", () => {
         cancelled_at: "2026-07-01T00:00:00.000Z",
         created_at: "2026-06-01T00:00:00.000Z",
         metadata: {
+          app: "0509",
           user_id: "user-1",
+          target_kind: "plan",
           plan: "starter",
         },
         customer: {
@@ -352,6 +408,28 @@ describe("Dodo subscription lifecycle", () => {
       customerEmail: "owner@example.com",
       subscriptionId: "sub_123",
       revokedAt: "2026-07-01T00:00:00.000Z",
+    });
+  });
+
+  it("extracts trusted lifecycle events without a metadata user id for database resolution", () => {
+    const revocation = extractDodoPlanRevocation(
+      lifecycleEnv,
+      subscriptionEnvelope("subscription.expired", {
+        metadata: {
+          app: "0509",
+          target_kind: "plan",
+          plan: "starter",
+        },
+      }),
+    );
+
+    expect(revocation).toMatchObject({
+      eventType: "subscription.expired",
+      action: "revoke",
+      userId: null,
+      customerId: "cus_1",
+      customerEmail: "owner@example.com",
+      subscriptionId: "sub_123",
     });
   });
 
@@ -413,16 +491,36 @@ describe("Dodo subscription lifecycle", () => {
     expect(isDodoWebhookTimestampFresh("not-a-timestamp", now)).toBe(false);
   });
 
-  it("falls back to the customer email when metadata has no user id", () => {
+  it("extracts lifecycle events with stored-linkage ids even when plan proof is absent", () => {
     const revocation = extractDodoPlanRevocation(
       lifecycleEnv,
       subscriptionEnvelope("subscription.cancelled", { metadata: {} }),
     );
 
     expect(revocation).toMatchObject({
+      eventType: "subscription.cancelled",
+      action: "revoke",
       userId: null,
-      customerEmail: "owner@example.com",
+      customerId: "cus_1",
+      customerEmail: null,
+      subscriptionId: "sub_123",
     });
+  });
+
+  it("ignores lifecycle events without user, linkage ids, or plan proof", () => {
+    const revocation = extractDodoPlanRevocation(
+      lifecycleEnv,
+      subscriptionEnvelope("subscription.cancelled", {
+        subscription_id: "",
+        id: "",
+        metadata: {},
+        customer: {
+          email: "owner@example.com",
+        },
+      }),
+    );
+
+    expect(revocation).toBeNull();
   });
 
   it("ignores non-lifecycle events and foreign brands", () => {
@@ -503,6 +601,22 @@ describe("extractDodoSubscriptionGrant", () => {
     );
 
     expect(grant).toMatchObject({ plan: "starter", cycle: "monthly" });
+  });
+
+  it("ignores unknown subscription products without trusted 0509 metadata", () => {
+    const grant = extractDodoSubscriptionGrant(
+      { DODO_0509_BRAND_ID: "brand_0509" } as never,
+      subscriptionPayload("subscription.renewed", {
+        product_id: "pdt_unmapped",
+        metadata: {
+          user_id: "user-1",
+          plan: "starter",
+          cycle: "monthly",
+        },
+      }),
+    );
+
+    expect(grant).toBeNull();
   });
 
   it("ignores other lifecycle events and foreign brands", () => {

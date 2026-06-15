@@ -328,8 +328,85 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         renderProvider: "browserless_bql",
       }),
 	  });
-	  expect(put).toHaveBeenCalledTimes(2);
-	});
+    expect(put).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to rendered capture when fetched HTML is over the byte limit", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(`<!doctype html><title>Huge page</title>${"A".repeat(1_000_001)}`, {
+          status: 200,
+        }),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/huge",
+      canonicalUrl: "https://example.com/huge",
+      rawHeadline: "Rendered huge page",
+      normalizedHeadline: "rendered huge page",
+      normalizedHeadlineHash: "hash-rendered-huge",
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+      captureMethod: "browser_render",
+      capturedAt: "2026-06-15T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/huge");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/huge",
+    );
+    expect(snapshot).toMatchObject({
+      captureMethod: "browser_render",
+      rawHeadline: "Rendered huge page",
+    });
+  });
+
+  it("refuses oversized Browserless screenshot artifacts", async () => {
+    const put = vi.fn();
+    mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (!String(input).includes("browserless.io/stealth/bql")) {
+          throw new Error("fetch failed");
+        }
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              html: { html: "<html><head><title>Huge proof</title></head><body></body></html>" },
+              screenshot: { base64: `${"A".repeat(4_000_004)}` },
+              documentRequests: [{ url: "https://www.example.com/glow" }],
+              url: { url: "https://www.example.com/glow" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
+        LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+      },
+      "https://example.com/glow",
+    );
+
+    expect(snapshot).toBeNull();
+    expect(put).not.toHaveBeenCalled();
+  });
 
 	it("does not send arbitrary proof URLs to Browserless without an allowlist", async () => {
 	  const fetch = mockFetchWithDns(

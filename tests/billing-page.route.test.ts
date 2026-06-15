@@ -141,6 +141,26 @@ describe("billing page", () => {
     expect(result).toMatchObject({ blockedCheckout: true });
   });
 
+  it("flags a pending checkout from the query string", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: "checkout_pending",
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.in/app/billing?checkout=already-started"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ pendingCheckout: true });
+  });
+
   it("renders the payment-issue banner and support path for a dunning customer", async () => {
     mockReactRouterRender({
       email: "owner@example.com",
@@ -157,6 +177,7 @@ describe("billing page", () => {
       dailyProofCap: 40,
       creditGrants: [],
       blockedCheckout: false,
+      pendingCheckout: false,
     });
 
     const { default: BillingRoute } = await import("~/routes/app.billing");
@@ -180,6 +201,7 @@ describe("billing page", () => {
       dailyProofCap: 0,
       creditGrants: [],
       blockedCheckout: false,
+      pendingCheckout: false,
     });
 
     const { default: BillingRoute } = await import("~/routes/app.billing");
@@ -193,11 +215,16 @@ describe("billing page", () => {
 });
 
 describe("Dodo checkout double-subscription guard", () => {
-  function mockCheckoutDependencies(currentPlan: string) {
+  function mockCheckoutDependencies(currentPlan: string, options: { checkoutClaimed?: boolean; checkoutFails?: boolean } = {}) {
     const createDodo0509CheckoutSession = vi.fn().mockResolvedValue({
       checkoutUrl: "https://checkout.dodo.example/session",
       sessionId: "sess_1",
     });
+    if (options.checkoutFails) {
+      createDodo0509CheckoutSession.mockRejectedValue(new Response("Dodo checkout failed.", { status: 502 }));
+    }
+    const claimDodoPlanCheckout = vi.fn().mockResolvedValue(options.checkoutClaimed ?? true);
+    const clearDodoPlanCheckout = vi.fn().mockResolvedValue(undefined);
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
     requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
@@ -216,7 +243,11 @@ describe("Dodo checkout double-subscription guard", () => {
     vi.doMock("~/lib/dodo-billing.server", () => ({
       createDodo0509CheckoutSession,
     }));
-    return { createDodo0509CheckoutSession };
+    vi.doMock("~/lib/data.server", () => ({
+      claimDodoPlanCheckout,
+      clearDodoPlanCheckout,
+    }));
+    return { createDodo0509CheckoutSession, claimDodoPlanCheckout, clearDodoPlanCheckout };
   }
 
   function checkoutRequest(body: Record<string, string>) {
@@ -274,6 +305,47 @@ describe("Dodo checkout double-subscription guard", () => {
     }
 
     expect(createDodo0509CheckoutSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks a second pending Dodo plan checkout before opening another session", async () => {
+    const { createDodo0509CheckoutSession, claimDodoPlanCheckout } = mockCheckoutDependencies("free", {
+      checkoutClaimed: false,
+    });
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    try {
+      await action({
+        context: {},
+        request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
+        params: {},
+      } as never);
+      throw new Error("expected redirect");
+    } catch (response) {
+      expect((response as Response).status).toBe(303);
+      expect((response as Response).headers.get("Location")).toBe(
+        "/app/billing?checkout=already-started",
+      );
+    }
+
+    expect(claimDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), { userId: "user-1" });
+    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("clears the pending Dodo plan checkout lock when Dodo session creation fails", async () => {
+    const { clearDodoPlanCheckout } = mockCheckoutDependencies("free", { checkoutFails: true });
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    await expect(
+      action({
+        context: {},
+        request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
+        params: {},
+      } as never),
+    ).rejects.toBeInstanceOf(Response);
+
+    expect(clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1");
   });
 
   it("still lets a subscriber buy usage bundles", async () => {

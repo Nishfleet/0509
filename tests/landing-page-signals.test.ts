@@ -138,4 +138,27 @@ describe("captureLandingPageSnapshot", () => {
       captureMethod: "landing_page_fetch",
     });
   });
+
+  it("refuses oversized landing-page HTML before storing artifacts", async () => {
+    const put = vi.fn();
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response("<html></html>", {
+          status: 200,
+          headers: {
+            "content-length": "1000001",
+          },
+        }),
+      ) as never,
+    );
+
+    const snapshot = await captureLandingPageSnapshot(
+      { LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket },
+      "https://example.com/glow",
+      { allowRenderedFallback: false },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(put).not.toHaveBeenCalled();
+  });
 });
