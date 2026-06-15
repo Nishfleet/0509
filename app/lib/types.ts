@@ -28,6 +28,8 @@ export const WATCH_EVENT_STATUSES = [
 ] as const;
 
 export const WATCH_TARGET_TYPES = ["advertiser", "saved_query"] as const;
+export const WATCHLIST_TRACKING_ROLES = ["competitor", "self"] as const;
+export const WEB_MENTION_SOURCES = ["reddit", "x", "blog", "youtube", "substack", "web"] as const;
 export const SHARE_RESOURCE_TYPES = ["collection", "watchlist", "digest", "report"] as const;
 export const SEARCH_MODES = ["advertiser", "keyword"] as const;
 export const CREATIVE_TYPES = ["all", "image", "video", "carousel"] as const;
@@ -80,6 +82,8 @@ export type AnalysisSource = (typeof ANALYSIS_SOURCES)[number];
 export type WatchEventType = (typeof WATCH_EVENT_TYPES)[number];
 export type WatchEventStatus = (typeof WATCH_EVENT_STATUSES)[number];
 export type WatchTargetType = (typeof WATCH_TARGET_TYPES)[number];
+export type WatchlistTrackingRole = (typeof WATCHLIST_TRACKING_ROLES)[number];
+export type WebMentionSource = (typeof WEB_MENTION_SOURCES)[number];
 export type ShareResourceType = (typeof SHARE_RESOURCE_TYPES)[number];
 export type SearchMode = (typeof SEARCH_MODES)[number];
 export type CreativeTypeFilter = (typeof CREATIVE_TYPES)[number];
@@ -262,6 +266,7 @@ export interface WatchlistRecord {
   userId: string;
   name: string;
   targetType: WatchTargetType;
+  trackingRole?: WatchlistTrackingRole;
   targetId: string;
   targetFingerprint: string;
   targetLabel: string;

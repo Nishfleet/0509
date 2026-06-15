@@ -221,6 +221,55 @@ describe("onboarding route", () => {
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
 
+  it("rejects an incomplete website instead of creating a broken first watchlist", async () => {
+    const completeUserOnboarding = vi.fn();
+    const createWatchlist = vi.fn();
+    const checkPlanLimit = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createSavedQuery: vi.fn(),
+      createWatchlist,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit,
+    }));
+
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("website", "seoitis");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "That website looks incomplete. Add the full domain, like seoitis.com.",
+    });
+    expect(checkPlanLimit).not.toHaveBeenCalled();
+    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
   it("returns a structured upgrade prompt when onboarding watchlists are capped", async () => {
     const completeUserOnboarding = vi.fn();
     const createWatchlist = vi.fn();

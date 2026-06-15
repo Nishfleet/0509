@@ -17,6 +17,7 @@ import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
 import {
   emptyCompetitorWebsite,
+  hasInvalidCompetitorWebsite,
   isHttpCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
   watchlistFingerprint,
@@ -34,6 +35,11 @@ import { normalizeSavedQuery } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { createReportId } from "~/lib/report";
+import {
+  formatWatchlistTargetNoun,
+  formatWatchlistTrackingRole,
+  normalizeWatchlistTrackingRole,
+} from "~/lib/watchlist-role";
 import type {
   DeliveryAttemptRecord,
   DiscoveryFailureClass,
@@ -258,15 +264,41 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (!name || (watchlist.targetType !== "saved_query" && !targetLabel)) {
       return {
         ok: false,
-        message: "Add both a watchlist name and competitor first.",
+        message: "Add both a watchlist name and tracked brand first.",
       };
     }
 
+    const trackingRole = normalizeWatchlistTrackingRole(formData.get("trackingRole") ?? watchlist.trackingRole);
     const competitorWebsite = formData.has("competitorWebsite")
       ? normalizeCompetitorWebsiteInput(String(formData.get("competitorWebsite") ?? ""))
       : isHttpCompetitorWebsite(watchlist.targetId)
         ? normalizeCompetitorWebsiteInput(watchlist.targetId)
         : emptyCompetitorWebsite();
+    if (hasInvalidCompetitorWebsite(competitorWebsite)) {
+      return {
+        ok: false,
+        message: competitorWebsite.error,
+      };
+    }
+
+    const nextTargetLabel = targetLabel ?? watchlist.targetLabel;
+    const previousCompetitorWebsite = isHttpCompetitorWebsite(watchlist.targetId)
+      ? normalizeCompetitorWebsiteInput(watchlist.targetId)
+      : emptyCompetitorWebsite();
+    const websiteUnchanged =
+      (competitorWebsite.normalizedUrl ?? null) === (previousCompetitorWebsite.normalizedUrl ?? null);
+    const labelUnchanged = nextTargetLabel === watchlist.targetLabel;
+    const targetFingerprint =
+      websiteUnchanged && labelUnchanged
+        ? watchlist.targetFingerprint
+        : watchlistFingerprint(
+            normalizeSavedQuery("advertiser", {
+              query: nextTargetLabel,
+              country: watchlist.targetCountry ?? "India",
+            }),
+            competitorWebsite,
+          );
+
     const targetUpdate =
       watchlist.targetType === "saved_query"
         ? {
@@ -275,20 +307,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
             targetFingerprint: watchlist.targetFingerprint,
             targetLabel: watchlist.targetLabel,
             targetCountry: watchlist.targetCountry,
+            trackingRole,
           }
         : {
             targetType: "advertiser" as const,
-            targetId: competitorWebsite.normalizedUrl ?? targetLabel ?? watchlist.targetLabel,
-            targetFingerprint: watchlistFingerprint(
-              normalizeSavedQuery("advertiser", {
-                query: targetLabel ?? watchlist.targetLabel,
-              }),
-              competitorWebsite,
-            ),
-            targetLabel: targetLabel ?? watchlist.targetLabel,
+            targetId: competitorWebsite.normalizedUrl ?? nextTargetLabel,
+            targetFingerprint,
+            targetLabel: nextTargetLabel,
             // Retargeting changes the competitor, not the market — the
             // replacement watchlist keeps scanning the same country.
             targetCountry: watchlist.targetCountry,
+            trackingRole,
           };
 
     try {
@@ -525,6 +554,8 @@ export default function WatchlistsRoute() {
   );
   const lastAttemptByEventId = buildLastAttemptByEventId(data.recentDeliveryAttempts);
   const insightDepth = data.selectedWatchlist ? buildWatchlistInsightDepth(data.events) : null;
+  const selectedTrackingRole = normalizeWatchlistTrackingRole(data.selectedWatchlist?.trackingRole);
+  const selectedTargetNoun = formatWatchlistTargetNoun(selectedTrackingRole);
   let consecutiveFailedRuns = 0;
   for (const run of data.runs as Array<{ status: string; errorCode?: string | null }>) {
     // Provider cooldowns are soft failures — skip them rather than alarming
@@ -558,11 +589,11 @@ export default function WatchlistsRoute() {
           <div className="f9-panel-toolbar">
             <div>
               <p className="f9-app-kicker">Watchlists</p>
-              <h2>Competitor tracking desk</h2>
+              <h2>Tracking desk</h2>
             </div>
           </div>
           <p className="f9-muted-copy">
-            Pick a competitor to review changes, proof freshness, and alert delivery.
+            Pick a tracked brand to review changes, proof freshness, and alert delivery.
           </p>
 
           <div className="f9-work-list is-compact">
@@ -580,7 +611,7 @@ export default function WatchlistsRoute() {
                 <div>
                   <h3>{watchlist.name}</h3>
                   <p className="f9-muted-copy">
-                    {watchlist.targetType.replace("_", " ")} · {watchlist.targetLabel}
+                    {formatWatchlistTrackingRole(watchlist.trackingRole)} · {watchlist.targetLabel}
                     {watchlist.isActive ? "" : " · Paused"}
                   </p>
                   <p className="f9-muted-copy">
@@ -600,7 +631,7 @@ export default function WatchlistsRoute() {
             {data.watchlists.length === 0 ? (
               <div className="f9-empty-panel">
                 <h3>Add your first competitor</h3>
-                <p>Paste a competitor website from search or onboarding to start tracking offer changes.</p>
+                <p>Paste your website or a competitor website to start tracking visible changes.</p>
                 <Link className="f9-primary-button" to="/search">
                   Add competitor
                 </Link>
@@ -626,6 +657,7 @@ export default function WatchlistsRoute() {
                     {data.selectedWatchlist.isActive
                       ? ` · next scan ${formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)}`
                       : null}
+                    {` · ${formatWatchlistTrackingRole(data.selectedWatchlist.trackingRole)}`}
                   </p>
                 </div>
                 <div className="f9-action-row">
@@ -719,8 +751,28 @@ export default function WatchlistsRoute() {
                         type="text"
                       />
                     </label>
+                    <div className="f9-mode-toggle" aria-label="Track as">
+                      <label className={selectedTrackingRole === "competitor" ? "is-active" : ""}>
+                        <input
+                          defaultChecked={selectedTrackingRole === "competitor"}
+                          name="trackingRole"
+                          type="radio"
+                          value="competitor"
+                        />
+                        Competitor
+                      </label>
+                      <label className={selectedTrackingRole === "self" ? "is-active" : ""}>
+                        <input
+                          defaultChecked={selectedTrackingRole === "self"}
+                          name="trackingRole"
+                          type="radio"
+                          value="self"
+                        />
+                        My brand
+                      </label>
+                    </div>
                     <label className="f9-field">
-                      <span>Competitor website</span>
+                      <span>{formatWatchlistTrackingRole(selectedTrackingRole)} website</span>
                       <input
                         defaultValue={
                           isHttpCompetitorWebsite(data.selectedWatchlist.targetId)
@@ -737,7 +789,7 @@ export default function WatchlistsRoute() {
                       <input
                         defaultValue={data.selectedWatchlist.targetLabel}
                         name="targetLabel"
-                        placeholder="Nykaa, Mamaearth, skincare serum"
+                        placeholder={selectedTrackingRole === "self" ? "Seoitis" : "Nykaa, Mamaearth, skincare serum"}
                         type="text"
                       />
                     </label>
@@ -791,6 +843,20 @@ export default function WatchlistsRoute() {
                       <Link className="f9-secondary-button" to="/app/sources">
                         Review tracking access
                       </Link>
+                    </article>
+                    <article className="f9-app-panel">
+                      <h3>Web mentions</h3>
+                      <p className="f9-muted-copy">
+                        {`This ${selectedTargetNoun} is ready for mention tracking across Reddit, X, blogs, YouTube, Substack, and web results once the source connectors are enabled.`}
+                      </p>
+                      <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
+                        {["Reddit", "X", "Blogs", "YouTube", "Substack", "Web"].map((source) => (
+                          <div className="f9-work-row" key={source}>
+                            <p className="f9-muted-copy">{source}</p>
+                            <span className="f9-status-pill">prepared</span>
+                          </div>
+                        ))}
+                      </div>
                     </article>
                   </div>
                 </section>
@@ -1149,7 +1215,7 @@ export default function WatchlistsRoute() {
           ) : (
             <div className="f9-empty-panel">
               <h2>Add your first competitor</h2>
-              <p>Paste a competitor website to start tracking offer, CTA, headline, and form changes.</p>
+              <p>Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes.</p>
               <Link className="f9-primary-button" to="/search">
                 Add competitor
               </Link>

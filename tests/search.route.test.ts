@@ -263,6 +263,111 @@ describe("search loader", () => {
     });
   });
 
+  it("infers the ad search from a valid website when the query is blank", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: baseAd,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?website=https://www.seoitis.com"),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        mode: "advertiser",
+        filters: expect.objectContaining({
+          query: "seoitis",
+        }),
+      }),
+      null,
+      { purpose: "public_search", forceLive: false },
+    );
+    expect(result).toMatchObject({
+      inputError: null,
+      competitorWebsite: {
+        normalizedUrl: "https://seoitis.com",
+        searchTerm: "seoitis",
+      },
+    });
+  });
+
+  it("shows an incomplete-website error instead of silently searching", async () => {
+    const env = { DB: {} };
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?website=seoitis&query=seoitis"),
+    } as never);
+
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      inputError: "That website looks incomplete. Add the full domain, like seoitis.com.",
+      result: {
+        discoveryStatus: "disabled",
+      },
+    });
+  });
+
   it("runs live discovery after a signed-in user submits a query", async () => {
     const env = { DB: {} };
     const sourceResult = {
@@ -800,14 +905,142 @@ describe("search actions", () => {
     expect(response?.headers.get("Location")).toBe("/app/watchlists?watchlist=watch-1");
     expect(checkPlanLimit).toHaveBeenCalledWith(env, "user-1", "watchlists");
     expect(createSavedQuery).not.toHaveBeenCalled();
+      expect(createWatchlist).toHaveBeenCalledWith(
+        env,
+        "user-1",
+        expect.objectContaining({
+          name: "Nykaa watch",
+          targetType: "advertiser",
+          targetId: "https://nykaa.com",
+          targetLabel: "nykaa",
+          trackingRole: "competitor",
+        }),
+      );
+    });
+
+  it("refuses to track an incomplete website", async () => {
+    const env = { DB: {} };
+    const checkPlanLimit = vi.fn();
+    const createSavedQuery = vi.fn();
+    const createWatchlist = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addAdToCollection: vi.fn(),
+      createSavedQuery,
+      createWatchlist,
+    }));
+
+    const { action } = await import("~/routes/search");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("mode", "advertiser");
+    formData.set("query", "seoitis");
+    formData.set("competitorWebsite", "seoitis");
+    formData.set("country", "India");
+    formData.set("platform", "all");
+    formData.set("creativeType", "all");
+    formData.set("status", "all");
+
+    const result = await action({
+      context: createContext(env),
+      request: new Request("http://localhost/search", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "That website looks incomplete. Add the full domain, like seoitis.com.",
+    });
+    expect(checkPlanLimit).not.toHaveBeenCalled();
+    expect(createSavedQuery).not.toHaveBeenCalled();
+    expect(createWatchlist).not.toHaveBeenCalled();
+  });
+
+  it("creates a self-tracking watchlist from a website", async () => {
+    const env = { DB: {} };
+    const checkPlanLimit = vi.fn().mockResolvedValue({
+      allowed: true,
+      limit: 10,
+      current: 0,
+    });
+    const createWatchlist = vi.fn().mockResolvedValue({
+      id: "watch-self",
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addAdToCollection: vi.fn(),
+      createSavedQuery: vi.fn(),
+      createWatchlist,
+    }));
+
+    const { action } = await import("~/routes/search");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("trackingRole", "self");
+    formData.set("mode", "advertiser");
+    formData.set("query", "");
+    formData.set("competitorWebsite", "seoitis.com");
+    formData.set("country", "India");
+    formData.set("platform", "all");
+    formData.set("creativeType", "all");
+    formData.set("status", "all");
+
+    let response: Response | null = null;
+    try {
+      await action({
+        context: createContext(env),
+        request: new Request("http://localhost/search", {
+          method: "POST",
+          body: formData,
+        }),
+      } as never);
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(response?.headers.get("Location")).toBe("/app/watchlists?watchlist=watch-self");
     expect(createWatchlist).toHaveBeenCalledWith(
       env,
       "user-1",
       expect.objectContaining({
-        name: "Nykaa watch",
-        targetType: "advertiser",
-        targetId: "https://nykaa.com",
-        targetLabel: "nykaa",
+        name: "Seoitis watch",
+        targetId: "https://seoitis.com",
+        targetLabel: "seoitis",
+        trackingRole: "self",
       }),
     );
   });

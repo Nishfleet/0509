@@ -15,6 +15,7 @@ import { SubmitButton } from "~/components/submit-button";
 import {
   applyWebsiteSearchFallback,
   emptyCompetitorWebsite,
+  hasInvalidCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
   watchlistFingerprint,
 } from "~/lib/competitor-website";
@@ -33,8 +34,13 @@ import {
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  formatWatchlistTargetNoun,
+  formatWatchlistTrackingRole,
+  normalizeWatchlistTrackingRole,
+} from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
-import type { AdRecord, SearchFilters, SearchResponse } from "~/lib/types";
+import type { AdRecord, SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
 
 const searchDescription =
   "Sign in to search competitor Meta ads, save useful examples, and track visible offer changes over time.";
@@ -63,11 +69,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       request.headers.get("cf-ipcountry"),
   );
   const competitorWebsite = normalizeCompetitorWebsiteInput(url.searchParams.get("website") ?? "");
-  const parsed = applyWebsiteSearchFallback(
-    parseSearchParams(url.searchParams, { country: visitorCountry }),
-    competitorWebsite,
-  );
+  const parsedInput = parseSearchParams(url.searchParams, { country: visitorCountry });
+  const parsed = hasInvalidCompetitorWebsite(competitorWebsite)
+    ? parsedInput
+    : applyWebsiteSearchFallback(parsedInput, competitorWebsite);
+  const trackingRole = normalizeWatchlistTrackingRole(url.searchParams.get("trackingRole"));
   const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
+
+  if (hasInvalidCompetitorWebsite(competitorWebsite)) {
+    return {
+      mode: parsed.mode,
+      filters: parsed.filters,
+      fingerprint: parsed.fingerprint,
+      result: buildIdleSearchResult(),
+      selectedAd: null,
+      collections: [],
+      session,
+      competitorWebsite,
+      trackingRole,
+      inputError: competitorWebsite.error,
+    };
+  }
 
   if (!session && request.method.toUpperCase() === "HEAD" && parsed.filters.query) {
     return {
@@ -79,6 +101,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       collections: [],
       session,
       competitorWebsite,
+      trackingRole,
+      inputError: null,
     };
   }
 
@@ -115,6 +139,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       collections,
       session,
       competitorWebsite,
+      trackingRole,
+      inputError: null,
     };
   }
 
@@ -152,6 +178,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     collections,
     session,
     competitorWebsite,
+    trackingRole,
+    inputError: null,
   };
 }
 
@@ -170,26 +198,31 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const competitorWebsite = normalizeCompetitorWebsiteInput(
     String(formData.get("competitorWebsite") ?? formData.get("website") ?? ""),
   );
+  const trackingRole = normalizeWatchlistTrackingRole(formData.get("trackingRole"));
   const normalizedQuery = applyWebsiteSearchFallback(
     normalizeSavedQuery(
-    (String(formData.get("mode") ?? "advertiser") === "keyword" ? "keyword" : "advertiser"),
-    {
-      query: String(formData.get("query") ?? ""),
-      country:
-        String(formData.get("country") ?? "") ||
-        defaultCountryForVisitor(
-          (context.cloudflare as { country?: string | null } | undefined)?.country ??
-            request.headers.get("cf-ipcountry"),
-        ),
-      platform: String(formData.get("platform") ?? "all"),
-      creativeType: String(formData.get("creativeType") ?? "all") as SearchFilters["creativeType"],
-      status: String(formData.get("status") ?? "all") as SearchFilters["status"],
-      firstSeenFrom: String(formData.get("firstSeenFrom") ?? ""),
-      lastSeenFrom: String(formData.get("lastSeenFrom") ?? ""),
-    },
+      String(formData.get("mode") ?? "advertiser") === "keyword" ? "keyword" : "advertiser",
+      {
+        query: String(formData.get("query") ?? ""),
+        country:
+          String(formData.get("country") ?? "") ||
+          defaultCountryForVisitor(
+            (context.cloudflare as { country?: string | null } | undefined)?.country ??
+              request.headers.get("cf-ipcountry"),
+          ),
+        platform: String(formData.get("platform") ?? "all"),
+        creativeType: String(formData.get("creativeType") ?? "all") as SearchFilters["creativeType"],
+        status: String(formData.get("status") ?? "all") as SearchFilters["status"],
+        firstSeenFrom: String(formData.get("firstSeenFrom") ?? ""),
+        lastSeenFrom: String(formData.get("lastSeenFrom") ?? ""),
+      },
     ),
     competitorWebsite,
   );
+
+  if ((intent === "save-query" || intent === "create-watchlist") && hasInvalidCompetitorWebsite(competitorWebsite)) {
+    return { ok: false, message: competitorWebsite.error };
+  }
 
   if ((intent === "save-query" || intent === "create-watchlist") && !normalizedQuery.filters.query) {
     return { ok: false, message: "Enter a competitor website or search term before saving or tracking it." };
@@ -235,6 +268,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
         targetLabel: normalizedQuery.filters.query,
         targetCountry: normalizedQuery.filters.country,
+        trackingRole,
       });
     } else {
       const savedQuery = await createSavedQuery(env, workspaceUserId!, {
@@ -254,6 +288,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
         targetLabel: normalizedQuery.filters.query || savedQuery.name,
         targetCountry: normalizedQuery.filters.country,
+        trackingRole,
       });
     }
 
@@ -301,20 +336,24 @@ export default function SearchRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const creativeTextField = data.selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
-  const currentSearchParams = withCompetitorWebsite(
+  const trackingRole = normalizeWatchlistTrackingRole(data.trackingRole);
+  const trackingRoleLabel = formatWatchlistTrackingRole(trackingRole);
+  const targetNoun = formatWatchlistTargetNoun(trackingRole);
+  const currentSearchParams = withTrackingContext(
     buildSearchParams({
       mode: data.mode,
       filters: data.filters,
     }),
     competitorWebsite.raw,
+    trackingRole,
   );
   const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(`/search?${currentSearchParams.toString()}`)}`;
   const inferredWatchlistName = (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
-  const canTrackCurrentCompetitor = Boolean(data.filters.query);
+  const canTrackCurrentCompetitor = Boolean(data.filters.query) && !data.inputError;
   const discoverySummary = formatDiscoverySummary(data.result);
   const idleSearchMessage = rootData.session
-    ? "Enter a competitor website to see ads and save what matters."
-    : "Enter a competitor website to preview live ads. Create an account to save and track.";
+    ? "Enter a website to see ads and save what matters."
+    : "Enter a website to preview live ads. Create an account to save and track.";
 
   return (
     <main className="f9-search-page">
@@ -344,11 +383,11 @@ export default function SearchRoute() {
         <div className="f9-search-gradient" aria-hidden="true" />
         <div className="f9-container f9-search-hero-grid">
           <div>
-            <p className="f9-search-kicker">Competitor ads</p>
-            <h1>Track competitor ads from one website.</h1>
+            <p className="f9-search-kicker">Market tracking</p>
+            <h1>Track ads from one website.</h1>
             <p>
-              Start with the site you care about. Five to Nine finds the ads behind it, saves useful
-              examples, and keeps watching for offer changes.
+              Start with your site or a competitor site. Five to Nine finds the ads behind it, saves useful
+              examples, and keeps watching for visible changes.
             </p>
           </div>
           <div className="f9-search-intake-card">
@@ -360,14 +399,36 @@ export default function SearchRoute() {
               <input name="platform" type="hidden" value="all" />
               <input name="creativeType" type="hidden" value="all" />
               <input name="status" type="hidden" value="all" />
+              <div className="f9-mode-toggle" aria-label="Track as">
+                <label className={trackingRole === "competitor" ? "is-active" : ""}>
+                  <input
+                    defaultChecked={trackingRole === "competitor"}
+                    name="trackingRole"
+                    type="radio"
+                    value="competitor"
+                  />
+                  Competitor
+                </label>
+                <label className={trackingRole === "self" ? "is-active" : ""}>
+                  <input
+                    defaultChecked={trackingRole === "self"}
+                    name="trackingRole"
+                    type="radio"
+                    value="self"
+                  />
+                  My brand
+                </label>
+              </div>
               <label className="f9-field is-primary">
                 <span>Website to track</span>
                 <input
+                  aria-invalid={Boolean(data.inputError)}
                   defaultValue={competitorWebsite.raw}
                   name="website"
                   placeholder="https://nykaa.com"
                   type="text"
                 />
+                {data.inputError ? <small>{data.inputError}</small> : null}
               </label>
               <label className="f9-field">
                 <span>Brand or search term</span>
@@ -380,7 +441,7 @@ export default function SearchRoute() {
               </label>
               <div className="f9-action-row">
                 <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
-                  See competitor ads
+                  See ads
                 </SubmitButton>
                 {!rootData.session ? (
                   <Link className="f9-secondary-button" to={signupTrackingPath}>
@@ -396,10 +457,11 @@ export default function SearchRoute() {
                   competitorWebsite={competitorWebsite.raw}
                   filters={data.filters}
                   mode={data.mode}
+                  trackingRole={trackingRole}
                 />
                 <input name="name" type="hidden" value={`${inferredWatchlistName} watch`} />
                 <SubmitButton className="f9-secondary-button" intent="create-watchlist" pendingLabel="Creating…">
-                  Track this competitor
+                  Track this {targetNoun}
                 </SubmitButton>
               </Form>
             ) : null}
@@ -433,6 +495,12 @@ export default function SearchRoute() {
             </div>
           ) : null}
 
+          {data.inputError ? (
+            <div className="f9-message is-error">
+              <p>{data.inputError}</p>
+            </div>
+          ) : null}
+
           {discoverySummary ? (
             <div className="f9-discovery-banner">
               <span>Results update</span>
@@ -445,20 +513,44 @@ export default function SearchRoute() {
               <Form className="f9-search-form" method="get">
                 <div className="f9-controls-head">
                   <span>Search</span>
-                  <h2>Choose a competitor</h2>
-                  <p>Enter a competitor site first. Use the brand field if its ad account uses a different name.</p>
+                  <h2>Choose a tracked brand</h2>
+                  <p>Enter a website first. Use the brand field if the ad account uses a different name.</p>
                 </div>
 
                 <label className="f9-field is-primary">
-                  <span>Competitor website</span>
+                  <span>{trackingRoleLabel} website</span>
                   <input
+                    aria-invalid={Boolean(data.inputError)}
                     defaultValue={competitorWebsite.raw}
                     name="website"
                     placeholder="https://mamaearth.in"
                     type="text"
                   />
-                  <small>This becomes the saved competitor when you track it.</small>
+                  <small>
+                    {data.inputError ?? `This becomes the saved ${targetNoun} when you track it.`}
+                  </small>
                 </label>
+
+                <div className="f9-mode-toggle" aria-label="Track as">
+                  <label className={trackingRole === "competitor" ? "is-active" : ""}>
+                    <input
+                      defaultChecked={trackingRole === "competitor"}
+                      name="trackingRole"
+                      type="radio"
+                      value="competitor"
+                    />
+                    Competitor
+                  </label>
+                  <label className={trackingRole === "self" ? "is-active" : ""}>
+                    <input
+                      defaultChecked={trackingRole === "self"}
+                      name="trackingRole"
+                      type="radio"
+                      value="self"
+                    />
+                    My brand
+                  </label>
+                </div>
 
                 <div className="f9-mode-toggle">
                   <label className={data.mode === "advertiser" ? "is-active" : ""}>
@@ -578,6 +670,7 @@ export default function SearchRoute() {
                         competitorWebsite={competitorWebsite.raw}
                         filters={data.filters}
                         mode={data.mode}
+                        trackingRole={trackingRole}
                       />
                       <input name="name" placeholder="Save this search as..." required />
                       <SubmitButton className="f9-secondary-button" intent="save-query" pendingLabel="Saving…">
@@ -591,6 +684,7 @@ export default function SearchRoute() {
                         competitorWebsite={competitorWebsite.raw}
                         filters={data.filters}
                         mode={data.mode}
+                        trackingRole={trackingRole}
                       />
                       <input
                         defaultValue={`${inferredWatchlistName} watch`}
@@ -598,7 +692,7 @@ export default function SearchRoute() {
                         placeholder="Watchlist name"
                       />
                       <SubmitButton className="f9-primary-button" intent="create-watchlist" pendingLabel="Creating…">
-                        Track this competitor
+                        Track this {targetNoun}
                       </SubmitButton>
                     </Form>
                   </div>
@@ -631,12 +725,13 @@ export default function SearchRoute() {
                   <Link
                     className="f9-secondary-button"
                     to={`/search?${appendCursor(
-                      withCompetitorWebsite(
+                      withTrackingContext(
                         buildSearchParams({
                           mode: data.mode,
                           filters: data.filters,
                         }),
                         competitorWebsite.raw,
+                        trackingRole,
                       ),
                       data.result.nextCursor,
                       data.selectedAd?.metaAdId ?? null,
@@ -654,12 +749,13 @@ export default function SearchRoute() {
                       className={`f9-result-card ${data.selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
                       key={ad.metaAdId}
                       to={`/search?${withSelected(
-                        withCompetitorWebsite(
+                        withTrackingContext(
                           buildSearchParams({
                             mode: data.mode,
                             filters: data.filters,
                           }),
                           competitorWebsite.raw,
+                          trackingRole,
                         ),
                         ad.metaAdId,
                       ).toString()}`}
@@ -865,14 +961,17 @@ function SearchStateFields({
   competitorWebsite = "",
   mode,
   filters,
+  trackingRole,
 }: {
   competitorWebsite?: string;
   mode: "advertiser" | "keyword";
   filters: SearchFilters;
+  trackingRole: WatchlistTrackingRole;
 }) {
   return (
     <>
       <input name="competitorWebsite" type="hidden" value={competitorWebsite} />
+      <input name="trackingRole" type="hidden" value={trackingRole} />
       <input name="mode" type="hidden" value={mode} />
       <input name="query" type="hidden" value={filters.query} />
       <input name="country" type="hidden" value={filters.country} />
@@ -1093,5 +1192,15 @@ function withCompetitorWebsite(params: URLSearchParams, website: string) {
   if (website.trim()) {
     next.set("website", website.trim());
   }
+  return next;
+}
+
+function withTrackingContext(
+  params: URLSearchParams,
+  website: string,
+  trackingRole: WatchlistTrackingRole,
+) {
+  const next = withCompetitorWebsite(params, website);
+  next.set("trackingRole", trackingRole);
   return next;
 }
