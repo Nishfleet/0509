@@ -9,12 +9,28 @@ function createContext(env = {}) {
 }
 
 function createCanaryDb() {
+  const cleanedPlanPaymentIds = new Set<string>();
+  const cleanedCreditPaymentIds = new Set<string>();
+  const restoredWatchlistIds = new Set<string>();
+
   return {
+    cleanedPlanPaymentIds,
+    cleanedCreditPaymentIds,
+    restoredWatchlistIds,
     prepare(sql: string) {
       return {
         bind(...bindings: unknown[]) {
           return {
             async run() {
+              if (sql.includes("UPDATE user_plan") && sql.includes("dodo_payment_id = ?")) {
+                cleanedPlanPaymentIds.add(String(bindings.at(-1)));
+              }
+              if (sql.includes("DELETE FROM proof_usage_credit")) {
+                cleanedCreditPaymentIds.add(String(bindings[1]));
+              }
+              if (sql.includes("UPDATE watchlist") && sql.includes("paused_reason = ?")) {
+                restoredWatchlistIds.add(String(bindings[4]));
+              }
               return { success: true };
             },
             async all<T>() {
@@ -31,12 +47,53 @@ function createCanaryDb() {
                 };
               }
 
-              if (sql.includes("FROM user_plan") && sql.includes("dodo_payment_id")) {
+              if (sql.includes("FROM watchlist")) {
                 return {
                   results: [
                     {
+                      id: "watchlist-1",
+                      is_active: 0,
+                      paused_reason: "plan_limit",
+                      updated_at: "2026-06-01T00:00:00.000Z",
+                    },
+                  ] as T[],
+                };
+              }
+
+              if (sql.includes("FROM user_plan") && sql.includes("LIMIT 1")) {
+                if (sql.includes("AND dodo_payment_id = ?")) {
+                  if (cleanedPlanPaymentIds.has(String(bindings[1]))) {
+                    return { results: [] as T[] };
+                  }
+
+                  return {
+                    results: [
+                      {
+                        plan: "starter",
+                        dodo_payment_id: bindings[1],
+                      },
+                    ] as T[],
+                  };
+                }
+
+                return {
+                  results: [
+                    {
+                      user_id: "user-1",
                       plan: "starter",
-                      dodo_payment_id: bindings[1],
+                      stripe_customer_id: null,
+                      stripe_subscription_id: null,
+                      plan_updated_at: "2026-06-01T00:00:00.000Z",
+                      razorpay_customer_id: null,
+                      razorpay_subscription_id: null,
+                      razorpay_plan_id: null,
+                      razorpay_status: null,
+                      dodo_payment_id: "real-payment-1",
+                      dodo_product_id: "real-product-1",
+                      dodo_status: "payment.succeeded",
+                      dodo_subscription_id: "real-subscription-1",
+                      dodo_customer_id: "real-customer-1",
+                      dodo_next_billing_at: "2026-07-01T00:00:00.000Z",
                     },
                   ] as T[],
                 };
@@ -152,8 +209,9 @@ describe("Dodo billing canary route", () => {
 
       return Response.json({ ok: true });
     });
+    const env = createEnv();
     vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => createEnv()),
+      getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/routes/api.webhooks.dodo", () => ({
       action: webhookAction,
@@ -179,11 +237,15 @@ describe("Dodo billing canary route", () => {
       },
       grants: {
         paidPlanUnlocked: true,
+        planCleanupOk: true,
+        watchlistCleanupOk: true,
         proofCreditsGranted: true,
         proofCreditCleanupOk: true,
         credits: 500,
       },
     });
+    expect(env.DB.cleanedCreditPaymentIds.size).toBe(1);
+    expect(env.DB.restoredWatchlistIds.has("watchlist-1")).toBe(true);
     expect(webhookAction).toHaveBeenCalledTimes(2);
     const paymentIds = webhookPayloads.map((payload) => payload.payment_id).sort();
     expect(paymentIds).toHaveLength(2);

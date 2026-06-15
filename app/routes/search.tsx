@@ -671,7 +671,7 @@ export default function SearchRoute() {
                           <h3>{ad.previewHeadline}</h3>
                           <AdLongevityPill ad={ad} />
                         </div>
-                        <p>{ad.hook}</p>
+                        <p>{formatResultCardSummary(ad)}</p>
                         <small>
                           {ad.offer} · {ad.destinationType} · {ad.languageLabel}
                         </small>
@@ -710,7 +710,7 @@ export default function SearchRoute() {
                       <AdThumb ad={data.selectedAd} />
                       <div>
                         <h3>{data.selectedAd.previewHeadline}</h3>
-                        <p>{data.selectedAd.body}</p>
+                        <p>{formatAdDetailBody(data.selectedAd)}</p>
                       </div>
                     </div>
                   </div>
@@ -901,6 +901,72 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function formatResultCardSummary(
+  ad: Pick<AdRecord, "advertiser" | "body" | "hook" | "offer" | "previewHeadline" | "previewSubhead">,
+) {
+  return (
+    firstDistinctDisplayText(
+      [ad.hook, ad.body, ad.previewSubhead, ad.offer],
+      [ad.previewHeadline, ad.advertiser],
+    ) ?? ad.offer
+  );
+}
+
+function formatAdDetailBody(ad: Pick<AdRecord, "body" | "hook" | "previewHeadline" | "previewSubhead">) {
+  return (
+    firstDistinctDisplayText(
+      [ad.body, ad.hook, ad.previewSubhead],
+      [ad.previewHeadline],
+    ) ?? ad.previewHeadline
+  );
+}
+
+function firstDistinctDisplayText(
+  candidates: Array<string | null | undefined>,
+  existing: Array<string | null | undefined>,
+) {
+  const seen = new Set(existing.map(normalizeDisplayText).filter(Boolean));
+
+  for (const candidate of candidates) {
+    const cleaned = cleanDisplayText(candidate);
+    const normalized = normalizeDisplayText(cleaned);
+    if (!cleaned || !normalized || seen.has(normalized)) {
+      continue;
+    }
+    return cleaned;
+  }
+
+  return null;
+}
+
+function cleanDisplayText(value: string | null | undefined) {
+  const lines = String(value ?? "")
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const line of lines) {
+    const normalized = normalizeDisplayText(line);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    unique.push(line);
+  }
+
+  return unique.join("\n");
+}
+
+function normalizeDisplayText(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function formatSearchSourceLabel(result: SearchResponse) {

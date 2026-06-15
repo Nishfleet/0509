@@ -22,6 +22,31 @@ interface CreditGrantRow {
   provider_payment_id: string;
 }
 
+interface UserPlanSnapshot {
+  user_id: string;
+  plan: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan_updated_at: string;
+  razorpay_customer_id: string | null;
+  razorpay_subscription_id: string | null;
+  razorpay_plan_id: string | null;
+  razorpay_status: string | null;
+  dodo_payment_id: string | null;
+  dodo_product_id: string | null;
+  dodo_status: string | null;
+  dodo_subscription_id: string | null;
+  dodo_customer_id: string | null;
+  dodo_next_billing_at: string | null;
+}
+
+interface WatchlistStateSnapshot {
+  id: string;
+  is_active: number;
+  paused_reason: string | null;
+  updated_at: string;
+}
+
 export function loader(_args: LoaderFunctionArgs) {
   return Response.json(
     { error: "Method not allowed. Use POST." },
@@ -71,6 +96,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (!user) {
     return canaryFailure("missing_canary_user");
   }
+  const userPlanSnapshot = await getUserPlanSnapshot(env, user.id);
+  const watchlistStateSnapshot = await getWatchlistStateSnapshot(env, user.id);
 
   const plan = planForCanary(user.plan);
   const planProductId = dodo0509ProductIds(env)[plan].monthly;
@@ -154,15 +181,24 @@ export async function action({ context, request }: ActionFunctionArgs) {
     getCreditGrant(env, user.id, creditPaymentId),
   ]);
   const paidPlanUnlocked = planWebhook.ok && planGrant?.plan === plan;
-	  const proofCreditsGranted =
-	    creditWebhook.ok &&
-	    creditGrant?.provider_payment_id === creditPaymentId &&
-	    Number(creditGrant.credits) === creditCount &&
-	    isCurrentActiveCreditGrant(creditGrant, nowIso);
-	  const creditCleanupOk = creditGrant
-	    ? await cleanupCanaryCreditGrant(env, user.id, creditPaymentId)
-	    : false;
-	  const ok = paidPlanUnlocked && proofCreditsGranted && creditCleanupOk;
+  const proofCreditsGranted =
+    creditWebhook.ok &&
+    creditGrant?.provider_payment_id === creditPaymentId &&
+    Number(creditGrant.credits) === creditCount &&
+    isCurrentActiveCreditGrant(creditGrant, nowIso);
+  const [planCleanupOk, creditCleanupOk] = await Promise.all([
+    planGrant
+      ? cleanupCanaryPlanGrant(
+          env,
+          user.id,
+          planPaymentId,
+          userPlanSnapshot,
+          watchlistStateSnapshot,
+        )
+      : Promise.resolve(false),
+    creditGrant ? cleanupCanaryCreditGrant(env, user.id, creditPaymentId) : Promise.resolve(false),
+  ]);
+  const ok = paidPlanUnlocked && proofCreditsGranted && planCleanupOk && creditCleanupOk;
 
   return Response.json(
     {
@@ -177,10 +213,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
       },
       grants: {
         paidPlanUnlocked,
-	        proofCreditsGranted,
-	        proofCreditCleanupOk: creditCleanupOk,
-	        credits: creditGrant?.credits ?? 0,
-	      },
+        planCleanupOk,
+        watchlistCleanupOk: planCleanupOk,
+        proofCreditsGranted,
+        proofCreditCleanupOk: creditCleanupOk,
+        credits: creditGrant?.credits ?? 0,
+      },
     },
     {
       status: ok ? 200 : 503,
@@ -276,6 +314,131 @@ async function getCreditGrant(env: AppEnv, userId: string, providerPaymentId: st
     `).bind(userId, providerPaymentId).all<CreditGrantRow>();
 
   return result?.results?.[0] ?? null;
+}
+
+async function getUserPlanSnapshot(env: AppEnv, userId: string) {
+  const result = await env.DB?.prepare(`
+      SELECT
+        user_id,
+        plan,
+        stripe_customer_id,
+        stripe_subscription_id,
+        plan_updated_at,
+        razorpay_customer_id,
+        razorpay_subscription_id,
+        razorpay_plan_id,
+        razorpay_status,
+        dodo_payment_id,
+        dodo_product_id,
+        dodo_status,
+        dodo_subscription_id,
+        dodo_customer_id,
+        dodo_next_billing_at
+      FROM user_plan
+      WHERE user_id = ?
+      LIMIT 1
+    `).bind(userId).all<UserPlanSnapshot>();
+
+  return result?.results?.[0] ?? null;
+}
+
+async function getWatchlistStateSnapshot(env: AppEnv, userId: string) {
+  const result = await env.DB?.prepare(`
+      SELECT id, is_active, paused_reason, updated_at
+      FROM watchlist
+      WHERE user_id = ?
+    `).bind(userId).all<WatchlistStateSnapshot>();
+
+  return result?.results ?? [];
+}
+
+async function cleanupCanaryPlanGrant(
+  env: AppEnv,
+  userId: string,
+  providerPaymentId: string,
+  snapshot: UserPlanSnapshot | null,
+  watchlists: WatchlistStateSnapshot[],
+) {
+  try {
+    if (snapshot) {
+      await env.DB?.prepare(`
+          UPDATE user_plan
+          SET plan = ?,
+              stripe_customer_id = ?,
+              stripe_subscription_id = ?,
+              plan_updated_at = ?,
+              razorpay_customer_id = ?,
+              razorpay_subscription_id = ?,
+              razorpay_plan_id = ?,
+              razorpay_status = ?,
+              dodo_payment_id = ?,
+              dodo_product_id = ?,
+              dodo_status = ?,
+              dodo_subscription_id = ?,
+              dodo_customer_id = ?,
+              dodo_next_billing_at = ?
+          WHERE user_id = ?
+            AND dodo_payment_id = ?
+        `).bind(
+          snapshot.plan,
+          snapshot.stripe_customer_id,
+          snapshot.stripe_subscription_id,
+          snapshot.plan_updated_at,
+          snapshot.razorpay_customer_id,
+          snapshot.razorpay_subscription_id,
+          snapshot.razorpay_plan_id,
+          snapshot.razorpay_status,
+          snapshot.dodo_payment_id,
+          snapshot.dodo_product_id,
+          snapshot.dodo_status,
+          snapshot.dodo_subscription_id,
+          snapshot.dodo_customer_id,
+          snapshot.dodo_next_billing_at,
+          userId,
+          providerPaymentId,
+        ).run();
+    } else {
+      await env.DB?.prepare(`
+          DELETE FROM user_plan
+          WHERE user_id = ?
+            AND dodo_payment_id = ?
+        `).bind(userId, providerPaymentId).run();
+    }
+
+    const syntheticGrant = await getPlanGrant(env, userId, providerPaymentId);
+    const watchlistsRestored = await restoreWatchlistStateSnapshot(env, userId, watchlists);
+    return !syntheticGrant && watchlistsRestored;
+  } catch {
+    return false;
+  }
+}
+
+async function restoreWatchlistStateSnapshot(
+  env: AppEnv,
+  userId: string,
+  watchlists: WatchlistStateSnapshot[],
+) {
+  try {
+    for (const watchlist of watchlists) {
+      await env.DB?.prepare(`
+          UPDATE watchlist
+          SET is_active = ?,
+              paused_reason = ?,
+              updated_at = ?
+          WHERE user_id = ?
+            AND id = ?
+        `).bind(
+          watchlist.is_active,
+          watchlist.paused_reason,
+          watchlist.updated_at,
+          userId,
+          watchlist.id,
+        ).run();
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function cleanupCanaryCreditGrant(env: AppEnv, userId: string, providerPaymentId: string) {

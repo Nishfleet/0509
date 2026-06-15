@@ -497,6 +497,8 @@ describe("searchMetaLibraryByBrowser", () => {
                         Sponsored
                         For the Man Who Never Settles For Less
                         Flat ₹400 Off on Your First Order
+                        For the Man Who Never Settles For Less
+                        Flat ₹400 Off on Your First Order
                         NYKAAMAN.COM
                         Shop Now
                       </main>
@@ -533,6 +535,8 @@ describe("searchMetaLibraryByBrowser", () => {
         expect.objectContaining({
           metaAdId: "1280520150312258",
           advertiser: "Nykaa Man",
+          body:
+            "For the Man Who Never Settles For Less\nFlat ₹400 Off on Your First Order\nNYKAAMAN.COM\nShop Now",
           previewHeadline: "For the Man Who Never Settles For Less",
           cta: "Shop Now",
           adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1280520150312258",
