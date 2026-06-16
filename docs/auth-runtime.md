@@ -1,20 +1,44 @@
 # Auth Runtime
 
-Last checked: 2026-05-13
+Last checked: 2026-06-16
 
 ## Decision
 
-Keep Five to Nine on Better Auth with Cloudflare D1 for launch and pilots.
+Use Stytch B2B for Five to Nine auth.
 
-Do not migrate to Stytch for this launch-readiness slice.
+Keep Cloudflare D1 as the app data store. Do not move product data, billing links, watchlists, digests, collections, customer API keys, or delivery targets into Stytch.
 
 ## Current Active Runtime
 
 - Active app code lives in `app/` and `workers/`.
-- Auth is implemented with `better-auth`.
-- User, session, plan, onboarding, workspace, and product data are stored in Cloudflare D1.
-- `BETTER_AUTH_SECRET` is the required production auth secret.
-- The `/api/auth/*` route is handled by Better Auth.
+- Auth is implemented through Stytch B2B discovery magic links and organization member sessions.
+- The app stores the opaque Stytch session token in an HTTP-only `f9_stytch_session` cookie.
+- Magic-link requests are stored in D1 with one-time state. Same-browser callbacks can complete directly; cross-browser callbacks require an explicit confirmation click before a session cookie is set.
+- On each protected request, `app/lib/auth.server.ts` authenticates the Stytch session and maps the Stytch member/org to the app-owned D1 `user.id`.
+- `migrations/0031_stytch_identity.sql` stores the local `user_id` to Stytch organization/member mapping plus short-lived auth request state.
+- Existing app-owned user IDs remain the owner key for Dodo billing, watchlists, digests, collections, delivery settings, and API keys.
+
+## Current B2B Scope
+
+The current app data model is still keyed by local `user.id`, not by a separate organization/workspace table. Because of that, this runtime supports one Stytch organization per email address. If Stytch discovery returns multiple organizations for one email, the app blocks sign-in and asks for support routing instead of risking cross-workspace data mixing.
+
+Team invite links are supported by allowing the invitee's Stytch login flow to create a Stytch organization when no organization is discovered, then returning the user to `/team/accept`.
+
+Do not enable Stytch settings that require an extra auth step, such as MFA-required flows or SSO-only primary authentication, until Five to Nine has a follow-up flow for those requirements. The app blocks those responses with an `unsupported_policy` auth error instead of silently failing.
+
+## Required Runtime Values
+
+- `APP_ORIGIN`
+- `AUTH_PROVIDER=stytch`
+- `STYTCH_API_BASE_URL`
+- `STYTCH_PROJECT_ID`
+- `STYTCH_SECRET`
+- `STYTCH_SESSION_DURATION_MINUTES` optional, defaults to 30 days
+- `UNSUBSCRIBE_SIGNING_SECRET` for signed unsubscribe links. `BETTER_AUTH_SECRET` remains a legacy fallback only during migration.
+
+## Cost Guardrail
+
+Use Stytch B2B within the included/free setup first. Do not enable paid custom branding, fraud add-ons, or extra paid SSO/SCIM connections without an explicit product/cost decision.
 
 ## Supabase Status
 
@@ -22,19 +46,10 @@ Supabase appears only in `legacy/`, which is the old Next.js prototype reference
 
 Supabase is not part of the active Cloudflare Worker runtime. Do not move legacy Supabase code forward unless a future task explicitly migrates a specific useful idea into the active D1 model.
 
-## Stytch Status
+## Better Auth Status
 
-Stytch is a deferred option, not a current dependency.
-
-Consider Stytch later if Five to Nine needs:
-
-- B2B organizations as a first-class auth model
-- SSO or SCIM
-- enterprise RBAC/admin portals
-- outsourced auth migration support
-
-Until then, Stytch would add migration cost without solving the current launch blocker: fresh commercial discovery.
+Better Auth is no longer the active auth provider and is not an app dependency. The old `user`, `session`, `account`, and `verification` tables remain historical schema; the app still uses the `user` table as its local product-data owner record.
 
 ## Guardrail
 
-`tests/auth-runtime.test.ts` checks that active runtime files do not import Supabase or Stytch and that package dependencies stay on Better Auth without active Supabase/Stytch packages.
+`tests/auth-runtime.test.ts` checks that active runtime files use Stytch and do not import Better Auth or Supabase.

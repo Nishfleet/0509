@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
-    "better-auth": "^1.5.6",
     "isbot": "^5.1.36",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
