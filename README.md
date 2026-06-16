@@ -77,6 +77,7 @@ Important bindings and secrets:
 - `STYTCH_API_BASE_URL`
 - `STYTCH_PROJECT_ID`
 - `STYTCH_PUBLIC_TOKEN` for Google/Microsoft Stytch B2B OAuth discovery starts; keep it in runtime config/secrets, not client code or repo vars
+- `STYTCH_OAUTH_PROVIDERS_ENABLED=true` only after Google and Microsoft provider configs are live in Stytch and verified against the provider redirects
 - `STYTCH_SECRET`
 - `STYTCH_SESSION_DURATION_MINUTES` (optional)
 - `UNSUBSCRIBE_SIGNING_SECRET`
@@ -117,7 +118,7 @@ Important bindings and secrets:
 - For the current Cloudflare Worker app, use `.dev.vars` for local secrets. A starter template now lives at `.dev.vars.example`.
 - Supabase is legacy-only under `legacy/`; it is not part of the active `app/` or `workers/` runtime.
 - Stytch B2B is the active auth provider. D1 remains the source of truth for product data, billing linkage, watchlists, digests, collections, and customer API keys.
-- Auth UI stays intentionally small: email link primary, plus Google and Microsoft only when `STYTCH_PUBLIC_TOKEN` is configured. OAuth PKCE verifier/state cookies are HTTP-only, email-link confirmation happens before token exchange, and callback tokens are never rendered into HTML.
+- Auth UI stays intentionally small: email link primary, plus Google and Microsoft only when `STYTCH_PUBLIC_TOKEN` is configured and `STYTCH_OAUTH_PROVIDERS_ENABLED=true`. OAuth PKCE verifier/state cookies are HTTP-only, email-link confirmation happens before token exchange, and callback tokens are never rendered into HTML.
 - Current B2B scope is one Stytch organization per email because the product data model is still keyed by local `user.id`. Multi-organization Stytch discovery is blocked until account data is organization-scoped.
 - `.env.local` and `.env.local.example` are legacy Next.js env files for the old `src/` runtime and should not be treated as the source of truth for the Worker app.
 - Meta ads tracking is a beta feature until the production canary proves fresh discovery, proof capture, and digest delivery are reliable.

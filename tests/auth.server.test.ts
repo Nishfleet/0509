@@ -10,6 +10,7 @@ import {
   isSameOriginAuthFormPost,
   isSameBrowserAuthRequest,
   isStytchConfigured,
+  isStytchOAuthConfigured,
   readStytchPkceVerifier,
   sendDiscoveryEmail,
   stytchConfirmationCookie,
@@ -540,6 +541,23 @@ describe("Stytch auth boundary", () => {
     expect(redirectUrl.search).toBe("");
   });
 
+  it("keeps Stytch OAuth disabled until provider configs are verified", () => {
+    const baseEnv = {
+      APP_ORIGIN: "https://0509.io",
+      STYTCH_PROJECT_ID: "project-test",
+      STYTCH_PUBLIC_TOKEN: "public-token-test",
+      STYTCH_SECRET: "secret-test",
+    };
+
+    expect(isStytchOAuthConfigured(baseEnv)).toBe(false);
+    expect(
+      isStytchOAuthConfigured({
+        ...baseEnv,
+        STYTCH_OAUTH_PROVIDERS_ENABLED: "true",
+      }),
+    ).toBe(true);
+  });
+
   it("starts Stytch OAuth from a same-origin server action with HTTP-only verifier cookies", async () => {
     const statements: string[] = [];
     const db = {
@@ -563,6 +581,7 @@ describe("Stytch auth boundary", () => {
           cloudflare: {
             env: {
               ...stytchActionTestEnv(db),
+              STYTCH_OAUTH_PROVIDERS_ENABLED: "true",
               STYTCH_PUBLIC_TOKEN: "public-token-test",
             },
           },
