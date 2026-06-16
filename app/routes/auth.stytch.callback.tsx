@@ -14,6 +14,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getLiveStytchAuthRequest,
     isSameBrowserAuthRequest,
     prepareStytchPendingCallbackConfirmation,
+    readStytchAuthRequestState,
     readStytchPkceVerifier,
     stytchConfirmationCookie,
     stytchAuthFailurePath,
@@ -22,27 +23,29 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const token =
     url.searchParams.get("token") ??
-    url.searchParams.get("discovery_magic_links_token") ??
-    url.searchParams.get("stytch_token") ??
-    "";
+      url.searchParams.get("discovery_magic_links_token") ??
+      url.searchParams.get("stytch_token") ??
+      "";
   const authMethod = callbackAuthMethod(url.searchParams);
-  const mode: CallbackMode = url.searchParams.get("mode") === "signup" ? "signup" : "login";
-  const pkceRequired = url.searchParams.get("pkce") === "1";
-  const state = url.searchParams.get("state") ?? "";
+  const requestedMode: CallbackMode = url.searchParams.get("mode") === "signup" ? "signup" : "login";
+  const state = url.searchParams.get("state") ?? readStytchAuthRequestState(request) ?? "";
 
   if (!token || !state) {
-    throw redirect(stytchAuthFailurePath(mode));
+    throw redirect(stytchAuthFailurePath(requestedMode));
   }
 
   const authRequest = await getLiveStytchAuthRequest(env, state);
-  if (!authRequest || authRequest.mode !== mode) {
-    throw redirect(stytchAuthFailurePath(mode));
+  if (!authRequest) {
+    throw redirect(stytchAuthFailurePath(requestedMode));
+  }
+  if (authRequest.authMethod !== authMethod) {
+    throw redirect(stytchAuthFailurePath(authRequest.mode));
   }
 
   const pkceCodeVerifier = readStytchPkceVerifier(request, authRequest.state);
   const sameBrowser = isSameBrowserAuthRequest(request, authRequest.state);
-  if (pkceRequired && (!sameBrowser || !pkceCodeVerifier)) {
-    throw redirect(stytchAuthFailurePath(mode));
+  if (authMethod === "oauth" && (!sameBrowser || !pkceCodeVerifier)) {
+    throw redirect(stytchAuthFailurePath(authRequest.mode));
   }
 
   if (authMethod === "magic_link") {
@@ -67,7 +70,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     authMethod,
     autoComplete: sameBrowser,
     env,
-    mode,
+    mode: authRequest.mode,
     pkceCodeVerifier,
     request,
     token,
@@ -101,9 +104,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (!authRequest || authRequest.mode !== mode) {
     throw redirect(stytchAuthFailurePath(mode));
   }
+  if (authRequest.authMethod !== authMethod) {
+    throw redirect(stytchAuthFailurePath(authRequest.mode));
+  }
   const { readStytchPkceVerifier } = await import("~/lib/stytch-b2b.server");
   const pkceCodeVerifier = readStytchPkceVerifier(request, authRequest.state);
-  if (pkceRequired && !pkceCodeVerifier) {
+  if ((pkceRequired || authMethod === "oauth") && !pkceCodeVerifier) {
     throw redirect(stytchAuthFailurePath(mode));
   }
 

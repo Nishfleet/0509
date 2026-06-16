@@ -423,9 +423,7 @@ describe("Stytch auth boundary", () => {
 
     const redirectUrl = new URL(String(sentBodies[0]?.discovery_redirect_url ?? ""));
     expect(redirectUrl.pathname).toBe("/auth/stytch/callback");
-    expect(redirectUrl.searchParams.get("mode")).toBe("login");
-    expect(redirectUrl.searchParams.get("state")).toBe("state-123");
-    expect(redirectUrl.searchParams.has("redirectTo")).toBe(false);
+    expect(redirectUrl.search).toBe("");
   });
 
   it("can add PKCE to Stytch magic links without exposing the verifier", async () => {
@@ -455,7 +453,7 @@ describe("Stytch auth boundary", () => {
     );
 
     const redirectUrl = new URL(String(sentBodies[0]?.discovery_redirect_url ?? ""));
-    expect(redirectUrl.searchParams.get("pkce")).toBe("1");
+    expect(redirectUrl.search).toBe("");
     expect(sentBodies[0]?.pkce_code_challenge).toBe(pkce.challenge);
     expect(JSON.stringify(sentBodies[0])).not.toContain(pkce.verifier);
   });
@@ -539,10 +537,7 @@ describe("Stytch auth boundary", () => {
     const redirectUrl = new URL(String(url.searchParams.get("discovery_redirect_url")));
     expect(redirectUrl.origin).toBe("https://0509.io");
     expect(redirectUrl.pathname).toBe("/auth/stytch/callback");
-    expect(redirectUrl.searchParams.get("method")).toBe("oauth");
-    expect(redirectUrl.searchParams.get("provider")).toBe("google");
-    expect(redirectUrl.searchParams.get("pkce")).toBe("1");
-    expect(redirectUrl.searchParams.get("state")).toBe("state-123");
+    expect(redirectUrl.search).toBe("");
   });
 
   it("starts Stytch OAuth from a same-origin server action with HTTP-only verifier cookies", async () => {
@@ -595,6 +590,8 @@ describe("Stytch auth boundary", () => {
       expect(location.searchParams.has("pkce_code_challenge")).toBe(true);
       const redirectUrl = new URL(String(location.searchParams.get("discovery_redirect_url")));
       expect(redirectUrl.origin).toBe("https://preview.0509.dev");
+      expect(redirectUrl.pathname).toBe("/auth/stytch/callback");
+      expect(redirectUrl.search).toBe("");
       expect(response.headers.get("Set-Cookie")).toContain("f9_stytch_state=");
       expect(response.headers.get("Set-Cookie")).toContain("f9_stytch_pkce=");
       expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
@@ -706,6 +703,7 @@ describe("Stytch auth boundary", () => {
                 expect(sql).toContain("FROM stytch_auth_request");
                 return {
                   state: "state-1",
+                  auth_method: "oauth",
                   email: "asha@agency.com",
                   mode: "login",
                   name: null,
@@ -732,7 +730,7 @@ describe("Stytch auth boundary", () => {
         },
         params: {},
         request: new Request(
-          "https://0509.io/auth/stytch/callback?mode=login&pkce=1&state=state-1&token=token-1",
+          "https://0509.io/auth/stytch/callback?stytch_token_type=discovery_oauth&token=token-1",
           {
             headers: { cookie: "f9_stytch_state=state-1" },
           },
@@ -747,20 +745,21 @@ describe("Stytch auth boundary", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("does not authenticate cross-browser magic-link GETs before confirmation", async () => {
+  it("rejects magic-link callbacks for pending OAuth requests before storing tokens", async () => {
     const fetchSpy = vi.fn();
-    const updates: Array<{ sql: string; bindings: unknown[] }> = [];
+    const updates: string[] = [];
     vi.stubGlobal("fetch", fetchSpy);
     const db = {
       prepare(sql: string) {
         return {
-          bind(...bindings: unknown[]) {
+          bind() {
             return {
               async first<T>() {
                 expect(sql).toContain("FROM stytch_auth_request");
                 return {
                   state: "state-1",
-                  email: "asha@agency.com",
+                  auth_method: "oauth",
+                  email: "",
                   mode: "login",
                   name: null,
                   organization_name: null,
@@ -772,7 +771,7 @@ describe("Stytch auth boundary", () => {
                 } as T;
               },
               async run() {
-                updates.push({ sql, bindings });
+                updates.push(sql);
                 return {};
               },
             };
@@ -790,21 +789,49 @@ describe("Stytch auth boundary", () => {
         },
         params: {},
         request: new Request(
-          "https://0509.io/auth/stytch/callback?mode=login&state=state-1&discovery_magic_links_token=token-1",
+          "https://0509.io/auth/stytch/callback?discovery_magic_links_token=token-1",
+          {
+            headers: { cookie: "f9_stytch_state=state-1" },
+          },
         ),
       } as never);
-      throw new Error("Expected cross-browser callback to redirect to confirmation.");
+      throw new Error("Expected mismatched callback method to fail closed.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      expect((error as Response).status).toBe(302);
+      expect((error as Response).headers.get("Location")).toBe("/auth/login?error=callback_failed");
+    }
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(updates).toHaveLength(0);
+  });
+
+  it("rejects cross-browser magic-link GETs before authenticating tokens", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    try {
+      await callbackLoader({
+        context: {
+          cloudflare: {
+            env: stytchActionTestEnv({}),
+          },
+        },
+        params: {},
+        request: new Request(
+          "https://0509.io/auth/stytch/callback?discovery_magic_links_token=token-1",
+        ),
+      } as never);
+      throw new Error("Expected cross-browser callback to fail closed.");
     } catch (error) {
       expect(error).toBeInstanceOf(Response);
       const response = error as Response;
       expect(response.status).toBe(302);
-      expect(response.headers.get("Location")).toBe("/auth/stytch/confirm?state=state-1");
-      expect(response.headers.get("Set-Cookie")).toContain("f9_stytch_confirm=");
-      expect(response.headers.get("Set-Cookie")).not.toContain("token-1");
+      expect(response.headers.get("Location")).toBe("/auth/login?error=callback_failed");
+      expect(response.headers.get("Set-Cookie")).toBeNull();
     }
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(updates.some(({ sql }) => sql.includes("intermediate_session_token = ?"))).toBe(true);
   });
 
   it("does not authenticate same-browser magic-link GETs before confirmation", async () => {
@@ -818,6 +845,7 @@ describe("Stytch auth boundary", () => {
               async first<T>() {
                 return {
                   state: "state-1",
+                  auth_method: "magic_link",
                   email: "asha@agency.com",
                   mode: "login",
                   name: null,
@@ -847,7 +875,7 @@ describe("Stytch auth boundary", () => {
         },
         params: {},
         request: new Request(
-          "https://0509.io/auth/stytch/callback?mode=login&state=state-1&discovery_magic_links_token=token-1",
+          "https://0509.io/auth/stytch/callback?discovery_magic_links_token=token-1",
           {
             headers: { cookie: "f9_stytch_state=state-1" },
           },
@@ -965,6 +993,7 @@ describe("Stytch auth boundary", () => {
                 expect(sql).toContain("FROM stytch_auth_request");
                 return {
                   state: "state-1",
+                  auth_method: "magic_link",
                   email: "asha@agency.com",
                   mode: "login",
                   name: null,
