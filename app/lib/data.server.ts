@@ -1590,6 +1590,274 @@ export async function getUserIdByEmail(env: AppEnv, email: string) {
   return row?.id ?? null;
 }
 
+export async function getStytchSessionByToken(env: AppEnv, sessionToken: string): Promise<AppSession | null> {
+  const tokenHash = await stytchSessionTokenHash(sessionToken);
+  const row = await one<{
+    sessionId: string;
+    sessionUserId: string;
+    expiresAt: string;
+    id: string;
+    email: string;
+    name: string;
+    image: string | null;
+    onboardedAt: string | null;
+  }>(
+    env,
+    `
+      SELECT stytch_session.member_session_id AS sessionId,
+             stytch_session.user_id AS sessionUserId,
+             stytch_session.expires_at AS expiresAt,
+             user.id,
+             user.email,
+             user.name,
+             user.image,
+             user.onboardedAt
+      FROM stytch_session
+      JOIN user ON user.id = stytch_session.user_id
+      WHERE stytch_session.session_token_hash = ?
+        AND stytch_session.expires_at > ?
+      LIMIT 1
+    `,
+    tokenHash,
+    new Date().toISOString(),
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    user: {
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      image: row.image,
+      onboardedAt: row.onboardedAt,
+    },
+    session: {
+      id: row.sessionId,
+      userId: row.sessionUserId,
+      expiresAt: row.expiresAt,
+    },
+  };
+}
+
+export async function storeStytchSession(
+  env: AppEnv,
+  input: {
+    sessionToken: string;
+    userId: string;
+    memberSessionId: string;
+    expiresAt: string;
+  },
+) {
+  const now = new Date().toISOString();
+  await run(
+    env,
+    `
+      INSERT INTO stytch_session (
+        session_token_hash, user_id, member_session_id, expires_at, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(session_token_hash) DO UPDATE SET
+        user_id = excluded.user_id,
+        member_session_id = excluded.member_session_id,
+        expires_at = excluded.expires_at,
+        updated_at = excluded.updated_at
+    `,
+    await stytchSessionTokenHash(input.sessionToken),
+    input.userId,
+    input.memberSessionId,
+    input.expiresAt,
+    now,
+    now,
+  );
+}
+
+export async function deleteStytchSessionByToken(env: AppEnv, sessionToken: string) {
+  await run(
+    env,
+    "DELETE FROM stytch_session WHERE session_token_hash = ?",
+    await stytchSessionTokenHash(sessionToken),
+  );
+}
+
+export async function upsertStytchAuthenticatedUser(
+  env: AppEnv,
+  input: {
+    email: string;
+    name: string | null | undefined;
+    stytchMemberId: string;
+    stytchOrganizationId: string;
+    stytchOrganizationName?: string | null;
+    stytchOrganizationSlug?: string | null;
+  },
+) {
+  const email = input.email.trim().toLowerCase();
+  const name = input.name?.trim() || email.split("@")[0] || "Five to Nine user";
+  const now = new Date().toISOString();
+
+  type StytchUserRow = {
+    id: string;
+    name: string;
+    email: string;
+    image: string | null;
+    onboardedAt: string | null;
+  };
+
+  const existingByIdentity = await one<StytchUserRow>(
+    env,
+    `
+      SELECT user.id, user.name, user.email, user.image, user.onboardedAt
+      FROM stytch_identity
+      JOIN user ON user.id = stytch_identity.user_id
+      WHERE stytch_identity.stytch_organization_id = ?
+        AND stytch_identity.stytch_member_id = ?
+      LIMIT 1
+    `,
+    input.stytchOrganizationId,
+    input.stytchMemberId,
+  );
+  const existingByEmail = await one<StytchUserRow>(
+    env,
+    `
+      SELECT id, name, email, image, onboardedAt
+      FROM user
+      WHERE email = ? COLLATE NOCASE
+      LIMIT 1
+    `,
+    email,
+  );
+  const emailOwnerIsDifferentUser = Boolean(
+    existingByIdentity && existingByEmail && existingByIdentity.id !== existingByEmail.id,
+  );
+  if (emailOwnerIsDifferentUser) {
+    throw new Error("This Stytch email is already linked to another local account.");
+  }
+
+  let shouldReplaceExistingIdentityForEmail = false;
+  if (!existingByIdentity && existingByEmail) {
+    const linkedIdentity = await one<{
+      stytchOrganizationId: string;
+      stytchMemberId: string;
+    }>(
+      env,
+      `
+        SELECT stytch_organization_id AS stytchOrganizationId,
+               stytch_member_id AS stytchMemberId
+        FROM stytch_identity
+        WHERE user_id = ?
+        LIMIT 1
+      `,
+      existingByEmail.id,
+    );
+
+    if (linkedIdentity && linkedIdentity.stytchOrganizationId !== input.stytchOrganizationId) {
+      throw new Error("This email is already linked to another Stytch organization.");
+    }
+    shouldReplaceExistingIdentityForEmail = Boolean(
+      linkedIdentity && linkedIdentity.stytchMemberId !== input.stytchMemberId,
+    );
+  }
+
+  const existing = existingByIdentity ?? existingByEmail;
+
+  const userId = existing?.id ?? crypto.randomUUID();
+  const emailForUser = email;
+  const previousEmail = existing?.email.trim().toLowerCase() ?? null;
+
+  if (existing) {
+    await run(
+      env,
+      `
+        UPDATE user
+        SET email = ?, name = ?, emailVerified = 1, updatedAt = ?
+        WHERE id = ?
+      `,
+      emailForUser,
+      existing.name?.trim() || name,
+      now,
+      userId,
+    );
+    if (previousEmail && previousEmail !== emailForUser) {
+      await migrateAutoProvisionedEmailTargets(env, userId, emailForUser);
+    }
+  } else {
+    await run(
+      env,
+      `
+        INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, onboardedAt)
+        VALUES (?, ?, ?, 1, NULL, ?, ?, NULL)
+      `,
+      userId,
+      name,
+      email,
+      now,
+      now,
+    );
+  }
+
+  if (shouldReplaceExistingIdentityForEmail) {
+    await run(
+      env,
+      `
+        UPDATE stytch_identity
+        SET stytch_member_id = ?,
+            organization_name = ?,
+            organization_slug = ?,
+            updated_at = ?
+        WHERE user_id = ?
+          AND stytch_organization_id = ?
+      `,
+      input.stytchMemberId,
+      input.stytchOrganizationName ?? null,
+      input.stytchOrganizationSlug ?? null,
+      now,
+      userId,
+      input.stytchOrganizationId,
+    );
+  }
+
+  await run(
+    env,
+    `
+      INSERT INTO stytch_identity (
+        user_id, stytch_organization_id, stytch_member_id, organization_name,
+        organization_slug, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(stytch_organization_id, stytch_member_id) DO UPDATE SET
+        user_id = excluded.user_id,
+        organization_name = excluded.organization_name,
+        organization_slug = excluded.organization_slug,
+        updated_at = excluded.updated_at
+    `,
+    userId,
+    input.stytchOrganizationId,
+    input.stytchMemberId,
+    input.stytchOrganizationName ?? null,
+    input.stytchOrganizationSlug ?? null,
+    now,
+    now,
+  );
+
+  return {
+    id: userId,
+    email: emailForUser,
+    name: existing?.name?.trim() || name,
+    image: existing?.image ?? null,
+    onboardedAt: existing?.onboardedAt ?? null,
+  };
+}
+
+async function stytchSessionTokenHash(sessionToken: string) {
+  const tokenBytes = new TextEncoder().encode(`stytch-session:${sessionToken}`);
+  const digest = await crypto.subtle.digest("SHA-256", tokenBytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export interface UserPlanBillingInfo {
   plan: "free" | "scout" | "starter" | "agency";
   dodoStatus: string | null;

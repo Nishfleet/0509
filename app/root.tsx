@@ -24,13 +24,13 @@ export interface RootLoaderData {
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { getOptionalSession } = await import("~/lib/auth.server");
+  const { getCachedOptionalSession } = await import("~/lib/auth.server");
   const cloudflare = context.cloudflare as {
     country?: string | null;
     env: AppEnv;
   };
   const env = cloudflare.env;
-  const session = await getOptionalSession(env, request);
+  const session = await getCachedOptionalSession(env, request);
   const countryCode = cloudflare.country ?? request.headers.get("cf-ipcountry");
 
   return {

@@ -1,140 +1,78 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router";
-
-import { authClient } from "~/lib/auth-client";
+import { Form, Link, useNavigation } from "react-router";
 
 interface AuthFormProps {
   mode: "login" | "signup";
   redirectTo: string;
   initialEmail?: string;
+  message?: string | null;
+  error?: string | null;
 }
 
-export function AuthForm({ mode, redirectTo, initialEmail }: AuthFormProps) {
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState(initialEmail ?? "");
-  const [password, setPassword] = useState("");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+export function AuthForm({ mode, redirectTo, initialEmail, message, error }: AuthFormProps) {
+  const navigation = useNavigation();
   const isSignup = mode === "signup";
+  const pending = navigation.state !== "idle";
   const switchHref = isSignup
     ? `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`
     : `/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`;
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-
-    try {
-      if (isSignup) {
-        const response = await authClient.signUp.email({
-          name: name.trim(),
-          email: email.trim(),
-          password,
-          callbackURL: redirectTo,
-        });
-
-        if (response.error) {
-          throw new Error(response.error.message);
-        }
-      } else {
-        const response = await authClient.signIn.email({
-          email: email.trim(),
-          password,
-          callbackURL: redirectTo,
-        });
-
-        if (response.error) {
-          throw new Error(response.error.message);
-        }
-      }
-
-      navigate(redirectTo, { replace: true });
-    } catch (submissionError) {
-      setError(
-        submissionError instanceof Error
-          ? submissionError.message
-          : "Authentication failed. Please try again.",
-      );
-    } finally {
-      setPending(false);
-    }
-  }
-
   return (
     <div className="f9-auth-card">
-      <span>{isSignup ? "Create your account" : "Welcome back"}</span>
+      <span>{isSignup ? "Create your workspace" : "Welcome back"}</span>
       <h2>
         {isSignup
-          ? "Start tracking competitor offer changes."
-          : "Return to your competitor tracking."}
+          ? "Verify your work email to start."
+          : "Get a secure sign-in link."}
       </h2>
       <p>
         {isSignup
-          ? "Save competitor searches, monitor changes, and keep useful ads and page evidence in one place."
-          : "Pick up your saved competitors, alerts, reports, and shared examples where you left them."}
+          ? "Five to Nine now uses organization-based sign-in. Your first verified login creates the workspace."
+          : "Enter your work email and we'll send a one-time link to your inbox."}
       </p>
 
-      <form className="f9-auth-form" onSubmit={handleSubmit}>
+      <Form className="f9-auth-form" method="post">
+        <input name="redirectTo" type="hidden" value={redirectTo} />
         {isSignup ? (
-          <label className="f9-field">
-            <span>Name</span>
-            <input
-              autoComplete="name"
-              name="name"
-              onChange={(event) => setName(event.currentTarget.value)}
-              placeholder="Your name"
-              required
-              value={name}
-            />
-          </label>
+          <>
+            <label className="f9-field">
+              <span>Name</span>
+              <input autoComplete="name" name="name" placeholder="Your name" required />
+            </label>
+            <label className="f9-field">
+              <span>Company or agency</span>
+              <input
+                autoComplete="organization"
+                name="organizationName"
+                placeholder="Your workspace name"
+                required
+              />
+            </label>
+          </>
         ) : null}
 
         <label className="f9-field">
           <span>Email</span>
           <input
             autoComplete="email"
+            defaultValue={initialEmail ?? ""}
             name="email"
-            onChange={(event) => setEmail(event.currentTarget.value)}
             placeholder="you@agency.com"
             required
             type="email"
-            value={email}
           />
         </label>
 
-        <label className="f9-field">
-          <span>Password</span>
-          <input
-            autoComplete={isSignup ? "new-password" : "current-password"}
-            minLength={8}
-            name="password"
-            onChange={(event) => setPassword(event.currentTarget.value)}
-            placeholder="At least 8 characters"
-            required
-            type="password"
-            value={password}
-          />
-        </label>
-
-        {!isSignup ? (
-          <p className="f9-auth-switch">
-            <Link to="/auth/forgot-password">Forgot your password?</Link>
-          </p>
-        ) : null}
-
+        {message ? <p className="f9-message is-success">{message}</p> : null}
         {error ? <p className="f9-message is-error">{error}</p> : null}
 
         <button className="f9-primary-button" disabled={pending} type="submit">
           {pending
-            ? "Working..."
+            ? "Sending..."
             : isSignup
-              ? "Create account"
-              : "Sign in"}
+              ? "Send setup link"
+              : "Send sign-in link"}
         </button>
-      </form>
+      </Form>
 
       <p className="f9-auth-switch">
         {isSignup ? "Already have an account?" : "Need an account?"}{" "}

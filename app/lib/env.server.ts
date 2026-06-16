@@ -13,6 +13,8 @@ export interface EmailSendingBinding {
 export interface AppEnv {
   AI?: Ai;
   APP_NAME?: string;
+  APP_ORIGIN?: string;
+  AUTH_PROVIDER?: string;
   BETTER_AUTH_SECRET?: string;
   BROWSER?: Fetcher;
   BROWSERLESS_PROOF_ALLOWLIST_ORIGINS?: string;
@@ -58,6 +60,11 @@ export interface AppEnv {
   RAZORPAY_PLAN_STARTER_MONTHLY?: string;
   RAZORPAY_PLAN_STARTER_YEARLY?: string;
   RAZORPAY_WEBHOOK_SECRET?: string;
+  STYTCH_API_BASE_URL?: string;
+  STYTCH_PROJECT_ID?: string;
+  STYTCH_SECRET?: string;
+  STYTCH_SESSION_DURATION_MINUTES?: string;
+  UNSUBSCRIBE_SIGNING_SECRET?: string;
   WHATSAPP_ACCESS_TOKEN?: string;
   WHATSAPP_APP_SECRET?: string;
   WHATSAPP_DELIVERY_ENABLED?: string;
@@ -101,7 +108,11 @@ function forwardedOrigin(request: Request) {
 }
 
 export function appOrigin(env: AppEnv, request: Request) {
-  return env.BETTER_AUTH_URL ?? forwardedOrigin(request) ?? new URL(request.url).origin;
+  return env.APP_ORIGIN ?? env.BETTER_AUTH_URL ?? forwardedOrigin(request) ?? new URL(request.url).origin;
+}
+
+export function isStytchAuthEnabled(env: AppEnv) {
+  return (env.AUTH_PROVIDER ?? "").trim().toLowerCase() === "stytch";
 }
 
 function parseEnvFlag(value: string | undefined) {
