@@ -77,6 +77,7 @@
   // - DODO_PAYMENTS_API_KEY
   // - STYTCH_PROJECT_ID
   // - STYTCH_PUBLIC_TOKEN (runtime-only for Stytch OAuth discovery starts)
+  // - STYTCH_OAUTH_PROVIDERS_ENABLED (set true only after Google/Microsoft provider configs are verified)
   // - STYTCH_SECRET
   // - UNSUBSCRIBE_SIGNING_SECRET
   // - DODO_0509_API_KEY (optional override if 0509 ever needs its own key)

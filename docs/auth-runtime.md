@@ -33,6 +33,7 @@ Do not enable Stytch settings that require an extra auth step, such as MFA-requi
 - `STYTCH_API_BASE_URL`
 - `STYTCH_PROJECT_ID`
 - `STYTCH_PUBLIC_TOKEN` for Google/Microsoft OAuth discovery starts; store as runtime config/secret and do not render it into public HTML or client bundles
+- `STYTCH_OAUTH_PROVIDERS_ENABLED=true` only after Google and Microsoft provider configs are live in Stytch and verified against the provider redirects
 - `STYTCH_SECRET`
 - `STYTCH_SESSION_DURATION_MINUTES` optional, defaults to 30 days
 - `UNSUBSCRIBE_SIGNING_SECRET` for signed unsubscribe links. `BETTER_AUTH_SECRET` remains a legacy fallback only during migration.

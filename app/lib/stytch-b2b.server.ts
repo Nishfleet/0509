@@ -120,7 +120,11 @@ export function isStytchConfigured(env: AppEnv) {
 }
 
 export function isStytchOAuthConfigured(env: AppEnv) {
-  return Boolean(isStytchConfigured(env) && env.STYTCH_PUBLIC_TOKEN?.trim());
+  return Boolean(
+    isStytchConfigured(env) &&
+      env.STYTCH_PUBLIC_TOKEN?.trim() &&
+      stytchEnvFlagEnabled(env.STYTCH_OAUTH_PROVIDERS_ENABLED),
+  );
 }
 
 function stytchConfig(env: AppEnv): StytchConfig {
@@ -886,4 +890,12 @@ function buildCookie(
   }
 
   return parts.join("; ");
+}
+
+function stytchEnvFlagEnabled(value: string | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
