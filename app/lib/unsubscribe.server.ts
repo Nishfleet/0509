@@ -6,8 +6,14 @@ function unsubscribePayload(input: { userId: string; targetId: string }) {
   return `unsubscribe:${input.userId}:${input.targetId}`;
 }
 
-async function importUnsubscribeKey(env: AppEnv) {
-  const secret = env.BETTER_AUTH_SECRET?.trim();
+function unsubscribeSecrets(env: AppEnv) {
+  return [env.UNSUBSCRIBE_SIGNING_SECRET?.trim(), env.BETTER_AUTH_SECRET?.trim()].filter(
+    (secret, index, secrets): secret is string =>
+      Boolean(secret) && secrets.indexOf(secret) === index,
+  );
+}
+
+async function importUnsubscribeKey(secret: string | undefined) {
   if (!secret) {
     return null;
   }
@@ -25,7 +31,7 @@ export async function buildUnsubscribeSignature(
   env: AppEnv,
   input: { userId: string; targetId: string },
 ) {
-  const key = await importUnsubscribeKey(env);
+  const key = await importUnsubscribeKey(unsubscribeSecrets(env)[0]);
   if (!key) {
     return null;
   }
@@ -42,8 +48,8 @@ export async function verifyUnsubscribeSignature(
   env: AppEnv,
   input: { userId: string; targetId: string; signature: string },
 ) {
-  const key = await importUnsubscribeKey(env);
-  if (!key) {
+  const secrets = unsubscribeSecrets(env);
+  if (secrets.length === 0) {
     return false;
   }
 
@@ -55,19 +61,29 @@ export async function verifyUnsubscribeSignature(
   const signatureBytes = new Uint8Array(
     normalized.match(/.{2}/g)!.map((pair) => Number.parseInt(pair, 16)),
   );
-  return crypto.subtle.verify(
-    "HMAC",
-    key,
-    signatureBytes,
-    encoder.encode(unsubscribePayload(input)),
-  );
+  for (const secret of secrets) {
+    const key = await importUnsubscribeKey(secret);
+    if (
+      key &&
+      (await crypto.subtle.verify(
+        "HMAC",
+        key,
+        signatureBytes,
+        encoder.encode(unsubscribePayload(input)),
+      ))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export async function buildUnsubscribeUrl(
   env: AppEnv,
   input: { userId: string; targetId: string },
 ) {
-  const baseUrl = env.BETTER_AUTH_URL?.trim();
+  const baseUrl = env.APP_ORIGIN?.trim() || env.BETTER_AUTH_URL?.trim();
   if (!baseUrl) {
     return null;
   }

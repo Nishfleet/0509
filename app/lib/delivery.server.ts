@@ -2276,7 +2276,7 @@ function readCompetitorLabel(event: WatchEventRecord) {
 }
 
 function buildWatchlistUrl(env: AppEnv, watchlistId: string) {
-  const baseUrl = env.BETTER_AUTH_URL?.trim();
+  const baseUrl = env.APP_ORIGIN?.trim() || env.BETTER_AUTH_URL?.trim();
   if (!baseUrl) {
     return null;
   }

@@ -1,24 +1,14 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
-
-import { authClient } from "~/lib/auth-client";
+import { Form, useNavigation } from "react-router";
 
 export function SignOutButton() {
-  const navigate = useNavigate();
-  const [pending, setPending] = useState(false);
+  const navigation = useNavigation();
+  const pending = navigation.state !== "idle";
 
   return (
-    <button
-      className="f9-secondary-button f9-sign-out-button"
-      disabled={pending}
-      onClick={async () => {
-        setPending(true);
-        await authClient.signOut();
-        navigate("/", { replace: true });
-      }}
-      type="button"
-    >
-      {pending ? "Signing out..." : "Sign out"}
-    </button>
+    <Form action="/auth/logout" method="post">
+      <button className="f9-secondary-button f9-sign-out-button" disabled={pending} type="submit">
+        {pending ? "Signing out..." : "Sign out"}
+      </button>
+    </Form>
   );
 }

@@ -12,7 +12,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
   vi.doUnmock("react-router");
-  vi.doUnmock("~/lib/auth-client");
   vi.doUnmock("~/lib/data.server");
 });
 
@@ -91,13 +90,7 @@ describe("sendPasswordResetEmail", () => {
 });
 
 describe("password reset pages", () => {
-  function mockReactRouter(searchParams: Record<string, string> = {}) {
-    vi.doMock("~/lib/auth-client", () => ({
-      authClient: {
-        requestPasswordReset: vi.fn(),
-        resetPassword: vi.fn(),
-      },
-    }));
+  function mockReactRouter() {
     vi.doMock("react-router", async () => {
       const actual = await vi.importActual<typeof import("react-router")>("react-router");
       const React = await import("react");
@@ -106,44 +99,14 @@ describe("password reset pages", () => {
         ...actual,
         Link: ({ children, to, ...props }: MockLinkProps) =>
           React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-        useNavigate: vi.fn(() => vi.fn()),
-        useSearchParams: vi.fn(() => [new URLSearchParams(searchParams)]),
+        Form: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
+          React.createElement("form", props, children),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       };
     });
   }
 
-  it("renders the forgot-password request form", async () => {
-    mockReactRouter();
-
-    const { default: ForgotPasswordRoute } = await import("~/routes/auth.forgot-password");
-    const markup = renderToStaticMarkup(createElement(ForgotPasswordRoute));
-
-    expect(markup).toContain("Forgot your password?");
-    expect(markup).toContain("Send reset link");
-    expect(markup).toContain("/auth/login");
-  });
-
-  it("renders the new-password form when a token is present", async () => {
-    mockReactRouter({ token: "valid-token" });
-
-    const { default: ResetPasswordRoute } = await import("~/routes/auth.reset-password");
-    const markup = renderToStaticMarkup(createElement(ResetPasswordRoute));
-
-    expect(markup).toContain("Set a new password.");
-    expect(markup).toContain("At least 8 characters");
-  });
-
-  it("explains expired links and offers a fresh request", async () => {
-    mockReactRouter({ error: "INVALID_TOKEN" });
-
-    const { default: ResetPasswordRoute } = await import("~/routes/auth.reset-password");
-    const markup = renderToStaticMarkup(createElement(ResetPasswordRoute));
-
-    expect(markup).toContain("valid anymore");
-    expect(markup).toContain("/auth/forgot-password");
-  });
-
-  it("shows a forgot-password link on the login form", async () => {
+  it("uses a passwordless login form", async () => {
     mockReactRouter();
 
     const { AuthForm } = await import("~/components/auth-form");
@@ -151,21 +114,14 @@ describe("password reset pages", () => {
       createElement(AuthForm, { mode: "login", redirectTo: "/app" }),
     );
 
-    expect(markup).toContain("/auth/forgot-password");
-    expect(markup).toContain("Forgot your password?");
+    expect(markup).toContain("Send sign-in link");
+    expect(markup).not.toContain("Forgot your password?");
+    expect(markup).not.toContain("type=\"password\"");
   });
 });
 
 describe("account page", () => {
   function mockAccountPage() {
-    vi.doMock("~/lib/auth-client", () => ({
-      authClient: {
-        changePassword: vi.fn(),
-        changeEmail: vi.fn(),
-        revokeOtherSessions: vi.fn(),
-        deleteUser: vi.fn(),
-      },
-    }));
     vi.doMock("react-router", async () => {
       const actual = await vi.importActual<typeof import("react-router")>("react-router");
       const React = await import("react");
@@ -179,29 +135,23 @@ describe("account page", () => {
           email: "owner@example.com",
           name: "Owner",
           currentSessionId: "session-1",
+          sessionExpiresAt: "2026-06-30T00:00:00.000Z",
           plan: "agency",
           brandName: null,
-          sessions: [
-            { id: "session-1", createdAt: "2026-06-01T00:00:00.000Z", userAgent: "Safari" },
-            { id: "session-2", createdAt: "2026-05-01T00:00:00.000Z", userAgent: "Chrome" },
-          ],
         }),
       };
     });
   }
 
-  it("renders password, email, sessions, and deletion sections", async () => {
+  it("renders Stytch-managed account controls and deletion support", async () => {
     mockAccountPage();
 
     const { default: AccountRoute } = await import("~/routes/app.account");
     const markup = renderToStaticMarkup(createElement(AccountRoute));
 
-    expect(markup).toContain("Change password");
-    expect(markup).toContain("Change email");
-    expect(markup).toContain("Active sessions");
-    expect(markup).toContain("This device");
-    expect(markup).toContain("Other device");
-    expect(markup).toContain("Sign out other devices");
+    expect(markup).toContain("Stytch B2B");
+    expect(markup).toContain("Session and account controls");
+    expect(markup).toContain("session-1");
     expect(markup).toContain("Delete this account");
     expect(markup).toContain("support@0509.io");
     expect(markup).toContain("Report branding");

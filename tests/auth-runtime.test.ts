@@ -4,15 +4,15 @@ import { join } from "node:path";
 
 const ACTIVE_RUNTIME_DIRS = ["app", "workers"];
 const FORBIDDEN_ACTIVE_AUTH_REFERENCES = [
+  "better-auth",
   "@supabase",
   "supabase",
-  "stytch",
   "legacy/",
   "../legacy",
 ];
 
 describe("auth runtime", () => {
-  it("keeps active runtime on Better Auth instead of Supabase or Stytch", () => {
+  it("keeps active runtime on Stytch B2B instead of Better Auth or Supabase", () => {
     const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
@@ -22,9 +22,8 @@ describe("auth runtime", () => {
       ...(packageJson.devDependencies ?? {}),
     };
 
-    expect(dependencies).toHaveProperty("better-auth");
+    expect(dependencies).not.toHaveProperty("better-auth");
     expect(Object.keys(dependencies).some((name) => name.includes("supabase"))).toBe(false);
-    expect(Object.keys(dependencies).some((name) => name.includes("stytch"))).toBe(false);
 
     const activeRuntimeText = ACTIVE_RUNTIME_DIRS
       .flatMap((dir) => listSourceFiles(dir))
@@ -34,6 +33,7 @@ describe("auth runtime", () => {
     for (const forbidden of FORBIDDEN_ACTIVE_AUTH_REFERENCES) {
       expect(activeRuntimeText).not.toContain(forbidden);
     }
+    expect(activeRuntimeText).toContain("stytch");
   });
 });
 

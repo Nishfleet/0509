@@ -1,9 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 async function handleAuth(request: Request, context: LoaderFunctionArgs["context"]) {
-  const { createAuth } = await import("~/lib/auth.server");
-  const env = (context.cloudflare as { env: Env }).env;
-  return createAuth(env, request).handler(request);
+  void request;
+  void context;
+  return new Response("Five to Nine auth is handled by Stytch B2B routes.", {
+    status: 404,
+  });
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
