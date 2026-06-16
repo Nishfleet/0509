@@ -6,9 +6,10 @@ interface AuthFormProps {
   initialEmail?: string;
   message?: string | null;
   error?: string | null;
+  oauthEnabled?: boolean;
 }
 
-export function AuthForm({ mode, redirectTo, initialEmail, message, error }: AuthFormProps) {
+export function AuthForm({ mode, redirectTo, initialEmail, message, error, oauthEnabled = false }: AuthFormProps) {
   const navigation = useNavigation();
   const isSignup = mode === "signup";
   const pending = navigation.state !== "idle";
@@ -31,6 +32,7 @@ export function AuthForm({ mode, redirectTo, initialEmail, message, error }: Aut
       </p>
 
       <Form className="f9-auth-form" method="post">
+        <input name="mode" type="hidden" value={mode} />
         <input name="redirectTo" type="hidden" value={redirectTo} />
         {isSignup ? (
           <>
@@ -72,6 +74,38 @@ export function AuthForm({ mode, redirectTo, initialEmail, message, error }: Aut
               ? "Send setup link"
               : "Send sign-in link"}
         </button>
+
+        {oauthEnabled ? (
+          <div className="f9-auth-oauth">
+            <div className="f9-auth-divider">
+              <span>Or continue with</span>
+            </div>
+            <div className="f9-auth-oauth-grid">
+              <button
+                className="f9-oauth-button"
+                disabled={pending}
+                formAction="/auth/stytch/oauth"
+                formNoValidate
+                name="provider"
+                type="submit"
+                value="google"
+              >
+                Google
+              </button>
+              <button
+                className="f9-oauth-button"
+                disabled={pending}
+                formAction="/auth/stytch/oauth"
+                formNoValidate
+                name="provider"
+                type="submit"
+                value="microsoft"
+              >
+                Microsoft
+              </button>
+            </div>
+          </div>
+        ) : null}
       </Form>
 
       <p className="f9-auth-switch">

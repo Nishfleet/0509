@@ -1773,6 +1773,54 @@ button[aria-busy="true"] {
   width: 100%;
 }
 
+.f9-auth-oauth {
+  display: grid;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.f9-auth-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+  color: var(--f9-search-soft);
+  font-size: 0.9rem;
+}
+
+.f9-auth-divider::before,
+.f9-auth-divider::after {
+  content: "";
+  height: 1px;
+  background: var(--f9-search-line);
+}
+
+.f9-auth-oauth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.f9-oauth-button {
+  min-height: 48px;
+  border: 1.5px solid var(--f9-search-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--f9-search-ink);
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.f9-oauth-button:hover {
+  border-color: var(--f9-search-ink);
+}
+
+.f9-oauth-button:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
+
 .f9-auth-switch {
   color: var(--f9-search-muted);
 }
@@ -4318,6 +4366,25 @@ one signal-green accent.
 
 .f9-auth-page .f9-primary-button:hover,
 .f9-search-page .f9-primary-button:hover { background: #2a2820; }
+
+.f9-auth-page .f9-auth-divider {
+  color: var(--ld-ink-soft);
+}
+
+.f9-auth-page .f9-auth-divider::before,
+.f9-auth-page .f9-auth-divider::after {
+  background: var(--ld-line);
+}
+
+.f9-auth-page .f9-oauth-button {
+  background: var(--ld-card);
+  border-color: var(--ld-line);
+  color: var(--ld-ink);
+}
+
+.f9-auth-page .f9-oauth-button:hover {
+  border-color: var(--ld-ink);
+}
 
 .f9-search-page .f9-secondary-button,
 .f9-legal-page .f9-secondary-button,

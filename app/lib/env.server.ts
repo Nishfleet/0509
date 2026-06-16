@@ -62,6 +62,7 @@ export interface AppEnv {
   RAZORPAY_WEBHOOK_SECRET?: string;
   STYTCH_API_BASE_URL?: string;
   STYTCH_PROJECT_ID?: string;
+  STYTCH_PUBLIC_TOKEN?: string;
   STYTCH_SECRET?: string;
   STYTCH_SESSION_DURATION_MINUTES?: string;
   UNSUBSCRIBE_SIGNING_SECRET?: string;

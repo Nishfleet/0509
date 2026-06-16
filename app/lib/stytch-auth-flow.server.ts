@@ -3,6 +3,7 @@ import { safeRedirectPath } from "~/lib/safe-redirect";
 import { storeStytchSession, upsertStytchAuthenticatedUser } from "~/lib/data.server";
 import {
   clearAuthRequestStateCookie,
+  clearAuthRequestPkceCookie,
   clearStytchConfirmationCookie,
   consumeStytchAuthRequest,
   createOrganizationViaDiscovery,
@@ -42,7 +43,7 @@ export async function completeStytchAuthRequest(
     input.kind === "create"
       ? await createOrganizationViaDiscovery(env, {
           intermediateSessionToken: authRequest.intermediateSessionToken,
-          organizationName: authRequest.organizationName ?? "Five to Nine workspace",
+          organizationName: authRequest.organizationName ?? workspaceNameFromEmail(authRequest.email),
         })
       : await exchangeIntermediateSession(env, {
           intermediateSessionToken: authRequest.intermediateSessionToken,
@@ -55,7 +56,7 @@ export async function completeStytchAuthRequest(
 
   const organization: StytchOrganization = session.organization ?? {
     organization_id: session.member.organization_id,
-    organization_name: authRequest.organizationName ?? "Five to Nine workspace",
+    organization_name: authRequest.organizationName ?? workspaceNameFromEmail(authRequest.email),
     organization_slug: null,
   };
 
@@ -78,10 +79,25 @@ export async function completeStytchAuthRequest(
   const headers = new Headers();
   headers.append("Set-Cookie", stytchSessionCookie(env, request, session.session_token));
   headers.append("Set-Cookie", clearAuthRequestStateCookie(request));
+  headers.append("Set-Cookie", clearAuthRequestPkceCookie(request));
   headers.append("Set-Cookie", clearStytchConfirmationCookie(request));
 
   return {
     headers,
     redirectTo: safeRedirectPath(authRequest.redirectTo, "/app"),
   };
+}
+
+function workspaceNameFromEmail(email: string) {
+  const domain = email.split("@")[1]?.trim();
+  if (!domain) {
+    return "Five to Nine workspace";
+  }
+
+  const rootDomain = domain.split(".").filter(Boolean)[0];
+  if (!rootDomain) {
+    return "Five to Nine workspace";
+  }
+
+  return `${rootDomain.slice(0, 1).toUpperCase()}${rootDomain.slice(1)} workspace`;
 }

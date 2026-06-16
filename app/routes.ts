@@ -19,6 +19,7 @@ export default [
   route("auth/login", "routes/auth.login.tsx"),
   route("auth/signup", "routes/auth.signup.tsx"),
   route("auth/logout", "routes/auth.logout.ts"),
+  route("auth/stytch/oauth", "routes/auth.stytch.oauth.ts"),
   route("auth/stytch/callback", "routes/auth.stytch.callback.tsx"),
   route("auth/stytch/confirm", "routes/auth.stytch.confirm.tsx"),
   route("auth/forgot-password", "routes/auth.forgot-password.tsx"),

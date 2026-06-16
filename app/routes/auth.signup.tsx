@@ -20,7 +20,9 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { isStytchAuthEnabled } = await import("~/lib/env.server");
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
+  const { isStytchOAuthConfigured } = await import("~/lib/stytch-b2b.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
@@ -35,11 +37,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       ? "Check your email. The setup link will verify you and create the workspace."
       : null;
   const error = signupErrorMessage(url.searchParams.get("error"));
+  const oauthEnabled = isStytchAuthEnabled(env) && isStytchOAuthConfigured(env);
 
   return {
     redirectTo,
     // The marketing hero's email-capture form lands here with ?email=…
     prefillEmail: url.searchParams.get("email")?.trim() || "",
+    ...(oauthEnabled ? { oauthEnabled } : {}),
     ...(message ? { message } : {}),
     ...(error ? { error } : {}),
   };
@@ -96,11 +100,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   next.searchParams.set("sent", "1");
   next.searchParams.set("email", email);
   next.searchParams.set("redirectTo", redirectTo);
-  throw redirect(`${next.pathname}${next.search}`, {
-    headers: {
-      "Set-Cookie": authRequestStateCookie(request, state),
-    },
-  });
+  const headers = new Headers();
+  headers.append("Set-Cookie", authRequestStateCookie(request, state));
+  throw redirect(`${next.pathname}${next.search}`, { headers });
 }
 
 export default function SignupRoute() {
@@ -145,6 +147,7 @@ export default function SignupRoute() {
           initialEmail={loaderData.prefillEmail}
           message={loaderData.message}
           mode="signup"
+          oauthEnabled={loaderData.oauthEnabled}
           redirectTo={loaderData.redirectTo}
         />
       </div>
@@ -173,6 +176,9 @@ function signupErrorMessage(code: string | null) {
   }
   if (code === "send_failed") {
     return "We could not send that setup link. Try again in a minute.";
+  }
+  if (code === "oauth_not_configured") {
+    return "Google and Microsoft sign-in are not configured yet. Use the email link for now.";
   }
   return null;
 }

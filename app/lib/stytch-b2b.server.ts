@@ -3,6 +3,8 @@ import { appOrigin, type AppEnv } from "~/lib/env.server";
 export const STYTCH_SESSION_COOKIE = "f9_stytch_session";
 const STYTCH_AUTH_STATE_COOKIE = "f9_stytch_state";
 const STYTCH_CONFIRMATION_COOKIE = "f9_stytch_confirm";
+const STYTCH_PKCE_COOKIE = "f9_stytch_pkce";
+const STYTCH_PENDING_CALLBACK_PREFIX = "pending_callback.";
 const DEFAULT_SESSION_DURATION_MINUTES = 60 * 24 * 30;
 const AUTH_REQUEST_MAX_AGE_SECONDS = 60 * 60;
 const CONFIRMATION_MAX_AGE_SECONDS = 10 * 60;
@@ -52,6 +54,7 @@ interface StytchDiscoveryAuthentication {
   intermediate_session_token: string;
   email_address: string;
   discovered_organizations?: StytchDiscoveredOrganization[];
+  full_name?: string | null;
 }
 
 interface StytchDiscoveryOrganizationsList {
@@ -95,6 +98,12 @@ export interface StytchAuthRequest {
 }
 
 export type StytchWorkspaceCreationReason = "signup" | "team_invite" | "local_user_migration";
+export type StytchOAuthProvider = "google" | "microsoft";
+export type StytchPendingCallback = {
+  authMethod: "magic_link";
+  pkceCodeVerifier?: string | null;
+  token: string;
+};
 
 export function stytchSessionDurationMinutes(env: AppEnv) {
   const parsed = Number.parseInt(env.STYTCH_SESSION_DURATION_MINUTES ?? "", 10);
@@ -106,6 +115,10 @@ export function stytchSessionDurationMinutes(env: AppEnv) {
 
 export function isStytchConfigured(env: AppEnv) {
   return Boolean(env.STYTCH_PROJECT_ID?.trim() && env.STYTCH_SECRET?.trim() && stytchRedirectOrigin(env));
+}
+
+export function isStytchOAuthConfigured(env: AppEnv) {
+  return Boolean(isStytchConfigured(env) && env.STYTCH_PUBLIC_TOKEN?.trim());
 }
 
 function stytchConfig(env: AppEnv): StytchConfig {
@@ -125,13 +138,17 @@ function stytchConfig(env: AppEnv): StytchConfig {
 }
 
 function stytchRedirectOrigin(env: AppEnv) {
-  const rawOrigin = env.APP_ORIGIN?.trim();
-  if (!rawOrigin) {
+  return stytchHttpsOrigin(env.APP_ORIGIN);
+}
+
+function stytchHttpsOrigin(rawOrigin: string | null | undefined) {
+  const value = rawOrigin?.trim();
+  if (!value) {
     return null;
   }
 
   try {
-    const origin = new URL(rawOrigin);
+    const origin = new URL(value);
     return origin.protocol === "https:" ? origin.origin : null;
   } catch {
     return null;
@@ -183,6 +200,7 @@ export async function sendDiscoveryEmail(
   input: {
     email: string;
     mode: "login" | "signup";
+    pkceCodeChallenge?: string | null;
     state: string;
   },
 ) {
@@ -193,23 +211,102 @@ export async function sendDiscoveryEmail(
 
   const redirectUrl = new URL("/auth/stytch/callback", origin);
   redirectUrl.searchParams.set("mode", input.mode);
+  if (input.pkceCodeChallenge) {
+    redirectUrl.searchParams.set("pkce", "1");
+  }
   redirectUrl.searchParams.set("state", input.state);
 
-  await stytchRequest(env, "/v1/b2b/magic_links/email/discovery/send", {
+  const body: Record<string, unknown> = {
     email_address: input.email.trim().toLowerCase(),
     discovery_redirect_url: redirectUrl.toString(),
     discovery_expiration_minutes: 60,
-  });
+  };
+  if (input.pkceCodeChallenge) {
+    body.pkce_code_challenge = input.pkceCodeChallenge;
+  }
+
+  await stytchRequest(env, "/v1/b2b/magic_links/email/discovery/send", body);
 }
 
-export async function authenticateDiscoveryMagicLink(env: AppEnv, token: string) {
+export async function authenticateDiscoveryMagicLink(
+  env: AppEnv,
+  token: string,
+  pkceCodeVerifier?: string | null,
+) {
+  const body: Record<string, unknown> = {
+    discovery_magic_links_token: token,
+  };
+  if (pkceCodeVerifier) {
+    body.pkce_code_verifier = pkceCodeVerifier;
+  }
+
   return stytchRequest<StytchDiscoveryAuthentication>(
     env,
     "/v1/b2b/magic_links/discovery/authenticate",
-    {
-      discovery_magic_links_token: token,
-    },
+    body,
   );
+}
+
+export async function authenticateDiscoveryOAuth(
+  env: AppEnv,
+  token: string,
+  pkceCodeVerifier?: string | null,
+) {
+  const body: Record<string, unknown> = {
+    discovery_oauth_token: token,
+  };
+  if (pkceCodeVerifier) {
+    body.pkce_code_verifier = pkceCodeVerifier;
+  }
+
+  return stytchRequest<StytchDiscoveryAuthentication>(
+    env,
+    "/v1/b2b/oauth/discovery/authenticate",
+    body,
+  );
+}
+
+export function stytchOAuthDiscoveryStartUrl(
+  env: AppEnv,
+  input: {
+    mode: "login" | "signup";
+    pkceCodeChallenge: string;
+    provider: StytchOAuthProvider;
+    redirectOrigin?: string | null;
+    state: string;
+    loginHint?: string | null;
+  },
+) {
+  const publicToken = env.STYTCH_PUBLIC_TOKEN?.trim();
+  const origin = input.redirectOrigin
+    ? stytchHttpsOrigin(input.redirectOrigin)
+    : stytchRedirectOrigin(env);
+  if (!publicToken) {
+    throw new Error("STYTCH_PUBLIC_TOKEN must be configured for Stytch OAuth.");
+  }
+  if (!origin) {
+    throw new Error("APP_ORIGIN must be configured as an HTTPS origin for Stytch auth.");
+  }
+
+  const redirectUrl = new URL("/auth/stytch/callback", origin);
+  redirectUrl.searchParams.set("method", "oauth");
+  redirectUrl.searchParams.set("mode", input.mode);
+  redirectUrl.searchParams.set("pkce", "1");
+  redirectUrl.searchParams.set("provider", input.provider);
+  redirectUrl.searchParams.set("state", input.state);
+
+  const config = stytchConfig(env);
+  const startUrl = new URL(`/v1/b2b/public/oauth/${input.provider}/discovery/start`, config.baseUrl);
+  startUrl.searchParams.set("public_token", publicToken);
+  startUrl.searchParams.set("discovery_redirect_url", redirectUrl.toString());
+  startUrl.searchParams.set("pkce_code_challenge", input.pkceCodeChallenge);
+
+  const loginHint = input.loginHint?.trim().toLowerCase();
+  if (loginHint) {
+    startUrl.searchParams.set("provider_login_hint", loginHint);
+  }
+
+  return startUrl.toString();
 }
 
 export async function exchangeIntermediateSession(
@@ -316,6 +413,42 @@ export function clearAuthRequestStateCookie(request: Request) {
     httpOnly: true,
     maxAge: 0,
   });
+}
+
+export function authRequestPkceCookie(request: Request, state: string, verifier: string) {
+  return buildCookie(STYTCH_PKCE_COOKIE, `${state}.${verifier}`, request, {
+    httpOnly: true,
+    maxAge: AUTH_REQUEST_MAX_AGE_SECONDS,
+  });
+}
+
+export function clearAuthRequestPkceCookie(request: Request) {
+  return buildCookie(STYTCH_PKCE_COOKIE, "", request, {
+    httpOnly: true,
+    maxAge: 0,
+  });
+}
+
+export function readStytchPkceVerifier(request: Request, state: string) {
+  const value = readCookie(request, STYTCH_PKCE_COOKIE);
+  if (!value) {
+    return null;
+  }
+
+  const [cookieState, verifier] = value.split(".", 2);
+  if (!cookieState || !verifier || cookieState !== state) {
+    return null;
+  }
+
+  return verifier;
+}
+
+export async function createStytchPkcePair() {
+  const verifier = base64UrlEncode(randomBytes(32));
+  const challenge = base64UrlEncode(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
+  );
+  return { verifier, challenge };
 }
 
 export function stytchConfirmationCookie(request: Request, secret: string) {
@@ -493,6 +626,34 @@ export async function prepareStytchConfirmation(env: AppEnv, state: string) {
   return secret;
 }
 
+export async function prepareStytchPendingCallbackConfirmation(
+  env: AppEnv,
+  state: string,
+  pendingCallback: StytchPendingCallback,
+) {
+  const secret = crypto.randomUUID();
+  const db = ensureDb(env);
+  await db.prepare(
+    `
+      UPDATE stytch_auth_request
+      SET intermediate_session_token = ?,
+          confirmation_secret = ?,
+          confirmation_nonce = NULL,
+          updated_at = ?
+      WHERE state = ?
+        AND consumed_at IS NULL
+    `,
+  )
+    .bind(
+      encodeStytchPendingCallback(pendingCallback),
+      secret,
+      new Date().toISOString(),
+      state,
+    )
+    .run();
+  return secret;
+}
+
 export async function rotateStytchConfirmationNonce(env: AppEnv, state: string) {
   const nonce = crypto.randomUUID();
   const db = ensureDb(env);
@@ -522,6 +683,32 @@ export function verifyStytchConfirmationSecret(request: Request, authRequest: St
     authRequest.confirmationSecret &&
       readCookie(request, STYTCH_CONFIRMATION_COOKIE) === authRequest.confirmationSecret,
   );
+}
+
+export function readStytchPendingCallback(
+  authRequest: Pick<StytchAuthRequest, "intermediateSessionToken">,
+): StytchPendingCallback | null {
+  const value = authRequest.intermediateSessionToken;
+  if (!value?.startsWith(STYTCH_PENDING_CALLBACK_PREFIX)) {
+    return null;
+  }
+
+  try {
+    const decoded = JSON.parse(
+      base64UrlDecodeToString(value.slice(STYTCH_PENDING_CALLBACK_PREFIX.length)),
+    ) as Partial<StytchPendingCallback>;
+    if (decoded.authMethod === "magic_link" && decoded.token) {
+      return {
+        authMethod: decoded.authMethod,
+        pkceCodeVerifier: decoded.pkceCodeVerifier ?? null,
+        token: decoded.token,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 export async function consumeStytchAuthRequest(env: AppEnv, state: string) {
@@ -567,14 +754,19 @@ export function stytchUnsupportedPolicyPath(mode: "login" | "signup") {
 }
 
 export function stytchAuthRequestMatchesEmail(authRequest: StytchAuthRequest, email: string) {
-  return authRequest.email.trim().toLowerCase() === email.trim().toLowerCase();
+  const expectedEmail = authRequest.email.trim().toLowerCase();
+  if (!expectedEmail) {
+    return true;
+  }
+
+  return expectedEmail === email.trim().toLowerCase();
 }
 
 export function stytchWorkspaceCreationReason(
   authRequest: Pick<StytchAuthRequest, "mode" | "organizationName" | "redirectTo">,
   options: { hasExistingLocalUser?: boolean } = {},
 ): StytchWorkspaceCreationReason | null {
-  if (authRequest.mode === "signup" && authRequest.organizationName?.trim()) {
+  if (authRequest.mode === "signup") {
     return "signup";
   }
   if (authRequest.redirectTo.startsWith("/team/accept?")) {
@@ -603,6 +795,40 @@ function ensureDb(env: AppEnv) {
   }
 
   return env.DB;
+}
+
+function randomBytes(length: number) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return bytes;
+}
+
+function base64UrlEncode(input: ArrayBuffer | Uint8Array) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecodeToString(input: string) {
+  let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4) {
+    base64 += "=";
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function encodeStytchPendingCallback(input: StytchPendingCallback) {
+  return `${STYTCH_PENDING_CALLBACK_PREFIX}${base64UrlEncode(
+    new TextEncoder().encode(JSON.stringify(input)),
+  )}`;
 }
 
 function normalizedOrigin(value: string | null | undefined) {
