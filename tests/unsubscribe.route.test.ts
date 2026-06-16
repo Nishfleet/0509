@@ -88,7 +88,7 @@ describe("unsubscribe signatures", () => {
     ).resolves.toBe(false);
   });
 
-  it("returns no signature without BETTER_AUTH_SECRET", async () => {
+  it("returns no signature without an unsubscribe signing secret", async () => {
     const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
     await expect(
       buildUnsubscribeUrl({ BETTER_AUTH_URL: "https://0509.io" } as never, {
@@ -96,6 +96,31 @@ describe("unsubscribe signatures", () => {
         targetId: "email-target-1",
       }),
     ).resolves.toBeNull();
+  });
+
+  it("verifies legacy unsubscribe links after the new signing secret is configured", async () => {
+    const { buildUnsubscribeSignature, verifyUnsubscribeSignature } = await import(
+      "~/lib/unsubscribe.server"
+    );
+    const legacySecret = `legacy-${"x".repeat(40)}`;
+    const newSecret = `new-${"x".repeat(40)}`;
+    const signature = await buildUnsubscribeSignature({
+      BETTER_AUTH_SECRET: legacySecret,
+    } as never, {
+      userId: "user-1",
+      targetId: "email-target-1",
+    });
+
+    await expect(
+      verifyUnsubscribeSignature({
+        UNSUBSCRIBE_SIGNING_SECRET: newSecret,
+        BETTER_AUTH_SECRET: legacySecret,
+      } as never, {
+        userId: "user-1",
+        targetId: "email-target-1",
+        signature: signature!,
+      }),
+    ).resolves.toBe(true);
   });
 });
 

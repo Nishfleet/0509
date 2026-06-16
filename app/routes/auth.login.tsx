@@ -1,5 +1,5 @@
 import { Link, redirect, useLoaderData } from "react-router";
-import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
@@ -30,9 +30,72 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect(redirectTo);
   }
 
+  const message =
+    url.searchParams.get("sent") === "1"
+      ? "Check your email for a secure Five to Nine sign-in link."
+      : null;
+  const error = authErrorMessage(url.searchParams.get("error"));
+
   return {
     redirectTo,
+    prefillEmail: url.searchParams.get("email")?.trim() || "",
+    ...(message ? { message } : {}),
+    ...(error ? { error } : {}),
   };
+}
+
+export async function action({ context, request }: ActionFunctionArgs) {
+  const { getEnv } = await import("~/lib/context.server");
+  const { isStytchAuthEnabled } = await import("~/lib/env.server");
+  const { safeRedirectPath } = await import("~/lib/safe-redirect");
+  const {
+    authRequestStateCookie,
+    consumeStytchAuthRequest,
+    createStytchAuthRequest,
+    isSameOriginAuthFormPost,
+    isStytchConfigured,
+    sendDiscoveryEmail,
+  } = await import("~/lib/stytch-b2b.server");
+  const env = getEnv(context);
+  const formData = await request.formData();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app");
+
+  if (!isStytchAuthEnabled(env) || !isStytchConfigured(env)) {
+    throw redirect("/auth/login?error=stytch_not_configured");
+  }
+  if (!isSameOriginAuthFormPost(env, request)) {
+    throw redirect("/auth/login?error=request_invalid");
+  }
+
+  const state = await createStytchAuthRequest(env, {
+    email,
+    mode: "login",
+    redirectTo,
+  });
+  try {
+    await sendDiscoveryEmail(env, request, {
+      email,
+      mode: "login",
+      state,
+    });
+  } catch (error) {
+    await consumeStytchAuthRequest(env, state).catch((consumeError) => {
+      console.warn("failed to consume unsent Stytch login request", consumeError);
+    });
+    console.warn("failed to send Stytch login email", error);
+    throw redirect("/auth/login?error=send_failed");
+  }
+
+  const next = new URL("/auth/login", request.url);
+  next.searchParams.set("sent", "1");
+  next.searchParams.set("email", email);
+  next.searchParams.set("redirectTo", redirectTo);
+  throw redirect(`${next.pathname}${next.search}`, {
+    headers: {
+      "Set-Cookie": authRequestStateCookie(request, state),
+    },
+  });
 }
 
 export default function LoginRoute() {
@@ -71,8 +134,42 @@ export default function LoginRoute() {
           </div>
         </section>
 
-        <AuthForm mode="login" redirectTo={loaderData.redirectTo} />
+        <AuthForm
+          error={loaderData.error}
+          initialEmail={loaderData.prefillEmail}
+          message={loaderData.message}
+          mode="login"
+          redirectTo={loaderData.redirectTo}
+        />
       </div>
     </main>
   );
+}
+
+function authErrorMessage(code: string | null) {
+  if (code === "stytch_not_configured") {
+    return "Stytch B2B is not configured yet. Add the Stytch project ID and secret before signing in.";
+  }
+  if (code === "callback_failed") {
+    return "That sign-in link could not be verified. Request a fresh link and try again.";
+  }
+  if (code === "no_workspace") {
+    return "No workspace was found for that email. Create a workspace first.";
+  }
+  if (code === "multiple_workspaces") {
+    return "That email is attached to multiple Stytch workspaces. Ask support to pick the right workspace before signing in.";
+  }
+  if (code === "unsupported_policy") {
+    return "This Stytch workspace requires an additional sign-in step that Five to Nine has not enabled yet. Ask support to disable that policy for now.";
+  }
+  if (code === "passwordless") {
+    return "Five to Nine now uses secure email links instead of passwords.";
+  }
+  if (code === "request_invalid") {
+    return "That sign-in request could not be verified. Open this page and try again.";
+  }
+  if (code === "send_failed") {
+    return "We could not send that sign-in link. Try again in a minute.";
+  }
+  return null;
 }

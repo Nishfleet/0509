@@ -23,7 +23,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 ## Current stack
 
 - React Router v7 on Cloudflare Workers
-- Better Auth on Cloudflare D1 for active auth and sessions
+- Stytch B2B for organization auth and sessions
 - D1 for product data
 - Optional R2 for landing-page artifact retention
 - Cloudflare Email Service `send_email` binding for digest and instant-alert email delivery
@@ -53,6 +53,9 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/api/webhooks/dodo`
 - `/auth/login`
 - `/auth/signup`
+- `/auth/stytch/callback`
+- `/auth/stytch/confirm`
+- `/auth/logout`
 - `/app/onboard`
 - `/app` workspace dashboard
 - `/app/collections`
@@ -69,7 +72,13 @@ Important bindings and secrets:
 
 - `DB`
 - `LANDING_PAGE_ARTIFACTS` (optional)
-- `BETTER_AUTH_SECRET`
+- `APP_ORIGIN`
+- `AUTH_PROVIDER=stytch`
+- `STYTCH_API_BASE_URL`
+- `STYTCH_PROJECT_ID`
+- `STYTCH_SECRET`
+- `STYTCH_SESSION_DURATION_MINUTES` (optional)
+- `UNSUBSCRIBE_SIGNING_SECRET`
 - `CANARY_BYPASS_TOKEN`
 - `ALLOW_PLATFORM_META_API_FALLBACK`
 - `META_AD_LIBRARY_TOKEN`
@@ -100,13 +109,14 @@ Important bindings and secrets:
 ## Operations
 
 - Run `npm run backup:d1` before risky migrations or data-shape changes. It exports the remote Cloudflare D1 database into `backups/d1/`, which is intentionally gitignored.
-- Apply pending D1 migrations before deploying code that reads new tables. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys; `migrations/0019_slack_delivery.sql` backs Slack delivery channels.
+- Apply pending D1 migrations before deploying code that reads new tables. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys; `migrations/0019_slack_delivery.sql` backs Slack delivery channels; `migrations/0031_stytch_identity.sql` backs Stytch identity mapping and one-time auth request state.
 
 ## Notes
 
 - For the current Cloudflare Worker app, use `.dev.vars` for local secrets. A starter template now lives at `.dev.vars.example`.
 - Supabase is legacy-only under `legacy/`; it is not part of the active `app/` or `workers/` runtime.
-- Stytch is deferred until there is a real B2B auth need such as SSO, SCIM, organization admin, or enterprise RBAC.
+- Stytch B2B is the active auth provider. D1 remains the source of truth for product data, billing linkage, watchlists, digests, collections, and customer API keys.
+- Current B2B scope is one Stytch organization per email because the product data model is still keyed by local `user.id`. Multi-organization Stytch discovery is blocked until account data is organization-scoped.
 - `.env.local` and `.env.local.example` are legacy Next.js env files for the old `src/` runtime and should not be treated as the source of truth for the Worker app.
 - Meta ads tracking is a beta feature until the production canary proves fresh discovery, proof capture, and digest delivery are reliable.
 - `META_AD_LIBRARY_TOKEN` should not be treated as proof that live India commercial-ad discovery is production-ready. The official Meta API is diagnostic-only by default. Customer-facing Meta API fallback requires a customer-owned Meta connection that is test-before-save and stored encrypted; the platform token can only be used if `ALLOW_PLATFORM_META_API_FALLBACK=true` is deliberately configured.

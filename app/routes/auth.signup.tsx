@@ -1,5 +1,5 @@
 import { Link, redirect, useLoaderData } from "react-router";
-import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
@@ -30,11 +30,77 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect(redirectTo);
   }
 
+  const message =
+    url.searchParams.get("sent") === "1"
+      ? "Check your email. The setup link will verify you and create the workspace."
+      : null;
+  const error = signupErrorMessage(url.searchParams.get("error"));
+
   return {
     redirectTo,
     // The marketing hero's email-capture form lands here with ?email=…
     prefillEmail: url.searchParams.get("email")?.trim() || "",
+    ...(message ? { message } : {}),
+    ...(error ? { error } : {}),
   };
+}
+
+export async function action({ context, request }: ActionFunctionArgs) {
+  const { getEnv } = await import("~/lib/context.server");
+  const { isStytchAuthEnabled } = await import("~/lib/env.server");
+  const { safeRedirectPath } = await import("~/lib/safe-redirect");
+  const {
+    authRequestStateCookie,
+    consumeStytchAuthRequest,
+    createStytchAuthRequest,
+    isSameOriginAuthFormPost,
+    isStytchConfigured,
+    sendDiscoveryEmail,
+  } = await import("~/lib/stytch-b2b.server");
+  const env = getEnv(context);
+  const formData = await request.formData();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const name = String(formData.get("name") ?? "").trim();
+  const organizationName = String(formData.get("organizationName") ?? "").trim();
+  const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app/onboard");
+
+  if (!isStytchAuthEnabled(env) || !isStytchConfigured(env)) {
+    throw redirect("/auth/signup?error=stytch_not_configured");
+  }
+  if (!isSameOriginAuthFormPost(env, request)) {
+    throw redirect("/auth/signup?error=request_invalid");
+  }
+
+  const state = await createStytchAuthRequest(env, {
+    email,
+    mode: "signup",
+    name,
+    organizationName,
+    redirectTo,
+  });
+  try {
+    await sendDiscoveryEmail(env, request, {
+      email,
+      mode: "signup",
+      state,
+    });
+  } catch (error) {
+    await consumeStytchAuthRequest(env, state).catch((consumeError) => {
+      console.warn("failed to consume unsent Stytch signup request", consumeError);
+    });
+    console.warn("failed to send Stytch signup email", error);
+    throw redirect("/auth/signup?error=send_failed");
+  }
+
+  const next = new URL("/auth/signup", request.url);
+  next.searchParams.set("sent", "1");
+  next.searchParams.set("email", email);
+  next.searchParams.set("redirectTo", redirectTo);
+  throw redirect(`${next.pathname}${next.search}`, {
+    headers: {
+      "Set-Cookie": authRequestStateCookie(request, state),
+    },
+  });
 }
 
 export default function SignupRoute() {
@@ -75,11 +141,38 @@ export default function SignupRoute() {
         </section>
 
         <AuthForm
+          error={loaderData.error}
           initialEmail={loaderData.prefillEmail}
+          message={loaderData.message}
           mode="signup"
           redirectTo={loaderData.redirectTo}
         />
       </div>
     </main>
   );
+}
+
+function signupErrorMessage(code: string | null) {
+  if (code === "stytch_not_configured") {
+    return "Stytch B2B is not configured yet. Add the Stytch project ID and secret before creating workspaces.";
+  }
+  if (code === "callback_failed") {
+    return "That setup link could not be verified. Request a fresh link and try again.";
+  }
+  if (code === "no_workspace") {
+    return "No workspace was found for that email. Create a workspace first.";
+  }
+  if (code === "multiple_workspaces") {
+    return "That email is attached to multiple Stytch workspaces. Ask support to pick the right workspace before continuing.";
+  }
+  if (code === "unsupported_policy") {
+    return "This Stytch workspace requires an additional sign-in step that Five to Nine has not enabled yet. Ask support to disable that policy for now.";
+  }
+  if (code === "request_invalid") {
+    return "That setup request could not be verified. Open this page and try again.";
+  }
+  if (code === "send_failed") {
+    return "We could not send that setup link. Try again in a minute.";
+  }
+  return null;
 }
