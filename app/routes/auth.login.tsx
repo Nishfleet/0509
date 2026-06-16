@@ -73,6 +73,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const state = await createStytchAuthRequest(env, {
+    authMethod: "magic_link",
     email,
     mode: "login",
     redirectTo,

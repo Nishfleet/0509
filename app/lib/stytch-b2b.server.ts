@@ -85,6 +85,7 @@ interface StytchSessionAuthentication {
 }
 
 export interface StytchAuthRequest {
+  authMethod: StytchAuthMethod;
   email: string;
   mode: "login" | "signup";
   name: string | null;
@@ -99,6 +100,7 @@ export interface StytchAuthRequest {
 
 export type StytchWorkspaceCreationReason = "signup" | "team_invite" | "local_user_migration";
 export type StytchOAuthProvider = "google" | "microsoft";
+export type StytchAuthMethod = "magic_link" | "oauth";
 export type StytchPendingCallback = {
   authMethod: "magic_link";
   pkceCodeVerifier?: string | null;
@@ -210,11 +212,6 @@ export async function sendDiscoveryEmail(
   }
 
   const redirectUrl = new URL("/auth/stytch/callback", origin);
-  redirectUrl.searchParams.set("mode", input.mode);
-  if (input.pkceCodeChallenge) {
-    redirectUrl.searchParams.set("pkce", "1");
-  }
-  redirectUrl.searchParams.set("state", input.state);
 
   const body: Record<string, unknown> = {
     email_address: input.email.trim().toLowerCase(),
@@ -289,11 +286,6 @@ export function stytchOAuthDiscoveryStartUrl(
   }
 
   const redirectUrl = new URL("/auth/stytch/callback", origin);
-  redirectUrl.searchParams.set("method", "oauth");
-  redirectUrl.searchParams.set("mode", input.mode);
-  redirectUrl.searchParams.set("pkce", "1");
-  redirectUrl.searchParams.set("provider", input.provider);
-  redirectUrl.searchParams.set("state", input.state);
 
   const config = stytchConfig(env);
   const startUrl = new URL(`/v1/b2b/public/oauth/${input.provider}/discovery/start`, config.baseUrl);
@@ -469,6 +461,10 @@ export function isSameBrowserAuthRequest(request: Request, state: string) {
   return readCookie(request, STYTCH_AUTH_STATE_COOKIE) === state;
 }
 
+export function readStytchAuthRequestState(request: Request) {
+  return readCookie(request, STYTCH_AUTH_STATE_COOKIE);
+}
+
 export function isSameOriginAuthFormPost(env: AppEnv, request: Request) {
   const allowedOrigins = new Set<string>();
   allowedOrigins.add(new URL(request.url).origin);
@@ -496,6 +492,7 @@ export function isSameOriginAuthFormPost(env: AppEnv, request: Request) {
 export async function createStytchAuthRequest(
   env: AppEnv,
   input: {
+    authMethod?: StytchAuthMethod;
     email: string;
     mode: "login" | "signup";
     name?: string | null;
@@ -511,13 +508,14 @@ export async function createStytchAuthRequest(
   await db.prepare(
     `
       INSERT INTO stytch_auth_request (
-        state, email, mode, name, organization_name, redirect_to, created_at, updated_at, expires_at
+        state, auth_method, email, mode, name, organization_name, redirect_to, created_at, updated_at, expires_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   )
     .bind(
       state,
+      input.authMethod ?? "magic_link",
       input.email.trim().toLowerCase(),
       input.mode,
       input.name?.trim() || null,
@@ -539,7 +537,7 @@ export async function getLiveStytchAuthRequest(
   const db = ensureDb(env);
   const row = await db.prepare(
     `
-      SELECT state, email, mode, name, organization_name, redirect_to,
+      SELECT state, auth_method, email, mode, name, organization_name, redirect_to,
              intermediate_session_token, confirmation_secret, confirmation_nonce, expires_at
       FROM stytch_auth_request
       WHERE state = ?
@@ -551,6 +549,7 @@ export async function getLiveStytchAuthRequest(
     .bind(state, new Date().toISOString())
     .first<{
       state: string;
+      auth_method: string;
       email: string;
       mode: string;
       name: string | null;
@@ -562,11 +561,16 @@ export async function getLiveStytchAuthRequest(
       expires_at: string;
     }>();
 
-  if (!row || (row.mode !== "login" && row.mode !== "signup")) {
+  if (
+    !row ||
+    (row.mode !== "login" && row.mode !== "signup") ||
+    (row.auth_method !== "magic_link" && row.auth_method !== "oauth")
+  ) {
     return null;
   }
 
   return {
+    authMethod: row.auth_method,
     email: row.email,
     mode: row.mode,
     name: row.name,
@@ -756,7 +760,7 @@ export function stytchUnsupportedPolicyPath(mode: "login" | "signup") {
 export function stytchAuthRequestMatchesEmail(authRequest: StytchAuthRequest, email: string) {
   const expectedEmail = authRequest.email.trim().toLowerCase();
   if (!expectedEmail) {
-    return true;
+    return authRequest.authMethod === "oauth";
   }
 
   return expectedEmail === email.trim().toLowerCase();

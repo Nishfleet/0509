@@ -46,6 +46,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const name = String(formData.get("name") ?? "").trim();
   const organizationName = String(formData.get("organizationName") ?? "").trim();
   const state = await createStytchAuthRequest(env, {
+    authMethod: "oauth",
     email,
     mode,
     name,
