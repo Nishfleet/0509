@@ -1,4 +1,4 @@
-import { Form, Link, redirect, useLoaderData, useNavigation } from "react-router";
+import { Link, redirect } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
@@ -6,12 +6,16 @@ import type { AppEnv } from "~/lib/env.server";
 import type { StytchAuthRequest } from "~/lib/stytch-b2b.server";
 
 type CallbackMode = "login" | "signup";
+type CallbackAuthMethod = "magic_link" | "oauth";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getLiveStytchAuthRequest,
     isSameBrowserAuthRequest,
+    prepareStytchPendingCallbackConfirmation,
+    readStytchPkceVerifier,
+    stytchConfirmationCookie,
     stytchAuthFailurePath,
   } = await import("~/lib/stytch-b2b.server");
   const env = getEnv(context);
@@ -21,7 +25,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     url.searchParams.get("discovery_magic_links_token") ??
     url.searchParams.get("stytch_token") ??
     "";
+  const authMethod = callbackAuthMethod(url.searchParams);
   const mode: CallbackMode = url.searchParams.get("mode") === "signup" ? "signup" : "login";
+  const pkceRequired = url.searchParams.get("pkce") === "1";
   const state = url.searchParams.get("state") ?? "";
 
   if (!token || !state) {
@@ -33,15 +39,36 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect(stytchAuthFailurePath(mode));
   }
 
-  if (!isSameBrowserAuthRequest(request, authRequest.state)) {
-    return { mode, state, token };
+  const pkceCodeVerifier = readStytchPkceVerifier(request, authRequest.state);
+  const sameBrowser = isSameBrowserAuthRequest(request, authRequest.state);
+  if (pkceRequired && (!sameBrowser || !pkceCodeVerifier)) {
+    throw redirect(stytchAuthFailurePath(mode));
+  }
+
+  if (authMethod === "magic_link") {
+    const confirmationSecret = await prepareStytchPendingCallbackConfirmation(
+      env,
+      authRequest.state,
+      {
+        authMethod,
+        pkceCodeVerifier,
+        token,
+      },
+    );
+    throw redirect(`/auth/stytch/confirm?state=${encodeURIComponent(authRequest.state)}`, {
+      headers: {
+        "Set-Cookie": stytchConfirmationCookie(request, confirmationSecret),
+      },
+    });
   }
 
   await completeAuthenticatedCallback({
     authRequest,
-    autoComplete: true,
+    authMethod,
+    autoComplete: sameBrowser,
     env,
     mode,
+    pkceCodeVerifier,
     request,
     token,
   });
@@ -58,7 +85,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const env = getEnv(context);
   const formData = await request.formData();
   const token = String(formData.get("token") ?? "");
+  const authMethod = formData.get("method") === "oauth" ? "oauth" : "magic_link";
   const mode: CallbackMode = formData.get("mode") === "signup" ? "signup" : "login";
+  const pkceRequired = formData.get("pkce") === "1";
   const state = String(formData.get("state") ?? "");
 
   if (!isSameOriginAuthFormPost(env, request)) {
@@ -72,22 +101,25 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (!authRequest || authRequest.mode !== mode) {
     throw redirect(stytchAuthFailurePath(mode));
   }
+  const { readStytchPkceVerifier } = await import("~/lib/stytch-b2b.server");
+  const pkceCodeVerifier = readStytchPkceVerifier(request, authRequest.state);
+  if (pkceRequired && !pkceCodeVerifier) {
+    throw redirect(stytchAuthFailurePath(mode));
+  }
 
   return completeAuthenticatedCallback({
     authRequest,
+    authMethod,
     autoComplete: false,
     env,
     mode,
+    pkceCodeVerifier,
     request,
     token,
   });
 }
 
 export default function StytchCallbackRoute() {
-  const { mode, state, token } = useLoaderData<typeof loader>();
-  const navigation = useNavigation();
-  const pending = navigation.state !== "idle";
-
   return (
     <main className="f9-auth-page">
       <div className="f9-auth-gradient" aria-hidden="true" />
@@ -105,21 +137,12 @@ export default function StytchCallbackRoute() {
         </section>
 
         <div className="f9-auth-card">
-          <span>{mode === "signup" ? "Workspace setup" : "Sign in"}</span>
-          <h2>Open Five to Nine?</h2>
-          <p>Use this only if you expected a Five to Nine email link.</p>
-
-          <Form className="f9-auth-form" method="post">
-            <input name="mode" type="hidden" value={mode} />
-            <input name="state" type="hidden" value={state} />
-            <input name="token" type="hidden" value={token} />
-            <button className="f9-primary-button" disabled={pending} type="submit">
-              {pending ? "Checking..." : "Continue"}
-            </button>
-          </Form>
+          <span>Secure sign-in</span>
+          <h2>Checking this sign-in.</h2>
+          <p>We are verifying the one-time sign-in response before opening Five to Nine.</p>
 
           <p className="f9-auth-switch">
-            Not your link? <Link to="/auth/login">Use another email</Link>
+            Not your sign-in? <Link to="/auth/login">Use another email</Link>
           </p>
         </div>
       </div>
@@ -129,9 +152,11 @@ export default function StytchCallbackRoute() {
 
 async function completeAuthenticatedCallback(input: {
   authRequest: StytchAuthRequest;
+  authMethod: CallbackAuthMethod;
   autoComplete: boolean;
   env: AppEnv;
   mode: CallbackMode;
+  pkceCodeVerifier?: string | null;
   request: Request;
   token: string;
 }) {
@@ -140,6 +165,7 @@ async function completeAuthenticatedCallback(input: {
     "~/lib/stytch-auth-flow.server"
   );
   const {
+    authenticateDiscoveryOAuth,
     authenticateDiscoveryMagicLink,
     prepareStytchConfirmation,
     storeStytchIntermediateSession,
@@ -153,7 +179,10 @@ async function completeAuthenticatedCallback(input: {
   } = await import("~/lib/stytch-b2b.server");
 
   try {
-    const discovery = await authenticateDiscoveryMagicLink(input.env, input.token);
+    const discovery =
+      input.authMethod === "oauth"
+        ? await authenticateDiscoveryOAuth(input.env, input.token, input.pkceCodeVerifier)
+        : await authenticateDiscoveryMagicLink(input.env, input.token, input.pkceCodeVerifier);
     if (!stytchAuthRequestMatchesEmail(input.authRequest, discovery.email_address)) {
       throw redirect(stytchAuthFailurePath(input.mode));
     }
@@ -167,6 +196,7 @@ async function completeAuthenticatedCallback(input: {
       ...input.authRequest,
       email: discovery.email_address.trim().toLowerCase(),
       intermediateSessionToken: discovery.intermediate_session_token,
+      name: input.authRequest.name ?? discovery.full_name ?? null,
     };
     const discovered = discovery.discovered_organizations ?? [];
     const firstOrganization = discovered[0]?.organization;
@@ -225,4 +255,15 @@ async function completeAuthenticatedCallback(input: {
     console.error("stytch callback failed", error);
     throw redirect(stytchAuthFailurePath(input.mode));
   }
+}
+
+function callbackAuthMethod(searchParams: URLSearchParams): CallbackAuthMethod {
+  if (
+    searchParams.get("method") === "oauth" ||
+    searchParams.get("stytch_token_type") === "discovery_oauth"
+  ) {
+    return "oauth";
+  }
+
+  return "magic_link";
 }

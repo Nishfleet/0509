@@ -20,6 +20,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const {
     getLiveStytchAuthRequest,
     listDiscoveredOrganizations,
+    readStytchPendingCallback,
     rotateStytchConfirmationNonce,
     stytchAuthFailurePath,
     stytchMultipleWorkspacesPath,
@@ -38,6 +39,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const authRequest = state ? await getLiveStytchAuthRequest(env, state) : null;
   if (!authRequest?.intermediateSessionToken || !verifyStytchConfirmationSecret(request, authRequest)) {
     throw redirect("/auth/login?error=callback_failed");
+  }
+  const pendingCallback = readStytchPendingCallback(authRequest);
+  if (pendingCallback) {
+    const nonce = await rotateStytchConfirmationNonce(env, authRequest.state);
+    return {
+      email: authRequest.email,
+      nonce,
+      organizationName: authRequest.organizationName ?? "Five to Nine workspace",
+      state: authRequest.state,
+    };
   }
 
   try {
@@ -82,8 +93,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
     "~/lib/stytch-auth-flow.server"
   );
   const {
+    authenticateDiscoveryMagicLink,
     getLiveStytchAuthRequest,
     listDiscoveredOrganizations,
+    readStytchPendingCallback,
+    storeStytchIntermediateSession,
+    stytchAuthRequestMatchesEmail,
     stytchAuthFailurePath,
     stytchMultipleWorkspacesPath,
     stytchNoWorkspacePath,
@@ -104,22 +119,52 @@ export async function action({ context, request }: ActionFunctionArgs) {
   ) {
     throw redirect("/auth/login?error=callback_failed");
   }
+  const pendingCallback = readStytchPendingCallback(authRequest);
 
   try {
-    const discovery = await listDiscoveredOrganizations(env, {
-      intermediateSessionToken: authRequest.intermediateSessionToken,
-    });
-    const organizations = discovery.discovered_organizations;
+    let confirmedAuthRequest = authRequest;
+    let organizations;
+    let confirmedEmail = authRequest.email;
+    if (pendingCallback) {
+      const discovery = await authenticateDiscoveryMagicLink(
+        env,
+        pendingCallback.token,
+        pendingCallback.pkceCodeVerifier,
+      );
+      if (!stytchAuthRequestMatchesEmail(authRequest, discovery.email_address)) {
+        throw redirect(stytchAuthFailurePath(authRequest.mode));
+      }
+
+      await storeStytchIntermediateSession(env, authRequest.state, {
+        email: discovery.email_address,
+        intermediateSessionToken: discovery.intermediate_session_token,
+      });
+      confirmedAuthRequest = {
+        ...authRequest,
+        email: discovery.email_address.trim().toLowerCase(),
+        intermediateSessionToken: discovery.intermediate_session_token,
+        name: authRequest.name ?? discovery.full_name ?? null,
+      };
+      organizations = discovery.discovered_organizations ?? [];
+      confirmedEmail = discovery.email_address;
+    } else {
+      const discovery = await listDiscoveredOrganizations(env, {
+        intermediateSessionToken: authRequest.intermediateSessionToken,
+      });
+      organizations = discovery.discovered_organizations;
+      confirmedEmail = discovery.email_address || authRequest.email;
+    }
+
     if (organizations.length > 1) {
       throw redirect(stytchMultipleWorkspacesPath(authRequest.mode));
     }
 
     const organization = organizations[0]?.organization;
     const hasExistingLocalUser =
-      !organization && authRequest.mode === "login"
-        ? Boolean(await getUserIdByEmail(env, discovery.email_address || authRequest.email))
+      !organization && confirmedAuthRequest.mode === "login"
+        ? Boolean(await getUserIdByEmail(env, confirmedEmail))
         : false;
-    const creationReason = stytchWorkspaceCreationReason(authRequest, { hasExistingLocalUser });
+    const creationReason = stytchWorkspaceCreationReason(confirmedAuthRequest, { hasExistingLocalUser });
     const organizationSelection = organization
       ? {
           kind: "organization" as const,
@@ -138,7 +183,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const result = await completeStytchAuthRequest(
       env,
       request,
-      authRequest,
+      confirmedAuthRequest,
       organizationSelection,
     );
     throw redirect(result.redirectTo, { headers: result.headers });

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const loginRoute = readFileSync("app/routes/auth.login.tsx", "utf8");
 const signupRoute = readFileSync("app/routes/auth.signup.tsx", "utf8");
+const callbackRoute = readFileSync("app/routes/auth.stytch.callback.tsx", "utf8");
 const authForm = readFileSync("app/components/auth-form.tsx", "utf8");
 const authSurface = `${loginRoute}\n${signupRoute}\n${authForm}`;
 const authClasses = Array.from(
@@ -44,5 +45,11 @@ describe("auth rebuild", () => {
 
   it("uses the Five to Nine wordmark in auth", () => {
     expect(authSurface).toContain("<BrandWordmark />");
+  });
+
+  it("does not render one-time Stytch tokens into auth HTML", () => {
+    expect(callbackRoute).not.toContain('name="token"');
+    expect(callbackRoute).not.toContain('value={token}');
+    expect(callbackRoute).toContain("Checking this sign-in.");
   });
 });

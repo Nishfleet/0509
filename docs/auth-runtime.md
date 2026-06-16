@@ -11,9 +11,9 @@ Keep Cloudflare D1 as the app data store. Do not move product data, billing link
 ## Current Active Runtime
 
 - Active app code lives in `app/` and `workers/`.
-- Auth is implemented through Stytch B2B discovery magic links and organization member sessions.
+- Auth is implemented through Stytch B2B discovery magic links, optional Google/Microsoft discovery OAuth starts, and organization member sessions.
 - The app stores the opaque Stytch session token in an HTTP-only `f9_stytch_session` cookie.
-- Magic-link requests are stored in D1 with one-time state. Same-browser callbacks can complete directly; cross-browser callbacks require an explicit confirmation click before a session cookie is set.
+- Magic-link and OAuth requests are stored in D1 with one-time state. OAuth starts use PKCE with an HTTP-only same-browser verifier cookie; email links confirm before token exchange. Callback tokens are exchanged server-side and are never rendered into HTML.
 - On each protected request, `app/lib/auth.server.ts` authenticates the Stytch session and maps the Stytch member/org to the app-owned D1 `user.id`.
 - `migrations/0031_stytch_identity.sql` stores the local `user_id` to Stytch organization/member mapping plus short-lived auth request state.
 - Existing app-owned user IDs remain the owner key for Dodo billing, watchlists, digests, collections, delivery settings, and API keys.
@@ -32,6 +32,7 @@ Do not enable Stytch settings that require an extra auth step, such as MFA-requi
 - `AUTH_PROVIDER=stytch`
 - `STYTCH_API_BASE_URL`
 - `STYTCH_PROJECT_ID`
+- `STYTCH_PUBLIC_TOKEN` for Google/Microsoft OAuth discovery starts; store as runtime config/secret and do not render it into public HTML or client bundles
 - `STYTCH_SECRET`
 - `STYTCH_SESSION_DURATION_MINUTES` optional, defaults to 30 days
 - `UNSUBSCRIBE_SIGNING_SECRET` for signed unsubscribe links. `BETTER_AUTH_SECRET` remains a legacy fallback only during migration.
