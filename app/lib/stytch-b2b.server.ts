@@ -400,6 +400,22 @@ export async function revokeStytchSession(env: AppEnv, sessionToken: string) {
   });
 }
 
+export async function attestTrustedAuthToken(
+  env: AppEnv,
+  input: {
+    organizationId: string;
+    profileId: string;
+    token: string;
+  },
+) {
+  return stytchRequest<StytchSessionExchange>(env, "/v1/b2b/sessions/attest", {
+    organization_id: input.organizationId,
+    profile_id: input.profileId,
+    token: input.token,
+    session_duration_minutes: stytchSessionDurationMinutes(env),
+  });
+}
+
 export function isInvalidStytchSessionError(error: unknown) {
   return error instanceof StytchRequestError && [401, 403, 404].includes(error.status);
 }

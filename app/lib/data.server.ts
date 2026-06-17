@@ -1682,6 +1682,362 @@ export async function deleteStytchSessionByToken(env: AppEnv, sessionToken: stri
   );
 }
 
+export interface StytchIdentityRecord {
+  userId: string;
+  stytchOrganizationId: string;
+  stytchMemberId: string;
+  organizationName: string | null;
+  organizationSlug: string | null;
+}
+
+export async function getStytchIdentityForUser(
+  env: AppEnv,
+  userId: string,
+): Promise<StytchIdentityRecord | null> {
+  return one<StytchIdentityRecord>(
+    env,
+    `
+      SELECT user_id AS userId,
+             stytch_organization_id AS stytchOrganizationId,
+             stytch_member_id AS stytchMemberId,
+             organization_name AS organizationName,
+             organization_slug AS organizationSlug
+      FROM stytch_identity
+      WHERE user_id = ?
+      LIMIT 1
+    `,
+    userId,
+  );
+}
+
+export interface PasskeyCredentialRecord {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  stytchOrganizationId: string;
+  stytchMemberId: string;
+  organizationName: string | null;
+  organizationSlug: string | null;
+  credentialId: string;
+  webauthnUserId: string;
+  publicKey: string;
+  counter: number;
+  transports: string[];
+  deviceType: string;
+  backedUp: boolean;
+  label: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string | null;
+}
+
+interface PasskeyCredentialRow {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  stytchOrganizationId: string;
+  stytchMemberId: string;
+  organizationName: string | null;
+  organizationSlug: string | null;
+  credentialId: string;
+  webauthnUserId: string;
+  publicKey: string;
+  counter: number;
+  transportsJson: string | null;
+  deviceType: string;
+  backedUp: number;
+  label: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string | null;
+}
+
+export async function listPasskeyCredentialsForUser(env: AppEnv, userId: string) {
+  const rows = await many<PasskeyCredentialRow>(
+    env,
+    `
+      SELECT passkey_credential.id,
+             passkey_credential.user_id AS userId,
+             user.email AS userEmail,
+             user.name AS userName,
+             passkey_credential.stytch_organization_id AS stytchOrganizationId,
+             passkey_credential.stytch_member_id AS stytchMemberId,
+             stytch_identity.organization_name AS organizationName,
+             stytch_identity.organization_slug AS organizationSlug,
+             passkey_credential.credential_id AS credentialId,
+             passkey_credential.webauthn_user_id AS webauthnUserId,
+             passkey_credential.public_key AS publicKey,
+             passkey_credential.counter,
+             passkey_credential.transports_json AS transportsJson,
+             passkey_credential.device_type AS deviceType,
+             passkey_credential.backed_up AS backedUp,
+             passkey_credential.label,
+             passkey_credential.created_at AS createdAt,
+             passkey_credential.updated_at AS updatedAt,
+             passkey_credential.last_used_at AS lastUsedAt
+      FROM passkey_credential
+      JOIN user ON user.id = passkey_credential.user_id
+      LEFT JOIN stytch_identity
+        ON stytch_identity.stytch_organization_id = passkey_credential.stytch_organization_id
+       AND stytch_identity.stytch_member_id = passkey_credential.stytch_member_id
+      WHERE passkey_credential.user_id = ?
+      ORDER BY passkey_credential.created_at DESC
+    `,
+    userId,
+  );
+  return rows.map(mapPasskeyCredentialRow);
+}
+
+export async function getPasskeyCredentialByCredentialId(
+  env: AppEnv,
+  credentialId: string,
+): Promise<PasskeyCredentialRecord | null> {
+  const row = await one<PasskeyCredentialRow>(
+    env,
+    `
+      SELECT passkey_credential.id,
+             passkey_credential.user_id AS userId,
+             user.email AS userEmail,
+             user.name AS userName,
+             passkey_credential.stytch_organization_id AS stytchOrganizationId,
+             passkey_credential.stytch_member_id AS stytchMemberId,
+             stytch_identity.organization_name AS organizationName,
+             stytch_identity.organization_slug AS organizationSlug,
+             passkey_credential.credential_id AS credentialId,
+             passkey_credential.webauthn_user_id AS webauthnUserId,
+             passkey_credential.public_key AS publicKey,
+             passkey_credential.counter,
+             passkey_credential.transports_json AS transportsJson,
+             passkey_credential.device_type AS deviceType,
+             passkey_credential.backed_up AS backedUp,
+             passkey_credential.label,
+             passkey_credential.created_at AS createdAt,
+             passkey_credential.updated_at AS updatedAt,
+             passkey_credential.last_used_at AS lastUsedAt
+      FROM passkey_credential
+      JOIN user ON user.id = passkey_credential.user_id
+      LEFT JOIN stytch_identity
+        ON stytch_identity.stytch_organization_id = passkey_credential.stytch_organization_id
+       AND stytch_identity.stytch_member_id = passkey_credential.stytch_member_id
+      WHERE passkey_credential.credential_id = ?
+      LIMIT 1
+    `,
+    credentialId,
+  );
+  return row ? mapPasskeyCredentialRow(row) : null;
+}
+
+export async function insertPasskeyCredential(
+  env: AppEnv,
+  input: {
+    userId: string;
+    stytchOrganizationId: string;
+    stytchMemberId: string;
+    credentialId: string;
+    webauthnUserId: string;
+    publicKey: string;
+    counter: number;
+    transports: string[];
+    deviceType: string;
+    backedUp: boolean;
+    label?: string | null;
+  },
+) {
+  const now = new Date().toISOString();
+  await run(
+    env,
+    `
+      INSERT INTO passkey_credential (
+        user_id, stytch_organization_id, stytch_member_id, credential_id,
+        webauthn_user_id, public_key, counter, transports_json, device_type,
+        backed_up, label, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    input.userId,
+    input.stytchOrganizationId,
+    input.stytchMemberId,
+    input.credentialId,
+    input.webauthnUserId,
+    input.publicKey,
+    input.counter,
+    JSON.stringify(input.transports),
+    input.deviceType,
+    input.backedUp ? 1 : 0,
+    input.label?.trim() || null,
+    now,
+    now,
+  );
+}
+
+export async function updatePasskeyCredentialAfterAuthentication(
+  env: AppEnv,
+  input: {
+    credentialId: string;
+    counter: number;
+    deviceType: string;
+    backedUp: boolean;
+  },
+) {
+  const now = new Date().toISOString();
+  await run(
+    env,
+    `
+      UPDATE passkey_credential
+      SET counter = ?,
+          device_type = ?,
+          backed_up = ?,
+          last_used_at = ?,
+          updated_at = ?
+      WHERE credential_id = ?
+    `,
+    input.counter,
+    input.deviceType,
+    input.backedUp ? 1 : 0,
+    now,
+    now,
+    input.credentialId,
+  );
+}
+
+export type PasskeyChallengeKind = "registration" | "authentication";
+
+export interface PasskeyChallengeRecord {
+  state: string;
+  kind: PasskeyChallengeKind;
+  userId: string | null;
+  challenge: string;
+  redirectTo: string | null;
+  expiresAt: string;
+}
+
+export async function createPasskeyChallenge(
+  env: AppEnv,
+  input: {
+    kind: PasskeyChallengeKind;
+    userId?: string | null;
+    challenge: string;
+    redirectTo?: string | null;
+    maxAgeSeconds: number;
+  },
+) {
+  const now = new Date();
+  const state = crypto.randomUUID();
+  await deleteExpiredPasskeyChallenges(env);
+  await run(
+    env,
+    `
+      INSERT INTO passkey_challenge (
+        state, kind, user_id, challenge, redirect_to, created_at, updated_at, expires_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    state,
+    input.kind,
+    input.userId ?? null,
+    input.challenge,
+    input.redirectTo ?? null,
+    now.toISOString(),
+    now.toISOString(),
+    new Date(now.getTime() + input.maxAgeSeconds * 1000).toISOString(),
+  );
+  return state;
+}
+
+export async function getLivePasskeyChallenge(
+  env: AppEnv,
+  input: {
+    state: string;
+    kind: PasskeyChallengeKind;
+  },
+): Promise<PasskeyChallengeRecord | null> {
+  const row = await one<{
+    state: string;
+    kind: string;
+    userId: string | null;
+    challenge: string;
+    redirectTo: string | null;
+    expiresAt: string;
+  }>(
+    env,
+    `
+      SELECT state,
+             kind,
+             user_id AS userId,
+             challenge,
+             redirect_to AS redirectTo,
+             expires_at AS expiresAt
+      FROM passkey_challenge
+      WHERE state = ?
+        AND kind = ?
+        AND consumed_at IS NULL
+        AND expires_at > ?
+      LIMIT 1
+    `,
+    input.state,
+    input.kind,
+    new Date().toISOString(),
+  );
+  if (!row || (row.kind !== "registration" && row.kind !== "authentication")) {
+    return null;
+  }
+  return {
+    state: row.state,
+    kind: row.kind,
+    userId: row.userId,
+    challenge: row.challenge,
+    redirectTo: row.redirectTo,
+    expiresAt: row.expiresAt,
+  };
+}
+
+export async function consumePasskeyChallenge(env: AppEnv, state: string) {
+  const now = new Date().toISOString();
+  await run(
+    env,
+    `
+      UPDATE passkey_challenge
+      SET consumed_at = ?,
+          updated_at = ?
+      WHERE state = ?
+    `,
+    now,
+    now,
+    state,
+  );
+}
+
+export async function deleteExpiredPasskeyChallenges(env: AppEnv) {
+  await run(env, "DELETE FROM passkey_challenge WHERE expires_at <= ?", new Date().toISOString());
+}
+
+function mapPasskeyCredentialRow(row: PasskeyCredentialRow): PasskeyCredentialRecord {
+  const transports = parseJson<string[]>(row.transportsJson, []);
+  return {
+    id: row.id,
+    userId: row.userId,
+    userEmail: row.userEmail,
+    userName: row.userName,
+    stytchOrganizationId: row.stytchOrganizationId,
+    stytchMemberId: row.stytchMemberId,
+    organizationName: row.organizationName,
+    organizationSlug: row.organizationSlug,
+    credentialId: row.credentialId,
+    webauthnUserId: row.webauthnUserId,
+    publicKey: row.publicKey,
+    counter: row.counter,
+    transports,
+    deviceType: row.deviceType,
+    backedUp: row.backedUp === 1,
+    label: row.label,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    lastUsedAt: row.lastUsedAt,
+  };
+}
+
 export async function upsertStytchAuthenticatedUser(
   env: AppEnv,
   input: {
