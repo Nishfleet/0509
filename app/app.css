@@ -3077,11 +3077,12 @@ button[aria-busy="true"] {
   }
 
   .f9-auth-story {
-    gap: 36px;
+    display: none;
   }
 
-  .f9-auth-story h1 {
-    font-size: 3.2rem;
+  .f9-auth-card {
+    width: min(100%, 520px);
+    justify-self: center;
   }
 }
 
@@ -3089,6 +3090,19 @@ button[aria-busy="true"] {
   .f9-app-main {
     width: min(100% - 28px, 1480px);
     padding-bottom: 34px;
+  }
+
+  .f9-auth-layout {
+    padding: 22px 0;
+  }
+
+  .f9-auth-card {
+    gap: 14px;
+    padding: 22px;
+  }
+
+  .f9-auth-form {
+    gap: 12px;
   }
 
   .f9-app-sidebar {
