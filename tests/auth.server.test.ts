@@ -7,10 +7,12 @@ import {
   authRequestStateCookie,
   createStytchAuthRequest,
   createStytchPkcePair,
+  enabledStytchOAuthProviders,
   isSameOriginAuthFormPost,
   isSameBrowserAuthRequest,
   isStytchConfigured,
   isStytchOAuthConfigured,
+  isStytchOAuthProviderConfigured,
   readStytchPkceVerifier,
   sendDiscoveryEmail,
   stytchConfirmationCookie,
@@ -556,6 +558,30 @@ describe("Stytch auth boundary", () => {
         STYTCH_OAUTH_PROVIDERS_ENABLED: "true",
       }),
     ).toBe(true);
+    expect(
+      enabledStytchOAuthProviders({
+        ...baseEnv,
+        STYTCH_OAUTH_ENABLED_PROVIDERS: "google, unknown, GOOGLE",
+      }),
+    ).toEqual(["google"]);
+    expect(
+      isStytchOAuthProviderConfigured(
+        {
+          ...baseEnv,
+          STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
+        },
+        "google",
+      ),
+    ).toBe(true);
+    expect(
+      isStytchOAuthProviderConfigured(
+        {
+          ...baseEnv,
+          STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
+        },
+        "microsoft",
+      ),
+    ).toBe(false);
   });
 
   it("starts Stytch OAuth from a same-origin server action with HTTP-only verifier cookies", async () => {
@@ -581,7 +607,7 @@ describe("Stytch auth boundary", () => {
           cloudflare: {
             env: {
               ...stytchActionTestEnv(db),
-              STYTCH_OAUTH_PROVIDERS_ENABLED: "true",
+              STYTCH_OAUTH_ENABLED_PROVIDERS: "microsoft",
               STYTCH_PUBLIC_TOKEN: "public-token-test",
             },
           },
@@ -616,6 +642,45 @@ describe("Stytch auth boundary", () => {
       expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
     }
     expect(statements.some((sql) => sql.includes("INSERT INTO stytch_auth_request"))).toBe(true);
+  });
+
+  it("rejects a Stytch OAuth provider that is not explicitly enabled", async () => {
+    const db = {
+      prepare() {
+        throw new Error("No auth request should be stored for a disabled provider.");
+      },
+    };
+
+    try {
+      await oauthAction({
+        context: {
+          cloudflare: {
+            env: {
+              ...stytchActionTestEnv(db),
+              STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
+              STYTCH_PUBLIC_TOKEN: "public-token-test",
+            },
+          },
+        },
+        params: {},
+        request: new Request("https://preview.0509.dev/auth/stytch/oauth", {
+          method: "POST",
+          body: new URLSearchParams({
+            email: "asha@agency.com",
+            mode: "login",
+            provider: "microsoft",
+            redirectTo: "/app",
+          }),
+          headers: { origin: "https://preview.0509.dev" },
+        }),
+      } as never);
+      throw new Error("Expected disabled OAuth provider to redirect.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      const response = error as Response;
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe("/auth/login?error=oauth_not_configured");
+    }
   });
 
   it("requires an explicit HTTPS app origin before sending Stytch magic links", async () => {
