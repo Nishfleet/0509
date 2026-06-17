@@ -18,6 +18,7 @@ import {
   revokeDodoPlanAccess,
   getDiscoveryCacheEntry,
   getLaunchReadinessSignals,
+  getSuccessfulProofCaptureStatsForUser,
   getOperatorSnapshot,
   getWeeklyBusinessSummary,
   listActiveWatchlists,
@@ -39,7 +40,9 @@ import {
   upsertWorkspaceDeliveryConfig,
 } from "~/lib/data.server";
 
-function createMockDb() {
+function createMockDb(
+  resultOverrides: Array<{ sqlIncludes: string; results: unknown[] }> = [],
+) {
   const statements: Array<{ sql: string; bindings: unknown[] }> = [];
 
   return {
@@ -54,6 +57,10 @@ function createMockDb() {
                 return { success: true };
               },
               async all<T>() {
+                const override = resultOverrides.find((entry) => sql.includes(entry.sqlIncludes));
+                if (override) {
+                  return { results: override.results as T[] };
+                }
                 return { results: [] as T[] };
               },
             };
@@ -1367,6 +1374,35 @@ describe("createProofCapture", () => {
       ),
     ).toBe(true);
     expect(statement?.bindings).toContain("capture:watch-1:meta-boat-1");
+  });
+});
+
+describe("getSuccessfulProofCaptureStatsForUser", () => {
+  it("counts only succeeded proof captures for the workspace user", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "COUNT(*) AS total, MAX(proof_capture.succeeded_at) AS latest_at",
+        results: [{ total: 3, latest_at: "2026-04-18T16:00:05.000Z" }],
+      },
+    ]);
+
+    const result = await getSuccessfulProofCaptureStatsForUser(
+      { DB: mock.db } as never,
+      "user-1",
+    );
+
+    expect(result).toEqual({
+      count: 3,
+      latestAt: "2026-04-18T16:00:05.000Z",
+    });
+
+    const statement = findStatement(
+      mock.statements,
+      "FROM proof_capture",
+      "proof_capture.status = 'succeeded'",
+    );
+    expect(statement?.sql).toContain("proof_capture.succeeded_at IS NOT NULL");
+    expect(statement?.bindings).toEqual(["user-1"]);
   });
 });
 

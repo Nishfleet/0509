@@ -409,6 +409,10 @@ describe("onboarding route", () => {
     expect(markup).toContain("Choose a plan to start monitoring");
     expect(markup).toContain("Watchlists are available on paid plans.");
     expect(markup).toContain("Starter is the recommended launch plan");
+    expect(markup).toContain("What happens next");
+    expect(markup).toContain("First sweep starts");
+    expect(markup).toContain("Quiet still counts");
+    expect(markup).toContain("Proof feeds briefs");
     expect(markup).not.toContain("Choose Scout or higher");
     expect(markup).toContain("View pricing");
     expect(markup).toContain("href=\"/#pricing\"");
