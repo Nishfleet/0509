@@ -21,6 +21,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { isStytchAuthEnabled } = await import("~/lib/env.server");
+  const { isPasskeyAuthConfigured } = await import("~/lib/passkeys.server");
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
   const { enabledStytchOAuthProviders } = await import("~/lib/stytch-b2b.server");
   const env = getEnv(context);
@@ -38,11 +39,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : null;
   const error = authErrorMessage(url.searchParams.get("error"));
   const oauthProviders = isStytchAuthEnabled(env) ? enabledStytchOAuthProviders(env) : [];
+  const passkeysEnabled = isStytchAuthEnabled(env) && isPasskeyAuthConfigured(env);
 
   return {
     redirectTo,
     prefillEmail: url.searchParams.get("email")?.trim() || "",
     ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
+    ...(passkeysEnabled ? { passkeysEnabled } : {}),
     ...(message ? { message } : {}),
     ...(error ? { error } : {}),
   };
@@ -143,6 +146,7 @@ export default function LoginRoute() {
           message={loaderData.message}
           mode="login"
           oauthProviders={loaderData.oauthProviders}
+          passkeysEnabled={loaderData.passkeysEnabled}
           redirectTo={loaderData.redirectTo}
         />
       </div>

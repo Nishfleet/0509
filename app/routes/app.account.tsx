@@ -1,5 +1,6 @@
 import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useState } from "react";
 
 import { SubmitButton } from "~/components/submit-button";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -10,13 +11,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlan } = await import("~/lib/plan.server");
-  const { getWorkspaceBranding } = await import("~/lib/data.server");
+  const { getWorkspaceBranding, listPasskeyCredentialsForUser } = await import("~/lib/data.server");
+  const { isPasskeyAuthConfigured, publicPasskeyCredential } = await import("~/lib/passkeys.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
 
   const plan = await getUserPlan(env, session.user.id);
   const branding =
     plan === "agency" ? await getWorkspaceBranding(env, session.user.id) : { brandName: null };
+  const passkeysEnabled = isPasskeyAuthConfigured(env);
+  const passkeys = passkeysEnabled
+    ? (await listPasskeyCredentialsForUser(env, session.user.id)).map(publicPasskeyCredential)
+    : [];
 
   return {
     email: session.user.email,
@@ -25,6 +31,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     sessionExpiresAt: session.session.expiresAt,
     plan,
     brandName: branding.brandName,
+    passkeys,
+    passkeysEnabled,
   };
 }
 
@@ -66,6 +74,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function AccountRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const [passkeyPending, setPasskeyPending] = useState(false);
+  const [passkeyMessage, setPasskeyMessage] = useState<string | null>(null);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
 
   return (
     <section className="f9-app-stack">
@@ -78,10 +89,58 @@ export default function AccountRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          Sign-in is handled by Stytch B2B. Five to Nine currently supports secure email links for
-          workspace access, while workspace data stays in Five to Nine.
+          Sign-in is handled by Stytch B2B. Five to Nine supports secure email links
+          and configured work sign-in methods, while workspace data stays in Five to Nine.
         </p>
       </article>
+
+      {data.passkeysEnabled ? (
+        <article className="f9-app-panel">
+          <div className="f9-panel-toolbar">
+            <div>
+              <span className="f9-app-kicker">Passkeys</span>
+              <h2>Use this device to sign in faster</h2>
+            </div>
+          </div>
+          {passkeyMessage ? <p className="f9-message is-success">{passkeyMessage}</p> : null}
+          {passkeyError ? <p className="f9-message is-error">{passkeyError}</p> : null}
+          <div className="f9-account-security-actions">
+            <button
+              className="f9-secondary-button"
+              disabled={passkeyPending}
+              onClick={() => {
+                void registerPasskey({
+                  setError: setPasskeyError,
+                  setMessage: setPasskeyMessage,
+                  setPending: setPasskeyPending,
+                });
+              }}
+              type="button"
+            >
+              {passkeyPending ? "Adding..." : "Add passkey"}
+            </button>
+          </div>
+          {data.passkeys.length > 0 ? (
+            <div className="f9-passkey-list">
+              {data.passkeys.map((passkey) => (
+                <div className="f9-passkey-row" key={passkey.id}>
+                  <div>
+                    <strong>{passkey.label}</strong>
+                    <span>Created {formatAccountDate(passkey.createdAt)}</span>
+                  </div>
+                  <span>
+                    {passkey.lastUsedAt ? `Last used ${formatAccountDate(passkey.lastUsedAt)}` : "Not used yet"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="f9-muted-copy">
+              No passkeys are attached to this account yet.
+            </p>
+          )}
+        </article>
+      ) : null}
 
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
@@ -166,4 +225,64 @@ export default function AccountRoute() {
       </article>
     </section>
   );
+}
+
+async function registerPasskey(input: {
+  setError: (message: string | null) => void;
+  setMessage: (message: string | null) => void;
+  setPending: (pending: boolean) => void;
+}) {
+  input.setError(null);
+  input.setMessage(null);
+  input.setPending(true);
+  try {
+    const { startRegistration } = await import("@simplewebauthn/browser");
+    const optionsResponse = await fetch("/auth/passkeys/registration/options", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const optionsPayload = (await optionsResponse.json().catch(() => null)) as
+      | { options?: unknown; state?: string }
+      | null;
+    if (!optionsResponse.ok || !optionsPayload?.options || !optionsPayload.state) {
+      throw new Error("options_failed");
+    }
+
+    const credential = await startRegistration({ optionsJSON: optionsPayload.options as never });
+    const verifyResponse = await fetch("/auth/passkeys/registration/verify", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credential, state: optionsPayload.state }),
+    });
+    if (!verifyResponse.ok) {
+      throw new Error("verify_failed");
+    }
+
+    input.setMessage("Passkey added.");
+    window.setTimeout(() => window.location.reload(), 400);
+  } catch (error) {
+    if (error instanceof Error && error.name === "InvalidStateError") {
+      input.setError("This passkey is already attached to your account.");
+    } else if (error instanceof Error && error.name === "NotAllowedError") {
+      input.setError("Passkey setup was cancelled.");
+    } else {
+      input.setError("That passkey could not be added. Try again or use email sign-in.");
+    }
+    input.setPending(false);
+  }
+}
+
+function formatAccountDate(value: string) {
+  try {
+    return new Intl.DateTimeFormat("en", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
 }
