@@ -1801,6 +1801,10 @@ button[aria-busy="true"] {
   gap: 10px;
 }
 
+.f9-auth-oauth-grid > .f9-oauth-button:only-child {
+  grid-column: 1 / -1;
+}
+
 .f9-oauth-button {
   min-height: 48px;
   border: 1.5px solid var(--f9-search-line);
