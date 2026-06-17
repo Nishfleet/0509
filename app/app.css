@@ -1806,23 +1806,35 @@ button[aria-busy="true"] {
 }
 
 .f9-oauth-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   min-height: 48px;
-  border: 1.5px solid var(--f9-search-line);
-  border-radius: 10px;
+  padding: 0 16px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
   background: #fff;
-  color: var(--f9-search-ink);
-  font: inherit;
-  font-weight: 850;
+  color: #3c4043;
+  font: 500 0.95rem/1 "Roboto", Arial, sans-serif;
   cursor: pointer;
 }
 
 .f9-oauth-button:hover {
-  border-color: var(--f9-search-ink);
+  background: #f8fafd;
+  border-color: #d2e3fc;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.2);
 }
 
 .f9-oauth-button:disabled {
   cursor: progress;
   opacity: 0.72;
+}
+
+.f9-oauth-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
 
 .f9-auth-switch {
@@ -4395,13 +4407,14 @@ one signal-green accent.
 }
 
 .f9-auth-page .f9-oauth-button {
-  background: var(--ld-card);
-  border-color: var(--ld-line);
-  color: var(--ld-ink);
+  background: #fff;
+  border-color: #dadce0;
+  color: #3c4043;
 }
 
 .f9-auth-page .f9-oauth-button:hover {
-  border-color: var(--ld-ink);
+  background: #f8fafd;
+  border-color: #d2e3fc;
 }
 
 .f9-search-page .f9-secondary-button,
