@@ -33,7 +33,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchlists,
   } = await import("~/lib/data.server");
   const { getProofUsageSummary } = await import("~/lib/plan.server");
-  const { getSuccessfulRunStatsForUserBetween, getUserPlanBillingInfo } = await import(
+  const { getSuccessfulProofCaptureStatsForUser, getSuccessfulRunStatsForUserBetween, getUserPlanBillingInfo } = await import(
     "~/lib/data.server"
   );
   const env = getEnv(context);
@@ -57,7 +57,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     (billingInfo.dodoStatus === "subscription.failed" ||
       billingInfo.dodoStatus === "subscription.on_hold");
   const overnightSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const [recentEvents, recentProofCaptures, deliveryTargets, overnightStats] = await Promise.all([
+  const [recentEvents, recentProofCaptures, deliveryTargets, overnightStats, successfulProofStats] = await Promise.all([
     Promise.all(watchlists.slice(0, 6).map((watchlist) => listWatchEvents(env, watchlist.id, 6))).then((groups) =>
       groups
         .flat()
@@ -67,6 +67,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listRecentWorkspaceProofCaptures(env, workspaceUserId, 8),
     listDeliveryTargets(env, workspaceUserId, { limit: 12 }),
     getSuccessfulRunStatsForUserBetween(env, workspaceUserId, overnightSince, new Date().toISOString()),
+    getSuccessfulProofCaptureStatsForUser(env, workspaceUserId),
   ]);
 
   return {
@@ -80,6 +81,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     metaStatus,
     proofUsage,
     overnightStats,
+    successfulProofStats,
     plan,
     teamMemberCount: workspaceMembers.length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
@@ -201,7 +203,8 @@ export default function AppDashboardRoute() {
       (event.status === "confirmed" || event.status === "detected") &&
       Date.parse(event.createdAt) >= overnightCutoff,
   ).length;
-  const successfulProofs = recentProofCaptures.filter((capture) => capture.status === "succeeded").length;
+  const recentSuccessfulProofs = recentProofCaptures.filter((capture) => capture.status === "succeeded").length;
+  const successfulProofs = data.successfulProofStats?.count ?? recentSuccessfulProofs;
   const sentDigests = digests.filter((digest) => digest.delivery?.status === "sent").length;
   const latestScanAt = watchlists
     .map((watchlist) => watchlist.lastScannedAt)
@@ -221,9 +224,11 @@ export default function AppDashboardRoute() {
   const slackNeedsProof = deliveryTargets.some(
     (target) => target.channel === "slack" && !target.isPaused && !target.lastSuccessfulDeliveryAt,
   );
+  const deliveryReady = hasEmailDelivery || hasSlackDelivery;
+  const deliveryComplete = sentDigests > 0 || hasSlackDelivery;
   const firstCompetitorReady = competitorCount > 0;
   const firstSearchReady = savedQueries.length > 0 || firstCompetitorReady;
-  const proofReady = successfulProofs > 0 || proofUsage.used > 0;
+  const proofReady = successfulProofs > 0;
   const sourceReady = data.metaStatus.status === "healthy";
   const setupItems = [
     {
@@ -240,7 +245,11 @@ export default function AppDashboardRoute() {
     },
     {
       label: "First proof",
-      detail: proofReady ? `${successfulProofs || proofUsage.used} evidence check${successfulProofs === 1 || proofUsage.used === 1 ? "" : "s"} recorded` : "Refresh a watchlist to capture landing-page evidence.",
+      detail: proofReady
+        ? `${successfulProofs} successful evidence check${successfulProofs === 1 ? "" : "s"} recorded`
+        : proofUsage.used > 0
+          ? "Evidence attempts have run, but no successful proof is attached yet."
+          : "Refresh a watchlist to capture landing-page evidence.",
       done: proofReady,
       href: "/app/watchlists",
     },
@@ -333,18 +342,96 @@ export default function AppDashboardRoute() {
       detail: sentDigests > 0 ? "Email trail active" : "No digest sent yet",
     },
   ];
+  const overnightAdsSeen = data.overnightStats?.adsSeen ?? 0;
+  const overnightRuns = data.overnightStats?.runs ?? 0;
+  const overnightWatchlists = data.overnightStats?.watchlistsChecked ?? 0;
+  const hasOvernightCheck = overnightRuns > 0 || overnightWatchlists > 0;
+  const overnightCheckScope = overnightWatchlists > 0
+    ? `${overnightWatchlists} competitor${overnightWatchlists === 1 ? "" : "s"}`
+    : `${overnightRuns} scan${overnightRuns === 1 ? "" : "s"}`;
+  const proofCount = successfulProofs;
+  const watchedState = activeWatchlists > 0
+    ? `${activeWatchlists} active competitor${activeWatchlists === 1 ? "" : "s"}`
+    : firstCompetitorReady
+      ? "Saved but paused"
+      : "Not started";
+  const valueLoopItems = [
+    {
+      label: "Watched",
+      state: watchedState,
+      detail: firstCompetitorReady
+        ? `${competitorCount} competitor${competitorCount === 1 ? "" : "s"} saved for retained monitoring.`
+        : "Add one competitor website to start the retained watch.",
+      done: activeWatchlists > 0,
+      href: "/app/watchlists",
+    },
+    {
+      label: "Checked",
+      state: hasOvernightCheck
+        ? `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked`
+        : activeWatchlists > 0
+          ? `Next sweep: ${nextScanLabel}`
+          : "Waiting for first sweep",
+      detail: hasOvernightCheck
+        ? overnightAdsSeen > 0
+          ? `Five to Nine looked across ${overnightCheckScope} in the last 24 hours.`
+          : `Quiet still counts: Five to Nine looked across ${overnightCheckScope}.`
+        : "The first sweep starts after a competitor is under watch.",
+      done: hasOvernightCheck,
+      href: "/app/watchlists",
+    },
+    {
+      label: "Changed",
+      state: confirmedChanges > 0
+        ? `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} found`
+        : "No move yet",
+      detail: confirmedChanges > 0
+        ? "Recent watch events are ready for review."
+        : "Quiet scans keep the market desk clean until a real change appears.",
+      done: confirmedChanges > 0,
+      href: "/app/watchlists",
+    },
+    {
+      label: "Proved",
+      state: proofReady
+        ? `${proofCount} evidence check${proofCount === 1 ? "" : "s"}`
+        : "Proof waiting",
+      detail: proofReady
+        ? "Screenshots and landing-page evidence are attached to the trail."
+        : "The first proof appears after a watchlist catches or confirms a tracked page.",
+      done: proofReady,
+      href: "/app/watchlists",
+    },
+    {
+      label: "Delivered",
+      state: sentDigests > 0
+        ? `${sentDigests} digest${sentDigests === 1 ? "" : "s"} sent`
+        : hasSlackDelivery
+          ? "Slack ready"
+          : hasEmailDelivery
+            ? "Email ready"
+            : slackNeedsProof
+              ? "Slack needs proof"
+              : "Delivery not set",
+      detail: sentDigests > 0
+        ? "Proof-backed summaries have already left the app."
+        : deliveryReady
+          ? "A delivery path exists for future eligible briefs."
+          : "Connect email or Slack when the team wants the proof pushed out.",
+      done: deliveryComplete,
+      href: sentDigests > 0 ? "/app/digests" : "/app/sources",
+    },
+  ];
   const readyCount = setupItems.filter((item) => item.done).length;
   const briefTitle = confirmedChanges > 0
     ? `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} to review`
     : firstCompetitorReady
       ? "Watching for the first change"
       : "Add your first competitor";
-  const overnightAdsSeen = data.overnightStats?.adsSeen ?? 0;
-  const overnightWatchlists = data.overnightStats?.watchlistsChecked ?? 0;
   const briefSummary = confirmedChanges > 0
     ? recentEvents.slice(0, 3).map((event) => event.title).join(". ")
-    : overnightAdsSeen > 0
-      ? `All quiet — ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightWatchlists} competitor${overnightWatchlists === 1 ? "" : "s"} in the last day. No changes worth your time.`
+    : hasOvernightCheck
+      ? `All quiet — ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightCheckScope} in the last day. No changes worth your time.`
       : firstCompetitorReady
         ? "Your watchlist is ready. Refresh tracking to capture proof when the landing page or offer changes."
         : "Paste a competitor website and Five to Nine will create the first market watch.";
@@ -374,8 +461,8 @@ export default function AppDashboardRoute() {
               : "Watch idle — add a competitor to start"}
         </strong>
         <span className="f9-watch-strip-detail">
-          {overnightAdsSeen > 0
-            ? `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked in the last day — silence means we looked`
+          {hasOvernightCheck
+            ? `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked in the last day — quiet means we looked`
             : activeWatchlists > 0
               ? `Next sweep: ${nextScanLabel}`
               : competitorCount > 0
@@ -522,6 +609,31 @@ export default function AppDashboardRoute() {
           <Link to="/app/watchlists">Open watchlists</Link>
         </div>
       </section>
+
+      <article className="f9-app-panel f9-value-loop-panel" aria-label="Retained value loop">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Retained value loop</span>
+            <h2>What Five to Nine did for you</h2>
+            <p className="f9-muted-copy">
+              The retained account loop is watched, checked, changed, proved, and delivered.
+            </p>
+          </div>
+          <Link className="f9-secondary-button" to="/app/watchlists">
+            Review proof trail
+          </Link>
+        </div>
+        <div className="f9-value-loop-list">
+          {valueLoopItems.map((item, index) => (
+            <Link className={`f9-value-loop-step ${item.done ? "is-done" : ""}`} key={item.label} to={item.href}>
+              <span className="f9-value-loop-index">{String(index + 1).padStart(2, "0")}</span>
+              <strong>{item.label}</strong>
+              <em>{item.state}</em>
+              <p>{item.detail}</p>
+            </Link>
+          ))}
+        </div>
+      </article>
 
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">

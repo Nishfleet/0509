@@ -262,6 +262,30 @@ export default function AppOnboardRoute() {
             </section>
           </div>
 
+          <section className="f9-onboard-value-loop" aria-label="What happens next after setup">
+            <div>
+              <span className="f9-app-kicker">What happens next</span>
+              <h2>Your first competitor starts the loop.</h2>
+            </div>
+            <div className="f9-onboard-touchpoints">
+              <div>
+                <span>01</span>
+                <strong>First sweep starts</strong>
+                <p>Five to Nine queues the first check as soon as the watchlist is created.</p>
+              </div>
+              <div>
+                <span>02</span>
+                <strong>Quiet still counts</strong>
+                <p>If nothing changed, the dashboard still shows that the account was checked.</p>
+              </div>
+              <div>
+                <span>03</span>
+                <strong>Proof feeds briefs</strong>
+                <p>When a real move appears, screenshots, landing-page proof, and digests keep the trail visible.</p>
+              </div>
+            </div>
+          </section>
+
           <div className="f9-onboard-actions">
             <Form method="post">
               <input name="intent" type="hidden" value="finish" />

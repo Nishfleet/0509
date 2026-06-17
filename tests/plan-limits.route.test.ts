@@ -484,6 +484,165 @@ describe("pricing CTA rendering", () => {
     expect(markup).toContain("/#pricing");
   });
 
+  it("credits successful quiet dashboard checks even when no ads are found", async () => {
+    await mockRouter({
+      loaderData: {
+        savedQueries: [],
+        collections: [],
+        watchlists: [],
+        digests: [],
+        recentEvents: [],
+        recentProofCaptures: [],
+        deliveryTargets: [],
+        metaStatus: {
+          status: "healthy",
+          summary: "Healthy",
+          lastCheckedAt: null,
+        },
+        proofUsage: {
+          warningLevel: "ok",
+          used: 0,
+          limit: 0,
+          remaining: 0,
+          plan: "free",
+        },
+        overnightStats: {
+          runs: 1,
+          watchlistsChecked: 1,
+          adsSeen: 0,
+        },
+        nextScanLabel: "tomorrow morning",
+      },
+    });
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("0 ads checked");
+    expect(markup).toContain("Quiet still counts");
+    expect(markup).toContain("quiet means we looked");
+    expect(markup).not.toContain("Next sweep: tomorrow morning");
+  });
+
+  it("does not mark failed proof attempts as completed proof", async () => {
+    await mockRouter({
+      loaderData: {
+        savedQueries: [],
+        collections: [],
+        watchlists: [],
+        digests: [],
+        recentEvents: [],
+        recentProofCaptures: [
+          {
+            status: "failed",
+          },
+        ],
+        deliveryTargets: [],
+        metaStatus: {
+          status: "healthy",
+          summary: "Healthy",
+          lastCheckedAt: null,
+        },
+        proofUsage: {
+          warningLevel: "ok",
+          used: 1,
+          limit: 10,
+          remaining: 9,
+          plan: "starter",
+        },
+      },
+    });
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Evidence attempts have run, but no successful proof is attached yet.");
+    expect(markup).toContain("Proof waiting");
+    expect(markup).not.toContain("Screenshots and landing-page evidence are attached to the trail.");
+  });
+
+  it("keeps proved complete when older successful proof exists outside recent attempts", async () => {
+    await mockRouter({
+      loaderData: {
+        savedQueries: [],
+        collections: [],
+        watchlists: [],
+        digests: [],
+        recentEvents: [],
+        recentProofCaptures: [
+          {
+            status: "failed",
+          },
+        ],
+        successfulProofStats: {
+          count: 1,
+          latestAt: "2026-04-18T16:00:05.000Z",
+        },
+        deliveryTargets: [],
+        metaStatus: {
+          status: "healthy",
+          summary: "Healthy",
+          lastCheckedAt: null,
+        },
+        proofUsage: {
+          warningLevel: "ok",
+          used: 9,
+          limit: 10,
+          remaining: 1,
+          plan: "starter",
+        },
+      },
+    });
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("1 evidence check");
+    expect(markup).toContain("Screenshots and landing-page evidence are attached to the trail.");
+  });
+
+  it("does not mark delivery complete just because email is configured", async () => {
+    await mockRouter({
+      loaderData: {
+        savedQueries: [],
+        collections: [],
+        watchlists: [],
+        digests: [],
+        recentEvents: [],
+        recentProofCaptures: [],
+        deliveryTargets: [
+          {
+            channel: "email",
+            isOptedIn: true,
+            isPaused: false,
+            optedOutAt: null,
+          },
+        ],
+        metaStatus: {
+          status: "healthy",
+          summary: "Healthy",
+          lastCheckedAt: null,
+        },
+        proofUsage: {
+          warningLevel: "ok",
+          used: 0,
+          limit: 10,
+          remaining: 10,
+          plan: "starter",
+        },
+      },
+    });
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Email ready");
+    expect(markup).toContain("A delivery path exists for future eligible briefs.");
+    expect(markup).toMatch(
+      /class="f9-value-loop-step " href="\/app\/sources"><span class="f9-value-loop-index">05<\/span><strong>Delivered<\/strong><em>Email ready<\/em>/,
+    );
+  });
+
   it("offers an upgrade path on collections plan-limit errors", async () => {
     await mockRouter({
       actionData: {

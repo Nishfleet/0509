@@ -4052,6 +4052,30 @@ export async function countProofCapturesForWorkspaceSince(
   return row?.total ?? 0;
 }
 
+export async function getSuccessfulProofCaptureStatsForUser(env: AppEnv, userId: string) {
+  const row = await one<{
+    total: number;
+    latest_at: string | null;
+  }>(
+    env,
+    `
+      SELECT COUNT(*) AS total, MAX(proof_capture.succeeded_at) AS latest_at
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
+      WHERE watchlist.user_id = ?
+        AND proof_capture.status = 'succeeded'
+        AND proof_capture.succeeded_at IS NOT NULL
+    `,
+    userId,
+  );
+
+  return {
+    count: Number(row?.total ?? 0),
+    latestAt: row?.latest_at ?? null,
+  };
+}
+
 export async function listRecentWorkspaceProofCaptures(
   env: AppEnv,
   userId: string,

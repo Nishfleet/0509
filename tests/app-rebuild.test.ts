@@ -73,6 +73,13 @@ describe("app rebuild", () => {
     expect(dashboardRoute).toContain("Add your first competitor");
     expect(dashboardRoute).toContain("Revenue brief");
     expect(dashboardRoute).toContain("Competitor website");
+    expect(dashboardRoute).toContain("Retained value loop");
+    expect(dashboardRoute).toContain("What Five to Nine did for you");
+    expect(dashboardRoute).toContain("Watched");
+    expect(dashboardRoute).toContain("Checked");
+    expect(dashboardRoute).toContain("Changed");
+    expect(dashboardRoute).toContain("Proved");
+    expect(dashboardRoute).toContain("Delivered");
     expect(dashboardRoute).not.toContain("Commercial discovery live");
     expect(dashboardRoute).not.toContain("source state visible");
     expect(appSurface).toContain("?format=json");
