@@ -16,12 +16,17 @@ import {
   readStytchPkceVerifier,
   sendDiscoveryEmail,
   stytchConfirmationCookie,
+  attestTrustedAuthToken,
   stytchOAuthDiscoveryStartUrl,
   stytchWorkspaceCreationReason,
   verifyStytchConfirmationNonce,
   verifyStytchConfirmationSecret,
   type StytchAuthRequest,
 } from "~/lib/stytch-b2b.server";
+import {
+  createPasskeyAuthenticationOptions,
+  isPasskeyAuthConfigured,
+} from "~/lib/passkeys.server";
 import { action as loginAction } from "~/routes/auth.login";
 import { action as logoutAction, loader as logoutLoader } from "~/routes/auth.logout";
 import { action as signupAction } from "~/routes/auth.signup";
@@ -582,6 +587,151 @@ describe("Stytch auth boundary", () => {
         "microsoft",
       ),
     ).toBe(false);
+  });
+
+  it("keeps passkeys disabled until every Stytch attestation secret is configured", () => {
+    const baseEnv = {
+      APP_ORIGIN: "https://0509.io",
+      STYTCH_PROJECT_ID: "project-test",
+      STYTCH_SECRET: "secret-test",
+    };
+
+    expect(isPasskeyAuthConfigured(baseEnv)).toBe(false);
+    expect(
+      isPasskeyAuthConfigured({
+        ...baseEnv,
+        STYTCH_B2B_PASSKEYS_ENABLED: "true",
+        STYTCH_TAT_AUDIENCE: "0509-passkeys",
+        STYTCH_TAT_ISSUER: "https://0509.io",
+        STYTCH_TAT_PRIVATE_KEY_B64: "private-key",
+        STYTCH_TAT_PROFILE_ID: "trusted-auth-token-profile-test",
+      }),
+    ).toBe(true);
+    expect(
+      isPasskeyAuthConfigured({
+        ...baseEnv,
+        STYTCH_B2B_PASSKEYS_ENABLED: "true",
+        STYTCH_TAT_AUDIENCE: "0509-passkeys",
+        STYTCH_TAT_ISSUER: "https://0509.io",
+        STYTCH_TAT_PROFILE_ID: "trusted-auth-token-profile-test",
+      }),
+    ).toBe(false);
+  });
+
+  it("creates passkey login challenges without revealing account credentials", async () => {
+    const calls: Array<{ sql: string; bindings: unknown[] }> = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            calls.push({ sql, bindings });
+            return {
+              async run() {
+                return {};
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const result = await createPasskeyAuthenticationOptions(
+      {
+        APP_ORIGIN: "https://0509.io",
+        DB: db as unknown as D1Database,
+        STYTCH_B2B_PASSKEYS_ENABLED: "true",
+        STYTCH_PROJECT_ID: "project-test",
+        STYTCH_SECRET: "secret-test",
+        STYTCH_TAT_AUDIENCE: "0509-passkeys",
+        STYTCH_TAT_ISSUER: "https://0509.io",
+        STYTCH_TAT_PRIVATE_KEY_B64: "private-key",
+        STYTCH_TAT_PROFILE_ID: "trusted-auth-token-profile-test",
+      },
+      new Request("https://0509.io/auth/login", {
+        method: "POST",
+        headers: { origin: "https://0509.io" },
+      }),
+      { redirectTo: "https://attacker.example/app" },
+    );
+
+    expect(result.state).toBeTruthy();
+    expect(result.options.challenge).toBeTruthy();
+    expect(result.options.allowCredentials).toBeUndefined();
+    const insert = calls.find((call) => call.sql.includes("INSERT INTO passkey_challenge"));
+    expect(insert?.bindings[1]).toBe("authentication");
+    expect(insert?.bindings[2]).toBeNull();
+    expect(insert?.bindings[4]).toBe("/app");
+  });
+
+  it("rejects passkey challenge creation without same-origin proof", async () => {
+    await expect(
+      createPasskeyAuthenticationOptions(
+        {
+          APP_ORIGIN: "https://0509.io",
+          DB: {} as D1Database,
+          STYTCH_B2B_PASSKEYS_ENABLED: "true",
+          STYTCH_PROJECT_ID: "project-test",
+          STYTCH_SECRET: "secret-test",
+          STYTCH_TAT_AUDIENCE: "0509-passkeys",
+          STYTCH_TAT_ISSUER: "https://0509.io",
+          STYTCH_TAT_PRIVATE_KEY_B64: "private-key",
+          STYTCH_TAT_PROFILE_ID: "trusted-auth-token-profile-test",
+        },
+        new Request("https://0509.io/auth/login", { method: "POST" }),
+        { redirectTo: "/app" },
+      ),
+    ).rejects.toThrow("passkey request could not be verified");
+  });
+
+  it("exchanges trusted auth tokens through the backend Stytch session endpoint", async () => {
+    const sentBodies: Array<Record<string, unknown>> = [];
+    const sentUrls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      sentUrls.push(String(url));
+      sentBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return new Response(
+        JSON.stringify({
+          member_id: "member-1",
+          session_token: "session-1",
+          session_jwt: "jwt-1",
+          member_authenticated: true,
+          member_session: {
+            member_session_id: "member-session-1",
+            expires_at: "2099-01-01T00:00:00.000Z",
+          },
+          member: {
+            organization_id: "organization-1",
+            member_id: "member-1",
+            email_address: "asha@agency.com",
+          },
+          organization: {
+            organization_id: "organization-1",
+            organization_name: "Agency",
+          },
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    });
+
+    await attestTrustedAuthToken(
+      {
+        STYTCH_API_BASE_URL: "https://api.stytch.test",
+        STYTCH_PROJECT_ID: "project-test",
+        STYTCH_SECRET: "secret-test",
+      },
+      {
+        organizationId: "organization-1",
+        profileId: "trusted-auth-token-profile-test",
+        token: "signed-jwt",
+      },
+    );
+
+    expect(sentUrls[0]).toBe("https://api.stytch.test/v1/b2b/sessions/attest");
+    expect(sentBodies[0]).toMatchObject({
+      organization_id: "organization-1",
+      profile_id: "trusted-auth-token-profile-test",
+      token: "signed-jwt",
+    });
   });
 
   it("starts Stytch OAuth from a same-origin server action with HTTP-only verifier cookies", async () => {
