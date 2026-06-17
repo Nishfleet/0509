@@ -19,7 +19,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     createStytchAuthRequest,
     createStytchPkcePair,
     isSameOriginAuthFormPost,
-    isStytchOAuthConfigured,
+    isStytchOAuthProviderConfigured,
     stytchOAuthDiscoveryStartUrl,
   } = await import("~/lib/stytch-b2b.server");
   const env = getEnv(context);
@@ -35,7 +35,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (!provider) {
     throw redirect(`${failurePath}?error=request_invalid`);
   }
-  if (!isStytchAuthEnabled(env) || !isStytchOAuthConfigured(env)) {
+  if (!isStytchAuthEnabled(env) || !isStytchOAuthProviderConfigured(env, provider)) {
     throw redirect(`${failurePath}?error=oauth_not_configured`);
   }
   if (!isSameOriginAuthFormPost(env, request)) {

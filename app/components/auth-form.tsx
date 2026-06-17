@@ -6,13 +6,21 @@ interface AuthFormProps {
   initialEmail?: string;
   message?: string | null;
   error?: string | null;
-  oauthEnabled?: boolean;
+  oauthProviders?: AuthOAuthProvider[];
 }
 
-export function AuthForm({ mode, redirectTo, initialEmail, message, error, oauthEnabled = false }: AuthFormProps) {
+type AuthOAuthProvider = "google" | "microsoft";
+
+const OAUTH_PROVIDER_LABELS: Record<AuthOAuthProvider, string> = {
+  google: "Google",
+  microsoft: "Microsoft",
+};
+
+export function AuthForm({ mode, redirectTo, initialEmail, message, error, oauthProviders = [] }: AuthFormProps) {
   const navigation = useNavigation();
   const isSignup = mode === "signup";
   const pending = navigation.state !== "idle";
+  const availableOAuthProviders = oauthProviders.filter((provider) => provider in OAUTH_PROVIDER_LABELS);
   const switchHref = isSignup
     ? `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`
     : `/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`;
@@ -75,34 +83,26 @@ export function AuthForm({ mode, redirectTo, initialEmail, message, error, oauth
               : "Send sign-in link"}
         </button>
 
-        {oauthEnabled ? (
+        {availableOAuthProviders.length > 0 ? (
           <div className="f9-auth-oauth">
             <div className="f9-auth-divider">
               <span>Or continue with</span>
             </div>
             <div className="f9-auth-oauth-grid">
-              <button
-                className="f9-oauth-button"
-                disabled={pending}
-                formAction="/auth/stytch/oauth"
-                formNoValidate
-                name="provider"
-                type="submit"
-                value="google"
-              >
-                Google
-              </button>
-              <button
-                className="f9-oauth-button"
-                disabled={pending}
-                formAction="/auth/stytch/oauth"
-                formNoValidate
-                name="provider"
-                type="submit"
-                value="microsoft"
-              >
-                Microsoft
-              </button>
+              {availableOAuthProviders.map((provider) => (
+                <button
+                  className="f9-oauth-button"
+                  disabled={pending}
+                  formAction="/auth/stytch/oauth"
+                  formNoValidate
+                  key={provider}
+                  name="provider"
+                  type="submit"
+                  value={provider}
+                >
+                  {OAUTH_PROVIDER_LABELS[provider]}
+                </button>
+              ))}
             </div>
           </div>
         ) : null}

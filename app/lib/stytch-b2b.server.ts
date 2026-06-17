@@ -119,12 +119,38 @@ export function isStytchConfigured(env: AppEnv) {
   return Boolean(env.STYTCH_PROJECT_ID?.trim() && env.STYTCH_SECRET?.trim() && stytchRedirectOrigin(env));
 }
 
+const STYTCH_OAUTH_PROVIDERS: StytchOAuthProvider[] = ["google", "microsoft"];
+
+export function enabledStytchOAuthProviders(env: AppEnv): StytchOAuthProvider[] {
+  if (!isStytchConfigured(env) || !env.STYTCH_PUBLIC_TOKEN?.trim()) {
+    return [];
+  }
+
+  const configuredProviders = env.STYTCH_OAUTH_ENABLED_PROVIDERS?.trim();
+  if (configuredProviders) {
+    const providers = new Set<StytchOAuthProvider>();
+    for (const provider of configuredProviders.split(",")) {
+      const normalized = provider.trim().toLowerCase();
+      if (isStytchOAuthProvider(normalized)) {
+        providers.add(normalized);
+      }
+    }
+    return STYTCH_OAUTH_PROVIDERS.filter((provider) => providers.has(provider));
+  }
+
+  return stytchEnvFlagEnabled(env.STYTCH_OAUTH_PROVIDERS_ENABLED) ? [...STYTCH_OAUTH_PROVIDERS] : [];
+}
+
 export function isStytchOAuthConfigured(env: AppEnv) {
-  return Boolean(
-    isStytchConfigured(env) &&
-      env.STYTCH_PUBLIC_TOKEN?.trim() &&
-      stytchEnvFlagEnabled(env.STYTCH_OAUTH_PROVIDERS_ENABLED),
-  );
+  return enabledStytchOAuthProviders(env).length > 0;
+}
+
+export function isStytchOAuthProviderConfigured(env: AppEnv, provider: StytchOAuthProvider) {
+  return enabledStytchOAuthProviders(env).includes(provider);
+}
+
+export function isStytchOAuthProvider(value: string): value is StytchOAuthProvider {
+  return value === "google" || value === "microsoft";
 }
 
 function stytchConfig(env: AppEnv): StytchConfig {

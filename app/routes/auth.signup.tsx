@@ -22,7 +22,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { isStytchAuthEnabled } = await import("~/lib/env.server");
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
-  const { isStytchOAuthConfigured } = await import("~/lib/stytch-b2b.server");
+  const { enabledStytchOAuthProviders } = await import("~/lib/stytch-b2b.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
@@ -37,13 +37,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       ? "Check your email. The setup link will verify you and create the workspace."
       : null;
   const error = signupErrorMessage(url.searchParams.get("error"));
-  const oauthEnabled = isStytchAuthEnabled(env) && isStytchOAuthConfigured(env);
+  const oauthProviders = isStytchAuthEnabled(env) ? enabledStytchOAuthProviders(env) : [];
 
   return {
     redirectTo,
     // The marketing hero's email-capture form lands here with ?email=…
     prefillEmail: url.searchParams.get("email")?.trim() || "",
-    ...(oauthEnabled ? { oauthEnabled } : {}),
+    ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
     ...(message ? { message } : {}),
     ...(error ? { error } : {}),
   };
@@ -148,7 +148,7 @@ export default function SignupRoute() {
           initialEmail={loaderData.prefillEmail}
           message={loaderData.message}
           mode="signup"
-          oauthEnabled={loaderData.oauthEnabled}
+          oauthProviders={loaderData.oauthProviders}
           redirectTo={loaderData.redirectTo}
         />
       </div>
@@ -179,7 +179,7 @@ function signupErrorMessage(code: string | null) {
     return "We could not send that setup link. Try again in a minute.";
   }
   if (code === "oauth_not_configured") {
-    return "Google and Microsoft sign-in are not configured yet. Use the email link for now.";
+    return "That sign-in option is not configured yet. Use the email link for now.";
   }
   return null;
 }
