@@ -81,7 +81,7 @@ export function AuthForm({
             autoComplete={showPasskeyLogin ? "email webauthn" : "email"}
             defaultValue={initialEmail ?? ""}
             name="email"
-            placeholder="you@agency.com"
+            placeholder="you@company.com"
             required
             type="email"
           />
