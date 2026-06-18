@@ -12,6 +12,7 @@ import {
   createWatchEvent,
   DODO_PLAN_CHECKOUT_LOCK_MINUTES,
   grantDodoPlanAccess,
+  getDeliveryTargetReadinessStats,
   getUserIdForDodoLifecycle,
   markDodoPlanPaymentIssue,
   revokeDodoAccessForRefundedPayment,
@@ -1490,6 +1491,41 @@ describe("upsertWatchlistDeliveryConfig", () => {
 });
 
 describe("upsertDeliveryTarget", () => {
+  it("summarizes active and proven delivery targets without a page limit", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM delivery_target",
+        results: [
+          {
+            active_count: 26,
+            proven_count: 3,
+          },
+        ],
+      },
+    ]);
+
+    const result = await getDeliveryTargetReadinessStats(
+      { DB: mock.db } as never,
+      "user-1",
+    );
+    const statement = mock.statements.find((entry) =>
+      entry.sql.includes("FROM delivery_target"),
+    );
+
+    expect(result).toEqual({
+      activeCount: 26,
+      provenCount: 3,
+    });
+    expect(statement?.bindings).toEqual(["user-1"]);
+    expect(statement?.sql).toContain("last_successful_delivery_at IS NOT NULL");
+    expect(statement?.sql).toContain("opted_out_at IS NULL");
+    expect(statement?.sql).toContain("channel = 'slack'");
+    expect(statement?.sql).toContain("is_validated = 1");
+    expect(statement?.sql).toContain("validation_status = 'validated'");
+    expect(statement?.sql).toContain("template_eligible = 1");
+    expect(statement?.sql).not.toContain("LIMIT");
+  });
+
   it("persists channel-specific validation and opt-in state", async () => {
     const mock = createMockDb();
 

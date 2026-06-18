@@ -2,9 +2,28 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import type { AppEnv } from "~/lib/env.server";
 import type { CustomerApiKeyRecord } from "~/lib/types";
+import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MCP_TOOLS = [
+  {
+    name: "get_workspace_readiness",
+    title: "Get Workspace Readiness",
+    description:
+      "Read the account setup state for Five to Nine monitoring, proof, delivery, billing, API, and MCP readiness.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        format: {
+          type: "string",
+          enum: ["json", "slack"],
+          default: "json",
+          description: "Use json for structured agent context or slack for a Slack-ready summary.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
   {
     name: "get_collection_export",
     title: "Get Collection Export",
@@ -130,7 +149,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        "Use these read-only tools to retrieve account-owned Five to Nine collections, watchlists, and digests. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, write API, or unsupported-channel coverage.",
+        "Use these read-only tools to retrieve Five to Nine workspace readiness plus account-owned collections, watchlists, and digests. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, write API, or unsupported-channel coverage.",
     });
   }
 
@@ -161,14 +180,18 @@ async function callTool(
   }
 
   const name = stringField(params, "name");
-  const args = objectField(params, "arguments");
-  if (!name || !args) {
-    return { ok: false, message: "tools/call requires name and arguments." };
+  const args = objectField(params, "arguments") ?? {};
+  if (!name) {
+    return { ok: false, message: "tools/call requires name." };
   }
 
   const format = normalizeAgentFormat(stringField(args, "format"));
   if (!format) {
     return { ok: false, message: "format must be json or slack." };
+  }
+
+  if (name === "get_workspace_readiness") {
+    return buildWorkspaceReadinessToolResult(env, apiKey.userId, format);
   }
 
   if (name === "get_collection_export") {
@@ -184,6 +207,33 @@ async function callTool(
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };
+}
+
+async function buildWorkspaceReadinessToolResult(
+  env: AppEnv,
+  userId: string,
+  format: AgentFormat,
+) {
+  const { getWorkspaceReadiness } = await import("~/lib/workspace-readiness.server");
+  const readiness = await getWorkspaceReadiness(env, userId);
+  const structuredContent = readiness as unknown as Record<string, unknown>;
+
+  if (format === "slack") {
+    return textToolResult(formatWorkspaceReadinessSummary(readiness), structuredContent);
+  }
+
+  return structuredToolResult(structuredContent);
+}
+
+function formatWorkspaceReadinessSummary(readiness: WorkspaceReadiness) {
+  const lines = [
+    `*Five to Nine workspace readiness:* ${readiness.readyCount} of ${readiness.totalCount} ready`,
+    ...readiness.items
+      .filter((item) => item.status !== "not_applicable")
+      .map((item) => `- ${item.label}: ${item.status.replaceAll("_", " ")} - ${item.detail}`),
+  ];
+
+  return lines.join("\n");
 }
 
 async function buildCollectionToolResult(
