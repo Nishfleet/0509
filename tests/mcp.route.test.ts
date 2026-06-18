@@ -20,6 +20,30 @@ const apiKey = {
   updatedAt: "2026-06-06T00:00:00.000Z",
 };
 
+const readinessPayload = {
+  status: "needs_setup",
+  readyCount: 2,
+  totalCount: 4,
+  items: [
+    {
+      id: "delivery",
+      label: "Delivery proof",
+      status: "needs_proof",
+      detail: "A delivery target exists but needs successful delivery proof.",
+      action: { label: "Open sources", href: "/app/sources" },
+    },
+  ],
+  counts: {
+    competitors: 1,
+    activeWatchlists: 1,
+    successfulProofs: 0,
+    sentDigests: 0,
+    deliveryTargets: 1,
+    activeApiKeys: 1,
+    teamMembers: 0,
+  },
+};
+
 function fakeApiKey(suffix: string) {
   return ["f9", "live", suffix].join("_");
 }
@@ -135,12 +159,14 @@ const digest: DigestRecord = {
 };
 
 function setupMocks(authOk = true) {
+  const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
   const mocks = {
     getCollection: vi.fn().mockResolvedValue(collection),
     getDigest: vi.fn().mockResolvedValue(digest),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
     listCollectionItems: vi.fn().mockResolvedValue([collectionItem]),
     listWatchEvents: vi.fn().mockResolvedValue([watchEvent]),
+    getWorkspaceReadiness,
   };
 
   vi.doMock("~/lib/api-keys.server", () => ({
@@ -157,6 +183,9 @@ function setupMocks(authOk = true) {
     getEnv: vi.fn(() => ({ DB: {} })),
   }));
   vi.doMock("~/lib/data.server", () => mocks);
+  vi.doMock("~/lib/workspace-readiness.server", () => ({
+    getWorkspaceReadiness,
+  }));
 
   return mocks;
 }
@@ -205,6 +234,7 @@ describe("MCP route", () => {
 
     expect(body.status).toBe("live");
     expect(body.endpoint).toBe("https://0509.io/api/mcp");
+    expect(body.tools.map((tool) => tool.name)).toContain("get_workspace_readiness");
     expect(body.tools.map((tool) => tool.name)).toContain("get_digest_export");
     expect(body.notLiveYet).toContain("TikTok ingestion");
     expect(body.notLiveYet).not.toContain("MCP server");
@@ -256,11 +286,44 @@ describe("MCP route", () => {
     };
 
     expect(body.result.tools.map((tool) => tool.name)).toEqual([
+      "get_workspace_readiness",
       "get_collection_export",
       "get_watchlist_export",
       "get_digest_export",
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
+  });
+
+  it("returns workspace readiness through tools/call", async () => {
+    const mocks = setupMocks();
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "readiness-1",
+      method: "tools/call",
+      params: {
+        name: "get_workspace_readiness",
+      },
+    });
+    const body = await response.json() as {
+      result: {
+        isError: boolean;
+        content: Array<{ text: string }>;
+        structuredContent: {
+          status: string;
+          items: Array<{ id: string; status: string }>;
+        };
+      };
+    };
+
+    expect(body.result.isError).toBe(false);
+    expect(body.result.structuredContent.status).toBe("needs_setup");
+    expect(body.result.structuredContent.items[0]).toMatchObject({
+      id: "delivery",
+      status: "needs_proof",
+    });
+    expect(body.result.content[0]?.text).toContain("Delivery proof");
+    expect(JSON.stringify(body)).not.toContain("encryptedWebhookUrl");
+    expect(mocks.getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "user-1");
   });
 
   it("returns account-owned structured digest proof through tools/call", async () => {

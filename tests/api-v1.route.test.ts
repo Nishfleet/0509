@@ -20,6 +20,30 @@ const apiKey = {
   updatedAt: "2026-06-06T00:00:00.000Z",
 };
 
+const readinessPayload = {
+  status: "needs_setup",
+  readyCount: 2,
+  totalCount: 4,
+  items: [
+    {
+      id: "delivery",
+      label: "Delivery proof",
+      status: "needs_proof",
+      detail: "A delivery target exists but needs successful delivery proof.",
+      action: { label: "Open sources", href: "/app/sources" },
+    },
+  ],
+  counts: {
+    competitors: 1,
+    activeWatchlists: 1,
+    successfulProofs: 0,
+    sentDigests: 0,
+    deliveryTargets: 1,
+    activeApiKeys: 1,
+    teamMembers: 0,
+  },
+};
+
 function fakeApiKey(suffix: string) {
   return ["f9", "live", suffix].join("_");
 }
@@ -175,6 +199,26 @@ async function loadApi(url: string) {
   } as never);
 }
 
+async function loadReadinessApi(authOk = true) {
+  setupMocks(authOk);
+  const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
+  vi.doMock("~/lib/workspace-readiness.server", () => ({
+    getWorkspaceReadiness,
+  }));
+
+  const { loader } = await import("~/routes/api.v1.workspace-readiness");
+  const response = await loader({
+    context: { cloudflare: { env: { DB: {} } } },
+    request: new Request("https://0509.io/api/v1/workspace-readiness", {
+      headers: {
+        Authorization: `Bearer ${fakeApiKey("test")}`,
+      },
+    }),
+  } as never);
+
+  return { response, getWorkspaceReadiness };
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -194,9 +238,28 @@ describe("customer API v1", () => {
     const body = await response.json() as { endpoints: Array<{ path: string }>; notLiveYet: string[] };
 
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/mcp");
+    expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/watchlists/{watchlistId}");
     expect(body.notLiveYet).not.toContain("MCP server");
     expect(body.notLiveYet).toContain("TikTok ingestion");
+  });
+
+  it("returns account-scoped workspace readiness by API key", async () => {
+    const { response, getWorkspaceReadiness } = await loadReadinessApi();
+    const body = await response.json();
+
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body).toMatchObject({
+      status: "needs_setup",
+      items: [
+        {
+          id: "delivery",
+          status: "needs_proof",
+        },
+      ],
+    });
+    expect(JSON.stringify(body)).not.toContain("encryptedWebhookUrl");
+    expect(getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "user-1");
   });
 
   it("returns account-scoped collection JSON by API key", async () => {
@@ -232,6 +295,14 @@ describe("customer API v1", () => {
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toMatchObject({ error: "invalid_api_key" });
+  });
+
+  it("rejects readiness requests without an active API key", async () => {
+    const { response, getWorkspaceReadiness } = await loadReadinessApi(false);
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: "invalid_api_key" });
+    expect(getWorkspaceReadiness).not.toHaveBeenCalled();
   });
 
   it("does not expose another user's digest", async () => {

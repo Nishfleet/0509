@@ -33,6 +33,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchlists,
   } = await import("~/lib/data.server");
   const { getProofUsageSummary } = await import("~/lib/plan.server");
+  const { getWorkspaceReadiness } = await import("~/lib/workspace-readiness.server");
   const { getSuccessfulProofCaptureStatsForUser, getSuccessfulRunStatsForUserBetween, getUserPlanBillingInfo } = await import(
     "~/lib/data.server"
   );
@@ -40,7 +41,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const checkoutReturn = new URL(request.url).searchParams.get("checkout") === "dodo";
   const { listWorkspaceMembers } = await import("~/lib/workspace.server");
-  const [savedQueries, collections, watchlists, digests, metaStatus, customerMetaConnection, proofUsage, billingInfo, workspaceMembers] = await Promise.all([
+  const [
+    savedQueries,
+    collections,
+    watchlists,
+    digests,
+    metaStatus,
+    customerMetaConnection,
+    proofUsage,
+    billingInfo,
+    workspaceMembers,
+    workspaceReadiness,
+  ] = await Promise.all([
     listSavedQueries(env, workspaceUserId),
     listCollections(env, workspaceUserId),
     listWatchlists(env, workspaceUserId),
@@ -50,6 +62,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getProofUsageSummary(env, workspaceUserId),
     getUserPlanBillingInfo(env, workspaceUserId),
     listWorkspaceMembers(env, workspaceUserId),
+    getWorkspaceReadiness(env, workspaceUserId),
   ]);
   const plan = billingInfo.plan;
   const hasPaymentIssue =
@@ -82,6 +95,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     proofUsage,
     overnightStats,
     successfulProofStats,
+    workspaceReadiness,
     plan,
     teamMemberCount: workspaceMembers.length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
@@ -204,6 +218,7 @@ export default function AppDashboardRoute() {
       Date.parse(event.createdAt) >= overnightCutoff,
   ).length;
   const recentSuccessfulProofs = recentProofCaptures.filter((capture) => capture.status === "succeeded").length;
+  const hasProofAttempts = recentProofCaptures.length > 0;
   const successfulProofs = data.successfulProofStats?.count ?? recentSuccessfulProofs;
   const sentDigests = digests.filter((digest) => digest.delivery?.status === "sent").length;
   const latestScanAt = watchlists
@@ -227,57 +242,28 @@ export default function AppDashboardRoute() {
   const deliveryReady = hasEmailDelivery || hasSlackDelivery;
   const deliveryComplete = sentDigests > 0 || hasSlackDelivery;
   const firstCompetitorReady = competitorCount > 0;
-  const firstSearchReady = savedQueries.length > 0 || firstCompetitorReady;
   const proofReady = successfulProofs > 0;
   const sourceReady = data.metaStatus.status === "healthy";
-  const setupItems = [
-    {
-      label: "First competitor",
-      detail: firstSearchReady ? "Competitor search exists." : "Paste a competitor website to start.",
-      done: firstSearchReady,
-      href: "/search",
-    },
-    {
-      label: "First watchlist",
-      detail: firstCompetitorReady ? `${competitorCount} competitor${competitorCount === 1 ? "" : "s"} tracked` : "Create one retained watchlist.",
-      done: firstCompetitorReady,
-      href: "/app/watchlists",
-    },
-    {
-      label: "First proof",
-      detail: proofReady
-        ? `${successfulProofs} successful evidence check${successfulProofs === 1 ? "" : "s"} recorded`
-        : proofUsage.used > 0
-          ? "Evidence attempts have run, but no successful proof is attached yet."
-          : "Refresh a watchlist to capture landing-page evidence.",
-      done: proofReady,
-      href: "/app/watchlists",
-    },
-    {
-      label: "First digest",
-      detail: sentDigests > 0 ? `${sentDigests} digest${sentDigests === 1 ? "" : "s"} sent` : "Digest history appears after monitored changes.",
-      done: sentDigests > 0,
-      href: "/app/digests",
-    },
-    {
-      label: "Slack setup",
-      detail: hasSlackDelivery ? "Slack has delivery proof." : "Connect Slack when the team wants channel delivery.",
-      done: hasSlackDelivery,
-      href: "/app/sources",
-    },
-    {
-      label: "Teammate invite",
-      detail: teamMemberCount > 0 ? `${teamMemberCount} teammate${teamMemberCount === 1 ? "" : "s"} invited` : "Agency teams can invite teammates.",
-      done: teamMemberCount > 0,
-      href: "/app/team",
-    },
-    {
-      label: "Billing awareness",
-      detail: proofUsage.limit > 0 ? `${proofUsage.remaining} evidence checks left this month` : "Choose a plan before retained monitoring.",
-      done: proofUsage.limit > 0,
-      href: "/app/billing",
-    },
-  ];
+  const readinessReviewPaths: Record<string, string> = {
+    first_competitor: "/search",
+    first_watchlist: "/app/watchlists",
+    first_proof: "/app/watchlists",
+    first_digest: "/app/digests",
+    delivery: "/app/sources",
+    billing: "/app/billing",
+    team: "/app/team",
+    source: "/app/sources",
+    api: "/app/sources",
+    mcp: "/app/sources",
+  };
+  const setupItems = data.workspaceReadiness.items
+    .filter((item) => item.status !== "not_applicable")
+    .map((item) => ({
+      label: item.label,
+      detail: item.detail,
+      done: item.status === "ready",
+      href: item.action?.href ?? readinessReviewPaths[item.id] ?? "/app",
+    }));
   const lifecycleNudges = [
     !firstCompetitorReady
       ? {
@@ -398,6 +384,8 @@ export default function AppDashboardRoute() {
         : "Proof waiting",
       detail: proofReady
         ? "Screenshots and landing-page evidence are attached to the trail."
+        : hasProofAttempts
+          ? "Evidence attempts have run, but no successful proof is attached yet."
         : "The first proof appears after a watchlist catches or confirms a tracked page.",
       done: proofReady,
       href: "/app/watchlists",
@@ -422,7 +410,7 @@ export default function AppDashboardRoute() {
       href: sentDigests > 0 ? "/app/digests" : "/app/sources",
     },
   ];
-  const readyCount = setupItems.filter((item) => item.done).length;
+  const readyCount = data.workspaceReadiness.readyCount;
   const briefTitle = confirmedChanges > 0
     ? `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} to review`
     : firstCompetitorReady
