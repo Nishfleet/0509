@@ -58,6 +58,7 @@ export interface WorkspaceReadiness {
     sentDigests: number;
     deliveryTargets: number;
     activeApiKeys: number;
+    actionEnabledApiKeys: number;
     teamMembers: number;
     agentMemoryEntries: number;
     clientRooms: number;
@@ -107,6 +108,7 @@ export async function getWorkspaceReadiness(
   const activeDeliveryTargetCount = deliveryTargetStats.activeCount;
   const deliveryProofCount = deliveryTargetStats.provenCount;
   const activeApiKeys = apiKeys.filter((apiKey) => !apiKey.revokedAt).length;
+  const actionEnabledApiKeys = apiKeys.filter((apiKey) => !apiKey.revokedAt && apiKey.actionsWriteEnabled).length;
   const isAgency = billingInfo.plan === "agency";
   const hasBillingPaymentIssue =
     billingInfo.plan !== "free" &&
@@ -242,12 +244,14 @@ export async function getWorkspaceReadiness(
     {
       id: "mcp",
       label: "MCP agent context",
-      status: activeApiKeys > 0 ? "ready" : "needs_setup",
+      status: actionEnabledApiKeys > 0 ? "ready" : activeApiKeys > 0 ? "attention" : "needs_setup",
       detail:
-        activeApiKeys > 0
-          ? "MCP can use the account API key for readiness, exports, and audited actions."
+        actionEnabledApiKeys > 0
+          ? "MCP can use a write-enabled API key for readiness, exports, and audited actions."
+          : activeApiKeys > 0
+            ? "MCP can use read-only API keys for readiness and exports. Create a write-enabled key for audited actions."
           : "Create an API key before connecting MCP clients.",
-      action: activeApiKeys > 0 ? null : { label: "Open sources", href: "/app/sources" },
+      action: actionEnabledApiKeys > 0 ? null : { label: "Open sources", href: "/app/sources" },
     },
   ];
 
@@ -273,6 +277,7 @@ export async function getWorkspaceReadiness(
       sentDigests,
       deliveryTargets: activeDeliveryTargetCount,
       activeApiKeys,
+      actionEnabledApiKeys,
       teamMembers: members.length,
       agentMemoryEntries: agentMemoryEntries.length,
       clientRooms: clientRooms.length,

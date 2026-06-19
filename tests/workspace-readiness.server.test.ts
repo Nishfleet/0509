@@ -181,6 +181,7 @@ describe("getWorkspaceReadiness", () => {
       sentDigests: 1,
       deliveryTargets: 1,
       activeApiKeys: 1,
+      actionEnabledApiKeys: 1,
       teamMembers: 1,
       agentMemoryEntries: 1,
       clientRooms: 1,
@@ -259,6 +260,38 @@ describe("getWorkspaceReadiness", () => {
     expect(readiness.counts).toMatchObject({
       sentDigests: 1,
       deliveryTargets: 0,
+    });
+  });
+
+  it("marks MCP attention when only read-only API keys exist", async () => {
+    setupMocks({
+      listCustomerApiKeys: vi.fn().mockResolvedValue([
+        {
+          id: "key-1",
+          userId: "user-1",
+          name: "Read-only workflow",
+          keyPrefix: "f9_live_read",
+          actionsWriteEnabled: false,
+          lastUsedAt: null,
+          revokedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]),
+    });
+
+    const readiness = await loadReadiness();
+    const mcp = readiness.items.find((item) => item.id === "mcp");
+
+    expect(readiness.status).toBe("attention");
+    expect(readiness.counts).toMatchObject({
+      activeApiKeys: 1,
+      actionEnabledApiKeys: 0,
+    });
+    expect(mcp).toMatchObject({
+      status: "attention",
+      detail: "MCP can use read-only API keys for readiness and exports. Create a write-enabled key for audited actions.",
+      action: { href: "/app/sources" },
     });
   });
 

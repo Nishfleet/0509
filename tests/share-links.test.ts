@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createShareLink,
   deactivateWatchlistsBeyondPlanLimit,
+  getShareLinkById,
   getShareLink,
   listActiveShareLinks,
   revokeShareLink,
@@ -114,6 +115,37 @@ describe("share link persistence", () => {
     const result = await getShareLink({ DB: mock.db } as never, "token-1");
 
     expect(result).toMatchObject({ id: "share-1", expiresAt: null, revokedAt: null });
+  });
+
+  it("loads an active share link by owner and id for idempotent replay", async () => {
+    const mock = createCapturingDb([
+      {
+        id: "share-1",
+        token: "token-1",
+        user_id: "user-1",
+        resource_type: "collection",
+        resource_id: "collection-1",
+        is_snapshot: 0,
+        snapshot_payload_json: null,
+        created_at: "2026-01-01T00:00:00.000Z",
+        expires_at: "2026-09-19T00:00:00.000Z",
+        revoked_at: null,
+      },
+    ]);
+
+    const result = await getShareLinkById({ DB: mock.db } as never, "user-1", "share-1");
+
+    expect(result).toMatchObject({
+      id: "share-1",
+      token: "token-1",
+      userId: "user-1",
+      resourceType: "collection",
+    });
+    const select = mock.statements.find((statement) => statement.sql.includes("FROM share_link"));
+    expect(select?.sql).toContain("id = ?");
+    expect(select?.sql).toContain("user_id = ?");
+    expect(select?.sql).toContain("revoked_at IS NULL");
+    expect(select?.bindings.slice(0, 2)).toEqual(["share-1", "user-1"]);
   });
 
   it("revokes only the owner's link and reports whether anything changed", async () => {

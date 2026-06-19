@@ -6375,6 +6375,26 @@ export async function getShareLink(env: AppEnv, token: string) {
   return toShareLinkRecord(row);
 }
 
+export async function getShareLinkById(env: AppEnv, userId: string, shareLinkId: string) {
+  const row = await one<ShareLinkRow>(
+    env,
+    `
+      SELECT *
+      FROM share_link
+      WHERE id = ?
+        AND user_id = ?
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ?)
+      LIMIT 1
+    `,
+    shareLinkId,
+    userId,
+    nowIso(),
+  );
+
+  return row ? toShareLinkRecord(row) : null;
+}
+
 export async function listActiveShareLinks(env: AppEnv, userId: string, limit = 50) {
   const rows = await many<ShareLinkRow>(
     env,

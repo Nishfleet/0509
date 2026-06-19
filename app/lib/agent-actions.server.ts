@@ -40,10 +40,15 @@ export interface AuditedAgentActionResult<T extends JsonRecord> {
   result: T;
 }
 
+export interface AuditedAgentActionOptions<T extends JsonRecord> {
+  replayCompleted?: (audit: AgentActionAuditRecord) => Promise<T | null> | T | null;
+}
+
 export async function runAuditedAgentAction<T extends JsonRecord>(
   env: AppEnv,
   context: AgentActionContext,
   action: () => Promise<AgentActionSuccess<T>>,
+  options: AuditedAgentActionOptions<T> = {},
 ): Promise<AuditedAgentActionResult<T>> {
   const { findAgentActionAuditByIdempotencyKey, claimAgentActionAudit, finishAgentActionAudit } = await import(
     "~/lib/data.server"
@@ -57,13 +62,14 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
       if (existing.actionName !== actionName) {
         throw new AgentActionIdempotencyConflictError();
       }
+      assertIdempotencyRequestMatches(existing, context.metadata ?? {});
       if (existing.status !== "succeeded" || !existing.result) {
         throw new AgentActionReplayUnavailableError();
       }
       return {
         audit: existing,
         replayed: true,
-        result: existing.result as T,
+        result: (await options.replayCompleted?.(existing)) ?? existing.result as T,
       };
     }
   }
@@ -86,13 +92,14 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
     if (claim.audit.actionName !== actionName) {
       throw new AgentActionIdempotencyConflictError();
     }
+    assertIdempotencyRequestMatches(claim.audit, context.metadata ?? {});
     if (claim.audit.status !== "succeeded" || !claim.audit.result) {
       throw new AgentActionReplayUnavailableError();
     }
     return {
       audit: claim.audit,
       replayed: true,
-      result: claim.audit.result as T,
+      result: (await options.replayCompleted?.(claim.audit)) ?? claim.audit.result as T,
     };
   }
 
@@ -201,6 +208,19 @@ function normalizeActionName(value: string) {
 function normalizeOptionalString(value: string | null | undefined) {
   const normalized = value?.trim() ?? "";
   return normalized.length > 0 ? normalized : null;
+}
+
+function assertIdempotencyRequestMatches(existing: AgentActionAuditRecord, metadata: JsonRecord) {
+  const expectedFingerprint = readRequestFingerprint(metadata);
+  const actualFingerprint = readRequestFingerprint(existing.metadata);
+  if (expectedFingerprint && actualFingerprint && expectedFingerprint !== actualFingerprint) {
+    throw new AgentActionIdempotencyConflictError("Idempotency key was already used for different input.");
+  }
+}
+
+function readRequestFingerprint(metadata: JsonRecord | null | undefined) {
+  const value = metadata?.requestFingerprint;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function isSecretishKey(key: string) {

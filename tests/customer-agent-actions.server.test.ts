@@ -122,6 +122,18 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       token: "sharetoken1",
       expiresAt: "2026-09-19T00:00:00.000Z",
     }),
+    getShareLinkById: vi.fn().mockResolvedValue({
+      id: "share-1",
+      token: "sharetoken1",
+      userId: "user-1",
+      resourceType: "collection",
+      resourceId: "collection-1",
+      isSnapshot: false,
+      snapshotPayload: null,
+      createdAt: "2026-06-19T00:00:00.000Z",
+      expiresAt: "2026-09-19T00:00:00.000Z",
+      revokedAt: null,
+    }),
     upsertAgentMemory: vi.fn().mockResolvedValue({
       id: "memory-1",
       userId: "user-1",
@@ -215,6 +227,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     createWatchlist: mocks.createWatchlist,
     getCollection: mocks.getCollection,
     getDigest: mocks.getDigest,
+    getShareLinkById: mocks.getShareLinkById,
     getWatchlist: mocks.getWatchlist,
     listAdsByIds: mocks.listAdsByIds,
     listAgentMemory: mocks.listAgentMemory,
@@ -428,6 +441,51 @@ describe("runCustomerAgentAction", () => {
         }),
       }),
     );
+  });
+
+  it("replays report share actions with a reconstructed share URL", async () => {
+    const mocks = setupMocks();
+    mocks.findAgentActionAuditByIdempotencyKey.mockResolvedValue(auditRecord({
+      actionName: "report.share",
+      status: "succeeded",
+      result: {
+        ok: true,
+        action: "report.share",
+        report: {
+          reportId: "collection:collection-1",
+        },
+        share: {
+          id: "share-1",
+          token: "[redacted]",
+          expiresAt: "2026-09-19T00:00:00.000Z",
+        },
+        shareUrl: "[redacted]",
+      },
+    }));
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "report-share-1",
+        source: "api_v1",
+        origin: "https://0509.io",
+      },
+      "report.share",
+      {
+        resourceType: "collection",
+        resourceId: "collection-1",
+      },
+    );
+
+    const result = outcome.result as { shareUrl: string; share: { token: string } };
+    expect(outcome.replayed).toBe(true);
+    expect(result.shareUrl).toBe("https://0509.io/share/sharetoken1");
+    expect(result.share.token).toBe("sharetoken1");
+    expect(mocks.createShareLink).not.toHaveBeenCalled();
+    expect(mocks.getShareLinkById).toHaveBeenCalledWith(expect.anything(), "user-1", "share-1");
   });
 
   it("builds audited counter-move briefs from owned watchlists", async () => {
