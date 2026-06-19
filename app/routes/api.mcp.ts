@@ -126,6 +126,95 @@ const MCP_TOOLS = [
     inputSchema: watchlistMutationInputSchema(),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
+  {
+    name: "add_external_proof",
+    title: "Add External Proof",
+    description:
+      "Save a manual cross-channel proof URL into an account-owned board with audit logging.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        collectionId: {
+          type: "string",
+          description: "Five to Nine board owned by the API-key account.",
+        },
+        advertiser: {
+          type: "string",
+        },
+        proofUrl: {
+          type: "string",
+        },
+        channel: {
+          type: "string",
+          enum: ["TikTok", "Google / YouTube", "LinkedIn", "Pinterest", "Meta", "Landing page", "Other"],
+          default: "Other",
+        },
+        hook: {
+          type: "string",
+          description: "Visible headline, hook, or proof summary.",
+        },
+        offer: {
+          type: "string",
+        },
+        cta: {
+          type: "string",
+        },
+        note: {
+          type: "string",
+        },
+        observedAt: {
+          type: "string",
+          description: "ISO timestamp or YYYY-MM-DD.",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["collectionId", "advertiser", "proofUrl", "hook"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "create_share_link",
+    title: "Create Share Link",
+    description:
+      "Create a live share link for an account-owned board, watchlist, or digest.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        resourceType: {
+          type: "string",
+          enum: ["collection", "watchlist", "digest"],
+        },
+        resourceId: {
+          type: "string",
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["resourceType", "resourceId"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "create_report",
+    title: "Create Report",
+    description:
+      "Build a client-ready report payload for an account-owned board or watchlist.",
+    inputSchema: reportInputSchema(),
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "share_report",
+    title: "Share Report",
+    description:
+      "Build and share a snapshot report for an account-owned board or watchlist.",
+    inputSchema: reportInputSchema(),
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
 ];
 
 type JsonRpcId = string | number | null;
@@ -233,7 +322,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (message.method === "tools/call") {
-    const result = await callTool(env, auth.apiKey, message.params);
+    const result = await callTool(env, auth.apiKey, message.params, new URL(request.url).origin);
     if (!result.ok) {
       return jsonRpcError(message.id, -32602, result.message);
     }
@@ -247,6 +336,7 @@ async function callTool(
   env: AppEnv,
   apiKey: CustomerApiKeyRecord,
   params: unknown,
+  origin: string,
 ): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; message: string }> {
   if (!params || typeof params !== "object") {
     return { ok: false, message: "tools/call params must be an object." };
@@ -280,19 +370,35 @@ async function callTool(
   }
 
   if (name === "create_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.create", args);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.create", args, origin);
   }
 
   if (name === "refresh_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.refresh", args);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.refresh", args, origin);
   }
 
   if (name === "pause_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.pause", args);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.pause", args, origin);
   }
 
   if (name === "resume_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.resume", args);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.resume", args, origin);
+  }
+
+  if (name === "add_external_proof") {
+    return buildAgentActionToolResult(env, apiKey, "proof.add_external", args, origin);
+  }
+
+  if (name === "create_share_link") {
+    return buildAgentActionToolResult(env, apiKey, "share.create", args, origin);
+  }
+
+  if (name === "create_report") {
+    return buildAgentActionToolResult(env, apiKey, "report.create", args, origin);
+  }
+
+  if (name === "share_report") {
+    return buildAgentActionToolResult(env, apiKey, "report.share", args, origin);
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };
@@ -303,6 +409,7 @@ async function buildAgentActionToolResult(
   apiKey: CustomerApiKeyRecord,
   actionName: CustomerAgentActionName,
   args: object,
+  origin: string,
 ) {
   const {
     customerAgentActionErrorPayload,
@@ -315,6 +422,7 @@ async function buildAgentActionToolResult(
       apiKeyId: apiKey.id,
       idempotencyKey: stringField(args, "idempotencyKey"),
       source: "mcp",
+      origin,
     }, actionName, args as Record<string, unknown>));
   } catch (error) {
     const payload = customerAgentActionErrorPayload(error).body;
@@ -599,6 +707,27 @@ function watchlistMutationInputSchema() {
       idempotencyKey: idempotencyKeySchema(),
     },
     required: ["watchlistId"],
+    additionalProperties: false,
+  };
+}
+
+function reportInputSchema() {
+  return {
+    type: "object",
+    properties: {
+      reportId: {
+        type: "string",
+        description: "Optional report id such as collection:abc or watchlist:abc.",
+      },
+      resourceType: {
+        type: "string",
+        enum: ["collection", "watchlist"],
+      },
+      resourceId: {
+        type: "string",
+      },
+      idempotencyKey: idempotencyKeySchema(),
+    },
     additionalProperties: false,
   };
 }

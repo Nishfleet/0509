@@ -43,6 +43,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     readString(payload, "idempotencyKey") ??
     request.headers.get("Idempotency-Key")?.trim() ??
     null;
+  const executionContext = ((context.cloudflare as { ctx?: { waitUntil(promise: Promise<unknown>): void } } | undefined)
+    ?.ctx ?? null) as ExecutionContext | null;
 
   try {
     const result = await runCustomerAgentAction(env, {
@@ -50,8 +52,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
       apiKeyId: auth.apiKey.id,
       idempotencyKey,
       source: "api_v1",
-      executionContext: (context.cloudflare as { ctx?: { waitUntil(promise: Promise<unknown>): void } } | undefined)
-        ?.ctx as ExecutionContext | null | undefined ?? null,
+      origin: new URL(request.url).origin,
+      executionContext,
     }, actionName, input);
 
     return actionResponse(result);

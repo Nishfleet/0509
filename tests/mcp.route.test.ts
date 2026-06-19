@@ -295,6 +295,10 @@ describe("MCP route", () => {
       "refresh_watchlist",
       "pause_watchlist",
       "resume_watchlist",
+      "add_external_proof",
+      "create_share_link",
+      "create_report",
+      "share_report",
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
     expect(body.result.tools.find((tool) => tool.name === "create_watchlist")?.annotations.readOnlyHint).toBe(false);

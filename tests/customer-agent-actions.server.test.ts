@@ -18,6 +18,39 @@ const watchlist: WatchlistRecord = {
   updatedAt: "2026-06-19T00:00:00.000Z",
 };
 
+const collection = {
+  id: "collection-1",
+  userId: "user-1",
+  name: "Client proof",
+  description: "Proof for the weekly review.",
+  createdAt: "2026-06-19T00:00:00.000Z",
+  updatedAt: "2026-06-19T00:00:00.000Z",
+};
+
+const externalAd = {
+  metaAdId: "external:linkedin:proof-1",
+  advertiser: "Glossier",
+  body: "Creator hook",
+  previewHeadline: "Creator hook",
+  previewSubhead: "LinkedIn",
+  hook: "Creator hook",
+  offer: "",
+  cta: "",
+  format: "unknown",
+  languageLabel: "English",
+  destinationType: "website",
+  landingPageUrl: null,
+  adSnapshotUrl: null,
+  countries: [],
+  platforms: ["LinkedIn"],
+  firstSeenAt: "2026-06-19T00:00:00.000Z",
+  lastSeenAt: null,
+  active: false,
+  researchSummary: "Manual proof.",
+  source: "external",
+  analysisFields: [],
+};
+
 function auditRecord(input: Partial<AgentActionAuditRecord> = {}): AgentActionAuditRecord {
   return {
     id: "audit-1",
@@ -51,6 +84,20 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     setWatchlistActive: vi.fn().mockResolvedValue(true),
     queueFirstWatchlistScan: vi.fn(),
     runWatchlistManual: vi.fn().mockResolvedValue({ status: "succeeded" }),
+    addExternalProofToCollection: vi.fn().mockResolvedValue(externalAd),
+    getCollection: vi.fn().mockResolvedValue(collection),
+    getDigest: vi.fn().mockResolvedValue({
+      id: "digest-1",
+      userId: "user-1",
+    }),
+    listAdsByIds: vi.fn().mockResolvedValue([]),
+    listCollectionItems: vi.fn().mockResolvedValue([]),
+    listWatchEvents: vi.fn().mockResolvedValue([]),
+    createShareLink: vi.fn().mockResolvedValue({
+      id: "share-1",
+      token: "sharetoken1",
+      expiresAt: "2026-09-19T00:00:00.000Z",
+    }),
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
     createAgentActionAudit: vi.fn().mockResolvedValue(auditRecord()),
     finishAgentActionAudit: vi.fn().mockImplementation((_, auditId: string, input: Record<string, unknown>) =>
@@ -70,8 +117,15 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     getUserPlan: mocks.getUserPlan,
   }));
   vi.doMock("~/lib/data.server", () => ({
+    addExternalProofToCollection: mocks.addExternalProofToCollection,
+    createShareLink: mocks.createShareLink,
     createWatchlist: mocks.createWatchlist,
+    getCollection: mocks.getCollection,
+    getDigest: mocks.getDigest,
     getWatchlist: mocks.getWatchlist,
+    listAdsByIds: mocks.listAdsByIds,
+    listCollectionItems: mocks.listCollectionItems,
+    listWatchEvents: mocks.listWatchEvents,
     setWatchlistActive: mocks.setWatchlistActive,
     findAgentActionAuditByIdempotencyKey: mocks.findAgentActionAuditByIdempotencyKey,
     createAgentActionAudit: mocks.createAgentActionAudit,
@@ -197,5 +251,85 @@ describe("runCustomerAgentAction", () => {
     ).rejects.toBeInstanceOf(CustomerAgentActionError);
 
     expect(mocks.runWatchlistManual).not.toHaveBeenCalled();
+  });
+
+  it("adds audited external proof to an owned board", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "proof-1",
+        source: "api_v1",
+      },
+      "proof.add_external",
+      {
+        collectionId: "collection-1",
+        advertiser: "Glossier",
+        proofUrl: "https://www.linkedin.com/posts/glossier",
+        channel: "LinkedIn",
+        hook: "Creator hook",
+        tags: ["launch"],
+      },
+    );
+
+    const result = outcome.result as { collectionId: string; ad: { metaAdId: string } };
+    expect(result.collectionId).toBe("collection-1");
+    expect(result.ad.metaAdId).toBe("external:linkedin:proof-1");
+    expect(mocks.addExternalProofToCollection).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "collection-1",
+      expect.objectContaining({
+        advertiser: "Glossier",
+        channel: "LinkedIn",
+        tags: ["launch"],
+      }),
+    );
+  });
+
+  it("creates report snapshot share links from owned resources", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "report-share-1",
+        source: "api_v1",
+        origin: "https://0509.io",
+      },
+      "report.share",
+      {
+        resourceType: "collection",
+        resourceId: "collection-1",
+      },
+    );
+
+    const result = outcome.result as {
+      report: { reportId: string };
+      shareUrl: string;
+    };
+    expect(result.report.reportId).toBe("collection:collection-1");
+    expect(result.shareUrl).toBe("https://0509.io/share/sharetoken1");
+    expect(mocks.createShareLink).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        user: expect.objectContaining({ id: "user-1" }),
+      }),
+      expect.objectContaining({
+        resourceType: "report",
+        resourceId: "collection:collection-1",
+        isSnapshot: true,
+        snapshotPayload: expect.objectContaining({
+          reportId: "collection:collection-1",
+        }),
+      }),
+    );
   });
 });
