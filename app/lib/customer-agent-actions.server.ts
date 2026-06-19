@@ -23,6 +23,7 @@ import type {
   ClientRoomResourceRef,
   DiscoveryFailureClass,
   ShareResourceType,
+  WatchEventRecord,
 } from "~/lib/types";
 
 export const CUSTOMER_AGENT_ACTION_NAMES = [
@@ -634,7 +635,8 @@ async function buildCounterMoveBriefFromAgent(
   }
 
   const limit = readInteger(input, "limit", 5);
-  const events = await listWatchEvents(env, watchlist.id, Math.max(1, Math.min(60, limit * 3)));
+  const events = (await listWatchEvents(env, watchlist.id, Math.max(1, Math.min(60, limit * 3))))
+    .filter(isProofBackedWatchEvent);
   const linkedAdIds = events
     .map((event) => event.adId)
     .filter((adId): adId is string => Boolean(adId));
@@ -716,6 +718,7 @@ async function upsertClientRoomFromAgent(
   const { upsertClientRoom } = await import("~/lib/data.server");
   const resourceRefs = readClientRoomResourceRefs(input);
   const hasNotes = Object.prototype.hasOwnProperty.call(input, "notes");
+  const notes = hasNotes ? readClientRoomNotes(input) : null;
   if (typeof resourceRefs !== "undefined") {
     await assertClientRoomResourceRefsOwned(env, context.userId, resourceRefs);
   }
@@ -725,7 +728,7 @@ async function upsertClientRoomFromAgent(
     clientLabel: readString(input, "clientLabel"),
     status: readClientRoomStatus(input),
     resourceRefs,
-    ...(hasNotes ? { notes: readOptionalObject(input, "notes") ?? {} } : {}),
+    ...(hasNotes ? { notes } : {}),
   });
 
   if (!room) {
@@ -735,7 +738,7 @@ async function upsertClientRoomFromAgent(
   return {
     ok: true,
     action: "client_room.upsert",
-    room,
+    room: safeClientRoomRecord(room),
   };
 }
 
@@ -755,7 +758,7 @@ async function listClientRoomsFromAgent(
     ok: true,
     action: "client_room.list",
     status,
-    rooms,
+    rooms: rooms.map(safeClientRoomRecord),
   };
 }
 
@@ -1025,27 +1028,73 @@ function safeMemoryRecord(memory: AgentMemoryRecord): AgentMemoryRecord {
   };
 }
 
-function rejectSecretishMemoryValue(value: unknown) {
+function readClientRoomNotes(input: Record<string, unknown>) {
+  const value = input.notes;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  rejectSecretishMemoryValue(value, "Client room notes cannot contain secrets or credentials.");
+  return sanitizeAgentActionMetadata(value);
+}
+
+function safeClientRoomRecord(room: ClientRoomRecord): ClientRoomRecord {
+  return {
+    ...room,
+    notes: sanitizeClientRoomNotesForResponse(room.notes),
+  };
+}
+
+function sanitizeClientRoomNotesForResponse(notes: Record<string, unknown>) {
+  const sanitized = sanitizeAgentFacingValue(notes);
+  return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
+    ? sanitized as Record<string, unknown>
+    : {};
+}
+
+function rejectSecretishMemoryValue(
+  value: unknown,
+  message = "Memory values cannot contain secrets or credentials.",
+) {
   if (typeof value === "string") {
     if (isSecretishString(value)) {
-      throw new CustomerAgentActionError("secret_memory_rejected", "Memory values cannot contain secrets or credentials.");
+      throw new CustomerAgentActionError("secret_memory_rejected", message);
     }
     return;
   }
   if (Array.isArray(value)) {
     for (const entry of value) {
-      rejectSecretishMemoryValue(entry);
+      rejectSecretishMemoryValue(entry, message);
     }
     return;
   }
   if (value && typeof value === "object") {
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
       if (isSecretishField(key)) {
-        throw new CustomerAgentActionError("secret_memory_rejected", "Memory values cannot contain secret fields.");
+        throw new CustomerAgentActionError("secret_memory_rejected", message);
       }
-      rejectSecretishMemoryValue(nested);
+      rejectSecretishMemoryValue(nested, message);
     }
   }
+}
+
+function sanitizeAgentFacingValue(value: unknown): unknown {
+  if (value === null || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return isSecretishString(value) ? "[redacted]" : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(sanitizeAgentFacingValue).filter((entry) => typeof entry !== "undefined");
+  }
+  if (value && typeof value === "object") {
+    const output: Record<string, unknown> = {};
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      output[key] = isSecretishField(key) ? "[redacted]" : sanitizeAgentFacingValue(nested);
+    }
+    return output;
+  }
+  return undefined;
 }
 
 function readOptionalObject(input: Record<string, unknown>, field: string) {
@@ -1065,6 +1114,10 @@ function readOptionalClientRoomStatus(input: Record<string, unknown>): ClientRoo
     return value;
   }
   throw new CustomerAgentActionError("invalid_room_status", "status must be active, archived, or all.");
+}
+
+function isProofBackedWatchEvent(event: WatchEventRecord) {
+  return event.status === "confirmed" && !event.suppressedAt && !event.invalidatedAt;
 }
 
 function readClientRoomStatus(input: Record<string, unknown>): ClientRoomRecord["status"] {

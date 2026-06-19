@@ -490,7 +490,16 @@ describe("runCustomerAgentAction", () => {
 
   it("builds audited counter-move briefs from owned watchlists", async () => {
     const mocks = setupMocks();
-    mocks.listWatchEvents.mockResolvedValue([watchEvent]);
+    mocks.listWatchEvents.mockResolvedValue([
+      {
+        ...watchEvent,
+        id: "event-unconfirmed",
+        status: "detected",
+        adId: "external:linkedin:unconfirmed",
+        title: "Unconfirmed change",
+      },
+      watchEvent,
+    ]);
     mocks.listAdsByIds.mockResolvedValue([externalAd]);
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
@@ -522,6 +531,7 @@ describe("runCustomerAgentAction", () => {
       counterMove: expect.stringContaining("offer shift"),
     });
     expect(mocks.listWatchEvents).toHaveBeenCalledWith(expect.anything(), "watchlist-1", 9);
+    expect(mocks.listAdsByIds).toHaveBeenCalledWith(expect.anything(), ["external:linkedin:proof-1"]);
   });
 
   it("saves and lists sanitized scoped agent memory", async () => {
@@ -680,7 +690,6 @@ describe("runCustomerAgentAction", () => {
         ],
         notes: {
           goal: "Weekly proof review",
-          token: "should-not-store",
         },
       },
     );
@@ -732,6 +741,73 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.listClientRooms).toHaveBeenCalledWith(expect.anything(), "user-1", {
       status: "all",
       limit: 5,
+    });
+  });
+
+  it("rejects client-room notes with secret-like values before persistence", async () => {
+    const mocks = setupMocks();
+    const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "room-secret-notes-1",
+          source: "api_v1",
+        },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          notes: {
+            url: "https://hooks.slack.com/services/team/channel/token",
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(CustomerAgentActionError);
+
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("redacts secret-like values from listed client-room notes", async () => {
+    const mocks = setupMocks();
+    mocks.listClientRooms.mockResolvedValue([
+      {
+        id: "room-1",
+        userId: "user-1",
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        status: "active",
+        resourceRefs: [],
+        notes: {
+          goal: "Weekly proof review",
+          url: "https://hooks.slack.com/services/team/channel/token",
+        },
+        createdAt: "2026-06-19T00:00:00.000Z",
+        updatedAt: "2026-06-19T00:00:00.000Z",
+      },
+    ]);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "room-list-redacted-1",
+        source: "api_v1",
+      },
+      "client_room.list",
+      {
+        status: "all",
+      },
+    );
+
+    const result = outcome.result as { rooms: Array<{ notes: Record<string, unknown> }> };
+    expect(result.rooms[0]?.notes).toEqual({
+      goal: "Weekly proof review",
+      url: "[redacted]",
     });
   });
 
