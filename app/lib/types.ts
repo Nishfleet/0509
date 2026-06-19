@@ -461,6 +461,38 @@ export interface DeliveryTargetRecord {
   updatedAt: string;
 }
 
+export interface WebMentionTargetRecord {
+  id: string;
+  userId: string;
+  watchlistId: string | null;
+  trackingRole: WatchlistTrackingRole;
+  label: string;
+  queryText: string;
+  domain: string | null;
+  sources: WebMentionSource[];
+  isActive: boolean;
+  lastCheckedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebMentionObservationRecord {
+  id: string;
+  targetId: string;
+  userId: string;
+  source: WebMentionSource;
+  sourceId: string | null;
+  url: string;
+  title: string;
+  author: string | null;
+  excerpt: string | null;
+  publishedAt: string | null;
+  observedAt: string;
+  sentiment: string | null;
+  engagement: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface DeliveryAttemptRecord {
   id: string;
   userId: string;

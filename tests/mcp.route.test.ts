@@ -300,10 +300,15 @@ describe("MCP route", () => {
       "get_watchlist_export",
       "get_digest_export",
       "create_watchlist",
+      "update_watchlist",
       "refresh_watchlist",
       "pause_watchlist",
       "resume_watchlist",
+      "create_collection",
       "add_external_proof",
+      "list_delivery_targets",
+      "update_delivery_settings",
+      "update_delivery_target",
       "create_share_link",
       "create_report",
       "share_report",
@@ -312,6 +317,7 @@ describe("MCP route", () => {
       "list_memory",
       "upsert_client_room",
       "list_client_rooms",
+      "list_web_mentions",
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
     expect(body.result.tools.find((tool) => tool.name === "create_watchlist")?.annotations.readOnlyHint).toBe(false);
@@ -530,6 +536,12 @@ describe("MCP route", () => {
         idempotencyKey: "create-1",
       },
       {
+        toolName: "update_watchlist",
+        actionName: "watchlist.update",
+        args: { watchlistId: "watchlist-1", targetLabel: "Glossier", idempotencyKey: "update-1" },
+        idempotencyKey: "update-1",
+      },
+      {
         toolName: "refresh_watchlist",
         actionName: "watchlist.refresh",
         args: { watchlistId: "watchlist-1", idempotencyKey: "refresh-1" },
@@ -548,6 +560,12 @@ describe("MCP route", () => {
         idempotencyKey: "resume-1",
       },
       {
+        toolName: "create_collection",
+        actionName: "collection.create",
+        args: { name: "Client proof", idempotencyKey: "collection-1" },
+        idempotencyKey: "collection-1",
+      },
+      {
         toolName: "add_external_proof",
         actionName: "proof.add_external",
         args: {
@@ -558,6 +576,33 @@ describe("MCP route", () => {
           idempotencyKey: "proof-1",
         },
         idempotencyKey: "proof-1",
+      },
+      {
+        toolName: "list_delivery_targets",
+        actionName: "delivery_targets.list",
+        args: { watchlistId: "watchlist-1", channel: "slack" },
+      },
+      {
+        toolName: "update_delivery_settings",
+        actionName: "delivery_settings.update",
+        args: {
+          watchlistId: "watchlist-1",
+          explicitApproval: true,
+          slackEnabled: true,
+          idempotencyKey: "delivery-settings-1",
+        },
+        idempotencyKey: "delivery-settings-1",
+      },
+      {
+        toolName: "update_delivery_target",
+        actionName: "delivery_target.update",
+        args: {
+          targetId: "target-1",
+          isPaused: true,
+          explicitApproval: true,
+          idempotencyKey: "delivery-target-1",
+        },
+        idempotencyKey: "delivery-target-1",
       },
       {
         toolName: "create_share_link",
@@ -603,6 +648,11 @@ describe("MCP route", () => {
         toolName: "list_client_rooms",
         actionName: "client_room.list",
         args: { status: "all" },
+      },
+      {
+        toolName: "list_web_mentions",
+        actionName: "web_mentions.list",
+        args: { watchlistId: "watchlist-1", sources: ["reddit"] },
       },
     ];
 

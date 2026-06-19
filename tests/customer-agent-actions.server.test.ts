@@ -27,6 +27,32 @@ const collection = {
   updatedAt: "2026-06-19T00:00:00.000Z",
 };
 
+const deliveryTarget = {
+  id: "target-1",
+  userId: "user-1",
+  watchlistId: "watchlist-1",
+  channel: "slack",
+  targetValue: "slack:abc123",
+  validationStatus: "validated",
+  isValidated: true,
+  isOptedIn: true,
+  optInSource: "slack_webhook",
+  optedInAt: "2026-06-19T00:00:00.000Z",
+  isPaused: false,
+  pausedAt: null,
+  optedOutAt: null,
+  templateEligible: false,
+  lastSuccessfulDeliveryAt: null,
+  lastSuccessfulAttemptId: null,
+  providerIdentifier: "slack-webhook:secret",
+  metadata: {
+    displayName: "#growth",
+    encryptedWebhookUrl: "https://hooks.slack.com/services/team/channel/token",
+  },
+  createdAt: "2026-06-19T00:00:00.000Z",
+  updatedAt: "2026-06-19T00:00:00.000Z",
+} as const;
+
 const externalAd = {
   metaAdId: "external:linkedin:proof-1",
   advertiser: "Glossier",
@@ -103,8 +129,15 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       current: options.planLimitAllowed === false ? 10 : 1,
     }),
     getUserPlan: vi.fn().mockResolvedValue(options.plan ?? "starter"),
+    createCollection: vi.fn().mockResolvedValue(collection),
     createWatchlist: vi.fn().mockResolvedValue(watchlist),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
+    updateWatchlist: vi.fn().mockResolvedValue({
+      ...watchlist,
+      name: "Glossier retained watch",
+      targetLabel: "Glossier",
+      trackingRole: "self",
+    }),
     setWatchlistActive: vi.fn().mockResolvedValue(true),
     queueFirstWatchlistScan: vi.fn(),
     runWatchlistManual: vi.fn().mockResolvedValue({ status: "succeeded" }),
@@ -117,6 +150,76 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listCollectionItems: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn().mockResolvedValue([]),
+    listDeliveryTargets: vi.fn().mockResolvedValue([deliveryTarget]),
+    getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+      id: "workspace-delivery-1",
+      userId: "user-1",
+      sensitivityMode: "balanced",
+      instantEnabled: false,
+      digestEnabled: true,
+      emailEnabled: true,
+      whatsappEnabled: false,
+      slackEnabled: false,
+      quietHours: null,
+      timezone: null,
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    }),
+    getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+    upsertWatchlistDeliveryConfig: vi.fn().mockResolvedValue({
+      id: "watchlist-delivery-1",
+      watchlistId: "watchlist-1",
+      userId: "user-1",
+      sensitivityMode: "aggressive",
+      instantEnabled: true,
+      digestEnabled: true,
+      emailEnabled: true,
+      whatsappEnabled: false,
+      slackEnabled: true,
+      quietHours: { startHour: 21, endHour: 8 },
+      timezone: "Asia/Kolkata",
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    }),
+    getDeliveryTargetById: vi.fn().mockResolvedValue(deliveryTarget),
+    upsertDeliveryTarget: vi.fn().mockResolvedValue({
+      ...deliveryTarget,
+      isPaused: true,
+    }),
+    listWebMentionTargets: vi.fn().mockResolvedValue([
+      {
+        id: "web-target-1",
+        userId: "user-1",
+        watchlistId: "watchlist-1",
+        trackingRole: "competitor",
+        label: "Glossier",
+        queryText: "Glossier",
+        domain: null,
+        sources: ["reddit", "x", "blog", "youtube", "substack", "web"],
+        isActive: true,
+        lastCheckedAt: null,
+        createdAt: "2026-06-19T00:00:00.000Z",
+        updatedAt: "2026-06-19T00:00:00.000Z",
+      },
+    ]),
+    listWebMentionObservations: vi.fn().mockResolvedValue([
+      {
+        id: "web-obs-1",
+        targetId: "web-target-1",
+        userId: "user-1",
+        source: "reddit",
+        sourceId: "post-1",
+        url: "https://reddit.com/r/beauty/comments/1",
+        title: "Glossier launch",
+        author: "user",
+        excerpt: "Proof-backed mention",
+        publishedAt: "2026-06-18T00:00:00.000Z",
+        observedAt: "2026-06-19T00:00:00.000Z",
+        sentiment: "neutral",
+        engagement: { comments: 4 },
+        createdAt: "2026-06-19T00:00:00.000Z",
+      },
+    ]),
     createShareLink: vi.fn().mockResolvedValue({
       id: "share-1",
       token: "sharetoken1",
@@ -223,19 +326,29 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
   }));
   vi.doMock("~/lib/data.server", () => ({
     addExternalProofToCollection: mocks.addExternalProofToCollection,
+    createCollection: mocks.createCollection,
     createShareLink: mocks.createShareLink,
     createWatchlist: mocks.createWatchlist,
+    getDeliveryTargetById: mocks.getDeliveryTargetById,
     getCollection: mocks.getCollection,
     getDigest: mocks.getDigest,
     getShareLinkById: mocks.getShareLinkById,
     getWatchlist: mocks.getWatchlist,
+    getWatchlistDeliveryConfig: mocks.getWatchlistDeliveryConfig,
+    getWorkspaceDeliveryConfig: mocks.getWorkspaceDeliveryConfig,
     listAdsByIds: mocks.listAdsByIds,
     listAgentMemory: mocks.listAgentMemory,
     listClientRooms: mocks.listClientRooms,
     listCollectionItems: mocks.listCollectionItems,
+    listDeliveryTargets: mocks.listDeliveryTargets,
     listWatchEvents: mocks.listWatchEvents,
+    listWebMentionObservations: mocks.listWebMentionObservations,
+    listWebMentionTargets: mocks.listWebMentionTargets,
     setWatchlistActive: mocks.setWatchlistActive,
+    updateWatchlist: mocks.updateWatchlist,
     upsertClientRoom: mocks.upsertClientRoom,
+    upsertDeliveryTarget: mocks.upsertDeliveryTarget,
+    upsertWatchlistDeliveryConfig: mocks.upsertWatchlistDeliveryConfig,
     upsertAgentMemory: mocks.upsertAgentMemory,
     findAgentActionAuditByIdempotencyKey: mocks.findAgentActionAuditByIdempotencyKey,
     claimAgentActionAudit: mocks.claimAgentActionAudit,
@@ -353,6 +466,180 @@ describe("runCustomerAgentAction", () => {
         errorCode: "action_failed",
       }),
     );
+  });
+
+  it("updates audited watchlist tuning without creating duplicate targets", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "update-watchlist-1",
+        source: "api_v1",
+      },
+      "watchlist.update",
+      {
+        watchlistId: "watchlist-1",
+        name: "Glossier retained watch",
+        targetLabel: "Glossier",
+        competitorWebsite: "glossier.com",
+        trackingRole: "self",
+      },
+    );
+
+    const result = outcome.result as { watchlist: { trackingRole: string } };
+    expect(result.watchlist.trackingRole).toBe("self");
+    expect(mocks.updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watchlist-1",
+      expect.objectContaining({
+        name: "Glossier retained watch",
+        targetType: "advertiser",
+        targetId: "https://glossier.com",
+        targetLabel: "Glossier",
+        trackingRole: "self",
+      }),
+    );
+  });
+
+  it("infers website-only retarget labels and preserves legacy null countries", async () => {
+    const mocks = setupMocks();
+    mocks.getWatchlist.mockResolvedValue({
+      ...watchlist,
+      targetId: "glossier",
+      targetCountry: null,
+      targetFingerprint: "legacy-india-fingerprint",
+    });
+    mocks.updateWatchlist.mockResolvedValue({
+      ...watchlist,
+      targetId: "https://rhode.com",
+      targetLabel: "rhode",
+      targetCountry: null,
+    });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "update-watchlist-website-only",
+        source: "api_v1",
+      },
+      "watchlist.update",
+      {
+        watchlistId: "watchlist-1",
+        competitorWebsite: "rhode.com",
+      },
+    );
+
+    expect(mocks.updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watchlist-1",
+      expect.objectContaining({
+        targetId: "https://rhode.com",
+        targetLabel: "rhode",
+        targetCountry: null,
+      }),
+    );
+  });
+
+  it("rejects null competitorWebsite values instead of clearing URL-backed targets", async () => {
+    const mocks = setupMocks();
+    const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "update-watchlist-null-website",
+          source: "api_v1",
+        },
+        "watchlist.update",
+        {
+          watchlistId: "watchlist-1",
+          competitorWebsite: null,
+        },
+      ),
+    ).rejects.toBeInstanceOf(CustomerAgentActionError);
+
+    expect(mocks.updateWatchlist).not.toHaveBeenCalled();
+  });
+
+  it("preserves advertiser target fields on name-only updates", async () => {
+    const mocks = setupMocks();
+    mocks.getWatchlist.mockResolvedValue({
+      ...watchlist,
+      name: "HTTPie watch",
+      targetId: "HTTPie",
+      targetLabel: "HTTPie",
+      targetCountry: null,
+      targetFingerprint: "legacy-httpie-fingerprint",
+    });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "update-watchlist-name-only",
+        source: "api_v1",
+      },
+      "watchlist.update",
+      {
+        watchlistId: "watchlist-1",
+        name: "HTTPie competitor watch",
+      },
+    );
+
+    expect(mocks.updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watchlist-1",
+      expect.objectContaining({
+        name: "HTTPie competitor watch",
+        targetId: "HTTPie",
+        targetLabel: "HTTPie",
+        targetCountry: null,
+        targetFingerprint: "legacy-httpie-fingerprint",
+      }),
+    );
+  });
+
+  it("creates audited boards after checking collection limits", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "collection-1",
+        source: "api_v1",
+      },
+      "collection.create",
+      {
+        name: "Client proof",
+        description: "Proof for the weekly review.",
+      },
+    );
+
+    const result = outcome.result as { collection: { id: string } };
+    expect(result.collection.id).toBe("collection-1");
+    expect(mocks.checkPlanLimit).toHaveBeenCalledWith(expect.anything(), "user-1", "collections");
+    expect(mocks.createCollection).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      name: "Client proof",
+      description: "Proof for the weekly review.",
+    });
   });
 
   it("blocks free-plan manual refreshes before running scans", async () => {
@@ -547,6 +834,208 @@ describe("runCustomerAgentAction", () => {
     });
     expect(mocks.listWatchEvents).toHaveBeenCalledWith(expect.anything(), "watchlist-1", 9);
     expect(mocks.listAdsByIds).toHaveBeenCalledWith(expect.anything(), ["external:linkedin:proof-1"]);
+  });
+
+  it("lists delivery targets with destination and secret metadata redacted", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        source: "api_v1",
+      },
+      "delivery_targets.list",
+      {
+        watchlistId: "watchlist-1",
+        channel: "slack",
+      },
+    );
+
+    const result = outcome.result as { targets: Array<{ targetValue: string; metadata: Record<string, unknown> }> };
+    expect(result.targets[0]).toMatchObject({
+      targetValue: "slack:[redacted]",
+      metadata: { displayName: "#growth" },
+    });
+    expect(JSON.stringify(result)).not.toContain("hooks.slack.com");
+    expect(JSON.stringify(result)).not.toContain("slack-webhook:secret");
+    expect(mocks.listDeliveryTargets).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      watchlistId: "watchlist-1",
+      channel: "slack",
+      limit: 50,
+    });
+  });
+
+  it("redacts destination-like delivery display names and clamps list limits", async () => {
+    const mocks = setupMocks();
+    mocks.listDeliveryTargets.mockResolvedValue([
+      {
+        ...deliveryTarget,
+        channel: "email",
+        targetValue: "person@example.com",
+        metadata: {
+          displayName: "person@example.com",
+        },
+      },
+    ]);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        source: "api_v1",
+      },
+      "delivery_targets.list",
+      {
+        channel: "email",
+        limit: -50,
+      },
+    );
+
+    const result = outcome.result as {
+      targets: Array<{ targetValue: string; displayName: string; metadata: Record<string, unknown> }>;
+    };
+    expect(result.targets[0]).toMatchObject({
+      targetValue: "p***@example.com",
+      displayName: "p***@example.com",
+      metadata: {},
+    });
+    expect(JSON.stringify(result)).not.toContain("person@example.com");
+    expect(mocks.listDeliveryTargets).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      channel: "email",
+      limit: 1,
+    });
+  });
+
+  it("updates delivery settings only after explicit approval", async () => {
+    const mocks = setupMocks();
+    const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "delivery-settings-missing-approval",
+          source: "api_v1",
+        },
+        "delivery_settings.update",
+        {
+          watchlistId: "watchlist-1",
+          slackEnabled: true,
+        },
+      ),
+    ).rejects.toBeInstanceOf(CustomerAgentActionError);
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "delivery-settings-approved",
+        source: "api_v1",
+      },
+      "delivery_settings.update",
+      {
+        watchlistId: "watchlist-1",
+        explicitApproval: true,
+        sensitivityMode: "aggressive",
+        instantEnabled: true,
+        slackEnabled: true,
+        quietHours: { startHour: 21, endHour: 8 },
+        timezone: "Asia/Kolkata",
+      },
+    );
+
+    const result = outcome.result as { config: { slackEnabled: boolean } };
+    expect(result.config.slackEnabled).toBe(true);
+    expect(mocks.upsertWatchlistDeliveryConfig).toHaveBeenCalledWith(expect.anything(), {
+      watchlistId: "watchlist-1",
+      userId: "user-1",
+      sensitivityMode: "aggressive",
+      instantEnabled: true,
+      digestEnabled: true,
+      emailEnabled: true,
+      whatsappEnabled: false,
+      slackEnabled: true,
+      quietHours: { startHour: 21, endHour: 8 },
+      timezone: "Asia/Kolkata",
+    });
+  });
+
+  it("pauses delivery targets without exposing destination secrets", async () => {
+    const mocks = setupMocks();
+    mocks.getDeliveryTargetById
+      .mockResolvedValueOnce(deliveryTarget)
+      .mockResolvedValueOnce({ ...deliveryTarget, isPaused: true, pausedAt: "2026-06-19T00:00:00.000Z" });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "pause-target-1",
+        source: "api_v1",
+      },
+      "delivery_target.update",
+      {
+        targetId: "target-1",
+        isPaused: true,
+        explicitApproval: true,
+      },
+    );
+
+    const result = outcome.result as { target: { targetValue: string; isPaused: boolean } };
+    expect(result.target.targetValue).toBe("slack:[redacted]");
+    expect(result.target.isPaused).toBe(true);
+    expect(mocks.upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        targetValue: "slack:abc123",
+        providerIdentifier: "slack-webhook:secret",
+        isPaused: true,
+      }),
+    );
+  });
+
+  it("lists only narrow proof-backed web mention beta sources", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        source: "api_v1",
+      },
+      "web_mentions.list",
+      {
+        watchlistId: "watchlist-1",
+        sources: ["reddit", "blog"],
+      },
+    );
+
+    const result = outcome.result as {
+      supportedSources: string[];
+      targets: Array<{ sources: string[] }>;
+      observations: Array<{ source: string }>;
+    };
+    expect(result.supportedSources).toEqual(["reddit", "blog", "substack", "web"]);
+    expect(result.targets[0]?.sources).toEqual(["reddit", "blog", "substack", "web"]);
+    expect(result.observations[0]?.source).toBe("reddit");
+    expect(mocks.listWebMentionObservations).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      watchlistId: "watchlist-1",
+      sources: ["reddit", "blog"],
+      includeInactive: false,
+      limit: 50,
+    });
   });
 
   it("saves and lists sanitized scoped agent memory", async () => {

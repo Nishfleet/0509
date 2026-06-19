@@ -1,6 +1,7 @@
 import {
   applyWebsiteSearchFallback,
   hasInvalidCompetitorWebsite,
+  isHttpCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
   watchlistFingerprint,
 } from "~/lib/competitor-website";
@@ -21,16 +22,24 @@ import type {
   AppSession,
   ClientRoomRecord,
   ClientRoomResourceRef,
+  DeliveryChannel,
+  DeliveryQuietHours,
+  DeliveryTargetRecord,
   DiscoveryFailureClass,
+  SensitivityMode,
   ShareResourceType,
   WatchEventRecord,
+  WebMentionSource,
+  WebMentionTargetRecord,
 } from "~/lib/types";
 
 export const CUSTOMER_AGENT_ACTION_NAMES = [
   "watchlist.create",
+  "watchlist.update",
   "watchlist.refresh",
   "watchlist.pause",
   "watchlist.resume",
+  "collection.create",
   "proof.add_external",
   "share.create",
   "report.create",
@@ -40,20 +49,28 @@ export const CUSTOMER_AGENT_ACTION_NAMES = [
   "memory.list",
   "client_room.upsert",
   "client_room.list",
+  "delivery_targets.list",
+  "delivery_settings.update",
+  "delivery_target.update",
+  "web_mentions.list",
 ] as const;
 
 export type CustomerAgentActionName = (typeof CUSTOMER_AGENT_ACTION_NAMES)[number];
 
 const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
   "watchlist.create",
+  "watchlist.update",
   "watchlist.refresh",
   "watchlist.pause",
   "watchlist.resume",
+  "collection.create",
   "proof.add_external",
   "share.create",
   "report.share",
   "memory.upsert",
   "client_room.upsert",
+  "delivery_settings.update",
+  "delivery_target.update",
 ]);
 
 export interface CustomerAgentActionContext {
@@ -179,6 +196,19 @@ export async function runCustomerAgentAction(
         };
       }
 
+      if (actionName === "watchlist.update") {
+        const result = await updateWatchlistFromAgent(env, context.userId, input);
+        return {
+          resourceType: "watchlist",
+          resourceId: result.watchlist.id,
+          result,
+          metadata: {
+            watchlistId: result.watchlist.id,
+            replacedWatchlistId: result.replacedWatchlistId,
+          },
+        };
+      }
+
       if (actionName === "watchlist.refresh") {
         const result = await refreshWatchlistFromAgent(env, context.userId, input);
         return {
@@ -203,6 +233,18 @@ export async function runCustomerAgentAction(
         };
       }
 
+      if (actionName === "collection.create") {
+        const result = await createCollectionFromAgent(env, context.userId, input);
+        return {
+          resourceType: "collection",
+          resourceId: result.collection.id,
+          result,
+          metadata: {
+            collectionId: result.collection.id,
+          },
+        };
+      }
+
       if (actionName === "proof.add_external") {
         const result = await addExternalProofFromAgent(env, context.userId, input);
         return {
@@ -212,6 +254,59 @@ export async function runCustomerAgentAction(
           metadata: {
             collectionId: result.collectionId,
             adId: result.ad.metaAdId,
+          },
+        };
+      }
+
+      if (actionName === "delivery_targets.list") {
+        const result = await listDeliveryTargetsFromAgent(env, context.userId, input);
+        return {
+          resourceType: "delivery_target",
+          resourceId: result.watchlistId ?? "workspace",
+          result,
+          metadata: {
+            watchlistId: result.watchlistId,
+            count: result.targets.length,
+          },
+        };
+      }
+
+      if (actionName === "delivery_settings.update") {
+        const result = await updateDeliverySettingsFromAgent(env, context.userId, input);
+        return {
+          resourceType: "watchlist_delivery_config",
+          resourceId: result.config.watchlistId,
+          result,
+          metadata: {
+            watchlistId: result.config.watchlistId,
+          },
+        };
+      }
+
+      if (actionName === "delivery_target.update") {
+        const result = await updateDeliveryTargetFromAgent(env, context.userId, input);
+        return {
+          resourceType: "delivery_target",
+          resourceId: result.target.id,
+          result,
+          metadata: {
+            targetId: result.target.id,
+            channel: result.target.channel,
+            isPaused: result.target.isPaused,
+          },
+        };
+      }
+
+      if (actionName === "web_mentions.list") {
+        const result = await listWebMentionsFromAgent(env, context.userId, input);
+        return {
+          resourceType: "web_mentions",
+          resourceId: result.watchlistId ?? "workspace",
+          result,
+          metadata: {
+            watchlistId: result.watchlistId,
+            targetCount: result.targets.length,
+            observationCount: result.observations.length,
           },
         };
       }
@@ -454,6 +549,156 @@ async function createWatchlistFromAgent(
   };
 }
 
+async function updateWatchlistFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const { getWatchlist, updateWatchlist } = await import("~/lib/data.server");
+  const watchlistId = requireString(input, "watchlistId");
+  const watchlist = await getWatchlist(env, watchlistId, userId);
+  if (!watchlist || !watchlist.isActive) {
+    throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
+  }
+
+  const name = readString(input, "name") ?? watchlist.name;
+  const trackingRole = normalizeWatchlistTrackingRole(readString(input, "trackingRole") ?? watchlist.trackingRole);
+  const targetLabelInput = readString(input, "targetLabel") ?? readString(input, "query");
+  const hasCompetitorWebsiteInput = Object.prototype.hasOwnProperty.call(input, "competitorWebsite");
+  const previousCompetitorWebsite = normalizeCompetitorWebsiteInput(
+    isHttpCompetitorWebsite(watchlist.targetId) ? watchlist.targetId : "",
+  );
+  const competitorWebsiteInput = input.competitorWebsite;
+  if (hasCompetitorWebsiteInput && typeof competitorWebsiteInput !== "string") {
+    throw new CustomerAgentActionError(
+      "invalid_competitor_website",
+      "competitorWebsite must be a website string when provided.",
+    );
+  }
+  const competitorWebsite = hasCompetitorWebsiteInput
+    ? normalizeCompetitorWebsiteInput(competitorWebsiteInput as string)
+    : previousCompetitorWebsite;
+
+  if (hasInvalidCompetitorWebsite(competitorWebsite)) {
+    throw new CustomerAgentActionError("invalid_competitor_website", competitorWebsite.error ?? "Invalid website.");
+  }
+
+  const websiteChanged =
+    (competitorWebsite.normalizedUrl ?? null) !== (previousCompetitorWebsite.normalizedUrl ?? null);
+  const targetLabel =
+    targetLabelInput ??
+    (hasCompetitorWebsiteInput && websiteChanged
+      ? competitorWebsite.searchTerm ?? competitorWebsite.displayName ?? null
+      : null) ??
+    watchlist.targetLabel;
+  const hasTargetCountryInput =
+    Object.prototype.hasOwnProperty.call(input, "targetCountry") ||
+    Object.prototype.hasOwnProperty.call(input, "country");
+  const targetCountryInput = readString(input, "targetCountry") ?? readString(input, "country");
+  const countryForQuery = hasTargetCountryInput
+    ? targetCountryInput ?? "all"
+    : watchlist.targetCountry ?? "India";
+  const countryForStorage = hasTargetCountryInput ? countryForQuery : watchlist.targetCountry;
+  const normalizedQuery = applyWebsiteSearchFallback(
+    normalizeSavedQuery("advertiser", {
+      query: targetLabel,
+      country: countryForQuery,
+    }),
+    competitorWebsite,
+  );
+  const targetFieldsChanged = hasCompetitorWebsiteInput || Boolean(targetLabelInput) || hasTargetCountryInput;
+  const nextTarget =
+    watchlist.targetType === "saved_query"
+      ? {
+          targetType: watchlist.targetType,
+          targetId: watchlist.targetId,
+          targetFingerprint: watchlist.targetFingerprint,
+          targetLabel: watchlist.targetLabel,
+          targetCountry: watchlist.targetCountry,
+          trackingRole,
+        }
+      : {
+          targetType: "advertiser" as const,
+          targetId: targetFieldsChanged
+            ? competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query
+            : watchlist.targetId,
+          targetFingerprint: targetFieldsChanged
+            ? watchlistFingerprint(normalizedQuery, competitorWebsite)
+            : watchlist.targetFingerprint,
+          targetLabel: targetFieldsChanged ? normalizedQuery.filters.query : watchlist.targetLabel,
+          targetCountry: countryForStorage,
+          trackingRole,
+        };
+
+  try {
+    const updated = await updateWatchlist(env, userId, watchlist.id, {
+      name,
+      ...nextTarget,
+    });
+    if (!updated) {
+      throw new CustomerAgentActionError("watchlist_update_failed", "Could not update this watchlist.", {
+        status: 500,
+      });
+    }
+
+    return {
+      ok: true,
+      action: "watchlist.update",
+      watchlist: updated,
+      replacedWatchlistId: updated.id !== watchlist.id ? watchlist.id : null,
+      message: updated.id !== watchlist.id
+        ? "Watchlist retargeted. Delivery settings moved to the replacement watchlist."
+        : "Watchlist updated.",
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === "watchlist_duplicate_target") {
+      throw new CustomerAgentActionError(
+        "watchlist_duplicate_target",
+        "Another active watchlist already tracks that target.",
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+}
+
+async function createCollectionFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const { checkPlanLimit } = await import("~/lib/plan.server");
+  const { createCollection } = await import("~/lib/data.server");
+  const name = requireString(input, "name");
+  const limit = await checkPlanLimit(env, userId, "collections");
+  if (!limit.allowed) {
+    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your workspace board limit.", {
+      status: 402,
+      details: {
+        limit: limit.limit,
+        current: limit.current,
+      },
+    });
+  }
+
+  const collection = await createCollection(env, userId, {
+    name,
+    description: readString(input, "description"),
+  });
+  if (!collection) {
+    throw new CustomerAgentActionError("collection_create_failed", "Could not create this board.", {
+      status: 500,
+    });
+  }
+
+  return {
+    ok: true,
+    action: "collection.create",
+    collection,
+    message: `Created ${collection.name}.`,
+  };
+}
+
 async function addExternalProofFromAgent(
   env: AppEnv,
   userId: string,
@@ -528,11 +773,12 @@ async function buildReportFromAgent(
   userId: string,
   input: Record<string, unknown>,
 ) {
-  const { report } = await loadReportDocumentForAgent(env, userId, input);
+  const { report, memoryContext } = await loadReportDocumentForAgent(env, userId, input);
   return {
     ok: true,
     action: "report.create",
     report,
+    memoryContext,
   };
 }
 
@@ -542,7 +788,7 @@ async function shareReportFromAgent(
   input: Record<string, unknown>,
 ) {
   const { createShareLink } = await import("~/lib/data.server");
-  const report = (await loadReportDocumentForAgent(env, context.userId, input)).report;
+  const { report, memoryContext } = await loadReportDocumentForAgent(env, context.userId, input);
   const share = await createShareLink(env, agentSession(context.userId, context.apiKeyId), {
     resourceType: "report",
     resourceId: report.reportId,
@@ -554,6 +800,7 @@ async function shareReportFromAgent(
     ok: true,
     action: "report.share",
     report,
+    memoryContext,
     share,
     shareUrl: shareUrl(context, share.token),
   };
@@ -591,6 +838,7 @@ async function loadReportDocumentForAgent(
         collection,
         items: await listCollectionItems(env, collection.id),
       }),
+      memoryContext: await loadMemoryContextForAgent(env, userId),
     };
   }
 
@@ -614,6 +862,7 @@ async function loadReportDocumentForAgent(
       events,
       adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
     }),
+    memoryContext: await loadMemoryContextForAgent(env, userId, { watchlistId: watchlist.id }),
   };
 }
 
@@ -653,6 +902,7 @@ async function buildCounterMoveBriefFromAgent(
     ok: true,
     action: "counter_move_brief.create",
     brief,
+    memoryContext: await loadMemoryContextForAgent(env, userId, { watchlistId: watchlist.id }),
   };
 }
 
@@ -710,6 +960,32 @@ async function listMemoryFromAgent(
   };
 }
 
+async function loadMemoryContextForAgent(
+  env: AppEnv,
+  userId: string,
+  options: { watchlistId?: string | null; clientRoomId?: string | null } = {},
+) {
+  const { listAgentMemory } = await import("~/lib/data.server");
+  const [workspaceMemories, scopedMemories] = await Promise.all([
+    listAgentMemory(env, userId, {
+      watchlistId: null,
+      clientRoomId: null,
+      limit: 5,
+    }),
+    options.watchlistId || options.clientRoomId
+      ? listAgentMemory(env, userId, {
+          ...(options.watchlistId ? { watchlistId: options.watchlistId } : {}),
+          ...(options.clientRoomId ? { clientRoomId: options.clientRoomId } : {}),
+          limit: 5,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  return Array.from(
+    new Map([...workspaceMemories, ...scopedMemories].map((memory) => [memory.id, safeMemoryRecord(memory)])).values(),
+  );
+}
+
 async function upsertClientRoomFromAgent(
   env: AppEnv,
   context: CustomerAgentActionContext,
@@ -759,6 +1035,208 @@ async function listClientRoomsFromAgent(
     action: "client_room.list",
     status,
     rooms: rooms.map(safeClientRoomRecord),
+  };
+}
+
+async function listDeliveryTargetsFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const { getWatchlist, listDeliveryTargets } = await import("~/lib/data.server");
+  const watchlistId = readString(input, "watchlistId");
+  if (watchlistId) {
+    const watchlist = await getWatchlist(env, watchlistId, userId);
+    if (!watchlist) {
+      throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
+    }
+  }
+
+  const targets = await listDeliveryTargets(env, userId, {
+    ...(watchlistId ? { watchlistId } : {}),
+    ...(readDeliveryChannel(input) ? { channel: readDeliveryChannel(input) ?? undefined } : {}),
+    limit: clampListLimit(readInteger(input, "limit", 50)),
+  });
+
+  return {
+    ok: true,
+    action: "delivery_targets.list",
+    watchlistId,
+    targets: targets.map(safeDeliveryTargetRecord),
+  };
+}
+
+async function updateDeliverySettingsFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  requireExplicitApproval(input);
+  const {
+    getWatchlist,
+    getWatchlistDeliveryConfig,
+    getWorkspaceDeliveryConfig,
+    upsertWatchlistDeliveryConfig,
+  } = await import("~/lib/data.server");
+  const watchlistId = requireString(input, "watchlistId");
+  const watchlist = await getWatchlist(env, watchlistId, userId);
+  if (!watchlist) {
+    throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
+  }
+
+  const workspaceConfig = await getWorkspaceDeliveryConfig(env, userId);
+  const existingConfig = await getWatchlistDeliveryConfig(env, watchlist.id);
+  const base = existingConfig ?? {
+    sensitivityMode: workspaceConfig?.sensitivityMode ?? "balanced",
+    instantEnabled: workspaceConfig?.instantEnabled ?? false,
+    digestEnabled: workspaceConfig?.digestEnabled ?? true,
+    emailEnabled: workspaceConfig?.emailEnabled ?? true,
+    whatsappEnabled: workspaceConfig?.whatsappEnabled ?? false,
+    slackEnabled: workspaceConfig?.slackEnabled ?? false,
+    quietHours: workspaceConfig?.quietHours ?? null,
+    timezone: workspaceConfig?.timezone ?? null,
+  };
+
+  const config = await upsertWatchlistDeliveryConfig(env, {
+    watchlistId: watchlist.id,
+    userId,
+    sensitivityMode: readSensitivityMode(input) ?? base.sensitivityMode,
+    instantEnabled: readOptionalBoolean(input, "instantEnabled") ?? base.instantEnabled,
+    digestEnabled: readOptionalBoolean(input, "digestEnabled") ?? base.digestEnabled,
+    emailEnabled: readOptionalBoolean(input, "emailEnabled") ?? base.emailEnabled,
+    whatsappEnabled: readOptionalBoolean(input, "whatsappEnabled") ?? base.whatsappEnabled,
+    slackEnabled: readOptionalBoolean(input, "slackEnabled") ?? base.slackEnabled,
+    quietHours: readQuietHours(input, "quietHours", base.quietHours),
+    timezone: readNullableString(input, "timezone", base.timezone),
+  });
+
+  if (!config) {
+    throw new CustomerAgentActionError(
+      "delivery_settings_update_failed",
+      "Could not update delivery settings.",
+      { status: 500 },
+    );
+  }
+
+  return {
+    ok: true,
+    action: "delivery_settings.update",
+    config,
+    message: "Delivery settings updated.",
+  };
+}
+
+async function updateDeliveryTargetFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  requireExplicitApproval(input);
+  const { getDeliveryTargetById, upsertDeliveryTarget } = await import("~/lib/data.server");
+  const targetId = requireString(input, "targetId");
+  const existing = await getDeliveryTargetById(env, {
+    userId,
+    targetId,
+  });
+  if (!existing) {
+    throw new CustomerAgentActionError("delivery_target_not_found", "Delivery target not found.", { status: 404 });
+  }
+
+  const isPaused = readOptionalBoolean(input, "isPaused");
+  if (typeof isPaused === "undefined") {
+    throw new CustomerAgentActionError("missing_field", "isPaused is required.");
+  }
+
+  await upsertDeliveryTarget(env, {
+    userId,
+    watchlistId: existing.watchlistId,
+    channel: existing.channel,
+    targetValue: existing.targetValue,
+    validationStatus: existing.validationStatus,
+    isValidated: existing.isValidated,
+    isOptedIn: existing.isOptedIn,
+    optInSource: existing.optInSource,
+    optedInAt: existing.optedInAt,
+    isPaused,
+    pausedAt: isPaused ? new Date().toISOString() : null,
+    optedOutAt: existing.optedOutAt,
+    templateEligible: existing.templateEligible,
+    lastSuccessfulDeliveryAt: existing.lastSuccessfulDeliveryAt,
+    lastSuccessfulAttemptId: existing.lastSuccessfulAttemptId,
+    providerIdentifier: existing.providerIdentifier,
+    metadata: existing.metadata,
+  });
+  const updated = await getDeliveryTargetById(env, {
+    userId,
+    targetId,
+  });
+
+  return {
+    ok: true,
+    action: "delivery_target.update",
+    target: safeDeliveryTargetRecord(updated ?? existing),
+    message: isPaused ? "Delivery target paused." : "Delivery target resumed.",
+  };
+}
+
+async function listWebMentionsFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const {
+    getWatchlist,
+    listWebMentionObservations,
+    listWebMentionTargets,
+  } = await import("~/lib/data.server");
+  const watchlistId = readString(input, "watchlistId");
+  if (watchlistId) {
+    const watchlist = await getWatchlist(env, watchlistId, userId);
+    if (!watchlist) {
+      throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
+    }
+  }
+
+  const sources = readWebMentionSources(input);
+  const includeInactive = readBoolean(input, "includeInactive", false);
+  const [targets, observations] = await Promise.all([
+    listWebMentionTargets(env, userId, {
+      ...(watchlistId ? { watchlistId } : {}),
+      includeInactive,
+      limit: readInteger(input, "targetLimit", 50),
+    }),
+    listWebMentionObservations(env, userId, {
+      ...(watchlistId ? { watchlistId } : {}),
+      sources,
+      includeInactive,
+      limit: readInteger(input, "limit", 50),
+    }),
+  ]);
+
+  return {
+    ok: true,
+    action: "web_mentions.list",
+    status: "schema_beta",
+    boundary:
+      "Returns existing proof-backed web, blog, Substack, and Reddit observations only. X, YouTube, and broad social listening are not live.",
+    watchlistId,
+    supportedSources: supportedWebMentionSources,
+    targets: targets.map(safeWebMentionTargetRecord),
+    observations: observations.map((observation) => ({
+      id: observation.id,
+      targetId: observation.targetId,
+      source: observation.source,
+      sourceId: observation.sourceId,
+      url: observation.url,
+      title: observation.title,
+      author: observation.author,
+      excerpt: observation.excerpt,
+      publishedAt: observation.publishedAt,
+      observedAt: observation.observedAt,
+      sentiment: observation.sentiment,
+      engagement: sanitizeAgentActionMetadata(observation.engagement),
+      createdAt: observation.createdAt,
+    })),
   };
 }
 
@@ -919,6 +1397,26 @@ function readBoolean(input: Record<string, unknown>, field: string, fallback: bo
   return typeof value === "boolean" ? value : fallback;
 }
 
+function readOptionalBoolean(input: Record<string, unknown>, field: string) {
+  if (!Object.prototype.hasOwnProperty.call(input, field)) {
+    return undefined;
+  }
+  const value = input[field];
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "0") {
+      return false;
+    }
+  }
+  throw new CustomerAgentActionError("invalid_boolean", `${field} must be true or false.`);
+}
+
 function readInteger(input: Record<string, unknown>, field: string, fallback: number) {
   const value = input[field];
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -928,6 +1426,10 @@ function readInteger(input: Record<string, unknown>, field: string, fallback: nu
     return Math.floor(Number(value));
   }
   return fallback;
+}
+
+function clampListLimit(value: number, max = 100) {
+  return Math.max(1, Math.min(max, Math.floor(value)));
 }
 
 function readStringList(input: Record<string, unknown>, field: string) {
@@ -944,6 +1446,97 @@ function readStringList(input: Record<string, unknown>, field: string) {
       .map((entry) => entry.trim())
       .filter(Boolean)
     : [];
+}
+
+function readSensitivityMode(input: Record<string, unknown>): SensitivityMode | null {
+  const value = readString(input, "sensitivityMode");
+  if (!value) {
+    return null;
+  }
+  if (value === "quiet" || value === "balanced" || value === "aggressive" || value === "auto") {
+    return value;
+  }
+  throw new CustomerAgentActionError(
+    "invalid_sensitivity_mode",
+    "sensitivityMode must be quiet, balanced, aggressive, or auto.",
+  );
+}
+
+function readDeliveryChannel(input: Record<string, unknown>): DeliveryChannel | null {
+  const value = readString(input, "channel");
+  if (!value) {
+    return null;
+  }
+  if (value === "email" || value === "whatsapp" || value === "slack") {
+    return value;
+  }
+  throw new CustomerAgentActionError("invalid_delivery_channel", "channel must be email, whatsapp, or slack.");
+}
+
+function readNullableString(input: Record<string, unknown>, field: string, fallback: string | null) {
+  if (!Object.prototype.hasOwnProperty.call(input, field)) {
+    return fallback;
+  }
+  const value = input[field];
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+  throw new CustomerAgentActionError("invalid_field", `${field} must be a string or null.`);
+}
+
+function readQuietHours(
+  input: Record<string, unknown>,
+  field: string,
+  fallback: DeliveryQuietHours | null,
+): DeliveryQuietHours | null {
+  if (!Object.prototype.hasOwnProperty.call(input, field)) {
+    return fallback;
+  }
+  const value = input[field];
+  if (value === null) {
+    return null;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new CustomerAgentActionError("invalid_quiet_hours", "quietHours must be an object or null.");
+  }
+  const candidate = value as Record<string, unknown>;
+  return {
+    startHour: normalizeHour(readHour(candidate.startHour, "quietHours.startHour")),
+    endHour: normalizeHour(readHour(candidate.endHour, "quietHours.endHour")),
+  };
+}
+
+function readHour(value: unknown, field: string) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.floor(value);
+  }
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+    return Math.floor(Number(value));
+  }
+  throw new CustomerAgentActionError("invalid_quiet_hours", `${field} must be a number from 0 to 23.`);
+}
+
+function normalizeHour(value: number) {
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 23) {
+    return 23;
+  }
+  return value;
+}
+
+function requireExplicitApproval(input: Record<string, unknown>) {
+  if (readOptionalBoolean(input, "explicitApproval") === true || readOptionalBoolean(input, "approved") === true) {
+    return;
+  }
+  throw new CustomerAgentActionError(
+    "missing_explicit_approval",
+    "Set explicitApproval to true before changing delivery settings or targets.",
+  );
 }
 
 function readShareResourceType(input: Record<string, unknown>): ShareResourceType {
@@ -1044,6 +1637,112 @@ function safeClientRoomRecord(room: ClientRoomRecord): ClientRoomRecord {
   return {
     ...room,
     notes: sanitizeClientRoomNotesForResponse(room.notes),
+  };
+}
+
+function safeDeliveryTargetRecord(target: DeliveryTargetRecord) {
+  const redactedValue = redactDeliveryTargetValue(target);
+  const displayName = safeDeliveryTargetDisplayName(target, redactedValue);
+  const hasSafeDisplayName = displayName !== redactedValue;
+  return {
+    id: target.id,
+    watchlistId: target.watchlistId,
+    channel: target.channel,
+    targetValue: redactedValue,
+    displayName,
+    validationStatus: target.validationStatus,
+    isValidated: target.isValidated,
+    isOptedIn: target.isOptedIn,
+    isPaused: target.isPaused,
+    optedInAt: target.optedInAt,
+    pausedAt: target.pausedAt,
+    optedOutAt: target.optedOutAt,
+    templateEligible: target.templateEligible,
+    lastSuccessfulDeliveryAt: target.lastSuccessfulDeliveryAt,
+    metadata: hasSafeDisplayName ? { displayName } : {},
+    createdAt: target.createdAt,
+    updatedAt: target.updatedAt,
+  };
+}
+
+function redactDeliveryTargetValue(target: Pick<DeliveryTargetRecord, "channel" | "targetValue">) {
+  if (target.channel === "email") {
+    return maskEmail(target.targetValue);
+  }
+  if (target.channel === "whatsapp") {
+    return maskPhone(target.targetValue);
+  }
+  return "slack:[redacted]";
+}
+
+function readMetadataDisplayName(metadata: Record<string, unknown>) {
+  const value = metadata.displayName;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function safeDeliveryTargetDisplayName(target: DeliveryTargetRecord, fallback: string) {
+  const displayName = readMetadataDisplayName(target.metadata);
+  if (!displayName || isSecretishString(displayName) || displayName.includes(target.targetValue)) {
+    return fallback;
+  }
+  if (target.channel === "email" && /[^\s@]+@[^\s@]+\.[^\s@]+/.test(displayName)) {
+    return fallback;
+  }
+  if (target.channel === "whatsapp") {
+    const displayDigits = displayName.replace(/\D/g, "");
+    const targetDigits = target.targetValue.replace(/\D/g, "");
+    if (displayDigits.length >= 6 || (displayDigits.length >= 4 && targetDigits.includes(displayDigits))) {
+      return fallback;
+    }
+  }
+  return displayName;
+}
+
+function maskEmail(value: string) {
+  const [local, domain] = value.split("@");
+  if (!local || !domain) {
+    return "[redacted-email]";
+  }
+  return `${local.slice(0, 1)}***@${domain}`;
+}
+
+function maskPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits ? `***${digits.slice(-4)}` : "[redacted-phone]";
+}
+
+const supportedWebMentionSources: WebMentionSource[] = ["reddit", "blog", "substack", "web"];
+
+function readWebMentionSources(input: Record<string, unknown>) {
+  const requested = readStringList(input, "sources");
+  if (requested.length === 0) {
+    return supportedWebMentionSources;
+  }
+
+  return Array.from(new Set(requested.map((source) => {
+    if (supportedWebMentionSources.includes(source as WebMentionSource)) {
+      return source as WebMentionSource;
+    }
+    throw new CustomerAgentActionError(
+      "unsupported_web_mention_source",
+      "web_mentions.list currently supports reddit, blog, substack, and web only.",
+    );
+  })));
+}
+
+function safeWebMentionTargetRecord(target: WebMentionTargetRecord) {
+  return {
+    id: target.id,
+    watchlistId: target.watchlistId,
+    trackingRole: target.trackingRole,
+    label: target.label,
+    queryText: target.queryText,
+    domain: target.domain,
+    sources: target.sources.filter((source) => supportedWebMentionSources.includes(source)),
+    isActive: target.isActive,
+    lastCheckedAt: target.lastCheckedAt,
+    createdAt: target.createdAt,
+    updatedAt: target.updatedAt,
   };
 }
 

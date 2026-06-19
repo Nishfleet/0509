@@ -28,9 +28,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
           formats: ["json"],
           actions: [
             "watchlist.create",
+            "watchlist.update",
             "watchlist.refresh",
             "watchlist.pause",
             "watchlist.resume",
+            "collection.create",
             "proof.add_external",
             "share.create",
             "report.create",
@@ -40,6 +42,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
             "memory.list",
             "client_room.upsert",
             "client_room.list",
+            "delivery_targets.list",
+            "delivery_settings.update",
+            "delivery_target.update",
+            "web_mentions.list",
           ],
         },
         {
@@ -62,6 +68,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         "Meta ad proof saved in this account",
         "Landing-page proof captured by this account",
         "Watchlist changes and digest items owned by this account",
+        "Manual external proof links, scoped memory, client rooms, redacted delivery settings, and existing web mention observations owned by this account",
       ],
       notLiveYet: [
         "TikTok ingestion",
