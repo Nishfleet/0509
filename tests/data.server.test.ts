@@ -2100,6 +2100,48 @@ describe("upsertDeliveryTarget", () => {
     expect(statement?.sql).not.toContain("LIMIT");
   });
 
+  it("counts only opted-in validated email targets as readiness usable", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE delivery_target (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          is_opted_in INTEGER NOT NULL DEFAULT 0,
+          is_paused INTEGER NOT NULL DEFAULT 0,
+          opted_out_at TEXT,
+          is_validated INTEGER NOT NULL DEFAULT 0,
+          validation_status TEXT NOT NULL,
+          template_eligible INTEGER NOT NULL DEFAULT 0,
+          last_successful_delivery_at TEXT
+        );
+        INSERT INTO delivery_target (
+          id,
+          user_id,
+          channel,
+          is_opted_in,
+          is_paused,
+          opted_out_at,
+          is_validated,
+          validation_status,
+          last_successful_delivery_at
+        ) VALUES
+          ('target-valid', 'user-1', 'email', 1, 0, NULL, 1, 'validated', '2026-06-19T00:00:00.000Z'),
+          ('target-pending', 'user-1', 'email', 0, 0, NULL, 0, 'pending', '2026-06-19T00:00:00.000Z'),
+          ('target-rejected', 'user-1', 'email', 1, 0, NULL, 0, 'provider_rejected', '2026-06-19T00:00:00.000Z');
+      `);
+
+      await expect(getDeliveryTargetReadinessStats({ DB: sqlite.db } as never, "user-1"))
+        .resolves.toEqual({
+          activeCount: 1,
+          provenCount: 1,
+        });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("persists channel-specific validation and opt-in state", async () => {
     const mock = createMockDb();
 

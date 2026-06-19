@@ -2,6 +2,12 @@ import type { AppEnv } from "~/lib/env.server";
 import type { AgentActionAuditRecord } from "~/lib/types";
 
 type JsonRecord = Record<string, unknown>;
+type SanitizeOptions = {
+  actionName?: string | null;
+  path?: string[];
+  redactSecretScalars?: boolean;
+  redactSecretKeys?: boolean;
+};
 
 export class AgentActionIdempotencyConflictError extends Error {
   constructor(message = "Idempotency key was already used for a different action.") {
@@ -112,7 +118,7 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
       status: "succeeded",
       resourceType: normalizeOptionalString(success.resourceType ?? context.resourceType),
       resourceId: normalizeOptionalString(success.resourceId ?? context.resourceId),
-      result: redactAgentActionResult(result),
+      result: redactAgentActionResult(result, { actionName }),
       metadata: sanitizeAgentActionMetadata({
         ...(context.metadata ?? {}),
         ...(success.metadata ?? {}),
@@ -145,8 +151,12 @@ export function sanitizeAgentActionMetadata(value: unknown): JsonRecord {
   return sanitizeObject(value as JsonRecord);
 }
 
-export function redactAgentActionResult<T extends JsonRecord>(value: T): T {
+export function redactAgentActionResult<T extends JsonRecord>(
+  value: T,
+  options: { actionName?: string | null } = {},
+): T {
   return sanitizeObject(value, {
+    actionName: normalizeOptionalString(options.actionName),
     redactSecretScalars: true,
     redactSecretKeys: true,
   }) as T;
@@ -154,20 +164,18 @@ export function redactAgentActionResult<T extends JsonRecord>(value: T): T {
 
 function sanitizeObject(
   value: JsonRecord,
-  options: {
-    redactSecretScalars?: boolean;
-    redactSecretKeys?: boolean;
-  } = {},
+  options: SanitizeOptions = {},
 ): JsonRecord {
   const output: JsonRecord = {};
   for (const [key, nestedValue] of Object.entries(value)) {
-    if (isSecretishKey(key)) {
+    const path = [...(options.path ?? []), key];
+    if (isSecretishKey(key) && !isPublicActionSchemaKey(key, path, options.actionName)) {
       if (options.redactSecretKeys) {
         output[key] = "[redacted]";
       }
       continue;
     }
-    const sanitized = sanitizeValue(nestedValue, options);
+    const sanitized = sanitizeValue(nestedValue, { ...options, path });
     if (typeof sanitized !== "undefined") {
       output[key] = sanitized;
     }
@@ -177,10 +185,7 @@ function sanitizeObject(
 
 function sanitizeValue(
   value: unknown,
-  options: {
-    redactSecretScalars?: boolean;
-    redactSecretKeys?: boolean;
-  } = {},
+  options: SanitizeOptions = {},
 ): unknown {
   if (value === null || typeof value === "number" || typeof value === "boolean") {
     return value;
@@ -221,6 +226,14 @@ function assertIdempotencyRequestMatches(existing: AgentActionAuditRecord, metad
 function readRequestFingerprint(metadata: JsonRecord | null | undefined) {
   const value = metadata?.requestFingerprint;
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isPublicActionSchemaKey(key: string, path: string[], actionName: string | null | undefined) {
+  if (key !== "key" || (actionName !== "memory.upsert" && actionName !== "memory.list")) {
+    return false;
+  }
+  const parent = path[path.length - 2];
+  return parent === "memory" || parent === "memories";
 }
 
 function isSecretishKey(key: string) {

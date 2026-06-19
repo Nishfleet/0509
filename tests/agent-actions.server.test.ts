@@ -126,6 +126,58 @@ describe("runAuditedAgentAction", () => {
     );
   });
 
+  it("preserves public memory keys when storing redacted action results", async () => {
+    const mocks = setupDataMock();
+    const { runAuditedAgentAction } = await import("~/lib/agent-actions.server");
+
+    await runAuditedAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        actionName: "memory.upsert",
+        idempotencyKey: "idem-1",
+      },
+      vi.fn().mockResolvedValue({
+        resourceType: "agent_memory",
+        resourceId: "memory-1",
+        result: {
+          ok: true,
+          action: "memory.upsert",
+          memory: {
+            id: "memory-1",
+            scope: "brand",
+            key: "voice",
+            value: {
+              tone: "plainspoken",
+              apiKey: "should-not-persist",
+            },
+          },
+        },
+      }),
+    );
+
+    expect(mocks.finishAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      "audit-1",
+      expect.objectContaining({
+        result: {
+          ok: true,
+          action: "memory.upsert",
+          memory: {
+            id: "memory-1",
+            scope: "brand",
+            key: "voice",
+            value: {
+              tone: "plainspoken",
+              apiKey: "[redacted]",
+            },
+          },
+        },
+      }),
+    );
+  });
+
   it("replays a completed action with the same idempotency key", async () => {
     const existing = auditRecord({
       status: "succeeded",
