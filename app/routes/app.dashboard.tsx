@@ -264,48 +264,7 @@ export default function AppDashboardRoute() {
       done: item.status === "ready",
       href: item.action?.href ?? readinessReviewPaths[item.id] ?? "/app",
     }));
-  const lifecycleNudges = [
-    !firstCompetitorReady
-      ? {
-          title: "No first watchlist yet",
-          detail: "Add one competitor so the first sweep and proof trail can start.",
-          href: "/search",
-        }
-      : null,
-    firstCompetitorReady && sentDigests === 0
-      ? {
-          title: "No first digest yet",
-          detail: "Open Digests after the first monitored change or quiet check to confirm the delivery trail.",
-          href: "/app/digests",
-        }
-      : null,
-    proofUsage.warningLevel !== "ok"
-      ? {
-          title: "Usage near cap",
-          detail: `${proofUsage.used} of ${proofUsage.limit} evidence checks are used.`,
-          href: "/app/billing",
-        }
-      : null,
-    slackNeedsProof
-      ? {
-          title: "Slack delivery needs proof",
-          detail: "A Slack destination exists but has no successful delivery yet.",
-          href: "/app/sources",
-        }
-      : null,
-    hasPaymentIssue
-      ? {
-          title: "Payment issue",
-          detail: "Dodo is retrying the last renewal payment. Review billing before access is affected.",
-          href: "/app/billing",
-        }
-      : null,
-    {
-      title: "Cancellation and help path",
-      detail: "Plan changes, cancellation, receipts, invoices, and support are centralized in Plan & billing.",
-      href: "/app/billing",
-    },
-  ].filter((item): item is { title: string; detail: string; href: string } => Boolean(item));
+  const lifecycleNudges = data.workspaceReadiness.nudges ?? [];
   const statusCards = [
     {
       label: "Competitors watched",
