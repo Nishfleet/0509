@@ -715,6 +715,7 @@ async function upsertClientRoomFromAgent(
 ) {
   const { upsertClientRoom } = await import("~/lib/data.server");
   const resourceRefs = readClientRoomResourceRefs(input);
+  const hasNotes = Object.prototype.hasOwnProperty.call(input, "notes");
   if (typeof resourceRefs !== "undefined") {
     await assertClientRoomResourceRefsOwned(env, context.userId, resourceRefs);
   }
@@ -724,7 +725,7 @@ async function upsertClientRoomFromAgent(
     clientLabel: readString(input, "clientLabel"),
     status: readClientRoomStatus(input),
     resourceRefs,
-    notes: readOptionalObject(input, "notes"),
+    ...(hasNotes ? { notes: readOptionalObject(input, "notes") ?? {} } : {}),
   });
 
   if (!room) {
@@ -1250,14 +1251,56 @@ function isSecretishString(value: string) {
 }
 
 function buildAgentActionRequestFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
-  return fnv1a32(`${actionName}:${stableStringify(sanitizeAgentActionInputForFingerprint(input))}`);
+  return fnv1a32(`${actionName}:${stableStringify(sanitizeAgentActionInputForFingerprint(actionName, input))}`);
 }
 
-function sanitizeAgentActionInputForFingerprint(input: Record<string, unknown>) {
-  const sanitized = sanitizeAgentActionMetadata(input);
-  delete sanitized.action;
-  delete sanitized.idempotencyKey;
-  return sanitized;
+function sanitizeAgentActionInputForFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
+  return sanitizeFingerprintObject(input, {
+    actionName,
+    topLevel: true,
+  });
+}
+
+function sanitizeFingerprintObject(
+  input: Record<string, unknown>,
+  options: {
+    actionName: CustomerAgentActionName;
+    topLevel?: boolean;
+  },
+): Record<string, unknown> {
+  const output: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (options.topLevel && (key === "action" || key === "idempotencyKey")) {
+      continue;
+    }
+    const preservesSchemaKey = options.topLevel && options.actionName === "memory.upsert" && key === "key";
+    if (isSecretishField(key) && !preservesSchemaKey) {
+      output[key] = "[redacted]";
+      continue;
+    }
+    const sanitized = sanitizeFingerprintValue(value, options.actionName);
+    if (typeof sanitized !== "undefined") {
+      output[key] = sanitized;
+    }
+  }
+  return output;
+}
+
+function sanitizeFingerprintValue(value: unknown, actionName: CustomerAgentActionName): unknown {
+  if (value === null || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return isSecretishString(value) ? "[redacted]" : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeFingerprintValue(entry, actionName))
+      .filter((entry) => typeof entry !== "undefined");
+  }
+  if (value && typeof value === "object") {
+    return sanitizeFingerprintObject(value as Record<string, unknown>, { actionName });
+  }
+  return undefined;
 }
 
 function stableStringify(value: unknown): string {

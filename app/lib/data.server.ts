@@ -914,7 +914,8 @@ export async function upsertClientRoom(
   const status = input.status ?? "active";
   const clientLabel = input.clientLabel?.trim() || null;
   const hasResourceRefs = Array.isArray(input.resourceRefs);
-  const notesJson = input.notes ? jsonValue(input.notes) : null;
+  const hasNotes = Object.prototype.hasOwnProperty.call(input, "notes");
+  const notesJson = hasNotes ? jsonValue(input.notes ?? {}) : null;
 
   if (input.roomId) {
     await run(
@@ -924,7 +925,7 @@ export async function upsertClientRoom(
         SET name = ?,
             client_label = ?,
             status = ?,
-            notes_json = COALESCE(?, notes_json),
+            notes_json = CASE WHEN ? = 1 THEN ? ELSE notes_json END,
             updated_at = ?
         WHERE id = ?
           AND user_id = ?
@@ -932,6 +933,7 @@ export async function upsertClientRoom(
       name,
       clientLabel,
       status,
+      hasNotes ? 1 : 0,
       notesJson,
       timestamp,
       input.roomId,
@@ -963,7 +965,7 @@ export async function upsertClientRoom(
       ON CONFLICT(user_id, name)
       DO UPDATE SET client_label = excluded.client_label,
                     status = excluded.status,
-                    notes_json = excluded.notes_json,
+                    notes_json = CASE WHEN ? = 1 THEN excluded.notes_json ELSE client_room.notes_json END,
                     updated_at = excluded.updated_at
     `,
     id,
@@ -974,6 +976,7 @@ export async function upsertClientRoom(
     notesJson ?? jsonValue({}),
     timestamp,
     timestamp,
+    hasNotes ? 1 : 0,
   );
 
   const row = await one<ClientRoomRow>(

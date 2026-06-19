@@ -681,6 +681,40 @@ describe("client room persistence", () => {
       sqlite.close();
     }
   });
+
+  it("preserves room notes when a name-conflict upsert omits notes", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0037_client_rooms.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+
+      await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        notes: { goal: "Weekly proof review" },
+      });
+      await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+        clientLabel: "Nykaa updated",
+        status: "archived",
+      });
+
+      const rooms = await listClientRooms({ DB: sqlite.db } as never, "user-1", {
+        status: "all",
+        limit: 5,
+      });
+
+      expect(rooms[0]).toMatchObject({
+        name: "Beauty client",
+        clientLabel: "Nykaa updated",
+        status: "archived",
+        notes: { goal: "Weekly proof review" },
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
 });
 
 describe("Razorpay billing persistence", () => {
