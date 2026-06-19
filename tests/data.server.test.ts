@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
   claimDodoPlanCheckout,
   claimDodoWebhookEvent,
+  claimAgentActionAudit,
   claimRazorpayWebhookEvent,
   createDeliveryAttempt,
   createDiscoveryFetchLog,
@@ -80,6 +84,41 @@ function createMockDb(
       },
     },
   };
+}
+
+function createSqliteD1() {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec("PRAGMA foreign_keys = ON;");
+  type SqliteBindings = Parameters<ReturnType<DatabaseSync["prepare"]>["run"]>;
+  const toSqliteBindings = (bindings: unknown[]) => bindings as SqliteBindings;
+
+  return {
+    close: () => sqlite.close(),
+    sqlite,
+    db: {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            return {
+              async run() {
+                sqlite.prepare(sql).run(...toSqliteBindings(bindings));
+                return { success: true };
+              },
+              async all<T>() {
+                return {
+                  results: sqlite.prepare(sql).all(...toSqliteBindings(bindings)) as T[],
+                };
+              },
+            };
+          },
+        };
+      },
+    },
+  };
+}
+
+function applyMigration(sqlite: DatabaseSync, path: string) {
+  sqlite.exec(readFileSync(path, "utf8"));
 }
 
 function findStatement(
@@ -233,6 +272,44 @@ describe("agent action audit persistence", () => {
     });
   });
 
+  it("claims idempotent audit rows atomically", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "SELECT * FROM agent_action_audit WHERE id = ?",
+        results: [row],
+      },
+    ]);
+
+    const claim = await claimAgentActionAudit({ DB: mock.db } as never, {
+      userId: "user-1",
+      apiKeyId: "api-key-1",
+      actionName: "watchlist.create",
+      resourceType: "watchlist",
+      resourceId: "watchlist-1",
+      idempotencyKey: "idem-1",
+      metadata: { source: "mcp" },
+    });
+
+    const insert = findStatement(mock.statements, "INSERT OR IGNORE INTO agent_action_audit");
+    expect(insert?.bindings.slice(1, 10)).toEqual([
+      "user-1",
+      "api-key-1",
+      "watchlist.create",
+      "watchlist",
+      "watchlist-1",
+      "idem-1",
+      JSON.stringify({ source: "mcp" }),
+      expect.any(String),
+      expect.any(String),
+    ]);
+    expect(claim).toMatchObject({
+      claimed: true,
+      audit: {
+        id: "audit-1",
+      },
+    });
+  });
+
   it("finishes an audit with status, resource, result, and error fields", async () => {
     const mock = createMockDb([
       {
@@ -276,13 +353,15 @@ describe("agent memory persistence", () => {
     user_id: "user-1",
     scope: "brand",
     memory_key: "voice",
+    watchlist_id: null,
+    client_room_id: null,
     value_json: JSON.stringify({ tone: "plainspoken" }),
     source: "api_v1",
     created_at: "2026-06-19T00:00:00.000Z",
     updated_at: "2026-06-19T00:01:00.000Z",
   };
 
-  it("upserts scoped memory with JSON value storage", async () => {
+  it("updates existing scoped memory with JSON value storage", async () => {
     const mock = createMockDb([
       {
         sqlIncludes: "FROM agent_memory",
@@ -301,19 +380,19 @@ describe("agent memory persistence", () => {
       },
     );
 
-    const insert = findStatement(mock.statements, "INSERT INTO agent_memory");
-    expect(insert?.sql).toContain("ON CONFLICT(user_id, scope, memory_key)");
-    expect(insert?.bindings.slice(1, 6)).toEqual([
-      "user-1",
-      "brand",
-      "voice",
+    const update = findStatement(mock.statements, "UPDATE agent_memory");
+    expect(update?.bindings.slice(0, 4)).toEqual([
       JSON.stringify({ tone: "plainspoken" }),
       "api_v1",
+      expect.any(String),
+      "memory-1",
     ]);
     expect(memory).toMatchObject({
       id: "memory-1",
       scope: "brand",
       key: "voice",
+      watchlistId: null,
+      clientRoomId: null,
       value: { tone: "plainspoken" },
       source: "api_v1",
     });
@@ -338,7 +417,94 @@ describe("agent memory persistence", () => {
       id: "memory-1",
       scope: "brand",
       key: "voice",
+      watchlistId: null,
+      clientRoomId: null,
     });
+  });
+
+  it("upserts global, watchlist, and client-room memory against the migration schema", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);
+        CREATE TABLE watchlist (id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL);
+      `);
+      applyMigration(sqlite.sqlite, "migrations/0036_agent_memory.sql");
+      applyMigration(sqlite.sqlite, "migrations/0037_client_rooms.sql");
+      sqlite.sqlite.exec(`
+        INSERT INTO user (id) VALUES ('user-1');
+        INSERT INTO watchlist (id, user_id) VALUES ('watchlist-1', 'user-1');
+        INSERT INTO client_room (
+          id,
+          user_id,
+          name,
+          status,
+          notes_json,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          'room-1',
+          'user-1',
+          'Beauty client',
+          'active',
+          '{}',
+          '2026-06-19T00:00:00.000Z',
+          '2026-06-19T00:00:00.000Z'
+        );
+      `);
+
+      const global = await upsertAgentMemory({ DB: sqlite.db } as never, "user-1", {
+        scope: "brand",
+        key: "voice",
+        value: { tone: "plainspoken" },
+        source: "api_v1",
+      });
+      const watchlistScoped = await upsertAgentMemory({ DB: sqlite.db } as never, "user-1", {
+        scope: "brand",
+        key: "voice",
+        watchlistId: "watchlist-1",
+        value: { tone: "watchlist" },
+        source: "api_v1",
+      });
+      const clientScoped = await upsertAgentMemory({ DB: sqlite.db } as never, "user-1", {
+        scope: "brand",
+        key: "voice",
+        clientRoomId: "room-1",
+        value: { tone: "client" },
+        source: "api_v1",
+      });
+      await upsertAgentMemory({ DB: sqlite.db } as never, "user-1", {
+        scope: "brand",
+        key: "voice",
+        watchlistId: "watchlist-1",
+        value: { tone: "watchlist updated" },
+        source: "mcp",
+      });
+
+      const memories = await listAgentMemory({ DB: sqlite.db } as never, "user-1", {
+        scope: "brand",
+        limit: 10,
+      });
+      const watchlistMemories = await listAgentMemory({ DB: sqlite.db } as never, "user-1", {
+        scope: "brand",
+        watchlistId: "watchlist-1",
+        limit: 10,
+      });
+
+      expect(global).toMatchObject({ watchlistId: null, clientRoomId: null });
+      expect(watchlistScoped).toMatchObject({ watchlistId: "watchlist-1", clientRoomId: null });
+      expect(clientScoped).toMatchObject({ watchlistId: null, clientRoomId: "room-1" });
+      expect(memories).toHaveLength(3);
+      expect(watchlistMemories).toHaveLength(1);
+      expect(watchlistMemories[0]).toMatchObject({
+        watchlistId: "watchlist-1",
+        value: { tone: "watchlist updated" },
+        source: "mcp",
+      });
+    } finally {
+      sqlite.close();
+    }
   });
 });
 
@@ -349,20 +515,26 @@ describe("client room persistence", () => {
     name: "Beauty client",
     client_label: "Nykaa",
     status: "active",
-    resource_refs_json: JSON.stringify([
-      {
-        resourceType: "watchlist",
-        resourceId: "watchlist-1",
-        label: "Nykaa competitor watch",
-      },
-    ]),
     notes_json: JSON.stringify({ goal: "Weekly proof review" }),
     created_at: "2026-06-19T00:00:00.000Z",
     updated_at: "2026-06-19T00:01:00.000Z",
   };
+  const resourceRow = {
+    id: "room-resource-1",
+    room_id: "room-1",
+    user_id: "user-1",
+    resource_type: "watchlist",
+    resource_id: "watchlist-1",
+    label: "Nykaa competitor watch",
+    created_at: "2026-06-19T00:00:00.000Z",
+  };
 
   it("upserts an account-owned room with linked resource refs", async () => {
     const mock = createMockDb([
+      {
+        sqlIncludes: "FROM client_room_resource",
+        results: [resourceRow],
+      },
       {
         sqlIncludes: "FROM client_room",
         results: [row],
@@ -388,19 +560,23 @@ describe("client room persistence", () => {
 
     const insert = findStatement(mock.statements, "INSERT INTO client_room");
     expect(insert?.sql).toContain("ON CONFLICT(user_id, name)");
-    expect(insert?.bindings.slice(1, 7)).toEqual([
+    expect(insert?.bindings.slice(1, 6)).toEqual([
       "user-1",
       "Beauty client",
       "Nykaa",
       "active",
-      JSON.stringify([
-        {
-          resourceType: "watchlist",
-          resourceId: "watchlist-1",
-          label: "Nykaa competitor watch",
-        },
-      ]),
       JSON.stringify({ goal: "Weekly proof review" }),
+    ]);
+    expect(findStatement(mock.statements, "DELETE FROM client_room_resource")?.bindings).toEqual([
+      "room-1",
+      "user-1",
+    ]);
+    expect(findStatement(mock.statements, "INSERT INTO client_room_resource")?.bindings.slice(1, 6)).toEqual([
+      "room-1",
+      "user-1",
+      "watchlist",
+      "watchlist-1",
+      "Nykaa competitor watch",
     ]);
     expect(room).toMatchObject({
       id: "room-1",
@@ -421,6 +597,10 @@ describe("client room persistence", () => {
   it("lists active rooms scoped to the account by default", async () => {
     const mock = createMockDb([
       {
+        sqlIncludes: "FROM client_room_resource",
+        results: [resourceRow],
+      },
+      {
         sqlIncludes: "FROM client_room",
         results: [row],
       },
@@ -435,7 +615,71 @@ describe("client room persistence", () => {
     expect(rooms[0]).toMatchObject({
       id: "room-1",
       status: "active",
+      resourceRefs: [
+        {
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+          label: "Nykaa competitor watch",
+        },
+      ],
     });
+  });
+
+  it("round-trips client-room resources through the migration schema", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0037_client_rooms.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+
+      const room = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watchlist-1",
+            label: "Nykaa competitor watch",
+          },
+        ],
+        notes: { goal: "Weekly proof review" },
+      });
+      expect(room?.id).toBeTruthy();
+      const roomId = room?.id as string;
+      await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        roomId,
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        resourceRefs: [],
+        notes: { goal: "No linked resources" },
+      });
+      const rooms = await listClientRooms({ DB: sqlite.db } as never, "user-1", {
+        status: "all",
+        limit: 5,
+      });
+      const resources = sqlite.sqlite
+        .prepare("SELECT * FROM client_room_resource WHERE room_id = ?")
+        .all(roomId);
+
+      expect(room).toMatchObject({
+        name: "Beauty client",
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watchlist-1",
+            label: "Nykaa competitor watch",
+          },
+        ],
+      });
+      expect(resources).toEqual([]);
+      expect(rooms[0]).toMatchObject({
+        name: "Beauty client",
+        resourceRefs: [],
+        notes: { goal: "No linked resources" },
+      });
+    } finally {
+      sqlite.close();
+    }
   });
 });
 

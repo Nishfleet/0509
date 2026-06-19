@@ -99,6 +99,7 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
         userId: "user-1",
         name: "Agent workflow",
         keyPrefix: "f9_live_abc",
+        actionsWriteEnabled: true,
         lastUsedAt: null,
         revokedAt: null,
         createdAt: now,

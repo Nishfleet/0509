@@ -508,6 +508,8 @@ export interface AgentMemoryRecord {
   userId: string;
   scope: AgentMemoryScope;
   key: string;
+  watchlistId: string | null;
+  clientRoomId: string | null;
   value: Record<string, unknown>;
   source: string | null;
   createdAt: string;
@@ -624,6 +626,7 @@ export interface CustomerApiKeyRecord {
   userId: string;
   name: string;
   keyPrefix: string;
+  actionsWriteEnabled: boolean;
   lastUsedAt: string | null;
   revokedAt: string | null;
   createdAt: string;

@@ -14,6 +14,7 @@ const apiKey = {
   userId: "user-1",
   name: "Claude workflow",
   keyPrefix: fakeApiKey("abc123"),
+  actionsWriteEnabled: true,
   lastUsedAt: null,
   revokedAt: null,
   createdAt: "2026-06-06T00:00:00.000Z",
@@ -158,7 +159,7 @@ const digest: DigestRecord = {
   ],
 };
 
-function setupMocks(authOk = true) {
+function setupMocks(authOk = true, actionsWriteEnabled = true) {
   const mocks = {
     getCollection: vi.fn().mockResolvedValue(collection),
     getDigest: vi.fn().mockResolvedValue(digest),
@@ -170,7 +171,7 @@ function setupMocks(authOk = true) {
   vi.doMock("~/lib/api-keys.server", () => ({
     authenticateApiKeyRequest: vi.fn().mockResolvedValue(
       authOk
-        ? { ok: true, apiKey }
+        ? { ok: true, apiKey: { ...apiKey, actionsWriteEnabled } }
         : {
             ok: false,
             response: Response.json({ error: "invalid_api_key" }, { status: 401 }),
@@ -224,9 +225,10 @@ async function postActionApi(
   options: {
     idempotencyKey?: string;
     authOk?: boolean;
+    actionsWriteEnabled?: boolean;
   } = {},
 ) {
-  setupMocks(options.authOk ?? true);
+  setupMocks(options.authOk ?? true, options.actionsWriteEnabled ?? true);
   const { action } = await import("~/routes/api.v1.actions");
   return action({
     context: {
@@ -376,6 +378,25 @@ describe("customer API v1", () => {
         watchlistId: "watchlist-1",
       },
     );
+  });
+
+  it("rejects audited actions from read-only API keys", async () => {
+    const response = await postActionApi(
+      {
+        action: "watchlist.pause",
+        input: {
+          watchlistId: "watchlist-1",
+          idempotencyKey: "pause-watchlist-1",
+        },
+      },
+      {
+        actionsWriteEnabled: false,
+      },
+    );
+    const body = await response.json() as { error: string };
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe("actions_write_not_enabled");
   });
 
   it("returns action errors with the mapped status code", async () => {

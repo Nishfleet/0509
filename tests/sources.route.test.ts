@@ -177,6 +177,7 @@ describe("sources route loader", () => {
           userId: "user-1",
           name: "Claude workflow",
           keyPrefix: ["f9", "live", "abcd1234"].join("_"),
+          actionsWriteEnabled: true,
           lastUsedAt: null,
           revokedAt: null,
           createdAt: "2026-06-06T00:00:00.000Z",
@@ -219,6 +220,7 @@ describe("sources route loader", () => {
           id: "api-key-1",
           name: "Claude workflow",
           keyPrefix: ["f9", "live", "abcd1234"].join("_"),
+          actionsWriteEnabled: true,
           lastUsedAt: null,
           revokedAt: null,
           createdAt: "2026-06-06T00:00:00.000Z",
@@ -344,6 +346,7 @@ describe("sources route action", () => {
     const formData = new FormData();
     formData.set("intent", "create-api-key");
     formData.set("apiKeyName", "Claude workflow");
+    formData.set("actionsWriteEnabled", "1");
 
     const result = await action({
       context: createContext({ DB: {} }),
@@ -353,7 +356,9 @@ describe("sources route action", () => {
       }),
     } as never);
 
-    expect(createCustomerApiKey).toHaveBeenCalledWith(expect.anything(), "user-1", "Claude workflow");
+    expect(createCustomerApiKey).toHaveBeenCalledWith(expect.anything(), "user-1", "Claude workflow", {
+      actionsWriteEnabled: true,
+    });
     expect(result).toMatchObject({
       ok: true,
       apiKeySecret: ["f9", "live", "full_secret"].join("_"),

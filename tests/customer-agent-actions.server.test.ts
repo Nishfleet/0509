@@ -127,6 +127,8 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       userId: "user-1",
       scope: "brand",
       key: "voice",
+      watchlistId: null,
+      clientRoomId: null,
       value: { tone: "plainspoken" },
       source: "api_v1",
       createdAt: "2026-06-19T00:00:00.000Z",
@@ -138,6 +140,8 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
         userId: "user-1",
         scope: "brand",
         key: "voice",
+        watchlistId: null,
+        clientRoomId: null,
         value: { tone: "plainspoken" },
         source: "api_v1",
         createdAt: "2026-06-19T00:00:00.000Z",
@@ -185,7 +189,10 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       },
     ]),
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
-    createAgentActionAudit: vi.fn().mockResolvedValue(auditRecord()),
+    claimAgentActionAudit: vi.fn().mockResolvedValue({
+      audit: auditRecord(),
+      claimed: true,
+    }),
     finishAgentActionAudit: vi.fn().mockImplementation((_, auditId: string, input: Record<string, unknown>) =>
       Promise.resolve(auditRecord({
         id: auditId,
@@ -218,7 +225,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     upsertClientRoom: mocks.upsertClientRoom,
     upsertAgentMemory: mocks.upsertAgentMemory,
     findAgentActionAuditByIdempotencyKey: mocks.findAgentActionAuditByIdempotencyKey,
-    createAgentActionAudit: mocks.createAgentActionAudit,
+    claimAgentActionAudit: mocks.claimAgentActionAudit,
     finishAgentActionAudit: mocks.finishAgentActionAudit,
   }));
   vi.doMock("~/lib/monitoring.server", () => ({
@@ -477,7 +484,6 @@ describe("runCustomerAgentAction", () => {
         key: "voice",
         value: {
           tone: "plainspoken",
-          apiKey: "should-not-store",
         },
       },
     );
@@ -488,6 +494,8 @@ describe("runCustomerAgentAction", () => {
       {
         scope: "brand",
         key: "voice",
+        watchlistId: null,
+        clientRoomId: null,
         value: { tone: "plainspoken" },
         source: "api_v1",
       },
@@ -514,6 +522,33 @@ describe("runCustomerAgentAction", () => {
       scope: "brand",
       limit: 5,
     });
+  });
+
+  it("rejects secret-like agent memory writes before persistence", async () => {
+    const mocks = setupMocks();
+    const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "memory-secret-1",
+          source: "api_v1",
+        },
+        "memory.upsert",
+        {
+          scope: "brand",
+          key: "voice",
+          value: {
+            apiKey: "should-not-store",
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(CustomerAgentActionError);
+
+    expect(mocks.upsertAgentMemory).not.toHaveBeenCalled();
   });
 
   it("saves and lists client rooms with owned resource refs", async () => {

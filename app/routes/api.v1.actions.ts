@@ -13,6 +13,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (!auth.ok) {
     return auth.response;
   }
+  if (!auth.apiKey.actionsWriteEnabled) {
+    return actionResponse(
+      {
+        ok: false,
+        error: "actions_write_not_enabled",
+        message: "Create a write-enabled API key before running audited workspace actions.",
+      },
+      403,
+    );
+  }
 
   const payload = await readJsonObject(request);
   if (!payload) {
@@ -42,6 +52,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const idempotencyKey =
     readString(payload, "idempotencyKey") ??
     request.headers.get("Idempotency-Key")?.trim() ??
+    readString(input, "idempotencyKey") ??
     null;
   const executionContext = ((context.cloudflare as { ctx?: { waitUntil(promise: Promise<unknown>): void } } | undefined)
     ?.ctx ?? null) as ExecutionContext | null;

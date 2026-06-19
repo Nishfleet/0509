@@ -242,6 +242,8 @@ interface AgentMemoryRow {
   user_id: string;
   scope: AgentMemoryScope;
   memory_key: string;
+  watchlist_id: string | null;
+  client_room_id: string | null;
   value_json: string;
   source: string | null;
   created_at: string;
@@ -254,10 +256,19 @@ interface ClientRoomRow {
   name: string;
   client_label: string | null;
   status: ClientRoomRecord["status"];
-  resource_refs_json: string;
   notes_json: string;
   created_at: string;
   updated_at: string;
+}
+
+interface ClientRoomResourceRow {
+  id: string;
+  room_id: string;
+  user_id: string;
+  resource_type: ClientRoomResourceRef["resourceType"];
+  resource_id: string;
+  label: string | null;
+  created_at: string;
 }
 
 interface WorkspaceDeliveryConfigRow {
@@ -469,6 +480,7 @@ interface CustomerApiKeyRow {
   name: string;
   key_prefix: string;
   key_hash: string;
+  actions_write_enabled: number;
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
@@ -575,6 +587,73 @@ export async function createAgentActionAudit(
   return row ? toAgentActionAuditRecord(row) : null;
 }
 
+export async function claimAgentActionAudit(
+  env: AppEnv,
+  input: {
+    userId: string;
+    apiKeyId?: string | null;
+    actionName: string;
+    resourceType?: string | null;
+    resourceId?: string | null;
+    idempotencyKey?: string | null;
+    metadata?: JsonRecord | null;
+  },
+) {
+  const id = createId();
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT OR IGNORE INTO agent_action_audit (
+        id,
+        user_id,
+        api_key_id,
+        action_name,
+        resource_type,
+        resource_id,
+        idempotency_key,
+        status,
+        result_json,
+        error_code,
+        error_message,
+        metadata_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'started', NULL, NULL, NULL, ?, ?, ?)
+    `,
+    id,
+    input.userId,
+    input.apiKeyId ?? null,
+    input.actionName,
+    input.resourceType ?? null,
+    input.resourceId ?? null,
+    input.idempotencyKey ?? null,
+    jsonValue(input.metadata ?? {}),
+    timestamp,
+    timestamp,
+  );
+
+  const claimed = await one<AgentActionAuditRow>(
+    env,
+    "SELECT * FROM agent_action_audit WHERE id = ?",
+    id,
+  );
+  if (claimed) {
+    return {
+      audit: toAgentActionAuditRecord(claimed),
+      claimed: true,
+    };
+  }
+
+  const existing = input.idempotencyKey
+    ? await findAgentActionAuditByIdempotencyKey(env, input.userId, input.idempotencyKey)
+    : null;
+  return existing
+    ? { audit: existing, claimed: false }
+    : null;
+}
+
 export async function finishAgentActionAudit(
   env: AppEnv,
   auditId: string,
@@ -624,6 +703,8 @@ export async function upsertAgentMemory(
   input: {
     scope: AgentMemoryScope;
     key: string;
+    watchlistId?: string | null;
+    clientRoomId?: string | null;
     value: JsonRecord;
     source?: string | null;
   },
@@ -631,36 +712,108 @@ export async function upsertAgentMemory(
   const id = createId();
   const timestamp = nowIso();
   const key = input.key.trim();
+  const watchlistId = input.watchlistId?.trim() || null;
+  const clientRoomId = input.clientRoomId?.trim() || null;
+  if (watchlistId && clientRoomId) {
+    throw new Error("Agent memory can be scoped to either a watchlist or a client room, not both.");
+  }
+
+  const existing = await findAgentMemoryRow(env, userId, {
+    scope: input.scope,
+    key,
+    watchlistId,
+    clientRoomId,
+  });
+
+  if (existing) {
+    await run(
+      env,
+      `
+        UPDATE agent_memory
+        SET value_json = ?,
+            source = ?,
+            updated_at = ?
+        WHERE id = ?
+      `,
+      jsonValue(input.value),
+      input.source ?? null,
+      timestamp,
+      existing.id,
+    );
+
+    const row = await one<AgentMemoryRow>(env, "SELECT * FROM agent_memory WHERE id = ?", existing.id);
+    return row ? toAgentMemoryRecord(row) : null;
+  }
+
   await run(
     env,
     `
-      INSERT INTO agent_memory (
+      INSERT OR IGNORE INTO agent_memory (
         id,
         user_id,
         scope,
         memory_key,
+        watchlist_id,
+        client_room_id,
         value_json,
         source,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, scope, memory_key)
-      DO UPDATE SET value_json = excluded.value_json,
-                    source = excluded.source,
-                    updated_at = excluded.updated_at
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     id,
     userId,
     input.scope,
     key,
+    watchlistId,
+    clientRoomId,
     jsonValue(input.value),
     input.source ?? null,
     timestamp,
     timestamp,
   );
 
-  const row = await one<AgentMemoryRow>(
+  const row = await findAgentMemoryRow(env, userId, {
+    scope: input.scope,
+    key,
+    watchlistId,
+    clientRoomId,
+  });
+
+  if (row && row.id !== id) {
+    await run(
+      env,
+      `
+        UPDATE agent_memory
+        SET value_json = ?,
+            source = ?,
+            updated_at = ?
+        WHERE id = ?
+      `,
+      jsonValue(input.value),
+      input.source ?? null,
+      timestamp,
+      row.id,
+    );
+    const updated = await one<AgentMemoryRow>(env, "SELECT * FROM agent_memory WHERE id = ?", row.id);
+    return updated ? toAgentMemoryRecord(updated) : null;
+  }
+
+  return row ? toAgentMemoryRecord(row) : null;
+}
+
+async function findAgentMemoryRow(
+  env: AppEnv,
+  userId: string,
+  input: {
+    scope: AgentMemoryScope;
+    key: string;
+    watchlistId: string | null;
+    clientRoomId: string | null;
+  },
+) {
+  return one<AgentMemoryRow>(
     env,
     `
       SELECT *
@@ -668,14 +821,16 @@ export async function upsertAgentMemory(
       WHERE user_id = ?
         AND scope = ?
         AND memory_key = ?
+        AND watchlist_id IS ?
+        AND client_room_id IS ?
       LIMIT 1
     `,
     userId,
     input.scope,
-    key,
+    input.key,
+    input.watchlistId,
+    input.clientRoomId,
   );
-
-  return row ? toAgentMemoryRecord(row) : null;
 }
 
 export async function listAgentMemory(
@@ -683,37 +838,44 @@ export async function listAgentMemory(
   userId: string,
   options: {
     scope?: AgentMemoryScope | null;
+    watchlistId?: string | null;
+    clientRoomId?: string | null;
     limit?: number | null;
   } = {},
 ) {
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 50)));
-  const rows = options.scope
-    ? await many<AgentMemoryRow>(
-      env,
-      `
-        SELECT *
-        FROM agent_memory
-        WHERE user_id = ?
-          AND scope = ?
-        ORDER BY updated_at DESC
-        LIMIT ?
-      `,
-      userId,
-      options.scope,
-      limit,
-    )
-    : await many<AgentMemoryRow>(
-      env,
-      `
-        SELECT *
-        FROM agent_memory
-        WHERE user_id = ?
-        ORDER BY updated_at DESC
-        LIMIT ?
-      `,
-      userId,
-      limit,
-    );
+  const clauses = ["user_id = ?"];
+  const bindings: unknown[] = [userId];
+
+  if (options.scope) {
+    clauses.push("scope = ?");
+    bindings.push(options.scope);
+  }
+  if (typeof options.watchlistId !== "undefined") {
+    clauses.push(options.watchlistId ? "watchlist_id = ?" : "watchlist_id IS NULL");
+    if (options.watchlistId) {
+      bindings.push(options.watchlistId);
+    }
+  }
+  if (typeof options.clientRoomId !== "undefined") {
+    clauses.push(options.clientRoomId ? "client_room_id = ?" : "client_room_id IS NULL");
+    if (options.clientRoomId) {
+      bindings.push(options.clientRoomId);
+    }
+  }
+
+  const rows = await many<AgentMemoryRow>(
+    env,
+    `
+      SELECT *
+      FROM agent_memory
+      WHERE ${clauses.join(" AND ")}
+      ORDER BY updated_at DESC
+      LIMIT ?
+    `,
+    ...bindings,
+    limit,
+  );
 
   return rows.map(toAgentMemoryRecord);
 }
@@ -732,7 +894,7 @@ export async function getClientRoom(env: AppEnv, userId: string, roomId: string)
     userId,
   );
 
-  return row ? toClientRoomRecord(row) : null;
+  return row ? toClientRoomRecord(row, await listClientRoomResourceRefs(env, userId, row.id)) : null;
 }
 
 export async function upsertClientRoom(
@@ -751,7 +913,7 @@ export async function upsertClientRoom(
   const name = input.name.trim();
   const status = input.status ?? "active";
   const clientLabel = input.clientLabel?.trim() || null;
-  const resourceRefsJson = input.resourceRefs ? jsonValue(input.resourceRefs) : null;
+  const hasResourceRefs = Array.isArray(input.resourceRefs);
   const notesJson = input.notes ? jsonValue(input.notes) : null;
 
   if (input.roomId) {
@@ -762,7 +924,6 @@ export async function upsertClientRoom(
         SET name = ?,
             client_label = ?,
             status = ?,
-            resource_refs_json = COALESCE(?, resource_refs_json),
             notes_json = COALESCE(?, notes_json),
             updated_at = ?
         WHERE id = ?
@@ -771,12 +932,15 @@ export async function upsertClientRoom(
       name,
       clientLabel,
       status,
-      resourceRefsJson,
       notesJson,
       timestamp,
       input.roomId,
       userId,
     );
+
+    if (hasResourceRefs) {
+      await replaceClientRoomResourceRefs(env, userId, input.roomId, input.resourceRefs ?? []);
+    }
 
     return getClientRoom(env, userId, input.roomId);
   }
@@ -791,16 +955,14 @@ export async function upsertClientRoom(
         name,
         client_label,
         status,
-        resource_refs_json,
         notes_json,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, name)
       DO UPDATE SET client_label = excluded.client_label,
                     status = excluded.status,
-                    resource_refs_json = excluded.resource_refs_json,
                     notes_json = excluded.notes_json,
                     updated_at = excluded.updated_at
     `,
@@ -809,7 +971,6 @@ export async function upsertClientRoom(
     name,
     clientLabel,
     status,
-    resourceRefsJson ?? jsonValue([]),
     notesJson ?? jsonValue({}),
     timestamp,
     timestamp,
@@ -828,7 +989,11 @@ export async function upsertClientRoom(
     name,
   );
 
-  return row ? toClientRoomRecord(row) : null;
+  if (row && hasResourceRefs) {
+    await replaceClientRoomResourceRefs(env, userId, row.id, input.resourceRefs ?? []);
+  }
+
+  return row ? toClientRoomRecord(row, await listClientRoomResourceRefs(env, userId, row.id)) : null;
 }
 
 export async function listClientRooms(
@@ -869,7 +1034,74 @@ export async function listClientRooms(
       limit,
     );
 
-  return rows.map(toClientRoomRecord);
+  return Promise.all(
+    rows.map(async (row) => toClientRoomRecord(row, await listClientRoomResourceRefs(env, userId, row.id))),
+  );
+}
+
+async function replaceClientRoomResourceRefs(
+  env: AppEnv,
+  userId: string,
+  roomId: string,
+  refs: ClientRoomResourceRef[],
+) {
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      DELETE FROM client_room_resource
+      WHERE room_id = ?
+        AND user_id = ?
+    `,
+    roomId,
+    userId,
+  );
+
+  for (const ref of refs) {
+    await run(
+      env,
+      `
+        INSERT INTO client_room_resource (
+          id,
+          room_id,
+          user_id,
+          resource_type,
+          resource_id,
+          label,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      createId(),
+      roomId,
+      userId,
+      ref.resourceType,
+      ref.resourceId,
+      ref.label?.trim() || null,
+      timestamp,
+    );
+  }
+}
+
+async function listClientRoomResourceRefs(env: AppEnv, userId: string, roomId: string) {
+  const rows = await many<ClientRoomResourceRow>(
+    env,
+    `
+      SELECT *
+      FROM client_room_resource
+      WHERE room_id = ?
+        AND user_id = ?
+      ORDER BY created_at ASC
+    `,
+    roomId,
+    userId,
+  );
+
+  return rows.map((row) => ({
+    resourceType: row.resource_type,
+    resourceId: row.resource_id,
+    ...(row.label ? { label: row.label } : {}),
+  }));
 }
 
 export async function upsertAd(env: AppEnv, ad: AdRecord) {
@@ -6265,6 +6497,7 @@ function toCustomerApiKeyRecord(row: CustomerApiKeyRow): CustomerApiKeyRecord {
     userId: row.user_id,
     name: row.name,
     keyPrefix: row.key_prefix,
+    actionsWriteEnabled: row.actions_write_enabled === 1,
     lastUsedAt: row.last_used_at,
     revokedAt: row.revoked_at,
     createdAt: row.created_at,
@@ -6297,6 +6530,8 @@ function toAgentMemoryRecord(row: AgentMemoryRow): AgentMemoryRecord {
     userId: row.user_id,
     scope: row.scope,
     key: row.memory_key,
+    watchlistId: row.watchlist_id ?? null,
+    clientRoomId: row.client_room_id ?? null,
     value: parseJson<Record<string, unknown>>(row.value_json, {}),
     source: row.source ?? null,
     createdAt: row.created_at,
@@ -6304,14 +6539,14 @@ function toAgentMemoryRecord(row: AgentMemoryRow): AgentMemoryRecord {
   };
 }
 
-function toClientRoomRecord(row: ClientRoomRow): ClientRoomRecord {
+function toClientRoomRecord(row: ClientRoomRow, resourceRefs: ClientRoomResourceRef[] = []): ClientRoomRecord {
   return {
     id: row.id,
     userId: row.user_id,
     name: row.name,
     clientLabel: row.client_label ?? null,
     status: row.status,
-    resourceRefs: parseJson<ClientRoomResourceRef[]>(row.resource_refs_json, []),
+    resourceRefs,
     notes: parseJson<Record<string, unknown>>(row.notes_json, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -6340,6 +6575,7 @@ export async function insertCustomerApiKey(
     name: string;
     keyPrefix: string;
     keyHash: string;
+    actionsWriteEnabled?: boolean;
   },
 ) {
   const id = createId();
@@ -6353,18 +6589,20 @@ export async function insertCustomerApiKey(
         name,
         key_prefix,
         key_hash,
+        actions_write_enabled,
         last_used_at,
         revoked_at,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
     `,
     id,
     input.userId,
     input.name,
     input.keyPrefix,
     input.keyHash,
+    boolToInt(Boolean(input.actionsWriteEnabled)),
     timestamp,
     timestamp,
   );
