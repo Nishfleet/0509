@@ -36,6 +36,14 @@ const session = {
   },
 };
 
+const emptyWorkspaceReadiness = {
+  generatedAt: "2026-06-18T00:00:00.000Z",
+  readyCount: 0,
+  totalCount: 0,
+  items: [],
+  nextActions: [],
+};
+
 describe("search watchlist limit", () => {
   it("returns a structured limit prompt when the watchlist plan limit is reached", async () => {
     const createWatchlist = vi.fn();
@@ -473,6 +481,7 @@ describe("pricing CTA rendering", () => {
         proofUsage: {
           warningLevel: "ok",
         },
+        workspaceReadiness: emptyWorkspaceReadiness,
       },
     });
 
@@ -512,6 +521,7 @@ describe("pricing CTA rendering", () => {
           adsSeen: 0,
         },
         nextScanLabel: "tomorrow morning",
+        workspaceReadiness: emptyWorkspaceReadiness,
       },
     });
 
@@ -550,6 +560,7 @@ describe("pricing CTA rendering", () => {
           remaining: 9,
           plan: "starter",
         },
+        workspaceReadiness: emptyWorkspaceReadiness,
       },
     });
 
@@ -591,6 +602,7 @@ describe("pricing CTA rendering", () => {
           remaining: 1,
           plan: "starter",
         },
+        workspaceReadiness: emptyWorkspaceReadiness,
       },
     });
 
@@ -630,6 +642,7 @@ describe("pricing CTA rendering", () => {
           remaining: 10,
           plan: "starter",
         },
+        workspaceReadiness: emptyWorkspaceReadiness,
       },
     });
 

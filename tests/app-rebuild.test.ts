@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const appLayout = readFileSync("app/routes/app-layout.tsx", "utf8");
+const routeConfig = readFileSync("app/routes.ts", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
 const onboardRoute = readFileSync("app/routes/app.onboard.tsx", "utf8");
 const collectionsRoute = readFileSync("app/routes/app.collections.tsx", "utf8");
@@ -70,6 +71,9 @@ describe("app rebuild", () => {
 
   it("matches the advertised competitor-ad dashboard surface", () => {
     expect(appLayout).toContain("Search competitor ads");
+    expect(routeConfig).toContain('route("api/v1/workspace-readiness"');
+    expect(dashboardRoute).toContain("getWorkspaceReadiness");
+    expect(dashboardRoute).toContain("data.workspaceReadiness.items");
     expect(dashboardRoute).toContain("Add your first competitor");
     expect(dashboardRoute).toContain("Revenue brief");
     expect(dashboardRoute).toContain("Competitor website");

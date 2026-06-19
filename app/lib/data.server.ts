@@ -4367,6 +4367,60 @@ export async function listDeliveryTargets(
   return rows.map(toDeliveryTargetRecord);
 }
 
+export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: string) {
+  const row = await one<{
+    active_count: number | null;
+    proven_count: number | null;
+  }>(
+    env,
+    `
+      WITH usable_targets AS (
+        SELECT last_successful_delivery_at
+        FROM delivery_target
+        WHERE user_id = ?
+          AND (
+            (
+              channel = 'email'
+              AND is_paused = 0
+              AND opted_out_at IS NULL
+              AND validation_status != 'invalid'
+            )
+            OR (
+              channel = 'slack'
+              AND is_opted_in = 1
+              AND is_paused = 0
+              AND opted_out_at IS NULL
+              AND is_validated = 1
+              AND validation_status = 'validated'
+            )
+            OR (
+              channel = 'whatsapp'
+              AND is_opted_in = 1
+              AND is_paused = 0
+              AND opted_out_at IS NULL
+              AND is_validated = 1
+              AND validation_status = 'validated'
+              AND template_eligible = 1
+            )
+          )
+      )
+      SELECT
+        COUNT(*) AS active_count,
+        SUM(CASE
+          WHEN last_successful_delivery_at IS NOT NULL
+          THEN 1 ELSE 0
+        END) AS proven_count
+      FROM usable_targets
+    `,
+    userId,
+  );
+
+  return {
+    activeCount: Number(row?.active_count ?? 0),
+    provenCount: Number(row?.proven_count ?? 0),
+  };
+}
+
 export async function upsertDeliveryTarget(
   env: AppEnv,
   input: {
