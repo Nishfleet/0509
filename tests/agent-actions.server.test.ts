@@ -170,6 +170,32 @@ describe("runAuditedAgentAction", () => {
     ).rejects.toBeInstanceOf(AgentActionIdempotencyConflictError);
   });
 
+  it("rejects a reused idempotency key for different request metadata", async () => {
+    setupDataMock(auditRecord({
+      status: "succeeded",
+      result: { watchlistId: "watchlist-1" },
+      metadata: {
+        requestFingerprint: "fp:one",
+      },
+    }));
+    const { AgentActionIdempotencyConflictError, runAuditedAgentAction } = await import("~/lib/agent-actions.server");
+
+    await expect(
+      runAuditedAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          actionName: "watchlist.create",
+          idempotencyKey: "idem-1",
+          metadata: {
+            requestFingerprint: "fp:two",
+          },
+        },
+        vi.fn(),
+      ),
+    ).rejects.toBeInstanceOf(AgentActionIdempotencyConflictError);
+  });
+
   it("marks the audit failed and rethrows when the action fails", async () => {
     const mocks = setupDataMock();
     const { runAuditedAgentAction } = await import("~/lib/agent-actions.server");

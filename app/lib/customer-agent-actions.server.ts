@@ -15,6 +15,7 @@ import { normalizeSavedQuery } from "~/lib/normalize";
 import { parseReportId } from "~/lib/report";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type {
+  AgentActionAuditRecord,
   AgentMemoryRecord,
   AgentMemoryScope,
   AppSession,
@@ -146,6 +147,7 @@ export async function runCustomerAgentAction(
   actionName: CustomerAgentActionName,
   input: Record<string, unknown>,
 ) {
+  const requestFingerprint = buildAgentActionRequestFingerprint(actionName, input);
   if (customerAgentActionRequiresIdempotency(actionName) && !context.idempotencyKey?.trim()) {
     throw new CustomerAgentActionError(
       "missing_idempotency_key",
@@ -160,6 +162,7 @@ export async function runCustomerAgentAction(
     idempotencyKey: context.idempotencyKey,
     metadata: {
       source: context.source,
+      requestFingerprint,
     },
   }, async () => {
     try {
@@ -324,7 +327,56 @@ export async function runCustomerAgentAction(
       }
       throw error;
     }
+  }, {
+    replayCompleted: (audit) => replayCustomerAgentAction(env, context, actionName, audit),
   });
+}
+
+async function replayCustomerAgentAction(
+  env: AppEnv,
+  context: CustomerAgentActionContext,
+  actionName: CustomerAgentActionName,
+  audit: AgentActionAuditRecord,
+) {
+  if (actionName !== "share.create" && actionName !== "report.share") {
+    return null;
+  }
+  return replayShareResultFromAudit(env, context, audit);
+}
+
+async function replayShareResultFromAudit(
+  env: AppEnv,
+  context: CustomerAgentActionContext,
+  audit: AgentActionAuditRecord,
+) {
+  const result = audit.result;
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    return null;
+  }
+  const shareValue = result.share;
+  if (!shareValue || typeof shareValue !== "object" || Array.isArray(shareValue)) {
+    return null;
+  }
+  const shareId = readString(shareValue as Record<string, unknown>, "id");
+  if (!shareId) {
+    return null;
+  }
+
+  const { getShareLinkById } = await import("~/lib/data.server");
+  const share = await getShareLinkById(env, context.userId, shareId);
+  if (!share) {
+    return null;
+  }
+
+  return {
+    ...result,
+    share: {
+      id: share.id,
+      token: share.token,
+      expiresAt: share.expiresAt,
+    },
+    shareUrl: shareUrl(context, share.token),
+  };
 }
 
 async function createWatchlistFromAgent(
@@ -1195,4 +1247,40 @@ function isSecretishField(value: string) {
 function isSecretishString(value: string) {
   return /(?:^f9_live_|bearer\s+|xox[baprs]-|sk-[a-z0-9]|hooks\.slack\.com\/services|\/share\/[a-z0-9_-]{12,}|https:\/\/[^/\s]+\/share\/[a-z0-9_-]{12,})/i
     .test(value);
+}
+
+function buildAgentActionRequestFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
+  return fnv1a32(`${actionName}:${stableStringify(sanitizeAgentActionInputForFingerprint(input))}`);
+}
+
+function sanitizeAgentActionInputForFingerprint(input: Record<string, unknown>) {
+  const sanitized = sanitizeAgentActionMetadata(input);
+  delete sanitized.action;
+  delete sanitized.idempotencyKey;
+  return sanitized;
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, nestedValue]) => typeof nestedValue !== "undefined")
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, nestedValue]) => `${JSON.stringify(key)}:${stableStringify(nestedValue)}`).join(",")}}`;
+  }
+  return "null";
+}
+
+function fnv1a32(value: string) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
