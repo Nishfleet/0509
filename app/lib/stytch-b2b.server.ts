@@ -126,19 +126,37 @@ export function enabledStytchOAuthProviders(env: AppEnv): StytchOAuthProvider[] 
     return [];
   }
 
-  const configuredProviders = env.STYTCH_OAUTH_ENABLED_PROVIDERS?.trim();
-  if (configuredProviders) {
-    const providers = new Set<StytchOAuthProvider>();
-    for (const provider of configuredProviders.split(",")) {
-      const normalized = provider.trim().toLowerCase();
-      if (isStytchOAuthProvider(normalized)) {
-        providers.add(normalized);
-      }
-    }
-    return STYTCH_OAUTH_PROVIDERS.filter((provider) => providers.has(provider));
+  const enabledProviders = configuredStytchOAuthProviders(env);
+  const brandedProviders = parseStytchOAuthProviders(env.STYTCH_OAUTH_BRANDED_PROVIDERS);
+  if (enabledProviders.size === 0 || brandedProviders.size === 0) {
+    return [];
   }
 
-  return stytchEnvFlagEnabled(env.STYTCH_OAUTH_PROVIDERS_ENABLED) ? [...STYTCH_OAUTH_PROVIDERS] : [];
+  return STYTCH_OAUTH_PROVIDERS.filter(
+    (provider) => enabledProviders.has(provider) && brandedProviders.has(provider),
+  );
+}
+
+function configuredStytchOAuthProviders(env: AppEnv): Set<StytchOAuthProvider> {
+  const configuredProviders = env.STYTCH_OAUTH_ENABLED_PROVIDERS?.trim();
+  if (configuredProviders) {
+    return parseStytchOAuthProviders(configuredProviders);
+  }
+
+  return stytchEnvFlagEnabled(env.STYTCH_OAUTH_PROVIDERS_ENABLED)
+    ? new Set(STYTCH_OAUTH_PROVIDERS)
+    : new Set();
+}
+
+function parseStytchOAuthProviders(value: string | undefined): Set<StytchOAuthProvider> {
+  const providers = new Set<StytchOAuthProvider>();
+  for (const provider of value?.split(",") ?? []) {
+    const normalized = provider.trim().toLowerCase();
+    if (isStytchOAuthProvider(normalized)) {
+      providers.add(normalized);
+    }
+  }
+  return providers;
 }
 
 export function isStytchOAuthConfigured(env: AppEnv) {

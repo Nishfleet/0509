@@ -548,7 +548,7 @@ describe("Stytch auth boundary", () => {
     expect(redirectUrl.search).toBe("");
   });
 
-  it("keeps Stytch OAuth disabled until provider configs are verified", () => {
+  it("keeps Stytch OAuth disabled until provider configs and branding are verified", () => {
     const baseEnv = {
       APP_ORIGIN: "https://0509.io",
       STYTCH_PROJECT_ID: "project-test",
@@ -562,11 +562,25 @@ describe("Stytch auth boundary", () => {
         ...baseEnv,
         STYTCH_OAUTH_PROVIDERS_ENABLED: "true",
       }),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      enabledStytchOAuthProviders({
+        ...baseEnv,
+        STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
+      }),
+    ).toEqual([]);
+    expect(
+      enabledStytchOAuthProviders({
+        ...baseEnv,
+        STYTCH_OAUTH_PROVIDERS_ENABLED: "true",
+        STYTCH_OAUTH_BRANDED_PROVIDERS: "google, unknown, GOOGLE",
+      }),
+    ).toEqual(["google"]);
     expect(
       enabledStytchOAuthProviders({
         ...baseEnv,
         STYTCH_OAUTH_ENABLED_PROVIDERS: "google, unknown, GOOGLE",
+        STYTCH_OAUTH_BRANDED_PROVIDERS: "google",
       }),
     ).toEqual(["google"]);
     expect(
@@ -574,6 +588,7 @@ describe("Stytch auth boundary", () => {
         {
           ...baseEnv,
           STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
+          STYTCH_OAUTH_BRANDED_PROVIDERS: "google",
         },
         "google",
       ),
@@ -583,6 +598,7 @@ describe("Stytch auth boundary", () => {
         {
           ...baseEnv,
           STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
+          STYTCH_OAUTH_BRANDED_PROVIDERS: "google",
         },
         "microsoft",
       ),
@@ -758,6 +774,7 @@ describe("Stytch auth boundary", () => {
             env: {
               ...stytchActionTestEnv(db),
               STYTCH_OAUTH_ENABLED_PROVIDERS: "microsoft",
+              STYTCH_OAUTH_BRANDED_PROVIDERS: "microsoft",
               STYTCH_PUBLIC_TOKEN: "public-token-test",
             },
           },
@@ -808,6 +825,7 @@ describe("Stytch auth boundary", () => {
             env: {
               ...stytchActionTestEnv(db),
               STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
+              STYTCH_OAUTH_BRANDED_PROVIDERS: "google",
               STYTCH_PUBLIC_TOKEN: "public-token-test",
             },
           },
@@ -825,6 +843,45 @@ describe("Stytch auth boundary", () => {
         }),
       } as never);
       throw new Error("Expected disabled OAuth provider to redirect.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Response);
+      const response = error as Response;
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe("/auth/login?error=oauth_not_configured");
+    }
+  });
+
+  it("rejects a Stytch OAuth provider that is enabled but not branded-verified", async () => {
+    const db = {
+      prepare() {
+        throw new Error("No auth request should be stored before OAuth branding is verified.");
+      },
+    };
+
+    try {
+      await oauthAction({
+        context: {
+          cloudflare: {
+            env: {
+              ...stytchActionTestEnv(db),
+              STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
+              STYTCH_PUBLIC_TOKEN: "public-token-test",
+            },
+          },
+        },
+        params: {},
+        request: new Request("https://preview.0509.dev/auth/stytch/oauth", {
+          method: "POST",
+          body: new URLSearchParams({
+            email: "asha@agency.com",
+            mode: "login",
+            provider: "google",
+            redirectTo: "/app",
+          }),
+          headers: { origin: "https://preview.0509.dev" },
+        }),
+      } as never);
+      throw new Error("Expected unbranded OAuth provider to redirect.");
     } catch (error) {
       expect(error).toBeInstanceOf(Response);
       const response = error as Response;
