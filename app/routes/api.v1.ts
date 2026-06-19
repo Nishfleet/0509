@@ -36,6 +36,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
             "report.create",
             "report.share",
             "counter_move_brief.create",
+            "memory.upsert",
+            "memory.list",
           ],
         },
         {

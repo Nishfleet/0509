@@ -242,6 +242,33 @@ const MCP_TOOLS = [
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
+  {
+    name: "upsert_memory",
+    title: "Upsert Memory",
+    description:
+      "Save scoped, secret-sanitized account memory for future agent runs.",
+    inputSchema: memoryMutationInputSchema(),
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "list_memory",
+    title: "List Memory",
+    description:
+      "Read scoped account memory saved for future agent runs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scope: memoryScopeSchema(),
+        limit: {
+          type: "number",
+          default: 50,
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
 ];
 
 type JsonRpcId = string | number | null;
@@ -430,6 +457,14 @@ async function callTool(
 
   if (name === "create_counter_move_brief") {
     return buildAgentActionToolResult(env, apiKey, "counter_move_brief.create", args, origin);
+  }
+
+  if (name === "upsert_memory") {
+    return buildAgentActionToolResult(env, apiKey, "memory.upsert", args, origin);
+  }
+
+  if (name === "list_memory") {
+    return buildAgentActionToolResult(env, apiKey, "memory.list", args, origin);
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };
@@ -760,6 +795,35 @@ function reportInputSchema() {
       idempotencyKey: idempotencyKeySchema(),
     },
     additionalProperties: false,
+  };
+}
+
+function memoryMutationInputSchema() {
+  return {
+    type: "object",
+    properties: {
+      scope: memoryScopeSchema(),
+      key: {
+        type: "string",
+      },
+      value: {
+        type: ["object", "string", "number", "boolean", "array", "null"],
+      },
+      source: {
+        type: "string",
+      },
+      idempotencyKey: idempotencyKeySchema(),
+    },
+    required: ["key", "value"],
+    additionalProperties: false,
+  };
+}
+
+function memoryScopeSchema() {
+  return {
+    type: "string",
+    enum: ["workspace", "customer", "brand", "competitor"],
+    default: "workspace",
   };
 }
 

@@ -70,6 +70,7 @@ export const DELIVERY_ATTEMPT_STATUSES = [
   "skipped_due_to_dedupe",
 ] as const;
 export const AGENT_ACTION_AUDIT_STATUSES = ["started", "succeeded", "failed"] as const;
+export const AGENT_MEMORY_SCOPES = ["workspace", "customer", "brand", "competitor"] as const;
 export const DELIVERY_TARGET_VALIDATION_STATUSES = [
   "pending",
   "validated",
@@ -99,6 +100,7 @@ export type DedupeReason = (typeof DEDUPE_REASONS)[number];
 export type WebhookReconciliationStatus = (typeof WEBHOOK_RECONCILIATION_STATUSES)[number];
 export type DeliveryAttemptStatus = (typeof DELIVERY_ATTEMPT_STATUSES)[number];
 export type AgentActionAuditStatus = (typeof AGENT_ACTION_AUDIT_STATUSES)[number];
+export type AgentMemoryScope = (typeof AGENT_MEMORY_SCOPES)[number];
 export type DeliveryTargetValidationStatus = (typeof DELIVERY_TARGET_VALIDATION_STATUSES)[number];
 export type ProofRenderMode = (typeof PROOF_RENDER_MODES)[number];
 export type ProofDeviceProfile = (typeof PROOF_DEVICE_PROFILES)[number];
@@ -497,6 +499,17 @@ export interface AgentActionAuditRecord {
   errorCode: string | null;
   errorMessage: string | null;
   metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentMemoryRecord {
+  id: string;
+  userId: string;
+  scope: AgentMemoryScope;
+  key: string;
+  value: Record<string, unknown>;
+  source: string | null;
   createdAt: string;
   updatedAt: string;
 }
