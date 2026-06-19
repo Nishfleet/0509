@@ -35,6 +35,7 @@ export default [
   route("api/demo-proof", "routes/api.demo-proof.ts"),
   route("api/mcp", "routes/api.mcp.ts"),
   route("api/v1", "routes/api.v1.ts"),
+  route("api/v1/actions", "routes/api.v1.actions.ts"),
   route("api/v1/workspace-readiness", "routes/api.v1.workspace-readiness.ts"),
   route("api/v1/:resourceType/:resourceId", "routes/api.v1.$resourceType.$resourceId.ts"),
   route("api/pricing-preview", "routes/api.pricing-preview.ts"),

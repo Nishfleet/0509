@@ -223,7 +223,7 @@ afterEach(() => {
 });
 
 describe("MCP route", () => {
-  it("documents the live read-only agent boundary", async () => {
+  it("documents the live agent boundary", async () => {
     const response = await loadDocs();
     const body = await response.json() as {
       status: string;
@@ -236,6 +236,7 @@ describe("MCP route", () => {
     expect(body.endpoint).toBe("https://0509.io/api/mcp");
     expect(body.tools.map((tool) => tool.name)).toContain("get_workspace_readiness");
     expect(body.tools.map((tool) => tool.name)).toContain("get_digest_export");
+    expect(body.tools.map((tool) => tool.name)).toContain("create_watchlist");
     expect(body.notLiveYet).toContain("TikTok ingestion");
     expect(body.notLiveYet).not.toContain("MCP server");
   });
@@ -290,8 +291,13 @@ describe("MCP route", () => {
       "get_collection_export",
       "get_watchlist_export",
       "get_digest_export",
+      "create_watchlist",
+      "refresh_watchlist",
+      "pause_watchlist",
+      "resume_watchlist",
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
+    expect(body.result.tools.find((tool) => tool.name === "create_watchlist")?.annotations.readOnlyHint).toBe(false);
   });
 
   it("returns workspace readiness through tools/call", async () => {
@@ -390,6 +396,108 @@ describe("MCP route", () => {
       resourceType: "watchlist",
       format: "slack",
     });
+  });
+
+  it("runs audited watchlist write tools through tools/call", async () => {
+    setupMocks();
+    const runCustomerAgentAction = vi.fn().mockResolvedValue({
+      audit: {
+        id: "audit-1",
+        status: "succeeded",
+      },
+      replayed: false,
+      result: {
+        ok: true,
+        action: "watchlist.create",
+        watchlist: {
+          id: "watchlist-2",
+          name: "Glossier watch",
+        },
+      },
+    });
+    vi.doMock("~/lib/customer-agent-actions.server", () => ({
+      customerAgentActionErrorPayload: vi.fn(),
+      runCustomerAgentAction,
+    }));
+
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "write-1",
+      method: "tools/call",
+      params: {
+        name: "create_watchlist",
+        arguments: {
+          targetLabel: "Glossier",
+          competitorWebsite: "glossier.com",
+          idempotencyKey: "create-glossier",
+        },
+      },
+    });
+    const body = await response.json() as {
+      result: {
+        isError: boolean;
+        structuredContent: {
+          replayed: boolean;
+          result: { watchlist: { id: string } };
+        };
+      };
+    };
+
+    expect(body.result.isError).toBe(false);
+    expect(body.result.structuredContent.replayed).toBe(false);
+    expect(body.result.structuredContent.result.watchlist.id).toBe("watchlist-2");
+    expect(runCustomerAgentAction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "create-glossier",
+        source: "mcp",
+      }),
+      "watchlist.create",
+      expect.objectContaining({
+        targetLabel: "Glossier",
+        competitorWebsite: "glossier.com",
+      }),
+    );
+  });
+
+  it("returns MCP tool errors without exposing internal exceptions", async () => {
+    setupMocks();
+    vi.doMock("~/lib/customer-agent-actions.server", () => ({
+      customerAgentActionErrorPayload: vi.fn(() => ({
+        status: 402,
+        body: {
+          ok: false,
+          error: "plan_limit_exceeded",
+          message: "You have reached your competitor tracking limit.",
+        },
+      })),
+      runCustomerAgentAction: vi.fn().mockRejectedValue(new Error("limit")),
+    }));
+
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "write-2",
+      method: "tools/call",
+      params: {
+        name: "resume_watchlist",
+        arguments: {
+          watchlistId: "watchlist-1",
+        },
+      },
+    });
+    const body = await response.json() as {
+      result: {
+        isError: boolean;
+        content: Array<{ text: string }>;
+        structuredContent: { error: string };
+      };
+    };
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0]?.text).toContain("competitor tracking limit");
+    expect(body.result.structuredContent.error).toBe("plan_limit_exceeded");
   });
 
   it("rejects MCP calls without an active API key", async () => {
