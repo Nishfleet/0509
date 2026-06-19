@@ -19,6 +19,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         {
           method: "GET",
+          path: "/api/v1/workspace-readiness",
+          formats: ["json"],
+        },
+        {
+          method: "GET",
           path: "/api/v1/collections/{collectionId}",
           formats: ["json", "csv", "slack"],
         },
