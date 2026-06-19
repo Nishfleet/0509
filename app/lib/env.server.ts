@@ -1,3 +1,7 @@
+import type { BrowserWorker } from "@cloudflare/puppeteer";
+
+export type BrowserBinding = BrowserWorker;
+
 export interface EmailSendingBinding {
   send(message: {
     from: string;
@@ -16,7 +20,7 @@ export interface AppEnv {
   APP_ORIGIN?: string;
   AUTH_PROVIDER?: string;
   BETTER_AUTH_SECRET?: string;
-  BROWSER?: Fetcher;
+  BROWSER?: BrowserBinding;
   BROWSERLESS_PROOF_ALLOWLIST_ORIGINS?: string;
   BROWSERLESS_TOKEN?: string;
   BROWSERLESS_BQL_URL?: string;
