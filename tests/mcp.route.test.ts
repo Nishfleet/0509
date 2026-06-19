@@ -300,6 +300,8 @@ describe("MCP route", () => {
       "create_report",
       "share_report",
       "create_counter_move_brief",
+      "upsert_memory",
+      "list_memory",
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
     expect(body.result.tools.find((tool) => tool.name === "create_watchlist")?.annotations.readOnlyHint).toBe(false);

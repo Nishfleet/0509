@@ -25,12 +25,14 @@ import {
   getWeeklyBusinessSummary,
   findAgentActionAuditByIdempotencyKey,
   finishAgentActionAudit,
+  listAgentMemory,
   listActiveWatchlists,
   listCollectionItems,
   listDigests,
   upsertDigestDelivery,
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
+  upsertAgentMemory,
   legacyWatchEventImportanceScore,
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
@@ -263,6 +265,78 @@ describe("agent action audit persistence", () => {
     ]);
     expect(update?.bindings[8]).toBe("audit-1");
     expect(audit?.id).toBe("audit-1");
+  });
+});
+
+describe("agent memory persistence", () => {
+  const row = {
+    id: "memory-1",
+    user_id: "user-1",
+    scope: "brand",
+    memory_key: "voice",
+    value_json: JSON.stringify({ tone: "plainspoken" }),
+    source: "api_v1",
+    created_at: "2026-06-19T00:00:00.000Z",
+    updated_at: "2026-06-19T00:01:00.000Z",
+  };
+
+  it("upserts scoped memory with JSON value storage", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM agent_memory",
+        results: [row],
+      },
+    ]);
+
+    const memory = await upsertAgentMemory(
+      { DB: mock.db } as never,
+      "user-1",
+      {
+        scope: "brand",
+        key: "voice",
+        value: { tone: "plainspoken" },
+        source: "api_v1",
+      },
+    );
+
+    const insert = findStatement(mock.statements, "INSERT INTO agent_memory");
+    expect(insert?.sql).toContain("ON CONFLICT(user_id, scope, memory_key)");
+    expect(insert?.bindings.slice(1, 6)).toEqual([
+      "user-1",
+      "brand",
+      "voice",
+      JSON.stringify({ tone: "plainspoken" }),
+      "api_v1",
+    ]);
+    expect(memory).toMatchObject({
+      id: "memory-1",
+      scope: "brand",
+      key: "voice",
+      value: { tone: "plainspoken" },
+      source: "api_v1",
+    });
+  });
+
+  it("lists memory within an optional scope", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM agent_memory",
+        results: [row],
+      },
+    ]);
+
+    const memories = await listAgentMemory({ DB: mock.db } as never, "user-1", {
+      scope: "brand",
+      limit: 5,
+    });
+
+    const select = findStatement(mock.statements, "FROM agent_memory", "scope = ?");
+    expect(select?.bindings).toEqual(["user-1", "brand", 5]);
+    expect(memories[0]).toMatchObject({
+      id: "memory-1",
+      scope: "brand",
+      key: "voice",
+    });
   });
 });
 

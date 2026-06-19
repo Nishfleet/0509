@@ -122,6 +122,28 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       token: "sharetoken1",
       expiresAt: "2026-09-19T00:00:00.000Z",
     }),
+    upsertAgentMemory: vi.fn().mockResolvedValue({
+      id: "memory-1",
+      userId: "user-1",
+      scope: "brand",
+      key: "voice",
+      value: { tone: "plainspoken" },
+      source: "api_v1",
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    }),
+    listAgentMemory: vi.fn().mockResolvedValue([
+      {
+        id: "memory-1",
+        userId: "user-1",
+        scope: "brand",
+        key: "voice",
+        value: { tone: "plainspoken" },
+        source: "api_v1",
+        createdAt: "2026-06-19T00:00:00.000Z",
+        updatedAt: "2026-06-19T00:00:00.000Z",
+      },
+    ]),
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
     createAgentActionAudit: vi.fn().mockResolvedValue(auditRecord()),
     finishAgentActionAudit: vi.fn().mockImplementation((_, auditId: string, input: Record<string, unknown>) =>
@@ -148,9 +170,11 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     getDigest: mocks.getDigest,
     getWatchlist: mocks.getWatchlist,
     listAdsByIds: mocks.listAdsByIds,
+    listAgentMemory: mocks.listAgentMemory,
     listCollectionItems: mocks.listCollectionItems,
     listWatchEvents: mocks.listWatchEvents,
     setWatchlistActive: mocks.setWatchlistActive,
+    upsertAgentMemory: mocks.upsertAgentMemory,
     findAgentActionAuditByIdempotencyKey: mocks.findAgentActionAuditByIdempotencyKey,
     createAgentActionAudit: mocks.createAgentActionAudit,
     finishAgentActionAudit: mocks.finishAgentActionAudit,
@@ -391,5 +415,62 @@ describe("runCustomerAgentAction", () => {
       counterMove: expect.stringContaining("offer shift"),
     });
     expect(mocks.listWatchEvents).toHaveBeenCalledWith(expect.anything(), "watchlist-1", 9);
+  });
+
+  it("saves and lists sanitized scoped agent memory", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "memory-1",
+        source: "api_v1",
+      },
+      "memory.upsert",
+      {
+        scope: "brand",
+        key: "voice",
+        value: {
+          tone: "plainspoken",
+          apiKey: "should-not-store",
+        },
+      },
+    );
+
+    expect(mocks.upsertAgentMemory).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      {
+        scope: "brand",
+        key: "voice",
+        value: { tone: "plainspoken" },
+        source: "api_v1",
+      },
+    );
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "memory-list-1",
+        source: "api_v1",
+      },
+      "memory.list",
+      {
+        scope: "brand",
+        limit: 5,
+      },
+    );
+    const result = outcome.result as { memories: Array<{ key: string }> };
+
+    expect(result.memories[0]?.key).toBe("voice");
+    expect(mocks.listAgentMemory).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      scope: "brand",
+      limit: 5,
+    });
   });
 });

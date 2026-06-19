@@ -19,6 +19,8 @@ import type {
   AdRecord,
   AgentActionAuditRecord,
   AgentActionAuditStatus,
+  AgentMemoryRecord,
+  AgentMemoryScope,
   AnalysisFieldInput,
   AppSession,
   CollectionItemRecord,
@@ -229,6 +231,17 @@ interface AgentActionAuditRow {
   error_code: string | null;
   error_message: string | null;
   metadata_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AgentMemoryRow {
+  id: string;
+  user_id: string;
+  scope: AgentMemoryScope;
+  memory_key: string;
+  value_json: string;
+  source: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -589,6 +602,106 @@ export async function finishAgentActionAudit(
 
   const row = await one<AgentActionAuditRow>(env, "SELECT * FROM agent_action_audit WHERE id = ?", auditId);
   return row ? toAgentActionAuditRecord(row) : null;
+}
+
+export async function upsertAgentMemory(
+  env: AppEnv,
+  userId: string,
+  input: {
+    scope: AgentMemoryScope;
+    key: string;
+    value: JsonRecord;
+    source?: string | null;
+  },
+) {
+  const id = createId();
+  const timestamp = nowIso();
+  const key = input.key.trim();
+  await run(
+    env,
+    `
+      INSERT INTO agent_memory (
+        id,
+        user_id,
+        scope,
+        memory_key,
+        value_json,
+        source,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, scope, memory_key)
+      DO UPDATE SET value_json = excluded.value_json,
+                    source = excluded.source,
+                    updated_at = excluded.updated_at
+    `,
+    id,
+    userId,
+    input.scope,
+    key,
+    jsonValue(input.value),
+    input.source ?? null,
+    timestamp,
+    timestamp,
+  );
+
+  const row = await one<AgentMemoryRow>(
+    env,
+    `
+      SELECT *
+      FROM agent_memory
+      WHERE user_id = ?
+        AND scope = ?
+        AND memory_key = ?
+      LIMIT 1
+    `,
+    userId,
+    input.scope,
+    key,
+  );
+
+  return row ? toAgentMemoryRecord(row) : null;
+}
+
+export async function listAgentMemory(
+  env: AppEnv,
+  userId: string,
+  options: {
+    scope?: AgentMemoryScope | null;
+    limit?: number | null;
+  } = {},
+) {
+  const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 50)));
+  const rows = options.scope
+    ? await many<AgentMemoryRow>(
+      env,
+      `
+        SELECT *
+        FROM agent_memory
+        WHERE user_id = ?
+          AND scope = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `,
+      userId,
+      options.scope,
+      limit,
+    )
+    : await many<AgentMemoryRow>(
+      env,
+      `
+        SELECT *
+        FROM agent_memory
+        WHERE user_id = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `,
+      userId,
+      limit,
+    );
+
+  return rows.map(toAgentMemoryRecord);
 }
 
 export async function upsertAd(env: AppEnv, ad: AdRecord) {
@@ -6005,6 +6118,19 @@ function toAgentActionAuditRecord(row: AgentActionAuditRow): AgentActionAuditRec
     errorCode: row.error_code ?? null,
     errorMessage: row.error_message ?? null,
     metadata: parseJson<Record<string, unknown>>(row.metadata_json, {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toAgentMemoryRecord(row: AgentMemoryRow): AgentMemoryRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    scope: row.scope,
+    key: row.memory_key,
+    value: parseJson<Record<string, unknown>>(row.value_json, {}),
+    source: row.source ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

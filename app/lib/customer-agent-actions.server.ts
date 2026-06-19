@@ -9,11 +9,12 @@ import {
   AgentActionIdempotencyConflictError,
   AgentActionReplayUnavailableError,
   runAuditedAgentAction,
+  sanitizeAgentActionMetadata,
 } from "~/lib/agent-actions.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { parseReportId } from "~/lib/report";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
-import type { AppSession, DiscoveryFailureClass, ShareResourceType } from "~/lib/types";
+import type { AgentMemoryScope, AppSession, DiscoveryFailureClass, ShareResourceType } from "~/lib/types";
 
 export const CUSTOMER_AGENT_ACTION_NAMES = [
   "watchlist.create",
@@ -25,6 +26,8 @@ export const CUSTOMER_AGENT_ACTION_NAMES = [
   "report.create",
   "report.share",
   "counter_move_brief.create",
+  "memory.upsert",
+  "memory.list",
 ] as const;
 
 export type CustomerAgentActionName = (typeof CUSTOMER_AGENT_ACTION_NAMES)[number];
@@ -224,6 +227,33 @@ export async function runCustomerAgentAction(
           metadata: {
             watchlistId: result.brief.watchlistId,
             moveCount: result.brief.moves.length,
+          },
+        };
+      }
+
+      if (actionName === "memory.upsert") {
+        const result = await upsertMemoryFromAgent(env, context, input);
+        return {
+          resourceType: "agent_memory",
+          resourceId: result.memory.id,
+          result,
+          metadata: {
+            memoryId: result.memory.id,
+            scope: result.memory.scope,
+            key: result.memory.key,
+          },
+        };
+      }
+
+      if (actionName === "memory.list") {
+        const result = await listMemoryFromAgent(env, context.userId, input);
+        return {
+          resourceType: "agent_memory",
+          resourceId: result.scope ?? "all",
+          result,
+          metadata: {
+            scope: result.scope ?? "all",
+            count: result.memories.length,
           },
         };
       }
@@ -512,6 +542,50 @@ async function buildCounterMoveBriefFromAgent(
   };
 }
 
+async function upsertMemoryFromAgent(
+  env: AppEnv,
+  context: CustomerAgentActionContext,
+  input: Record<string, unknown>,
+) {
+  const { upsertAgentMemory } = await import("~/lib/data.server");
+  const memory = await upsertAgentMemory(env, context.userId, {
+    scope: readAgentMemoryScope(input),
+    key: requireString(input, "key"),
+    value: readMemoryValue(input),
+    source: readString(input, "source") ?? context.source,
+  });
+
+  if (!memory) {
+    throw new CustomerAgentActionError("memory_upsert_failed", "Could not save memory.", { status: 500 });
+  }
+
+  return {
+    ok: true,
+    action: "memory.upsert",
+    memory,
+  };
+}
+
+async function listMemoryFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const { listAgentMemory } = await import("~/lib/data.server");
+  const scope = readOptionalAgentMemoryScope(input);
+  const memories = await listAgentMemory(env, userId, {
+    scope,
+    limit: readInteger(input, "limit", 50),
+  });
+
+  return {
+    ok: true,
+    action: "memory.list",
+    scope,
+    memories,
+  };
+}
+
 async function refreshWatchlistFromAgent(env: AppEnv, userId: string, input: Record<string, unknown>) {
   const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
   const { getWatchlist } = await import("~/lib/data.server");
@@ -713,6 +787,44 @@ function readReportResourceType(input: Record<string, unknown>) {
     return value;
   }
   throw new CustomerAgentActionError("invalid_resource_type", "resourceType must be collection or watchlist.");
+}
+
+function readAgentMemoryScope(input: Record<string, unknown>): AgentMemoryScope {
+  return readOptionalAgentMemoryScope(input) ?? "workspace";
+}
+
+function readOptionalAgentMemoryScope(input: Record<string, unknown>): AgentMemoryScope | null {
+  const value = readString(input, "scope");
+  if (!value) {
+    return null;
+  }
+  if (value === "workspace" || value === "customer" || value === "brand" || value === "competitor") {
+    return value;
+  }
+  throw new CustomerAgentActionError(
+    "invalid_memory_scope",
+    "scope must be workspace, customer, brand, or competitor.",
+  );
+}
+
+function readMemoryValue(input: Record<string, unknown>) {
+  const value = input.value;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+    return { value };
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return sanitizeAgentActionMetadata(value);
+  }
+  if (Array.isArray(value)) {
+    return {
+      items: value.map((entry) =>
+        entry && typeof entry === "object" && !Array.isArray(entry)
+          ? sanitizeAgentActionMetadata(entry)
+          : entry,
+      ),
+    };
+  }
+  throw new CustomerAgentActionError("missing_field", "value is required.");
 }
 
 function agentSession(userId: string, apiKeyId: string | null): AppSession {
