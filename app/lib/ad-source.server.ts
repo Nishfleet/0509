@@ -7,7 +7,7 @@ import {
 } from "~/lib/data.server";
 import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discovery-cache.server";
-import type { AppEnv } from "~/lib/env.server";
+import type { AppEnv, BrowserBinding } from "~/lib/env.server";
 import { searchMetaLibraryByBrowser, CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 import { demoSearch, MetaApiError, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
 import { fingerprintSavedQuery } from "~/lib/normalize";
@@ -124,7 +124,7 @@ export function resolveCommercialDiscoveryProvider(
   return "demo";
 }
 
-function hasBrowserBinding(binding: AppEnv["BROWSER"] | undefined): binding is Fetcher {
+function hasBrowserBinding(binding: AppEnv["BROWSER"] | undefined): binding is BrowserBinding {
   return Boolean(binding && typeof binding.fetch === "function");
 }
 

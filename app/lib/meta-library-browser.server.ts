@@ -9,7 +9,7 @@ import {
   hasBrowserRunQuickActions,
 } from "~/lib/browser-run.server";
 import { isoFromCountryName } from "~/lib/countries";
-import type { AppEnv } from "~/lib/env.server";
+import type { AppEnv, BrowserBinding } from "~/lib/env.server";
 import type {
   AdRecord,
   DiscoveryFailureClass,
@@ -147,7 +147,7 @@ export async function searchMetaLibraryByBrowser(
 }
 
 async function searchMetaLibraryViaSessions(
-  browserBinding: Fetcher,
+  browserBinding: BrowserBinding,
   query: NormalizedSavedQuery,
 ): Promise<SearchResponse> {
   let browser: BrowserInstance | null = null;
@@ -429,7 +429,7 @@ async function extractMetaLibraryByQuickActions(
   }
 }
 
-async function acquireBrowser(browserBinding: Fetcher) {
+async function acquireBrowser(browserBinding: BrowserBinding) {
   const reusableBrowser = await connectToReusableBrowser(browserBinding);
   if (reusableBrowser) {
     return reusableBrowser;
@@ -454,7 +454,7 @@ async function acquireBrowser(browserBinding: Fetcher) {
   });
 }
 
-async function connectToReusableBrowser(browserBinding: Fetcher) {
+async function connectToReusableBrowser(browserBinding: BrowserBinding) {
   const sessions = await listReusableSessions(browserBinding);
 
   for (const session of sessions) {
@@ -468,7 +468,7 @@ async function connectToReusableBrowser(browserBinding: Fetcher) {
   return null;
 }
 
-async function listReusableSessions(browserBinding: Fetcher) {
+async function listReusableSessions(browserBinding: BrowserBinding) {
   try {
     const sessions = await puppeteer.sessions(browserBinding);
     return [...(sessions as BrowserRunSession[])]
@@ -479,7 +479,7 @@ async function listReusableSessions(browserBinding: Fetcher) {
   }
 }
 
-async function readBrowserLimits(browserBinding: Fetcher) {
+async function readBrowserLimits(browserBinding: BrowserBinding) {
   try {
     return (await puppeteer.limits(browserBinding)) as BrowserRunLimits;
   } catch {
