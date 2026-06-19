@@ -215,6 +215,33 @@ const MCP_TOOLS = [
     inputSchema: reportInputSchema(),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
+  {
+    name: "create_counter_move_brief",
+    title: "Create Counter-Move Brief",
+    description:
+      "Build a proof-backed counter-move brief from recent account-owned watchlist changes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        watchlistId: {
+          type: "string",
+          description: "Five to Nine watchlist owned by the API-key account.",
+        },
+        limit: {
+          type: "number",
+          default: 5,
+          description: "Maximum moves to include, capped at 20.",
+        },
+        timeZone: {
+          type: "string",
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["watchlistId"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
 ];
 
 type JsonRpcId = string | number | null;
@@ -399,6 +426,10 @@ async function callTool(
 
   if (name === "share_report") {
     return buildAgentActionToolResult(env, apiKey, "report.share", args, origin);
+  }
+
+  if (name === "create_counter_move_brief") {
+    return buildAgentActionToolResult(env, apiKey, "counter_move_brief.create", args, origin);
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };

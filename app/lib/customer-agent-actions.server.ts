@@ -24,6 +24,7 @@ export const CUSTOMER_AGENT_ACTION_NAMES = [
   "share.create",
   "report.create",
   "report.share",
+  "counter_move_brief.create",
 ] as const;
 
 export type CustomerAgentActionName = (typeof CUSTOMER_AGENT_ACTION_NAMES)[number];
@@ -210,6 +211,19 @@ export async function runCustomerAgentAction(
           metadata: {
             reportId: result.report.reportId,
             shareLinkId: result.share.id,
+          },
+        };
+      }
+
+      if (actionName === "counter_move_brief.create") {
+        const result = await buildCounterMoveBriefFromAgent(env, context.userId, input);
+        return {
+          resourceType: "watchlist",
+          resourceId: result.brief.watchlistId,
+          result,
+          metadata: {
+            watchlistId: result.brief.watchlistId,
+            moveCount: result.brief.moves.length,
           },
         };
       }
@@ -460,6 +474,44 @@ async function loadReportDocumentForAgent(
   };
 }
 
+async function buildCounterMoveBriefFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const {
+    getWatchlist,
+    listAdsByIds,
+    listWatchEvents,
+  } = await import("~/lib/data.server");
+  const { buildCounterMoveBrief } = await import("~/lib/counter-move-brief.server");
+  const watchlistId = requireString(input, "watchlistId");
+  const watchlist = await getWatchlist(env, watchlistId, userId);
+  if (!watchlist) {
+    throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
+  }
+
+  const limit = readInteger(input, "limit", 5);
+  const events = await listWatchEvents(env, watchlist.id, Math.max(1, Math.min(60, limit * 3)));
+  const linkedAdIds = events
+    .map((event) => event.adId)
+    .filter((adId): adId is string => Boolean(adId));
+  const ads = linkedAdIds.length > 0 ? await listAdsByIds(env, linkedAdIds) : [];
+  const brief = buildCounterMoveBrief({
+    watchlist,
+    events,
+    adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
+    limit,
+    timeZone: readString(input, "timeZone"),
+  });
+
+  return {
+    ok: true,
+    action: "counter_move_brief.create",
+    brief,
+  };
+}
+
 async function refreshWatchlistFromAgent(env: AppEnv, userId: string, input: Record<string, unknown>) {
   const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
   const { getWatchlist } = await import("~/lib/data.server");
@@ -615,6 +667,17 @@ function readString(input: Record<string, unknown>, field: string) {
 function readBoolean(input: Record<string, unknown>, field: string, fallback: boolean) {
   const value = input[field];
   return typeof value === "boolean" ? value : fallback;
+}
+
+function readInteger(input: Record<string, unknown>, field: string, fallback: number) {
+  const value = input[field];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.floor(value);
+  }
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+    return Math.floor(Number(value));
+  }
+  return fallback;
 }
 
 function readStringList(input: Record<string, unknown>, field: string) {
