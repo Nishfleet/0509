@@ -79,6 +79,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       id: apiKey.id,
       name: apiKey.name,
       keyPrefix: apiKey.keyPrefix,
+      actionsWriteEnabled: apiKey.actionsWriteEnabled,
       lastUsedAt: apiKey.lastUsedAt,
       revokedAt: apiKey.revokedAt,
       createdAt: apiKey.createdAt,
@@ -160,7 +161,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "create-api-key") {
     const { createCustomerApiKey } = await import("~/lib/api-keys.server");
     const name = String(formData.get("apiKeyName") ?? "");
-    const result = await createCustomerApiKey(env, workspaceUserId, name);
+    const result = await createCustomerApiKey(env, workspaceUserId, name, {
+      actionsWriteEnabled: formData.get("actionsWriteEnabled") === "1",
+    });
 
     return {
       ok: true,
@@ -512,6 +515,10 @@ export default function AppSourcesRoute() {
                   type="text"
                 />
               </label>
+              <label className="f9-checkbox-row">
+                <input name="actionsWriteEnabled" type="checkbox" value="1" />
+                <span>Allow audited workspace actions</span>
+              </label>
               <SubmitButton className="f9-primary-button" intent="create-api-key" pendingLabel="Creating…">
                 Create API key
               </SubmitButton>
@@ -540,8 +547,8 @@ export default function AppSourcesRoute() {
               </div>
             </dl>
             <p className="f9-muted-copy">
-              This API can read saved manual external proof links in boards, but does not add automated
-              TikTok, Google, LinkedIn, Pinterest, or write access.
+              This API can read saved manual external proof links in boards. Write-enabled keys can run audited
+              workspace actions, but this does not add automated TikTok, Google, LinkedIn, or Pinterest ingestion.
             </p>
           </section>
         </div>
@@ -564,6 +571,8 @@ export default function AppSourcesRoute() {
                     ) : (
                       ""
                     )}
+                    {" · "}
+                    {apiKey.actionsWriteEnabled ? "audited actions enabled" : "read-only"}
                   </p>
                 </div>
                 {apiKey.revokedAt ? null : (

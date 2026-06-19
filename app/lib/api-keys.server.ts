@@ -14,6 +14,9 @@ export async function createCustomerApiKey(
   env: AppEnv,
   userId: string,
   rawName: string,
+  options: {
+    actionsWriteEnabled?: boolean;
+  } = {},
 ) {
   const {
     insertCustomerApiKey,
@@ -24,6 +27,7 @@ export async function createCustomerApiKey(
     name: normalizeApiKeyName(rawName),
     keyPrefix: keyPrefixForSecret(secret),
     keyHash: await hashApiKey(secret),
+    actionsWriteEnabled: Boolean(options.actionsWriteEnabled),
   });
 
   return {

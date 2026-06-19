@@ -30,7 +30,10 @@ function setupDataMock(existing: AgentActionAuditRecord | null = null) {
   });
   const mocks = {
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(existing),
-    createAgentActionAudit: vi.fn().mockResolvedValue(auditRecord()),
+    claimAgentActionAudit: vi.fn().mockResolvedValue({
+      audit: auditRecord(),
+      claimed: true,
+    }),
     finishAgentActionAudit: vi.fn().mockResolvedValue(completed),
   };
 
@@ -55,7 +58,14 @@ describe("runAuditedAgentAction", () => {
     const action = vi.fn().mockResolvedValue({
       resourceType: "watchlist",
       resourceId: "watchlist-1",
-      result: { watchlistId: "watchlist-1" },
+      result: {
+        watchlistId: "watchlist-1",
+        shareUrl: "https://0509.io/share/abcdefghijklmnopqrstuvwxyz",
+        share: {
+          id: "share-1",
+          token: "abcdefghijklmnopqrstuvwxyz",
+        },
+      },
       metadata: {
         note: "safe",
         token: "should-not-persist",
@@ -78,15 +88,21 @@ describe("runAuditedAgentAction", () => {
     );
 
     expect(outcome.replayed).toBe(false);
-    expect(outcome.result).toEqual({ watchlistId: "watchlist-1" });
-    expect(mocks.createAgentActionAudit).toHaveBeenCalledWith(
+    expect(outcome.result).toEqual({
+      watchlistId: "watchlist-1",
+      shareUrl: "https://0509.io/share/abcdefghijklmnopqrstuvwxyz",
+      share: {
+        id: "share-1",
+        token: "abcdefghijklmnopqrstuvwxyz",
+      },
+    });
+    expect(mocks.claimAgentActionAudit).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "user-1",
         apiKeyId: "api-key-1",
         actionName: "watchlist.create",
         idempotencyKey: "idem-1",
-        status: "started",
         metadata: { source: "mcp" },
       }),
     );
@@ -97,7 +113,14 @@ describe("runAuditedAgentAction", () => {
         status: "succeeded",
         resourceType: "watchlist",
         resourceId: "watchlist-1",
-        result: { watchlistId: "watchlist-1" },
+        result: {
+          watchlistId: "watchlist-1",
+          shareUrl: "[redacted]",
+          share: {
+            id: "share-1",
+            token: "[redacted]",
+          },
+        },
         metadata: { source: "mcp", note: "safe" },
       }),
     );
@@ -126,7 +149,7 @@ describe("runAuditedAgentAction", () => {
     expect(outcome.audit).toBe(existing);
     expect(outcome.result).toEqual({ watchlistId: "watchlist-1" });
     expect(action).not.toHaveBeenCalled();
-    expect(mocks.createAgentActionAudit).not.toHaveBeenCalled();
+    expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
     expect(mocks.finishAgentActionAudit).not.toHaveBeenCalled();
   });
 

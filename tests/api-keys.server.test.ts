@@ -5,6 +5,7 @@ const apiKeyRecord = {
   userId: "user-1",
   name: "Claude workflow",
   keyPrefix: fakeApiKey("abc123"),
+  actionsWriteEnabled: false,
   lastUsedAt: null,
   revokedAt: null,
   createdAt: "2026-06-06T00:00:00.000Z",
@@ -42,6 +43,7 @@ describe("customer API keys", () => {
         name: "Claude workflow",
         keyPrefix: expect.stringMatching(/^f9_live_/),
         keyHash: expect.any(String),
+        actionsWriteEnabled: false,
       }),
     );
     expect(JSON.stringify(insertCustomerApiKey.mock.calls[0]?.[1])).not.toContain(result.secret);
@@ -82,5 +84,27 @@ describe("customer API keys", () => {
       expect(result.response.status).toBe(401);
       await expect(result.response.json()).resolves.toMatchObject({ error: "invalid_api_key" });
     }
+  });
+
+  it("can create an explicit write-enabled action key", async () => {
+    const insertCustomerApiKey = vi.fn().mockResolvedValue({
+      ...apiKeyRecord,
+      actionsWriteEnabled: true,
+    });
+    vi.doMock("~/lib/data.server", () => ({
+      insertCustomerApiKey,
+    }));
+
+    const { createCustomerApiKey } = await import("~/lib/api-keys.server");
+    await createCustomerApiKey({ DB: {} } as never, "user-1", "Agent workflow", {
+      actionsWriteEnabled: true,
+    });
+
+    expect(insertCustomerApiKey).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionsWriteEnabled: true,
+      }),
+    );
   });
 });

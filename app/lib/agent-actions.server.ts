@@ -45,7 +45,7 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
   context: AgentActionContext,
   action: () => Promise<AgentActionSuccess<T>>,
 ): Promise<AuditedAgentActionResult<T>> {
-  const { findAgentActionAuditByIdempotencyKey, createAgentActionAudit, finishAgentActionAudit } = await import(
+  const { findAgentActionAuditByIdempotencyKey, claimAgentActionAudit, finishAgentActionAudit } = await import(
     "~/lib/data.server"
   );
   const actionName = normalizeActionName(context.actionName);
@@ -68,20 +68,35 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
     }
   }
 
-  const audit = await createAgentActionAudit(env, {
+  const claim = await claimAgentActionAudit(env, {
     userId: context.userId,
     apiKeyId: normalizeOptionalString(context.apiKeyId),
     actionName,
     resourceType: normalizeOptionalString(context.resourceType),
     resourceId: normalizeOptionalString(context.resourceId),
     idempotencyKey,
-    status: "started",
     metadata: sanitizeAgentActionMetadata(context.metadata ?? {}),
   });
 
-  if (!audit) {
+  if (!claim) {
     throw new Error("Could not create agent action audit.");
   }
+
+  if (!claim.claimed) {
+    if (claim.audit.actionName !== actionName) {
+      throw new AgentActionIdempotencyConflictError();
+    }
+    if (claim.audit.status !== "succeeded" || !claim.audit.result) {
+      throw new AgentActionReplayUnavailableError();
+    }
+    return {
+      audit: claim.audit,
+      replayed: true,
+      result: claim.audit.result as T,
+    };
+  }
+
+  const audit = claim.audit;
 
   try {
     const success = await action();
@@ -90,7 +105,7 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
       status: "succeeded",
       resourceType: normalizeOptionalString(success.resourceType ?? context.resourceType),
       resourceId: normalizeOptionalString(success.resourceId ?? context.resourceId),
-      result,
+      result: redactAgentActionResult(result),
       metadata: sanitizeAgentActionMetadata({
         ...(context.metadata ?? {}),
         ...(success.metadata ?? {}),
@@ -123,13 +138,29 @@ export function sanitizeAgentActionMetadata(value: unknown): JsonRecord {
   return sanitizeObject(value as JsonRecord);
 }
 
-function sanitizeObject(value: JsonRecord): JsonRecord {
+export function redactAgentActionResult<T extends JsonRecord>(value: T): T {
+  return sanitizeObject(value, {
+    redactSecretScalars: true,
+    redactSecretKeys: true,
+  }) as T;
+}
+
+function sanitizeObject(
+  value: JsonRecord,
+  options: {
+    redactSecretScalars?: boolean;
+    redactSecretKeys?: boolean;
+  } = {},
+): JsonRecord {
   const output: JsonRecord = {};
   for (const [key, nestedValue] of Object.entries(value)) {
     if (isSecretishKey(key)) {
+      if (options.redactSecretKeys) {
+        output[key] = "[redacted]";
+      }
       continue;
     }
-    const sanitized = sanitizeValue(nestedValue);
+    const sanitized = sanitizeValue(nestedValue, options);
     if (typeof sanitized !== "undefined") {
       output[key] = sanitized;
     }
@@ -137,15 +168,24 @@ function sanitizeObject(value: JsonRecord): JsonRecord {
   return output;
 }
 
-function sanitizeValue(value: unknown): unknown {
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+function sanitizeValue(
+  value: unknown,
+  options: {
+    redactSecretScalars?: boolean;
+    redactSecretKeys?: boolean;
+  } = {},
+): unknown {
+  if (value === null || typeof value === "number" || typeof value === "boolean") {
     return value;
   }
+  if (typeof value === "string") {
+    return options.redactSecretScalars && isSecretishString(value) ? "[redacted]" : value;
+  }
   if (Array.isArray(value)) {
-    return value.map(sanitizeValue).filter((entry) => typeof entry !== "undefined");
+    return value.map((entry) => sanitizeValue(entry, options)).filter((entry) => typeof entry !== "undefined");
   }
   if (typeof value === "object") {
-    return sanitizeObject(value as JsonRecord);
+    return sanitizeObject(value as JsonRecord, options);
   }
   return undefined;
 }
@@ -171,4 +211,9 @@ function isSecretishKey(key: string) {
       normalized,
     )
   );
+}
+
+function isSecretishString(value: string) {
+  return /(?:^f9_live_|bearer\s+|xox[baprs]-|sk-[a-z0-9]|\/share\/[a-z0-9_-]{12,}|https:\/\/[^/\s]+\/share\/[a-z0-9_-]{12,})/i
+    .test(value);
 }

@@ -14,6 +14,7 @@ const apiKey = {
   userId: "user-1",
   name: "Agent workflow",
   keyPrefix: fakeApiKey("abc123"),
+  actionsWriteEnabled: true,
   lastUsedAt: null,
   revokedAt: null,
   createdAt: "2026-06-06T00:00:00.000Z",
@@ -158,7 +159,7 @@ const digest: DigestRecord = {
   ],
 };
 
-function setupMocks(authOk = true) {
+function setupMocks(authOk = true, actionsWriteEnabled = true) {
   const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
   const mocks = {
     getCollection: vi.fn().mockResolvedValue(collection),
@@ -172,7 +173,7 @@ function setupMocks(authOk = true) {
   vi.doMock("~/lib/api-keys.server", () => ({
     authenticateApiKeyRequest: vi.fn().mockResolvedValue(
       authOk
-        ? { ok: true, apiKey }
+        ? { ok: true, apiKey: { ...apiKey, actionsWriteEnabled } }
         : {
             ok: false,
             response: Response.json({ error: "invalid_api_key" }, { status: 401 }),
@@ -201,7 +202,14 @@ async function loadDocs() {
 async function postMcp(body: Record<string, unknown>) {
   const { action } = await import("~/routes/api.mcp");
   return action({
-    context: { cloudflare: { env: { DB: {} } } },
+    context: {
+      cloudflare: {
+        env: { DB: {} },
+        ctx: {
+          waitUntil: vi.fn(),
+        },
+      },
+    },
     request: new Request("https://0509.io/api/mcp", {
       method: "POST",
       headers: {
@@ -307,6 +315,24 @@ describe("MCP route", () => {
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
     expect(body.result.tools.find((tool) => tool.name === "create_watchlist")?.annotations.readOnlyHint).toBe(false);
+  });
+
+  it("hides write tools for read-only API keys", async () => {
+    setupMocks(true, false);
+    const tools = await postMcp({
+      jsonrpc: "2.0",
+      id: "tools-read-only",
+      method: "tools/list",
+      params: {},
+    });
+    const body = await tools.json() as { result: { tools: Array<{ name: string }> } };
+
+    expect(body.result.tools.map((tool) => tool.name)).toEqual([
+      "get_workspace_readiness",
+      "get_collection_export",
+      "get_watchlist_export",
+      "get_digest_export",
+    ]);
   });
 
   it("returns workspace readiness through tools/call", async () => {
@@ -462,6 +488,9 @@ describe("MCP route", () => {
         apiKeyId: "api-key-1",
         idempotencyKey: "create-glossier",
         source: "mcp",
+        executionContext: expect.objectContaining({
+          waitUntil: expect.any(Function),
+        }),
       }),
       "watchlist.create",
       expect.objectContaining({
@@ -469,6 +498,160 @@ describe("MCP route", () => {
         competitorWebsite: "glossier.com",
       }),
     );
+  });
+
+  it("dispatches every advertised MCP write tool to the expected audited action", async () => {
+    setupMocks();
+    const runCustomerAgentAction = vi.fn().mockResolvedValue({
+      audit: {
+        id: "audit-1",
+        status: "succeeded",
+      },
+      replayed: false,
+      result: {
+        ok: true,
+      },
+    });
+    vi.doMock("~/lib/customer-agent-actions.server", () => ({
+      customerAgentActionErrorPayload: vi.fn(),
+      runCustomerAgentAction,
+    }));
+
+    const cases: Array<{
+      toolName: string;
+      actionName: string;
+      args: Record<string, unknown>;
+      idempotencyKey?: string;
+    }> = [
+      {
+        toolName: "create_watchlist",
+        actionName: "watchlist.create",
+        args: { targetLabel: "Glossier", idempotencyKey: "create-1" },
+        idempotencyKey: "create-1",
+      },
+      {
+        toolName: "refresh_watchlist",
+        actionName: "watchlist.refresh",
+        args: { watchlistId: "watchlist-1", idempotencyKey: "refresh-1" },
+        idempotencyKey: "refresh-1",
+      },
+      {
+        toolName: "pause_watchlist",
+        actionName: "watchlist.pause",
+        args: { watchlistId: "watchlist-1", idempotencyKey: "pause-1" },
+        idempotencyKey: "pause-1",
+      },
+      {
+        toolName: "resume_watchlist",
+        actionName: "watchlist.resume",
+        args: { watchlistId: "watchlist-1", idempotencyKey: "resume-1" },
+        idempotencyKey: "resume-1",
+      },
+      {
+        toolName: "add_external_proof",
+        actionName: "proof.add_external",
+        args: {
+          collectionId: "collection-1",
+          advertiser: "Nykaa",
+          proofUrl: "https://example.com/proof",
+          hook: "Offer changed",
+          idempotencyKey: "proof-1",
+        },
+        idempotencyKey: "proof-1",
+      },
+      {
+        toolName: "create_share_link",
+        actionName: "share.create",
+        args: { resourceType: "collection", resourceId: "collection-1", idempotencyKey: "share-1" },
+        idempotencyKey: "share-1",
+      },
+      {
+        toolName: "create_report",
+        actionName: "report.create",
+        args: { resourceType: "collection", resourceId: "collection-1" },
+      },
+      {
+        toolName: "share_report",
+        actionName: "report.share",
+        args: { reportId: "collection:collection-1", idempotencyKey: "report-share-1" },
+        idempotencyKey: "report-share-1",
+      },
+      {
+        toolName: "create_counter_move_brief",
+        actionName: "counter_move_brief.create",
+        args: { watchlistId: "watchlist-1", idempotencyKey: "brief-1" },
+        idempotencyKey: "brief-1",
+      },
+      {
+        toolName: "upsert_memory",
+        actionName: "memory.upsert",
+        args: { key: "voice", value: { tone: "plainspoken" }, idempotencyKey: "memory-1" },
+        idempotencyKey: "memory-1",
+      },
+      {
+        toolName: "list_memory",
+        actionName: "memory.list",
+        args: { scope: "brand" },
+      },
+      {
+        toolName: "upsert_client_room",
+        actionName: "client_room.upsert",
+        args: { name: "Beauty client", idempotencyKey: "room-1" },
+        idempotencyKey: "room-1",
+      },
+      {
+        toolName: "list_client_rooms",
+        actionName: "client_room.list",
+        args: { status: "all" },
+      },
+    ];
+
+    for (const item of cases) {
+      await postMcp({
+        jsonrpc: "2.0",
+        id: `dispatch-${item.toolName}`,
+        method: "tools/call",
+        params: {
+          name: item.toolName,
+          arguments: item.args,
+        },
+      });
+
+      expect(runCustomerAgentAction).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: item.idempotencyKey ?? null,
+          source: "mcp",
+          origin: "https://0509.io",
+          executionContext: expect.objectContaining({
+            waitUntil: expect.any(Function),
+          }),
+        }),
+        item.actionName,
+        item.args,
+      );
+    }
+  });
+
+  it("rejects MCP write calls from read-only API keys", async () => {
+    setupMocks(true, false);
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "write-read-only",
+      method: "tools/call",
+      params: {
+        name: "create_watchlist",
+        arguments: {
+          targetLabel: "Glossier",
+          idempotencyKey: "create-glossier",
+        },
+      },
+    });
+    const body = await response.json() as { error: { message: string } };
+
+    expect(body.error.message).toContain("read-only");
   });
 
   it("returns MCP tool errors without exposing internal exceptions", async () => {

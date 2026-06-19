@@ -15,6 +15,7 @@ import { normalizeSavedQuery } from "~/lib/normalize";
 import { parseReportId } from "~/lib/report";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type {
+  AgentMemoryRecord,
   AgentMemoryScope,
   AppSession,
   ClientRoomRecord,
@@ -40,6 +41,18 @@ export const CUSTOMER_AGENT_ACTION_NAMES = [
 ] as const;
 
 export type CustomerAgentActionName = (typeof CUSTOMER_AGENT_ACTION_NAMES)[number];
+
+const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
+  "watchlist.create",
+  "watchlist.refresh",
+  "watchlist.pause",
+  "watchlist.resume",
+  "proof.add_external",
+  "share.create",
+  "report.share",
+  "memory.upsert",
+  "client_room.upsert",
+]);
 
 export interface CustomerAgentActionContext {
   userId: string;
@@ -123,12 +136,23 @@ export function normalizeCustomerAgentActionName(value: string | null | undefine
     : null;
 }
 
+export function customerAgentActionRequiresIdempotency(actionName: CustomerAgentActionName) {
+  return IDEMPOTENCY_REQUIRED_ACTIONS.has(actionName);
+}
+
 export async function runCustomerAgentAction(
   env: AppEnv,
   context: CustomerAgentActionContext,
   actionName: CustomerAgentActionName,
   input: Record<string, unknown>,
 ) {
+  if (customerAgentActionRequiresIdempotency(actionName) && !context.idempotencyKey?.trim()) {
+    throw new CustomerAgentActionError(
+      "missing_idempotency_key",
+      "Provide idempotencyKey or an Idempotency-Key header before running this action.",
+    );
+  }
+
   return runAuditedAgentAction<Record<string, unknown>>(env, {
     userId: context.userId,
     apiKeyId: context.apiKeyId,
@@ -364,15 +388,16 @@ async function createWatchlistFromAgent(
     });
   }
 
-  if (readBoolean(input, "queueFirstScan", true)) {
-    queueFirstWatchlistScan(env, context.executionContext ?? undefined, watchlist);
-  }
+  const shouldQueueFirstScan = readBoolean(input, "queueFirstScan", true);
+  const firstScanQueued = shouldQueueFirstScan
+    ? queueFirstWatchlistScan(env, context.executionContext ?? undefined, watchlist)
+    : false;
 
   return {
     ok: true,
     action: "watchlist.create",
     watchlist,
-    firstScanQueued: readBoolean(input, "queueFirstScan", true),
+    firstScanQueued,
   };
 }
 
@@ -583,11 +608,16 @@ async function upsertMemoryFromAgent(
   input: Record<string, unknown>,
 ) {
   const { upsertAgentMemory } = await import("~/lib/data.server");
+  const watchlistId = readString(input, "watchlistId");
+  const clientRoomId = readString(input, "clientRoomId");
+  await assertMemoryScopeOwned(env, context.userId, { watchlistId, clientRoomId });
   const memory = await upsertAgentMemory(env, context.userId, {
     scope: readAgentMemoryScope(input),
-    key: requireString(input, "key"),
+    key: readMemoryKey(input),
+    watchlistId,
+    clientRoomId,
     value: readMemoryValue(input),
-    source: readString(input, "source") ?? context.source,
+    source: readMemorySource(input) ?? context.source,
   });
 
   if (!memory) {
@@ -597,7 +627,7 @@ async function upsertMemoryFromAgent(
   return {
     ok: true,
     action: "memory.upsert",
-    memory,
+    memory: safeMemoryRecord(memory),
   };
 }
 
@@ -608,8 +638,13 @@ async function listMemoryFromAgent(
 ) {
   const { listAgentMemory } = await import("~/lib/data.server");
   const scope = readOptionalAgentMemoryScope(input);
+  const watchlistId = readString(input, "watchlistId");
+  const clientRoomId = readString(input, "clientRoomId");
+  await assertMemoryScopeOwned(env, userId, { watchlistId, clientRoomId });
   const memories = await listAgentMemory(env, userId, {
     scope,
+    ...(watchlistId ? { watchlistId } : {}),
+    ...(clientRoomId ? { clientRoomId } : {}),
     limit: readInteger(input, "limit", 50),
   });
 
@@ -617,7 +652,7 @@ async function listMemoryFromAgent(
     ok: true,
     action: "memory.list",
     scope,
-    memories,
+    memories: memories.map(safeMemoryRecord),
   };
 }
 
@@ -628,7 +663,9 @@ async function upsertClientRoomFromAgent(
 ) {
   const { upsertClientRoom } = await import("~/lib/data.server");
   const resourceRefs = readClientRoomResourceRefs(input);
-  await assertClientRoomResourceRefsOwned(env, context.userId, resourceRefs);
+  if (typeof resourceRefs !== "undefined") {
+    await assertClientRoomResourceRefsOwned(env, context.userId, resourceRefs);
+  }
   const room = await upsertClientRoom(env, context.userId, {
     roomId: readString(input, "roomId"),
     name: requireString(input, "name"),
@@ -890,8 +927,25 @@ function readOptionalAgentMemoryScope(input: Record<string, unknown>): AgentMemo
   );
 }
 
+function readMemoryKey(input: Record<string, unknown>) {
+  const key = requireString(input, "key");
+  if (isSecretishField(key)) {
+    throw new CustomerAgentActionError("secret_memory_rejected", "Memory keys cannot describe secrets or credentials.");
+  }
+  return key;
+}
+
+function readMemorySource(input: Record<string, unknown>) {
+  const source = readString(input, "source");
+  if (source && isSecretishField(source)) {
+    throw new CustomerAgentActionError("secret_memory_rejected", "Memory source cannot describe secrets or credentials.");
+  }
+  return source;
+}
+
 function readMemoryValue(input: Record<string, unknown>) {
   const value = input.value;
+  rejectSecretishMemoryValue(value);
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
     return { value };
   }
@@ -908,6 +962,37 @@ function readMemoryValue(input: Record<string, unknown>) {
     };
   }
   throw new CustomerAgentActionError("missing_field", "value is required.");
+}
+
+function safeMemoryRecord(memory: AgentMemoryRecord): AgentMemoryRecord {
+  return {
+    ...memory,
+    value: sanitizeAgentActionMetadata(memory.value),
+    source: memory.source && isSecretishField(memory.source) ? null : memory.source,
+  };
+}
+
+function rejectSecretishMemoryValue(value: unknown) {
+  if (typeof value === "string") {
+    if (isSecretishString(value)) {
+      throw new CustomerAgentActionError("secret_memory_rejected", "Memory values cannot contain secrets or credentials.");
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      rejectSecretishMemoryValue(entry);
+    }
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (isSecretishField(key)) {
+        throw new CustomerAgentActionError("secret_memory_rejected", "Memory values cannot contain secret fields.");
+      }
+      rejectSecretishMemoryValue(nested);
+    }
+  }
 }
 
 function readOptionalObject(input: Record<string, unknown>, field: string) {
@@ -940,7 +1025,7 @@ function readClientRoomStatus(input: Record<string, unknown>): ClientRoomRecord[
 function readClientRoomResourceRefs(input: Record<string, unknown>) {
   const value = input.resourceRefs ?? input.resources;
   if (typeof value === "undefined") {
-    return [];
+    return undefined;
   }
   if (!Array.isArray(value)) {
     throw new CustomerAgentActionError("invalid_resource_refs", "resourceRefs must be an array.");
@@ -1008,6 +1093,38 @@ async function assertReportResourceOwned(env: AppEnv, userId: string, reportId: 
   await assertShareResourceOwned(env, userId, "watchlist", parsedReport.resourceId);
 }
 
+async function assertMemoryScopeOwned(
+  env: AppEnv,
+  userId: string,
+  input: {
+    watchlistId: string | null;
+    clientRoomId: string | null;
+  },
+) {
+  if (input.watchlistId && input.clientRoomId) {
+    throw new CustomerAgentActionError(
+      "invalid_memory_scope",
+      "Memory can be scoped to either a watchlist or a client room, not both.",
+    );
+  }
+
+  if (input.watchlistId) {
+    const { getWatchlist } = await import("~/lib/data.server");
+    const watchlist = await getWatchlist(env, input.watchlistId, userId);
+    if (!watchlist) {
+      throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
+    }
+  }
+
+  if (input.clientRoomId) {
+    const { getClientRoom } = await import("~/lib/data.server");
+    const room = await getClientRoom(env, userId, input.clientRoomId);
+    if (!room) {
+      throw new CustomerAgentActionError("client_room_not_found", "Client room not found.", { status: 404 });
+    }
+  }
+}
+
 function agentSession(userId: string, apiKeyId: string | null): AppSession {
   return {
     user: {
@@ -1067,4 +1184,15 @@ function formatRetryAfterLabel(retryAfterSeconds: number) {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
+function isSecretishField(value: string) {
+  return /^(key|token|secret|password)$/i.test(value.trim()) ||
+    /(authorization|bearer|credential|encrypted|password|secret|token|webhook|api[_-]?key|privatekey|accesskey)/i
+    .test(value);
+}
+
+function isSecretishString(value: string) {
+  return /(?:^f9_live_|bearer\s+|xox[baprs]-|sk-[a-z0-9]|hooks\.slack\.com\/services|\/share\/[a-z0-9_-]{12,}|https:\/\/[^/\s]+\/share\/[a-z0-9_-]{12,})/i
+    .test(value);
 }

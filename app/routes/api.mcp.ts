@@ -18,6 +18,21 @@ const WRITE_TOOL_ANNOTATIONS = {
   idempotentHint: false,
   openWorldHint: false,
 };
+const WRITE_TOOL_NAMES = new Set([
+  "create_watchlist",
+  "refresh_watchlist",
+  "pause_watchlist",
+  "resume_watchlist",
+  "add_external_proof",
+  "create_share_link",
+  "create_report",
+  "share_report",
+  "create_counter_move_brief",
+  "upsert_memory",
+  "list_memory",
+  "upsert_client_room",
+  "list_client_rooms",
+]);
 const MCP_TOOLS = [
   {
     name: "get_workspace_readiness",
@@ -98,6 +113,7 @@ const MCP_TOOLS = [
         },
         idempotencyKey: idempotencyKeySchema(),
       },
+      required: ["idempotencyKey"],
       additionalProperties: false,
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
@@ -170,9 +186,18 @@ const MCP_TOOLS = [
           type: "array",
           items: { type: "string" },
         },
+        spend: {
+          type: "string",
+        },
+        impressions: {
+          type: "string",
+        },
+        reach: {
+          type: "string",
+        },
         idempotencyKey: idempotencyKeySchema(),
       },
-      required: ["collectionId", "advertiser", "proofUrl", "hook"],
+      required: ["collectionId", "advertiser", "proofUrl", "hook", "idempotencyKey"],
       additionalProperties: false,
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
@@ -194,7 +219,7 @@ const MCP_TOOLS = [
         },
         idempotencyKey: idempotencyKeySchema(),
       },
-      required: ["resourceType", "resourceId"],
+      required: ["resourceType", "resourceId", "idempotencyKey"],
       additionalProperties: false,
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
@@ -212,7 +237,7 @@ const MCP_TOOLS = [
     title: "Share Report",
     description:
       "Build and share a snapshot report for an account-owned board or watchlist.",
-    inputSchema: reportInputSchema(),
+    inputSchema: reportInputSchema({ requiresIdempotency: true }),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
   {
@@ -403,12 +428,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (message.method === "tools/list") {
     return jsonRpcResult(message.id, {
-      tools: MCP_TOOLS,
+      tools: toolsForApiKey(auth.apiKey),
     });
   }
 
   if (message.method === "tools/call") {
-    const result = await callTool(env, auth.apiKey, message.params, new URL(request.url).origin);
+    const executionContext = ((context.cloudflare as { ctx?: ExecutionContext } | undefined)?.ctx ?? null);
+    const result = await callTool(env, auth.apiKey, message.params, new URL(request.url).origin, executionContext);
     if (!result.ok) {
       return jsonRpcError(message.id, -32602, result.message);
     }
@@ -423,6 +449,7 @@ async function callTool(
   apiKey: CustomerApiKeyRecord,
   params: unknown,
   origin: string,
+  executionContext: ExecutionContext | null = null,
 ): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; message: string }> {
   if (!params || typeof params !== "object") {
     return { ok: false, message: "tools/call params must be an object." };
@@ -432,6 +459,9 @@ async function callTool(
   const args = objectField(params, "arguments") ?? {};
   if (!name) {
     return { ok: false, message: "tools/call requires name." };
+  }
+  if (isWriteToolName(name) && !apiKey.actionsWriteEnabled) {
+    return { ok: false, message: "This API key is read-only. Create a write-enabled key for audited action tools." };
   }
 
   const format = normalizeAgentFormat(stringField(args, "format"));
@@ -456,55 +486,55 @@ async function callTool(
   }
 
   if (name === "create_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.create", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.create", args, origin, executionContext);
   }
 
   if (name === "refresh_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.refresh", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.refresh", args, origin, executionContext);
   }
 
   if (name === "pause_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.pause", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.pause", args, origin, executionContext);
   }
 
   if (name === "resume_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.resume", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.resume", args, origin, executionContext);
   }
 
   if (name === "add_external_proof") {
-    return buildAgentActionToolResult(env, apiKey, "proof.add_external", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "proof.add_external", args, origin, executionContext);
   }
 
   if (name === "create_share_link") {
-    return buildAgentActionToolResult(env, apiKey, "share.create", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "share.create", args, origin, executionContext);
   }
 
   if (name === "create_report") {
-    return buildAgentActionToolResult(env, apiKey, "report.create", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "report.create", args, origin, executionContext);
   }
 
   if (name === "share_report") {
-    return buildAgentActionToolResult(env, apiKey, "report.share", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "report.share", args, origin, executionContext);
   }
 
   if (name === "create_counter_move_brief") {
-    return buildAgentActionToolResult(env, apiKey, "counter_move_brief.create", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "counter_move_brief.create", args, origin, executionContext);
   }
 
   if (name === "upsert_memory") {
-    return buildAgentActionToolResult(env, apiKey, "memory.upsert", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "memory.upsert", args, origin, executionContext);
   }
 
   if (name === "list_memory") {
-    return buildAgentActionToolResult(env, apiKey, "memory.list", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "memory.list", args, origin, executionContext);
   }
 
   if (name === "upsert_client_room") {
-    return buildAgentActionToolResult(env, apiKey, "client_room.upsert", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "client_room.upsert", args, origin, executionContext);
   }
 
   if (name === "list_client_rooms") {
-    return buildAgentActionToolResult(env, apiKey, "client_room.list", args, origin);
+    return buildAgentActionToolResult(env, apiKey, "client_room.list", args, origin, executionContext);
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };
@@ -516,6 +546,7 @@ async function buildAgentActionToolResult(
   actionName: CustomerAgentActionName,
   args: object,
   origin: string,
+  executionContext: ExecutionContext | null,
 ) {
   const {
     customerAgentActionErrorPayload,
@@ -529,6 +560,7 @@ async function buildAgentActionToolResult(
       idempotencyKey: stringField(args, "idempotencyKey"),
       source: "mcp",
       origin,
+      executionContext,
     }, actionName, args as Record<string, unknown>));
   } catch (error) {
     const payload = customerAgentActionErrorPayload(error).body;
@@ -717,6 +749,16 @@ function toolNotFound(message: string) {
   };
 }
 
+function toolsForApiKey(apiKey: CustomerApiKeyRecord) {
+  return apiKey.actionsWriteEnabled
+    ? MCP_TOOLS
+    : MCP_TOOLS.filter((tool) => !isWriteToolName(tool.name));
+}
+
+function isWriteToolName(name: string) {
+  return WRITE_TOOL_NAMES.has(name);
+}
+
 function errorToolResult(structuredContent: Record<string, unknown>) {
   return {
     ok: true as const,
@@ -812,12 +854,12 @@ function watchlistMutationInputSchema() {
       },
       idempotencyKey: idempotencyKeySchema(),
     },
-    required: ["watchlistId"],
+    required: ["watchlistId", "idempotencyKey"],
     additionalProperties: false,
   };
 }
 
-function reportInputSchema() {
+function reportInputSchema(options: { requiresIdempotency?: boolean } = {}) {
   return {
     type: "object",
     properties: {
@@ -834,6 +876,11 @@ function reportInputSchema() {
       },
       idempotencyKey: idempotencyKeySchema(),
     },
+    required: options.requiresIdempotency ? ["idempotencyKey"] : [],
+    anyOf: [
+      { required: ["reportId"] },
+      { required: ["resourceType", "resourceId"] },
+    ],
     additionalProperties: false,
   };
 }
@@ -852,9 +899,15 @@ function memoryMutationInputSchema() {
       source: {
         type: "string",
       },
+      watchlistId: {
+        type: "string",
+      },
+      clientRoomId: {
+        type: "string",
+      },
       idempotencyKey: idempotencyKeySchema(),
     },
-    required: ["key", "value"],
+    required: ["key", "value", "idempotencyKey"],
     additionalProperties: false,
   };
 }
@@ -904,7 +957,7 @@ function clientRoomMutationInputSchema() {
       },
       idempotencyKey: idempotencyKeySchema(),
     },
-    required: ["name"],
+    required: ["name", "idempotencyKey"],
     additionalProperties: false,
   };
 }
@@ -920,7 +973,7 @@ function memoryScopeSchema() {
 function idempotencyKeySchema() {
   return {
     type: "string",
-    description: "Optional stable key for safe retry. Replays only when the previous matching action succeeded.",
+    description: "Stable key for safe retry. Replays only when the previous matching action succeeded.",
   };
 }
 
