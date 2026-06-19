@@ -1,6 +1,8 @@
 import { resolveCommercialAdSourceStatus } from "~/lib/ad-source.server";
 import {
   listCustomerApiKeys,
+  listAgentMemory,
+  listClientRooms,
   listDigests,
   listRecentWorkspaceProofCaptures,
   listSavedQueries,
@@ -10,6 +12,7 @@ import {
   getUserPlanBillingInfo,
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
+import { buildLifecycleNudges, type LifecycleNudge } from "~/lib/lifecycle-nudges.server";
 import { getProofUsageSummary } from "~/lib/plan.server";
 import { listWorkspaceMembers } from "~/lib/workspace.server";
 
@@ -56,7 +59,10 @@ export interface WorkspaceReadiness {
     deliveryTargets: number;
     activeApiKeys: number;
     teamMembers: number;
+    agentMemoryEntries: number;
+    clientRooms: number;
   };
+  nudges: LifecycleNudge[];
 }
 
 export async function getWorkspaceReadiness(
@@ -75,6 +81,8 @@ export async function getWorkspaceReadiness(
     apiKeys,
     sourceStatus,
     successfulProofStats,
+    agentMemoryEntries,
+    clientRooms,
   ] = await Promise.all([
     listSavedQueries(env, userId),
     listWatchlists(env, userId, { includeInactive: true }),
@@ -87,6 +95,8 @@ export async function getWorkspaceReadiness(
     listCustomerApiKeys(env, userId),
     resolveCommercialAdSourceStatus(env),
     getSuccessfulProofCaptureStatsForUser(env, userId),
+    listAgentMemory(env, userId, { limit: 100 }),
+    listClientRooms(env, userId, { status: "active", limit: 100 }),
   ]);
 
   const competitorCount = watchlists.length;
@@ -264,6 +274,23 @@ export async function getWorkspaceReadiness(
       deliveryTargets: activeDeliveryTargetCount,
       activeApiKeys,
       teamMembers: members.length,
+      agentMemoryEntries: agentMemoryEntries.length,
+      clientRooms: clientRooms.length,
     },
+    nudges: buildLifecycleNudges({
+      items,
+      counts: {
+        competitors: competitorCount,
+        activeWatchlists,
+        successfulProofs,
+        sentDigests,
+        deliveryTargets: activeDeliveryTargetCount,
+        activeApiKeys,
+        agentMemoryEntries: agentMemoryEntries.length,
+        clientRooms: clientRooms.length,
+      },
+      proofUsage,
+      hasPaymentIssue: hasBillingPaymentIssue,
+    }),
   };
 }

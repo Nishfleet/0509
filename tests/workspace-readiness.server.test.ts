@@ -68,6 +68,31 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
       count: 1,
       latestAt: now,
     }),
+    listAgentMemory: vi.fn().mockResolvedValue([
+      {
+        id: "memory-1",
+        userId: "user-1",
+        scope: "workspace",
+        key: "cadence",
+        value: { cadence: "weekly" },
+        source: "api_v1",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+    listClientRooms: vi.fn().mockResolvedValue([
+      {
+        id: "room-1",
+        userId: "user-1",
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        status: "active",
+        resourceRefs: [],
+        notes: {},
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
     listCustomerApiKeys: vi.fn().mockResolvedValue([
       {
         id: "key-1",
@@ -156,7 +181,12 @@ describe("getWorkspaceReadiness", () => {
       deliveryTargets: 1,
       activeApiKeys: 1,
       teamMembers: 1,
+      agentMemoryEntries: 1,
+      clientRooms: 1,
     });
+    expect(readiness.nudges).toEqual([
+      expect.objectContaining({ id: "billing_support", priority: "low" }),
+    ]);
     expect(itemStatuses.delivery).toBe("ready");
     expect(itemStatuses.api).toBe("ready");
     expect(itemStatuses.mcp).toBe("ready");
@@ -268,6 +298,8 @@ describe("getWorkspaceReadiness", () => {
         provenCount: 0,
       }),
       listCustomerApiKeys: vi.fn().mockResolvedValue([]),
+      listAgentMemory: vi.fn().mockResolvedValue([]),
+      listClientRooms: vi.fn().mockResolvedValue([]),
       getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({
         count: 0,
         latestAt: null,
@@ -329,6 +361,10 @@ describe("getWorkspaceReadiness", () => {
     expect(items.mcp).toMatchObject({
       status: "needs_setup",
       action: { href: "/app/sources" },
+    });
+    expect(readiness.nudges[0]).toMatchObject({
+      id: "first_competitor",
+      href: "/search",
     });
   });
 });
