@@ -5039,9 +5039,11 @@ export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: strin
           AND (
             (
               channel = 'email'
+              AND is_opted_in = 1
               AND is_paused = 0
               AND opted_out_at IS NULL
-              AND validation_status != 'invalid'
+              AND is_validated = 1
+              AND validation_status = 'validated'
             )
             OR (
               channel = 'slack'
