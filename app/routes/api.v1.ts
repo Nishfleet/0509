@@ -31,6 +31,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
             "watchlist.refresh",
             "watchlist.pause",
             "watchlist.resume",
+            "proof.add_external",
+            "share.create",
+            "report.create",
+            "report.share",
           ],
         },
         {

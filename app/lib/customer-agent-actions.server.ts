@@ -11,14 +11,19 @@ import {
   runAuditedAgentAction,
 } from "~/lib/agent-actions.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import { parseReportId } from "~/lib/report";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
-import type { DiscoveryFailureClass } from "~/lib/types";
+import type { AppSession, DiscoveryFailureClass, ShareResourceType } from "~/lib/types";
 
 export const CUSTOMER_AGENT_ACTION_NAMES = [
   "watchlist.create",
   "watchlist.refresh",
   "watchlist.pause",
   "watchlist.resume",
+  "proof.add_external",
+  "share.create",
+  "report.create",
+  "report.share",
 ] as const;
 
 export type CustomerAgentActionName = (typeof CUSTOMER_AGENT_ACTION_NAMES)[number];
@@ -29,6 +34,7 @@ export interface CustomerAgentActionContext {
   idempotencyKey?: string | null;
   source: "mcp" | "api_v1";
   executionContext?: ExecutionContext | null;
+  origin?: string | null;
 }
 
 export class CustomerAgentActionError extends Error {
@@ -119,43 +125,102 @@ export async function runCustomerAgentAction(
       source: context.source,
     },
   }, async () => {
-    if (actionName === "watchlist.create") {
-      const result = await createWatchlistFromAgent(env, context, input);
-      return {
-        resourceType: "watchlist",
-        resourceId: result.watchlist.id,
-        result,
-        metadata: {
-          watchlistId: result.watchlist.id,
-        },
-      };
-    }
+    try {
+      if (actionName === "watchlist.create") {
+        const result = await createWatchlistFromAgent(env, context, input);
+        return {
+          resourceType: "watchlist",
+          resourceId: result.watchlist.id,
+          result,
+          metadata: {
+            watchlistId: result.watchlist.id,
+          },
+        };
+      }
 
-    if (actionName === "watchlist.refresh") {
-      const result = await refreshWatchlistFromAgent(env, context.userId, input);
-      return {
-        resourceType: "watchlist",
-        resourceId: result.watchlist.id,
-        result,
-        metadata: {
-          watchlistId: result.watchlist.id,
-        },
-      };
-    }
+      if (actionName === "watchlist.refresh") {
+        const result = await refreshWatchlistFromAgent(env, context.userId, input);
+        return {
+          resourceType: "watchlist",
+          resourceId: result.watchlist.id,
+          result,
+          metadata: {
+            watchlistId: result.watchlist.id,
+          },
+        };
+      }
 
-    if (actionName === "watchlist.pause" || actionName === "watchlist.resume") {
-      const result = await setWatchlistActiveFromAgent(env, context.userId, input, actionName === "watchlist.resume");
-      return {
-        resourceType: "watchlist",
-        resourceId: result.watchlist.id,
-        result,
-        metadata: {
-          watchlistId: result.watchlist.id,
-        },
-      };
-    }
+      if (actionName === "watchlist.pause" || actionName === "watchlist.resume") {
+        const result = await setWatchlistActiveFromAgent(env, context.userId, input, actionName === "watchlist.resume");
+        return {
+          resourceType: "watchlist",
+          resourceId: result.watchlist.id,
+          result,
+          metadata: {
+            watchlistId: result.watchlist.id,
+          },
+        };
+      }
 
-    throw new CustomerAgentActionError("unsupported_action", "Unsupported agent action.", { status: 404 });
+      if (actionName === "proof.add_external") {
+        const result = await addExternalProofFromAgent(env, context.userId, input);
+        return {
+          resourceType: "collection",
+          resourceId: result.collectionId,
+          result,
+          metadata: {
+            collectionId: result.collectionId,
+            adId: result.ad.metaAdId,
+          },
+        };
+      }
+
+      if (actionName === "share.create") {
+        const result = await createShareFromAgent(env, context, input);
+        return {
+          resourceType: result.resourceType,
+          resourceId: result.resourceId,
+          result,
+          metadata: {
+            shareLinkId: result.share.id,
+            resourceType: result.resourceType,
+            resourceId: result.resourceId,
+          },
+        };
+      }
+
+      if (actionName === "report.create") {
+        const result = await buildReportFromAgent(env, context.userId, input);
+        return {
+          resourceType: "report",
+          resourceId: result.report.reportId,
+          result,
+          metadata: {
+            reportId: result.report.reportId,
+          },
+        };
+      }
+
+      if (actionName === "report.share") {
+        const result = await shareReportFromAgent(env, context, input);
+        return {
+          resourceType: "report",
+          resourceId: result.report.reportId,
+          result,
+          metadata: {
+            reportId: result.report.reportId,
+            shareLinkId: result.share.id,
+          },
+        };
+      }
+
+      throw new CustomerAgentActionError("unsupported_action", "Unsupported agent action.", { status: 404 });
+    } catch (error) {
+      if (error instanceof Response) {
+        throw await customerErrorFromResponse(error);
+      }
+      throw error;
+    }
   });
 }
 
@@ -232,6 +297,169 @@ async function createWatchlistFromAgent(
   };
 }
 
+async function addExternalProofFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const { addExternalProofToCollection, getCollection } = await import("~/lib/data.server");
+  const collectionId = requireString(input, "collectionId");
+  const collection = await getCollection(env, collectionId, userId);
+
+  if (!collection) {
+    throw new CustomerAgentActionError("collection_not_found", "Board not found.", { status: 404 });
+  }
+
+  const ad = await addExternalProofToCollection(env, userId, collection.id, {
+    advertiser: requireString(input, "advertiser"),
+    proofUrl: requireString(input, "proofUrl"),
+    channel: readString(input, "channel") ?? "Other",
+    hook: requireString(input, "hook"),
+    offer: readString(input, "offer"),
+    cta: readString(input, "cta"),
+    note: readString(input, "note"),
+    observedAt: readString(input, "observedAt"),
+    spend: readString(input, "spend"),
+    impressions: readString(input, "impressions"),
+    reach: readString(input, "reach"),
+    tags: readStringList(input, "tags"),
+  });
+
+  return {
+    ok: true,
+    action: "proof.add_external",
+    collectionId: collection.id,
+    ad,
+    message: `Saved ${ad.platforms[0] ?? "external"} proof for ${ad.advertiser}.`,
+  };
+}
+
+async function createShareFromAgent(
+  env: AppEnv,
+  context: CustomerAgentActionContext,
+  input: Record<string, unknown>,
+) {
+  const { createShareLink } = await import("~/lib/data.server");
+  const resourceType = readShareResourceType(input);
+  if (resourceType === "report") {
+    throw new CustomerAgentActionError(
+      "unsupported_share_resource",
+      "Use report.share to create a report snapshot link.",
+    );
+  }
+
+  const resourceId = requireString(input, "resourceId");
+  await assertShareResourceOwned(env, context.userId, resourceType, resourceId);
+  const share = await createShareLink(env, agentSession(context.userId, context.apiKeyId), {
+    resourceType,
+    resourceId,
+    isSnapshot: false,
+  });
+
+  return {
+    ok: true,
+    action: "share.create",
+    resourceType,
+    resourceId,
+    share,
+    shareUrl: shareUrl(context, share.token),
+  };
+}
+
+async function buildReportFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const { report } = await loadReportDocumentForAgent(env, userId, input);
+  return {
+    ok: true,
+    action: "report.create",
+    report,
+  };
+}
+
+async function shareReportFromAgent(
+  env: AppEnv,
+  context: CustomerAgentActionContext,
+  input: Record<string, unknown>,
+) {
+  const { createShareLink } = await import("~/lib/data.server");
+  const report = (await loadReportDocumentForAgent(env, context.userId, input)).report;
+  const share = await createShareLink(env, agentSession(context.userId, context.apiKeyId), {
+    resourceType: "report",
+    resourceId: report.reportId,
+    isSnapshot: true,
+    snapshotPayload: report as unknown as Record<string, unknown>,
+  });
+
+  return {
+    ok: true,
+    action: "report.share",
+    report,
+    share,
+    shareUrl: shareUrl(context, share.token),
+  };
+}
+
+async function loadReportDocumentForAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const {
+    getCollection,
+    getWatchlist,
+    listAdsByIds,
+    listCollectionItems,
+    listWatchEvents,
+  } = await import("~/lib/data.server");
+  const {
+    buildCollectionReport,
+    buildWatchlistReport,
+  } = await import("~/lib/report-builder.server");
+  const parsedReport = parseReportId(readString(input, "reportId") ?? "");
+  const resourceType = parsedReport?.resourceType ?? readReportResourceType(input);
+  const resourceId = parsedReport?.resourceId ?? requireString(input, "resourceId");
+
+  if (resourceType === "collection") {
+    const collection = await getCollection(env, resourceId, userId);
+    if (!collection) {
+      throw new CustomerAgentActionError("collection_not_found", "Board not found.", { status: 404 });
+    }
+
+    return {
+      ok: true,
+      report: buildCollectionReport({
+        collection,
+        items: await listCollectionItems(env, collection.id),
+      }),
+    };
+  }
+
+  const watchlist = await getWatchlist(env, resourceId, userId);
+  if (!watchlist) {
+    throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
+  }
+
+  const events = await listWatchEvents(env, watchlist.id, 60);
+  const ads = await listAdsByIds(
+    env,
+    events
+      .map((event) => event.adId)
+      .filter((adId): adId is string => Boolean(adId)),
+  );
+
+  return {
+    ok: true,
+    report: buildWatchlistReport({
+      watchlist,
+      events,
+      adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
+    }),
+  };
+}
+
 async function refreshWatchlistFromAgent(env: AppEnv, userId: string, input: Record<string, unknown>) {
   const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
   const { getWatchlist } = await import("~/lib/data.server");
@@ -287,6 +515,36 @@ async function refreshWatchlistFromAgent(env: AppEnv, userId: string, input: Rec
     watchlist,
     message: `${watchlist.name} refreshed successfully.`,
   };
+}
+
+async function assertShareResourceOwned(
+  env: AppEnv,
+  userId: string,
+  resourceType: Exclude<ShareResourceType, "report">,
+  resourceId: string,
+) {
+  const { getCollection, getDigest, getWatchlist } = await import("~/lib/data.server");
+
+  if (resourceType === "collection") {
+    const collection = await getCollection(env, resourceId, userId);
+    if (!collection) {
+      throw new CustomerAgentActionError("collection_not_found", "Board not found.", { status: 404 });
+    }
+    return;
+  }
+
+  if (resourceType === "watchlist") {
+    const watchlist = await getWatchlist(env, resourceId, userId);
+    if (!watchlist) {
+      throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
+    }
+    return;
+  }
+
+  const digest = await getDigest(env, resourceId);
+  if (!digest || digest.userId !== userId) {
+    throw new CustomerAgentActionError("digest_not_found", "Digest not found.", { status: 404 });
+  }
 }
 
 async function setWatchlistActiveFromAgent(
@@ -357,6 +615,67 @@ function readString(input: Record<string, unknown>, field: string) {
 function readBoolean(input: Record<string, unknown>, field: string, fallback: boolean) {
   const value = input[field];
   return typeof value === "boolean" ? value : fallback;
+}
+
+function readStringList(input: Record<string, unknown>, field: string) {
+  const value = input[field];
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim()))
+      .map((entry) => entry.trim());
+  }
+  const single = readString(input, field);
+  return single
+    ? single
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+    : [];
+}
+
+function readShareResourceType(input: Record<string, unknown>): ShareResourceType {
+  const value = readString(input, "resourceType");
+  if (value === "collection" || value === "watchlist" || value === "digest" || value === "report") {
+    return value;
+  }
+  throw new CustomerAgentActionError(
+    "invalid_resource_type",
+    "resourceType must be collection, watchlist, digest, or report.",
+  );
+}
+
+function readReportResourceType(input: Record<string, unknown>) {
+  const value = readString(input, "resourceType") ?? readString(input, "reportResourceType");
+  if (value === "collection" || value === "watchlist") {
+    return value;
+  }
+  throw new CustomerAgentActionError("invalid_resource_type", "resourceType must be collection or watchlist.");
+}
+
+function agentSession(userId: string, apiKeyId: string | null): AppSession {
+  return {
+    user: {
+      id: userId,
+      email: "",
+      name: "API key",
+    },
+    session: {
+      id: apiKeyId ? `api-key:${apiKeyId}` : "api-key",
+      userId,
+      expiresAt: "",
+    },
+  };
+}
+
+function shareUrl(context: CustomerAgentActionContext, token: string) {
+  return context.origin ? new URL(`/share/${token}`, context.origin).toString() : `/share/${token}`;
+}
+
+async function customerErrorFromResponse(response: Response) {
+  const message = await response.text().catch(() => "") || response.statusText || "Agent action failed.";
+  return new CustomerAgentActionError("invalid_action_input", message, {
+    status: response.status >= 400 ? response.status : 400,
+  });
 }
 
 function formatWatchlistRefreshFailure(
