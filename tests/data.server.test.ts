@@ -7,6 +7,7 @@ import {
   claimRazorpayWebhookEvent,
   createDeliveryAttempt,
   createDiscoveryFetchLog,
+  createAgentActionAudit,
   createLandingPageSnapshot,
   createProofCapture,
   createWatchEvent,
@@ -22,6 +23,8 @@ import {
   getSuccessfulProofCaptureStatsForUser,
   getOperatorSnapshot,
   getWeeklyBusinessSummary,
+  findAgentActionAuditByIdempotencyKey,
+  finishAgentActionAudit,
   listActiveWatchlists,
   listCollectionItems,
   listDigests,
@@ -140,6 +143,126 @@ describe("createLandingPageSnapshot", () => {
 
     const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
     expect(statement?.sql).toContain("provider = excluded.provider");
+  });
+});
+
+describe("agent action audit persistence", () => {
+  const row = {
+    id: "audit-1",
+    user_id: "user-1",
+    api_key_id: "api-key-1",
+    action_name: "watchlist.create",
+    resource_type: "watchlist",
+    resource_id: "watchlist-1",
+    idempotency_key: "idem-1",
+    status: "succeeded",
+    result_json: JSON.stringify({ watchlistId: "watchlist-1" }),
+    error_code: null,
+    error_message: null,
+    metadata_json: JSON.stringify({ source: "mcp" }),
+    created_at: "2026-06-19T00:00:00.000Z",
+    updated_at: "2026-06-19T00:01:00.000Z",
+  };
+
+  it("creates an audit row with normalized JSON payloads", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "SELECT * FROM agent_action_audit WHERE id = ?",
+        results: [row],
+      },
+    ]);
+
+    const audit = await createAgentActionAudit(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        actionName: "watchlist.create",
+        resourceType: "watchlist",
+        resourceId: "watchlist-1",
+        idempotencyKey: "idem-1",
+        status: "succeeded",
+        result: { watchlistId: "watchlist-1" },
+        metadata: { source: "mcp" },
+      },
+    );
+
+    const insert = findStatement(mock.statements, "INSERT INTO agent_action_audit");
+    expect(insert?.bindings.slice(1, 12)).toEqual([
+      "user-1",
+      "api-key-1",
+      "watchlist.create",
+      "watchlist",
+      "watchlist-1",
+      "idem-1",
+      "succeeded",
+      JSON.stringify({ watchlistId: "watchlist-1" }),
+      null,
+      null,
+      JSON.stringify({ source: "mcp" }),
+    ]);
+    expect(audit).toMatchObject({
+      id: "audit-1",
+      userId: "user-1",
+      status: "succeeded",
+      result: { watchlistId: "watchlist-1" },
+      metadata: { source: "mcp" },
+    });
+  });
+
+  it("finds an audit row by user-scoped idempotency key", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM agent_action_audit",
+        results: [row],
+      },
+    ]);
+
+    const audit = await findAgentActionAuditByIdempotencyKey({ DB: mock.db } as never, "user-1", "idem-1");
+
+    const select = findStatement(mock.statements, "FROM agent_action_audit", "idempotency_key = ?");
+    expect(select?.bindings).toEqual(["user-1", "idem-1"]);
+    expect(audit).toMatchObject({
+      id: "audit-1",
+      actionName: "watchlist.create",
+      result: { watchlistId: "watchlist-1" },
+    });
+  });
+
+  it("finishes an audit with status, resource, result, and error fields", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "SELECT * FROM agent_action_audit WHERE id = ?",
+        results: [row],
+      },
+    ]);
+
+    const audit = await finishAgentActionAudit(
+      { DB: mock.db } as never,
+      "audit-1",
+      {
+        status: "failed",
+        resourceType: "watchlist",
+        resourceId: "watchlist-1",
+        errorCode: "action_failed",
+        errorMessage: "manual scan failed",
+        metadata: { source: "mcp" },
+      },
+    );
+
+    const update = findStatement(mock.statements, "UPDATE agent_action_audit");
+    expect(update?.bindings.slice(0, 8)).toEqual([
+      "failed",
+      "watchlist",
+      "watchlist-1",
+      null,
+      "action_failed",
+      "manual scan failed",
+      JSON.stringify({ source: "mcp" }),
+      expect.any(String),
+    ]);
+    expect(update?.bindings[8]).toBe("audit-1");
+    expect(audit?.id).toBe("audit-1");
   });
 });
 
