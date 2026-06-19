@@ -17,6 +17,8 @@ import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type {
   AdRecord,
+  AgentActionAuditRecord,
+  AgentActionAuditStatus,
   AnalysisFieldInput,
   AppSession,
   CollectionItemRecord,
@@ -212,6 +214,23 @@ interface ProofCaptureRow {
 
 interface CountRow {
   total: number;
+}
+
+interface AgentActionAuditRow {
+  id: string;
+  user_id: string;
+  api_key_id: string | null;
+  action_name: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  idempotency_key: string | null;
+  status: AgentActionAuditStatus;
+  result_json: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  metadata_json: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface WorkspaceDeliveryConfigRow {
@@ -447,6 +466,129 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
   }
 
   return hydrateAdsWithPersistedCreativesImpl(env, ads);
+}
+
+export async function findAgentActionAuditByIdempotencyKey(
+  env: AppEnv,
+  userId: string,
+  idempotencyKey: string,
+) {
+  const row = await one<AgentActionAuditRow>(
+    env,
+    `
+      SELECT *
+      FROM agent_action_audit
+      WHERE user_id = ?
+        AND idempotency_key = ?
+      LIMIT 1
+    `,
+    userId,
+    idempotencyKey,
+  );
+
+  return row ? toAgentActionAuditRecord(row) : null;
+}
+
+export async function createAgentActionAudit(
+  env: AppEnv,
+  input: {
+    userId: string;
+    apiKeyId?: string | null;
+    actionName: string;
+    resourceType?: string | null;
+    resourceId?: string | null;
+    idempotencyKey?: string | null;
+    status?: AgentActionAuditStatus;
+    result?: JsonRecord | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    metadata?: JsonRecord | null;
+  },
+) {
+  const id = createId();
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT INTO agent_action_audit (
+        id,
+        user_id,
+        api_key_id,
+        action_name,
+        resource_type,
+        resource_id,
+        idempotency_key,
+        status,
+        result_json,
+        error_code,
+        error_message,
+        metadata_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    id,
+    input.userId,
+    input.apiKeyId ?? null,
+    input.actionName,
+    input.resourceType ?? null,
+    input.resourceId ?? null,
+    input.idempotencyKey ?? null,
+    input.status ?? "started",
+    input.result ? jsonValue(input.result) : null,
+    input.errorCode ?? null,
+    input.errorMessage ?? null,
+    jsonValue(input.metadata ?? {}),
+    timestamp,
+    timestamp,
+  );
+
+  const row = await one<AgentActionAuditRow>(env, "SELECT * FROM agent_action_audit WHERE id = ?", id);
+  return row ? toAgentActionAuditRecord(row) : null;
+}
+
+export async function finishAgentActionAudit(
+  env: AppEnv,
+  auditId: string,
+  input: {
+    status: Exclude<AgentActionAuditStatus, "started">;
+    resourceType?: string | null;
+    resourceId?: string | null;
+    result?: JsonRecord | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    metadata?: JsonRecord | null;
+  },
+) {
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      UPDATE agent_action_audit
+      SET status = ?,
+          resource_type = COALESCE(?, resource_type),
+          resource_id = COALESCE(?, resource_id),
+          result_json = ?,
+          error_code = ?,
+          error_message = ?,
+          metadata_json = ?,
+          updated_at = ?
+      WHERE id = ?
+    `,
+    input.status,
+    input.resourceType ?? null,
+    input.resourceId ?? null,
+    input.result ? jsonValue(input.result) : null,
+    input.errorCode ?? null,
+    input.errorMessage ?? null,
+    jsonValue(input.metadata ?? {}),
+    timestamp,
+    auditId,
+  );
+
+  const row = await one<AgentActionAuditRow>(env, "SELECT * FROM agent_action_audit WHERE id = ?", auditId);
+  return row ? toAgentActionAuditRecord(row) : null;
 }
 
 export async function upsertAd(env: AppEnv, ad: AdRecord) {
@@ -5844,6 +5986,25 @@ function toCustomerApiKeyRecord(row: CustomerApiKeyRow): CustomerApiKeyRecord {
     keyPrefix: row.key_prefix,
     lastUsedAt: row.last_used_at,
     revokedAt: row.revoked_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toAgentActionAuditRecord(row: AgentActionAuditRow): AgentActionAuditRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    apiKeyId: row.api_key_id ?? null,
+    actionName: row.action_name,
+    resourceType: row.resource_type ?? null,
+    resourceId: row.resource_id ?? null,
+    idempotencyKey: row.idempotency_key ?? null,
+    status: row.status,
+    result: parseJson<Record<string, unknown> | null>(row.result_json, null),
+    errorCode: row.error_code ?? null,
+    errorMessage: row.error_message ?? null,
+    metadata: parseJson<Record<string, unknown>>(row.metadata_json, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

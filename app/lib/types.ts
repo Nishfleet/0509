@@ -69,6 +69,7 @@ export const DELIVERY_ATTEMPT_STATUSES = [
   "skipped_due_to_quiet_hours",
   "skipped_due_to_dedupe",
 ] as const;
+export const AGENT_ACTION_AUDIT_STATUSES = ["started", "succeeded", "failed"] as const;
 export const DELIVERY_TARGET_VALIDATION_STATUSES = [
   "pending",
   "validated",
@@ -97,6 +98,7 @@ export type ProofSkipReason = (typeof PROOF_SKIP_REASONS)[number];
 export type DedupeReason = (typeof DEDUPE_REASONS)[number];
 export type WebhookReconciliationStatus = (typeof WEBHOOK_RECONCILIATION_STATUSES)[number];
 export type DeliveryAttemptStatus = (typeof DELIVERY_ATTEMPT_STATUSES)[number];
+export type AgentActionAuditStatus = (typeof AGENT_ACTION_AUDIT_STATUSES)[number];
 export type DeliveryTargetValidationStatus = (typeof DELIVERY_TARGET_VALIDATION_STATUSES)[number];
 export type ProofRenderMode = (typeof PROOF_RENDER_MODES)[number];
 export type ProofDeviceProfile = (typeof PROOF_DEVICE_PROFILES)[number];
@@ -478,6 +480,23 @@ export interface DeliveryAttemptRecord {
   errorMessage: string | null;
   sentAt: string | null;
   failedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentActionAuditRecord {
+  id: string;
+  userId: string;
+  apiKeyId: string | null;
+  actionName: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  idempotencyKey: string | null;
+  status: AgentActionAuditStatus;
+  result: Record<string, unknown> | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
