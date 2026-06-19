@@ -261,6 +261,21 @@ afterEach(() => {
   vi.resetModules();
 });
 
+describe("customerAgentActionErrorPayload", () => {
+  it("does not expose unexpected exception messages to API clients", async () => {
+    const { customerAgentActionErrorPayload } = await import("~/lib/customer-agent-actions.server");
+
+    expect(customerAgentActionErrorPayload(new Error("SQLITE_CONSTRAINT: private table detail"))).toEqual({
+      status: 500,
+      body: {
+        ok: false,
+        error: "agent_action_failed",
+        message: "Agent action failed.",
+      },
+    });
+  });
+});
+
 describe("runCustomerAgentAction", () => {
   it("creates an audited competitor watchlist with normalized website targeting", async () => {
     const mocks = setupMocks();
@@ -763,6 +778,30 @@ describe("runCustomerAgentAction", () => {
           notes: {
             url: "https://hooks.slack.com/services/team/channel/token",
           },
+        },
+      ),
+    ).rejects.toBeInstanceOf(CustomerAgentActionError);
+
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed client-room notes instead of clearing them", async () => {
+    const mocks = setupMocks();
+    const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "room-bad-notes-1",
+          source: "api_v1",
+        },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          notes: [],
         },
       ),
     ).rejects.toBeInstanceOf(CustomerAgentActionError);
