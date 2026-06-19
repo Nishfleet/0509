@@ -582,6 +582,48 @@ describe("runCustomerAgentAction", () => {
     });
   });
 
+  it("includes the memory key in idempotency fingerprints", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "memory-fingerprint-1",
+        source: "api_v1",
+      },
+      "memory.upsert",
+      {
+        scope: "brand",
+        key: "voice",
+        value: { tone: "plainspoken" },
+      },
+    );
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "memory-fingerprint-2",
+        source: "api_v1",
+      },
+      "memory.upsert",
+      {
+        scope: "brand",
+        key: "positioning",
+        value: { tone: "plainspoken" },
+      },
+    );
+
+    const fingerprints = mocks.claimAgentActionAudit.mock.calls
+      .map((call) => call[1].metadata.requestFingerprint);
+    expect(fingerprints[0]).toMatch(/^fnv1a:/);
+    expect(fingerprints[1]).toMatch(/^fnv1a:/);
+    expect(fingerprints[0]).not.toBe(fingerprints[1]);
+  });
+
   it("rejects secret-like agent memory writes before persistence", async () => {
     const mocks = setupMocks();
     const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
@@ -691,6 +733,29 @@ describe("runCustomerAgentAction", () => {
       status: "all",
       limit: 5,
     });
+  });
+
+  it("omits client-room notes from persistence when notes were not supplied", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "room-no-notes-1",
+        source: "api_v1",
+      },
+      "client_room.upsert",
+      {
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+      },
+    );
+
+    const roomInput = mocks.upsertClientRoom.mock.calls[0][2] as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(roomInput, "notes")).toBe(false);
   });
 
   it("rejects client-room refs that are not owned by the account", async () => {
