@@ -144,6 +144,46 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
         updatedAt: "2026-06-19T00:00:00.000Z",
       },
     ]),
+    upsertClientRoom: vi.fn().mockResolvedValue({
+      id: "room-1",
+      userId: "user-1",
+      name: "Beauty client",
+      clientLabel: "Nykaa",
+      status: "active",
+      resourceRefs: [
+        {
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+          label: "Nykaa watch",
+        },
+      ],
+      notes: {
+        goal: "Weekly proof review",
+      },
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    }),
+    listClientRooms: vi.fn().mockResolvedValue([
+      {
+        id: "room-1",
+        userId: "user-1",
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        status: "active",
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watchlist-1",
+            label: "Nykaa watch",
+          },
+        ],
+        notes: {
+          goal: "Weekly proof review",
+        },
+        createdAt: "2026-06-19T00:00:00.000Z",
+        updatedAt: "2026-06-19T00:00:00.000Z",
+      },
+    ]),
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
     createAgentActionAudit: vi.fn().mockResolvedValue(auditRecord()),
     finishAgentActionAudit: vi.fn().mockImplementation((_, auditId: string, input: Record<string, unknown>) =>
@@ -171,9 +211,11 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     getWatchlist: mocks.getWatchlist,
     listAdsByIds: mocks.listAdsByIds,
     listAgentMemory: mocks.listAgentMemory,
+    listClientRooms: mocks.listClientRooms,
     listCollectionItems: mocks.listCollectionItems,
     listWatchEvents: mocks.listWatchEvents,
     setWatchlistActive: mocks.setWatchlistActive,
+    upsertClientRoom: mocks.upsertClientRoom,
     upsertAgentMemory: mocks.upsertAgentMemory,
     findAgentActionAuditByIdempotencyKey: mocks.findAgentActionAuditByIdempotencyKey,
     createAgentActionAudit: mocks.createAgentActionAudit,
@@ -472,5 +514,119 @@ describe("runCustomerAgentAction", () => {
       scope: "brand",
       limit: 5,
     });
+  });
+
+  it("saves and lists client rooms with owned resource refs", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "room-1",
+        source: "api_v1",
+      },
+      "client_room.upsert",
+      {
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watchlist-1",
+            label: "Nykaa watch",
+          },
+          {
+            resourceType: "report",
+            resourceId: "collection:collection-1",
+          },
+        ],
+        notes: {
+          goal: "Weekly proof review",
+          token: "should-not-store",
+        },
+      },
+    );
+
+    const result = outcome.result as { room: { id: string } };
+    expect(result.room.id).toBe("room-1");
+    expect(mocks.getWatchlist).toHaveBeenCalledWith(expect.anything(), "watchlist-1", "user-1");
+    expect(mocks.getCollection).toHaveBeenCalledWith(expect.anything(), "collection-1", "user-1");
+    expect(mocks.upsertClientRoom).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watchlist-1",
+            label: "Nykaa watch",
+          },
+          {
+            resourceType: "report",
+            resourceId: "collection:collection-1",
+          },
+        ],
+        notes: {
+          goal: "Weekly proof review",
+        },
+      }),
+    );
+
+    const listOutcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "room-list-1",
+        source: "api_v1",
+      },
+      "client_room.list",
+      {
+        status: "all",
+        limit: 5,
+      },
+    );
+    const listResult = listOutcome.result as { rooms: Array<{ id: string }> };
+
+    expect(listResult.rooms[0]?.id).toBe("room-1");
+    expect(mocks.listClientRooms).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      status: "all",
+      limit: 5,
+    });
+  });
+
+  it("rejects client-room refs that are not owned by the account", async () => {
+    const mocks = setupMocks();
+    mocks.getWatchlist.mockResolvedValue(null);
+    const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "room-bad-ref-1",
+          source: "api_v1",
+        },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          resourceRefs: [
+            {
+              resourceType: "watchlist",
+              resourceId: "other-watchlist",
+            },
+          ],
+        },
+      ),
+    ).rejects.toBeInstanceOf(CustomerAgentActionError);
+
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
   });
 });

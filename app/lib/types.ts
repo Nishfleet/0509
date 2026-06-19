@@ -514,6 +514,24 @@ export interface AgentMemoryRecord {
   updatedAt: string;
 }
 
+export interface ClientRoomResourceRef {
+  resourceType: ShareResourceType;
+  resourceId: string;
+  label?: string | null;
+}
+
+export interface ClientRoomRecord {
+  id: string;
+  userId: string;
+  name: string;
+  clientLabel: string | null;
+  status: "active" | "archived";
+  resourceRefs: ClientRoomResourceRef[];
+  notes: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DigestRecord {
   id: string;
   userId: string;

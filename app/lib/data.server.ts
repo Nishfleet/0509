@@ -25,6 +25,8 @@ import type {
   AppSession,
   CollectionItemRecord,
   CollectionRecord,
+  ClientRoomRecord,
+  ClientRoomResourceRef,
   CustomerMetaConnectionRecord,
   CustomerApiKeyRecord,
   DeliveryAttemptRecord,
@@ -242,6 +244,18 @@ interface AgentMemoryRow {
   memory_key: string;
   value_json: string;
   source: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ClientRoomRow {
+  id: string;
+  user_id: string;
+  name: string;
+  client_label: string | null;
+  status: ClientRoomRecord["status"];
+  resource_refs_json: string;
+  notes_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -702,6 +716,160 @@ export async function listAgentMemory(
     );
 
   return rows.map(toAgentMemoryRecord);
+}
+
+export async function getClientRoom(env: AppEnv, userId: string, roomId: string) {
+  const row = await one<ClientRoomRow>(
+    env,
+    `
+      SELECT *
+      FROM client_room
+      WHERE id = ?
+        AND user_id = ?
+      LIMIT 1
+    `,
+    roomId,
+    userId,
+  );
+
+  return row ? toClientRoomRecord(row) : null;
+}
+
+export async function upsertClientRoom(
+  env: AppEnv,
+  userId: string,
+  input: {
+    roomId?: string | null;
+    name: string;
+    clientLabel?: string | null;
+    status?: ClientRoomRecord["status"] | null;
+    resourceRefs?: ClientRoomResourceRef[] | null;
+    notes?: JsonRecord | null;
+  },
+) {
+  const timestamp = nowIso();
+  const name = input.name.trim();
+  const status = input.status ?? "active";
+  const clientLabel = input.clientLabel?.trim() || null;
+  const resourceRefsJson = input.resourceRefs ? jsonValue(input.resourceRefs) : null;
+  const notesJson = input.notes ? jsonValue(input.notes) : null;
+
+  if (input.roomId) {
+    await run(
+      env,
+      `
+        UPDATE client_room
+        SET name = ?,
+            client_label = ?,
+            status = ?,
+            resource_refs_json = COALESCE(?, resource_refs_json),
+            notes_json = COALESCE(?, notes_json),
+            updated_at = ?
+        WHERE id = ?
+          AND user_id = ?
+      `,
+      name,
+      clientLabel,
+      status,
+      resourceRefsJson,
+      notesJson,
+      timestamp,
+      input.roomId,
+      userId,
+    );
+
+    return getClientRoom(env, userId, input.roomId);
+  }
+
+  const id = createId();
+  await run(
+    env,
+    `
+      INSERT INTO client_room (
+        id,
+        user_id,
+        name,
+        client_label,
+        status,
+        resource_refs_json,
+        notes_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, name)
+      DO UPDATE SET client_label = excluded.client_label,
+                    status = excluded.status,
+                    resource_refs_json = excluded.resource_refs_json,
+                    notes_json = excluded.notes_json,
+                    updated_at = excluded.updated_at
+    `,
+    id,
+    userId,
+    name,
+    clientLabel,
+    status,
+    resourceRefsJson ?? jsonValue([]),
+    notesJson ?? jsonValue({}),
+    timestamp,
+    timestamp,
+  );
+
+  const row = await one<ClientRoomRow>(
+    env,
+    `
+      SELECT *
+      FROM client_room
+      WHERE user_id = ?
+        AND name = ?
+      LIMIT 1
+    `,
+    userId,
+    name,
+  );
+
+  return row ? toClientRoomRecord(row) : null;
+}
+
+export async function listClientRooms(
+  env: AppEnv,
+  userId: string,
+  options: {
+    status?: ClientRoomRecord["status"] | "all" | null;
+    limit?: number | null;
+  } = {},
+) {
+  const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 50)));
+  const status = options.status ?? "active";
+  const rows = status === "all"
+    ? await many<ClientRoomRow>(
+      env,
+      `
+        SELECT *
+        FROM client_room
+        WHERE user_id = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `,
+      userId,
+      limit,
+    )
+    : await many<ClientRoomRow>(
+      env,
+      `
+        SELECT *
+        FROM client_room
+        WHERE user_id = ?
+          AND status = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `,
+      userId,
+      status,
+      limit,
+    );
+
+  return rows.map(toClientRoomRecord);
 }
 
 export async function upsertAd(env: AppEnv, ad: AdRecord) {
@@ -6131,6 +6299,20 @@ function toAgentMemoryRecord(row: AgentMemoryRow): AgentMemoryRecord {
     key: row.memory_key,
     value: parseJson<Record<string, unknown>>(row.value_json, {}),
     source: row.source ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toClientRoomRecord(row: ClientRoomRow): ClientRoomRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    clientLabel: row.client_label ?? null,
+    status: row.status,
+    resourceRefs: parseJson<ClientRoomResourceRef[]>(row.resource_refs_json, []),
+    notes: parseJson<Record<string, unknown>>(row.notes_json, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

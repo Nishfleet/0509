@@ -38,6 +38,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
             "counter_move_brief.create",
             "memory.upsert",
             "memory.list",
+            "client_room.upsert",
+            "client_room.list",
           ],
         },
         {
