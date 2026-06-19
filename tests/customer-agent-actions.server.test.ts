@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentActionAuditRecord, WatchlistRecord } from "~/lib/types";
+import type { AgentActionAuditRecord, WatchEventRecord, WatchlistRecord } from "~/lib/types";
 
 const watchlist: WatchlistRecord = {
   id: "watchlist-1",
@@ -49,6 +49,30 @@ const externalAd = {
   researchSummary: "Manual proof.",
   source: "external",
   analysisFields: [],
+};
+
+const watchEvent: WatchEventRecord = {
+  id: "event-1",
+  watchlistId: "watchlist-1",
+  runId: "run-1",
+  eventType: "landing_page_offer_changed",
+  status: "confirmed",
+  importanceScore: 90,
+  adId: "external:linkedin:proof-1",
+  baselineFromRunId: null,
+  candidateId: "candidate-1",
+  proofCaptureId: "proof-1",
+  title: "Offer changed",
+  summary: "The offer changed.",
+  metadata: {
+    from: "Starting at ₹499",
+    to: "Starting at ₹799",
+  },
+  confirmedAt: "2026-06-19T00:00:00.000Z",
+  suppressedAt: null,
+  invalidatedAt: null,
+  lastEvaluatedAt: "2026-06-19T00:00:00.000Z",
+  createdAt: "2026-06-19T00:00:00.000Z",
 };
 
 function auditRecord(input: Partial<AgentActionAuditRecord> = {}): AgentActionAuditRecord {
@@ -331,5 +355,41 @@ describe("runCustomerAgentAction", () => {
         }),
       }),
     );
+  });
+
+  it("builds audited counter-move briefs from owned watchlists", async () => {
+    const mocks = setupMocks();
+    mocks.listWatchEvents.mockResolvedValue([watchEvent]);
+    mocks.listAdsByIds.mockResolvedValue([externalAd]);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "brief-1",
+        source: "api_v1",
+      },
+      "counter_move_brief.create",
+      {
+        watchlistId: "watchlist-1",
+        limit: 3,
+        timeZone: "Asia/Kolkata",
+      },
+    );
+
+    const result = outcome.result as {
+      brief: {
+        watchlistId: string;
+        moves: Array<{ counterMove: string; priorityBand: string }>;
+      };
+    };
+    expect(result.brief.watchlistId).toBe("watchlist-1");
+    expect(result.brief.moves[0]).toMatchObject({
+      priorityBand: "High priority",
+      counterMove: expect.stringContaining("offer shift"),
+    });
+    expect(mocks.listWatchEvents).toHaveBeenCalledWith(expect.anything(), "watchlist-1", 9);
   });
 });

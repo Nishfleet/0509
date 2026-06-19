@@ -35,6 +35,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             "share.create",
             "report.create",
             "report.share",
+            "counter_move_brief.create",
           ],
         },
         {
