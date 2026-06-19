@@ -14,7 +14,14 @@ import {
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { parseReportId } from "~/lib/report";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
-import type { AgentMemoryScope, AppSession, DiscoveryFailureClass, ShareResourceType } from "~/lib/types";
+import type {
+  AgentMemoryScope,
+  AppSession,
+  ClientRoomRecord,
+  ClientRoomResourceRef,
+  DiscoveryFailureClass,
+  ShareResourceType,
+} from "~/lib/types";
 
 export const CUSTOMER_AGENT_ACTION_NAMES = [
   "watchlist.create",
@@ -28,6 +35,8 @@ export const CUSTOMER_AGENT_ACTION_NAMES = [
   "counter_move_brief.create",
   "memory.upsert",
   "memory.list",
+  "client_room.upsert",
+  "client_room.list",
 ] as const;
 
 export type CustomerAgentActionName = (typeof CUSTOMER_AGENT_ACTION_NAMES)[number];
@@ -254,6 +263,32 @@ export async function runCustomerAgentAction(
           metadata: {
             scope: result.scope ?? "all",
             count: result.memories.length,
+          },
+        };
+      }
+
+      if (actionName === "client_room.upsert") {
+        const result = await upsertClientRoomFromAgent(env, context, input);
+        return {
+          resourceType: "client_room",
+          resourceId: result.room.id,
+          result,
+          metadata: {
+            roomId: result.room.id,
+            resourceCount: result.room.resourceRefs.length,
+          },
+        };
+      }
+
+      if (actionName === "client_room.list") {
+        const result = await listClientRoomsFromAgent(env, context.userId, input);
+        return {
+          resourceType: "client_room",
+          resourceId: result.status ?? "all",
+          result,
+          metadata: {
+            status: result.status ?? "all",
+            count: result.rooms.length,
           },
         };
       }
@@ -586,6 +621,54 @@ async function listMemoryFromAgent(
   };
 }
 
+async function upsertClientRoomFromAgent(
+  env: AppEnv,
+  context: CustomerAgentActionContext,
+  input: Record<string, unknown>,
+) {
+  const { upsertClientRoom } = await import("~/lib/data.server");
+  const resourceRefs = readClientRoomResourceRefs(input);
+  await assertClientRoomResourceRefsOwned(env, context.userId, resourceRefs);
+  const room = await upsertClientRoom(env, context.userId, {
+    roomId: readString(input, "roomId"),
+    name: requireString(input, "name"),
+    clientLabel: readString(input, "clientLabel"),
+    status: readClientRoomStatus(input),
+    resourceRefs,
+    notes: readOptionalObject(input, "notes"),
+  });
+
+  if (!room) {
+    throw new CustomerAgentActionError("client_room_upsert_failed", "Could not save client room.", { status: 500 });
+  }
+
+  return {
+    ok: true,
+    action: "client_room.upsert",
+    room,
+  };
+}
+
+async function listClientRoomsFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const { listClientRooms } = await import("~/lib/data.server");
+  const status = readOptionalClientRoomStatus(input) ?? "active";
+  const rooms = await listClientRooms(env, userId, {
+    status,
+    limit: readInteger(input, "limit", 50),
+  });
+
+  return {
+    ok: true,
+    action: "client_room.list",
+    status,
+    rooms,
+  };
+}
+
 async function refreshWatchlistFromAgent(env: AppEnv, userId: string, input: Record<string, unknown>) {
   const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
   const { getWatchlist } = await import("~/lib/data.server");
@@ -825,6 +908,104 @@ function readMemoryValue(input: Record<string, unknown>) {
     };
   }
   throw new CustomerAgentActionError("missing_field", "value is required.");
+}
+
+function readOptionalObject(input: Record<string, unknown>, field: string) {
+  const value = input[field];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return sanitizeAgentActionMetadata(value);
+}
+
+function readOptionalClientRoomStatus(input: Record<string, unknown>): ClientRoomRecord["status"] | "all" | null {
+  const value = readString(input, "status");
+  if (!value) {
+    return null;
+  }
+  if (value === "active" || value === "archived" || value === "all") {
+    return value;
+  }
+  throw new CustomerAgentActionError("invalid_room_status", "status must be active, archived, or all.");
+}
+
+function readClientRoomStatus(input: Record<string, unknown>): ClientRoomRecord["status"] {
+  const status = readOptionalClientRoomStatus(input);
+  if (!status || status === "all") {
+    return "active";
+  }
+  return status;
+}
+
+function readClientRoomResourceRefs(input: Record<string, unknown>) {
+  const value = input.resourceRefs ?? input.resources;
+  if (typeof value === "undefined") {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new CustomerAgentActionError("invalid_resource_refs", "resourceRefs must be an array.");
+  }
+
+  const refs = value.slice(0, 25).map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new CustomerAgentActionError("invalid_resource_refs", "Each resource ref must be an object.");
+    }
+    const ref = entry as Record<string, unknown>;
+    const resourceType = readClientRoomResourceType(ref);
+    const resourceId = requireString(ref, "resourceId");
+    const label = readString(ref, "label");
+    return {
+      resourceType,
+      resourceId,
+      ...(label ? { label } : {}),
+    } satisfies ClientRoomResourceRef;
+  });
+
+  return Array.from(
+    new Map(refs.map((ref) => [`${ref.resourceType}:${ref.resourceId}`, ref])).values(),
+  );
+}
+
+function readClientRoomResourceType(input: Record<string, unknown>): ShareResourceType {
+  const value = readString(input, "resourceType");
+  if (value === "collection" || value === "watchlist" || value === "digest" || value === "report") {
+    return value;
+  }
+  throw new CustomerAgentActionError(
+    "invalid_resource_type",
+    "client room resources must be collection, watchlist, digest, or report.",
+  );
+}
+
+async function assertClientRoomResourceRefsOwned(
+  env: AppEnv,
+  userId: string,
+  refs: ClientRoomResourceRef[],
+) {
+  for (const ref of refs) {
+    if (ref.resourceType === "report") {
+      await assertReportResourceOwned(env, userId, ref.resourceId);
+    } else {
+      await assertShareResourceOwned(env, userId, ref.resourceType, ref.resourceId);
+    }
+  }
+}
+
+async function assertReportResourceOwned(env: AppEnv, userId: string, reportId: string) {
+  const parsedReport = parseReportId(reportId);
+  if (!parsedReport) {
+    throw new CustomerAgentActionError(
+      "invalid_report_id",
+      "report resources must use a report id such as collection:<id> or watchlist:<id>.",
+    );
+  }
+
+  if (parsedReport.resourceType === "collection") {
+    await assertShareResourceOwned(env, userId, "collection", parsedReport.resourceId);
+    return;
+  }
+
+  await assertShareResourceOwned(env, userId, "watchlist", parsedReport.resourceId);
 }
 
 function agentSession(userId: string, apiKeyId: string | null): AppSession {

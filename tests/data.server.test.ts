@@ -25,6 +25,7 @@ import {
   getWeeklyBusinessSummary,
   findAgentActionAuditByIdempotencyKey,
   finishAgentActionAudit,
+  listClientRooms,
   listAgentMemory,
   listActiveWatchlists,
   listCollectionItems,
@@ -40,6 +41,7 @@ import {
   syncRazorpaySubscriptionStatus,
   upsertAd,
   upsertCustomerMetaConnection,
+  upsertClientRoom,
   upsertDeliveryTarget,
   upsertProofTarget,
   upsertWatchlistDeliveryConfig,
@@ -336,6 +338,103 @@ describe("agent memory persistence", () => {
       id: "memory-1",
       scope: "brand",
       key: "voice",
+    });
+  });
+});
+
+describe("client room persistence", () => {
+  const row = {
+    id: "room-1",
+    user_id: "user-1",
+    name: "Beauty client",
+    client_label: "Nykaa",
+    status: "active",
+    resource_refs_json: JSON.stringify([
+      {
+        resourceType: "watchlist",
+        resourceId: "watchlist-1",
+        label: "Nykaa competitor watch",
+      },
+    ]),
+    notes_json: JSON.stringify({ goal: "Weekly proof review" }),
+    created_at: "2026-06-19T00:00:00.000Z",
+    updated_at: "2026-06-19T00:01:00.000Z",
+  };
+
+  it("upserts an account-owned room with linked resource refs", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM client_room",
+        results: [row],
+      },
+    ]);
+
+    const room = await upsertClientRoom(
+      { DB: mock.db } as never,
+      "user-1",
+      {
+        name: "Beauty client",
+        clientLabel: "Nykaa",
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watchlist-1",
+            label: "Nykaa competitor watch",
+          },
+        ],
+        notes: { goal: "Weekly proof review" },
+      },
+    );
+
+    const insert = findStatement(mock.statements, "INSERT INTO client_room");
+    expect(insert?.sql).toContain("ON CONFLICT(user_id, name)");
+    expect(insert?.bindings.slice(1, 7)).toEqual([
+      "user-1",
+      "Beauty client",
+      "Nykaa",
+      "active",
+      JSON.stringify([
+        {
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+          label: "Nykaa competitor watch",
+        },
+      ]),
+      JSON.stringify({ goal: "Weekly proof review" }),
+    ]);
+    expect(room).toMatchObject({
+      id: "room-1",
+      userId: "user-1",
+      name: "Beauty client",
+      clientLabel: "Nykaa",
+      resourceRefs: [
+        {
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+          label: "Nykaa competitor watch",
+        },
+      ],
+      notes: { goal: "Weekly proof review" },
+    });
+  });
+
+  it("lists active rooms scoped to the account by default", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM client_room",
+        results: [row],
+      },
+    ]);
+
+    const rooms = await listClientRooms({ DB: mock.db } as never, "user-1", {
+      limit: 5,
+    });
+
+    const select = findStatement(mock.statements, "FROM client_room", "status = ?");
+    expect(select?.bindings).toEqual(["user-1", "active", 5]);
+    expect(rooms[0]).toMatchObject({
+      id: "room-1",
+      status: "active",
     });
   });
 });

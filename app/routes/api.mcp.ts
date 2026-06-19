@@ -269,6 +269,37 @@ const MCP_TOOLS = [
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
+  {
+    name: "upsert_client_room",
+    title: "Upsert Client Room",
+    description:
+      "Save an account-owned client room that groups owned boards, watchlists, digests, reports, and memory context.",
+    inputSchema: clientRoomMutationInputSchema(),
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "list_client_rooms",
+    title: "List Client Rooms",
+    description:
+      "Read account-owned client rooms and their linked Five to Nine resources.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["active", "archived", "all"],
+          default: "active",
+        },
+        limit: {
+          type: "number",
+          default: 50,
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
 ];
 
 type JsonRpcId = string | number | null;
@@ -314,6 +345,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Account-owned digests",
       "Saved Meta and landing-page proof already captured in Five to Nine",
       "Manual external proof links saved in account-owned collections",
+      "Client rooms and scoped account memory saved by this account",
     ],
     notLiveYet: [
       "TikTok ingestion",
@@ -365,7 +397,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        "Use these read-only tools to retrieve Five to Nine workspace readiness plus account-owned collections, watchlists, and digests. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, write API, or unsupported-channel coverage.",
+        "Use these tools to retrieve Five to Nine workspace readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Audited write tools are limited to safe workspace actions. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, billing, delivery-send, or unsupported-channel coverage.",
     });
   }
 
@@ -465,6 +497,14 @@ async function callTool(
 
   if (name === "list_memory") {
     return buildAgentActionToolResult(env, apiKey, "memory.list", args, origin);
+  }
+
+  if (name === "upsert_client_room") {
+    return buildAgentActionToolResult(env, apiKey, "client_room.upsert", args, origin);
+  }
+
+  if (name === "list_client_rooms") {
+    return buildAgentActionToolResult(env, apiKey, "client_room.list", args, origin);
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };
@@ -815,6 +855,56 @@ function memoryMutationInputSchema() {
       idempotencyKey: idempotencyKeySchema(),
     },
     required: ["key", "value"],
+    additionalProperties: false,
+  };
+}
+
+function clientRoomMutationInputSchema() {
+  return {
+    type: "object",
+    properties: {
+      roomId: {
+        type: "string",
+        description: "Optional existing client room id to update.",
+      },
+      name: {
+        type: "string",
+      },
+      clientLabel: {
+        type: "string",
+      },
+      status: {
+        type: "string",
+        enum: ["active", "archived"],
+        default: "active",
+      },
+      resourceRefs: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            resourceType: {
+              type: "string",
+              enum: ["collection", "watchlist", "digest", "report"],
+            },
+            resourceId: {
+              type: "string",
+            },
+            label: {
+              type: "string",
+            },
+          },
+          required: ["resourceType", "resourceId"],
+          additionalProperties: false,
+        },
+      },
+      notes: {
+        type: "object",
+        additionalProperties: true,
+      },
+      idempotencyKey: idempotencyKeySchema(),
+    },
+    required: ["name"],
     additionalProperties: false,
   };
 }
