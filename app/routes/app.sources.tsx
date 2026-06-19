@@ -483,8 +483,8 @@ export default function AppSourcesRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          API keys are read-only and only expose boards, watchlists, digests, proof trails, and export markdown
-          owned by this account.
+          API keys expose only account-owned readiness, boards, watchlists, digests, proof trails, export markdown,
+          and narrow audited workspace actions for this account.
         </p>
 
         {actionData && "apiKeySecret" in actionData && actionData.apiKeySecret ? (
@@ -500,7 +500,7 @@ export default function AppSourcesRoute() {
         <div className="f9-dashboard-grid">
           <section className="f9-app-panel f9-source-guide">
             <span className="f9-app-kicker">Create API key</span>
-            <h3>Read-only export access</h3>
+            <h3>Exports and audited actions</h3>
             <Form className="f9-auth-form" method="post">
               <input name="intent" type="hidden" value="create-api-key" />
               <label className="f9-field">

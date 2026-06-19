@@ -245,7 +245,7 @@ export async function getWorkspaceReadiness(
       status: activeApiKeys > 0 ? "ready" : "needs_setup",
       detail:
         activeApiKeys > 0
-          ? "MCP can use the account API key for read-only context."
+          ? "MCP can use the account API key for readiness, exports, and audited actions."
           : "Create an API key before connecting MCP clients.",
       action: activeApiKeys > 0 ? null : { label: "Open sources", href: "/app/sources" },
     },

@@ -47,7 +47,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("exports support CSV, API JSON, and Slack-ready markdown");
     expect(PUBLIC_MARKDOWN).toContain("Slack incoming-webhook setup exists");
     expect(PUBLIC_MARKDOWN).toContain("successful live delivery proof");
-    expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned");
+    expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned readiness");
+    expect(PUBLIC_MARKDOWN).toContain("narrow audited workspace actions");
     expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, and trust pages are available");
     expect(PUBLIC_MARKDOWN).toContain("Email delivery uses Cloudflare Email Service");
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history");
@@ -67,8 +68,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Account-gated saved analysis");
     expect(LLMS_TEXT).toContain("user-supplied metric proof");
     expect(LLMS_TEXT).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
-    expect(LLMS_TEXT).toContain("read-only /api/v1");
-    expect(LLMS_TEXT).toContain("read-only /api/mcp");
+    expect(LLMS_TEXT).toContain("/api/v1 readiness plus collection, watchlist, and digest exports");
+    expect(LLMS_TEXT).toContain("narrow audited workspace actions through /api/v1/actions and /api/mcp");
     expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");
     expect(LLMS_TEXT).toContain("Email delivery uses Cloudflare Email Service");
     expect(LLMS_TEXT).toContain("Customer WhatsApp delivery is not launch-scoped today");

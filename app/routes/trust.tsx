@@ -61,8 +61,8 @@ export default function TrustRoute() {
       <PublicDocBlock title="Honest non-claims">
         <p>
           Five to Nine does not currently claim SOC 2, HIPAA, GDPR compliance, zero retention,
-          no training, automated unsupported-channel ingestion, public write APIs, or automated
-          spend/reach/impression benchmarks. See <Link to="/privacy">Privacy</Link> and{" "}
+          no training, automated unsupported-channel ingestion, broad public write APIs beyond audited
+          workspace actions, or automated spend/reach/impression benchmarks. See <Link to="/privacy">Privacy</Link> and{" "}
           <Link to="/terms">Terms</Link> for the plain-English operating policy.
         </p>
       </PublicDocBlock>

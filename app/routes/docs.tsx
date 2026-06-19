@@ -38,7 +38,7 @@ export default function DocsRoute() {
       <PublicDocBlock title="What is live today">
         <ul className="f9-doc-list">
           <li>Public read-only live search and a sample proof loop.</li>
-          <li>Authenticated watchlists, boards, digests, reports, share links, exports, API keys, and MCP exports.</li>
+          <li>Authenticated watchlists, boards, digests, reports, share links, exports, API keys, MCP exports, and narrow audited workspace actions.</li>
           <li>Dodo-backed pricing, checkout, signed webhook grants, proof-credit packs, and billing portal redirect.</li>
           <li>Email delivery through Cloudflare Email Service and self-serve Slack incoming webhooks.</li>
           <li>Security headers, rate limits, plan caps, proof usage warnings, and operator health views.</li>
@@ -49,7 +49,7 @@ export default function DocsRoute() {
         <ul className="f9-doc-list">
           <li>Customer WhatsApp delivery until Meta provider setup, templates, opt-in, webhook reconciliation, and delivery proof are verified.</li>
           <li>Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion, or automated spend/reach/impression benchmarks.</li>
-          <li>Public write APIs.</li>
+          <li>Broad public write APIs beyond the narrow audited workspace actions.</li>
           <li>SOC 2, HIPAA, GDPR compliance, zero-retention, or no-training guarantees.</li>
         </ul>
       </PublicDocBlock>
