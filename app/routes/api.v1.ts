@@ -23,6 +23,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
           formats: ["json"],
         },
         {
+          method: "POST",
+          path: "/api/v1/actions",
+          formats: ["json"],
+          actions: [
+            "watchlist.create",
+            "watchlist.refresh",
+            "watchlist.pause",
+            "watchlist.resume",
+          ],
+        },
+        {
           method: "GET",
           path: "/api/v1/collections/{collectionId}",
           formats: ["json", "csv", "slack"],
@@ -47,7 +58,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         "TikTok ingestion",
         "Google or YouTube ingestion",
         "LinkedIn or Pinterest ingestion",
-        "public write API",
+        "fully general write API beyond audited agent actions",
       ],
     },
     {

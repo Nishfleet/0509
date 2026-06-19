@@ -1,10 +1,23 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import type { AppEnv } from "~/lib/env.server";
+import type { CustomerAgentActionName } from "~/lib/customer-agent-actions.server";
 import type { CustomerApiKeyRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
+const READ_ONLY_TOOL_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
+const WRITE_TOOL_ANNOTATIONS = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+};
 const MCP_TOOLS = [
   {
     name: "get_workspace_readiness",
@@ -23,6 +36,7 @@ const MCP_TOOLS = [
       },
       additionalProperties: false,
     },
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
     name: "get_collection_export",
@@ -30,6 +44,7 @@ const MCP_TOOLS = [
     description:
       "Read an account-owned Five to Nine collection with saved competitor proof and insight-depth summaries.",
     inputSchema: resourceInputSchema("collectionId"),
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
     name: "get_watchlist_export",
@@ -37,6 +52,7 @@ const MCP_TOOLS = [
     description:
       "Read an account-owned Five to Nine watchlist with recent proof-backed changes and next-move intelligence.",
     inputSchema: resourceInputSchema("watchlistId"),
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
     name: "get_digest_export",
@@ -44,16 +60,73 @@ const MCP_TOOLS = [
     description:
       "Read an account-owned Five to Nine digest with priority, recommendation, proof trail, and insight-depth summaries.",
     inputSchema: resourceInputSchema("digestId"),
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
-].map((tool) => ({
-  ...tool,
-  annotations: {
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
+  {
+    name: "create_watchlist",
+    title: "Create Watchlist",
+    description:
+      "Create an account-owned competitor watchlist with plan-limit checks and an audited first-scan queue.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Optional display name. Defaults to '<competitor> watch'.",
+        },
+        targetLabel: {
+          type: "string",
+          description: "Competitor or brand name to monitor.",
+        },
+        competitorWebsite: {
+          type: "string",
+          description: "Optional competitor website, such as brand.com.",
+        },
+        targetCountry: {
+          type: "string",
+          default: "all",
+          description: "Country name used by Five to Nine search filters.",
+        },
+        trackingRole: {
+          type: "string",
+          enum: ["competitor", "self"],
+          default: "competitor",
+        },
+        queueFirstScan: {
+          type: "boolean",
+          default: true,
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
   },
-}));
+  {
+    name: "refresh_watchlist",
+    title: "Refresh Watchlist",
+    description:
+      "Run a paid-plan manual refresh for an active account-owned watchlist and audit the action.",
+    inputSchema: watchlistMutationInputSchema(),
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "pause_watchlist",
+    title: "Pause Watchlist",
+    description:
+      "Pause an account-owned watchlist so scheduled scans stop and the plan slot is freed.",
+    inputSchema: watchlistMutationInputSchema(),
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "resume_watchlist",
+    title: "Resume Watchlist",
+    description:
+      "Resume an account-owned watchlist after checking the workspace's active watchlist limit.",
+    inputSchema: watchlistMutationInputSchema(),
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+];
 
 type JsonRpcId = string | number | null;
 
@@ -103,7 +176,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "TikTok ingestion",
       "Google or YouTube ingestion",
       "LinkedIn or Pinterest ingestion",
-      "public write API",
+      "fully general write API beyond audited agent actions",
     ],
   });
 }
@@ -206,7 +279,47 @@ async function callTool(
     return buildDigestToolResult(env, apiKey.userId, stringField(args, "digestId"), format);
   }
 
+  if (name === "create_watchlist") {
+    return buildAgentActionToolResult(env, apiKey, "watchlist.create", args);
+  }
+
+  if (name === "refresh_watchlist") {
+    return buildAgentActionToolResult(env, apiKey, "watchlist.refresh", args);
+  }
+
+  if (name === "pause_watchlist") {
+    return buildAgentActionToolResult(env, apiKey, "watchlist.pause", args);
+  }
+
+  if (name === "resume_watchlist") {
+    return buildAgentActionToolResult(env, apiKey, "watchlist.resume", args);
+  }
+
   return { ok: false, message: `Unknown tool: ${name}` };
+}
+
+async function buildAgentActionToolResult(
+  env: AppEnv,
+  apiKey: CustomerApiKeyRecord,
+  actionName: CustomerAgentActionName,
+  args: object,
+) {
+  const {
+    customerAgentActionErrorPayload,
+    runCustomerAgentAction,
+  } = await import("~/lib/customer-agent-actions.server");
+
+  try {
+    return structuredToolResult(await runCustomerAgentAction(env, {
+      userId: apiKey.userId,
+      apiKeyId: apiKey.id,
+      idempotencyKey: stringField(args, "idempotencyKey"),
+      source: "mcp",
+    }, actionName, args as Record<string, unknown>));
+  } catch (error) {
+    const payload = customerAgentActionErrorPayload(error).body;
+    return errorToolResult(payload);
+  }
 }
 
 async function buildWorkspaceReadinessToolResult(
@@ -339,7 +452,7 @@ async function buildDigestToolResult(
   return structuredToolResult(buildDigestExportPayload(digest));
 }
 
-function structuredToolResult(structuredContent: Record<string, unknown>) {
+function structuredToolResult(structuredContent: object) {
   return {
     ok: true as const,
     value: {
@@ -385,6 +498,22 @@ function toolNotFound(message: string) {
         error: "not_found",
         message,
       },
+      isError: true,
+    },
+  };
+}
+
+function errorToolResult(structuredContent: Record<string, unknown>) {
+  return {
+    ok: true as const,
+    value: {
+      content: [
+        {
+          type: "text",
+          text: String(structuredContent.message ?? "Agent action failed."),
+        },
+      ],
+      structuredContent,
       isError: true,
     },
   };
@@ -456,6 +585,28 @@ function resourceInputSchema(idName: string) {
     },
     required: [idName],
     additionalProperties: false,
+  };
+}
+
+function watchlistMutationInputSchema() {
+  return {
+    type: "object",
+    properties: {
+      watchlistId: {
+        type: "string",
+        description: "Five to Nine watchlist owned by the API-key account.",
+      },
+      idempotencyKey: idempotencyKeySchema(),
+    },
+    required: ["watchlistId"],
+    additionalProperties: false,
+  };
+}
+
+function idempotencyKeySchema() {
+  return {
+    type: "string",
+    description: "Optional stable key for safe retry. Replays only when the previous matching action succeeded.",
   };
 }
 

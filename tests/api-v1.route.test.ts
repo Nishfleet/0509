@@ -219,6 +219,36 @@ async function loadReadinessApi(authOk = true) {
   return { response, getWorkspaceReadiness };
 }
 
+async function postActionApi(
+  body: Record<string, unknown>,
+  options: {
+    idempotencyKey?: string;
+    authOk?: boolean;
+  } = {},
+) {
+  setupMocks(options.authOk ?? true);
+  const { action } = await import("~/routes/api.v1.actions");
+  return action({
+    context: {
+      cloudflare: {
+        env: { DB: {} },
+        ctx: {
+          waitUntil: vi.fn(),
+        },
+      },
+    },
+    request: new Request("https://0509.io/api/v1/actions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${fakeApiKey("test")}`,
+        "Content-Type": "application/json",
+        ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
+      },
+      body: JSON.stringify(body),
+    }),
+  } as never);
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -229,7 +259,7 @@ afterEach(() => {
 });
 
 describe("customer API v1", () => {
-  it("documents the live read-only API boundaries", async () => {
+  it("documents the live API boundaries", async () => {
     const { loader } = await import("~/routes/api.v1");
     const response = await loader({
       context: { cloudflare: { env: {} } },
@@ -239,6 +269,7 @@ describe("customer API v1", () => {
 
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/mcp");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
+    expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/actions");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/watchlists/{watchlistId}");
     expect(body.notLiveYet).not.toContain("MCP server");
     expect(body.notLiveYet).toContain("TikTok ingestion");
@@ -287,6 +318,94 @@ describe("customer API v1", () => {
     expect(body).toContain("*Five to Nine watchlist: Nykaa watch*");
     expect(body).toContain("*Insight depth*");
     expect(body).toContain("Next move:");
+  });
+
+  it("runs audited watchlist actions by API key", async () => {
+    const runCustomerAgentAction = vi.fn().mockResolvedValue({
+      audit: {
+        id: "audit-1",
+        status: "succeeded",
+      },
+      replayed: false,
+      result: {
+        ok: true,
+        action: "watchlist.pause",
+        watchlist: {
+          id: "watchlist-1",
+          isActive: false,
+        },
+      },
+    });
+    vi.doMock("~/lib/customer-agent-actions.server", () => ({
+      customerAgentActionErrorPayload: vi.fn(),
+      normalizeCustomerAgentActionName: vi.fn((value: string | null) =>
+        value === "watchlist.pause" ? "watchlist.pause" : null,
+      ),
+      runCustomerAgentAction,
+    }));
+
+    const response = await postActionApi(
+      {
+        action: "watchlist.pause",
+        input: {
+          watchlistId: "watchlist-1",
+        },
+      },
+      {
+        idempotencyKey: "pause-watchlist-1",
+      },
+    );
+    const body = await response.json() as {
+      replayed: boolean;
+      result: { watchlist: { isActive: boolean } };
+    };
+
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body.replayed).toBe(false);
+    expect(body.result.watchlist.isActive).toBe(false);
+    expect(runCustomerAgentAction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "pause-watchlist-1",
+        source: "api_v1",
+      }),
+      "watchlist.pause",
+      {
+        watchlistId: "watchlist-1",
+      },
+    );
+  });
+
+  it("returns action errors with the mapped status code", async () => {
+    vi.doMock("~/lib/customer-agent-actions.server", () => ({
+      customerAgentActionErrorPayload: vi.fn(() => ({
+        status: 402,
+        body: {
+          ok: false,
+          error: "plan_limit_exceeded",
+          message: "You have reached your competitor tracking limit.",
+        },
+      })),
+      normalizeCustomerAgentActionName: vi.fn((value: string | null) =>
+        value === "watchlist.resume" ? "watchlist.resume" : null,
+      ),
+      runCustomerAgentAction: vi.fn().mockRejectedValue(new Error("limit")),
+    }));
+
+    const response = await postActionApi({
+      action: "watchlist.resume",
+      input: {
+        watchlistId: "watchlist-1",
+      },
+    });
+
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: "plan_limit_exceeded",
+    });
   });
 
   it("rejects requests without an active API key", async () => {
