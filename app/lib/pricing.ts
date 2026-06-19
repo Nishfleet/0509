@@ -56,7 +56,7 @@ const PLANS: PricingPlan[] = [
       "2,500 evidence checks per month",
       "Client-ready proof reports (share link + PDF print)",
       "Your agency name on shared reports",
-      "Read-only API + MCP endpoint for your tools and agents",
+      "API + MCP exports and audited workspace actions",
       "Email + Slack delivery",
       "3 team seats — teammates share watchlists, boards, and briefs",
     ],

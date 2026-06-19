@@ -6,7 +6,7 @@ Last checked: 2026-06-15
 
 Five to Nine is pilot-ready, but not broad launch-ready until Slack delivery proof is configured and green, the Dodo customer portal subscription-update setting is confirmed, and external uptime monitoring is set up.
 
-The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, and proof-first monitoring all exist.
+The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
 The remaining launch blockers are not hidden in code: production has no configured Slack delivery target, the Dodo portal setting is external-dashboard work, and external uptime monitoring needs to be created. WhatsApp is no longer launch-scoped while provider/customer/webhook readiness is disabled, and public copy must not claim WhatsApp delivery.
 
@@ -91,7 +91,7 @@ Use this framing for the first customer:
 - Broad launch until Slack proof is green, Dodo portal subscription updates are confirmed, and external uptime monitoring is set up.
 - Customer WhatsApp delivery unless opt-in, template readiness, provider sends, and webhook reconciliation are verified.
 - SOC 2, HIPAA, GDPR compliance, zero retention, no training, or similar trust guarantees.
-- Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion, automated spend/reach/impression benchmarks, or public write APIs.
+- Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion, automated spend/reach/impression benchmarks, or broad public write APIs beyond the narrow audited workspace actions.
 
 ## Next Slice
 

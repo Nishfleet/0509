@@ -18,7 +18,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 - `Public trial` is the public hook: logged-out buyers can run read-only live search and inspect a sample tracked competitor, proof trail, and digest preview before creating an account.
 - `Analysis` is account-gated after the preview: signed-in users save searches, track competitors, inspect deeper proof, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, insight-depth summaries, observed campaign duration, daily briefs, and weekly digests.
-- `Workspace memory` is the compounding layer: collections, notes, tags, manual external proof links, visible metric proof fields, CSV/API JSON/Slack-ready exports, customer API keys, Slack delivery, and share links.
+- `Workspace memory` is the compounding layer: collections, notes, tags, manual external proof links, visible metric proof fields, CSV/API JSON/Slack-ready exports, customer API keys, narrow audited agent actions, agent memory, client rooms, Slack delivery, and share links.
 
 ## Current stack
 
@@ -42,8 +42,8 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/changelog` public product changelog
 - `/trust` public trust and security basics
 - `/api/demo-proof` sample public proof payload for buyer and agent evaluation
-- `/api/mcp` read-only MCP JSON-RPC endpoint for account-owned collection, watchlist, and digest exports with a customer API key
-- `/api/v1` machine-readable customer API index for read-only account export endpoints
+- `/api/mcp` MCP JSON-RPC endpoint for account-owned readiness, exports, and narrow audited workspace actions with a customer API key
+- `/api/v1` machine-readable customer API index for workspace readiness, account exports, and audited agent actions
 - `/api/v1/:resourceType/:resourceId` customer API-key export endpoint for account-owned collections, watchlists, and digests
 - `/search` public read-only live search trial; save, track, collections, and deeper proof enrichment require an account while private canary probes can force fresh live checks with the configured token
 - `/privacy`
@@ -111,7 +111,7 @@ Important bindings and secrets:
 ## Operations
 
 - Run `npm run backup:d1` before risky migrations or data-shape changes. It exports the remote Cloudflare D1 database into `backups/d1/`, which is intentionally gitignored.
-- Apply pending D1 migrations before deploying code that reads new tables. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys; `migrations/0019_slack_delivery.sql` backs Slack delivery channels; `migrations/0031_stytch_identity.sql` backs Stytch identity mapping and one-time auth request state.
+- Apply pending D1 migrations before deploying code that reads new tables. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys; `migrations/0019_slack_delivery.sql` backs Slack delivery channels; `migrations/0031_stytch_identity.sql` backs Stytch identity mapping and one-time auth request state; `migrations/0035_agent_action_audit.sql`, `0036_agent_memory.sql`, and `0037_client_rooms.sql` back audited agent actions, agent memory, and client rooms.
 
 ## Notes
 
@@ -125,7 +125,7 @@ Important bindings and secrets:
 - `META_AD_LIBRARY_TOKEN` should not be treated as proof that live India commercial-ad discovery is production-ready. The official Meta API is diagnostic-only by default. Customer-facing Meta API fallback requires a customer-owned Meta connection that is test-before-save and stored encrypted; the platform token can only be used if `ALLOW_PLATFORM_META_API_FALLBACK=true` is deliberately configured.
 - If no live commercial discovery provider is configured, the app should operate only in explicit demo mode. Production should not silently fall back to demo data on live-provider failures.
 - Daily briefs and weekly digests share the same proof-backed event model. Each digest item should carry a priority score, next action, source proof trail, timestamp, and confidence label.
-- Account insight-depth summaries are generated from real saved ads, manual external proof links, watch events, and digest items: top hooks, media mix, observed campaign duration from first-seen/last-seen proof, manual metric proof, creative timeline, and landing-page history. Customer API keys are live for read-only account-owned export data at `/api/v1`, `/api/mcp` exposes the same account-owned exports to agents, and Slack incoming-webhook setup exists for configured account destinations but remains broad-launch-gated until production has a configured Slack target with successful live delivery proof. Manual external proof links can store TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing-page, or other proof in collections, including user-supplied visible spend, impression, and reach values. They do not imply automated non-Meta ingestion, automated spend/reach/impression benchmarks, or public write API coverage.
+- Account insight-depth summaries are generated from real saved ads, manual external proof links, watch events, and digest items: top hooks, media mix, observed campaign duration from first-seen/last-seen proof, manual metric proof, creative timeline, and landing-page history. Customer API keys are live for account-owned readiness, exports, and narrow audited workspace actions at `/api/v1/actions`; `/api/mcp` exposes the same account-owned context and safe actions to agents. Billing, team invites, secret setup, external delivery sends, unsupported-channel ingestion, and broad public write APIs are not exposed as agent actions. Slack incoming-webhook setup exists for configured account destinations but remains broad-launch-gated until production has a configured Slack target with successful live delivery proof. Manual external proof links can store TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing-page, or other proof in collections, including user-supplied visible spend, impression, and reach values. They do not imply automated non-Meta ingestion or automated spend/reach/impression benchmarks.
 - Cloudflare cost policy: stay on the included/free tier by default. Do not enable usage-billed add-ons just because they exist; enable them when the missing capability is materially hampering product quality, operations, or launch.
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.

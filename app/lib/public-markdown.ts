@@ -27,8 +27,8 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Saving competitor results, saved queries, watchlists, boards, reports, and delivery require an account.
 - Authenticated board, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
 - Signed-in boards can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
-- Customer API keys can read account-owned collection, watchlist, and digest exports at /api/v1.
-- Customer API keys can also use the read-only MCP endpoint at /api/mcp for account-owned collection, watchlist, and digest exports.
+- Customer API keys can read account-owned readiness, collection, watchlist, and digest exports at /api/v1.
+- Customer API keys can also use /api/v1/actions and /api/mcp for narrow audited workspace actions: watchlists, manual proof links, share links, reports, counter-move briefs, account memory, and client rooms.
 - Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
 - Email delivery uses Cloudflare Email Service through the app's send_email binding.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires at least one configured Slack target with successful live delivery proof.
@@ -88,12 +88,12 @@ Current product truth:
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
 - Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved boards, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
 - Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
-- Customer API keys support read-only /api/v1 collection, watchlist, and digest exports for account-owned data.
-- Customer API keys support the read-only /api/mcp endpoint for agent access to account-owned collection, watchlist, and digest exports.
+- Customer API keys support /api/v1 readiness plus collection, watchlist, and digest exports for account-owned data.
+- Customer API keys support narrow audited workspace actions through /api/v1/actions and /api/mcp for watchlists, manual proof links, share links, reports, counter-move briefs, account memory, and client rooms.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires a configured Slack target with successful live delivery proof.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Customer WhatsApp delivery is not launch-scoped today and must stay behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
-- Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and public write APIs are not live yet.
+- Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and broad public write APIs beyond audited workspace actions are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
 Core layers:
