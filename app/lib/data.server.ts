@@ -940,11 +940,17 @@ export async function upsertClientRoom(
       userId,
     );
 
-    if (hasResourceRefs) {
-      await replaceClientRoomResourceRefs(env, userId, input.roomId, input.resourceRefs ?? []);
+    const updatedRoom = await getClientRoom(env, userId, input.roomId);
+    if (!updatedRoom) {
+      return null;
     }
 
-    return getClientRoom(env, userId, input.roomId);
+    if (hasResourceRefs) {
+      await replaceClientRoomResourceRefs(env, userId, input.roomId, input.resourceRefs ?? []);
+      return getClientRoom(env, userId, input.roomId);
+    }
+
+    return updatedRoom;
   }
 
   const id = createId();

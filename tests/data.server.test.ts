@@ -682,6 +682,25 @@ describe("client room persistence", () => {
     }
   });
 
+  it("does not replace resource refs when a roomId update matches no owned room", async () => {
+    const mock = createMockDb();
+
+    const room = await upsertClientRoom({ DB: mock.db } as never, "user-1", {
+      roomId: "missing-room",
+      name: "Beauty client",
+      resourceRefs: [
+        {
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+        },
+      ],
+    });
+
+    expect(room).toBeNull();
+    expect(findStatement(mock.statements, "DELETE FROM client_room_resource")).toBeUndefined();
+    expect(findStatement(mock.statements, "INSERT INTO client_room_resource")).toBeUndefined();
+  });
+
   it("preserves room notes when a name-conflict upsert omits notes", async () => {
     const sqlite = createSqliteD1();
     try {
