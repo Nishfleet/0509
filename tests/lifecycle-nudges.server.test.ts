@@ -128,6 +128,7 @@ describe("buildLifecycleNudges", () => {
       expect.objectContaining({
         id: "client_context",
         title: "Client context is missing",
+        href: "/app/clients",
       }),
     ]);
   });

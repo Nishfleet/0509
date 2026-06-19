@@ -63,6 +63,9 @@ import type {
   WatchlistDeliveryConfigRecord,
   WatchlistRecord,
   WatchlistRunRecord,
+  WebMentionObservationRecord,
+  WebMentionSource,
+  WebMentionTargetRecord,
   WebhookReconciliationStatus,
   WorkspaceDeliveryConfigRecord,
   DeliveryLane,
@@ -323,6 +326,40 @@ interface DeliveryTargetRow {
   metadata_json: string;
   created_at: string;
   updated_at: string;
+}
+
+interface WebMentionTargetRow {
+  id: string;
+  user_id: string;
+  watchlist_id: string | null;
+  tracking_role: WatchlistTrackingRole;
+  label: string;
+  query_text: string;
+  domain: string | null;
+  sources_json: string;
+  is_active: number;
+  last_checked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface WebMentionObservationRow {
+  id: string;
+  target_id: string;
+  user_id: string;
+  source: WebMentionSource;
+  source_id: string | null;
+  url: string;
+  url_hash: string;
+  title: string;
+  author: string | null;
+  excerpt: string | null;
+  published_at: string | null;
+  observed_at: string;
+  sentiment: string | null;
+  engagement_json: string | null;
+  raw_json: string | null;
+  created_at: string;
 }
 
 interface ObservationRow {
@@ -1439,6 +1476,42 @@ function toDeliveryTargetRecord(row: DeliveryTargetRow): DeliveryTargetRecord {
     metadata: parseJson<JsonRecord>(row.metadata_json, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function toWebMentionTargetRecord(row: WebMentionTargetRow): WebMentionTargetRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    watchlistId: row.watchlist_id,
+    trackingRole: normalizeWatchlistTrackingRole(row.tracking_role),
+    label: row.label,
+    queryText: row.query_text,
+    domain: row.domain,
+    sources: parseJson<WebMentionSource[]>(row.sources_json, []),
+    isActive: row.is_active === 1,
+    lastCheckedAt: row.last_checked_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toWebMentionObservationRecord(row: WebMentionObservationRow): WebMentionObservationRecord {
+  return {
+    id: row.id,
+    targetId: row.target_id,
+    userId: row.user_id,
+    source: row.source,
+    sourceId: row.source_id,
+    url: row.url,
+    title: row.title,
+    author: row.author,
+    excerpt: row.excerpt,
+    publishedAt: row.published_at,
+    observedAt: row.observed_at,
+    sentiment: row.sentiment,
+    engagement: parseJson<JsonRecord>(row.engagement_json, {}),
+    createdAt: row.created_at,
   };
 }
 
@@ -3621,6 +3694,86 @@ async function syncWebMentionTargetsForUser(env: AppEnv, userId: string, timesta
   );
 }
 
+export async function listWebMentionTargets(
+  env: AppEnv,
+  userId: string,
+  options: { watchlistId?: string | null; includeInactive?: boolean; limit?: number | null } = {},
+) {
+  const clauses = ["user_id = ?"];
+  const bindings: unknown[] = [userId];
+  if (typeof options.watchlistId !== "undefined") {
+    clauses.push(options.watchlistId ? "watchlist_id = ?" : "watchlist_id IS NULL");
+    if (options.watchlistId) {
+      bindings.push(options.watchlistId);
+    }
+  }
+  if (!options.includeInactive) {
+    clauses.push("is_active = 1");
+  }
+
+  const rows = await many<WebMentionTargetRow>(
+    env,
+    `
+      SELECT *
+      FROM web_mention_target
+      WHERE ${clauses.join(" AND ")}
+      ORDER BY is_active DESC, updated_at DESC
+      LIMIT ?
+    `,
+    ...bindings,
+    Math.max(1, Math.min(100, Math.floor(options.limit ?? 50))),
+  );
+
+  return rows.map(toWebMentionTargetRecord);
+}
+
+export async function listWebMentionObservations(
+  env: AppEnv,
+  userId: string,
+  options: {
+    watchlistId?: string | null;
+    sources?: WebMentionSource[] | null;
+    includeInactive?: boolean;
+    limit?: number | null;
+  } = {},
+) {
+  const sources = (options.sources?.length ? options.sources : ["reddit", "blog", "substack", "web"])
+    .filter((source, index, all): source is WebMentionSource => all.indexOf(source) === index);
+  const clauses = ["web_mention_observation.user_id = ?", "web_mention_target.user_id = ?"];
+  const bindings: unknown[] = [userId, userId];
+
+  if (typeof options.watchlistId !== "undefined") {
+    clauses.push(options.watchlistId ? "web_mention_target.watchlist_id = ?" : "web_mention_target.watchlist_id IS NULL");
+    if (options.watchlistId) {
+      bindings.push(options.watchlistId);
+    }
+  }
+  if (!options.includeInactive) {
+    clauses.push("web_mention_target.is_active = 1");
+  }
+  if (sources.length > 0) {
+    clauses.push(`web_mention_observation.source IN (${sources.map(() => "?").join(", ")})`);
+    bindings.push(...sources);
+  }
+
+  const rows = await many<WebMentionObservationRow>(
+    env,
+    `
+      SELECT web_mention_observation.*
+      FROM web_mention_observation
+      INNER JOIN web_mention_target
+        ON web_mention_target.id = web_mention_observation.target_id
+      WHERE ${clauses.join(" AND ")}
+      ORDER BY web_mention_observation.observed_at DESC
+      LIMIT ?
+    `,
+    ...bindings,
+    Math.max(1, Math.min(100, Math.floor(options.limit ?? 50))),
+  );
+
+  return rows.map(toWebMentionObservationRecord);
+}
+
 export async function updateWatchlist(
   env: AppEnv,
   userId: string,
@@ -5002,6 +5155,7 @@ export async function listDeliveryTargets(
   userId: string,
   options: { watchlistId?: string | null; channel?: DeliveryChannel; limit?: number } = {},
 ) {
+  const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
   const clauses = ["user_id = ?"];
   const bindings: unknown[] = [userId];
   if (options.watchlistId !== undefined) {
@@ -5025,7 +5179,7 @@ export async function listDeliveryTargets(
       LIMIT ?
     `,
     ...bindings,
-    options.limit ?? 20,
+    limit,
   );
 
   return rows.map(toDeliveryTargetRecord);

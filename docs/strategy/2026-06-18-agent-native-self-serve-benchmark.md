@@ -23,7 +23,7 @@ That means customers and their agents can set up monitoring, tune what matters, 
 - Cloudflare Email delivery and self-serve Slack incoming-webhook setup.
 - Stytch B2B auth with D1 as the product-data authority.
 - Customer API and MCP exports for account-owned readiness, collections, watchlists, digests, memory, and client rooms.
-- A write-enabled, audited agent-action beta for `watchlist.create`, `watchlist.refresh`, `watchlist.pause`, `watchlist.resume`, `proof.add_external`, `share.create`, `report.create`, `report.share`, `counter_move_brief.create`, `memory.upsert`, `memory.list`, `client_room.upsert`, and `client_room.list`.
+- A write-enabled, audited agent-action beta for `watchlist.create`, `watchlist.update`, `watchlist.refresh`, `watchlist.pause`, `watchlist.resume`, `collection.create`, `proof.add_external`, `share.create`, `report.create`, `report.share`, `counter_move_brief.create`, `memory.upsert`, `memory.list`, `client_room.upsert`, `client_room.list`, `delivery_targets.list`, `delivery_settings.update`, `delivery_target.update`, and `web_mentions.list`.
 - Write actions require a write-enabled API key, owner-scoped resources, idempotency on retryable mutations, audit records, and secret redaction.
 
 The live public posture remains pilot-ready, not broad launch-ready, until production canaries show recent proof capture, digest delivery, Slack delivery, Dodo portal subscription updates, and external uptime monitoring are confirmed.
@@ -98,8 +98,8 @@ Implication:
 
 0509 is close to being self-serve as a SaaS surface, and the first safe agent-action layer now exists. The remaining gap is no longer "agents can only read." It is production-grade operations parity:
 
-- Agents can create, refresh, pause, resume, share, report, add external proof, create counter-move briefs, save memory, and maintain client rooms.
-- Agents still cannot safely manage every account setup surface a human can manage: delivery targets, billing changes, team invites, Meta source reconnection, collection creation, watchlist label/tuning updates, and external sends remain intentionally gated or missing.
+- Agents can create, update, refresh, pause, resume, share, report, create boards, add external proof, create counter-move briefs, save memory, maintain client rooms, list redacted delivery targets, update delivery policy with explicit approval, pause/resume delivery targets, and read existing narrow web mentions.
+- Agents still cannot safely manage every account setup surface a human can manage: billing changes, team invites, Meta source reconnection, secret-bearing integration setup, external delivery sends, automated X/YouTube/social listening, and unsupported-channel ingestion remain intentionally gated or missing.
 - The product still needs live operational proof: recent proof capture, digest delivery, Slack delivery, and external uptime monitoring must be visible in canaries before broad self-serve claims are credible.
 - The UI and docs need to make the same readiness/action model obvious to customers, not only to API/MCP users.
 
@@ -122,16 +122,16 @@ Core capabilities:
    - Remaining: make production readiness visible in the app and keep canaries quiet only when the live proof/delivery signals are current.
 
 2. Agent setup parity
-   - Shipped: agent can create watchlists, pause/resume watches, and refresh paid watches with owner checks, plan checks, idempotency, audit logs, and replay guards.
-   - Remaining: update target labels, set competitor/self role, tune alert sensitivity, create collections, and manage source reconnection without exposing private credentials.
+   - Shipped: agent can create/update watchlists, set competitor/self role, pause/resume watches, refresh paid watches, create boards, and tune delivery sensitivity with owner checks, plan checks, idempotency, audit logs, and replay guards.
+   - Remaining: manage source reconnection without exposing private credentials.
 
 3. Delivery parity
-   - Shipped: readiness reports delivery state without returning secrets.
-   - Remaining: create, retest, pause, or update delivery targets only with explicit approval; never return Slack webhook secrets through tools.
+   - Shipped: readiness reports delivery state without returning secrets; agents can list redacted targets, update watchlist delivery settings with explicit approval, and pause/resume existing targets.
+   - Remaining: create/retest secret-bearing delivery targets and prove Slack delivery through the app-owned integration flow; never return Slack webhook secrets through tools.
 
 4. Proof and report parity
-   - Shipped: agent can add external proof, create generic share links, build reports, share reports, and create counter-move briefs.
-   - Remaining: create boards/collections, export Slack-ready summaries, and ensure every report output carries confidence, proof trail, source status, and next action.
+   - Shipped: agent can create boards, add external proof, create generic share links, build reports, share reports, create counter-move briefs, and carry saved memory context into reports and briefs.
+   - Remaining: prove recurring workflow quality with live customer usage and keep report copy aligned to source status.
 
 5. Counter-move briefs
    - Shipped: agent action can generate proof-backed counter-move briefs from account-owned watchlists.
@@ -169,10 +169,15 @@ Shipped high-value MCP tools:
 - `get_watchlist_export`
 - `get_digest_export`
 - `create_watchlist`
+- `update_watchlist`
 - `pause_watchlist`
 - `resume_watchlist`
 - `refresh_watchlist`
+- `create_collection`
 - `add_external_proof`
+- `list_delivery_targets`
+- `update_delivery_settings`
+- `update_delivery_target`
 - `create_report`
 - `create_share_link`
 - `share_report`
@@ -181,13 +186,12 @@ Shipped high-value MCP tools:
 - `list_memory`
 - `upsert_client_room`
 - `list_client_rooms`
+- `list_web_mentions`
 
 Next MCP/API primitives:
 
-- `update_watchlist`
-- `list_delivery_targets`
-- `update_delivery_settings`
-- `create_collection`
+- Secret-bearing source setup with app-owned approval flow
+- Recurring workflow follow-up state for counter-move briefs
 - `invite_team_member`
 - `retest_meta_source`
 

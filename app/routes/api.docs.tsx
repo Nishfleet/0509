@@ -62,8 +62,9 @@ export default function ApiDocsRoute() {
       <PublicDocBlock title="MCP endpoint">
         <p>
           POST JSON-RPC to `/api/mcp` with the same bearer token. The endpoint exposes readiness/export
-          tools plus audited actions for watchlists, manual proof links, share links, reports,
-          counter-move briefs, account memory, and client rooms.
+          tools plus audited actions for watchlists, boards, manual proof links, share links, reports,
+          counter-move briefs, account memory, client rooms, redacted delivery settings, and existing
+          proof-backed web mentions.
         </p>
         <pre className="f9-code-block">
           <code>{`{
@@ -88,7 +89,7 @@ export default function ApiDocsRoute() {
           <li>API reads are account-scoped and rate limited.</li>
           <li>Audited actions are limited to safe workspace operations and store an action log.</li>
           <li>Keys are shown once, stored hashed, and can be revoked from Integrations &amp; API.</li>
-          <li>Not live yet: broad public write APIs, billing/team/delivery-send actions, unsupported-channel ingestion, or automated spend/reach/impression benchmarks.</li>
+          <li>Not live yet: broad public write APIs, billing/team/delivery-send actions, unsupported-channel ingestion, X/YouTube listening, or automated spend/reach/impression benchmarks.</li>
         </ul>
       </PublicDocBlock>
     </PublicDocShell>
