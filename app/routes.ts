@@ -53,6 +53,7 @@ export default [
     index("routes/app.dashboard.tsx"),
     route("collections", "routes/app.collections.tsx"),
     route("watchlists", "routes/app.watchlists.tsx"),
+    route("clients", "routes/app.clients.tsx"),
     route("digests", "routes/app.digests.tsx"),
     route("shares", "routes/app.shares.tsx"),
     route("billing", "routes/app.billing.tsx"),

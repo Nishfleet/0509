@@ -20,9 +20,11 @@ const WRITE_TOOL_ANNOTATIONS = {
 };
 const WRITE_TOOL_NAMES = new Set([
   "create_watchlist",
+  "update_watchlist",
   "refresh_watchlist",
   "pause_watchlist",
   "resume_watchlist",
+  "create_collection",
   "add_external_proof",
   "create_share_link",
   "create_report",
@@ -32,6 +34,10 @@ const WRITE_TOOL_NAMES = new Set([
   "list_memory",
   "upsert_client_room",
   "list_client_rooms",
+  "list_delivery_targets",
+  "update_delivery_settings",
+  "update_delivery_target",
+  "list_web_mentions",
 ]);
 const MCP_TOOLS = [
   {
@@ -119,6 +125,41 @@ const MCP_TOOLS = [
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
   {
+    name: "update_watchlist",
+    title: "Update Watchlist",
+    description:
+      "Update an account-owned watchlist's label, website target, self/competitor role, or alert tuning target with duplicate-target protection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        watchlistId: {
+          type: "string",
+          description: "Five to Nine watchlist owned by the API-key account.",
+        },
+        name: {
+          type: "string",
+        },
+        targetLabel: {
+          type: "string",
+        },
+        competitorWebsite: {
+          type: "string",
+        },
+        targetCountry: {
+          type: "string",
+        },
+        trackingRole: {
+          type: "string",
+          enum: ["competitor", "self"],
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["watchlistId", "idempotencyKey"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
     name: "refresh_watchlist",
     title: "Refresh Watchlist",
     description:
@@ -140,6 +181,27 @@ const MCP_TOOLS = [
     description:
       "Resume an account-owned watchlist after checking the workspace's active watchlist limit.",
     inputSchema: watchlistMutationInputSchema(),
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "create_collection",
+    title: "Create Board",
+    description:
+      "Create an account-owned board for saved proof links after checking the workspace board limit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+        },
+        description: {
+          type: "string",
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["name", "idempotencyKey"],
+      additionalProperties: false,
+    },
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
   {
@@ -198,6 +260,111 @@ const MCP_TOOLS = [
         idempotencyKey: idempotencyKeySchema(),
       },
       required: ["collectionId", "advertiser", "proofUrl", "hook", "idempotencyKey"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "list_delivery_targets",
+    title: "List Delivery Targets",
+    description:
+      "List redacted account-owned delivery targets. Webhooks, phone numbers, provider identifiers, and raw secret-like metadata are not returned.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        watchlistId: {
+          type: "string",
+        },
+        channel: {
+          type: "string",
+          enum: ["email", "whatsapp", "slack"],
+        },
+        limit: {
+          type: "number",
+          default: 50,
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "update_delivery_settings",
+    title: "Update Delivery Settings",
+    description:
+      "Update per-watchlist delivery policy after explicit approval. This does not send proof, test webhooks, or configure secret-bearing integrations.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        watchlistId: {
+          type: "string",
+        },
+        explicitApproval: {
+          type: "boolean",
+        },
+        sensitivityMode: {
+          type: "string",
+          enum: ["quiet", "balanced", "aggressive", "auto"],
+        },
+        instantEnabled: {
+          type: "boolean",
+        },
+        digestEnabled: {
+          type: "boolean",
+        },
+        emailEnabled: {
+          type: "boolean",
+        },
+        whatsappEnabled: {
+          type: "boolean",
+        },
+        slackEnabled: {
+          type: "boolean",
+        },
+        quietHours: {
+          anyOf: [
+            {
+              type: "object",
+              properties: {
+                startHour: { type: "number" },
+                endHour: { type: "number" },
+              },
+              required: ["startHour", "endHour"],
+              additionalProperties: false,
+            },
+            { type: "null" },
+          ],
+        },
+        timezone: {
+          type: ["string", "null"],
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["watchlistId", "explicitApproval", "idempotencyKey"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "update_delivery_target",
+    title: "Update Delivery Target",
+    description:
+      "Pause or resume an existing account-owned delivery target after explicit approval. This cannot change destination secrets or trigger sends.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetId: {
+          type: "string",
+        },
+        isPaused: {
+          type: "boolean",
+        },
+        explicitApproval: {
+          type: "boolean",
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["targetId", "isPaused", "explicitApproval", "idempotencyKey"],
       additionalProperties: false,
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
@@ -325,6 +492,41 @@ const MCP_TOOLS = [
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
+  {
+    name: "list_web_mentions",
+    title: "List Web Mentions Beta",
+    description:
+      "Read existing proof-backed web, blog, Substack, and Reddit mention observations tied to account-owned watchlists. X, YouTube, and broad social listening are not live.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        watchlistId: {
+          type: "string",
+        },
+        sources: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: ["reddit", "blog", "substack", "web"],
+          },
+        },
+        includeInactive: {
+          type: "boolean",
+          default: false,
+        },
+        targetLimit: {
+          type: "number",
+          default: 50,
+        },
+        limit: {
+          type: "number",
+          default: 50,
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
 ];
 
 type JsonRpcId = string | number | null;
@@ -371,6 +573,8 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Saved Meta and landing-page proof already captured in Five to Nine",
       "Manual external proof links saved in account-owned collections",
       "Client rooms and scoped account memory saved by this account",
+      "Redacted delivery settings and delivery target state owned by this account",
+      "Existing proof-backed web, blog, Substack, and Reddit mention observations tied to watchlists",
     ],
     notLiveYet: [
       "TikTok ingestion",
@@ -489,6 +693,10 @@ async function callTool(
     return buildAgentActionToolResult(env, apiKey, "watchlist.create", args, origin, executionContext);
   }
 
+  if (name === "update_watchlist") {
+    return buildAgentActionToolResult(env, apiKey, "watchlist.update", args, origin, executionContext);
+  }
+
   if (name === "refresh_watchlist") {
     return buildAgentActionToolResult(env, apiKey, "watchlist.refresh", args, origin, executionContext);
   }
@@ -501,8 +709,24 @@ async function callTool(
     return buildAgentActionToolResult(env, apiKey, "watchlist.resume", args, origin, executionContext);
   }
 
+  if (name === "create_collection") {
+    return buildAgentActionToolResult(env, apiKey, "collection.create", args, origin, executionContext);
+  }
+
   if (name === "add_external_proof") {
     return buildAgentActionToolResult(env, apiKey, "proof.add_external", args, origin, executionContext);
+  }
+
+  if (name === "list_delivery_targets") {
+    return buildAgentActionToolResult(env, apiKey, "delivery_targets.list", args, origin, executionContext);
+  }
+
+  if (name === "update_delivery_settings") {
+    return buildAgentActionToolResult(env, apiKey, "delivery_settings.update", args, origin, executionContext);
+  }
+
+  if (name === "update_delivery_target") {
+    return buildAgentActionToolResult(env, apiKey, "delivery_target.update", args, origin, executionContext);
   }
 
   if (name === "create_share_link") {
@@ -535,6 +759,10 @@ async function callTool(
 
   if (name === "list_client_rooms") {
     return buildAgentActionToolResult(env, apiKey, "client_room.list", args, origin, executionContext);
+  }
+
+  if (name === "list_web_mentions") {
+    return buildAgentActionToolResult(env, apiKey, "web_mentions.list", args, origin, executionContext);
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };

@@ -123,7 +123,7 @@ export function buildLifecycleNudges(input: {
       id: "client_room_setup",
       title: "No client room yet",
       detail: "Group one watchlist or report into a client room before agency handoff.",
-      href: "/app/sources",
+      href: "/app/clients",
       priority: "low",
     });
   } else if ((counts.clientRooms ?? 0) > 0 && (counts.agentMemoryEntries ?? 0) === 0) {
@@ -131,7 +131,7 @@ export function buildLifecycleNudges(input: {
       id: "client_context",
       title: "Client context is missing",
       detail: "Save account memory for goals, tone, or review cadence before the next agent run.",
-      href: "/app/sources",
+      href: "/app/clients",
       priority: "medium",
     });
   }
