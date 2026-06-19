@@ -126,7 +126,7 @@ export function customerAgentActionErrorPayload(error: unknown) {
     body: {
       ok: false,
       error: "agent_action_failed",
-      message: error instanceof Error ? error.message : "Agent action failed.",
+      message: "Agent action failed.",
     },
   };
 }
@@ -1030,8 +1030,11 @@ function safeMemoryRecord(memory: AgentMemoryRecord): AgentMemoryRecord {
 
 function readClientRoomNotes(input: Record<string, unknown>) {
   const value = input.notes;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (value === null) {
     return {};
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new CustomerAgentActionError("invalid_room_notes", "notes must be an object.", { status: 400 });
   }
   rejectSecretishMemoryValue(value, "Client room notes cannot contain secrets or credentials.");
   return sanitizeAgentActionMetadata(value);
