@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import type { AgentActionAuditRecord } from "~/lib/types";
 
 type JsonRecord = Record<string, unknown>;
@@ -148,7 +149,7 @@ export function sanitizeAgentActionMetadata(value: unknown): JsonRecord {
     return {};
   }
 
-  return sanitizeObject(value as JsonRecord);
+  return sanitizeObject(value as JsonRecord, { redactSecretScalars: true });
 }
 
 export function redactAgentActionResult<T extends JsonRecord>(
@@ -237,16 +238,9 @@ function isPublicActionSchemaKey(key: string, path: string[], actionName: string
 }
 
 function isSecretishKey(key: string) {
-  const normalized = key.toLowerCase();
-  return (
-    normalized === "key" ||
-    /(authorization|bearer|credential|encrypted|password|secret|token|webhook|api[_-]?key|privatekey|accesskey)/i.test(
-      normalized,
-    )
-  );
+  return isSecretishMemoryField(key);
 }
 
 function isSecretishString(value: string) {
-  return /(?:^f9_live_|bearer\s+|xox[baprs]-|sk-[a-z0-9]|\/share\/[a-z0-9_-]{12,}|https:\/\/[^/\s]+\/share\/[a-z0-9_-]{12,})/i
-    .test(value);
+  return isSecretishMemoryString(value);
 }

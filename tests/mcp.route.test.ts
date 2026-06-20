@@ -161,12 +161,46 @@ const digest: DigestRecord = {
 
 function setupMocks(authOk = true, actionsWriteEnabled = true) {
   const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
+  const audit = {
+    id: "audit-1",
+    userId: "user-1",
+    apiKeyId: "api-key-1",
+    actionName: "source.meta.retest",
+    resourceType: null,
+    resourceId: null,
+    idempotencyKey: "retest-source-1",
+    status: "started",
+    result: null,
+    errorCode: null,
+    errorMessage: null,
+    metadata: {},
+    createdAt: "2026-06-20T00:00:00.000Z",
+    updatedAt: "2026-06-20T00:00:00.000Z",
+  };
   const mocks = {
     getCollection: vi.fn().mockResolvedValue(collection),
     getDigest: vi.fn().mockResolvedValue(digest),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
+    listAdsByIds: vi.fn().mockResolvedValue([ad]),
+    listAgentMemory: vi.fn().mockResolvedValue([]),
     listCollectionItems: vi.fn().mockResolvedValue([collectionItem]),
     listWatchEvents: vi.fn().mockResolvedValue([watchEvent]),
+    findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
+    claimAgentActionAudit: vi.fn().mockResolvedValue({
+      audit,
+      claimed: true,
+    }),
+    finishAgentActionAudit: vi.fn().mockImplementation((_env, auditId: string, input: Record<string, unknown>) =>
+      Promise.resolve({
+        ...audit,
+        id: auditId,
+        status: input.status,
+        resourceType: input.resourceType ?? null,
+        resourceId: input.resourceId ?? null,
+        result: input.result ?? null,
+        metadata: input.metadata ?? {},
+      })
+    ),
     getWorkspaceReadiness,
   };
 
@@ -273,6 +307,11 @@ describe("MCP route", () => {
       result: {
         tools: Array<{
           name: string;
+          inputSchema: {
+            properties?: Record<string, unknown>;
+            required?: string[];
+            not?: Record<string, unknown>;
+          };
           annotations: { readOnlyHint: boolean };
           requiresWriteEnabled: boolean;
           credentialRequirement: string;
@@ -285,6 +324,7 @@ describe("MCP route", () => {
       "get_collection_export",
       "get_watchlist_export",
       "get_digest_export",
+      "retest_meta_source",
       "create_watchlist",
       "update_watchlist",
       "refresh_watchlist",
@@ -315,6 +355,29 @@ describe("MCP route", () => {
       requiresWriteEnabled: true,
       credentialRequirement: "Requires a write-enabled customer API key.",
     });
+    const updateWatchlistSchema = body.result.tools.find((tool) => tool.name === "update_watchlist")?.inputSchema;
+    expect(updateWatchlistSchema).toMatchObject({
+      required: ["watchlistId", "idempotencyKey"],
+    });
+    const counterMoveSchema = body.result.tools.find((tool) => tool.name === "create_counter_move_brief")?.inputSchema;
+    expect(counterMoveSchema).toMatchObject({
+      required: ["watchlistId", "idempotencyKey"],
+      properties: {
+        ownerLabel: { type: "string" },
+        followUpChannel: { type: "string", enum: ["app", "email", "slack", "client_room"] },
+        expiryDays: { type: "number", minimum: 1, maximum: 30 },
+      },
+    });
+    const listMemorySchema = body.result.tools.find((tool) => tool.name === "list_memory")?.inputSchema;
+    expect(listMemorySchema).toMatchObject({
+      properties: {
+        watchlistId: { type: "string" },
+        clientRoomId: { type: "string" },
+      },
+      not: { required: ["watchlistId", "clientRoomId"] },
+    });
+    expect(listMemorySchema?.properties).not.toHaveProperty("idempotencyKey");
+    expect(body.result.tools.find((tool) => tool.name === "list_client_rooms")?.inputSchema.properties).not.toHaveProperty("idempotencyKey");
   });
 
   it("hides write tools for read-only API keys", async () => {
@@ -365,8 +428,7 @@ describe("MCP route", () => {
         };
       };
     };
-
-    expect(body.result.isError).toBe(false);
+    expect(body.result.isError, JSON.stringify(body.result.structuredContent)).toBe(false);
     expect(body.result.structuredContent.status).toBe("needs_setup");
     expect(body.result.structuredContent.items[0]).toMatchObject({
       id: "delivery",
@@ -375,6 +437,84 @@ describe("MCP route", () => {
     expect(body.result.content[0]?.text).toContain("Delivery proof");
     expect(JSON.stringify(body)).not.toContain("encryptedWebhookUrl");
     expect(mocks.getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "user-1");
+  });
+
+  it("returns credential-free Meta source retest results through MCP", async () => {
+    vi.doUnmock("~/lib/customer-agent-actions.server");
+    setupMocks();
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      retestSavedCustomerMetaToken: vi.fn().mockResolvedValue({
+        ok: false,
+        connection: {
+          id: "meta-connection-1",
+          userId: "user-1",
+          encryptedAccessToken: "encrypted-meta-token",
+          tokenLastFour: "1234",
+          tokenFingerprint: "meta-token-fingerprint",
+          status: "degraded",
+          summary: "Meta token needs attention.",
+          lastCheckedAt: "2026-06-20T00:00:00.000Z",
+          lastErrorCode: "permission_denied",
+          lastErrorMessage: "Raw provider response with encrypted-meta-token and 1234.",
+          createdAt: "2026-06-19T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+        testResult: {
+          ok: false,
+          status: "degraded",
+          summary: "Meta token needs attention.",
+          errorCode: "permission_denied",
+          errorMessage: "Raw provider response with encrypted-meta-token and 1234.",
+        },
+      }),
+    }));
+
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "retest-source-1",
+      method: "tools/call",
+      params: {
+        name: "retest_meta_source",
+        arguments: {
+          idempotencyKey: "retest-source-1",
+        },
+      },
+    });
+    const body = await response.json() as {
+      result: {
+        isError: boolean;
+        content: Array<{ text: string }>;
+        structuredContent: {
+          result: {
+            ok: boolean;
+            connection: { status: string; lastErrorCode: string | null };
+            testResult: { errorCode: string | null };
+          };
+          audit: {
+            metadata: Record<string, unknown>;
+            result: Record<string, unknown>;
+          };
+        };
+      };
+    };
+
+    expect(body.result.isError, JSON.stringify(body.result.structuredContent)).toBe(false);
+    expect(body.result.structuredContent.result).toMatchObject({
+      ok: false,
+      connection: {
+        status: "degraded",
+        lastErrorCode: "permission_denied",
+      },
+      testResult: {
+        errorCode: "permission_denied",
+      },
+    });
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain("encrypted-meta-token");
+    expect(serialized).not.toContain("tokenLastFour");
+    expect(serialized).not.toContain("tokenFingerprint");
+    expect(serialized).not.toContain("Raw provider response");
+    expect(body.result.content[0]?.text).not.toContain("1234");
   });
 
   it("returns account-owned structured digest proof through tools/call", async () => {
@@ -534,6 +674,12 @@ describe("MCP route", () => {
       idempotencyKey?: string;
     }> = [
       {
+        toolName: "retest_meta_source",
+        actionName: "source.meta.retest",
+        args: { idempotencyKey: "source-retest-1" },
+        idempotencyKey: "source-retest-1",
+      },
+      {
         toolName: "create_watchlist",
         actionName: "watchlist.create",
         args: { targetLabel: "Glossier", idempotencyKey: "create-1" },
@@ -628,7 +774,13 @@ describe("MCP route", () => {
       {
         toolName: "create_counter_move_brief",
         actionName: "counter_move_brief.create",
-        args: { watchlistId: "watchlist-1", idempotencyKey: "brief-1" },
+        args: {
+          watchlistId: "watchlist-1",
+          ownerLabel: "Growth lead",
+          followUpChannel: "client_room",
+          expiryDays: 10,
+          idempotencyKey: "brief-1",
+        },
         idempotencyKey: "brief-1",
       },
       {
@@ -744,6 +896,31 @@ describe("MCP route", () => {
     expect(body.result.isError).toBe(true);
     expect(body.result.content[0]?.text).toContain("competitor tracking limit");
     expect(body.result.structuredContent.error).toBe("plan_limit_exceeded");
+  });
+
+  it("rejects counter-move brief calls without idempotency through MCP", async () => {
+    vi.doUnmock("~/lib/customer-agent-actions.server");
+    setupMocks();
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "brief-missing-idempotency",
+      method: "tools/call",
+      params: {
+        name: "create_counter_move_brief",
+        arguments: {
+          watchlistId: "watchlist-1",
+        },
+      },
+    });
+    const body = await response.json() as {
+      result: {
+        isError: boolean;
+        structuredContent: { error: string };
+      };
+    };
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.error).toBe("missing_idempotency_key");
   });
 
   it("rejects MCP calls without an active API key", async () => {

@@ -565,6 +565,49 @@ export async function findAgentActionAuditByIdempotencyKey(
   return row ? toAgentActionAuditRecord(row) : null;
 }
 
+export async function listRecentAgentActionAudits(
+  env: AppEnv,
+  userId: string,
+  options: {
+    actionName?: string | null;
+    status?: AgentActionAuditStatus | null;
+    resourceType?: string | null;
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const actionName = options.actionName ?? null;
+  const status = options.status ?? null;
+  const resourceType = options.resourceType ?? null;
+  const limit = Math.max(1, Math.min(50, Math.floor(options.limit ?? 10)));
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
+
+  const rows = await many<AgentActionAuditRow>(
+    env,
+    `
+      SELECT *
+      FROM agent_action_audit
+      WHERE user_id = ?
+        AND (? IS NULL OR action_name = ?)
+        AND (? IS NULL OR status = ?)
+        AND (? IS NULL OR resource_type = ?)
+      ORDER BY updated_at DESC
+      LIMIT ? OFFSET ?
+    `,
+    userId,
+    actionName,
+    actionName,
+    status,
+    status,
+    resourceType,
+    resourceType,
+    limit,
+    offset,
+  );
+
+  return rows.map(toAgentActionAuditRecord);
+}
+
 export async function createAgentActionAudit(
   env: AppEnv,
   input: {
@@ -955,6 +998,24 @@ export async function upsertClientRoom(
   const notesJson = hasNotes ? jsonValue(input.notes ?? {}) : null;
 
   if (input.roomId) {
+    const conflictingRoom = await one<ClientRoomRow>(
+      env,
+      `
+        SELECT *
+        FROM client_room
+        WHERE user_id = ?
+          AND name = ?
+          AND id <> ?
+        LIMIT 1
+      `,
+      userId,
+      name,
+      input.roomId,
+    );
+    if (conflictingRoom) {
+      return null;
+    }
+
     await run(
       env,
       `

@@ -45,6 +45,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
 - Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
+- The public status page shows coarse launch blockers and safety posture without account activity, aggregate counts, timestamps, or private canary evidence.
 - Email delivery uses Cloudflare Email Service through the app's send_email binding.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires at least one configured Slack target with successful live delivery proof.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history from saved proof, watch events, and digest items.
@@ -109,6 +110,7 @@ Current product truth:
 - Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Paid customer support paths cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires a configured Slack target with successful live delivery proof.
+- The public status page shows blockers and safety posture only; detailed monitoring, proof-capture, digest, Slack, Dodo, and uptime evidence stays in private canaries and signed-in operational views.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Customer WhatsApp delivery is not launch-scoped today and must stay behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
 - Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and broad public write APIs beyond audited workspace actions are not live yet.

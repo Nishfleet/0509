@@ -29,6 +29,7 @@ import {
   getWeeklyBusinessSummary,
   findAgentActionAuditByIdempotencyKey,
   finishAgentActionAudit,
+  listRecentAgentActionAudits,
   listClientRooms,
   listAgentMemory,
   listActiveWatchlists,
@@ -268,6 +269,42 @@ describe("agent action audit persistence", () => {
     expect(audit).toMatchObject({
       id: "audit-1",
       actionName: "watchlist.create",
+      result: { watchlistId: "watchlist-1" },
+    });
+  });
+
+  it("lists recent successful agent action audits by action name", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM agent_action_audit",
+        results: [row],
+      },
+    ]);
+
+    const audits = await listRecentAgentActionAudits({ DB: mock.db } as never, "user-1", {
+      actionName: "counter_move_brief.create",
+      status: "succeeded",
+      resourceType: "watchlist",
+      limit: 3,
+      offset: 30,
+    });
+
+    const select = findStatement(mock.statements, "FROM agent_action_audit", "ORDER BY updated_at DESC");
+    expect(select?.bindings).toEqual([
+      "user-1",
+      "counter_move_brief.create",
+      "counter_move_brief.create",
+      "succeeded",
+      "succeeded",
+      "watchlist",
+      "watchlist",
+      3,
+      30,
+    ]);
+    expect(select?.sql).not.toContain("${");
+    expect(select?.sql).toContain("LIMIT ? OFFSET ?");
+    expect(audits[0]).toMatchObject({
+      id: "audit-1",
       result: { watchlistId: "watchlist-1" },
     });
   });
@@ -730,6 +767,38 @@ describe("client room persistence", () => {
         status: "archived",
         notes: { goal: "Weekly proof review" },
       });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("does not rename a room over another room with the same account name", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0037_client_rooms.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+
+      const first = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+      });
+      const second = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Retail client",
+      });
+
+      const renamed = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        roomId: second?.id,
+        name: "Beauty client",
+      });
+      const rooms = await listClientRooms({ DB: sqlite.db } as never, "user-1", {
+        status: "all",
+        limit: 5,
+      });
+
+      expect(first?.id).toBeTruthy();
+      expect(second?.id).toBeTruthy();
+      expect(renamed).toBeNull();
+      expect(rooms.map((room) => room.name).sort()).toEqual(["Beauty client", "Retail client"]);
     } finally {
       sqlite.close();
     }

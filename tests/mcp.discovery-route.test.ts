@@ -11,6 +11,11 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     actions: ["get_workspace_readiness"],
   },
   {
+    label: "Source health",
+    requiresWriteEnabled: true,
+    actions: ["retest_meta_source"],
+  },
+  {
     label: "Watchlists",
     requiresWriteEnabled: true,
     actions: ["create_watchlist", "update_watchlist", "refresh_watchlist", "pause_watchlist", "resume_watchlist"],
