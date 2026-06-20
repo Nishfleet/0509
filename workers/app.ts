@@ -51,6 +51,7 @@ function markdownResponse(request: Request, body: string): Response {
         "content-signal": "search=yes, ai-input=yes",
       },
     }),
+    request,
   );
 }
 
@@ -62,6 +63,7 @@ function publicFileResponse(request: Request, file: NonNullable<ReturnType<typeo
         "cache-control": file.cacheControl,
       },
     }),
+    request,
   );
 }
 
@@ -70,7 +72,7 @@ export default {
     const url = new URL(request.url);
     const primaryDomainResponse = primaryDomainRedirect(request);
     if (primaryDomainResponse) {
-      return withSecurityHeaders(primaryDomainResponse);
+      return withSecurityHeaders(primaryDomainResponse, request);
     }
 
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
@@ -91,7 +93,7 @@ export default {
 
     const rateLimitResponse = await enforceRequestRateLimit(request, env, ctx);
     if (rateLimitResponse) {
-      return withSecurityHeaders(rateLimitResponse);
+      return withSecurityHeaders(rateLimitResponse, request);
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
@@ -102,7 +104,7 @@ export default {
         country: request.headers.get("cf-ipcountry"),
       },
     });
-    return withSecurityHeaders(response);
+    return withSecurityHeaders(response, request);
   },
   async scheduled(controller, env, ctx) {
     const scheduledTask = resolveScheduledTask(controller.cron);

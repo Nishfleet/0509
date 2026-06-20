@@ -6,18 +6,41 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
-  useLoaderData,
+  useLocation,
+  useRouteLoaderData,
 } from "react-router";
+import { useLayoutEffect, useRef } from "react";
 
 import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
 import type { AppEnv } from "~/lib/env.server";
 import { pricingPlans, usageBundles } from "~/lib/pricing";
+import {
+  canUseSiteRepWidgetScript,
+  hasSiteRepAuthCookie,
+  isSiteRepWidgetIsolatedPath,
+  SITE_REP_WIDGET,
+  shouldReloadForSiteRepWidgetDocument,
+  siteRepWidgetForRequestState,
+} from "~/lib/siterep-widget";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
+export {
+  hasSiteRepAuthCookie,
+  canUseSiteRepWidgetScript,
+  isSiteRepWidgetIsolatedPath,
+  normalizeSiteRepWidgetPathname,
+  SITE_REP_WIDGET,
+  shouldLoadSiteRepWidget,
+  shouldReloadForSiteRepWidgetDocument,
+  siteRepWidgetForPathname,
+  siteRepWidgetForRequestState,
+} from "~/lib/siterep-widget";
 
 export interface RootLoaderData {
   session: AppSession | null;
+  hasAuthCookie: boolean;
+  allowsSiteRepScript: boolean;
   pricingPlans: PricingPlan[];
   usageBundles: UsageBundle[];
   countryCode: string | null;
@@ -31,10 +54,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   };
   const env = cloudflare.env;
   const session = await getCachedOptionalSession(env, request);
+  const hasAuthCookie = hasSiteRepAuthCookie(request);
   const countryCode = cloudflare.country ?? request.headers.get("cf-ipcountry");
 
   return {
     session,
+    hasAuthCookie,
+    allowsSiteRepScript: canUseSiteRepWidgetScript(request),
     pricingPlans: pricingPlans(),
     usageBundles: usageBundles(),
     countryCode: countryCode ?? null,
@@ -63,8 +89,112 @@ export const links: LinksFunction = () => [
   },
 ];
 
+type SiteRepWidgetRuntimeWindow = Window & {
+  siterep?: { botId?: string; publicKey?: string; apiBase?: string };
+  SiteRep?: { uninstall?: () => void };
+  CiteRep?: { uninstall?: () => void };
+};
+
+type SiteRepWidgetRuntimeDocument = Pick<Document, "createElement" | "querySelectorAll"> & {
+  body: Pick<Document["body"], "appendChild">;
+};
+
+export function teardownSiteRepWidget(
+  widgetWindow: SiteRepWidgetRuntimeWindow | undefined =
+    typeof window === "undefined" ? undefined : (window as SiteRepWidgetRuntimeWindow),
+  widgetDocument: SiteRepWidgetRuntimeDocument | undefined =
+    typeof document === "undefined" ? undefined : document,
+) {
+  if (!widgetWindow || !widgetDocument) return;
+  for (const surface of [widgetWindow.SiteRep, widgetWindow.CiteRep]) {
+    try {
+      surface?.uninstall?.();
+    } catch (error) {
+      console.warn("Site Rep widget teardown failed", error);
+    }
+  }
+  if (widgetWindow.siterep?.botId === SITE_REP_WIDGET.botId) {
+    delete widgetWindow.siterep;
+  }
+  widgetDocument.querySelectorAll("[data-siterep-loader='0509']").forEach((node) => node.remove());
+  widgetDocument.querySelectorAll("[data-citerep-owned]").forEach((node) => node.remove());
+}
+
+export function installSiteRepWidget(
+  widget: typeof SITE_REP_WIDGET,
+  widgetWindow: SiteRepWidgetRuntimeWindow | undefined =
+    typeof window === "undefined" ? undefined : (window as SiteRepWidgetRuntimeWindow),
+  widgetDocument: SiteRepWidgetRuntimeDocument | undefined =
+    typeof document === "undefined" ? undefined : document,
+) {
+  teardownSiteRepWidget(widgetWindow, widgetDocument);
+  if (!widgetWindow || !widgetDocument) return undefined;
+
+  widgetWindow.siterep = {
+    botId: widget.botId,
+    publicKey: widget.publicKey,
+    apiBase: widget.apiBase,
+  };
+
+  const script = widgetDocument.createElement("script");
+  script.src = widget.src;
+  script.defer = true;
+  script.dataset.siterepLoader = "0509";
+  script.dataset.botId = widget.botId;
+  script.dataset.publicKey = widget.publicKey;
+  script.dataset.apiBase = widget.apiBase;
+  widgetDocument.body.appendChild(script);
+
+  return () => teardownSiteRepWidget(widgetWindow, widgetDocument);
+}
+
+function SiteRepWidgetEmbed({ widget }: { widget: typeof SITE_REP_WIDGET | null }) {
+  useLayoutEffect(() => {
+    if (!widget) {
+      teardownSiteRepWidget();
+      return undefined;
+    }
+
+    return installSiteRepWidget(widget);
+  }, [widget]);
+
+  return null;
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
-  const data = useLoaderData<typeof loader>();
+  const location = useLocation();
+  const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
+  const initialAllowsSiteRepScript = useRef(rootData?.allowsSiteRepScript === true);
+  const shouldReloadForSiteRepWidget = shouldReloadForSiteRepWidgetDocument(
+    location.pathname,
+    rootData,
+    initialAllowsSiteRepScript.current,
+  );
+  const siteRepWidget = siteRepWidgetForRequestState(
+    location.pathname,
+    rootData ? { ...rootData, allowsSiteRepScript: initialAllowsSiteRepScript.current } : undefined,
+  );
+
+  useLayoutEffect(() => {
+    if (shouldReloadForSiteRepWidget) {
+      teardownSiteRepWidget();
+      window.location.replace(window.location.href);
+    }
+  }, [shouldReloadForSiteRepWidget]);
+
+  if (shouldReloadForSiteRepWidget) {
+    return (
+      <html lang="en">
+        <head>
+          <meta charSet="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <Meta />
+          <Links />
+        </head>
+        <body data-pricing="dodo-local" />
+      </html>
+    );
+  }
 
   return (
     <html lang="en">
@@ -77,6 +207,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body data-pricing="dodo-local">
         {children}
+        <SiteRepWidgetEmbed widget={siteRepWidget} />
         <ScrollRestoration />
         <Scripts />
       </body>
