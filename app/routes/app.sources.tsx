@@ -4,10 +4,10 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import {
-  AGENT_ACTION_GROUPS,
   AGENT_BLOCKED_CAPABILITIES,
   AGENT_FIRST_WORKFLOW,
   CUSTOMER_SUPPORT_PATHS,
+  auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
@@ -496,7 +496,8 @@ export default function AppSourcesRoute() {
 
         <p className="f9-muted-copy">
           API keys expose only account-owned readiness, boards, watchlists, digests, proof trails, export markdown,
-          and narrow audited workspace actions for this account.
+          and narrow audited workspace actions for this account. Readiness and exports work with any active key;
+          audited workspace actions require a write-enabled key.
         </p>
 
         <div className="f9-status-strip">
@@ -532,10 +533,10 @@ export default function AppSourcesRoute() {
             <span className="f9-app-kicker">Live action groups</span>
             <h3>What a write-enabled key can do</h3>
             <dl className="proof-trail-list">
-              {AGENT_ACTION_GROUPS.filter((group) => group.id !== "readiness").map((group) => (
+              {auditedAgentActionGroups().map((group) => (
                 <div key={group.id}>
                   <dt>{group.label}</dt>
-                  <dd>{group.detail}</dd>
+                  <dd>{group.detail} {group.credentialRequirement}</dd>
                 </div>
               ))}
             </dl>

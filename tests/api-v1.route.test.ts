@@ -8,6 +8,34 @@ import type {
   WatchEventRecord,
   WatchlistRecord,
 } from "~/lib/types";
+import {
+  BROAD_WRITE_API_NON_GOAL,
+  CUSTOMER_AGENT_ACTION_NAMES,
+} from "~/lib/agent-action-catalog";
+
+const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
+  "watchlist.create",
+  "watchlist.update",
+  "watchlist.refresh",
+  "watchlist.pause",
+  "watchlist.resume",
+  "collection.create",
+  "proof.add_external",
+  "share.create",
+  "report.create",
+  "report.share",
+  "counter_move_brief.create",
+  "memory.upsert",
+  "memory.list",
+  "client_room.upsert",
+  "client_room.list",
+  "delivery_targets.list",
+  "delivery_settings.update",
+  "delivery_target.update",
+  "web_mentions.list",
+] as const;
+const READ_ONLY_API_KEY_REQUIREMENT = "Works with any active customer API key.";
+const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled customer API key.";
 
 const apiKey = {
   id: "api-key-1",
@@ -268,11 +296,21 @@ describe("customer API v1", () => {
       request: new Request("https://0509.io/api/v1"),
     } as never);
     const body = await response.json() as {
-      endpoints: Array<{ path: string; actions?: string[] }>;
+      endpoints: Array<{
+        path: string;
+        actions?: string[];
+        requiresWriteEnabled: boolean;
+        credentialRequirement: string;
+      }>;
       agentActivation: {
         readinessEndpoint: string;
         firstWorkflow: Array<{ label: string }>;
-        actionGroups: Array<{ label: string; actions: string[] }>;
+        actionGroups: Array<{
+          label: string;
+          actions: string[];
+          requiresWriteEnabled: boolean;
+          credentialRequirement: string;
+        }>;
         supportPaths: Array<{ label: string }>;
         blockedCapabilities: string[];
       };
@@ -283,17 +321,39 @@ describe("customer API v1", () => {
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/actions");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/watchlists/{watchlistId}");
-    expect(body.endpoints.find((endpoint) => endpoint.path === "/api/v1/actions")?.actions).toContain("watchlist.create");
+    expect(CUSTOMER_AGENT_ACTION_NAMES).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
+    const actionsEndpoint = body.endpoints.find((endpoint) => endpoint.path === "/api/v1/actions");
+    expect(actionsEndpoint?.actions).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
+    expect(actionsEndpoint).toMatchObject({
+      requiresWriteEnabled: true,
+      credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
+    });
+    body.endpoints
+      .filter((endpoint) => endpoint.path !== "/api/v1/actions" && endpoint.path !== "/api/mcp")
+      .forEach((endpoint) => {
+        expect(endpoint).toMatchObject({
+          requiresWriteEnabled: false,
+          credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
+        });
+      });
+    expect(body.endpoints.find((endpoint) => endpoint.path === "/api/mcp")).toMatchObject({
+      requiresWriteEnabled: false,
+      credentialRequirement: expect.stringContaining(WRITE_ENABLED_API_KEY_REQUIREMENT),
+    });
     expect(body.agentActivation.readinessEndpoint).toBe("/api/v1/workspace-readiness");
     expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
     expect(body.agentActivation.actionGroups.map((group) => group.label)).toContain("Proof and reports");
-    expect(body.agentActivation.actionGroups.flatMap((group) => group.actions)).toContain("watchlist.create");
+    expect(body.agentActivation.actionGroups.every((group) => group.requiresWriteEnabled)).toBe(true);
+    expect(body.agentActivation.actionGroups.every((group) => group.credentialRequirement.includes("write-enabled"))).toBe(true);
+    expect(body.agentActivation.actionGroups.flatMap((group) => group.actions)).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
     expect(body.agentActivation.actionGroups.flatMap((group) => group.actions)).not.toContain("get_workspace_readiness");
     expect(body.agentActivation.supportPaths.map((path) => path.label)).toContain("Billing changes and cancellation");
     expect(body.agentActivation.blockedCapabilities).toContain("billing changes");
     expect(body.agentActivation.blockedCapabilities).toContain("team invites");
+    expect(body.agentActivation.blockedCapabilities).toContain("customer API key creation, rotation, and revocation");
     expect(body.notLiveYet).not.toContain("MCP server");
     expect(body.notLiveYet).toContain("TikTok ingestion");
+    expect(body.notLiveYet).toContain(BROAD_WRITE_API_NON_GOAL);
     expect(body.notLiveYet).not.toContain("billing changes");
     expect(body.notLiveYet).not.toContain("team invites");
   });

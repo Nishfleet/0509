@@ -6,6 +6,7 @@ import {
   PUBLIC_MARKDOWN,
   wantsPublicMarkdown,
 } from "~/lib/public-markdown";
+import { auditedAgentActionGroups } from "~/lib/agent-action-catalog";
 
 describe("public markdown", () => {
   it("supports same-url markdown negotiation for public pages", () => {
@@ -49,12 +50,15 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("successful live delivery proof");
     expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned readiness");
     expect(PUBLIC_MARKDOWN).toContain("narrow audited workspace actions");
+    expect(PUBLIC_MARKDOWN).toContain("Write-enabled customer API keys can also use");
     expect(PUBLIC_MARKDOWN).toContain("Recommended first agent workflow");
     expect(PUBLIC_MARKDOWN).toContain("Check readiness -> Set up monitoring -> Package proof -> Preserve context");
     expect(PUBLIC_MARKDOWN).toContain("Live audited action groups");
+    expect(PUBLIC_MARKDOWN).toContain("Requires a write-enabled customer API key");
     expect(PUBLIC_MARKDOWN.split("\n").find((line) => line.startsWith("- Live audited action groups:"))).not.toContain("Readiness and setup");
     expect(PUBLIC_MARKDOWN).toContain("Agent-blocked capabilities");
     expect(PUBLIC_MARKDOWN).toContain("secret-bearing integration setup");
+    expect(PUBLIC_MARKDOWN).toContain("customer API key creation, rotation, and revocation");
     expect(PUBLIC_MARKDOWN).toContain("Paid customer support paths cover");
     expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, and trust pages are available");
     expect(PUBLIC_MARKDOWN).toContain("Email delivery uses Cloudflare Email Service");
@@ -77,6 +81,11 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(LLMS_TEXT).toContain("/api/v1 readiness plus collection, watchlist, and digest exports");
     expect(LLMS_TEXT).toContain("narrow audited workspace actions through /api/v1/actions and /api/mcp");
+    auditedAgentActionGroups().forEach((group) => {
+      expect(PUBLIC_MARKDOWN).toContain(group.label);
+      expect(LLMS_TEXT).toContain(group.label);
+    });
+    expect(LLMS_TEXT).toContain("customer API key creation, rotation, and revocation");
     expect(LLMS_TEXT).toContain("Recommended first agent workflow");
     expect(LLMS_TEXT).toContain("Paid customer support paths cover billing changes and cancellation");
     expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");

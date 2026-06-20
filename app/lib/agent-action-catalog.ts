@@ -1,9 +1,25 @@
+export const READINESS_ACTION_NAME = "get_workspace_readiness" as const;
+export const READ_ONLY_API_KEY_REQUIREMENT = "Works with any active customer API key.";
+export const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled customer API key.";
+export const BROAD_WRITE_API_NON_GOAL = "broad public write APIs beyond audited workspace actions";
+
+type AgentActionGroup = {
+  id: string;
+  label: string;
+  detail: string;
+  actions: readonly string[];
+  requiresWriteEnabled: boolean;
+  credentialRequirement: string;
+};
+
 export const AGENT_ACTION_GROUPS = [
   {
     id: "readiness",
     label: "Readiness and setup",
     detail: "Inspect the account state before changing anything.",
-    actions: ["get_workspace_readiness"],
+    actions: [READINESS_ACTION_NAME],
+    requiresWriteEnabled: false,
+    credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
   },
   {
     id: "watchlists",
@@ -16,6 +32,8 @@ export const AGENT_ACTION_GROUPS = [
       "watchlist.pause",
       "watchlist.resume",
     ],
+    requiresWriteEnabled: true,
+    credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
   {
     id: "proof",
@@ -29,6 +47,8 @@ export const AGENT_ACTION_GROUPS = [
       "report.share",
       "counter_move_brief.create",
     ],
+    requiresWriteEnabled: true,
+    credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
   {
     id: "memory",
@@ -40,6 +60,8 @@ export const AGENT_ACTION_GROUPS = [
       "client_room.upsert",
       "client_room.list",
     ],
+    requiresWriteEnabled: true,
+    credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
   {
     id: "delivery",
@@ -50,41 +72,35 @@ export const AGENT_ACTION_GROUPS = [
       "delivery_settings.update",
       "delivery_target.update",
     ],
+    requiresWriteEnabled: true,
+    credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
   {
     id: "mentions",
     label: "Web mentions beta",
     detail: "Read existing proof-backed web, blog, Substack, and Reddit observations.",
     actions: ["web_mentions.list"],
+    requiresWriteEnabled: true,
+    credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
-] as const;
+] as const satisfies readonly AgentActionGroup[];
+
+export type AgentCatalogActionName = (typeof AGENT_ACTION_GROUPS)[number]["actions"][number];
+export type CustomerAgentActionName = Exclude<AgentCatalogActionName, typeof READINESS_ACTION_NAME>;
+
+function isAuditedCatalogActionName(actionName: AgentCatalogActionName): actionName is CustomerAgentActionName {
+  return actionName !== READINESS_ACTION_NAME;
+}
 
 export const CUSTOMER_AGENT_ACTION_NAMES = AGENT_ACTION_GROUPS
   .flatMap((group) => group.actions)
-  .filter((actionName) => actionName !== "get_workspace_readiness") as CustomerAgentActionName[];
+  .filter(isAuditedCatalogActionName);
 
-export type CustomerAgentActionName =
-  | "watchlist.create"
-  | "watchlist.update"
-  | "watchlist.refresh"
-  | "watchlist.pause"
-  | "watchlist.resume"
-  | "collection.create"
-  | "proof.add_external"
-  | "share.create"
-  | "report.create"
-  | "report.share"
-  | "counter_move_brief.create"
-  | "memory.upsert"
-  | "memory.list"
-  | "client_room.upsert"
-  | "client_room.list"
-  | "delivery_targets.list"
-  | "delivery_settings.update"
-  | "delivery_target.update"
-  | "web_mentions.list";
+export const CUSTOMER_AGENT_ACTION_NAME_SET: ReadonlySet<string> = new Set(CUSTOMER_AGENT_ACTION_NAMES);
 
-export const CUSTOMER_AGENT_ACTION_NAME_SET = new Set<CustomerAgentActionName>(CUSTOMER_AGENT_ACTION_NAMES);
+export function isCustomerAgentActionName(actionName: string | null | undefined): actionName is CustomerAgentActionName {
+  return typeof actionName === "string" && CUSTOMER_AGENT_ACTION_NAME_SET.has(actionName);
+}
 
 export const AGENT_FIRST_WORKFLOW = [
   {
@@ -109,6 +125,7 @@ export const AGENT_BLOCKED_CAPABILITIES = [
   "billing changes",
   "team invites",
   "secret-bearing integration setup",
+  "customer API key creation, rotation, and revocation",
   "external delivery sends",
   "unsupported-channel ingestion",
   "automated spend, reach, or impression benchmarks",
@@ -135,6 +152,10 @@ export const CUSTOMER_SUPPORT_PATHS = [
 
 export function apiActionNames() {
   return [...CUSTOMER_AGENT_ACTION_NAMES];
+}
+
+export function auditedAgentActionGroups() {
+  return AGENT_ACTION_GROUPS.filter((group) => group.requiresWriteEnabled);
 }
 
 export function blockedCapabilityLabels() {
