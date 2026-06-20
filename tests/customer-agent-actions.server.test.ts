@@ -868,22 +868,31 @@ describe("runCustomerAgentAction", () => {
     const mocks = setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
-    await expect(runCustomerAgentAction(
-      { DB: {} } as never,
-      {
-        userId: "user-1",
-        apiKeyId: "api-key-1",
-        idempotencyKey: "brief-unsafe",
-        source: "api_v1",
-      },
-      "counter_move_brief.create",
-      {
-        watchlistId: "watchlist-1",
-        ownerLabel: "apiKey=f9_live_secret",
-      },
-    )).rejects.toMatchObject({
-      code: "secret_workflow_owner_rejected",
-    });
+    const unsafeOwnerLabels = [
+      "apiKey=f9_live_secret",
+      "growth@example.com",
+      "https://hooks.example.com/follow-up",
+      "+1 (555) 123-4567",
+    ];
+
+    for (const [index, ownerLabel] of unsafeOwnerLabels.entries()) {
+      await expect(runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: `brief-unsafe-${index}`,
+          source: "api_v1",
+        },
+        "counter_move_brief.create",
+        {
+          watchlistId: "watchlist-1",
+          ownerLabel,
+        },
+      )).rejects.toMatchObject({
+        code: "secret_workflow_owner_rejected",
+      });
+    }
 
     expect(mocks.finishAgentActionAudit).toHaveBeenCalledWith(
       expect.anything(),
