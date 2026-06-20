@@ -870,6 +870,7 @@ describe("runCustomerAgentAction", () => {
 
     const unsafeOwnerLabels = [
       "apiKey=f9_live_secret",
+      "hooks.slack.com/services/T/B/C",
       "growth@example.com",
       "https://hooks.example.com/follow-up",
       "+1 (555) 123-4567",

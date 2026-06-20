@@ -180,6 +180,7 @@ export function isSecretishMemoryString(value: string) {
     /\b[a-z0-9_]*(?:api[_-]?key|access[_-]?key|secret|token|password|webhook)[a-z0-9_]*\s*=\s*\S+/i.test(normalized) ||
     /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(normalized) ||
     /\beyJ[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\b/i.test(normalized) ||
+    /\bhooks\.slack\.com\/services\/[^\s"'<>]+/i.test(normalized) ||
     /https:\/\/[^\s"'<>]*(?:hooks\.slack\.com\/services|hooks\.zapier\.com\/hooks\/catch|discord(?:app)?\.com\/api\/webhooks|webhook\.office\.com|outlook\.office\.com\/webhook|\/(?:api\/)?webhooks?\/|\/hooks\/catch\/)[^\s"'<>]*/i.test(normalized) ||
     /https:\/\/[^\s"'<>]*(?:logic\.azure\.com|powerautomate\.com)[^\s"'<>]*\bsig=/i.test(normalized) ||
     /(?:\/share\/[a-z0-9_-]{12,}|https:\/\/[^/\s]+\/share\/[a-z0-9_-]{12,})/i.test(normalized)
