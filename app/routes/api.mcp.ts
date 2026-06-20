@@ -28,6 +28,7 @@ const WRITE_TOOL_ANNOTATIONS = {
   openWorldHint: false,
 };
 const WRITE_TOOL_NAMES = new Set([
+  "retest_meta_source",
   "create_watchlist",
   "update_watchlist",
   "refresh_watchlist",
@@ -91,6 +92,21 @@ const MCP_TOOLS = [
       "Read an account-owned Five to Nine digest with priority, recommendation, proof trail, and insight-depth summaries.",
     inputSchema: resourceInputSchema("digestId"),
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "retest_meta_source",
+    title: "Retest Meta Source",
+    description:
+      "Retest the saved account-owned Meta source connection without accepting or returning the credential.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["idempotencyKey"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
   },
   {
     name: "create_watchlist",
@@ -697,6 +713,10 @@ async function callTool(
 
   if (name === "get_digest_export") {
     return buildDigestToolResult(env, apiKey.userId, stringField(args, "digestId"), format);
+  }
+
+  if (name === "retest_meta_source") {
+    return buildAgentActionToolResult(env, apiKey, "source.meta.retest", args, origin, executionContext);
   }
 
   if (name === "create_watchlist") {

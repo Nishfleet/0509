@@ -22,6 +22,14 @@ export const AGENT_ACTION_GROUPS = [
     credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
   },
   {
+    id: "source_health",
+    label: "Source health",
+    detail: "Retest saved source access without exposing or replacing credentials.",
+    actions: ["source.meta.retest"],
+    requiresWriteEnabled: true,
+    credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
+  },
+  {
     id: "watchlists",
     label: "Watchlists",
     detail: "Create, tune, pause, resume, and refresh account-owned competitor watches.",

@@ -55,6 +55,7 @@ export { CUSTOMER_AGENT_ACTION_NAMES } from "~/lib/agent-action-catalog";
 export type { CustomerAgentActionName } from "~/lib/agent-action-catalog";
 
 const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
+  "source.meta.retest",
   "watchlist.create",
   "watchlist.update",
   "watchlist.refresh",
@@ -179,6 +180,21 @@ export async function runCustomerAgentAction(
     },
   }, async () => {
     try {
+      if (actionName === "source.meta.retest") {
+        const result = await retestMetaSourceFromAgent(env, context.userId);
+        return {
+          resourceType: "source_connection",
+          resourceId: "meta",
+          result,
+          metadata: {
+            source: result.source,
+            ok: result.ok,
+            status: result.connection.status,
+            errorCode: result.testResult.errorCode,
+          },
+        };
+      }
+
       if (actionName === "watchlist.create") {
         const result = await createWatchlistFromAgent(env, context, input);
         return {
@@ -471,6 +487,44 @@ async function replayShareResultFromAudit(
       expiresAt: share.expiresAt,
     },
     shareUrl: shareUrl(context, share.token),
+  };
+}
+
+async function retestMetaSourceFromAgent(env: AppEnv, userId: string) {
+  const { retestSavedCustomerMetaToken } = await import("~/lib/customer-meta.server");
+  const retest = await retestSavedCustomerMetaToken(env, userId);
+  if (!retest.connection) {
+    throw new CustomerAgentActionError(
+      "source_connection_missing",
+      "No Meta source connection is saved for this workspace.",
+      {
+        status: 404,
+        details: {
+          source: "meta_ad_library",
+        },
+      },
+    );
+  }
+
+  return {
+    ok: retest.ok,
+    action: "source.meta.retest",
+    source: "meta_ad_library",
+    connection: {
+      status: retest.connection.status,
+      summary: retest.connection.summary,
+      tokenLastFour: retest.connection.tokenLastFour,
+      lastCheckedAt: retest.connection.lastCheckedAt,
+      lastErrorCode: retest.connection.lastErrorCode,
+      updatedAt: retest.connection.updatedAt,
+    },
+    testResult: {
+      ok: retest.testResult.ok,
+      status: retest.testResult.status,
+      summary: retest.testResult.summary,
+      errorCode: retest.testResult.errorCode,
+    },
+    message: retest.testResult.summary,
   };
 }
 
