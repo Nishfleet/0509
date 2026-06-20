@@ -122,9 +122,10 @@ function mockDashboardLoaderDependencies(options: { counterMoveAudits?: unknown[
     getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({ count: 0, latestAt: null }),
     getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({ runs: 0, watchlistsChecked: 0, adsSeen: 0 }),
     getUserPlanBillingInfo: vi.fn().mockResolvedValue({ plan: "free", dodoStatus: null }),
-    listRecentAgentActionAudits: vi.fn(async (_env, _userId, query: { limit?: number } = {}) =>
-      counterMoveAudits.slice(0, query.limit ?? counterMoveAudits.length),
-    ),
+    listRecentAgentActionAudits: vi.fn(async (_env, _userId, query: { limit?: number; offset?: number } = {}) => {
+      const offset = query.offset ?? 0;
+      return counterMoveAudits.slice(offset, offset + (query.limit ?? counterMoveAudits.length));
+    }),
     listAgentMemory: vi.fn().mockResolvedValue([
       {
         id: "memory-1",
@@ -408,33 +409,19 @@ describe("dashboard route agent memory", () => {
     expect(markup).not.toContain("Expired move");
   });
 
-  it("keeps open counter-move follow-ups visible behind newer quiet briefs", async () => {
+  it("paginates past newer quiet briefs to keep open counter-move follow-ups visible", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
 
     mockDashboardLoaderDependencies({
       counterMoveAudits: [
-        createCounterMoveAudit({
-          id: "audit-quiet-1",
-          targetLabel: "Quiet 1",
+        ...Array.from({ length: 30 }, (_, index) => createCounterMoveAudit({
+          id: `audit-quiet-${index}`,
+          targetLabel: `Quiet ${index}`,
           workflowStatus: "quiet",
           openCount: 0,
-          updatedAt: "2026-06-20T00:04:00.000Z",
-        }),
-        createCounterMoveAudit({
-          id: "audit-quiet-2",
-          targetLabel: "Quiet 2",
-          workflowStatus: "quiet",
-          openCount: 0,
-          updatedAt: "2026-06-20T00:03:00.000Z",
-        }),
-        createCounterMoveAudit({
-          id: "audit-quiet-3",
-          targetLabel: "Quiet 3",
-          workflowStatus: "quiet",
-          openCount: 0,
-          updatedAt: "2026-06-20T00:02:00.000Z",
-        }),
+          updatedAt: `2026-06-20T00:${String(index).padStart(2, "0")}:00.000Z`,
+        })),
         createCounterMoveAudit({
           id: "audit-open-older",
           targetLabel: "Nykaa",
@@ -451,6 +438,7 @@ describe("dashboard route agent memory", () => {
       context: createContext(),
       request: new Request("http://localhost/app"),
     } as never);
+    const dataServer = await import("~/lib/data.server");
 
     expect(loaderData.counterMoveFollowUps).toHaveLength(1);
     expect(loaderData.counterMoveFollowUps[0]).toMatchObject({
@@ -458,5 +446,15 @@ describe("dashboard route agent memory", () => {
       title: "Older pricing proof needs review",
       openCount: 1,
     });
+    expect(dataServer.listRecentAgentActionAudits).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({ limit: 30, offset: 0 }),
+    );
+    expect(dataServer.listRecentAgentActionAudits).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({ limit: 30, offset: 30 }),
+    );
   });
 });

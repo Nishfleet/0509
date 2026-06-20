@@ -573,6 +573,7 @@ export async function listRecentAgentActionAudits(
     status?: AgentActionAuditStatus | null;
     resourceType?: string | null;
     limit?: number;
+    offset?: number;
   } = {},
 ) {
   const clauses = ["user_id = ?"];
@@ -590,6 +591,7 @@ export async function listRecentAgentActionAudits(
     bindings.push(options.resourceType);
   }
   bindings.push(Math.max(1, Math.min(50, Math.floor(options.limit ?? 10))));
+  bindings.push(Math.max(0, Math.floor(options.offset ?? 0)));
 
   const rows = await many<AgentActionAuditRow>(
     env,
@@ -598,7 +600,7 @@ export async function listRecentAgentActionAudits(
       FROM agent_action_audit
       WHERE ${clauses.join(" AND ")}
       ORDER BY updated_at DESC
-      LIMIT ?
+      LIMIT ? OFFSET ?
     `,
     ...bindings,
   );
