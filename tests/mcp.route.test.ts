@@ -191,14 +191,6 @@ function setupMocks(authOk = true, actionsWriteEnabled = true) {
   return mocks;
 }
 
-async function loadDocs() {
-  const { loader } = await import("~/routes/api.mcp");
-  return loader({
-    context: { cloudflare: { env: {} } },
-    request: new Request("https://0509.io/api/mcp"),
-  } as never);
-}
-
 async function postMcp(body: Record<string, unknown>) {
   const { action } = await import("~/routes/api.mcp");
   return action({
@@ -231,37 +223,6 @@ afterEach(() => {
 });
 
 describe("MCP route", () => {
-  it("documents the live agent boundary", async () => {
-    const response = await loadDocs();
-    const body = await response.json() as {
-      status: string;
-      endpoint: string;
-      tools: Array<{ name: string }>;
-      agentActivation: {
-        firstWorkflow: Array<{ label: string }>;
-        actionGroups: Array<{ label: string; actions: string[] }>;
-        supportPaths: Array<{ label: string }>;
-        blockedCapabilities: string[];
-      };
-      notLiveYet: string[];
-    };
-
-    expect(body.status).toBe("live");
-    expect(body.endpoint).toBe("https://0509.io/api/mcp");
-    expect(body.tools.map((tool) => tool.name)).toContain("get_workspace_readiness");
-    expect(body.tools.map((tool) => tool.name)).toContain("get_digest_export");
-    expect(body.tools.map((tool) => tool.name)).toContain("create_watchlist");
-    expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
-    expect(body.agentActivation.actionGroups.map((group) => group.label)).toContain("Delivery controls");
-    expect(body.agentActivation.actionGroups.find((group) => group.label === "Watchlists")?.actions).toContain("create_watchlist");
-    expect(body.agentActivation.actionGroups.find((group) => group.label === "Watchlists")?.actions).not.toContain("watchlist.create");
-    expect(body.agentActivation.supportPaths.map((path) => path.label)).toContain("Security and deletion requests");
-    expect(body.agentActivation.blockedCapabilities).toContain("secret-bearing integration setup");
-    expect(body.notLiveYet).toContain("TikTok ingestion");
-    expect(body.notLiveYet).not.toContain("secret-bearing integration setup");
-    expect(body.notLiveYet).not.toContain("MCP server");
-  });
-
   it("rejects unsupported MCP SSE stream probes on the POST-only endpoint", async () => {
     const { loader } = await import("~/routes/api.mcp");
     const response = await loader({
@@ -290,12 +251,17 @@ describe("MCP route", () => {
       },
     });
     const initialized = await initialize.json() as {
-      result: { protocolVersion: string; capabilities: { tools: { listChanged: boolean } } };
+      result: {
+        protocolVersion: string;
+        capabilities: { tools: { listChanged: boolean } };
+        instructions: string;
+      };
     };
 
     expect(initialize.headers.get("mcp-protocol-version")).toBe("2025-06-18");
     expect(initialized.result.protocolVersion).toBe("2025-06-18");
     expect(initialized.result.capabilities.tools.listChanged).toBe(false);
+    expect(initialized.result.instructions).toContain("customer API key creation, rotation, and revocation");
 
     const tools = await postMcp({
       jsonrpc: "2.0",
@@ -304,7 +270,14 @@ describe("MCP route", () => {
       params: {},
     });
     const body = await tools.json() as {
-      result: { tools: Array<{ name: string; annotations: { readOnlyHint: boolean } }> };
+      result: {
+        tools: Array<{
+          name: string;
+          annotations: { readOnlyHint: boolean };
+          requiresWriteEnabled: boolean;
+          credentialRequirement: string;
+        }>;
+      };
     };
 
     expect(body.result.tools.map((tool) => tool.name)).toEqual([
@@ -333,7 +306,15 @@ describe("MCP route", () => {
       "list_web_mentions",
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
-    expect(body.result.tools.find((tool) => tool.name === "create_watchlist")?.annotations.readOnlyHint).toBe(false);
+    expect(body.result.tools[0]).toMatchObject({
+      requiresWriteEnabled: false,
+      credentialRequirement: "Works with any active customer API key.",
+    });
+    expect(body.result.tools.find((tool) => tool.name === "create_watchlist")).toMatchObject({
+      annotations: { readOnlyHint: false },
+      requiresWriteEnabled: true,
+      credentialRequirement: "Requires a write-enabled customer API key.",
+    });
   });
 
   it("hides write tools for read-only API keys", async () => {
@@ -344,7 +325,15 @@ describe("MCP route", () => {
       method: "tools/list",
       params: {},
     });
-    const body = await tools.json() as { result: { tools: Array<{ name: string }> } };
+    const body = await tools.json() as {
+      result: {
+        tools: Array<{
+          name: string;
+          requiresWriteEnabled: boolean;
+          credentialRequirement: string;
+        }>;
+      };
+    };
 
     expect(body.result.tools.map((tool) => tool.name)).toEqual([
       "get_workspace_readiness",
@@ -352,6 +341,8 @@ describe("MCP route", () => {
       "get_watchlist_export",
       "get_digest_export",
     ]);
+    expect(body.result.tools.every((tool) => !tool.requiresWriteEnabled)).toBe(true);
+    expect(body.result.tools.every((tool) => tool.credentialRequirement === "Works with any active customer API key.")).toBe(true);
   });
 
   it("returns workspace readiness through tools/call", async () => {

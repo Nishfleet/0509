@@ -1,11 +1,14 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import {
-  AGENT_ACTION_GROUPS,
   AGENT_BLOCKED_CAPABILITIES,
   AGENT_FIRST_WORKFLOW,
+  BROAD_WRITE_API_NON_GOAL,
   CUSTOMER_SUPPORT_PATHS,
+  READ_ONLY_API_KEY_REQUIREMENT,
+  WRITE_ENABLED_API_KEY_REQUIREMENT,
 } from "~/lib/agent-action-catalog";
+import { mcpActionGroups } from "~/lib/mcp-agent-action-groups";
 import type { AppEnv } from "~/lib/env.server";
 import type { CustomerAgentActionName } from "~/lib/customer-agent-actions.server";
 import type { CustomerApiKeyRecord } from "~/lib/types";
@@ -534,36 +537,6 @@ const MCP_TOOLS = [
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
 ];
-const MCP_TOOL_NAME_BY_AGENT_ACTION = {
-  get_workspace_readiness: "get_workspace_readiness",
-  "watchlist.create": "create_watchlist",
-  "watchlist.update": "update_watchlist",
-  "watchlist.refresh": "refresh_watchlist",
-  "watchlist.pause": "pause_watchlist",
-  "watchlist.resume": "resume_watchlist",
-  "collection.create": "create_collection",
-  "proof.add_external": "add_external_proof",
-  "share.create": "create_share_link",
-  "report.create": "create_report",
-  "report.share": "share_report",
-  "counter_move_brief.create": "create_counter_move_brief",
-  "memory.upsert": "upsert_memory",
-  "memory.list": "list_memory",
-  "client_room.upsert": "upsert_client_room",
-  "client_room.list": "list_client_rooms",
-  "delivery_targets.list": "list_delivery_targets",
-  "delivery_settings.update": "update_delivery_settings",
-  "delivery_target.update": "update_delivery_target",
-  "web_mentions.list": "list_web_mentions",
-} as const;
-
-function mcpActionGroups() {
-  return AGENT_ACTION_GROUPS.map((group) => ({
-    ...group,
-    actions: group.actions.map((actionName) => MCP_TOOL_NAME_BY_AGENT_ACTION[actionName]),
-  }));
-}
-
 type JsonRpcId = string | number | null;
 
 interface JsonRpcRequest {
@@ -596,11 +569,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       header: "Authorization: Bearer <Five to Nine API key>",
       createKeysIn: `${origin}/app/sources`,
     },
-    tools: MCP_TOOLS.map((tool) => ({
-      name: tool.name,
-      title: tool.title,
-      description: tool.description,
-    })),
+    tools: MCP_TOOLS.map(mcpToolDiscoveryEntry),
     liveDataScope: [
       "Account-owned collections",
       "Account-owned watchlists",
@@ -621,6 +590,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "TikTok ingestion",
       "Google or YouTube ingestion",
       "LinkedIn or Pinterest ingestion",
+      BROAD_WRITE_API_NON_GOAL,
     ],
   });
 }
@@ -666,7 +636,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        "Use these tools to retrieve Five to Nine workspace readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Audited write tools are limited to safe workspace actions. Start by checking readiness, then set up or tune watchlists, package proof, and save memory. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, billing, team-invite, delivery-send, secret-setup, or unsupported-channel coverage.",
+        `Use these tools to retrieve Five to Nine workspace readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active customer API key; audited workspace action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package proof, and save memory. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these app-owned capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
     });
   }
 
@@ -1018,13 +988,26 @@ function toolNotFound(message: string) {
 }
 
 function toolsForApiKey(apiKey: CustomerApiKeyRecord) {
-  return apiKey.actionsWriteEnabled
+  const tools = apiKey.actionsWriteEnabled
     ? MCP_TOOLS
     : MCP_TOOLS.filter((tool) => !isWriteToolName(tool.name));
+
+  return tools.map(mcpToolDiscoveryEntry);
 }
 
 function isWriteToolName(name: string) {
   return WRITE_TOOL_NAMES.has(name);
+}
+
+function mcpToolDiscoveryEntry(tool: (typeof MCP_TOOLS)[number]) {
+  const requiresWriteEnabled = isWriteToolName(tool.name);
+  return {
+    ...tool,
+    requiresWriteEnabled,
+    credentialRequirement: requiresWriteEnabled
+      ? WRITE_ENABLED_API_KEY_REQUIREMENT
+      : READ_ONLY_API_KEY_REQUIREMENT,
+  };
 }
 
 function errorToolResult(structuredContent: Record<string, unknown>) {

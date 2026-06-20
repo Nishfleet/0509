@@ -13,7 +13,7 @@ import {
   sanitizeAgentActionMetadata,
 } from "~/lib/agent-actions.server";
 import {
-  CUSTOMER_AGENT_ACTION_NAME_SET,
+  isCustomerAgentActionName,
   type CustomerAgentActionName,
 } from "~/lib/agent-action-catalog";
 import { normalizeSavedQuery } from "~/lib/normalize";
@@ -133,9 +133,7 @@ export function customerAgentActionErrorPayload(error: unknown) {
 
 export function normalizeCustomerAgentActionName(value: string | null | undefined): CustomerAgentActionName | null {
   const normalized = value?.trim().toLowerCase();
-  return CUSTOMER_AGENT_ACTION_NAME_SET.has(normalized as CustomerAgentActionName)
-    ? (normalized as CustomerAgentActionName)
-    : null;
+  return isCustomerAgentActionName(normalized) ? normalized : null;
 }
 
 export function customerAgentActionRequiresIdempotency(actionName: CustomerAgentActionName) {

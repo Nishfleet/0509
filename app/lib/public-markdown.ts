@@ -1,11 +1,13 @@
 import {
-  AGENT_ACTION_GROUPS,
   AGENT_BLOCKED_CAPABILITIES,
   AGENT_FIRST_WORKFLOW,
+  WRITE_ENABLED_API_KEY_REQUIREMENT,
   CUSTOMER_SUPPORT_PATHS,
+  auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
 
-const AUDITED_AGENT_ACTION_GROUPS = AGENT_ACTION_GROUPS.filter((group) => group.id !== "readiness");
+const AUDITED_AGENT_ACTION_GROUPS = auditedAgentActionGroups();
+const AUDITED_AGENT_ACTION_GROUP_SUMMARY = AUDITED_AGENT_ACTION_GROUPS.map((group) => group.label).join(", ");
 
 const PUBLIC_MARKDOWN_PATHS = new Set([
   "/",
@@ -37,9 +39,9 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Authenticated board, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
 - Signed-in boards can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
 - Customer API keys can read account-owned readiness, collection, watchlist, and digest exports at /api/v1.
-- Customer API keys can also use /api/v1/actions and /api/mcp for narrow audited workspace actions: watchlists, manual proof links, share links, reports, counter-move briefs, account memory, and client rooms.
+- Write-enabled customer API keys can also use /api/v1/actions and /api/mcp for narrow audited workspace actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
 - Recommended first agent workflow: ${AGENT_FIRST_WORKFLOW.map((step) => step.label).join(" -> ")}.
-- Live audited action groups: ${AUDITED_AGENT_ACTION_GROUPS.map((group) => group.label).join(", ")}.
+- Live audited action groups: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}. ${WRITE_ENABLED_API_KEY_REQUIREMENT}
 - Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
 - Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
@@ -102,7 +104,7 @@ Current product truth:
 - Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved boards, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
 - Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
 - Customer API keys support /api/v1 readiness plus collection, watchlist, and digest exports for account-owned data.
-- Customer API keys support narrow audited workspace actions through /api/v1/actions and /api/mcp for watchlists, manual proof links, share links, reports, counter-move briefs, account memory, and client rooms.
+- Write-enabled customer API keys support narrow audited workspace actions through /api/v1/actions and /api/mcp for ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
 - Recommended first agent workflow: ${AGENT_FIRST_WORKFLOW.map((step) => step.label).join(" -> ")}.
 - Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Paid customer support paths cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests.
