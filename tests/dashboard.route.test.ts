@@ -46,7 +46,7 @@ async function mockRouter(loaderData: unknown) {
   });
 }
 
-function mockDashboardLoaderDependencies() {
+function mockDashboardLoaderDependencies(options: { counterMoveAudits?: unknown[] } = {}) {
   const liveKey = ["f9", "live", "dashboard"].join("_");
 
   vi.doMock("~/lib/auth.server", () => ({
@@ -72,6 +72,7 @@ function mockDashboardLoaderDependencies() {
     getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({ count: 0, latestAt: null }),
     getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({ runs: 0, watchlistsChecked: 0, adsSeen: 0 }),
     getUserPlanBillingInfo: vi.fn().mockResolvedValue({ plan: "free", dodoStatus: null }),
+    listRecentAgentActionAudits: vi.fn().mockResolvedValue(options.counterMoveAudits ?? []),
     listAgentMemory: vi.fn().mockResolvedValue([
       {
         id: "memory-1",
@@ -154,9 +155,100 @@ describe("dashboard route agent memory", () => {
 
     expect(markup).toContain("Agent memory ready");
     expect(markup).toContain("[redacted]: [redacted]");
+    expect(markup).toContain("Counter-move follow-ups");
     expect(markup).toContain("/app/clients");
     expect(markup).not.toContain("hunter2");
     expect(markup).not.toContain(["f9", "live", "dashboard"].join("_"));
     expect(markup).not.toContain("password=");
+  });
+
+  it("surfaces safe counter-move follow-ups from agent action audits", async () => {
+    mockDashboardLoaderDependencies({
+      counterMoveAudits: [
+        {
+          id: "audit-counter-move-1",
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          actionName: "counter_move_brief.create",
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+          idempotencyKey: "brief-1",
+          status: "succeeded",
+          result: {
+            brief: {
+              targetLabel: "Nykaa",
+              workflow: {
+                ownerLabel: "Growth lead",
+                channel: "client_room",
+                status: "needs_review",
+                openCount: 1,
+                expiresAt: "2026-06-24T02:00:00.000Z",
+                followUps: [
+                  {
+                    title: "Review pricing move",
+                    status: "open",
+                    ownerLabel: "Growth lead",
+                    channel: "client_room",
+                    expiresAt: "2026-06-24T02:00:00.000Z",
+                  },
+                ],
+              },
+            },
+          },
+          errorCode: null,
+          errorMessage: null,
+          metadata: {},
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:01:00.000Z",
+        },
+        {
+          id: "audit-legacy-brief",
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          actionName: "counter_move_brief.create",
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+          idempotencyKey: "brief-legacy",
+          status: "succeeded",
+          result: {
+            brief: {
+              targetLabel: "Legacy",
+              summary: "Legacy payload without workflow metadata",
+            },
+          },
+          errorCode: null,
+          errorMessage: null,
+          metadata: {},
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:01:00.000Z",
+        },
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(loaderData.counterMoveFollowUps).toHaveLength(1);
+    expect(loaderData.counterMoveFollowUps[0]).toMatchObject({
+      title: "Review pricing move",
+      ownerLabel: "Growth lead",
+      channelLabel: "Client room",
+      status: "needs_review",
+      openCount: 1,
+    });
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Counter-move follow-ups");
+    expect(markup).toContain("Review pricing move");
+    expect(markup).toContain("Growth lead");
+    expect(markup).toContain("Client room");
+    expect(markup).not.toContain("Legacy payload");
   });
 });

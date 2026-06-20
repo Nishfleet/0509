@@ -818,6 +818,9 @@ describe("runCustomerAgentAction", () => {
         watchlistId: "watchlist-1",
         limit: 3,
         timeZone: "Asia/Kolkata",
+        ownerLabel: "Growth lead",
+        followUpChannel: "client_room",
+        expiryDays: 10,
       },
     );
 
@@ -825,6 +828,13 @@ describe("runCustomerAgentAction", () => {
       brief: {
         watchlistId: string;
         moves: Array<{ counterMove: string; priorityBand: string }>;
+        workflow: {
+          ownerLabel: string;
+          channel: string;
+          status: string;
+          openCount: number;
+          followUps: Array<{ eventId: string; status: string; ownerLabel: string; channel: string }>;
+        };
       };
     };
     expect(result.brief.watchlistId).toBe("watchlist-1");
@@ -832,8 +842,57 @@ describe("runCustomerAgentAction", () => {
       priorityBand: "High priority",
       counterMove: expect.stringContaining("offer shift"),
     });
+    expect(result.brief.workflow).toMatchObject({
+      ownerLabel: "Growth lead",
+      channel: "client_room",
+      status: "needs_review",
+      openCount: 1,
+    });
+    expect(result.brief.workflow.followUps[0]).toMatchObject({
+      eventId: "event-1",
+      status: "open",
+      ownerLabel: "Growth lead",
+      channel: "client_room",
+    });
     expect(mocks.listWatchEvents).toHaveBeenCalledWith(expect.anything(), "watchlist-1", 9);
     expect(mocks.listAdsByIds).toHaveBeenCalledWith(expect.anything(), ["external:linkedin:proof-1"]);
+    expect(outcome.audit.metadata).toMatchObject({
+      workflowStatus: "needs_review",
+      followUpOpenCount: 1,
+      followUpChannel: "client_room",
+      followUpExpiresAt: expect.any(String),
+    });
+  });
+
+  it("rejects unsafe counter-move workflow hints", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "brief-unsafe",
+        source: "api_v1",
+      },
+      "counter_move_brief.create",
+      {
+        watchlistId: "watchlist-1",
+        ownerLabel: "apiKey=f9_live_secret",
+      },
+    )).rejects.toMatchObject({
+      code: "secret_workflow_owner_rejected",
+    });
+
+    expect(mocks.finishAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      "audit-1",
+      expect.objectContaining({
+        status: "failed",
+        errorCode: "action_failed",
+      }),
+    );
   });
 
   it("lists delivery targets with destination and secret metadata redacted", async () => {

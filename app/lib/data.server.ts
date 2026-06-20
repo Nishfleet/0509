@@ -565,6 +565,47 @@ export async function findAgentActionAuditByIdempotencyKey(
   return row ? toAgentActionAuditRecord(row) : null;
 }
 
+export async function listRecentAgentActionAudits(
+  env: AppEnv,
+  userId: string,
+  options: {
+    actionName?: string | null;
+    status?: AgentActionAuditStatus | null;
+    resourceType?: string | null;
+    limit?: number;
+  } = {},
+) {
+  const clauses = ["user_id = ?"];
+  const bindings: unknown[] = [userId];
+  if (options.actionName) {
+    clauses.push("action_name = ?");
+    bindings.push(options.actionName);
+  }
+  if (options.status) {
+    clauses.push("status = ?");
+    bindings.push(options.status);
+  }
+  if (options.resourceType) {
+    clauses.push("resource_type = ?");
+    bindings.push(options.resourceType);
+  }
+  bindings.push(Math.max(1, Math.min(50, Math.floor(options.limit ?? 10))));
+
+  const rows = await many<AgentActionAuditRow>(
+    env,
+    `
+      SELECT *
+      FROM agent_action_audit
+      WHERE ${clauses.join(" AND ")}
+      ORDER BY updated_at DESC
+      LIMIT ?
+    `,
+    ...bindings,
+  );
+
+  return rows.map(toAgentActionAuditRecord);
+}
+
 export async function createAgentActionAudit(
   env: AppEnv,
   input: {
