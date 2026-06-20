@@ -61,6 +61,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("customer API key creation, rotation, and revocation");
     expect(PUBLIC_MARKDOWN).toContain("Paid customer support paths cover");
     expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, and trust pages are available");
+    expect(PUBLIC_MARKDOWN).toContain("coarse aggregate production evidence for recent monitoring");
+    expect(PUBLIC_MARKDOWN).toContain("without exact activity counts or timestamps");
     expect(PUBLIC_MARKDOWN).toContain("Email delivery uses Cloudflare Email Service");
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history");
     expect(PUBLIC_MARKDOWN).toContain("Manual external proof links can store user-supplied visible spend, impression, and reach values");
@@ -89,6 +91,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Recommended first agent workflow");
     expect(LLMS_TEXT).toContain("Paid customer support paths cover billing changes and cancellation");
     expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");
+    expect(LLMS_TEXT).toContain("coarse aggregate production evidence");
+    expect(LLMS_TEXT).toContain("private canaries and manual blockers remain the launch gate");
     expect(LLMS_TEXT).toContain("Email delivery uses Cloudflare Email Service");
     expect(LLMS_TEXT).toContain("Customer WhatsApp delivery is not launch-scoped today");
     expect(LLMS_TEXT).not.toContain("MCP are not live yet");

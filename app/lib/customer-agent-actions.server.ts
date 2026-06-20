@@ -13,6 +13,19 @@ import {
   sanitizeAgentActionMetadata,
 } from "~/lib/agent-actions.server";
 import {
+  AgentMemoryInputError,
+  isSecretishMemoryField,
+  isSecretishMemoryString,
+  readOptionalSafeAgentMemoryScope,
+  readSafeAgentMemoryKey,
+  readSafeAgentMemoryScope,
+  readSafeAgentMemorySource,
+  readSafeAgentMemoryValue,
+  rejectSecretishMemoryValue,
+  safeAgentMemoryRecord,
+  sanitizeAgentFacingValue,
+} from "~/lib/agent-memory.server";
+import {
   isCustomerAgentActionName,
   type CustomerAgentActionName,
 } from "~/lib/agent-action-catalog";
@@ -1539,67 +1552,39 @@ function readReportResourceType(input: Record<string, unknown>) {
   throw new CustomerAgentActionError("invalid_resource_type", "resourceType must be collection or watchlist.");
 }
 
+function mapAgentMemoryInputError<T>(callback: () => T): T {
+  try {
+    return callback();
+  } catch (error) {
+    if (error instanceof AgentMemoryInputError) {
+      throw new CustomerAgentActionError(error.code, error.message, { status: error.status });
+    }
+    throw error;
+  }
+}
+
 function readAgentMemoryScope(input: Record<string, unknown>): AgentMemoryScope {
-  return readOptionalAgentMemoryScope(input) ?? "workspace";
+  return mapAgentMemoryInputError(() => readSafeAgentMemoryScope(input.scope));
 }
 
 function readOptionalAgentMemoryScope(input: Record<string, unknown>): AgentMemoryScope | null {
-  const value = readString(input, "scope");
-  if (!value) {
-    return null;
-  }
-  if (value === "workspace" || value === "customer" || value === "brand" || value === "competitor") {
-    return value;
-  }
-  throw new CustomerAgentActionError(
-    "invalid_memory_scope",
-    "scope must be workspace, customer, brand, or competitor.",
-  );
+  return mapAgentMemoryInputError(() => readOptionalSafeAgentMemoryScope(input.scope));
 }
 
 function readMemoryKey(input: Record<string, unknown>) {
-  const key = requireString(input, "key");
-  if (isSecretishField(key)) {
-    throw new CustomerAgentActionError("secret_memory_rejected", "Memory keys cannot describe secrets or credentials.");
-  }
-  return key;
+  return mapAgentMemoryInputError(() => readSafeAgentMemoryKey(input.key));
 }
 
 function readMemorySource(input: Record<string, unknown>) {
-  const source = readString(input, "source");
-  if (source && isSecretishField(source)) {
-    throw new CustomerAgentActionError("secret_memory_rejected", "Memory source cannot describe secrets or credentials.");
-  }
-  return source;
+  return mapAgentMemoryInputError(() => readSafeAgentMemorySource(input.source));
 }
 
 function readMemoryValue(input: Record<string, unknown>) {
-  const value = input.value;
-  rejectSecretishMemoryValue(value);
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
-    return { value };
-  }
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return sanitizeAgentActionMetadata(value);
-  }
-  if (Array.isArray(value)) {
-    return {
-      items: value.map((entry) =>
-        entry && typeof entry === "object" && !Array.isArray(entry)
-          ? sanitizeAgentActionMetadata(entry)
-          : entry,
-      ),
-    };
-  }
-  throw new CustomerAgentActionError("missing_field", "value is required.");
+  return mapAgentMemoryInputError(() => readSafeAgentMemoryValue(input.value));
 }
 
 function safeMemoryRecord(memory: AgentMemoryRecord): AgentMemoryRecord {
-  return {
-    ...memory,
-    value: sanitizeAgentActionMetadata(memory.value),
-    source: memory.source && isSecretishField(memory.source) ? null : memory.source,
-  };
+  return safeAgentMemoryRecord(memory);
 }
 
 function readClientRoomNotes(input: Record<string, unknown>) {
@@ -1610,7 +1595,7 @@ function readClientRoomNotes(input: Record<string, unknown>) {
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new CustomerAgentActionError("invalid_room_notes", "notes must be an object.", { status: 400 });
   }
-  rejectSecretishMemoryValue(value, "Client room notes cannot contain secrets or credentials.");
+  mapAgentMemoryInputError(() => rejectSecretishMemoryValue(value, "Client room notes cannot contain secrets or credentials."));
   return sanitizeAgentActionMetadata(value);
 }
 
@@ -1663,7 +1648,7 @@ function readMetadataDisplayName(metadata: Record<string, unknown>) {
 
 function safeDeliveryTargetDisplayName(target: DeliveryTargetRecord, fallback: string) {
   const displayName = readMetadataDisplayName(target.metadata);
-  if (!displayName || isSecretishString(displayName) || displayName.includes(target.targetValue)) {
+  if (!displayName || isSecretishMemoryString(displayName) || displayName.includes(target.targetValue)) {
     return fallback;
   }
   if (target.channel === "email" && /[^\s@]+@[^\s@]+\.[^\s@]+/.test(displayName)) {
@@ -1732,52 +1717,6 @@ function sanitizeClientRoomNotesForResponse(notes: Record<string, unknown>) {
   return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
     ? sanitized as Record<string, unknown>
     : {};
-}
-
-function rejectSecretishMemoryValue(
-  value: unknown,
-  message = "Memory values cannot contain secrets or credentials.",
-) {
-  if (typeof value === "string") {
-    if (isSecretishString(value)) {
-      throw new CustomerAgentActionError("secret_memory_rejected", message);
-    }
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      rejectSecretishMemoryValue(entry, message);
-    }
-    return;
-  }
-  if (value && typeof value === "object") {
-    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      if (isSecretishField(key)) {
-        throw new CustomerAgentActionError("secret_memory_rejected", message);
-      }
-      rejectSecretishMemoryValue(nested, message);
-    }
-  }
-}
-
-function sanitizeAgentFacingValue(value: unknown): unknown {
-  if (value === null || typeof value === "number" || typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "string") {
-    return isSecretishString(value) ? "[redacted]" : value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(sanitizeAgentFacingValue).filter((entry) => typeof entry !== "undefined");
-  }
-  if (value && typeof value === "object") {
-    const output: Record<string, unknown> = {};
-    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      output[key] = isSecretishField(key) ? "[redacted]" : sanitizeAgentFacingValue(nested);
-    }
-    return output;
-  }
-  return undefined;
 }
 
 function readOptionalObject(input: Record<string, unknown>, field: string) {
@@ -1975,17 +1914,6 @@ function formatRetryAfterLabel(retryAfterSeconds: number) {
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
-function isSecretishField(value: string) {
-  return /^(key|token|secret|password)$/i.test(value.trim()) ||
-    /(authorization|bearer|credential|encrypted|password|secret|token|webhook|api[_-]?key|privatekey|accesskey)/i
-    .test(value);
-}
-
-function isSecretishString(value: string) {
-  return /(?:^f9_live_|bearer\s+|xox[baprs]-|sk-[a-z0-9]|hooks\.slack\.com\/services|\/share\/[a-z0-9_-]{12,}|https:\/\/[^/\s]+\/share\/[a-z0-9_-]{12,})/i
-    .test(value);
-}
-
 function buildAgentActionRequestFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
   return fnv1a32(`${actionName}:${stableStringify(sanitizeAgentActionInputForFingerprint(actionName, input))}`);
 }
@@ -2010,7 +1938,7 @@ function sanitizeFingerprintObject(
       continue;
     }
     const preservesSchemaKey = options.topLevel && options.actionName === "memory.upsert" && key === "key";
-    if (isSecretishField(key) && !preservesSchemaKey) {
+    if (isSecretishMemoryField(key) && !preservesSchemaKey) {
       output[key] = "[redacted]";
       continue;
     }
@@ -2027,7 +1955,7 @@ function sanitizeFingerprintValue(value: unknown, actionName: CustomerAgentActio
     return value;
   }
   if (typeof value === "string") {
-    return isSecretishString(value) ? "[redacted]" : value;
+    return isSecretishMemoryString(value) ? "[redacted]" : value;
   }
   if (Array.isArray(value)) {
     return value.map((entry) => sanitizeFingerprintValue(entry, actionName))

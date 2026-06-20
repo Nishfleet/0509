@@ -22,6 +22,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listCollections,
     listWatchlists,
   } = await import("~/lib/data.server");
+  const { safeAgentMemoryRecord, summarizeAgentMemoryValue } = await import("~/lib/agent-memory.server");
   const env = getEnv(context);
   const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const [rooms, watchlists, collections, memories] = await Promise.all([
@@ -35,7 +36,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     rooms,
     watchlists,
     collections,
-    memories,
+    memories: memories.map((memory) => toMemorySummary(safeAgentMemoryRecord(memory), summarizeAgentMemoryValue)),
   };
 }
 
@@ -46,6 +47,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     getClientRoom,
     getCollection,
     getWatchlist,
+    upsertAgentMemory,
     upsertClientRoom,
   } = await import("~/lib/data.server");
   const env = getEnv(context);
@@ -76,6 +78,46 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return room
       ? { ok: true, message: "Client room saved." }
       : { ok: false, message: "Client room could not be saved." };
+  }
+
+  if (intent === "upsert-agent-memory") {
+    const {
+      AgentMemoryInputError,
+      readSafeAgentMemoryKey,
+      readSafeAgentMemoryScope,
+      readSafeAgentMemoryValue,
+    } = await import("~/lib/agent-memory.server");
+    const rawValue = readOptionalString(formData.get("value"));
+    if (!rawValue) {
+      return { ok: false, message: "Memory value is required." };
+    }
+
+    const clientRoomId = readOptionalString(formData.get("clientRoomId"));
+    if (clientRoomId) {
+      const room = await getClientRoom(env, workspaceUserId, clientRoomId);
+      if (!room) {
+        return { ok: false, message: "Client room not found." };
+      }
+    }
+
+    try {
+      const memory = await upsertAgentMemory(env, workspaceUserId, {
+        scope: readSafeAgentMemoryScope(formData.get("scope")),
+        key: readSafeAgentMemoryKey(formData.get("key")),
+        clientRoomId,
+        value: readSafeAgentMemoryValue(rawValue),
+        source: "owner_ui",
+      });
+
+      return memory
+        ? { ok: true, message: "Operating memory saved for future agent runs." }
+        : { ok: false, message: "Operating memory could not be saved." };
+    } catch (error) {
+      if (error instanceof AgentMemoryInputError) {
+        return { ok: false, message: error.message };
+      }
+      throw error;
+    }
   }
 
   if (intent === "set-client-room-status") {
@@ -254,12 +296,52 @@ export default function ClientsRoute() {
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel">
           <span className="f9-app-kicker">Saved memory</span>
-          <h2>Agent context already saved</h2>
+          <h2>Operating context for agents</h2>
+          <Form className="f9-auth-form" method="post">
+            <input name="intent" type="hidden" value="upsert-agent-memory" />
+            <label className="f9-field">
+              <span>Memory key</span>
+              <input name="key" placeholder="review_cadence" required />
+            </label>
+            <div className="f9-field-grid">
+              <label className="f9-field">
+                <span>Scope</span>
+                <select name="scope" defaultValue="workspace">
+                  <option value="workspace">Workspace</option>
+                  <option value="customer">Customer</option>
+                  <option value="brand">Brand</option>
+                  <option value="competitor">Competitor</option>
+                </select>
+              </label>
+              <label className="f9-field">
+                <span>Client room</span>
+                <select name="clientRoomId" defaultValue="">
+                  <option value="">Account-wide</option>
+                  {activeRooms.map((room) => (
+                    <option key={room.id} value={room.id}>{room.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="f9-field">
+              <span>Context</span>
+              <textarea
+                name="value"
+                placeholder="Goals, review cadence, tone, positioning guardrails, or follow-up preference"
+                required
+                rows={4}
+              />
+            </label>
+            <SubmitButton className="f9-primary-button" intent="upsert-agent-memory" pendingLabel="Saving...">
+              Save memory
+            </SubmitButton>
+          </Form>
           <div className="f9-work-list is-compact">
             {data.memories.slice(0, 8).map((memory) => (
               <div className="f9-work-row" key={memory.id}>
                 <div>
                   <h3>{memory.key}</h3>
+                  <p>{memory.preview}</p>
                   <p className="f9-muted-copy">
                     {memory.scope}
                     {memory.watchlistId ? " · watchlist scoped" : ""}
@@ -389,4 +471,29 @@ function resourceLabel(ref: ClientRoomResourceRef) {
     return "Digest";
   }
   return "Report";
+}
+
+function toMemorySummary(
+  memory: {
+    id: string;
+    key: string;
+    scope: string;
+    watchlistId: string | null;
+    clientRoomId: string | null;
+    value: Record<string, unknown>;
+    source: string | null;
+    updatedAt: string;
+  },
+  summarizeAgentMemoryValue: (value: unknown) => string,
+) {
+  return {
+    id: memory.id,
+    key: memory.key,
+    scope: memory.scope,
+    watchlistId: memory.watchlistId,
+    clientRoomId: memory.clientRoomId,
+    source: memory.source,
+    updatedAt: memory.updatedAt,
+    preview: summarizeAgentMemoryValue(memory.value),
+  };
 }

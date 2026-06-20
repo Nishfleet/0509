@@ -25,6 +25,20 @@ describe("rateLimitPolicyFor", () => {
     expect(rateLimitPolicyFor(new Request("https://0509.io/search?website=https%3A%2F%2Fnykaa.com"))).toBeNull();
     expect(rateLimitPolicyFor(new Request("https://0509.io/search?query=nykaa", { method: "HEAD" }))).toBeNull();
   });
+
+  it("protects the public status page because it can render cached production evidence", () => {
+    expect(rateLimitPolicyFor(new Request("https://0509.io/status"))).toMatchObject({
+      scope: "public-status",
+      limit: 120,
+      keyByIpOnly: true,
+    });
+    expect(rateLimitPolicyFor(new Request("https://0509.io/status", { method: "HEAD" }))).toMatchObject({
+      scope: "public-status",
+    });
+    expect(rateLimitPolicyFor(new Request("https://0509.io/status/"))).toMatchObject({
+      scope: "public-status",
+    });
+  });
 });
 
 describe("enforceRequestRateLimit", () => {
@@ -105,6 +119,36 @@ describe("enforceRequestRateLimit", () => {
         headers: {
           "cf-connecting-ip": "203.0.113.12",
           "user-agent": "brand-new-agent",
+        },
+      }),
+      env,
+    );
+    expect(blocked?.status).toBe(429);
+  });
+
+  it("keeps public status slash variants in the same quota bucket", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+
+    for (let index = 0; index < 120; index += 1) {
+      const path = index % 2 === 0 ? "/status" : "/status////";
+      await expect(
+        enforceRequestRateLimit(
+          new Request(`https://0509.io${path}`, {
+            headers: {
+              "cf-connecting-ip": "203.0.113.13",
+              "user-agent": `rotating-agent-${index}`,
+            },
+          }),
+          env,
+        ),
+      ).resolves.toBeNull();
+    }
+
+    const blocked = await enforceRequestRateLimit(
+      new Request("https://0509.io/status/", {
+        headers: {
+          "cf-connecting-ip": "203.0.113.13",
+          "user-agent": "new-agent",
         },
       }),
       env,
