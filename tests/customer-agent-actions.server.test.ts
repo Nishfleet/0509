@@ -442,7 +442,6 @@ describe("runCustomerAgentAction", () => {
       connection: {
         status: string;
         summary: string;
-        tokenLastFour: string;
         lastErrorCode: string | null;
       };
       testResult: {
@@ -456,7 +455,6 @@ describe("runCustomerAgentAction", () => {
       source: "meta_ad_library",
       connection: {
         status: "healthy",
-        tokenLastFour: "1234",
         lastErrorCode: null,
       },
       testResult: {
@@ -473,6 +471,7 @@ describe("runCustomerAgentAction", () => {
     });
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("encrypted-meta-token");
+    expect(serialized).not.toContain(customerMetaConnection.tokenLastFour);
     expect(serialized).not.toContain(customerMetaConnection.lastErrorMessage);
     expect(serialized).not.toContain("tokenFingerprint");
   });
