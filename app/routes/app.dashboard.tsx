@@ -823,9 +823,9 @@ export default function AppDashboardRoute() {
       <article className="f9-app-panel f9-callout-panel">
         <span className="f9-app-kicker">Production proof</span>
         <p>
-          This checklist shows your account setup. Broad launch proof is separate: recent monitoring, proof capture,
-          digest delivery, Slack delivery, Dodo portal confirmation, and external uptime monitoring stay visible on the
-          public status page.
+          This checklist shows your account setup. Detailed launch evidence stays in the private canary checks and
+          signed-in app; the public status page shows the coarse launch blockers and safety posture without exposing
+          account activity.
         </p>
         <Link className="f9-secondary-button" to="/status">
           Open status
@@ -949,7 +949,7 @@ function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
     status !== "needs_review" ||
     openCount === 0 ||
     isExpiredIso(expiresAt) ||
-    isStaleCounterMoveAudit(audit.updatedAt)
+    (!expiresAt && isStaleCounterMoveAudit(audit.updatedAt))
   ) {
     return null;
   }

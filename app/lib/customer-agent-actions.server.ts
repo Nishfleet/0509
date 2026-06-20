@@ -55,6 +55,7 @@ export { CUSTOMER_AGENT_ACTION_NAMES } from "~/lib/agent-action-catalog";
 export type { CustomerAgentActionName } from "~/lib/agent-action-catalog";
 
 const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
+  "counter_move_brief.create",
   "source.meta.retest",
   "watchlist.create",
   "watchlist.update",

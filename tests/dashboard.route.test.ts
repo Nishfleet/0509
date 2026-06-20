@@ -33,9 +33,10 @@ function createCounterMoveAudit(options: {
   workflowStatus: "needs_review" | "quiet";
   openCount: number;
   title?: string;
+  expiresAt?: string | null;
   updatedAt: string;
 }) {
-  const expiresAt = "2026-06-24T02:00:00.000Z";
+  const expiresAt = "expiresAt" in options ? options.expiresAt : "2026-06-24T02:00:00.000Z";
   return {
     id: options.id,
     userId: "user-1",
@@ -530,5 +531,62 @@ describe("dashboard route agent memory", () => {
       "user-1",
       expect.objectContaining({ limit: 30, offset: 30 }),
     );
+  });
+
+  it("keeps stale audit-backed counter-move follow-ups until their embedded expiry closes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
+
+    mockDashboardLoaderDependencies({
+      counterMoveAudits: [
+        createCounterMoveAudit({
+          id: "audit-open-stale",
+          targetLabel: "Nykaa",
+          workflowStatus: "needs_review",
+          openCount: 1,
+          title: "Old pricing proof needs review",
+          updatedAt: "2026-06-12T23:59:00.000Z",
+        }),
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(loaderData.counterMoveFollowUps).toHaveLength(1);
+    expect(loaderData.counterMoveFollowUps[0]).toMatchObject({
+      id: "audit-open-stale",
+      title: "Old pricing proof needs review",
+    });
+  });
+
+  it("hides stale audit-backed counter-move follow-ups when no valid expiry exists", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
+
+    mockDashboardLoaderDependencies({
+      counterMoveAudits: [
+        createCounterMoveAudit({
+          id: "audit-open-stale-without-expiry",
+          targetLabel: "Nykaa",
+          workflowStatus: "needs_review",
+          openCount: 1,
+          title: "Old pricing proof needs review",
+          expiresAt: null,
+          updatedAt: "2026-06-12T23:59:00.000Z",
+        }),
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(loaderData.counterMoveFollowUps).toEqual([]);
   });
 });

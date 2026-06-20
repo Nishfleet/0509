@@ -9,7 +9,7 @@ status: "in_progress"
 
 ## Goal
 
-Preserve and verify the agent-facing security hardening work already present in the worktree: shared secret-pattern detection, client-room display redaction, safer counter-move and memory MCP schemas, and public status checks that do not depend on mutable labels.
+Preserve and verify the agent-facing security hardening work already present in the worktree: shared secret-pattern detection, client-room display redaction, safer counter-move and memory MCP schemas, and public status copy that does not expose tenant-backed evidence.
 
 ## Scope
 
@@ -17,7 +17,7 @@ Preserve and verify the agent-facing security hardening work already present in 
 - Reject or redact secret-like client-room names, labels, resource labels, and notes before agent/UI exposure.
 - Require idempotency for counter-move brief creation across API/MCP paths.
 - Keep Meta source retest responses credential-free through MCP.
-- Make public status readiness checks use structured state instead of label text.
+- Keep public status as a coarse blocker/safety page rather than a tenant-backed evidence surface.
 - Add focused tests for the bug classes above.
 
 ## Non-Goals

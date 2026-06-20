@@ -8,13 +8,13 @@ date: "2026-06-20"
 
 ## Summary
 
-Show launch-readiness evidence from existing aggregate production signals on the public status page and keep the signed-in app aligned with the same proof boundary. The product should feel more self-serve without exposing private canary tokens or claiming broad launch while Slack, Dodo portal, and uptime blockers remain open.
+Show launch-readiness boundaries on the public status page and keep detailed evidence in private canary checks and signed-in operational views. The product should feel more self-serve without exposing private canary tokens, account activity, or claiming broad launch while Slack, Dodo portal, and uptime blockers remain open.
 
 ---
 
 ## Problem Frame
 
-0509 already has private launch-readiness canaries and workspace readiness. The remaining customer-facing gap is that operational proof is split between private scripts, docs, and static status copy, so buyers and account owners cannot quickly see what is proven, what needs proof, and what is still manual.
+0509 already has private launch-readiness canaries and workspace readiness. The remaining customer-facing gap is that operational truth is split between private scripts, docs, and static status copy, so buyers and account owners cannot quickly see which launch blockers remain and where detailed proof lives.
 
 ---
 
@@ -22,9 +22,9 @@ Show launch-readiness evidence from existing aggregate production signals on the
 
 **Public operational truth**
 
-- R1. `/status` must render safe aggregate launch signals when D1 is available: monitoring, proof capture, digest delivery, Slack delivery, and WhatsApp launch scope.
+- R1. `/status` must render coarse launch blockers and safety posture without account activity, exact aggregate counts, timestamps, or private canary evidence.
 - R2. `/status` must keep broad launch gated when Slack delivery proof, Dodo portal confirmation, or external uptime monitoring are not done.
-- R3. `/status` must degrade honestly when D1 is unavailable and must not require or expose the private canary token.
+- R3. `/status` must not require or expose the private canary token.
 
 **Signed-in readiness alignment**
 
@@ -40,8 +40,8 @@ Show launch-readiness evidence from existing aggregate production signals on the
 
 ## Key Technical Decisions
 
-- KTD1. Reuse `getLaunchReadinessSignals`: The aggregate query already excludes synthetic canary proof captures and returns safe counts/timestamps.
-- KTD2. Keep the private canary route private: `/api/launch-readiness` remains token-gated; `/status` reads safe aggregate signals directly server-side.
+- KTD1. Keep `/status` static and public-safe: launch evidence remains in private canary checks and signed-in operational views.
+- KTD2. Keep the private canary route private: `/api/launch-readiness` remains token-gated and `/status` does not read tenant-backed evidence.
 - KTD3. Manual blockers stay manual: Dodo portal and external uptime are rendered as explicit manual confirmations, not inferred from code.
 - KTD4. Dashboard copy is a pointer, not a launch verdict: Workspace readiness remains account-specific while production readiness lives on `/status`.
 
@@ -49,24 +49,24 @@ Show launch-readiness evidence from existing aggregate production signals on the
 
 ## Implementation Units
 
-### U1. Add Public Status Evidence Model
+### U1. Add Public Status Boundary
 
-- **Goal:** Add a small status model around `getLaunchReadinessSignals` so `/status` can render safe launch evidence and blockers.
+- **Goal:** Make `/status` render safe launch blockers and the private-canary boundary without exposing tenant-backed evidence.
 - **Requirements:** R1, R2, R3, R6
 - **Dependencies:** None
 - **Files:** Modify `app/routes/status.tsx`; add or update route tests.
-- **Patterns to follow:** `app/routes/api.launch-readiness.ts`, `app/lib/data.server.ts#getLaunchReadinessSignals`, `app/components/public-doc-shell.tsx`.
-- **Test scenarios:** D1 unavailable shows an honest unavailable state. Recent monitoring/proof/digest/Slack proof render as ready. Missing Slack proof keeps broad launch gated. WhatsApp stays not launch-scoped when provider/customer/webhook are disabled.
+- **Patterns to follow:** `app/routes/api.launch-readiness.ts`, `app/components/public-doc-shell.tsx`.
+- **Test scenarios:** The page renders static blockers and explains that detailed proof is held in authenticated launch-readiness canaries.
 - **Verification:** Status route tests pass.
 
 ### U2. Align Dashboard Readiness Copy
 
-- **Goal:** Point signed-in owners from the dashboard to production-readiness proof without mixing account setup status with global launch blockers.
+- **Goal:** Point signed-in owners from the dashboard to public launch blockers without implying `/status` exposes account proof.
 - **Requirements:** R4, R5, R6
 - **Dependencies:** U1
 - **Files:** Modify `app/routes/app.dashboard.tsx`; update dashboard/app rebuild tests if needed.
 - **Patterns to follow:** Existing setup checklist and lifecycle nudge panels.
-- **Test scenarios:** Dashboard mentions public status/production proof when setup is incomplete or delivery proof is missing, and does not expose secrets or broad-launch claims.
+- **Test scenarios:** Dashboard mentions public status/production boundaries when setup is incomplete or delivery proof is missing, and does not expose secrets, account activity, or broad-launch claims.
 - **Verification:** App rebuild and relevant dashboard tests pass.
 
 ### U3. Keep Docs and Markdown Truth in Sync
@@ -99,8 +99,8 @@ Show launch-readiness evidence from existing aggregate production signals on the
 
 ## Risks & Dependencies
 
-- **Stale-proof risk:** Aggregate signals use a 36-hour window, so copy must say recent proof rather than permanent uptime.
-- **Secret exposure risk:** Status must show counts and timestamps only, never target values or tokens.
+- **Stale-proof risk:** Public copy must not suggest `/status` renders private or tenant-backed evidence.
+- **Secret exposure risk:** Status must avoid counts, timestamps, target values, and tokens.
 - **Trust risk:** A green local workspace must not become a broad-launch claim while manual blockers remain.
 
 ---

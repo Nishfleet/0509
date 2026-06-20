@@ -539,6 +539,7 @@ describe("runCustomerAgentAction", () => {
       },
     )).rejects.toMatchObject({
       code: "missing_idempotency_key",
+      status: 400,
     });
     expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
   });
@@ -1098,6 +1099,7 @@ describe("runCustomerAgentAction", () => {
       {
         userId: "user-1",
         apiKeyId: "api-key-1",
+        idempotencyKey: "delivery-targets-list-1",
         source: "api_v1",
       },
       "delivery_targets.list",
@@ -1119,6 +1121,13 @@ describe("runCustomerAgentAction", () => {
       channel: "slack",
       limit: 50,
     });
+    expect(mocks.claimAgentActionAudit).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionName: "delivery_targets.list",
+        idempotencyKey: null,
+      }),
+    );
   });
 
   it("redacts destination-like delivery display names and clamps list limits", async () => {
@@ -1266,6 +1275,7 @@ describe("runCustomerAgentAction", () => {
       {
         userId: "user-1",
         apiKeyId: "api-key-1",
+        idempotencyKey: "web-mentions-list-1",
         source: "api_v1",
       },
       "web_mentions.list",
@@ -1289,6 +1299,13 @@ describe("runCustomerAgentAction", () => {
       includeInactive: false,
       limit: 50,
     });
+    expect(mocks.claimAgentActionAudit).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionName: "web_mentions.list",
+        idempotencyKey: null,
+      }),
+    );
   });
 
   it("saves and lists sanitized scoped agent memory", async () => {
@@ -1347,6 +1364,13 @@ describe("runCustomerAgentAction", () => {
       scope: "brand",
       limit: 5,
     });
+    expect(mocks.claimAgentActionAudit).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionName: "memory.list",
+        idempotencyKey: null,
+      }),
+    );
   });
 
   it("redacts legacy secret-looking keys and values from agent memory list responses", async () => {
@@ -1556,6 +1580,13 @@ describe("runCustomerAgentAction", () => {
       status: "all",
       limit: 5,
     });
+    expect(mocks.claimAgentActionAudit).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionName: "client_room.list",
+        idempotencyKey: null,
+      }),
+    );
   });
 
   it("rejects client-room notes with secret-like values before persistence", async () => {
