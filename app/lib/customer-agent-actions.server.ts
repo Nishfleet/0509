@@ -513,7 +513,6 @@ async function retestMetaSourceFromAgent(env: AppEnv, userId: string) {
     connection: {
       status: retest.connection.status,
       summary: retest.connection.summary,
-      tokenLastFour: retest.connection.tokenLastFour,
       lastCheckedAt: retest.connection.lastCheckedAt,
       lastErrorCode: retest.connection.lastErrorCode,
       updatedAt: retest.connection.updatedAt,
