@@ -24,6 +24,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCustomerMetaConnection,
+    listAgentMemory,
     listCollections,
     listDeliveryTargets,
     listDigests,
@@ -32,6 +33,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchEvents,
     listWatchlists,
   } = await import("~/lib/data.server");
+  const { safeAgentMemoryRecord, summarizeAgentMemoryValue } = await import("~/lib/agent-memory.server");
   const { getProofUsageSummary } = await import("~/lib/plan.server");
   const { getWorkspaceReadiness } = await import("~/lib/workspace-readiness.server");
   const { getSuccessfulProofCaptureStatsForUser, getSuccessfulRunStatsForUserBetween, getUserPlanBillingInfo } = await import(
@@ -52,6 +54,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     billingInfo,
     workspaceMembers,
     workspaceReadiness,
+    agentMemories,
   ] = await Promise.all([
     listSavedQueries(env, workspaceUserId),
     listCollections(env, workspaceUserId),
@@ -63,6 +66,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getUserPlanBillingInfo(env, workspaceUserId),
     listWorkspaceMembers(env, workspaceUserId),
     getWorkspaceReadiness(env, workspaceUserId),
+    listAgentMemory(env, workspaceUserId, { limit: 5 }),
   ]);
   const plan = billingInfo.plan;
   const hasPaymentIssue =
@@ -96,6 +100,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     overnightStats,
     successfulProofStats,
     workspaceReadiness,
+    agentMemories: agentMemories.map((memory) => {
+      const safeMemory = safeAgentMemoryRecord(memory);
+      return {
+        id: safeMemory.id,
+        key: safeMemory.key,
+        scope: safeMemory.scope,
+        preview: summarizeAgentMemoryValue(safeMemory.value),
+        updatedAt: safeMemory.updatedAt,
+      };
+    }),
     plan,
     teamMemberCount: workspaceMembers.length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
@@ -255,6 +269,8 @@ export default function AppDashboardRoute() {
     source: "/app/sources",
     api: "/app/sources",
     mcp: "/app/sources",
+    memory: "/app/clients",
+    client_room: "/app/clients",
   };
   const setupItems = data.workspaceReadiness.items
     .filter((item) => item.status !== "not_applicable")
@@ -265,6 +281,10 @@ export default function AppDashboardRoute() {
       href: item.action?.href ?? readinessReviewPaths[item.id] ?? "/app",
     }));
   const lifecycleNudges = data.workspaceReadiness.nudges ?? [];
+  const agentMemories = data.agentMemories ?? [];
+  const agentMemoryCount = data.workspaceReadiness.counts?.agentMemoryEntries ?? agentMemories.length;
+  const hasAgentMemory = agentMemoryCount > 0;
+  const latestAgentMemory = agentMemories[0] ?? null;
   const statusCards = [
     {
       label: "Competitors watched",
@@ -367,6 +387,17 @@ export default function AppDashboardRoute() {
           : "Connect email or Slack when the team wants the proof pushed out.",
       done: deliveryComplete,
       href: sentDigests > 0 ? "/app/digests" : "/app/sources",
+    },
+    {
+      label: "Remembered",
+      state: hasAgentMemory
+        ? `${agentMemoryCount} memory ${agentMemoryCount === 1 ? "entry" : "entries"}`
+        : "No context saved",
+      detail: hasAgentMemory
+        ? "Future reports and briefs can use saved goals, tone, and review preferences."
+        : "Save goals, tone, or review cadence so the next agent run has context.",
+      done: hasAgentMemory,
+      href: "/app/clients",
     },
   ];
   const readyCount = data.workspaceReadiness.readyCount;
@@ -554,6 +585,7 @@ export default function AppDashboardRoute() {
           <Link to="/search?website=https%3A%2F%2Fmamaearth.in">Try Mamaearth</Link>
           {savedQueries.length > 0 ? <Link to="/search">Saved searches</Link> : null}
           <Link to="/app/watchlists">Open watchlists</Link>
+          <Link to="/app/clients">Save agent memory</Link>
         </div>
       </section>
 
@@ -707,12 +739,33 @@ export default function AppDashboardRoute() {
               <strong>{hasEmailDelivery ? "Email alerts ready" : "Email alert target missing"}</strong>
               <p>{hasEmailDelivery ? "Digest and instant alert delivery can use the saved target." : "Add delivery from a watchlist after creating it."}</p>
             </div>
+            <div>
+              <span className={`f9-status-dot ${hasAgentMemory ? "is-good" : "is-attention"}`} />
+              <strong>{hasAgentMemory ? "Agent memory ready" : "Agent memory missing"}</strong>
+              <p>
+                {latestAgentMemory
+                  ? `${latestAgentMemory.key}: ${latestAgentMemory.preview}`
+                  : "Save account context before the next report, brief, or client-room handoff."}
+              </p>
+            </div>
           </div>
           <Link className="f9-secondary-button" to="/app/sources">
             Review tracking access
           </Link>
         </article>
       </div>
+
+      <article className="f9-app-panel f9-callout-panel">
+        <span className="f9-app-kicker">Production proof</span>
+        <p>
+          This checklist shows your account setup. Broad launch proof is separate: recent monitoring, proof capture,
+          digest delivery, Slack delivery, Dodo portal confirmation, and external uptime monitoring stay visible on the
+          public status page.
+        </p>
+        <Link className="f9-secondary-button" to="/status">
+          Open status
+        </Link>
+      </article>
 
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel">

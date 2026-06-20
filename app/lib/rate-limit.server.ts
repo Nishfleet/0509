@@ -74,6 +74,7 @@ async function enforceRateLimitPolicy(
 
   try {
     const url = new URL(request.url);
+    const route = normalizeRateLimitedPathname(url.pathname);
     const now = new Date();
     const since = new Date(now.getTime() - policy.windowSeconds * 1000).toISOString();
     const keyHash = await requestKeyHash(request, policy);
@@ -82,7 +83,7 @@ async function enforceRateLimitPolicy(
       `INSERT INTO rate_limit_events (id, scope, key_hash, route, created_at)
        VALUES (?, ?, ?, ?, ?)`,
     )
-      .bind(crypto.randomUUID(), policy.scope, keyHash, url.pathname, now.toISOString())
+      .bind(crypto.randomUUID(), policy.scope, keyHash, route, now.toISOString())
       .run();
 
     const row = await env.DB.prepare(
@@ -93,7 +94,7 @@ async function enforceRateLimitPolicy(
           AND route = ?
           AND created_at >= ?`,
     )
-      .bind(policy.scope, keyHash, url.pathname, since)
+      .bind(policy.scope, keyHash, route, since)
       .first<{ count: number }>();
 
     const count = Number(row?.count ?? 0);
@@ -118,16 +119,21 @@ async function enforceRateLimitPolicy(
 export function rateLimitPolicyFor(request: Request): RateLimitPolicy | null {
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
+  const pathname = normalizeRateLimitedPathname(url.pathname);
 
-  if (method === "OPTIONS" || (method === "GET" && url.pathname === "/api/health")) {
+  if (method === "OPTIONS" || (method === "GET" && pathname === "/api/health")) {
     return null;
   }
 
-  if (url.pathname.startsWith("/api/auth") || url.pathname.startsWith("/auth/")) {
+  if ((method === "GET" || method === "HEAD") && pathname === "/status") {
+    return { scope: "public-status", limit: 120, windowSeconds: 60, failClosed: false, keyByIpOnly: true };
+  }
+
+  if (pathname.startsWith("/api/auth") || pathname.startsWith("/auth/")) {
     return { scope: "auth", limit: 20, windowSeconds: 10 * 60, failClosed: true };
   }
 
-  if (url.pathname.startsWith("/api/delivery-status")) {
+  if (pathname.startsWith("/api/delivery-status")) {
     return { scope: "delivery-webhook", limit: 180, windowSeconds: 60, failClosed: false };
   }
 
@@ -135,11 +141,15 @@ export function rateLimitPolicyFor(request: Request): RateLimitPolicy | null {
     return { scope: "write", limit: 60, windowSeconds: 60, failClosed: true };
   }
 
-  if (url.pathname.startsWith("/api/")) {
+  if (pathname.startsWith("/api/")) {
     return { scope: "api-read", limit: 240, windowSeconds: 60, failClosed: false };
   }
 
   return null;
+}
+
+function normalizeRateLimitedPathname(pathname: string) {
+  return pathname === "/" ? pathname : pathname.replace(/\/+$/, "");
 }
 
 async function requestKeyHash(request: Request, policy: RateLimitPolicy) {

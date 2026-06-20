@@ -1096,6 +1096,63 @@ describe("runCustomerAgentAction", () => {
     });
   });
 
+  it("redacts legacy secret-looking keys and values from agent memory list responses", async () => {
+    const mocks = setupMocks();
+    const liveKey = ["f9", "live", "abc123"].join("_");
+    mocks.listAgentMemory.mockResolvedValueOnce([
+      {
+        id: "memory-1",
+        userId: "user-1",
+        scope: "brand",
+        key: liveKey,
+        watchlistId: null,
+        clientRoomId: null,
+        value: {
+          value: `API key: ${liveKey}`,
+          nested: {
+            [liveKey]: "do-not-return",
+            tone: "plainspoken",
+          },
+        },
+        source: `owner ${liveKey}`,
+        createdAt: "2026-06-19T00:00:00.000Z",
+        updatedAt: "2026-06-19T00:00:00.000Z",
+      },
+    ]);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "memory-list-redacted",
+        source: "api_v1",
+      },
+      "memory.list",
+      {
+        scope: "brand",
+        limit: 5,
+      },
+    );
+    const result = outcome.result as { memories: Array<{ key: string; source: string | null; value: unknown }> };
+    const serialized = JSON.stringify(result);
+
+    expect(result.memories[0]).toMatchObject({
+      key: "[redacted]",
+      source: null,
+      value: {
+        value: "[redacted]",
+        nested: {
+          "[redacted]": "[redacted]",
+          tone: "plainspoken",
+        },
+      },
+    });
+    expect(serialized).not.toContain(liveKey);
+    expect(serialized).not.toContain("do-not-return");
+  });
+
   it("includes the memory key in idempotency fingerprints", async () => {
     const mocks = setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
