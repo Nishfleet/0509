@@ -576,33 +576,33 @@ export async function listRecentAgentActionAudits(
     offset?: number;
   } = {},
 ) {
-  const clauses = ["user_id = ?"];
-  const bindings: unknown[] = [userId];
-  if (options.actionName) {
-    clauses.push("action_name = ?");
-    bindings.push(options.actionName);
-  }
-  if (options.status) {
-    clauses.push("status = ?");
-    bindings.push(options.status);
-  }
-  if (options.resourceType) {
-    clauses.push("resource_type = ?");
-    bindings.push(options.resourceType);
-  }
-  bindings.push(Math.max(1, Math.min(50, Math.floor(options.limit ?? 10))));
-  bindings.push(Math.max(0, Math.floor(options.offset ?? 0)));
+  const actionName = options.actionName ?? null;
+  const status = options.status ?? null;
+  const resourceType = options.resourceType ?? null;
+  const limit = Math.max(1, Math.min(50, Math.floor(options.limit ?? 10)));
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
 
   const rows = await many<AgentActionAuditRow>(
     env,
     `
       SELECT *
       FROM agent_action_audit
-      WHERE ${clauses.join(" AND ")}
+      WHERE user_id = ?
+        AND (? IS NULL OR action_name = ?)
+        AND (? IS NULL OR status = ?)
+        AND (? IS NULL OR resource_type = ?)
       ORDER BY updated_at DESC
       LIMIT ? OFFSET ?
     `,
-    ...bindings,
+    userId,
+    actionName,
+    actionName,
+    status,
+    status,
+    resourceType,
+    resourceType,
+    limit,
+    offset,
   );
 
   return rows.map(toAgentActionAuditRecord);
@@ -998,6 +998,24 @@ export async function upsertClientRoom(
   const notesJson = hasNotes ? jsonValue(input.notes ?? {}) : null;
 
   if (input.roomId) {
+    const conflictingRoom = await one<ClientRoomRow>(
+      env,
+      `
+        SELECT *
+        FROM client_room
+        WHERE user_id = ?
+          AND name = ?
+          AND id <> ?
+        LIMIT 1
+      `,
+      userId,
+      name,
+      input.roomId,
+    );
+    if (conflictingRoom) {
+      return null;
+    }
+
     await run(
       env,
       `

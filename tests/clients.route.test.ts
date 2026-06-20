@@ -138,6 +138,84 @@ describe("clients route agent memory", () => {
     expect(upsertAgentMemory).not.toHaveBeenCalled();
   });
 
+  it("rejects secret-like client-room text before persistence", async () => {
+    mockAuth();
+    const upsertClientRoom = vi.fn();
+    vi.doMock("~/lib/data.server", () => ({
+      getClientRoom: vi.fn(),
+      getCollection: vi.fn(),
+      getWatchlist: vi.fn(),
+      upsertAgentMemory: vi.fn(),
+      upsertClientRoom,
+    }));
+
+    const { action } = await import("~/routes/app.clients");
+    const formData = new FormData();
+    formData.set("intent", "upsert-client-room");
+    formData.set("name", "Beauty client");
+    formData.set("clientLabel", "https://hooks.slack.com/services/T/B/C");
+    formData.set("goal", "Weekly client-ready review.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({ ok: false, message: "Client label cannot contain secrets or credentials." });
+    expect(upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("allows ordinary client-room display text that contains security-adjacent words", async () => {
+    mockAuth();
+    const upsertClientRoom = vi.fn().mockResolvedValue({
+      id: "room-1",
+      userId: "user-1",
+      name: "Token Metrics",
+      clientLabel: "Secret Sales",
+      status: "active",
+      notes: {
+        goal: "Webhook QA review.",
+      },
+      resourceRefs: [],
+      createdAt: "2026-06-20T00:00:00.000Z",
+      updatedAt: "2026-06-20T00:00:00.000Z",
+    });
+    vi.doMock("~/lib/data.server", () => ({
+      getClientRoom: vi.fn(),
+      getCollection: vi.fn(),
+      getWatchlist: vi.fn(),
+      upsertAgentMemory: vi.fn(),
+      upsertClientRoom,
+    }));
+
+    const { action } = await import("~/routes/app.clients");
+    const formData = new FormData();
+    formData.set("intent", "upsert-client-room");
+    formData.set("name", "Token Metrics");
+    formData.set("clientLabel", "Secret Sales");
+    formData.set("goal", "Webhook QA review.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(upsertClientRoom).toHaveBeenCalledWith(expect.anything(), "user-1", expect.objectContaining({
+      name: "Token Metrics",
+      clientLabel: "Secret Sales",
+      notes: expect.objectContaining({
+        goal: "Webhook QA review.",
+      }),
+    }));
+  });
+
   it("does not save client-room memory when the room is not owned by the workspace", async () => {
     mockAuth();
     const upsertAgentMemory = vi.fn();
@@ -201,6 +279,70 @@ describe("clients route agent memory", () => {
     expect(result.memories[0]).toMatchObject({
       key: "slack-note",
       preview: "[redacted]",
+    });
+  });
+
+  it("redacts legacy secret-like client-room fields from loader data", async () => {
+    mockAuth();
+    vi.doMock("~/lib/data.server", () => ({
+      listAgentMemory: vi.fn().mockResolvedValue([]),
+      listClientRooms: vi.fn().mockResolvedValue([
+        {
+          id: "room-1",
+          userId: "user-1",
+          name: "https://hooks.slack.com/services/T/B/C",
+          clientLabel: "apiKey=f9_live_secret",
+          status: "active",
+          notes: {
+            goal: "bearer abcdefghijklmnop",
+            cadence: "Weekly",
+            handoff: {
+              webhook: "https://hooks.slack.com/services/T/B/C",
+              owner: "Growth",
+            },
+            channels: ["Email", "bearer nestedabcdefghijklmnop"],
+          },
+          resourceRefs: [
+            {
+              resourceType: "watchlist",
+              resourceId: "watchlist-1",
+              label: "https://hooks.slack.com/services/T/B/C",
+            },
+          ],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([]),
+    }));
+
+    const { loader } = await import("~/routes/app.clients");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients"),
+    } as never);
+
+    expect(JSON.stringify(result)).not.toContain("hooks.slack.com");
+    expect(JSON.stringify(result)).not.toContain("f9_live_secret");
+    expect(JSON.stringify(result)).not.toContain("nestedabcdefghijklmnop");
+    expect(result.rooms[0]).toMatchObject({
+      name: "Client room",
+      clientLabel: "Client",
+      notes: {
+        goal: "[redacted]",
+        cadence: "Weekly",
+        handoff: {
+          "[redacted]": "[redacted]",
+          owner: "Growth",
+        },
+        channels: ["Email", "[redacted]"],
+      },
+      resourceRefs: [
+        {
+          label: "Watchlist",
+        },
+      ],
     });
   });
 

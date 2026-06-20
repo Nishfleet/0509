@@ -409,6 +409,80 @@ describe("dashboard route agent memory", () => {
     expect(markup).not.toContain("Expired move");
   });
 
+  it("redacts secret-like counter-move follow-up audit text before rendering", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
+    const liveKey = ["f9", "live", "countermove"].join("_");
+    const slackHook = "https://hooks.slack.com/services/T/B/C";
+
+    mockDashboardLoaderDependencies({
+      counterMoveAudits: [
+        {
+          id: "audit-secret-brief",
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          actionName: "counter_move_brief.create",
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+          idempotencyKey: "brief-secret",
+          status: "succeeded",
+          result: {
+            brief: {
+              targetLabel: liveKey,
+              workflow: {
+                ownerLabel: slackHook,
+                channel: "client_room",
+                status: "needs_review",
+                openCount: 1,
+                expiresAt: "2026-06-24T02:00:00.000Z",
+                followUps: [
+                  {
+                    title: "bearer abcdefghijklmnop",
+                    status: "open",
+                    ownerLabel: slackHook,
+                    channel: "client_room",
+                    expiresAt: "2026-06-24T02:00:00.000Z",
+                  },
+                ],
+              },
+            },
+          },
+          errorCode: null,
+          errorMessage: null,
+          metadata: {},
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:01:00.000Z",
+        },
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(JSON.stringify(loaderData)).not.toContain(liveKey);
+    expect(JSON.stringify(loaderData)).not.toContain(slackHook);
+    expect(JSON.stringify(loaderData)).not.toContain("bearer abcdefghijklmnop");
+    expect(loaderData.counterMoveFollowUps[0]).toMatchObject({
+      title: "Counter-move brief counter-move brief",
+      ownerLabel: "Workspace owner",
+      channelLabel: "Client room",
+    });
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Workspace owner");
+    expect(markup).toContain("Client room");
+    expect(markup).not.toContain(liveKey);
+    expect(markup).not.toContain(slackHook);
+    expect(markup).not.toContain("bearer abcdefghijklmnop");
+  });
+
   it("paginates past newer quiet briefs to keep open counter-move follow-ups visible", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));

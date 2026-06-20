@@ -1,7 +1,10 @@
 import { sanitizeAgentActionMetadata } from "~/lib/agent-actions.server";
+import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import { AGENT_MEMORY_SCOPES, type AgentMemoryRecord, type AgentMemoryScope } from "~/lib/types";
 
 type JsonRecord = Record<string, unknown>;
+
+export { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 
 export class AgentMemoryInputError extends Error {
   readonly code: string;
@@ -162,57 +165,6 @@ export function sanitizeAgentFacingValue(value: unknown): unknown {
     return output;
   }
   return undefined;
-}
-
-export function isSecretishMemoryField(value: string) {
-  return /^(key|token|secret|password)$/i.test(value.trim()) ||
-    /(authorization|bearer|credential|encrypted|password|secret|token|webhook|api[_-]?key|privatekey|accesskey)/i
-    .test(value);
-}
-
-export function isSecretishMemoryString(value: string) {
-  const normalized = value.trim();
-  return (
-    containsSecretishJsonMemoryValue(normalized) ||
-    /(?:^|[^a-z0-9_])f9_live_[a-z0-9_-]+/i.test(normalized) ||
-    /\b(?:bearer\s+[a-z0-9._~+/=-]+|xox[baprs]-[a-z0-9-]+|sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_]{8,}|github_pat_[a-z0-9_]{8,})\b/i.test(normalized) ||
-    /(?:^|[{\s,])["']?(?:password|passphrase|api[_-]?key|access[_-]?key|secret|token|authorization|webhook(?:[_-]?url)?)["']?\s*[:=]\s*["']?\S+/i.test(normalized) ||
-    /\b[a-z0-9_]*(?:api[_-]?key|access[_-]?key|secret|token|password|webhook)[a-z0-9_]*\s*=\s*\S+/i.test(normalized) ||
-    /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(normalized) ||
-    /\beyJ[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\b/i.test(normalized) ||
-    /\bhooks\.slack\.com\/services\/[^\s"'<>]+/i.test(normalized) ||
-    /https:\/\/[^\s"'<>]*(?:hooks\.slack\.com\/services|hooks\.zapier\.com\/hooks\/catch|discord(?:app)?\.com\/api\/webhooks|webhook\.office\.com|outlook\.office\.com\/webhook|\/(?:api\/)?webhooks?\/|\/hooks\/catch\/)[^\s"'<>]*/i.test(normalized) ||
-    /https:\/\/[^\s"'<>]*(?:logic\.azure\.com|powerautomate\.com)[^\s"'<>]*\bsig=/i.test(normalized) ||
-    /(?:\/share\/[a-z0-9_-]{12,}|https:\/\/[^/\s]+\/share\/[a-z0-9_-]{12,})/i.test(normalized)
-  );
-}
-
-function containsSecretishJsonMemoryValue(value: string) {
-  const normalized = value.trim();
-  if (!normalized || !/^[{["]/.test(normalized)) {
-    return false;
-  }
-
-  try {
-    return hasSecretishMemoryContent(JSON.parse(normalized));
-  } catch {
-    return false;
-  }
-}
-
-function hasSecretishMemoryContent(value: unknown): boolean {
-  if (typeof value === "string") {
-    return isSecretishMemoryString(value);
-  }
-  if (Array.isArray(value)) {
-    return value.some(hasSecretishMemoryContent);
-  }
-  if (value && typeof value === "object") {
-    return Object.entries(value as JsonRecord).some(([key, nested]) =>
-      isSecretishMemoryField(key) || isSecretishMemoryString(key) || hasSecretishMemoryContent(nested)
-    );
-  }
-  return false;
 }
 
 function requireMemoryString(value: unknown, name: string) {
