@@ -19,6 +19,9 @@ import type { AgentActionAuditRecord } from "~/lib/types";
 
 export const meta = () => [{ title: "Dashboard | Five to Nine" }];
 
+const COUNTER_MOVE_AUDIT_WINDOW_LIMIT = 30;
+const COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT = 3;
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
@@ -74,7 +77,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       actionName: "counter_move_brief.create",
       status: "succeeded",
       resourceType: "watchlist",
-      limit: 3,
+      limit: COUNTER_MOVE_AUDIT_WINDOW_LIMIT,
     }),
   ]);
   const plan = billingInfo.plan;
@@ -119,7 +122,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         updatedAt: safeMemory.updatedAt,
       };
     }),
-    counterMoveFollowUps: mapCounterMoveFollowUpAudits(counterMoveAudits),
+    counterMoveFollowUps: mapCounterMoveFollowUpAudits(counterMoveAudits).slice(0, COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT),
     plan,
     teamMemberCount: workspaceMembers.length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
@@ -905,6 +908,10 @@ function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
   const openCount = Math.max(0, Math.floor(readNumberValue(workflow?.openCount) ?? openFollowUps.length));
   const status = readWorkflowStatus(workflow?.status, openCount);
   const firstFollowUp = openFollowUps[0] ?? followUps[0] ?? null;
+  const expiresAt = readIsoString(workflow?.expiresAt) ?? readIsoString(firstFollowUp?.expiresAt);
+  if (status !== "needs_review" || openCount === 0 || isExpiredIso(expiresAt)) {
+    return null;
+  }
   const targetLabel = safeDashboardText(readStringValue(brief.targetLabel), "Counter-move brief");
   const title = safeDashboardText(
     readStringValue(firstFollowUp?.title) ?? readStringValue(brief.summary),
@@ -918,7 +925,7 @@ function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
     openCount,
     ownerLabel: safeDashboardText(readStringValue(workflow?.ownerLabel) ?? readStringValue(firstFollowUp?.ownerLabel), "Workspace owner"),
     channelLabel: formatFollowUpChannel(readStringValue(workflow?.channel) ?? readStringValue(firstFollowUp?.channel)),
-    expiresAt: readIsoString(workflow?.expiresAt) ?? readIsoString(firstFollowUp?.expiresAt),
+    expiresAt,
     updatedAt: audit.updatedAt,
   };
 }
@@ -946,6 +953,10 @@ function readNumberValue(value: unknown) {
 function readIsoString(value: unknown) {
   const normalized = readStringValue(value);
   return normalized && Number.isFinite(Date.parse(normalized)) ? normalized : null;
+}
+
+function isExpiredIso(value: string | null) {
+  return Boolean(value && Date.parse(value) <= Date.now());
 }
 
 function readWorkflowStatus(value: unknown, openCount: number) {

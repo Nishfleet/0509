@@ -1572,13 +1572,25 @@ function readCounterMoveOwnerLabel(input: Record<string, unknown>) {
   if (!value) {
     return null;
   }
-  if (isSecretishMemoryField(value) || isSecretishMemoryString(value)) {
+  if (isSecretishMemoryField(value) || isSecretishMemoryString(value) || looksLikeDeliveryTargetValue(value)) {
     throw new CustomerAgentActionError(
       "secret_workflow_owner_rejected",
-      "Counter-move follow-up owner cannot contain secrets or credentials.",
+      "Counter-move follow-up owner cannot contain secrets, credentials, or delivery targets.",
     );
   }
   return value.replace(/\s+/g, " ").slice(0, 80);
+}
+
+function looksLikeDeliveryTargetValue(value: string) {
+  const normalized = value.trim();
+  if (/[^\s@]+@[^\s@]+\.[^\s@]+/.test(normalized)) {
+    return true;
+  }
+  if (/\b(?:https?:\/\/|www\.)\S+/i.test(normalized)) {
+    return true;
+  }
+  const digits = normalized.replace(/\D/g, "");
+  return digits.length >= 7 && /^[+\d\s().-]+$/.test(normalized);
 }
 
 function readCounterMoveFollowUpChannel(input: Record<string, unknown>): CounterMoveFollowUpChannel | null {
