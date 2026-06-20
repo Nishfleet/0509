@@ -237,6 +237,12 @@ describe("MCP route", () => {
       status: string;
       endpoint: string;
       tools: Array<{ name: string }>;
+      agentActivation: {
+        firstWorkflow: Array<{ label: string }>;
+        actionGroups: Array<{ label: string; actions: string[] }>;
+        supportPaths: Array<{ label: string }>;
+        blockedCapabilities: string[];
+      };
       notLiveYet: string[];
     };
 
@@ -245,7 +251,14 @@ describe("MCP route", () => {
     expect(body.tools.map((tool) => tool.name)).toContain("get_workspace_readiness");
     expect(body.tools.map((tool) => tool.name)).toContain("get_digest_export");
     expect(body.tools.map((tool) => tool.name)).toContain("create_watchlist");
+    expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
+    expect(body.agentActivation.actionGroups.map((group) => group.label)).toContain("Delivery controls");
+    expect(body.agentActivation.actionGroups.find((group) => group.label === "Watchlists")?.actions).toContain("create_watchlist");
+    expect(body.agentActivation.actionGroups.find((group) => group.label === "Watchlists")?.actions).not.toContain("watchlist.create");
+    expect(body.agentActivation.supportPaths.map((path) => path.label)).toContain("Security and deletion requests");
+    expect(body.agentActivation.blockedCapabilities).toContain("secret-bearing integration setup");
     expect(body.notLiveYet).toContain("TikTok ingestion");
+    expect(body.notLiveYet).not.toContain("secret-bearing integration setup");
     expect(body.notLiveYet).not.toContain("MCP server");
   });
 

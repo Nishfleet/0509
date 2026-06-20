@@ -1,5 +1,15 @@
 import type { LoaderFunctionArgs } from "react-router";
 
+import {
+  AGENT_ACTION_GROUPS,
+  AGENT_BLOCKED_CAPABILITIES,
+  AGENT_FIRST_WORKFLOW,
+  CUSTOMER_SUPPORT_PATHS,
+  apiActionNames,
+} from "~/lib/agent-action-catalog";
+
+const REST_AGENT_ACTION_GROUPS = AGENT_ACTION_GROUPS.filter((group) => group.id !== "readiness");
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const origin = new URL(request.url).origin;
   return Response.json(
@@ -26,27 +36,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           method: "POST",
           path: "/api/v1/actions",
           formats: ["json"],
-          actions: [
-            "watchlist.create",
-            "watchlist.update",
-            "watchlist.refresh",
-            "watchlist.pause",
-            "watchlist.resume",
-            "collection.create",
-            "proof.add_external",
-            "share.create",
-            "report.create",
-            "report.share",
-            "counter_move_brief.create",
-            "memory.upsert",
-            "memory.list",
-            "client_room.upsert",
-            "client_room.list",
-            "delivery_targets.list",
-            "delivery_settings.update",
-            "delivery_target.update",
-            "web_mentions.list",
-          ],
+          actions: apiActionNames(),
         },
         {
           method: "GET",
@@ -70,11 +60,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
         "Watchlist changes and digest items owned by this account",
         "Manual external proof links, scoped memory, client rooms, redacted delivery settings, and existing web mention observations owned by this account",
       ],
+      agentActivation: {
+        firstWorkflow: AGENT_FIRST_WORKFLOW,
+        readinessEndpoint: "/api/v1/workspace-readiness",
+        actionGroups: REST_AGENT_ACTION_GROUPS,
+        supportPaths: CUSTOMER_SUPPORT_PATHS,
+        blockedCapabilities: AGENT_BLOCKED_CAPABILITIES,
+      },
       notLiveYet: [
         "TikTok ingestion",
         "Google or YouTube ingestion",
         "LinkedIn or Pinterest ingestion",
-        "fully general write API beyond audited agent actions",
       ],
     },
     {

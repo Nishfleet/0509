@@ -1,3 +1,12 @@
+import {
+  AGENT_ACTION_GROUPS,
+  AGENT_BLOCKED_CAPABILITIES,
+  AGENT_FIRST_WORKFLOW,
+  CUSTOMER_SUPPORT_PATHS,
+} from "~/lib/agent-action-catalog";
+
+const AUDITED_AGENT_ACTION_GROUPS = AGENT_ACTION_GROUPS.filter((group) => group.id !== "readiness");
+
 const PUBLIC_MARKDOWN_PATHS = new Set([
   "/",
   "/help",
@@ -29,6 +38,10 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Signed-in boards can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
 - Customer API keys can read account-owned readiness, collection, watchlist, and digest exports at /api/v1.
 - Customer API keys can also use /api/v1/actions and /api/mcp for narrow audited workspace actions: watchlists, manual proof links, share links, reports, counter-move briefs, account memory, and client rooms.
+- Recommended first agent workflow: ${AGENT_FIRST_WORKFLOW.map((step) => step.label).join(" -> ")}.
+- Live audited action groups: ${AUDITED_AGENT_ACTION_GROUPS.map((group) => group.label).join(", ")}.
+- Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
+- Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
 - Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
 - Email delivery uses Cloudflare Email Service through the app's send_email binding.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires at least one configured Slack target with successful live delivery proof.
@@ -90,6 +103,9 @@ Current product truth:
 - Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
 - Customer API keys support /api/v1 readiness plus collection, watchlist, and digest exports for account-owned data.
 - Customer API keys support narrow audited workspace actions through /api/v1/actions and /api/mcp for watchlists, manual proof links, share links, reports, counter-move briefs, account memory, and client rooms.
+- Recommended first agent workflow: ${AGENT_FIRST_WORKFLOW.map((step) => step.label).join(" -> ")}.
+- Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
+- Paid customer support paths cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires a configured Slack target with successful live delivery proof.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Customer WhatsApp delivery is not launch-scoped today and must stay behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
