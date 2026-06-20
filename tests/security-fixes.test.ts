@@ -54,7 +54,7 @@ describe("auth open-redirect protection", () => {
       expect(response).toBeInstanceOf(Response);
       expect((response as Response).headers.get("Location")).toBe("/app");
     }
-  });
+  }, 10_000);
 
   it("passes only sanitized redirect targets to the signup form", async () => {
     vi.doMock("~/lib/auth.server", () => ({

@@ -82,7 +82,7 @@ describe("app rebuild", () => {
     expect(dashboardRoute).toContain("Retained value loop");
     expect(dashboardRoute).toContain("What Five to Nine did for you");
     expect(dashboardRoute).toContain("Production proof");
-    expect(dashboardRoute).toContain("Broad launch proof is separate");
+    expect(dashboardRoute).toContain("Detailed launch evidence stays in the private canary checks");
     expect(dashboardRoute).toContain('to="/status"');
     expect(dashboardRoute).toContain("Watched");
     expect(dashboardRoute).toContain("Checked");

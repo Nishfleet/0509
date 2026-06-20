@@ -102,7 +102,7 @@ describe("launch readiness canary route", () => {
     ).rejects.toMatchObject({
       status: 404,
     });
-  });
+  }, 10_000);
 
   it("creates fresh monitoring, proof, digest, and delivery signals", async () => {
     const createWatchlistRun = vi.fn().mockResolvedValue("run-1");

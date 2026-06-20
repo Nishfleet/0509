@@ -179,7 +179,7 @@ const MCP_TOOLS = [
         },
         idempotencyKey: idempotencyKeySchema(),
       },
-      required: ["watchlistId"],
+      required: ["watchlistId", "idempotencyKey"],
       additionalProperties: false,
     },
     annotations: WRITE_TOOL_ANNOTATIONS,

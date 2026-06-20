@@ -181,6 +181,8 @@ function setupMocks(authOk = true, actionsWriteEnabled = true) {
     getCollection: vi.fn().mockResolvedValue(collection),
     getDigest: vi.fn().mockResolvedValue(digest),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
+    listAdsByIds: vi.fn().mockResolvedValue([ad]),
+    listAgentMemory: vi.fn().mockResolvedValue([]),
     listCollectionItems: vi.fn().mockResolvedValue([collectionItem]),
     listWatchEvents: vi.fn().mockResolvedValue([watchEvent]),
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
@@ -308,6 +310,7 @@ describe("MCP route", () => {
           inputSchema: {
             properties?: Record<string, unknown>;
             required?: string[];
+            not?: Record<string, unknown>;
           };
           annotations: { readOnlyHint: boolean };
           requiresWriteEnabled: boolean;
@@ -352,7 +355,12 @@ describe("MCP route", () => {
       requiresWriteEnabled: true,
       credentialRequirement: "Requires a write-enabled customer API key.",
     });
-    expect(body.result.tools.find((tool) => tool.name === "create_counter_move_brief")?.inputSchema).toMatchObject({
+    const updateWatchlistSchema = body.result.tools.find((tool) => tool.name === "update_watchlist")?.inputSchema;
+    expect(updateWatchlistSchema).toMatchObject({
+      required: ["watchlistId", "idempotencyKey"],
+    });
+    const counterMoveSchema = body.result.tools.find((tool) => tool.name === "create_counter_move_brief")?.inputSchema;
+    expect(counterMoveSchema).toMatchObject({
       required: ["watchlistId", "idempotencyKey"],
       properties: {
         ownerLabel: { type: "string" },
@@ -360,12 +368,16 @@ describe("MCP route", () => {
         expiryDays: { type: "number", minimum: 1, maximum: 30 },
       },
     });
-    expect(body.result.tools.find((tool) => tool.name === "list_memory")?.inputSchema).toMatchObject({
+    const listMemorySchema = body.result.tools.find((tool) => tool.name === "list_memory")?.inputSchema;
+    expect(listMemorySchema).toMatchObject({
       properties: {
         watchlistId: { type: "string" },
         clientRoomId: { type: "string" },
       },
+      not: { required: ["watchlistId", "clientRoomId"] },
     });
+    expect(listMemorySchema?.properties).not.toHaveProperty("idempotencyKey");
+    expect(body.result.tools.find((tool) => tool.name === "list_client_rooms")?.inputSchema.properties).not.toHaveProperty("idempotencyKey");
   });
 
   it("hides write tools for read-only API keys", async () => {
@@ -416,7 +428,7 @@ describe("MCP route", () => {
         };
       };
     };
-    expect(body.result.isError).toBe(false);
+    expect(body.result.isError, JSON.stringify(body.result.structuredContent)).toBe(false);
     expect(body.result.structuredContent.status).toBe("needs_setup");
     expect(body.result.structuredContent.items[0]).toMatchObject({
       id: "delivery",
@@ -486,7 +498,7 @@ describe("MCP route", () => {
       };
     };
 
-    expect(body.result.isError).toBe(false);
+    expect(body.result.isError, JSON.stringify(body.result.structuredContent)).toBe(false);
     expect(body.result.structuredContent.result).toMatchObject({
       ok: false,
       connection: {

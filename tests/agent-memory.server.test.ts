@@ -21,6 +21,12 @@ describe("agent memory input safety", () => {
   const discordWebhook = "https://discord.com/api/webhooks/1234567890/discord_webhook_secret";
   const teamsWebhook = "https://example.webhook.office.com/webhookb2/tenant/incoming-webhook/token";
   const zapierWebhook = "https://hooks.zapier.com/hooks/catch/123456/abcdef";
+  const stripeSecret = ["sk", "live", "1234567890abcdefghijkl"].join("_");
+  const stripeRestricted = ["rk", "live", "1234567890abcdefghijkl"].join("_");
+  const stripeWebhookSecret = ["whsec", "1234567890abcdefghijkl"].join("_");
+  const awsAccessKey = ["AK", "IA", "ABCDEFGHIJKLMNOP"].join("");
+  const googleApiKey = ["AI", "za", "A".repeat(35)].join("");
+  const opaqueToken = ["AbcdefGHIJK", "1234567890", "mnopqrstuvwxyzABCDE"].join("");
   const jwt = [
     `eyJ${"hbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"}`,
     "eyJzdWIiOiIxMjM0NTY3ODkwIn0",
@@ -64,6 +70,13 @@ describe("agent memory input safety", () => {
     expect(() => readSafeAgentMemoryValue(discordWebhook)).toThrow(AgentMemoryInputError);
     expect(() => readSafeAgentMemoryValue(teamsWebhook)).toThrow(AgentMemoryInputError);
     expect(() => readSafeAgentMemoryValue(zapierWebhook)).toThrow(AgentMemoryInputError);
+    expect(() => readSafeAgentMemoryValue(stripeSecret)).toThrow(AgentMemoryInputError);
+    expect(() => readSafeAgentMemoryValue(stripeRestricted)).toThrow(AgentMemoryInputError);
+    expect(() => readSafeAgentMemoryValue(stripeWebhookSecret)).toThrow(AgentMemoryInputError);
+    expect(() => readSafeAgentMemoryValue(awsAccessKey)).toThrow(AgentMemoryInputError);
+    expect(() => readSafeAgentMemoryValue(googleApiKey)).toThrow(AgentMemoryInputError);
+    expect(() => readSafeAgentMemoryValue(opaqueToken)).toThrow(AgentMemoryInputError);
+    expect(() => readSafeAgentMemoryValue("550e8400-e29b-41d4-a716-446655440000")).not.toThrow();
   });
 
   it("summarizes legacy secret-looking scalar values without exposing them", () => {
@@ -76,6 +89,10 @@ describe("agent memory input safety", () => {
     expect(summarizeAgentMemoryValue({ value: discordWebhook })).toBe("[redacted]");
     expect(summarizeAgentMemoryValue({ value: teamsWebhook })).toBe("[redacted]");
     expect(summarizeAgentMemoryValue({ value: zapierWebhook })).toBe("[redacted]");
+    expect(summarizeAgentMemoryValue({ value: stripeSecret })).toBe("[redacted]");
+    expect(summarizeAgentMemoryValue({ value: awsAccessKey })).toBe("[redacted]");
+    expect(summarizeAgentMemoryValue({ value: googleApiKey })).toBe("[redacted]");
+    expect(summarizeAgentMemoryValue({ value: opaqueToken })).toBe("[redacted]");
     expect(summarizeAgentMemoryValue({ tone: "direct", cadence: "weekly" })).toBe("Fields: tone, cadence");
   });
 

@@ -10,7 +10,7 @@ The core app is real: public competitor search, authenticated workspace, watchli
 
 The remaining launch blockers are not hidden in code: production has no configured Slack delivery target, the Dodo portal setting is external-dashboard work, and external uptime monitoring needs to be created. WhatsApp is no longer launch-scoped while provider/customer/webhook readiness is disabled, and public copy must not claim WhatsApp delivery.
 
-The public `/status` page now summarizes coarse aggregate production evidence from recent monitoring, proof capture, digest delivery, Slack delivery, and WhatsApp launch scope when D1 is available, without exact activity counts or timestamps. It does not replace the private canary gates or the manual Slack/Dodo/uptime confirmations.
+The public `/status` page summarizes coarse launch blockers and safety posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, Slack, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
 ## Evidence From 2026-06-15
 
