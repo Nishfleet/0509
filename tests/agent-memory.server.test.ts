@@ -17,6 +17,7 @@ describe("agent memory input safety", () => {
   const bearerToken = [["Authorization:", "Bearer"].join(" "), `eyJ${"hbGciOiJIUzI1NiJ9.fake"}`].join(" ");
   const privateKeyHeader = ["-----BEGIN", "PRIVATE", "KEY-----"].join(" ");
   const privateKey = [privateKeyHeader, "abc", privateKeyHeader.replace("BEGIN", "END")].join("\n");
+  const bareSlackWebhook = "hooks.slack.com/services/T/B/C";
   const discordWebhook = "https://discord.com/api/webhooks/1234567890/discord_webhook_secret";
   const teamsWebhook = "https://example.webhook.office.com/webhookb2/tenant/incoming-webhook/token";
   const zapierWebhook = "https://hooks.zapier.com/hooks/catch/123456/abcdef";
@@ -50,6 +51,7 @@ describe("agent memory input safety", () => {
     expect(() => readSafeAgentMemoryValue({ apiKey: "do-not-store" })).toThrow(AgentMemoryInputError);
     expect(() => readSafeAgentMemoryValue({ [liveKey]: "do-not-store" })).toThrow(AgentMemoryInputError);
     expect(() => readSafeAgentMemoryValue("https://hooks.slack.com/services/T/B/C")).toThrow(AgentMemoryInputError);
+    expect(() => readSafeAgentMemoryValue(bareSlackWebhook)).toThrow(AgentMemoryInputError);
     expect(() => readSafeAgentMemoryValue(`API key: ${liveKey}`)).toThrow(AgentMemoryInputError);
     expect(() => readSafeAgentMemoryValue(passwordAssignment)).toThrow(AgentMemoryInputError);
     expect(() => readSafeAgentMemoryValue(dodoApiKeyAssignment)).toThrow(AgentMemoryInputError);
@@ -66,6 +68,7 @@ describe("agent memory input safety", () => {
 
   it("summarizes legacy secret-looking scalar values without exposing them", () => {
     expect(summarizeAgentMemoryValue({ value: "https://hooks.slack.com/services/T/B/C" })).toBe("[redacted]");
+    expect(summarizeAgentMemoryValue({ value: bareSlackWebhook })).toBe("[redacted]");
     expect(summarizeAgentMemoryValue({ value: `API key: ${liveKey}` })).toBe("[redacted]");
     expect(summarizeAgentMemoryValue({ value: passwordAssignment })).toBe("[redacted]");
     expect(summarizeAgentMemoryValue({ value: `GitHub token ${githubToken}` })).toBe("[redacted]");
