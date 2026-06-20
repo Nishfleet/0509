@@ -7,9 +7,10 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { SubmitButton } from "~/components/submit-button";
+import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import type { AppEnv } from "~/lib/env.server";
 import { createReportId } from "~/lib/report";
-import type { ClientRoomResourceRef } from "~/lib/types";
+import type { ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 export const meta = () => [{ title: "Clients | Five to Nine" }];
 
@@ -33,7 +34,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   ]);
 
   return {
-    rooms,
+    rooms: rooms.map(safeClientRoomForUi),
     watchlists,
     collections,
     memories: memories.map((memory) => toMemorySummary(safeAgentMemoryRecord(memory), summarizeAgentMemoryValue)),
@@ -56,23 +57,42 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "upsert-client-room") {
+    const { AgentMemoryInputError, rejectSecretishMemoryValue } = await import("~/lib/agent-memory.server");
     const name = readOptionalString(formData.get("name"));
     if (!name) {
       return { ok: false, message: "Client room name is required." };
+    }
+    const clientLabel = readOptionalString(formData.get("clientLabel"));
+    const notes = {
+      goal: readOptionalString(formData.get("goal")) ?? "",
+      cadence: readOptionalString(formData.get("cadence")) ?? "",
+      tone: readOptionalString(formData.get("tone")) ?? "",
+    };
+
+    try {
+      rejectSecretishClientRoomText(name, "Client room name cannot contain secrets or credentials.");
+      if (clientLabel) {
+        rejectSecretishClientRoomText(clientLabel, "Client label cannot contain secrets or credentials.");
+      }
+      rejectSecretishMemoryValue(notes, "Client room notes cannot contain secrets or credentials.");
+    } catch (error) {
+      if (error instanceof AgentMemoryInputError) {
+        return { ok: false, message: error.message };
+      }
+      if (error instanceof Error) {
+        return { ok: false, message: error.message };
+      }
+      return { ok: false, message: "Client room could not be saved." };
     }
 
     const resourceRefs = await readOwnedResourceRefs(env, workspaceUserId, formData, getWatchlist, getCollection);
     const room = await upsertClientRoom(env, workspaceUserId, {
       roomId: readOptionalString(formData.get("roomId")),
       name,
-      clientLabel: readOptionalString(formData.get("clientLabel")),
+      clientLabel,
       status: readClientRoomStatus(formData.get("status")),
       resourceRefs,
-      notes: {
-        goal: readOptionalString(formData.get("goal")) ?? "",
-        cadence: readOptionalString(formData.get("cadence")) ?? "",
-        tone: readOptionalString(formData.get("tone")) ?? "",
-      },
+      notes,
     });
 
     return room
@@ -445,6 +465,64 @@ function formatRoomNotes(notes: Record<string, unknown>) {
   const values = [notes.goal, notes.cadence, notes.tone]
     .filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
   return values.length > 0 ? values.join(" · ") : "No room notes yet.";
+}
+
+function safeClientRoomForUi(room: ClientRoomRecord): ClientRoomRecord {
+  return {
+    ...room,
+    name: safeClientRoomDisplayText(room.name, "Client room"),
+    clientLabel: room.clientLabel ? safeClientRoomDisplayText(room.clientLabel, "Client") : null,
+    resourceRefs: room.resourceRefs.map((ref) => ({
+      ...ref,
+      ...(ref.label ? { label: safeClientRoomDisplayText(ref.label, resourceLabel(ref)) } : {}),
+    })),
+    notes: sanitizeRoomNotesForUi(room.notes),
+  };
+}
+
+function sanitizeRoomNotesForUi(notes: Record<string, unknown>) {
+  const sanitized = sanitizeRoomNoteValue(notes);
+  return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
+    ? sanitized as Record<string, unknown>
+    : {};
+}
+
+function sanitizeRoomNoteValue(value: unknown): unknown {
+  if (value === null || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return isSecretishMemoryString(value) ? "[redacted]" : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(sanitizeRoomNoteValue).filter((entry) => typeof entry !== "undefined");
+  }
+  if (value && typeof value === "object") {
+    const output: Record<string, unknown> = {};
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (isSecretishMemoryField(key) || isSecretishMemoryString(key)) {
+        output["[redacted]"] = "[redacted]";
+      } else {
+        output[key] = sanitizeRoomNoteValue(nested);
+      }
+    }
+    return output;
+  }
+  return undefined;
+}
+
+function rejectSecretishClientRoomText(value: string, message: string) {
+  if (isSecretishMemoryString(value)) {
+    throw new Error(message);
+  }
+}
+
+function safeClientRoomDisplayText(value: string, fallback: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized || isSecretishMemoryString(normalized)) {
+    return fallback;
+  }
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
 }
 
 function resourceHref(ref: ClientRoomResourceRef) {

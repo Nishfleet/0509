@@ -71,6 +71,13 @@ const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
   "delivery_target.update",
 ]);
 
+const IDEMPOTENCY_IGNORED_ACTIONS = new Set<CustomerAgentActionName>([
+  "delivery_targets.list",
+  "web_mentions.list",
+  "memory.list",
+  "client_room.list",
+]);
+
 export interface CustomerAgentActionContext {
   userId: string;
   apiKeyId: string | null;
@@ -155,6 +162,10 @@ export function customerAgentActionRequiresIdempotency(actionName: CustomerAgent
   return IDEMPOTENCY_REQUIRED_ACTIONS.has(actionName);
 }
 
+function customerAgentActionSupportsIdempotency(actionName: CustomerAgentActionName) {
+  return !IDEMPOTENCY_IGNORED_ACTIONS.has(actionName);
+}
+
 export async function runCustomerAgentAction(
   env: AppEnv,
   context: CustomerAgentActionContext,
@@ -162,7 +173,9 @@ export async function runCustomerAgentAction(
   input: Record<string, unknown>,
 ) {
   const requestFingerprint = buildAgentActionRequestFingerprint(actionName, input);
-  if (customerAgentActionRequiresIdempotency(actionName) && !context.idempotencyKey?.trim()) {
+  const normalizedIdempotencyKey = context.idempotencyKey?.trim() ?? null;
+  const idempotencyKey = customerAgentActionSupportsIdempotency(actionName) ? normalizedIdempotencyKey : null;
+  if (customerAgentActionRequiresIdempotency(actionName) && !idempotencyKey) {
     throw new CustomerAgentActionError(
       "missing_idempotency_key",
       "Provide idempotencyKey or an Idempotency-Key header before running this action.",
@@ -173,7 +186,7 @@ export async function runCustomerAgentAction(
     userId: context.userId,
     apiKeyId: context.apiKeyId,
     actionName,
-    idempotencyKey: context.idempotencyKey,
+    idempotencyKey,
     metadata: {
       source: context.source,
       requestFingerprint,
@@ -1045,23 +1058,32 @@ async function upsertClientRoomFromAgent(
   context: CustomerAgentActionContext,
   input: Record<string, unknown>,
 ) {
-  const { upsertClientRoom } = await import("~/lib/data.server");
+  const { getClientRoom, upsertClientRoom } = await import("~/lib/data.server");
   const resourceRefs = readClientRoomResourceRefs(input);
   const hasNotes = Object.prototype.hasOwnProperty.call(input, "notes");
   const notes = hasNotes ? readClientRoomNotes(input) : null;
+  const roomId = readString(input, "roomId");
+  const name = readClientRoomDisplayName(input, "name", "Client room name");
   if (typeof resourceRefs !== "undefined") {
     await assertClientRoomResourceRefsOwned(env, context.userId, resourceRefs);
   }
   const room = await upsertClientRoom(env, context.userId, {
-    roomId: readString(input, "roomId"),
-    name: requireString(input, "name"),
-    clientLabel: readString(input, "clientLabel"),
+    roomId,
+    name,
+    clientLabel: readOptionalClientRoomDisplayName(input, "clientLabel", "Client label"),
     status: readClientRoomStatus(input),
     resourceRefs,
     ...(hasNotes ? { notes } : {}),
   });
 
   if (!room) {
+    if (roomId && await getClientRoom(env, context.userId, roomId)) {
+      throw new CustomerAgentActionError(
+        "client_room_name_conflict",
+        "Another client room already uses this name.",
+        { status: 409 },
+      );
+    }
     throw new CustomerAgentActionError("client_room_upsert_failed", "Could not save client room.", { status: 500 });
   }
 
@@ -1625,7 +1647,7 @@ function readCounterMoveOwnerLabel(input: Record<string, unknown>) {
   if (!value) {
     return null;
   }
-  if (isSecretishMemoryField(value) || isSecretishMemoryString(value) || looksLikeDeliveryTargetValue(value)) {
+  if (isSecretishMemoryString(value) || looksLikeDeliveryTargetValue(value)) {
     throw new CustomerAgentActionError(
       "secret_workflow_owner_rejected",
       "Counter-move follow-up owner cannot contain secrets, credentials, or delivery targets.",
@@ -1729,6 +1751,12 @@ function readClientRoomNotes(input: Record<string, unknown>) {
 function safeClientRoomRecord(room: ClientRoomRecord): ClientRoomRecord {
   return {
     ...room,
+    name: safeClientRoomDisplayText(room.name, "Client room"),
+    clientLabel: room.clientLabel ? safeClientRoomDisplayText(room.clientLabel, "Client") : null,
+    resourceRefs: room.resourceRefs.map((ref) => ({
+      ...ref,
+      ...(ref.label ? { label: safeClientRoomDisplayText(ref.label, "Linked resource") } : {}),
+    })),
     notes: sanitizeClientRoomNotesForResponse(room.notes),
   };
 }
@@ -1846,6 +1874,35 @@ function sanitizeClientRoomNotesForResponse(notes: Record<string, unknown>) {
     : {};
 }
 
+function readClientRoomDisplayName(input: Record<string, unknown>, field: string, label: string) {
+  const value = requireString(input, field);
+  rejectSecretishClientRoomDisplayText(value, `${label} cannot contain secrets or credentials.`);
+  return value;
+}
+
+function readOptionalClientRoomDisplayName(input: Record<string, unknown>, field: string, label: string) {
+  const value = readString(input, field);
+  if (!value) {
+    return null;
+  }
+  rejectSecretishClientRoomDisplayText(value, `${label} cannot contain secrets or credentials.`);
+  return value;
+}
+
+function rejectSecretishClientRoomDisplayText(value: string, message: string) {
+  if (isSecretishMemoryString(value)) {
+    throw new CustomerAgentActionError("secret_client_room_text_rejected", message);
+  }
+}
+
+function safeClientRoomDisplayText(value: string, fallback: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized || isSecretishMemoryString(normalized)) {
+    return fallback;
+  }
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
+}
+
 function readOptionalObject(input: Record<string, unknown>, field: string) {
   const value = input[field];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -1893,7 +1950,7 @@ function readClientRoomResourceRefs(input: Record<string, unknown>) {
     const ref = entry as Record<string, unknown>;
     const resourceType = readClientRoomResourceType(ref);
     const resourceId = requireString(ref, "resourceId");
-    const label = readString(ref, "label");
+    const label = readOptionalClientRoomDisplayName(ref, "label", "Resource label");
     return {
       resourceType,
       resourceId,

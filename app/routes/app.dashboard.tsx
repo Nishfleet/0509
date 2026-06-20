@@ -12,6 +12,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
+import { isSecretishMemoryString } from "~/lib/agent-redaction";
 import { buildSearchParams } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -23,6 +24,7 @@ export const meta = () => [{ title: "Dashboard | Five to Nine" }];
 const COUNTER_MOVE_AUDIT_PAGE_LIMIT = 30;
 const COUNTER_MOVE_AUDIT_MAX_PAGES = 10;
 const COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT = 3;
+const COUNTER_MOVE_FOLLOW_UP_AUDIT_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
 
 type ListRecentAgentActionAudits = (
   env: AppEnv,
@@ -943,7 +945,12 @@ function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
   const status = readWorkflowStatus(workflow?.status, openCount);
   const firstFollowUp = openFollowUps[0] ?? followUps[0] ?? null;
   const expiresAt = readIsoString(workflow?.expiresAt) ?? readIsoString(firstFollowUp?.expiresAt);
-  if (status !== "needs_review" || openCount === 0 || isExpiredIso(expiresAt)) {
+  if (
+    status !== "needs_review" ||
+    openCount === 0 ||
+    isExpiredIso(expiresAt) ||
+    isStaleCounterMoveAudit(audit.updatedAt)
+  ) {
     return null;
   }
   const targetLabel = safeDashboardText(readStringValue(brief.targetLabel), "Counter-move brief");
@@ -993,6 +1000,11 @@ function isExpiredIso(value: string | null) {
   return Boolean(value && Date.parse(value) <= Date.now());
 }
 
+function isStaleCounterMoveAudit(value: string) {
+  const updatedAt = Date.parse(value);
+  return !Number.isFinite(updatedAt) || updatedAt + COUNTER_MOVE_FOLLOW_UP_AUDIT_FRESHNESS_MS <= Date.now();
+}
+
 function readWorkflowStatus(value: unknown, openCount: number) {
   const normalized = readStringValue(value);
   if (normalized === "needs_review" || normalized === "quiet") {
@@ -1003,19 +1015,10 @@ function readWorkflowStatus(value: unknown, openCount: number) {
 
 function safeDashboardText(value: string | null, fallback: string) {
   const normalized = value?.replace(/\s+/g, " ").trim();
-  if (!normalized || looksSecretish(normalized)) {
+  if (!normalized || isSecretishMemoryString(normalized)) {
     return fallback;
   }
   return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
-}
-
-function looksSecretish(value: string) {
-  return (
-    /(?:^|[^a-z0-9_])f9_live_[a-z0-9_-]+/i.test(value) ||
-    /\b(?:bearer\s+|xox[baprs]-|sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_]{8,}|github_pat_[a-z0-9_]{8,})/i.test(value) ||
-    /(?:password|passphrase|api[_-]?key|access[_-]?key|secret|token|authorization|webhook)\s*[:=]/i.test(value) ||
-    /https:\/\/[^\s"'<>]*(?:hooks\.slack\.com\/services|hooks\.zapier\.com\/hooks\/catch|discord(?:app)?\.com\/api\/webhooks|webhook\.office\.com|outlook\.office\.com\/webhook|\/(?:api\/)?webhooks?\/)[^\s"'<>]*/i.test(value)
-  );
 }
 
 function formatFollowUpChannel(value: string | null) {

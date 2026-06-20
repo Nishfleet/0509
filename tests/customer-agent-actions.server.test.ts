@@ -158,6 +158,17 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     runWatchlistManual: vi.fn().mockResolvedValue({ status: "succeeded" }),
     addExternalProofToCollection: vi.fn().mockResolvedValue(externalAd),
     getCollection: vi.fn().mockResolvedValue(collection),
+    getClientRoom: vi.fn().mockResolvedValue({
+      id: "room-1",
+      userId: "user-1",
+      name: "Beauty client",
+      clientLabel: "Nykaa",
+      status: "active",
+      resourceRefs: [],
+      notes: {},
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    }),
     getDigest: vi.fn().mockResolvedValue({
       id: "digest-1",
       userId: "user-1",
@@ -356,6 +367,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     createShareLink: mocks.createShareLink,
     createWatchlist: mocks.createWatchlist,
     getDeliveryTargetById: mocks.getDeliveryTargetById,
+    getClientRoom: mocks.getClientRoom,
     getCollection: mocks.getCollection,
     getDigest: mocks.getDigest,
     getShareLinkById: mocks.getShareLinkById,
@@ -508,6 +520,27 @@ describe("runCustomerAgentAction", () => {
         source: "meta_ad_library",
       },
     });
+  });
+
+  it("requires idempotency for counter-move brief creation", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        source: "api_v1",
+      },
+      "counter_move_brief.create",
+      {
+        watchlistId: "watchlist-1",
+      },
+    )).rejects.toMatchObject({
+      code: "missing_idempotency_key",
+    });
+    expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
   });
 
   it("creates an audited competitor watchlist with normalized website targeting", async () => {
@@ -1025,6 +1058,37 @@ describe("runCustomerAgentAction", () => {
     );
   });
 
+  it("allows ordinary counter-move owner labels with security-adjacent words", async () => {
+    const mocks = setupMocks();
+    mocks.listWatchEvents.mockResolvedValue([watchEvent]);
+    mocks.listAdsByIds.mockResolvedValue([externalAd]);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "brief-safe-owner-keywords",
+        source: "api_v1",
+      },
+      "counter_move_brief.create",
+      {
+        watchlistId: "watchlist-1",
+        ownerLabel: "Webhook QA",
+      },
+    );
+
+    const result = outcome.result as {
+      brief: {
+        workflow: {
+          ownerLabel: string;
+        };
+      };
+    };
+    expect(result.brief.workflow.ownerLabel).toBe("Webhook QA");
+  });
+
   it("lists delivery targets with destination and secret metadata redacted", async () => {
     const mocks = setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
@@ -1520,6 +1584,92 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
   });
 
+  it("rejects client-room display fields with secret-like values before persistence", async () => {
+    const mocks = setupMocks();
+    const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "room-secret-labels-1",
+          source: "api_v1",
+        },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          clientLabel: "https://hooks.slack.com/services/team/channel/token",
+        },
+      ),
+    ).rejects.toBeInstanceOf(CustomerAgentActionError);
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "room-secret-labels-2",
+          source: "api_v1",
+        },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          resourceRefs: [
+            {
+              resourceType: "watchlist",
+              resourceId: "watchlist-1",
+              label: "bearer abcdefghijklmnop",
+            },
+          ],
+        },
+      ),
+    ).rejects.toBeInstanceOf(CustomerAgentActionError);
+
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("allows ordinary client-room display fields that contain security-adjacent words", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "room-safe-labels-1",
+        source: "api_v1",
+      },
+      "client_room.upsert",
+      {
+        name: "Token Metrics",
+        clientLabel: "Secret Sales",
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watchlist-1",
+            label: "Webhook QA",
+          },
+        ],
+      },
+    );
+
+    expect(mocks.upsertClientRoom).toHaveBeenCalledWith(expect.anything(), "user-1", expect.objectContaining({
+      name: "Token Metrics",
+      clientLabel: "Secret Sales",
+      resourceRefs: [
+        {
+          resourceType: "watchlist",
+          resourceId: "watchlist-1",
+          label: "Webhook QA",
+        },
+      ],
+    }));
+  });
+
   it("rejects malformed client-room notes instead of clearing them", async () => {
     const mocks = setupMocks();
     const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
@@ -1544,19 +1694,30 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
   });
 
-  it("redacts secret-like values from listed client-room notes", async () => {
+  it("redacts secret-like values from listed client-room fields", async () => {
     const mocks = setupMocks();
     mocks.listClientRooms.mockResolvedValue([
       {
         id: "room-1",
         userId: "user-1",
-        name: "Beauty client",
-        clientLabel: "Nykaa",
+        name: "https://hooks.slack.com/services/team/channel/token",
+        clientLabel: "apiKey=f9_live_secret",
         status: "active",
-        resourceRefs: [],
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watchlist-1",
+            label: "bearer abcdefghijklmnop",
+          },
+        ],
         notes: {
           goal: "Weekly proof review",
           url: "https://hooks.slack.com/services/team/channel/token",
+          handoff: {
+            webhook: "https://hooks.slack.com/services/team/channel/token",
+            owner: "Growth",
+          },
+          channels: ["Email", "bearer nestedabcdefghijklmnop"],
         },
         createdAt: "2026-06-19T00:00:00.000Z",
         updatedAt: "2026-06-19T00:00:00.000Z",
@@ -1578,10 +1739,31 @@ describe("runCustomerAgentAction", () => {
       },
     );
 
-    const result = outcome.result as { rooms: Array<{ notes: Record<string, unknown> }> };
+    const result = outcome.result as {
+      rooms: Array<{
+        name: string;
+        clientLabel: string | null;
+        resourceRefs: Array<{ label?: string }>;
+        notes: Record<string, unknown>;
+      }>;
+    };
+    expect(result.rooms[0]).toMatchObject({
+      name: "Client room",
+      clientLabel: "Client",
+      resourceRefs: [
+        {
+          label: "Linked resource",
+        },
+      ],
+    });
     expect(result.rooms[0]?.notes).toEqual({
       goal: "Weekly proof review",
       url: "[redacted]",
+      handoff: {
+        "[redacted]": "[redacted]",
+        owner: "Growth",
+      },
+      channels: ["Email", "[redacted]"],
     });
   });
 
