@@ -12,6 +12,10 @@ import {
   runAuditedAgentAction,
   sanitizeAgentActionMetadata,
 } from "~/lib/agent-actions.server";
+import {
+  CUSTOMER_AGENT_ACTION_NAME_SET,
+  type CustomerAgentActionName,
+} from "~/lib/agent-action-catalog";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { parseReportId } from "~/lib/report";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
@@ -33,29 +37,8 @@ import type {
   WebMentionTargetRecord,
 } from "~/lib/types";
 
-export const CUSTOMER_AGENT_ACTION_NAMES = [
-  "watchlist.create",
-  "watchlist.update",
-  "watchlist.refresh",
-  "watchlist.pause",
-  "watchlist.resume",
-  "collection.create",
-  "proof.add_external",
-  "share.create",
-  "report.create",
-  "report.share",
-  "counter_move_brief.create",
-  "memory.upsert",
-  "memory.list",
-  "client_room.upsert",
-  "client_room.list",
-  "delivery_targets.list",
-  "delivery_settings.update",
-  "delivery_target.update",
-  "web_mentions.list",
-] as const;
-
-export type CustomerAgentActionName = (typeof CUSTOMER_AGENT_ACTION_NAMES)[number];
+export { CUSTOMER_AGENT_ACTION_NAMES } from "~/lib/agent-action-catalog";
+export type { CustomerAgentActionName } from "~/lib/agent-action-catalog";
 
 const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
   "watchlist.create",
@@ -150,7 +133,7 @@ export function customerAgentActionErrorPayload(error: unknown) {
 
 export function normalizeCustomerAgentActionName(value: string | null | undefined): CustomerAgentActionName | null {
   const normalized = value?.trim().toLowerCase();
-  return CUSTOMER_AGENT_ACTION_NAMES.includes(normalized as CustomerAgentActionName)
+  return CUSTOMER_AGENT_ACTION_NAME_SET.has(normalized as CustomerAgentActionName)
     ? (normalized as CustomerAgentActionName)
     : null;
 }

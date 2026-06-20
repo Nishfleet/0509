@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
+import { AGENT_BLOCKED_CAPABILITIES } from "~/lib/agent-action-catalog";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
@@ -64,6 +65,10 @@ export default function TrustRoute() {
           no training, automated unsupported-channel ingestion, broad public write APIs beyond audited
           workspace actions, or automated spend/reach/impression benchmarks. See <Link to="/privacy">Privacy</Link> and{" "}
           <Link to="/terms">Terms</Link> for the plain-English operating policy.
+        </p>
+        <p>
+          Agent tools also do not perform {AGENT_BLOCKED_CAPABILITIES.join(", ")}. Those stay app-owned,
+          support-owned, or not live until safe approval paths exist.
         </p>
       </PublicDocBlock>
     </PublicDocShell>

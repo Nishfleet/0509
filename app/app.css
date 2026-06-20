@@ -73,6 +73,8 @@ img {
 .proof-trail-list div {
   display: grid;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
   padding: 14px 0;
   border-top: 1px solid var(--f9-search-line, var(--f9-global-line));
 }
@@ -88,9 +90,11 @@ img {
 
 .proof-trail-list dd,
 .report-field dd {
+  min-width: 0;
   margin: 0;
   color: var(--f9-search-ink, var(--f9-global-ink));
   font-weight: 850;
+  overflow-wrap: anywhere;
 }
 
 .report-layout,
@@ -3158,8 +3162,11 @@ button[aria-busy="true"] {
 
 .f9-legal-card,
 .f9-error-card {
+  box-sizing: border-box;
   display: grid;
   gap: 22px;
+  min-width: 0;
+  width: 100%;
   max-width: 920px;
   padding: clamp(24px, 4vw, 42px);
   border: 1px solid var(--f9-search-line);
@@ -3187,8 +3194,15 @@ button[aria-busy="true"] {
 .f9-legal-block {
   display: grid;
   gap: 8px;
+  min-width: 0;
   padding-top: 20px;
   border-top: 1px solid var(--f9-search-line);
+}
+
+.f9-legal-card > *,
+.f9-legal-block > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .f9-legal-block h2 {
@@ -4723,7 +4737,10 @@ one signal-green accent.
 }
 
 .f9-code-block {
+  max-width: 100%;
   overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   margin: 14px 0 0;
   padding: 14px;
   border: 1px solid var(--ld-ink);

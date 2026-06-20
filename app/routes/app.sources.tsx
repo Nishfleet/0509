@@ -3,6 +3,13 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
+import {
+  AGENT_ACTION_GROUPS,
+  AGENT_BLOCKED_CAPABILITIES,
+  AGENT_FIRST_WORKFLOW,
+  CUSTOMER_SUPPORT_PATHS,
+} from "~/lib/agent-action-catalog";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const meta: MetaFunction = () => [
   { title: "Tracking access | Five to Nine" },
@@ -335,6 +342,8 @@ export default function AppSourcesRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const statusLabel = data.connection ? formatConnectionStatus(data.connection.status) : "Not connected";
+  const activeApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt).length;
+  const writeEnabledApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt && apiKey.actionsWriteEnabled).length;
 
   return (
     <section className="f9-app-stack">
@@ -489,6 +498,78 @@ export default function AppSourcesRoute() {
           API keys expose only account-owned readiness, boards, watchlists, digests, proof trails, export markdown,
           and narrow audited workspace actions for this account.
         </p>
+
+        <div className="f9-status-strip">
+          <div>
+            <span className="f9-app-kicker">Active keys</span>
+            <strong>{activeApiKeyCount}</strong>
+          </div>
+          <div>
+            <span className="f9-app-kicker">Agent actions</span>
+            <strong>{writeEnabledApiKeyCount > 0 ? `${writeEnabledApiKeyCount} enabled` : "Needs write key"}</strong>
+          </div>
+          <div>
+            <span className="f9-app-kicker">Boundary</span>
+            <strong>Audited workspace actions only</strong>
+          </div>
+        </div>
+
+        <div className="f9-dashboard-grid">
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">First agent workflow</span>
+            <h3>Operate the desk without exposing secrets</h3>
+            <ol className="f9-numbered-guide">
+              {AGENT_FIRST_WORKFLOW.map((step) => (
+                <li key={step.label}>
+                  <strong>{step.label}</strong>
+                  <span>{step.detail}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Live action groups</span>
+            <h3>What a write-enabled key can do</h3>
+            <dl className="proof-trail-list">
+              {AGENT_ACTION_GROUPS.filter((group) => group.id !== "readiness").map((group) => (
+                <div key={group.id}>
+                  <dt>{group.label}</dt>
+                  <dd>{group.detail}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </div>
+
+        <div className="f9-dashboard-grid">
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Blocked for agents</span>
+            <h3>Keep these app-owned or support-owned</h3>
+            <ul className="f9-doc-list">
+              {AGENT_BLOCKED_CAPABILITIES.map((capability) => (
+                <li key={capability}>{capability}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="f9-app-panel f9-source-guide">
+            <span className="f9-app-kicker">Paid customer support</span>
+            <h3>Human help stays visible</h3>
+            <dl className="proof-trail-list">
+              {CUSTOMER_SUPPORT_PATHS.map((path) => (
+                <div key={path.label}>
+                  <dt>{path.label}</dt>
+                  <dd>{path.detail}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="f9-muted-copy">
+              Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> for sensitive changes, migration help, security reports,
+              or deletion requests.
+            </p>
+          </section>
+        </div>
 
         {actionData && "apiKeySecret" in actionData && actionData.apiKeySecret ? (
           <div className="f9-message is-success">

@@ -2,6 +2,11 @@ import { Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
+import {
+  AGENT_ACTION_GROUPS,
+  AGENT_BLOCKED_CAPABILITIES,
+  AGENT_FIRST_WORKFLOW,
+} from "~/lib/agent-action-catalog";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const description =
@@ -76,6 +81,28 @@ export default function ApiDocsRoute() {
         </pre>
       </PublicDocBlock>
 
+      <PublicDocBlock title="First agent workflow">
+        <ol className="f9-numbered-guide">
+          {AGENT_FIRST_WORKFLOW.map((step) => (
+            <li key={step.label}>
+              <strong>{step.label}</strong>
+              <span>{step.detail}</span>
+            </li>
+          ))}
+        </ol>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Audited action groups">
+        <dl className="proof-trail-list">
+          {AGENT_ACTION_GROUPS.filter((group) => group.id !== "readiness").map((group) => (
+            <div key={group.id}>
+              <dt>{group.label}</dt>
+              <dd>{group.detail}</dd>
+            </div>
+          ))}
+        </dl>
+      </PublicDocBlock>
+
       <PublicDocBlock title="Recipes">
         <ul className="f9-doc-list">
           <li>Export a watchlist as Slack markdown before a weekly sales meeting.</li>
@@ -89,7 +116,8 @@ export default function ApiDocsRoute() {
           <li>API reads are account-scoped and rate limited.</li>
           <li>Audited actions are limited to safe workspace operations and store an action log.</li>
           <li>Keys are shown once, stored hashed, and can be revoked from Integrations &amp; API.</li>
-          <li>Not live yet: broad public write APIs, billing/team/delivery-send actions, unsupported-channel ingestion, X/YouTube listening, or automated spend/reach/impression benchmarks.</li>
+          <li>Agent-blocked capabilities: {AGENT_BLOCKED_CAPABILITIES.join(", ")}.</li>
+          <li>Not live yet: X/YouTube listening or broad social listening beyond existing proof-backed observations.</li>
         </ul>
       </PublicDocBlock>
     </PublicDocShell>

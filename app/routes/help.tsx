@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
+import { CUSTOMER_SUPPORT_PATHS } from "~/lib/agent-action-catalog";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
@@ -53,6 +54,17 @@ export default function HelpRoute() {
           a linked Dodo customer id. Portal subscription updates still depend on the Dodo dashboard
           setting described in the launch runbook.
         </p>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Paid customer support paths">
+        <dl className="proof-trail-list">
+          {CUSTOMER_SUPPORT_PATHS.map((path) => (
+            <div key={path.label}>
+              <dt>{path.label}</dt>
+              <dd>{path.detail}</dd>
+            </div>
+          ))}
+        </dl>
       </PublicDocBlock>
 
       <PublicDocBlock title="Contact support">

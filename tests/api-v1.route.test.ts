@@ -267,14 +267,35 @@ describe("customer API v1", () => {
       context: { cloudflare: { env: {} } },
       request: new Request("https://0509.io/api/v1"),
     } as never);
-    const body = await response.json() as { endpoints: Array<{ path: string }>; notLiveYet: string[] };
+    const body = await response.json() as {
+      endpoints: Array<{ path: string; actions?: string[] }>;
+      agentActivation: {
+        readinessEndpoint: string;
+        firstWorkflow: Array<{ label: string }>;
+        actionGroups: Array<{ label: string; actions: string[] }>;
+        supportPaths: Array<{ label: string }>;
+        blockedCapabilities: string[];
+      };
+      notLiveYet: string[];
+    };
 
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/mcp");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/actions");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/watchlists/{watchlistId}");
+    expect(body.endpoints.find((endpoint) => endpoint.path === "/api/v1/actions")?.actions).toContain("watchlist.create");
+    expect(body.agentActivation.readinessEndpoint).toBe("/api/v1/workspace-readiness");
+    expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
+    expect(body.agentActivation.actionGroups.map((group) => group.label)).toContain("Proof and reports");
+    expect(body.agentActivation.actionGroups.flatMap((group) => group.actions)).toContain("watchlist.create");
+    expect(body.agentActivation.actionGroups.flatMap((group) => group.actions)).not.toContain("get_workspace_readiness");
+    expect(body.agentActivation.supportPaths.map((path) => path.label)).toContain("Billing changes and cancellation");
+    expect(body.agentActivation.blockedCapabilities).toContain("billing changes");
+    expect(body.agentActivation.blockedCapabilities).toContain("team invites");
     expect(body.notLiveYet).not.toContain("MCP server");
     expect(body.notLiveYet).toContain("TikTok ingestion");
+    expect(body.notLiveYet).not.toContain("billing changes");
+    expect(body.notLiveYet).not.toContain("team invites");
   });
 
   it("returns account-scoped workspace readiness by API key", async () => {

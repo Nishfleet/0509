@@ -1,5 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import {
+  AGENT_ACTION_GROUPS,
+  AGENT_BLOCKED_CAPABILITIES,
+  AGENT_FIRST_WORKFLOW,
+  CUSTOMER_SUPPORT_PATHS,
+} from "~/lib/agent-action-catalog";
 import type { AppEnv } from "~/lib/env.server";
 import type { CustomerAgentActionName } from "~/lib/customer-agent-actions.server";
 import type { CustomerApiKeyRecord } from "~/lib/types";
@@ -528,6 +534,35 @@ const MCP_TOOLS = [
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
 ];
+const MCP_TOOL_NAME_BY_AGENT_ACTION = {
+  get_workspace_readiness: "get_workspace_readiness",
+  "watchlist.create": "create_watchlist",
+  "watchlist.update": "update_watchlist",
+  "watchlist.refresh": "refresh_watchlist",
+  "watchlist.pause": "pause_watchlist",
+  "watchlist.resume": "resume_watchlist",
+  "collection.create": "create_collection",
+  "proof.add_external": "add_external_proof",
+  "share.create": "create_share_link",
+  "report.create": "create_report",
+  "report.share": "share_report",
+  "counter_move_brief.create": "create_counter_move_brief",
+  "memory.upsert": "upsert_memory",
+  "memory.list": "list_memory",
+  "client_room.upsert": "upsert_client_room",
+  "client_room.list": "list_client_rooms",
+  "delivery_targets.list": "list_delivery_targets",
+  "delivery_settings.update": "update_delivery_settings",
+  "delivery_target.update": "update_delivery_target",
+  "web_mentions.list": "list_web_mentions",
+} as const;
+
+function mcpActionGroups() {
+  return AGENT_ACTION_GROUPS.map((group) => ({
+    ...group,
+    actions: group.actions.map((actionName) => MCP_TOOL_NAME_BY_AGENT_ACTION[actionName]),
+  }));
+}
 
 type JsonRpcId = string | number | null;
 
@@ -576,11 +611,16 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Redacted delivery settings and delivery target state owned by this account",
       "Existing proof-backed web, blog, Substack, and Reddit mention observations tied to watchlists",
     ],
+    agentActivation: {
+      firstWorkflow: AGENT_FIRST_WORKFLOW,
+      actionGroups: mcpActionGroups(),
+      supportPaths: CUSTOMER_SUPPORT_PATHS,
+      blockedCapabilities: AGENT_BLOCKED_CAPABILITIES,
+    },
     notLiveYet: [
       "TikTok ingestion",
       "Google or YouTube ingestion",
       "LinkedIn or Pinterest ingestion",
-      "fully general write API beyond audited agent actions",
     ],
   });
 }
@@ -626,7 +666,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        "Use these tools to retrieve Five to Nine workspace readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Audited write tools are limited to safe workspace actions. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, billing, delivery-send, or unsupported-channel coverage.",
+        "Use these tools to retrieve Five to Nine workspace readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Audited write tools are limited to safe workspace actions. Start by checking readiness, then set up or tune watchlists, package proof, and save memory. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, billing, team-invite, delivery-send, secret-setup, or unsupported-channel coverage.",
     });
   }
 

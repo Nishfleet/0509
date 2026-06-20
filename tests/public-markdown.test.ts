@@ -49,6 +49,13 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("successful live delivery proof");
     expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned readiness");
     expect(PUBLIC_MARKDOWN).toContain("narrow audited workspace actions");
+    expect(PUBLIC_MARKDOWN).toContain("Recommended first agent workflow");
+    expect(PUBLIC_MARKDOWN).toContain("Check readiness -> Set up monitoring -> Package proof -> Preserve context");
+    expect(PUBLIC_MARKDOWN).toContain("Live audited action groups");
+    expect(PUBLIC_MARKDOWN.split("\n").find((line) => line.startsWith("- Live audited action groups:"))).not.toContain("Readiness and setup");
+    expect(PUBLIC_MARKDOWN).toContain("Agent-blocked capabilities");
+    expect(PUBLIC_MARKDOWN).toContain("secret-bearing integration setup");
+    expect(PUBLIC_MARKDOWN).toContain("Paid customer support paths cover");
     expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, and trust pages are available");
     expect(PUBLIC_MARKDOWN).toContain("Email delivery uses Cloudflare Email Service");
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history");
@@ -70,6 +77,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(LLMS_TEXT).toContain("/api/v1 readiness plus collection, watchlist, and digest exports");
     expect(LLMS_TEXT).toContain("narrow audited workspace actions through /api/v1/actions and /api/mcp");
+    expect(LLMS_TEXT).toContain("Recommended first agent workflow");
+    expect(LLMS_TEXT).toContain("Paid customer support paths cover billing changes and cancellation");
     expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");
     expect(LLMS_TEXT).toContain("Email delivery uses Cloudflare Email Service");
     expect(LLMS_TEXT).toContain("Customer WhatsApp delivery is not launch-scoped today");
