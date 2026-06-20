@@ -15,12 +15,26 @@ import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { buildSearchParams } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import type { AppEnv } from "~/lib/env.server";
 import type { AgentActionAuditRecord } from "~/lib/types";
 
 export const meta = () => [{ title: "Dashboard | Five to Nine" }];
 
-const COUNTER_MOVE_AUDIT_WINDOW_LIMIT = 30;
+const COUNTER_MOVE_AUDIT_PAGE_LIMIT = 30;
+const COUNTER_MOVE_AUDIT_MAX_PAGES = 10;
 const COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT = 3;
+
+type ListRecentAgentActionAudits = (
+  env: AppEnv,
+  userId: string,
+  options: {
+    actionName?: string | null;
+    status?: "succeeded" | null;
+    resourceType?: string | null;
+    limit?: number;
+    offset?: number;
+  },
+) => Promise<AgentActionAuditRecord[]>;
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -60,7 +74,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceMembers,
     workspaceReadiness,
     agentMemories,
-    counterMoveAudits,
+    counterMoveFollowUps,
   ] = await Promise.all([
     listSavedQueries(env, workspaceUserId),
     listCollections(env, workspaceUserId),
@@ -73,12 +87,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWorkspaceMembers(env, workspaceUserId),
     getWorkspaceReadiness(env, workspaceUserId),
     listAgentMemory(env, workspaceUserId, { limit: 5 }),
-    listRecentAgentActionAudits(env, workspaceUserId, {
-      actionName: "counter_move_brief.create",
-      status: "succeeded",
-      resourceType: "watchlist",
-      limit: COUNTER_MOVE_AUDIT_WINDOW_LIMIT,
-    }),
+    listActionableCounterMoveFollowUps(env, workspaceUserId, listRecentAgentActionAudits),
   ]);
   const plan = billingInfo.plan;
   const hasPaymentIssue =
@@ -122,7 +131,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         updatedAt: safeMemory.updatedAt,
       };
     }),
-    counterMoveFollowUps: mapCounterMoveFollowUpAudits(counterMoveAudits).slice(0, COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT),
+    counterMoveFollowUps,
     plan,
     teamMemberCount: workspaceMembers.length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
@@ -893,6 +902,31 @@ function mapCounterMoveFollowUpAudits(audits: AgentActionAuditRecord[]) {
   return audits
     .map(readCounterMoveFollowUpSummary)
     .filter((summary): summary is NonNullable<typeof summary> => Boolean(summary));
+}
+
+async function listActionableCounterMoveFollowUps(
+  env: AppEnv,
+  workspaceUserId: string,
+  listRecentAgentActionAudits: ListRecentAgentActionAudits,
+) {
+  const followUps: ReturnType<typeof mapCounterMoveFollowUpAudits> = [];
+
+  for (let page = 0; page < COUNTER_MOVE_AUDIT_MAX_PAGES; page += 1) {
+    const audits = await listRecentAgentActionAudits(env, workspaceUserId, {
+      actionName: "counter_move_brief.create",
+      status: "succeeded",
+      resourceType: "watchlist",
+      limit: COUNTER_MOVE_AUDIT_PAGE_LIMIT,
+      offset: page * COUNTER_MOVE_AUDIT_PAGE_LIMIT,
+    });
+
+    followUps.push(...mapCounterMoveFollowUpAudits(audits));
+    if (followUps.length >= COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT || audits.length < COUNTER_MOVE_AUDIT_PAGE_LIMIT) {
+      break;
+    }
+  }
+
+  return followUps.slice(0, COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT);
 }
 
 function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {

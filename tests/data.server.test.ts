@@ -286,10 +286,12 @@ describe("agent action audit persistence", () => {
       status: "succeeded",
       resourceType: "watchlist",
       limit: 3,
+      offset: 30,
     });
 
     const select = findStatement(mock.statements, "FROM agent_action_audit", "ORDER BY updated_at DESC");
-    expect(select?.bindings).toEqual(["user-1", "counter_move_brief.create", "succeeded", "watchlist", 3]);
+    expect(select?.bindings).toEqual(["user-1", "counter_move_brief.create", "succeeded", "watchlist", 3, 30]);
+    expect(select?.sql).toContain("LIMIT ? OFFSET ?");
     expect(audits[0]).toMatchObject({
       id: "audit-1",
       result: { watchlistId: "watchlist-1" },
