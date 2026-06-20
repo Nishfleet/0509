@@ -178,6 +178,83 @@ describe("runAuditedAgentAction", () => {
     );
   });
 
+  it("redacts standalone provider credentials from audit results and metadata", async () => {
+    const mocks = setupDataMock();
+    const stripeSecret = ["sk", "live", "1234567890abcdefghijkl"].join("_");
+    const awsAccessKey = ["AK", "IA", "ABCDEFGHIJKLMNOP"].join("");
+    const googleApiKey = ["AI", "za", "A".repeat(35)].join("");
+    const opaqueToken = ["AbcdefGHIJK", "1234567890", "mnopqrstuvwxyzABCDE"].join("");
+    const { runAuditedAgentAction } = await import("~/lib/agent-actions.server");
+
+    await runAuditedAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        actionName: "report.create",
+        idempotencyKey: "idem-1",
+        metadata: {
+          source: "mcp",
+          note: stripeSecret,
+        },
+      },
+      vi.fn().mockResolvedValue({
+        resourceType: "report",
+        resourceId: "report-1",
+        result: {
+          ok: true,
+          report: {
+            summary: "Safe report",
+            note: stripeSecret,
+            nested: {
+              owner: "Growth",
+              awsRef: awsAccessKey,
+              googleRef: googleApiKey,
+              opaqueRef: opaqueToken,
+            },
+          },
+        },
+        metadata: {
+          trace: googleApiKey,
+        },
+      }),
+    );
+
+    expect(mocks.claimAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: {
+          source: "mcp",
+          note: "[redacted]",
+        },
+      }),
+    );
+    expect(mocks.finishAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      "audit-1",
+      expect.objectContaining({
+        result: {
+          ok: true,
+          report: {
+            summary: "Safe report",
+            note: "[redacted]",
+            nested: {
+              owner: "Growth",
+              awsRef: "[redacted]",
+              googleRef: "[redacted]",
+              opaqueRef: "[redacted]",
+            },
+          },
+        },
+        metadata: {
+          source: "mcp",
+          note: "[redacted]",
+          trace: "[redacted]",
+        },
+      }),
+    );
+  });
+
   it("replays a completed action with the same idempotency key", async () => {
     const existing = auditRecord({
       status: "succeeded",
@@ -288,6 +365,7 @@ describe("sanitizeAgentActionMetadata", () => {
           campaign: "summer",
           webhookUrl: "https://hooks.example.com/private",
           accessToken: "token",
+          note: ["whsec", "1234567890abcdefghijkl"].join("_"),
         },
         list: [
           {
@@ -302,6 +380,7 @@ describe("sanitizeAgentActionMetadata", () => {
       source: "mcp",
       nested: {
         campaign: "summer",
+        note: "[redacted]",
       },
       list: [
         {

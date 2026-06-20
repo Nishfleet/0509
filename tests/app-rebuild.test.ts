@@ -81,11 +81,16 @@ describe("app rebuild", () => {
     expect(dashboardRoute).toContain("Competitor website");
     expect(dashboardRoute).toContain("Retained value loop");
     expect(dashboardRoute).toContain("What Five to Nine did for you");
+    expect(dashboardRoute).toContain("Production proof");
+    expect(dashboardRoute).toContain("Detailed launch evidence stays in the private canary checks");
+    expect(dashboardRoute).toContain('to="/status"');
     expect(dashboardRoute).toContain("Watched");
     expect(dashboardRoute).toContain("Checked");
     expect(dashboardRoute).toContain("Changed");
     expect(dashboardRoute).toContain("Proved");
     expect(dashboardRoute).toContain("Delivered");
+    expect(dashboardRoute).toContain("Remembered");
+    expect(dashboardRoute).toContain("Save agent memory");
     expect(dashboardRoute).not.toContain("Commercial discovery live");
     expect(dashboardRoute).not.toContain("source state visible");
     expect(appSurface).toContain("?format=json");
@@ -105,6 +110,8 @@ describe("app rebuild", () => {
     expect(collectionsRoute).toContain("Save proof link");
     expect(collectionsRoute).toContain("Google / YouTube");
     expect(collectionsRoute).toContain("LinkedIn");
+    expect(clientsRoute).toContain("Operating context for agents");
+    expect(clientsRoute).toContain("upsert-agent-memory");
     expect(digestsRoute).toContain("formatDeliveryChannelLabel");
     expect(digestsRoute).toContain('channel === "slack"');
   });

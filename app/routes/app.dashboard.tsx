@@ -12,11 +12,31 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
+import { isSecretishMemoryString } from "~/lib/agent-redaction";
 import { buildSearchParams } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import type { AppEnv } from "~/lib/env.server";
+import type { AgentActionAuditRecord } from "~/lib/types";
 
 export const meta = () => [{ title: "Dashboard | Five to Nine" }];
+
+const COUNTER_MOVE_AUDIT_PAGE_LIMIT = 30;
+const COUNTER_MOVE_AUDIT_MAX_PAGES = 10;
+const COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT = 3;
+const COUNTER_MOVE_FOLLOW_UP_AUDIT_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
+
+type ListRecentAgentActionAudits = (
+  env: AppEnv,
+  userId: string,
+  options: {
+    actionName?: string | null;
+    status?: "succeeded" | null;
+    resourceType?: string | null;
+    limit?: number;
+    offset?: number;
+  },
+) => Promise<AgentActionAuditRecord[]>;
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -24,14 +44,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCustomerMetaConnection,
+    listAgentMemory,
     listCollections,
     listDeliveryTargets,
     listDigests,
+    listRecentAgentActionAudits,
     listRecentWorkspaceProofCaptures,
     listSavedQueries,
     listWatchEvents,
     listWatchlists,
   } = await import("~/lib/data.server");
+  const { safeAgentMemoryRecord, summarizeAgentMemoryValue } = await import("~/lib/agent-memory.server");
   const { getProofUsageSummary } = await import("~/lib/plan.server");
   const { getWorkspaceReadiness } = await import("~/lib/workspace-readiness.server");
   const { getSuccessfulProofCaptureStatsForUser, getSuccessfulRunStatsForUserBetween, getUserPlanBillingInfo } = await import(
@@ -52,6 +75,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     billingInfo,
     workspaceMembers,
     workspaceReadiness,
+    agentMemories,
+    counterMoveFollowUps,
   ] = await Promise.all([
     listSavedQueries(env, workspaceUserId),
     listCollections(env, workspaceUserId),
@@ -63,6 +88,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getUserPlanBillingInfo(env, workspaceUserId),
     listWorkspaceMembers(env, workspaceUserId),
     getWorkspaceReadiness(env, workspaceUserId),
+    listAgentMemory(env, workspaceUserId, { limit: 5 }),
+    listActionableCounterMoveFollowUps(env, workspaceUserId, listRecentAgentActionAudits),
   ]);
   const plan = billingInfo.plan;
   const hasPaymentIssue =
@@ -96,6 +123,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     overnightStats,
     successfulProofStats,
     workspaceReadiness,
+    agentMemories: agentMemories.map((memory) => {
+      const safeMemory = safeAgentMemoryRecord(memory);
+      return {
+        id: safeMemory.id,
+        key: safeMemory.key,
+        scope: safeMemory.scope,
+        preview: summarizeAgentMemoryValue(safeMemory.value),
+        updatedAt: safeMemory.updatedAt,
+      };
+    }),
+    counterMoveFollowUps,
     plan,
     teamMemberCount: workspaceMembers.length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
@@ -255,6 +293,8 @@ export default function AppDashboardRoute() {
     source: "/app/sources",
     api: "/app/sources",
     mcp: "/app/sources",
+    memory: "/app/clients",
+    client_room: "/app/clients",
   };
   const setupItems = data.workspaceReadiness.items
     .filter((item) => item.status !== "not_applicable")
@@ -265,6 +305,11 @@ export default function AppDashboardRoute() {
       href: item.action?.href ?? readinessReviewPaths[item.id] ?? "/app",
     }));
   const lifecycleNudges = data.workspaceReadiness.nudges ?? [];
+  const agentMemories = data.agentMemories ?? [];
+  const counterMoveFollowUps = data.counterMoveFollowUps ?? [];
+  const agentMemoryCount = data.workspaceReadiness.counts?.agentMemoryEntries ?? agentMemories.length;
+  const hasAgentMemory = agentMemoryCount > 0;
+  const latestAgentMemory = agentMemories[0] ?? null;
   const statusCards = [
     {
       label: "Competitors watched",
@@ -367,6 +412,17 @@ export default function AppDashboardRoute() {
           : "Connect email or Slack when the team wants the proof pushed out.",
       done: deliveryComplete,
       href: sentDigests > 0 ? "/app/digests" : "/app/sources",
+    },
+    {
+      label: "Remembered",
+      state: hasAgentMemory
+        ? `${agentMemoryCount} memory ${agentMemoryCount === 1 ? "entry" : "entries"}`
+        : "No context saved",
+      detail: hasAgentMemory
+        ? "Future reports and briefs can use saved goals, tone, and review preferences."
+        : "Save goals, tone, or review cadence so the next agent run has context.",
+      done: hasAgentMemory,
+      href: "/app/clients",
     },
   ];
   const readyCount = data.workspaceReadiness.readyCount;
@@ -554,6 +610,7 @@ export default function AppDashboardRoute() {
           <Link to="/search?website=https%3A%2F%2Fmamaearth.in">Try Mamaearth</Link>
           {savedQueries.length > 0 ? <Link to="/search">Saved searches</Link> : null}
           <Link to="/app/watchlists">Open watchlists</Link>
+          <Link to="/app/clients">Save agent memory</Link>
         </div>
       </section>
 
@@ -580,6 +637,46 @@ export default function AppDashboardRoute() {
             </Link>
           ))}
         </div>
+      </article>
+
+      <article className="f9-app-panel">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Counter-move follow-ups</span>
+            <h2>Briefs that need a decision</h2>
+            <p className="f9-muted-copy">
+              Recent agent-created briefs stay visible until their review window closes.
+            </p>
+          </div>
+          <Link className="f9-secondary-button" to="/app/watchlists">
+            Review changes
+          </Link>
+        </div>
+        {counterMoveFollowUps.length > 0 ? (
+          <div className="f9-work-list is-compact">
+            {counterMoveFollowUps.map((followUp) => (
+              <article className="f9-work-row" key={followUp.id}>
+                <div>
+                  <h3>{followUp.title}</h3>
+                  <p className="f9-muted-copy">
+                    {followUp.ownerLabel} · {followUp.channelLabel}
+                    {followUp.expiresAt ? <> · expires <LocalTime iso={followUp.expiresAt} mode="date" /></> : null}
+                  </p>
+                </div>
+                <span className="f9-status-pill">
+                  {followUp.status === "needs_review"
+                    ? `${followUp.openCount} open`
+                    : followUp.status.replaceAll("_", " ")}
+                </span>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="f9-dashboard-empty is-compact">
+            <h3>No counter-move follow-ups yet.</h3>
+            <p>Create a counter-move brief after a proof-backed change to keep the next action visible here.</p>
+          </div>
+        )}
       </article>
 
       <article className="f9-app-panel">
@@ -707,12 +804,33 @@ export default function AppDashboardRoute() {
               <strong>{hasEmailDelivery ? "Email alerts ready" : "Email alert target missing"}</strong>
               <p>{hasEmailDelivery ? "Digest and instant alert delivery can use the saved target." : "Add delivery from a watchlist after creating it."}</p>
             </div>
+            <div>
+              <span className={`f9-status-dot ${hasAgentMemory ? "is-good" : "is-attention"}`} />
+              <strong>{hasAgentMemory ? "Agent memory ready" : "Agent memory missing"}</strong>
+              <p>
+                {latestAgentMemory
+                  ? `${latestAgentMemory.key}: ${latestAgentMemory.preview}`
+                  : "Save account context before the next report, brief, or client-room handoff."}
+              </p>
+            </div>
           </div>
           <Link className="f9-secondary-button" to="/app/sources">
             Review tracking access
           </Link>
         </article>
       </div>
+
+      <article className="f9-app-panel f9-callout-panel">
+        <span className="f9-app-kicker">Production proof</span>
+        <p>
+          This checklist shows your account setup. Detailed launch evidence stays in the private canary checks and
+          signed-in app; the public status page shows the coarse launch blockers and safety posture without exposing
+          account activity.
+        </p>
+        <Link className="f9-secondary-button" to="/status">
+          Open status
+        </Link>
+      </article>
 
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel">
@@ -780,6 +898,140 @@ export default function AppDashboardRoute() {
       </div>
     </section>
   );
+}
+
+function mapCounterMoveFollowUpAudits(audits: AgentActionAuditRecord[]) {
+  return audits
+    .map(readCounterMoveFollowUpSummary)
+    .filter((summary): summary is NonNullable<typeof summary> => Boolean(summary));
+}
+
+async function listActionableCounterMoveFollowUps(
+  env: AppEnv,
+  workspaceUserId: string,
+  listRecentAgentActionAudits: ListRecentAgentActionAudits,
+) {
+  const followUps: ReturnType<typeof mapCounterMoveFollowUpAudits> = [];
+
+  for (let page = 0; page < COUNTER_MOVE_AUDIT_MAX_PAGES; page += 1) {
+    const audits = await listRecentAgentActionAudits(env, workspaceUserId, {
+      actionName: "counter_move_brief.create",
+      status: "succeeded",
+      resourceType: "watchlist",
+      limit: COUNTER_MOVE_AUDIT_PAGE_LIMIT,
+      offset: page * COUNTER_MOVE_AUDIT_PAGE_LIMIT,
+    });
+
+    followUps.push(...mapCounterMoveFollowUpAudits(audits));
+    if (followUps.length >= COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT || audits.length < COUNTER_MOVE_AUDIT_PAGE_LIMIT) {
+      break;
+    }
+  }
+
+  return followUps.slice(0, COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT);
+}
+
+function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
+  const result = readRecord(audit.result);
+  const brief = readRecord(result?.brief);
+  const workflow = readRecord(brief?.workflow);
+  if (!brief || !workflow) {
+    return null;
+  }
+
+  const followUps = readRecordArray(workflow?.followUps);
+  const openFollowUps = followUps.filter((followUp) => readStringValue(followUp.status) !== "closed");
+  const openCount = Math.max(0, Math.floor(readNumberValue(workflow?.openCount) ?? openFollowUps.length));
+  const status = readWorkflowStatus(workflow?.status, openCount);
+  const firstFollowUp = openFollowUps[0] ?? followUps[0] ?? null;
+  const expiresAt = readIsoString(workflow?.expiresAt) ?? readIsoString(firstFollowUp?.expiresAt);
+  if (
+    status !== "needs_review" ||
+    openCount === 0 ||
+    isExpiredIso(expiresAt) ||
+    (!expiresAt && isStaleCounterMoveAudit(audit.updatedAt))
+  ) {
+    return null;
+  }
+  const targetLabel = safeDashboardText(readStringValue(brief.targetLabel), "Counter-move brief");
+  const title = safeDashboardText(
+    readStringValue(firstFollowUp?.title) ?? readStringValue(brief.summary),
+    `${targetLabel} counter-move brief`,
+  );
+
+  return {
+    id: audit.id,
+    title,
+    status,
+    openCount,
+    ownerLabel: safeDashboardText(readStringValue(workflow?.ownerLabel) ?? readStringValue(firstFollowUp?.ownerLabel), "Workspace owner"),
+    channelLabel: formatFollowUpChannel(readStringValue(workflow?.channel) ?? readStringValue(firstFollowUp?.channel)),
+    expiresAt,
+    updatedAt: audit.updatedAt,
+  };
+}
+
+function readRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function readRecordArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.map(readRecord).filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    : [];
+}
+
+function readStringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readNumberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readIsoString(value: unknown) {
+  const normalized = readStringValue(value);
+  return normalized && Number.isFinite(Date.parse(normalized)) ? normalized : null;
+}
+
+function isExpiredIso(value: string | null) {
+  return Boolean(value && Date.parse(value) <= Date.now());
+}
+
+function isStaleCounterMoveAudit(value: string) {
+  const updatedAt = Date.parse(value);
+  return !Number.isFinite(updatedAt) || updatedAt + COUNTER_MOVE_FOLLOW_UP_AUDIT_FRESHNESS_MS <= Date.now();
+}
+
+function readWorkflowStatus(value: unknown, openCount: number) {
+  const normalized = readStringValue(value);
+  if (normalized === "needs_review" || normalized === "quiet") {
+    return normalized;
+  }
+  return openCount > 0 ? "needs_review" : "quiet";
+}
+
+function safeDashboardText(value: string | null, fallback: string) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized || isSecretishMemoryString(normalized)) {
+    return fallback;
+  }
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
+}
+
+function formatFollowUpChannel(value: string | null) {
+  switch (value) {
+    case "email":
+      return "Email workflow";
+    case "slack":
+      return "Slack workflow";
+    case "client_room":
+      return "Client room";
+    default:
+      return "App workflow";
+  }
 }
 
 const CHECKOUT_ACTIVATION_POLL_LIMIT = 10;

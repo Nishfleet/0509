@@ -28,6 +28,7 @@ const WRITE_TOOL_ANNOTATIONS = {
   openWorldHint: false,
 };
 const WRITE_TOOL_NAMES = new Set([
+  "retest_meta_source",
   "create_watchlist",
   "update_watchlist",
   "refresh_watchlist",
@@ -91,6 +92,21 @@ const MCP_TOOLS = [
       "Read an account-owned Five to Nine digest with priority, recommendation, proof trail, and insight-depth summaries.",
     inputSchema: resourceInputSchema("digestId"),
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "retest_meta_source",
+    title: "Retest Meta Source",
+    description:
+      "Retest the saved account-owned Meta source connection without accepting or returning the credential.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["idempotencyKey"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
   },
   {
     name: "create_watchlist",
@@ -436,9 +452,24 @@ const MCP_TOOLS = [
         timeZone: {
           type: "string",
         },
+        ownerLabel: {
+          type: "string",
+          description: "Safe non-secret owner label for the follow-up, such as Growth lead.",
+        },
+        followUpChannel: {
+          type: "string",
+          enum: ["app", "email", "slack", "client_room"],
+          default: "app",
+        },
+        expiryDays: {
+          type: "number",
+          default: 7,
+          minimum: 1,
+          maximum: 30,
+        },
         idempotencyKey: idempotencyKeySchema(),
       },
-      required: ["watchlistId"],
+      required: ["watchlistId", "idempotencyKey"],
       additionalProperties: false,
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
@@ -464,8 +495,16 @@ const MCP_TOOLS = [
           type: "number",
           default: 50,
         },
-        idempotencyKey: idempotencyKeySchema(),
+        watchlistId: {
+          type: "string",
+          description: "Optional owned watchlist id for scoped memory.",
+        },
+        clientRoomId: {
+          type: "string",
+          description: "Optional owned client room id for scoped memory.",
+        },
       },
+      not: { required: ["watchlistId", "clientRoomId"] },
       additionalProperties: false,
     },
     annotations: WRITE_TOOL_ANNOTATIONS,
@@ -495,7 +534,6 @@ const MCP_TOOLS = [
           type: "number",
           default: 50,
         },
-        idempotencyKey: idempotencyKeySchema(),
       },
       additionalProperties: false,
     },
@@ -697,6 +735,10 @@ async function callTool(
 
   if (name === "get_digest_export") {
     return buildDigestToolResult(env, apiKey.userId, stringField(args, "digestId"), format);
+  }
+
+  if (name === "retest_meta_source") {
+    return buildAgentActionToolResult(env, apiKey, "source.meta.retest", args, origin, executionContext);
   }
 
   if (name === "create_watchlist") {

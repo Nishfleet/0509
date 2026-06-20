@@ -5,6 +5,7 @@ import {
 
 export const MCP_TOOL_NAME_BY_AGENT_ACTION = {
   get_workspace_readiness: "get_workspace_readiness",
+  "source.meta.retest": "retest_meta_source",
   "watchlist.create": "create_watchlist",
   "watchlist.update": "update_watchlist",
   "watchlist.refresh": "refresh_watchlist",
