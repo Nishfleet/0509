@@ -285,6 +285,7 @@ describe("MCP route", () => {
       "get_collection_export",
       "get_watchlist_export",
       "get_digest_export",
+      "retest_meta_source",
       "create_watchlist",
       "update_watchlist",
       "refresh_watchlist",
@@ -533,6 +534,12 @@ describe("MCP route", () => {
       args: Record<string, unknown>;
       idempotencyKey?: string;
     }> = [
+      {
+        toolName: "retest_meta_source",
+        actionName: "source.meta.retest",
+        args: { idempotencyKey: "source-retest-1" },
+        idempotencyKey: "source-retest-1",
+      },
       {
         toolName: "create_watchlist",
         actionName: "watchlist.create",

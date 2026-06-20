@@ -53,6 +53,21 @@ const deliveryTarget = {
   updatedAt: "2026-06-19T00:00:00.000Z",
 } as const;
 
+const customerMetaConnection = {
+  id: "meta-connection-1",
+  userId: "user-1",
+  encryptedAccessToken: "encrypted-meta-token",
+  tokenLastFour: "1234",
+  tokenFingerprint: "meta-token-fingerprint",
+  status: "healthy",
+  summary: "Connected. Five to Nine can use this customer-owned token for Meta Ad Library API fallback.",
+  lastCheckedAt: "2026-06-20T00:00:00.000Z",
+  lastErrorCode: null,
+  lastErrorMessage: "Raw Meta response that should not leave the server.",
+  createdAt: "2026-06-19T00:00:00.000Z",
+  updatedAt: "2026-06-20T00:00:00.000Z",
+} as const;
+
 const externalAd = {
   metaAdId: "external:linkedin:proof-1",
   advertiser: "Glossier",
@@ -220,6 +235,17 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
         createdAt: "2026-06-19T00:00:00.000Z",
       },
     ]),
+    retestSavedCustomerMetaToken: vi.fn().mockResolvedValue({
+      ok: true,
+      connection: customerMetaConnection,
+      testResult: {
+        ok: true,
+        status: "healthy",
+        summary: customerMetaConnection.summary,
+        errorCode: null,
+        errorMessage: customerMetaConnection.lastErrorMessage,
+      },
+    }),
     createShareLink: vi.fn().mockResolvedValue({
       id: "share-1",
       token: "sharetoken1",
@@ -358,6 +384,9 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     queueFirstWatchlistScan: mocks.queueFirstWatchlistScan,
     runWatchlistManual: mocks.runWatchlistManual,
   }));
+  vi.doMock("~/lib/customer-meta.server", () => ({
+    retestSavedCustomerMetaToken: mocks.retestSavedCustomerMetaToken,
+  }));
   vi.doMock("~/lib/ad-source.server", () => ({
     CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
   }));
@@ -390,6 +419,98 @@ describe("customerAgentActionErrorPayload", () => {
 });
 
 describe("runCustomerAgentAction", () => {
+  it("retests saved Meta source access without exposing credential material", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "retest-meta-source-1",
+        source: "api_v1",
+      },
+      "source.meta.retest",
+      {},
+    );
+
+    const result = outcome.result as {
+      ok: boolean;
+      action: string;
+      source: string;
+      connection: {
+        status: string;
+        summary: string;
+        tokenLastFour: string;
+        lastErrorCode: string | null;
+      };
+      testResult: {
+        ok: boolean;
+        errorCode: string | null;
+      };
+    };
+    expect(result).toMatchObject({
+      ok: true,
+      action: "source.meta.retest",
+      source: "meta_ad_library",
+      connection: {
+        status: "healthy",
+        tokenLastFour: "1234",
+        lastErrorCode: null,
+      },
+      testResult: {
+        ok: true,
+        errorCode: null,
+      },
+    });
+    expect(mocks.retestSavedCustomerMetaToken).toHaveBeenCalledWith(expect.anything(), "user-1");
+    expect(outcome.audit.metadata).toMatchObject({
+      source: "meta_ad_library",
+      ok: true,
+      status: "healthy",
+      errorCode: null,
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("encrypted-meta-token");
+    expect(serialized).not.toContain(customerMetaConnection.lastErrorMessage);
+    expect(serialized).not.toContain("tokenFingerprint");
+  });
+
+  it("reports missing Meta source setup without treating secret setup as agent-owned", async () => {
+    const mocks = setupMocks();
+    mocks.retestSavedCustomerMetaToken.mockResolvedValue({
+      ok: false,
+      connection: null,
+      testResult: {
+        ok: false,
+        status: "degraded",
+        summary: "No Meta token is connected yet.",
+        errorCode: "missing_connection",
+        errorMessage: null,
+      },
+    });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "retest-meta-source-missing",
+        source: "api_v1",
+      },
+      "source.meta.retest",
+      {},
+    )).rejects.toMatchObject({
+      code: "source_connection_missing",
+      status: 404,
+      details: {
+        source: "meta_ad_library",
+      },
+    });
+  });
+
   it("creates an audited competitor watchlist with normalized website targeting", async () => {
     const mocks = setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");

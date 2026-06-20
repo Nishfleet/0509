@@ -14,6 +14,7 @@ import {
 } from "~/lib/agent-action-catalog";
 
 const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
+  "source.meta.retest",
   "watchlist.create",
   "watchlist.update",
   "watchlist.refresh",
