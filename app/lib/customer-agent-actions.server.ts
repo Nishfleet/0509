@@ -32,6 +32,7 @@ import {
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { parseReportId } from "~/lib/report";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
+import type { CounterMoveFollowUpChannel } from "~/lib/counter-move-brief.server";
 import type {
   AgentActionAuditRecord,
   AgentMemoryRecord,
@@ -353,6 +354,10 @@ export async function runCustomerAgentAction(
           metadata: {
             watchlistId: result.brief.watchlistId,
             moveCount: result.brief.moves.length,
+            workflowStatus: result.brief.workflow.status,
+            followUpOpenCount: result.brief.workflow.openCount,
+            followUpChannel: result.brief.workflow.channel,
+            followUpExpiresAt: result.brief.workflow.expiresAt,
           },
         };
       }
@@ -884,12 +889,14 @@ async function buildCounterMoveBriefFromAgent(
     .map((event) => event.adId)
     .filter((adId): adId is string => Boolean(adId));
   const ads = linkedAdIds.length > 0 ? await listAdsByIds(env, linkedAdIds) : [];
+  const workflow = readCounterMoveWorkflow(input);
   const brief = buildCounterMoveBrief({
     watchlist,
     events,
     adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
     limit,
     timeZone: readString(input, "timeZone"),
+    workflow,
   });
 
   return {
@@ -1550,6 +1557,61 @@ function readReportResourceType(input: Record<string, unknown>) {
     return value;
   }
   throw new CustomerAgentActionError("invalid_resource_type", "resourceType must be collection or watchlist.");
+}
+
+function readCounterMoveWorkflow(input: Record<string, unknown>) {
+  return {
+    ownerLabel: readCounterMoveOwnerLabel(input),
+    channel: readCounterMoveFollowUpChannel(input),
+    expiryDays: readCounterMoveExpiryDays(input),
+  };
+}
+
+function readCounterMoveOwnerLabel(input: Record<string, unknown>) {
+  const value = readString(input, "ownerLabel") ?? readString(input, "followUpOwner");
+  if (!value) {
+    return null;
+  }
+  if (isSecretishMemoryField(value) || isSecretishMemoryString(value)) {
+    throw new CustomerAgentActionError(
+      "secret_workflow_owner_rejected",
+      "Counter-move follow-up owner cannot contain secrets or credentials.",
+    );
+  }
+  return value.replace(/\s+/g, " ").slice(0, 80);
+}
+
+function readCounterMoveFollowUpChannel(input: Record<string, unknown>): CounterMoveFollowUpChannel | null {
+  const value = readString(input, "followUpChannel") ?? readString(input, "channel");
+  if (!value) {
+    return null;
+  }
+  if (value === "app" || value === "email" || value === "slack" || value === "client_room") {
+    return value;
+  }
+  throw new CustomerAgentActionError(
+    "invalid_follow_up_channel",
+    "followUpChannel must be app, email, slack, or client_room.",
+  );
+}
+
+function readCounterMoveExpiryDays(input: Record<string, unknown>) {
+  const value = input.expiryDays ?? input.expiresInDays ?? input.followUpDays;
+  if (value === null || typeof value === "undefined" || value === "") {
+    return null;
+  }
+  const parsed = typeof value === "number"
+    ? value
+    : typeof value === "string" && value.trim()
+      ? Number(value)
+      : Number.NaN;
+  if (!Number.isFinite(parsed)) {
+    throw new CustomerAgentActionError(
+      "invalid_follow_up_expiry",
+      "expiryDays must be a number from 1 to 30.",
+    );
+  }
+  return Math.max(1, Math.min(30, Math.floor(parsed)));
 }
 
 function mapAgentMemoryInputError<T>(callback: () => T): T {

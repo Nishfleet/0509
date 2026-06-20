@@ -29,6 +29,7 @@ import {
   getWeeklyBusinessSummary,
   findAgentActionAuditByIdempotencyKey,
   finishAgentActionAudit,
+  listRecentAgentActionAudits,
   listClientRooms,
   listAgentMemory,
   listActiveWatchlists,
@@ -268,6 +269,29 @@ describe("agent action audit persistence", () => {
     expect(audit).toMatchObject({
       id: "audit-1",
       actionName: "watchlist.create",
+      result: { watchlistId: "watchlist-1" },
+    });
+  });
+
+  it("lists recent successful agent action audits by action name", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM agent_action_audit",
+        results: [row],
+      },
+    ]);
+
+    const audits = await listRecentAgentActionAudits({ DB: mock.db } as never, "user-1", {
+      actionName: "counter_move_brief.create",
+      status: "succeeded",
+      resourceType: "watchlist",
+      limit: 3,
+    });
+
+    const select = findStatement(mock.statements, "FROM agent_action_audit", "ORDER BY updated_at DESC");
+    expect(select?.bindings).toEqual(["user-1", "counter_move_brief.create", "succeeded", "watchlist", 3]);
+    expect(audits[0]).toMatchObject({
+      id: "audit-1",
       result: { watchlistId: "watchlist-1" },
     });
   });

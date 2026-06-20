@@ -15,6 +15,7 @@ import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { buildSearchParams } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import type { AgentActionAuditRecord } from "~/lib/types";
 
 export const meta = () => [{ title: "Dashboard | Five to Nine" }];
 
@@ -28,6 +29,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listCollections,
     listDeliveryTargets,
     listDigests,
+    listRecentAgentActionAudits,
     listRecentWorkspaceProofCaptures,
     listSavedQueries,
     listWatchEvents,
@@ -55,6 +57,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceMembers,
     workspaceReadiness,
     agentMemories,
+    counterMoveAudits,
   ] = await Promise.all([
     listSavedQueries(env, workspaceUserId),
     listCollections(env, workspaceUserId),
@@ -67,6 +70,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWorkspaceMembers(env, workspaceUserId),
     getWorkspaceReadiness(env, workspaceUserId),
     listAgentMemory(env, workspaceUserId, { limit: 5 }),
+    listRecentAgentActionAudits(env, workspaceUserId, {
+      actionName: "counter_move_brief.create",
+      status: "succeeded",
+      resourceType: "watchlist",
+      limit: 3,
+    }),
   ]);
   const plan = billingInfo.plan;
   const hasPaymentIssue =
@@ -110,6 +119,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         updatedAt: safeMemory.updatedAt,
       };
     }),
+    counterMoveFollowUps: mapCounterMoveFollowUpAudits(counterMoveAudits),
     plan,
     teamMemberCount: workspaceMembers.length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(plan),
@@ -282,6 +292,7 @@ export default function AppDashboardRoute() {
     }));
   const lifecycleNudges = data.workspaceReadiness.nudges ?? [];
   const agentMemories = data.agentMemories ?? [];
+  const counterMoveFollowUps = data.counterMoveFollowUps ?? [];
   const agentMemoryCount = data.workspaceReadiness.counts?.agentMemoryEntries ?? agentMemories.length;
   const hasAgentMemory = agentMemoryCount > 0;
   const latestAgentMemory = agentMemories[0] ?? null;
@@ -617,6 +628,46 @@ export default function AppDashboardRoute() {
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
           <div>
+            <span className="f9-app-kicker">Counter-move follow-ups</span>
+            <h2>Briefs that need a decision</h2>
+            <p className="f9-muted-copy">
+              Recent agent-created briefs stay visible until their review window closes.
+            </p>
+          </div>
+          <Link className="f9-secondary-button" to="/app/watchlists">
+            Review changes
+          </Link>
+        </div>
+        {counterMoveFollowUps.length > 0 ? (
+          <div className="f9-work-list is-compact">
+            {counterMoveFollowUps.map((followUp) => (
+              <article className="f9-work-row" key={followUp.id}>
+                <div>
+                  <h3>{followUp.title}</h3>
+                  <p className="f9-muted-copy">
+                    {followUp.ownerLabel} · {followUp.channelLabel}
+                    {followUp.expiresAt ? <> · expires <LocalTime iso={followUp.expiresAt} mode="date" /></> : null}
+                  </p>
+                </div>
+                <span className="f9-status-pill">
+                  {followUp.status === "needs_review"
+                    ? `${followUp.openCount} open`
+                    : followUp.status.replaceAll("_", " ")}
+                </span>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="f9-dashboard-empty is-compact">
+            <h3>No counter-move follow-ups yet.</h3>
+            <p>Create a counter-move brief after a proof-backed change to keep the next action visible here.</p>
+          </div>
+        )}
+      </article>
+
+      <article className="f9-app-panel">
+        <div className="f9-panel-toolbar">
+          <div>
             <span className="f9-app-kicker">Lifecycle nudges</span>
             <h2>What to unblock next</h2>
           </div>
@@ -833,6 +884,106 @@ export default function AppDashboardRoute() {
       </div>
     </section>
   );
+}
+
+function mapCounterMoveFollowUpAudits(audits: AgentActionAuditRecord[]) {
+  return audits
+    .map(readCounterMoveFollowUpSummary)
+    .filter((summary): summary is NonNullable<typeof summary> => Boolean(summary));
+}
+
+function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
+  const result = readRecord(audit.result);
+  const brief = readRecord(result?.brief);
+  const workflow = readRecord(brief?.workflow);
+  if (!brief || !workflow) {
+    return null;
+  }
+
+  const followUps = readRecordArray(workflow?.followUps);
+  const openFollowUps = followUps.filter((followUp) => readStringValue(followUp.status) !== "closed");
+  const openCount = Math.max(0, Math.floor(readNumberValue(workflow?.openCount) ?? openFollowUps.length));
+  const status = readWorkflowStatus(workflow?.status, openCount);
+  const firstFollowUp = openFollowUps[0] ?? followUps[0] ?? null;
+  const targetLabel = safeDashboardText(readStringValue(brief.targetLabel), "Counter-move brief");
+  const title = safeDashboardText(
+    readStringValue(firstFollowUp?.title) ?? readStringValue(brief.summary),
+    `${targetLabel} counter-move brief`,
+  );
+
+  return {
+    id: audit.id,
+    title,
+    status,
+    openCount,
+    ownerLabel: safeDashboardText(readStringValue(workflow?.ownerLabel) ?? readStringValue(firstFollowUp?.ownerLabel), "Workspace owner"),
+    channelLabel: formatFollowUpChannel(readStringValue(workflow?.channel) ?? readStringValue(firstFollowUp?.channel)),
+    expiresAt: readIsoString(workflow?.expiresAt) ?? readIsoString(firstFollowUp?.expiresAt),
+    updatedAt: audit.updatedAt,
+  };
+}
+
+function readRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function readRecordArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.map(readRecord).filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    : [];
+}
+
+function readStringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readNumberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readIsoString(value: unknown) {
+  const normalized = readStringValue(value);
+  return normalized && Number.isFinite(Date.parse(normalized)) ? normalized : null;
+}
+
+function readWorkflowStatus(value: unknown, openCount: number) {
+  const normalized = readStringValue(value);
+  if (normalized === "needs_review" || normalized === "quiet") {
+    return normalized;
+  }
+  return openCount > 0 ? "needs_review" : "quiet";
+}
+
+function safeDashboardText(value: string | null, fallback: string) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized || looksSecretish(normalized)) {
+    return fallback;
+  }
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
+}
+
+function looksSecretish(value: string) {
+  return (
+    /(?:^|[^a-z0-9_])f9_live_[a-z0-9_-]+/i.test(value) ||
+    /\b(?:bearer\s+|xox[baprs]-|sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_]{8,}|github_pat_[a-z0-9_]{8,})/i.test(value) ||
+    /(?:password|passphrase|api[_-]?key|access[_-]?key|secret|token|authorization|webhook)\s*[:=]/i.test(value) ||
+    /https:\/\/[^\s"'<>]*(?:hooks\.slack\.com\/services|hooks\.zapier\.com\/hooks\/catch|discord(?:app)?\.com\/api\/webhooks|webhook\.office\.com|outlook\.office\.com\/webhook|\/(?:api\/)?webhooks?\/)[^\s"'<>]*/i.test(value)
+  );
+}
+
+function formatFollowUpChannel(value: string | null) {
+  switch (value) {
+    case "email":
+      return "Email workflow";
+    case "slack":
+      return "Slack workflow";
+    case "client_room":
+      return "Client room";
+    default:
+      return "App workflow";
+  }
 }
 
 const CHECKOUT_ACTIVATION_POLL_LIMIT = 10;

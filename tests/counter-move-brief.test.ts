@@ -61,6 +61,11 @@ describe("buildCounterMoveBrief", () => {
       generatedAt: "2026-06-19T02:00:00.000Z",
       limit: 1,
       timeZone: "Asia/Kolkata",
+      workflow: {
+        ownerLabel: "Growth owner",
+        channel: "app",
+        expiryDays: 5,
+      },
     });
 
     expect(brief).toMatchObject({
@@ -70,12 +75,45 @@ describe("buildCounterMoveBrief", () => {
       generatedAt: "2026-06-19T02:00:00.000Z",
       summary: "1 proof-backed move to review for Nykaa.",
     });
+    expect(brief.workflow).toMatchObject({
+      ownerLabel: "Growth owner",
+      channel: "app",
+      status: "needs_review",
+      expiresAt: "2026-06-24T02:00:00.000Z",
+      openCount: 1,
+    });
+    expect(brief.workflow.followUps[0]).toMatchObject({
+      eventId: "event-offer",
+      status: "open",
+      dueAt: "2026-06-24T02:00:00.000Z",
+      recommendedAction: expect.stringContaining("review pricing"),
+      priorityBand: "High priority",
+    });
     expect(brief.moves).toHaveLength(1);
     expect(brief.moves[0]).toMatchObject({
       eventId: "event-offer",
       priorityBand: "High priority",
       counterMove: expect.stringContaining("price, bundle, guarantee"),
       evidence: expect.stringContaining("Starting at ₹499"),
+    });
+  });
+
+  it("returns quiet workflow state when no proof-backed moves are ready", () => {
+    const brief = buildCounterMoveBrief({
+      watchlist,
+      events: [],
+      adsById: new Map(),
+      generatedAt: "2026-06-19T02:00:00.000Z",
+    });
+
+    expect(brief.summary).toBe("No proof-backed moves are ready for Nykaa.");
+    expect(brief.workflow).toMatchObject({
+      ownerLabel: "Workspace owner",
+      channel: "app",
+      status: "quiet",
+      expiresAt: "2026-06-26T02:00:00.000Z",
+      openCount: 0,
+      followUps: [],
     });
   });
 });

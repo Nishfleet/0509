@@ -9,6 +9,7 @@ export interface CounterMoveBrief {
   generatedAt: string;
   summary: string;
   moves: CounterMove[];
+  workflow: CounterMoveWorkflow;
 }
 
 export interface CounterMove {
@@ -24,6 +25,33 @@ export interface CounterMove {
   landingPageUrl: string | null;
 }
 
+export type CounterMoveWorkflowStatus = "needs_review" | "quiet";
+export type CounterMoveFollowUpStatus = "open" | "closed";
+export type CounterMoveFollowUpChannel = "app" | "email" | "slack" | "client_room";
+
+export interface CounterMoveWorkflow {
+  ownerLabel: string;
+  channel: CounterMoveFollowUpChannel;
+  status: CounterMoveWorkflowStatus;
+  expiresAt: string;
+  openCount: number;
+  followUps: CounterMoveFollowUp[];
+}
+
+export interface CounterMoveFollowUp {
+  eventId: string;
+  title: string;
+  status: CounterMoveFollowUpStatus;
+  dueAt: string;
+  expiresAt: string;
+  ownerLabel: string;
+  channel: CounterMoveFollowUpChannel;
+  recommendedAction: string;
+  priorityBand: string;
+}
+
+const DEFAULT_WORKFLOW_EXPIRY_DAYS = 7;
+
 export function buildCounterMoveBrief(input: {
   watchlist: WatchlistRecord;
   events: WatchEventRecord[];
@@ -31,23 +59,69 @@ export function buildCounterMoveBrief(input: {
   generatedAt?: string;
   limit?: number;
   timeZone?: string | null;
+  workflow?: {
+    ownerLabel?: string | null;
+    channel?: CounterMoveFollowUpChannel | null;
+    expiryDays?: number | null;
+  } | null;
 }): CounterMoveBrief {
   const limit = Math.max(1, Math.min(20, Math.floor(input.limit ?? 5)));
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
   const moves = [...input.events]
     .sort(compareEventsForBrief)
     .slice(0, limit)
     .map((event) => buildCounterMove(event, input.adsById.get(event.adId ?? "") ?? null, input.timeZone));
+  const workflow = buildCounterMoveWorkflow({
+    moves,
+    generatedAt,
+    ownerLabel: input.workflow?.ownerLabel,
+    channel: input.workflow?.channel,
+    expiryDays: input.workflow?.expiryDays,
+  });
 
   return {
     kind: "counter_move_brief",
     watchlistId: input.watchlist.id,
     watchlistName: input.watchlist.name,
     targetLabel: input.watchlist.targetLabel,
-    generatedAt: input.generatedAt ?? new Date().toISOString(),
+    generatedAt,
     summary: moves.length > 0
       ? `${moves.length} proof-backed move${moves.length === 1 ? "" : "s"} to review for ${input.watchlist.targetLabel}.`
       : `No proof-backed moves are ready for ${input.watchlist.targetLabel}.`,
     moves,
+    workflow,
+  };
+}
+
+function buildCounterMoveWorkflow(input: {
+  moves: CounterMove[];
+  generatedAt: string;
+  ownerLabel?: string | null;
+  channel?: CounterMoveFollowUpChannel | null;
+  expiryDays?: number | null;
+}): CounterMoveWorkflow {
+  const ownerLabel = normalizeOwnerLabel(input.ownerLabel);
+  const channel = input.channel ?? "app";
+  const expiresAt = addDaysIso(input.generatedAt, input.expiryDays ?? DEFAULT_WORKFLOW_EXPIRY_DAYS);
+  const followUps = input.moves.map((move) => ({
+    eventId: move.eventId,
+    title: move.title,
+    status: "open" as const,
+    dueAt: expiresAt,
+    expiresAt,
+    ownerLabel,
+    channel,
+    recommendedAction: move.recommendedAction,
+    priorityBand: move.priorityBand,
+  }));
+
+  return {
+    ownerLabel,
+    channel,
+    status: followUps.length > 0 ? "needs_review" : "quiet",
+    expiresAt,
+    openCount: followUps.length,
+    followUps,
   };
 }
 
@@ -79,6 +153,17 @@ function compareEventsForBrief(left: WatchEventRecord, right: WatchEventRecord) 
     return rightScore - leftScore;
   }
   return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+}
+
+function normalizeOwnerLabel(value?: string | null) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  return normalized || "Workspace owner";
+}
+
+function addDaysIso(value: string, days: number) {
+  const base = Number.isFinite(Date.parse(value)) ? new Date(value) : new Date();
+  base.setUTCDate(base.getUTCDate() + Math.max(1, Math.min(30, Math.floor(days))));
+  return base.toISOString();
 }
 
 function counterMoveForEvent(event: WatchEventRecord) {
