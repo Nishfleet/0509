@@ -3,9 +3,10 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
-  AGENT_ACTION_GROUPS,
   AGENT_BLOCKED_CAPABILITIES,
   AGENT_FIRST_WORKFLOW,
+  BROAD_WRITE_API_NON_GOAL,
+  auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
@@ -69,7 +70,8 @@ export default function ApiDocsRoute() {
           POST JSON-RPC to `/api/mcp` with the same bearer token. The endpoint exposes readiness/export
           tools plus audited actions for watchlists, boards, manual proof links, share links, reports,
           counter-move briefs, account memory, client rooms, redacted delivery settings, and existing
-          proof-backed web mentions.
+          proof-backed web mentions. Readiness and exports work with any active key; audited action
+          groups require a write-enabled key.
         </p>
         <pre className="f9-code-block">
           <code>{`{
@@ -94,10 +96,10 @@ export default function ApiDocsRoute() {
 
       <PublicDocBlock title="Audited action groups">
         <dl className="proof-trail-list">
-          {AGENT_ACTION_GROUPS.filter((group) => group.id !== "readiness").map((group) => (
+          {auditedAgentActionGroups().map((group) => (
             <div key={group.id}>
               <dt>{group.label}</dt>
-              <dd>{group.detail}</dd>
+              <dd>{group.detail} {group.credentialRequirement}</dd>
             </div>
           ))}
         </dl>
@@ -117,6 +119,7 @@ export default function ApiDocsRoute() {
           <li>Audited actions are limited to safe workspace operations and store an action log.</li>
           <li>Keys are shown once, stored hashed, and can be revoked from Integrations &amp; API.</li>
           <li>Agent-blocked capabilities: {AGENT_BLOCKED_CAPABILITIES.join(", ")}.</li>
+          <li>Not live yet: {BROAD_WRITE_API_NON_GOAL}.</li>
           <li>Not live yet: X/YouTube listening or broad social listening beyond existing proof-backed observations.</li>
         </ul>
       </PublicDocBlock>
