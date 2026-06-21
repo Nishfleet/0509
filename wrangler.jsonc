@@ -59,6 +59,8 @@
     "APP_ORIGIN": "https://0509.io",
     "AUTH_PROVIDER": "stytch",
     "STYTCH_API_BASE_URL": "https://api.stytch.com",
+    "STYTCH_OAUTH_ENABLED_PROVIDERS": "google",
+    "STYTCH_OAUTH_BRANDED_PROVIDERS": "google",
     "DODO_0509_ADAPTIVE_CURRENCY": "true",
     "DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE": "true",
     "DODO_0509_ENVIRONMENT": "live",
@@ -77,8 +79,6 @@
   // - DODO_PAYMENTS_API_KEY
   // - STYTCH_PROJECT_ID
   // - STYTCH_PUBLIC_TOKEN (runtime-only for Stytch OAuth discovery starts)
-  // - STYTCH_OAUTH_ENABLED_PROVIDERS (provider allowlist after Google/Microsoft provider configs are verified)
-  // - STYTCH_OAUTH_BRANDED_PROVIDERS (subset verified to show Five to Nine/0509 on provider screens)
   // - STYTCH_SECRET
   // - UNSUBSCRIBE_SIGNING_SECRET
   // - DODO_0509_API_KEY (optional override if 0509 ever needs its own key)
