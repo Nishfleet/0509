@@ -167,6 +167,21 @@ function customerAgentActionSupportsIdempotency(actionName: CustomerAgentActionN
   return !IDEMPOTENCY_IGNORED_ACTIONS.has(actionName);
 }
 
+function actionReversal(
+  action: CustomerAgentActionName,
+  input: Record<string, unknown>,
+  note: string,
+  options: { requiresExplicitApproval?: boolean } = {},
+) {
+  return {
+    action,
+    input,
+    requiresNewIdempotencyKey: true,
+    requiresExplicitApproval: options.requiresExplicitApproval ?? false,
+    note,
+  };
+}
+
 export async function runCustomerAgentAction(
   env: AppEnv,
   context: CustomerAgentActionContext,
@@ -612,6 +627,11 @@ async function createWatchlistFromAgent(
     action: "watchlist.create",
     watchlist,
     firstScanQueued,
+    reversal: actionReversal(
+      "watchlist.pause",
+      { watchlistId: watchlist.id },
+      "Pause this watchlist to stop future scans and alerts. History and audit records stay intact.",
+    ),
   };
 }
 
@@ -1199,6 +1219,23 @@ async function updateDeliverySettingsFromAgent(
     ok: true,
     action: "delivery_settings.update",
     config,
+    reversal: actionReversal(
+      "delivery_settings.update",
+      {
+        watchlistId: watchlist.id,
+        explicitApproval: true,
+        sensitivityMode: base.sensitivityMode,
+        instantEnabled: base.instantEnabled,
+        digestEnabled: base.digestEnabled,
+        emailEnabled: base.emailEnabled,
+        whatsappEnabled: base.whatsappEnabled,
+        slackEnabled: base.slackEnabled,
+        quietHours: base.quietHours,
+        timezone: base.timezone,
+      },
+      "Restore the previous delivery policy with explicit approval and a fresh idempotency key.",
+      { requiresExplicitApproval: true },
+    ),
     message: "Delivery settings updated.",
   };
 }
@@ -1252,6 +1289,18 @@ async function updateDeliveryTargetFromAgent(
     ok: true,
     action: "delivery_target.update",
     target: safeDeliveryTargetRecord(updated ?? existing),
+    reversal: actionReversal(
+      "delivery_target.update",
+      {
+        targetId,
+        isPaused: existing.isPaused,
+        explicitApproval: true,
+      },
+      existing.isPaused
+        ? "Return this delivery target to paused with explicit approval and a fresh idempotency key."
+        : "Return this delivery target to active with explicit approval and a fresh idempotency key.",
+      { requiresExplicitApproval: true },
+    ),
     message: isPaused ? "Delivery target paused." : "Delivery target resumed.",
   };
 }
@@ -1450,6 +1499,13 @@ async function setWatchlistActiveFromAgent(
       ...watchlist,
       isActive,
     },
+    reversal: actionReversal(
+      isActive ? "watchlist.pause" : "watchlist.resume",
+      { watchlistId: watchlist.id },
+      isActive
+        ? "Pause this watchlist again to stop future scans and alerts."
+        : "Resume this watchlist to rejoin scheduled scans if the plan limit still allows it.",
+    ),
     message: isActive
       ? "Watchlist resumed. It rejoins the next scheduled scan."
       : "Watchlist paused. Scans and alerts stop, the history stays, and the plan slot is free.",

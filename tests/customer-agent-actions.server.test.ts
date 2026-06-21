@@ -564,8 +564,20 @@ describe("runCustomerAgentAction", () => {
       },
     );
 
-    const result = outcome.result as { watchlist: { id: string } };
+    const result = outcome.result as {
+      watchlist: { id: string };
+      reversal: {
+        action: string;
+        input: { watchlistId: string };
+        requiresNewIdempotencyKey: boolean;
+      };
+    };
     expect(result.watchlist.id).toBe("watchlist-1");
+    expect(result.reversal).toMatchObject({
+      action: "watchlist.pause",
+      input: { watchlistId: "watchlist-1" },
+      requiresNewIdempotencyKey: true,
+    });
     expect(mocks.checkPlanLimit).toHaveBeenCalledWith(expect.anything(), "user-1", "watchlists");
     expect(mocks.createWatchlist).toHaveBeenCalledWith(
       expect.anything(),
@@ -589,6 +601,74 @@ describe("runCustomerAgentAction", () => {
         resourceId: "watchlist-1",
       }),
     );
+  });
+
+  it("returns reversal hints for pausing and resuming watchlists", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const pauseOutcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "pause-watchlist-1",
+        source: "api_v1",
+      },
+      "watchlist.pause",
+      {
+        watchlistId: "watchlist-1",
+      },
+    );
+
+    expect(pauseOutcome.result).toMatchObject({
+      action: "watchlist.pause",
+      watchlist: {
+        id: "watchlist-1",
+        isActive: false,
+      },
+      reversal: {
+        action: "watchlist.resume",
+        input: { watchlistId: "watchlist-1" },
+        requiresNewIdempotencyKey: true,
+        requiresExplicitApproval: false,
+      },
+    });
+    expect(mocks.setWatchlistActive).toHaveBeenCalledWith(expect.anything(), "user-1", "watchlist-1", false);
+
+    mocks.getWatchlist.mockResolvedValueOnce({
+      ...watchlist,
+      isActive: false,
+    });
+
+    const resumeOutcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "resume-watchlist-1",
+        source: "api_v1",
+      },
+      "watchlist.resume",
+      {
+        watchlistId: "watchlist-1",
+      },
+    );
+
+    expect(resumeOutcome.result).toMatchObject({
+      action: "watchlist.resume",
+      watchlist: {
+        id: "watchlist-1",
+        isActive: true,
+      },
+      reversal: {
+        action: "watchlist.pause",
+        input: { watchlistId: "watchlist-1" },
+        requiresNewIdempotencyKey: true,
+        requiresExplicitApproval: false,
+      },
+    });
+    expect(mocks.setWatchlistActive).toHaveBeenCalledWith(expect.anything(), "user-1", "watchlist-1", true);
   });
 
   it("audits plan-limit failures for watchlist creation", async () => {
@@ -1214,8 +1294,33 @@ describe("runCustomerAgentAction", () => {
       },
     );
 
-    const result = outcome.result as { config: { slackEnabled: boolean } };
+    const result = outcome.result as {
+      config: { slackEnabled: boolean };
+      reversal: {
+        action: string;
+        input: Record<string, unknown>;
+        requiresExplicitApproval: boolean;
+        requiresNewIdempotencyKey: boolean;
+      };
+    };
     expect(result.config.slackEnabled).toBe(true);
+    expect(result.reversal).toMatchObject({
+      action: "delivery_settings.update",
+      requiresExplicitApproval: true,
+      requiresNewIdempotencyKey: true,
+      input: {
+        watchlistId: "watchlist-1",
+        explicitApproval: true,
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: null,
+      },
+    });
     expect(mocks.upsertWatchlistDeliveryConfig).toHaveBeenCalledWith(expect.anything(), {
       watchlistId: "watchlist-1",
       userId: "user-1",
@@ -1253,9 +1358,29 @@ describe("runCustomerAgentAction", () => {
       },
     );
 
-    const result = outcome.result as { target: { targetValue: string; isPaused: boolean } };
+    const result = outcome.result as {
+      target: { targetValue: string; isPaused: boolean };
+      reversal: {
+        action: string;
+        input: { targetId: string; isPaused: boolean; explicitApproval: boolean };
+        requiresExplicitApproval: boolean;
+        requiresNewIdempotencyKey: boolean;
+      };
+    };
     expect(result.target.targetValue).toBe("slack:[redacted]");
     expect(result.target.isPaused).toBe(true);
+    expect(result.reversal).toMatchObject({
+      action: "delivery_target.update",
+      input: {
+        targetId: "target-1",
+        isPaused: false,
+        explicitApproval: true,
+      },
+      requiresExplicitApproval: true,
+      requiresNewIdempotencyKey: true,
+    });
+    expect(JSON.stringify(result.reversal)).not.toContain("slack:abc123");
+    expect(JSON.stringify(result.reversal)).not.toContain("hooks.slack.com");
     expect(mocks.upsertDeliveryTarget).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
