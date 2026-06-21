@@ -262,6 +262,35 @@ describe("support route", () => {
     expect(createSupportCase).not.toHaveBeenCalled();
   });
 
+  it("blocks workspace members from hiding owner-authority requests under another category", async () => {
+    mockAuth({ workspaceUserId: "owner-1" });
+    const createSupportCase = vi.fn();
+    vi.doMock("~/lib/data.server", () => ({
+      createSupportCase,
+    }));
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "other");
+    formData.set("subject", "Cancel this workspace");
+    formData.set("detail", "Please cancel renewal for this paid workspace.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
+    });
+    expect(createSupportCase).not.toHaveBeenCalled();
+  });
+
   it("allows workspace members to open personal billing and invoice cases", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-invoice" });

@@ -671,6 +671,70 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.setWatchlistActive).toHaveBeenCalledWith(expect.anything(), "user-1", "watchlist-1", true);
   });
 
+  it("does not return reversal hints for no-op watchlist pause or resume requests", async () => {
+    const resumeMocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const resumeOutcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "resume-watchlist-noop",
+        source: "api_v1",
+      },
+      "watchlist.resume",
+      {
+        watchlistId: "watchlist-1",
+      },
+    );
+
+    expect(resumeOutcome.result).toMatchObject({
+      action: "watchlist.resume",
+      watchlist: {
+        id: "watchlist-1",
+        isActive: true,
+      },
+      message: "Watchlist was already active. No change was made.",
+    });
+    expect(resumeOutcome.result).not.toHaveProperty("reversal");
+    expect(resumeMocks.setWatchlistActive).not.toHaveBeenCalled();
+    expect(resumeMocks.checkPlanLimit).not.toHaveBeenCalled();
+
+    vi.resetModules();
+    const pauseMocks = setupMocks();
+    pauseMocks.getWatchlist.mockResolvedValue({
+      ...watchlist,
+      isActive: false,
+    });
+    const { runCustomerAgentAction: runPauseAction } = await import("~/lib/customer-agent-actions.server");
+
+    const pauseOutcome = await runPauseAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "pause-watchlist-noop",
+        source: "api_v1",
+      },
+      "watchlist.pause",
+      {
+        watchlistId: "watchlist-1",
+      },
+    );
+
+    expect(pauseOutcome.result).toMatchObject({
+      action: "watchlist.pause",
+      watchlist: {
+        id: "watchlist-1",
+        isActive: false,
+      },
+      message: "Watchlist was already paused. No change was made.",
+    });
+    expect(pauseOutcome.result).not.toHaveProperty("reversal");
+    expect(pauseMocks.setWatchlistActive).not.toHaveBeenCalled();
+  });
+
   it("audits plan-limit failures for watchlist creation", async () => {
     const mocks = setupMocks({ planLimitAllowed: false });
     const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");

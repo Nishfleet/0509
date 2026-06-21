@@ -1485,11 +1485,14 @@ async function setWatchlistActiveFromAgent(
     }
   }
 
-  const changed = await setWatchlistActive(env, userId, watchlist.id, isActive);
-  if (!changed) {
-    throw new CustomerAgentActionError("watchlist_update_failed", "Could not update this watchlist.", {
-      status: 500,
-    });
+  const changedState = watchlist.isActive !== isActive;
+  if (changedState) {
+    const changed = await setWatchlistActive(env, userId, watchlist.id, isActive);
+    if (!changed) {
+      throw new CustomerAgentActionError("watchlist_update_failed", "Could not update this watchlist.", {
+        status: 500,
+      });
+    }
   }
 
   return {
@@ -1499,16 +1502,24 @@ async function setWatchlistActiveFromAgent(
       ...watchlist,
       isActive,
     },
-    reversal: actionReversal(
-      isActive ? "watchlist.pause" : "watchlist.resume",
-      { watchlistId: watchlist.id },
-      isActive
-        ? "Pause this watchlist again to stop future scans and alerts."
-        : "Resume this watchlist to rejoin scheduled scans if the plan limit still allows it.",
-    ),
-    message: isActive
-      ? "Watchlist resumed. It rejoins the next scheduled scan."
-      : "Watchlist paused. Scans and alerts stop, the history stays, and the plan slot is free.",
+    ...(changedState
+      ? {
+          reversal: actionReversal(
+            watchlist.isActive ? "watchlist.resume" : "watchlist.pause",
+            { watchlistId: watchlist.id },
+            watchlist.isActive
+              ? "Resume this watchlist to restore the active state it had before this action."
+              : "Pause this watchlist again to restore the inactive state it had before this action.",
+          ),
+        }
+      : {}),
+    message: changedState
+      ? isActive
+        ? "Watchlist resumed. It rejoins the next scheduled scan."
+        : "Watchlist paused. Scans and alerts stop, the history stays, and the plan slot is free."
+      : isActive
+        ? "Watchlist was already active. No change was made."
+        : "Watchlist was already paused. No change was made.",
   };
 }
 

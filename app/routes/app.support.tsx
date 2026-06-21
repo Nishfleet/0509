@@ -30,12 +30,14 @@ import type {
 } from "~/lib/types";
 
 const OWNER_ONLY_SUPPORT_CATEGORIES = new Set<SupportCaseCategory>(["team"]);
-const BILLING_OWNER_AUTHORITY_PATTERNS = [
+const OWNER_AUTHORITY_TEXT_PATTERNS = [
   /\bcancel(?:led|lation|ling)?\b/i,
   /\brenewal\b/i,
   /\b(?:change|switch|upgrade|downgrade)\s+(?:my\s+|our\s+|the\s+)?plan\b/i,
   /\bplan\s+(?:change|switch|upgrade|downgrade)\b/i,
   /\bsubscription\s+(?:change|switch|upgrade|downgrade|cancel(?:led|lation|ling)?)\b/i,
+  /\b(?:add|remove|invite|deactivate)\s+(?:a\s+)?(?:teammate|team\s+member|seat|workspace\s+user)\b/i,
+  /\bteam\s+seat\b/i,
 ];
 
 export const meta = () => [{ title: "Support | Five to Nine" }];
@@ -312,12 +314,8 @@ function requiresWorkspaceOwnerAuthority(input: {
   if (OWNER_ONLY_SUPPORT_CATEGORIES.has(input.category)) {
     return true;
   }
-  if (input.category !== "billing") {
-    return false;
-  }
-
-  const billingText = `${input.subject} ${input.detail}`;
-  return BILLING_OWNER_AUTHORITY_PATTERNS.some((pattern) => pattern.test(billingText));
+  const requestText = `${input.subject} ${input.detail}`;
+  return OWNER_AUTHORITY_TEXT_PATTERNS.some((pattern) => pattern.test(requestText));
 }
 
 function toSupportCaseSummary(supportCase: {
