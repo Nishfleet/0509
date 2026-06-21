@@ -29,7 +29,14 @@ import type {
   SupportCaseStatus,
 } from "~/lib/types";
 
-const OWNER_ONLY_SUPPORT_CATEGORIES = new Set<SupportCaseCategory>(["billing", "team"]);
+const OWNER_ONLY_SUPPORT_CATEGORIES = new Set<SupportCaseCategory>(["team"]);
+const BILLING_OWNER_AUTHORITY_PATTERNS = [
+  /\bcancel(?:led|lation|ling)?\b/i,
+  /\brenewal\b/i,
+  /\b(?:change|switch|upgrade|downgrade)\s+(?:my\s+|our\s+|the\s+)?plan\b/i,
+  /\bplan\s+(?:change|switch|upgrade|downgrade)\b/i,
+  /\bsubscription\s+(?:change|switch|upgrade|downgrade|cancel(?:led|lation|ling)?)\b/i,
+];
 
 export const meta = () => [{ title: "Support | Five to Nine" }];
 
@@ -81,10 +88,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const isWorkspaceMember = workspaceUserId !== session.user.id;
-  if (isWorkspaceMember && OWNER_ONLY_SUPPORT_CATEGORIES.has(input.category)) {
+  if (isWorkspaceMember && requiresWorkspaceOwnerAuthority(input)) {
     return {
       ok: false,
-      message: "Ask the workspace owner to open billing or team-seat requests.",
+      message: "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
     };
   }
 
@@ -295,6 +302,22 @@ function SupportCaseRow({ supportCase }: { supportCase: SupportCaseSummary }) {
       <span>{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
     </article>
   );
+}
+
+function requiresWorkspaceOwnerAuthority(input: {
+  category: SupportCaseCategory;
+  subject: string;
+  detail: string;
+}) {
+  if (OWNER_ONLY_SUPPORT_CATEGORIES.has(input.category)) {
+    return true;
+  }
+  if (input.category !== "billing") {
+    return false;
+  }
+
+  const billingText = `${input.subject} ${input.detail}`;
+  return BILLING_OWNER_AUTHORITY_PATTERNS.some((pattern) => pattern.test(billingText));
 }
 
 function toSupportCaseSummary(supportCase: {

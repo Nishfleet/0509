@@ -120,13 +120,11 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
   const highPriorityCount = rankedItems.filter(
     (entry) => entry.intelligence.priorityScore !== null && entry.intelligence.priorityScore >= 85,
   ).length;
-  const proofBackedCount = items.filter((item) => {
-    const metadata = item.metadata ?? {};
-    return metadata.sourceStatus === "proof_backed" || Boolean(metadata.proofCaptureId);
-  }).length;
+  const proofBackedCount = items.filter(isProofBackedDigestItem).length;
   const scanBackedCount = Math.max(items.length - proofBackedCount, 0);
   const changeLabel = `${items.length} change${items.length === 1 ? "" : "s"}`;
   const competitorLabel = `${watchlists.size} competitor${watchlists.size === 1 ? "" : "s"}`;
+  const topIsProofBacked = top ? isProofBackedDigestItem(top.item) : false;
 
   if (!top) {
     return {
@@ -142,7 +140,7 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
   return {
     title: `${changeLabel} packaged for handoff`,
     summary: `${top.item.title}: ${
-      proofBackedCount > 0
+      topIsProofBacked
         ? "ready to send as a client or teammate brief without rereading every event."
         : "ready for internal review; add page proof before sending externally."
     }`,
@@ -156,4 +154,9 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
     coverage: `${competitorLabel} · ${highPriorityCount} high-priority change${highPriorityCount === 1 ? "" : "s"}`,
     confidenceTrail: top.intelligence.proofTrail,
   };
+}
+
+function isProofBackedDigestItem(item: DigestProofPacketItem) {
+  const metadata = item.metadata ?? {};
+  return metadata.sourceStatus === "proof_backed" || Boolean(metadata.proofCaptureId);
 }

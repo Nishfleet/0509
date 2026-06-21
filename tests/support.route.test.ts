@@ -228,7 +228,7 @@ describe("support route", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "Ask the workspace owner to open billing or team-seat requests.",
+      message: "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
     });
     expect(createSupportCase).not.toHaveBeenCalled();
   });
@@ -257,9 +257,42 @@ describe("support route", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "Ask the workspace owner to open billing or team-seat requests.",
+      message: "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
     });
     expect(createSupportCase).not.toHaveBeenCalled();
+  });
+
+  it("allows workspace members to open personal billing and invoice cases", async () => {
+    mockAuth({ workspaceUserId: "owner-1" });
+    const createSupportCase = vi.fn().mockResolvedValue({ id: "case-invoice" });
+    vi.doMock("~/lib/data.server", () => ({
+      createSupportCase,
+    }));
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "billing");
+    formData.set("subject", "Need invoice copy");
+    formData.set("detail", "Please send a copy of my latest invoice for my records.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: true, caseId: "case-invoice" });
+    expect(createSupportCase).toHaveBeenCalledWith({}, expect.objectContaining({
+      userId: "user-1",
+      category: "billing",
+      subject: "Need invoice copy",
+      context: expect.objectContaining({
+        workspaceUserId: "owner-1",
+      }),
+    }));
   });
 
   it("allows workspace members to open non-owner-authority support cases", async () => {

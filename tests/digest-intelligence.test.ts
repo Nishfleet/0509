@@ -72,6 +72,46 @@ describe("DigestProofPacket", () => {
     expect(markup).not.toContain("verified snapshot");
   });
 
+  it("keeps a scan-backed top change internal even when another item has proof", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DigestProofPacket, {
+        items: [
+          {
+            title: "Breaking offer changed",
+            watchlistName: "Nykaa",
+            metadata: {
+              priorityScore: 96,
+              priorityBand: "High priority",
+              recommendedAction: "Today: review the offer before briefing the client.",
+              proofTrail: "Spotted in the scheduled scan · 20 Jun, 4:00 am UTC",
+              sourceStatus: "scan_backed",
+            },
+          },
+          {
+            title: "Footer copy changed",
+            watchlistName: "Mamaearth",
+            metadata: {
+              priorityScore: 62,
+              priorityBand: "Medium priority",
+              recommendedAction: "Next review: compare footer positioning.",
+              proofTrail: "Verified from a page snapshot · 20 Jun, 5:09 am UTC",
+              proofCaptureId: "proof-2",
+              sourceStatus: "proof_backed",
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("Breaking offer changed: ready for internal review");
+    expect(markup).toContain("add page proof before sending externally");
+    expect(markup).toContain("1 verified snapshot");
+    expect(markup).toContain("1 scan-backed change");
+    expect(markup).toContain("Today: review the offer before briefing the client.");
+    expect(markup).toContain("Spotted in the scheduled scan");
+    expect(markup).not.toContain("Breaking offer changed: ready to send");
+  });
+
   it("renders an honest empty packet before digest evidence exists", () => {
     const markup = renderToStaticMarkup(
       createElement(DigestProofPacket, {
