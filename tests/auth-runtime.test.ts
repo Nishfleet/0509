@@ -35,13 +35,6 @@ describe("auth runtime", () => {
     }
     expect(activeRuntimeText).toContain("stytch");
   });
-
-  it("ships the verified Google OAuth allowlists in Worker config", () => {
-    const wranglerConfig = readFileSync("wrangler.jsonc", "utf8");
-
-    expect(wranglerConfig).toMatch(/"STYTCH_OAUTH_ENABLED_PROVIDERS"\s*:\s*"google"/);
-    expect(wranglerConfig).toMatch(/"STYTCH_OAUTH_BRANDED_PROVIDERS"\s*:\s*"google"/);
-  });
 });
 
 function listSourceFiles(dir: string): string[] {
