@@ -132,4 +132,29 @@ describe("buildLifecycleNudges", () => {
       }),
     ]);
   });
+
+  it("points billing support nudges to signed-in support cases", () => {
+    const nudges = buildLifecycleNudges({
+      items: readyItems,
+      counts: {
+        competitors: 1,
+        activeWatchlists: 1,
+        successfulProofs: 1,
+        sentDigests: 1,
+        deliveryTargets: 1,
+        activeApiKeys: 1,
+        agentMemoryEntries: 1,
+        clientRooms: 1,
+      },
+      proofUsage: { warningLevel: "ok", used: 3, limit: 100 },
+    });
+
+    expect(nudges).toEqual([
+      expect.objectContaining({
+        id: "billing_support",
+        href: "/app/support?category=billing",
+        detail: expect.stringContaining("support cases"),
+      }),
+    ]);
+  });
 });

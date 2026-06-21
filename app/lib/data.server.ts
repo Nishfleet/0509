@@ -14,6 +14,7 @@ import {
 } from "~/lib/env.server";
 import { buildExternalProofAd } from "~/lib/external-proof.server";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
+import { normalizeSupportCaseInput } from "~/lib/support";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type {
   AdRecord,
@@ -55,6 +56,10 @@ import type {
   SensitivityMode,
   ShareLinkRecord,
   ShareResourceType,
+  SupportCaseCategory,
+  SupportCasePriority,
+  SupportCaseRecord,
+  SupportCaseStatus,
   WatchEventStatus,
   WatchEventRecord,
   WatchEventType,
@@ -272,6 +277,19 @@ interface ClientRoomResourceRow {
   resource_id: string;
   label: string | null;
   created_at: string;
+}
+
+interface SupportCaseRow {
+  id: string;
+  user_id: string;
+  category: SupportCaseCategory;
+  priority: SupportCasePriority;
+  status: SupportCaseStatus;
+  subject: string;
+  detail: string;
+  context_json: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface WorkspaceDeliveryConfigRow {
@@ -1144,6 +1162,111 @@ export async function listClientRooms(
   return Promise.all(
     rows.map(async (row) => toClientRoomRecord(row, await listClientRoomResourceRefs(env, userId, row.id))),
   );
+}
+
+export async function createSupportCase(
+  env: AppEnv,
+  input: {
+    userId: string;
+    category: unknown;
+    subject: unknown;
+    detail: unknown;
+    priority?: unknown;
+    context?: JsonRecord | null;
+  },
+) {
+  const normalized = normalizeSupportCaseInput({
+    category: input.category,
+    priority: input.priority ?? "normal",
+    subject: input.subject,
+    detail: input.detail,
+  });
+  const id = createId();
+  const timestamp = nowIso();
+
+  await run(
+    env,
+    `
+      INSERT INTO support_case (
+        id,
+        user_id,
+        category,
+        priority,
+        status,
+        subject,
+        detail,
+        context_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)
+    `,
+    id,
+    input.userId,
+    normalized.category,
+    normalized.priority,
+    normalized.subject,
+    normalized.detail,
+    jsonValue(input.context ?? {}),
+    timestamp,
+    timestamp,
+  );
+
+  const row = await one<SupportCaseRow>(
+    env,
+    `
+      SELECT *
+      FROM support_case
+      WHERE id = ?
+        AND user_id = ?
+      LIMIT 1
+    `,
+    id,
+    input.userId,
+  );
+
+  return row ? toSupportCaseRecord(row) : null;
+}
+
+export async function listSupportCases(
+  env: AppEnv,
+  userId: string,
+  options: {
+    status?: SupportCaseStatus | "all" | null;
+    limit?: number | null;
+  } = {},
+) {
+  const limit = Math.max(1, Math.min(50, Math.floor(options.limit ?? 20)));
+  const status = options.status ?? "all";
+  const rows = status === "all"
+    ? await many<SupportCaseRow>(
+      env,
+      `
+        SELECT *
+        FROM support_case
+        WHERE user_id = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `,
+      userId,
+      limit,
+    )
+    : await many<SupportCaseRow>(
+      env,
+      `
+        SELECT *
+        FROM support_case
+        WHERE user_id = ?
+          AND status = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `,
+      userId,
+      status,
+      limit,
+    );
+
+  return rows.map(toSupportCaseRecord);
 }
 
 async function replaceClientRoomResourceRefs(
@@ -6794,6 +6917,21 @@ function toClientRoomRecord(row: ClientRoomRow, resourceRefs: ClientRoomResource
     status: row.status,
     resourceRefs,
     notes: parseJson<Record<string, unknown>>(row.notes_json, {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toSupportCaseRecord(row: SupportCaseRow): SupportCaseRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    category: row.category,
+    priority: row.priority,
+    status: row.status,
+    subject: row.subject,
+    detail: row.detail,
+    context: parseJson<Record<string, unknown>>(row.context_json, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

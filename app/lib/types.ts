@@ -79,6 +79,18 @@ export const DELIVERY_TARGET_VALIDATION_STATUSES = [
 ] as const;
 export const PROOF_RENDER_MODES = ["mobile", "desktop"] as const;
 export const PROOF_DEVICE_PROFILES = ["mobile_default", "desktop_default"] as const;
+export const SUPPORT_CASE_CATEGORIES = [
+  "billing",
+  "source",
+  "delivery",
+  "account",
+  "team",
+  "security",
+  "migration",
+  "other",
+] as const;
+export const SUPPORT_CASE_PRIORITIES = ["normal", "urgent"] as const;
+export const SUPPORT_CASE_STATUSES = ["open", "closed"] as const;
 
 export type AnalysisSource = (typeof ANALYSIS_SOURCES)[number];
 export type WatchEventType = (typeof WATCH_EVENT_TYPES)[number];
@@ -104,6 +116,9 @@ export type AgentMemoryScope = (typeof AGENT_MEMORY_SCOPES)[number];
 export type DeliveryTargetValidationStatus = (typeof DELIVERY_TARGET_VALIDATION_STATUSES)[number];
 export type ProofRenderMode = (typeof PROOF_RENDER_MODES)[number];
 export type ProofDeviceProfile = (typeof PROOF_DEVICE_PROFILES)[number];
+export type SupportCaseCategory = (typeof SUPPORT_CASE_CATEGORIES)[number];
+export type SupportCasePriority = (typeof SUPPORT_CASE_PRIORITIES)[number];
+export type SupportCaseStatus = (typeof SUPPORT_CASE_STATUSES)[number];
 export type NormalizedSensitivityMode = Exclude<SensitivityMode, "auto">;
 export type CaptureMethod = "landing_page_fetch" | "browser_render" | "manual";
 export type CreativeTextCaptureMethod = "ad_snapshot_fetch" | "browser_render" | "manual";
@@ -562,6 +577,19 @@ export interface ClientRoomRecord {
   status: "active" | "archived";
   resourceRefs: ClientRoomResourceRef[];
   notes: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupportCaseRecord {
+  id: string;
+  userId: string;
+  category: SupportCaseCategory;
+  priority: SupportCasePriority;
+  status: SupportCaseStatus;
+  subject: string;
+  detail: string;
+  context: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
