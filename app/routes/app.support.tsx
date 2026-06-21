@@ -30,12 +30,10 @@ import type {
 } from "~/lib/types";
 
 const OWNER_ONLY_SUPPORT_CATEGORIES = new Set<SupportCaseCategory>(["team"]);
-const OWNER_AUTHORITY_TEXT_PATTERNS = [
-  /\bcancel(?:led|lation|ling)?\b/i,
-  /\brenewal\b/i,
-  /\b(?:change|switch|upgrade|downgrade)\s+(?:my\s+|our\s+|the\s+)?plan\b/i,
-  /\bplan\s+(?:change|switch|upgrade|downgrade)\b/i,
-  /\bsubscription\s+(?:change|switch|upgrade|downgrade|cancel(?:led|lation|ling)?)\b/i,
+const BILLING_CHANGE_TEXT_PATTERN =
+  /\b(?:cancel(?:led|lation|ling)?|renewal|change\s+plan|switch\s+plan|upgrade|downgrade|plan\s+(?:change|switch|upgrade|downgrade)|subscription\s+(?:change|switch|upgrade|downgrade|cancel(?:led|lation|ling)?))\b/i;
+const WORKSPACE_AUTHORITY_TEXT_PATTERN = /\b(?:workspace|agency|team|seat|teammate|team\s+member|workspace\s+user)\b/i;
+const TEAM_AUTHORITY_TEXT_PATTERNS = [
   /\b(?:add|remove|invite|deactivate)\s+(?:a\s+)?(?:teammate|team\s+member|seat|workspace\s+user)\b/i,
   /\bteam\s+seat\b/i,
 ];
@@ -315,7 +313,11 @@ function requiresWorkspaceOwnerAuthority(input: {
     return true;
   }
   const requestText = `${input.subject} ${input.detail}`;
-  return OWNER_AUTHORITY_TEXT_PATTERNS.some((pattern) => pattern.test(requestText));
+  if (TEAM_AUTHORITY_TEXT_PATTERNS.some((pattern) => pattern.test(requestText))) {
+    return true;
+  }
+
+  return BILLING_CHANGE_TEXT_PATTERN.test(requestText) && WORKSPACE_AUTHORITY_TEXT_PATTERN.test(requestText);
 }
 
 function toSupportCaseSummary(supportCase: {

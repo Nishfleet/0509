@@ -269,13 +269,6 @@ export default function AppDashboardRoute() {
   const hasActiveSlackDeliveryTarget = deliveryTargets.some(
     (target) => target.channel === "slack" && target.isOptedIn && !target.isPaused && !target.optedOutAt,
   );
-  const hasDeliveryTargetProof = deliveryTargets.some(
-    (target) =>
-      target.isOptedIn &&
-      !target.isPaused &&
-      !target.optedOutAt &&
-      Boolean(target.lastSuccessfulDeliveryAt),
-  );
   const slackNeedsProof = deliveryTargets.some(
     (target) => target.channel === "slack" && !target.isPaused && !target.lastSuccessfulDeliveryAt,
   );
@@ -300,7 +293,7 @@ export default function AppDashboardRoute() {
   };
   const readinessItems = data.workspaceReadiness.items.filter((item) => item.status !== "not_applicable");
   const deliveryReadinessItem = readinessItems.find((item) => item.id === "delivery");
-  const deliveryComplete = deliveryReadinessItem?.status === "ready" || hasDeliveryTargetProof;
+  const deliveryComplete = deliveryReadinessItem?.status === "ready";
   const deliveryReady = hasActiveDeliveryTarget;
   const deliveryNeedsProof = deliveryReady && !deliveryComplete;
   const setupItems = readinessItems.map((item) => ({
@@ -404,7 +397,7 @@ export default function AppDashboardRoute() {
       label: "Delivered",
       state: sentDigests > 0
         ? `${sentDigests} digest${sentDigests === 1 ? "" : "s"} sent`
-        : hasDeliveryTargetProof
+        : deliveryComplete
           ? "Delivery proved"
           : hasActiveSlackDeliveryTarget
             ? "Slack target saved"

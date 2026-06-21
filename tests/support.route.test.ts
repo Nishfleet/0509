@@ -324,6 +324,39 @@ describe("support route", () => {
     }));
   });
 
+  it("allows workspace members to open personal billing cancellation cases", async () => {
+    mockAuth({ workspaceUserId: "owner-1" });
+    const createSupportCase = vi.fn().mockResolvedValue({ id: "case-cancel" });
+    vi.doMock("~/lib/data.server", () => ({
+      createSupportCase,
+    }));
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "billing");
+    formData.set("subject", "Cancel Starter at period end");
+    formData.set("detail", "Please cancel my personal plan renewal but keep access through the paid period.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: true, caseId: "case-cancel" });
+    expect(createSupportCase).toHaveBeenCalledWith({}, expect.objectContaining({
+      userId: "user-1",
+      category: "billing",
+      subject: "Cancel Starter at period end",
+      context: expect.objectContaining({
+        workspaceUserId: "owner-1",
+      }),
+    }));
+  });
+
   it("allows workspace members to open non-owner-authority support cases", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-2" });

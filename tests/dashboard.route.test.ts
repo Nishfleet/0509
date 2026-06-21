@@ -288,7 +288,15 @@ describe("dashboard first 15 minutes activation", () => {
         generatedAt: "2026-06-20T00:00:00.000Z",
         readyCount: 1,
         totalCount: 1,
-        items: [],
+        items: [
+          {
+            id: "delivery",
+            label: "Delivery proof",
+            status: "ready",
+            detail: "A delivery path has successful proof.",
+            action: { label: "Open sources", href: "/app/sources" },
+          },
+        ],
         nextActions: [],
         nudges: [],
         counts: {
@@ -391,6 +399,82 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("First 15 minutes");
     expect(markup).toContain("Prove delivery");
     expect(markup).toContain("Delivery target is saved; send the first proof-backed brief");
+    expect(markup).not.toContain("Retained value loop");
+  });
+
+  it("does not let stale delivery success override readiness", async () => {
+    await mockRouter(baseDashboardData({
+      watchlists: [
+        {
+          id: "watchlist-1",
+          name: "Nykaa watch",
+          targetType: "advertiser",
+          targetLabel: "Nykaa",
+          isActive: true,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+      recentProofCaptures: [
+        {
+          id: "proof-1",
+          status: "succeeded",
+        },
+      ],
+      successfulProofStats: {
+        count: 1,
+        latestAt: "2026-06-20T08:00:00.000Z",
+      },
+      deliveryTargets: [
+        {
+          channel: "email",
+          isOptedIn: true,
+          isPaused: false,
+          optedOutAt: null,
+          lastSuccessfulDeliveryAt: "2026-06-01T08:05:00.000Z",
+        },
+      ],
+      overnightStats: {
+        runs: 1,
+        watchlistsChecked: 1,
+        adsSeen: 0,
+      },
+      workspaceReadiness: {
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        readyCount: 0,
+        totalCount: 1,
+        items: [
+          {
+            id: "delivery",
+            label: "Delivery proof",
+            status: "needs_proof",
+            detail: "A delivery target exists but needs fresh successful delivery proof.",
+            action: { label: "Open sources", href: "/app/sources" },
+          },
+        ],
+        nextActions: [],
+        nudges: [],
+        counts: {
+          agentMemoryEntries: 1,
+        },
+      },
+      agentMemories: [
+        {
+          id: "memory-1",
+          key: "review_cadence",
+          scope: "workspace",
+          preview: "Weekly review",
+          updatedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+    }));
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("First 15 minutes");
+    expect(markup).toContain("Prove delivery");
+    expect(markup).toContain("Delivery target is saved; send the first proof-backed brief");
+    expect(markup).not.toContain("A successful delivery trail exists");
     expect(markup).not.toContain("Retained value loop");
   });
 
@@ -504,7 +588,15 @@ describe("dashboard first 15 minutes activation", () => {
         generatedAt: "2026-06-20T00:00:00.000Z",
         readyCount: 1,
         totalCount: 1,
-        items: [],
+        items: [
+          {
+            id: "delivery",
+            label: "Delivery proof",
+            status: "ready",
+            detail: "A delivery path has successful proof.",
+            action: { label: "Open sources", href: "/app/sources" },
+          },
+        ],
         nextActions: [],
         nudges: [],
         counts: {
