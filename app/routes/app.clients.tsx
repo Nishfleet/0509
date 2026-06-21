@@ -26,12 +26,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { safeAgentMemoryRecord, summarizeAgentMemoryValue } = await import("~/lib/agent-memory.server");
   const env = getEnv(context);
   const { workspaceUserId } = await requireWorkspaceSession(env, request);
-  const [rooms, watchlists, collections, memories] = await Promise.all([
+  const [rooms, watchlists, collections, recentMemories] = await Promise.all([
     listClientRooms(env, workspaceUserId, { status: "all", limit: 50 }),
     listWatchlists(env, workspaceUserId, { includeInactive: true }),
     listCollections(env, workspaceUserId),
     listAgentMemory(env, workspaceUserId, { limit: 20 }),
   ]);
+  const roomMemories = (await Promise.all(
+    rooms.map((room) => listAgentMemory(env, workspaceUserId, { clientRoomId: room.id, limit: 20 })),
+  )).flat();
+  const memories = uniqueAgentMemories([...recentMemories, ...roomMemories]);
 
   return {
     rooms: rooms.map(safeClientRoomForUi),
@@ -392,6 +396,17 @@ export default function ClientsRoute() {
       </div>
     </section>
   );
+}
+
+function uniqueAgentMemories<T extends { id: string }>(memories: T[]) {
+  const seen = new Set<string>();
+  return memories.filter((memory) => {
+    if (seen.has(memory.id)) {
+      return false;
+    }
+    seen.add(memory.id);
+    return true;
+  });
 }
 
 function ClientRoomCard({

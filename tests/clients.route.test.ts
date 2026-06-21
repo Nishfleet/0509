@@ -282,6 +282,63 @@ describe("clients route agent memory", () => {
     });
   });
 
+  it("loads room-scoped memory for displayed client rooms beyond the recent workspace list", async () => {
+    mockAuth();
+    const listAgentMemory = vi.fn(async (_env, _userId, options: { clientRoomId?: string } = {}) => {
+      if (options.clientRoomId === "room-1") {
+        return [
+          {
+            id: "memory-room-1",
+            userId: "user-1",
+            scope: "customer",
+            key: "client_review_tone",
+            watchlistId: null,
+            clientRoomId: "room-1",
+            value: { value: "Direct weekly review with proof links." },
+            source: "owner_ui",
+            createdAt: "2026-06-20T00:00:00.000Z",
+            updatedAt: "2026-06-20T00:00:00.000Z",
+          },
+        ];
+      }
+      return [];
+    });
+    vi.doMock("~/lib/data.server", () => ({
+      listAgentMemory,
+      listClientRooms: vi.fn().mockResolvedValue([
+        {
+          id: "room-1",
+          userId: "user-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {},
+          resourceRefs: [],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([]),
+    }));
+
+    const { loader } = await import("~/routes/app.clients");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients"),
+    } as never);
+
+    expect(listAgentMemory).toHaveBeenCalledWith({}, "user-1", { limit: 20 });
+    expect(listAgentMemory).toHaveBeenCalledWith({}, "user-1", { clientRoomId: "room-1", limit: 20 });
+    expect(result.memories).toHaveLength(1);
+    expect(result.memories[0]).toMatchObject({
+      id: "memory-room-1",
+      key: "client_review_tone",
+      clientRoomId: "room-1",
+      preview: "Direct weekly review with proof links.",
+    });
+  });
+
   it("redacts legacy secret-like client-room fields from loader data", async () => {
     mockAuth();
     vi.doMock("~/lib/data.server", () => ({
