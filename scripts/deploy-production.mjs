@@ -53,6 +53,7 @@ try {
   run("node", ["scripts/check-public-home-current.mjs"]);
   run("wrangler", ["deploy"]);
   run("node", ["scripts/check-live-public-home.mjs"]);
+  run("node", ["scripts/check-google-oauth-branding.mjs"]);
 } catch (error) {
   exitCode = error && typeof error.exitCode === "number" ? error.exitCode : 1;
   console.error(error instanceof Error ? error.message : error);
