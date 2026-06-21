@@ -354,8 +354,22 @@ describe("clients route agent memory", () => {
           name: "Nykaa weekly desk",
           clientLabel: "Nykaa",
           status: "active",
-          notes: {},
-          resourceRefs: [],
+          notes: {
+            goal: "Weekly proof review for growth team.",
+            cadence: "Weekly",
+          },
+          resourceRefs: [
+            {
+              resourceType: "watchlist",
+              resourceId: "watchlist-1",
+              label: "Nykaa watchlist",
+            },
+            {
+              resourceType: "report",
+              resourceId: "watchlist-watchlist-1",
+              label: "Nykaa watchlist report",
+            },
+          ],
           createdAt: "2026-06-20T00:00:00.000Z",
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
@@ -384,5 +398,39 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("review_cadence");
     expect(markup).toContain("Weekly client-ready review with direct tone.");
     expect(markup).toContain("Nykaa weekly desk");
+    expect(markup).toContain("Ready for client review");
+    expect(markup).toContain("1 proof source");
+    expect(markup).toContain("1 report");
+    expect(markup).toContain("1 saved memory");
+    expect(markup).toContain("room notes saved");
+    expect(markup).toContain("Open the report and share the snapshot when ready.");
+  });
+
+  it("shows a concrete next step for client rooms that are not ready to hand off", async () => {
+    await mockRouter({
+      rooms: [
+        {
+          id: "room-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {},
+          resourceRefs: [],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ],
+      watchlists: [],
+      collections: [],
+      memories: [],
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain("Needs setup before client review");
+    expect(markup).toContain("No linked proof yet");
+    expect(markup).toContain("No client context saved");
+    expect(markup).toContain("Link a watchlist or board to this room.");
   });
 });
