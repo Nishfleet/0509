@@ -263,12 +263,14 @@ export default function AppDashboardRoute() {
     .map((watchlist) => watchlist.lastScannedAt)
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
-  const hasEmailDelivery = deliveryTargets.some(
+  const hasActiveEmailDeliveryTarget = deliveryTargets.some(
     (target) => target.channel === "email" && target.isOptedIn && !target.isPaused && !target.optedOutAt,
   );
-  const hasSlackDelivery = deliveryTargets.some(
+  const hasActiveSlackDeliveryTarget = deliveryTargets.some(
+    (target) => target.channel === "slack" && target.isOptedIn && !target.isPaused && !target.optedOutAt,
+  );
+  const hasDeliveryTargetProof = deliveryTargets.some(
     (target) =>
-      target.channel === "slack" &&
       target.isOptedIn &&
       !target.isPaused &&
       !target.optedOutAt &&
@@ -277,8 +279,8 @@ export default function AppDashboardRoute() {
   const slackNeedsProof = deliveryTargets.some(
     (target) => target.channel === "slack" && !target.isPaused && !target.lastSuccessfulDeliveryAt,
   );
-  const deliveryReady = hasEmailDelivery || hasSlackDelivery;
-  const deliveryComplete = sentDigests > 0 || hasSlackDelivery;
+  const hasActiveDeliveryTarget = hasActiveEmailDeliveryTarget || hasActiveSlackDeliveryTarget;
+  const hasEmailDelivery = hasActiveEmailDeliveryTarget;
   const firstCompetitorReady = competitorCount > 0;
   const proofReady = successfulProofs > 0;
   const sourceReady = data.metaStatus.status === "healthy";
@@ -296,17 +298,21 @@ export default function AppDashboardRoute() {
     memory: "/app/clients",
     client_room: "/app/clients",
   };
-  const setupItems = data.workspaceReadiness.items
-    .filter((item) => item.status !== "not_applicable")
-    .map((item) => ({
-      label: item.label,
-      detail: item.detail,
-      done: item.status === "ready",
-      href: item.action?.href ?? readinessReviewPaths[item.id] ?? "/app",
-    }));
+  const readinessItems = data.workspaceReadiness.items.filter((item) => item.status !== "not_applicable");
+  const deliveryReadinessItem = readinessItems.find((item) => item.id === "delivery");
+  const deliveryComplete = deliveryReadinessItem?.status === "ready" || hasDeliveryTargetProof;
+  const deliveryReady = hasActiveDeliveryTarget;
+  const deliveryNeedsProof = deliveryReady && !deliveryComplete;
+  const setupItems = readinessItems.map((item) => ({
+    label: item.label,
+    detail: item.detail,
+    done: item.status === "ready",
+    href: item.action?.href ?? readinessReviewPaths[item.id] ?? "/app",
+  }));
   const lifecycleNudges = data.workspaceReadiness.nudges ?? [];
   const agentMemories = data.agentMemories ?? [];
   const counterMoveFollowUps = data.counterMoveFollowUps ?? [];
+  const counterMoveFollowUpCount = counterMoveFollowUps.length;
   const agentMemoryCount = data.workspaceReadiness.counts?.agentMemoryEntries ?? agentMemories.length;
   const hasAgentMemory = agentMemoryCount > 0;
   const latestAgentMemory = agentMemories[0] ?? null;
@@ -398,17 +404,21 @@ export default function AppDashboardRoute() {
       label: "Delivered",
       state: sentDigests > 0
         ? `${sentDigests} digest${sentDigests === 1 ? "" : "s"} sent`
-        : hasSlackDelivery
-          ? "Slack ready"
-          : hasEmailDelivery
-            ? "Email ready"
+        : hasDeliveryTargetProof
+          ? "Delivery proved"
+          : hasActiveSlackDeliveryTarget
+            ? "Slack target saved"
+            : hasActiveEmailDeliveryTarget
+              ? "Email target saved"
             : slackNeedsProof
               ? "Slack needs proof"
               : "Delivery not set",
       detail: sentDigests > 0
         ? "Proof-backed summaries have already left the app."
-        : deliveryReady
-          ? "A delivery path exists for future eligible briefs."
+        : deliveryComplete
+          ? "A delivery path has successful proof."
+          : deliveryNeedsProof
+            ? "A delivery target exists; the first successful send will complete the proof trail."
           : "Connect email or Slack when the team wants the proof pushed out.",
       done: deliveryComplete,
       href: sentDigests > 0 ? "/app/digests" : "/app/sources",
@@ -425,13 +435,114 @@ export default function AppDashboardRoute() {
       href: "/app/clients",
     },
   ];
+  const firstFifteenSteps = [
+    {
+      minute: "00-02",
+      title: "Add one competitor",
+      detail: firstCompetitorReady
+        ? `${competitorCount} competitor${competitorCount === 1 ? "" : "s"} saved.`
+        : "Paste one competitor website so the account has a real market watch.",
+      done: firstCompetitorReady,
+      href: "/search",
+      cta: firstCompetitorReady ? "Review search" : "Add competitor",
+    },
+    {
+      minute: "02-05",
+      title: "Start the first sweep",
+      detail: latestScanAt
+        ? "The first scan trail exists."
+        : activeWatchlists > 0
+          ? `The next sweep is ${nextScanLabel}. Open the watchlist if you want to refresh now.`
+          : "Create or resume a watchlist so Five to Nine can check the market.",
+      done: Boolean(latestScanAt),
+      href: "/app/watchlists",
+      cta: latestScanAt ? "Review scan" : "Open watchlist",
+    },
+    {
+      minute: "05-10",
+      title: "Capture proof",
+      detail: proofReady
+        ? `${proofCount} evidence check${proofCount === 1 ? "" : "s"} attached.`
+        : hasProofAttempts
+          ? "Evidence attempts ran; open the watchlist to retry or inspect the failed proof."
+          : "Get the first screenshot and landing-page trail before sharing a claim.",
+      done: proofReady,
+      href: "/app/watchlists",
+      cta: proofReady ? "Review proof" : "Capture proof",
+    },
+    {
+      minute: "10-12",
+      title: deliveryReady ? "Prove delivery" : "Set delivery",
+      detail: deliveryComplete
+        ? "A successful delivery trail exists."
+        : deliveryNeedsProof
+          ? "Delivery target is saved; send the first proof-backed brief to prove it reaches the team."
+        : "Add email or Slack so the proof reaches the team without a manual chase.",
+      done: deliveryComplete,
+      href: "/app/sources",
+      cta: deliveryComplete ? "Review delivery" : deliveryNeedsProof ? "Prove delivery" : "Set delivery",
+    },
+    {
+      minute: "12-15",
+      title: "Save context",
+      detail: hasAgentMemory
+        ? "Goals, tone, or cadence are saved for future agent work."
+        : "Save the account goal or review cadence so briefs sound like the team.",
+      done: hasAgentMemory,
+      href: "/app/clients",
+      cta: hasAgentMemory ? "Review context" : "Save context",
+    },
+  ];
+  const nextActivationStep = firstFifteenSteps.find((step) => !step.done) ?? firstFifteenSteps[firstFifteenSteps.length - 1];
+  const activationComplete = firstFifteenSteps.every((step) => step.done);
+  const showSetupChecklist = activationComplete && setupItems.some((item) => !item.done);
+  const showValueLoop = activationComplete;
+  const counterMoveBriefLabel = `${counterMoveFollowUpCount} brief${counterMoveFollowUpCount === 1 ? "" : "s"}`;
+  const todaysAnswer = counterMoveFollowUpCount > 0
+    ? {
+      title: `${counterMoveBriefLabel} ${counterMoveFollowUpCount === 1 ? "needs" : "need"} a decision`,
+      detail: "Open the proof-backed follow-ups and choose the next response before the review window closes.",
+      href: "/app/watchlists",
+      cta: "Review briefs",
+    }
+    : confirmedChanges > 0
+    ? {
+      title: `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} need review`,
+      detail: "Open the proof trail and decide whether to respond, ignore, or package the change.",
+      href: "/app/watchlists",
+      cta: "Review moves",
+    }
+    : hasOvernightCheck
+      ? {
+        title: "Quiet check completed",
+        detail: `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightCheckScope}; no urgent competitor move is waiting.`,
+        href: "/app/watchlists",
+        cta: "Review watchlists",
+      }
+      : activeWatchlists > 0
+        ? {
+          title: "First sweep is queued",
+          detail: `Your next scheduled sweep is ${nextScanLabel}. Open the watchlist to run one now.`,
+          href: "/app/watchlists",
+          cta: "Open watchlist",
+        }
+        : {
+          title: "No market watch yet",
+          detail: "Add one competitor website to turn the account into a daily market desk.",
+          href: "/search",
+          cta: "Add competitor",
+        };
   const readyCount = data.workspaceReadiness.readyCount;
-  const briefTitle = confirmedChanges > 0
+  const briefTitle = counterMoveFollowUpCount > 0
+    ? `${counterMoveBriefLabel} to decide`
+    : confirmedChanges > 0
     ? `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} to review`
     : firstCompetitorReady
       ? "Watching for the first change"
       : "Add your first competitor";
-  const briefSummary = confirmedChanges > 0
+  const briefSummary = counterMoveFollowUpCount > 0
+    ? "A proof-backed follow-up is waiting for a response decision."
+    : confirmedChanges > 0
     ? recentEvents.slice(0, 3).map((event) => event.title).join(". ")
     : hasOvernightCheck
       ? `All quiet — ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightCheckScope} in the last day. No changes worth your time.`
@@ -492,6 +603,50 @@ export default function AppDashboardRoute() {
           </div>
         </article>
       ) : null}
+      <article
+        className={`f9-first-fifteen-panel ${activationComplete ? "is-complete" : ""}`}
+        aria-label={activationComplete ? "Today on Five to Nine" : "First 15 minutes activation plan"}
+      >
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">{activationComplete ? "Today" : "First 15 minutes"}</span>
+            <h2>{activationComplete ? todaysAnswer.title : nextActivationStep.title}</h2>
+            <p className="f9-muted-copy">
+              {activationComplete
+                ? todaysAnswer.detail
+                : nextActivationStep.detail}
+            </p>
+          </div>
+          <Link className="f9-primary-button" to={activationComplete ? todaysAnswer.href : nextActivationStep.href}>
+            {activationComplete ? todaysAnswer.cta : nextActivationStep.cta}
+          </Link>
+        </div>
+
+        {!activationComplete ? (
+          <>
+            <div className="f9-first-fifteen-current">
+              <span>Today</span>
+              <strong>{todaysAnswer.title}</strong>
+              <p>{todaysAnswer.detail}</p>
+            </div>
+
+            <div className="f9-first-fifteen-list">
+              {firstFifteenSteps.map((step) => (
+                <Link
+                  className={`f9-first-fifteen-step ${step.done ? "is-done" : step === nextActivationStep ? "is-active" : ""}`}
+                  key={step.title}
+                  to={step.href}
+                >
+                  <span>{step.minute}</span>
+                  <strong>{step.title}</strong>
+                  <p>{step.detail}</p>
+                </Link>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </article>
+
       <section className="f9-market-desk" aria-label="Five to Nine market moves dashboard">
         <div className="f9-market-desk-top">
           <strong>Five to Nine</strong>
@@ -587,57 +742,61 @@ export default function AppDashboardRoute() {
         </div>
       </section>
 
-      <section className="f9-dashboard-setup-row">
-      <aside className="f9-setup-card" aria-label="Account setup status">
-          <div>
-            <span className="f9-app-kicker">Setup checklist</span>
-            <h3>{readyCount} of {setupItems.length} ready</h3>
+      {showSetupChecklist ? (
+        <section className="f9-dashboard-setup-row">
+          <aside className="f9-setup-card" aria-label="Account setup status">
+            <div>
+              <span className="f9-app-kicker">Setup checklist</span>
+              <h3>{readyCount} of {setupItems.length} ready</h3>
+            </div>
+            <div className="f9-setup-list">
+              {setupItems.map((item) => (
+                <div className={item.done ? "is-done" : ""} key={item.label}>
+                  <span>{item.done ? "Done" : "Next"}</span>
+                  <strong>{item.label}</strong>
+                  <p>{item.detail}</p>
+                  <Link to={item.href}>{item.done ? "Review" : "Open"}</Link>
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          <div className="f9-dashboard-quick-links">
+            <Link to="/search?website=https%3A%2F%2Fnykaa.com">Try Nykaa</Link>
+            <Link to="/search?website=https%3A%2F%2Fmamaearth.in">Try Mamaearth</Link>
+            {savedQueries.length > 0 ? <Link to="/search">Saved searches</Link> : null}
+            <Link to="/app/watchlists">Open watchlists</Link>
+            <Link to="/app/clients">Save agent memory</Link>
           </div>
-          <div className="f9-setup-list">
-            {setupItems.map((item) => (
-              <div className={item.done ? "is-done" : ""} key={item.label}>
-                <span>{item.done ? "Done" : "Next"}</span>
+        </section>
+      ) : null}
+
+      {showValueLoop ? (
+        <article className="f9-app-panel f9-value-loop-panel" aria-label="Retained value loop">
+          <div className="f9-panel-toolbar">
+            <div>
+              <span className="f9-app-kicker">Retained value loop</span>
+              <h2>What Five to Nine did for you</h2>
+              <p className="f9-muted-copy">
+                The retained account loop is watched, checked, changed, proved, and delivered.
+              </p>
+            </div>
+            <Link className="f9-secondary-button" to="/app/watchlists">
+              Review proof trail
+            </Link>
+          </div>
+          <div className="f9-value-loop-list">
+            {valueLoopItems.map((item, index) => (
+              <Link className={`f9-value-loop-step ${item.done ? "is-done" : ""}`} key={item.label} to={item.href}>
+                <span className="f9-value-loop-index">{String(index + 1).padStart(2, "0")}</span>
                 <strong>{item.label}</strong>
+                <em>{item.state}</em>
                 <p>{item.detail}</p>
-                <Link to={item.href}>{item.done ? "Review" : "Open"}</Link>
-              </div>
+              </Link>
             ))}
           </div>
-        </aside>
-
-        <div className="f9-dashboard-quick-links">
-          <Link to="/search?website=https%3A%2F%2Fnykaa.com">Try Nykaa</Link>
-          <Link to="/search?website=https%3A%2F%2Fmamaearth.in">Try Mamaearth</Link>
-          {savedQueries.length > 0 ? <Link to="/search">Saved searches</Link> : null}
-          <Link to="/app/watchlists">Open watchlists</Link>
-          <Link to="/app/clients">Save agent memory</Link>
-        </div>
-      </section>
-
-      <article className="f9-app-panel f9-value-loop-panel" aria-label="Retained value loop">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">Retained value loop</span>
-            <h2>What Five to Nine did for you</h2>
-            <p className="f9-muted-copy">
-              The retained account loop is watched, checked, changed, proved, and delivered.
-            </p>
-          </div>
-          <Link className="f9-secondary-button" to="/app/watchlists">
-            Review proof trail
-          </Link>
-        </div>
-        <div className="f9-value-loop-list">
-          {valueLoopItems.map((item, index) => (
-            <Link className={`f9-value-loop-step ${item.done ? "is-done" : ""}`} key={item.label} to={item.href}>
-              <span className="f9-value-loop-index">{String(index + 1).padStart(2, "0")}</span>
-              <strong>{item.label}</strong>
-              <em>{item.state}</em>
-              <p>{item.detail}</p>
-            </Link>
-          ))}
-        </div>
-      </article>
+        </article>
+      ) : null}
 
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
