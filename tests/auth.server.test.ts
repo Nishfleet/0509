@@ -434,6 +434,65 @@ describe("Stytch auth boundary", () => {
     expect(redirectUrl.search).toBe("");
   });
 
+  it("uses branded Stytch discovery email templates by auth flow", async () => {
+    const sentBodies: Array<Record<string, unknown>> = [];
+    const brandedTemplateEnv = {
+      APP_ORIGIN: "https://0509.io",
+      STYTCH_API_BASE_URL: "https://api.stytch.test",
+      STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID: "template-shared",
+      STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID: "template-login",
+      STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID: "template-activation",
+      STYTCH_PROJECT_ID: "project-test",
+      STYTCH_SECRET: "secret-test",
+    };
+    vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return new Response(JSON.stringify({ request_id: "request-1" }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    await sendDiscoveryEmail(
+      brandedTemplateEnv,
+      new Request("https://0509.io/auth/login"),
+      {
+        email: "asha@agency.com",
+        mode: "login",
+        state: "state-123",
+      },
+    );
+
+    await sendDiscoveryEmail(
+      brandedTemplateEnv,
+      new Request("https://0509.io/auth/signup"),
+      {
+        email: "asha@agency.com",
+        mode: "signup",
+        state: "state-456",
+      },
+    );
+
+    await sendDiscoveryEmail(
+      {
+        APP_ORIGIN: "https://0509.io",
+        STYTCH_API_BASE_URL: "https://api.stytch.test",
+        STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID: "template-shared",
+        STYTCH_PROJECT_ID: "project-test",
+        STYTCH_SECRET: "secret-test",
+      },
+      new Request("https://0509.io/auth/signup"),
+      {
+        email: "asha@agency.com",
+        mode: "signup",
+        state: "state-789",
+      },
+    );
+
+    expect(sentBodies[0]?.login_template_id).toBe("template-login");
+    expect(sentBodies[1]?.login_template_id).toBe("template-activation");
+    expect(sentBodies[2]?.login_template_id).toBe("template-shared");
+  });
+
   it("can add PKCE to Stytch magic links without exposing the verifier", async () => {
     const sentBodies: Array<Record<string, unknown>> = [];
     vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {

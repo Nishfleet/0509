@@ -32,6 +32,9 @@ Do not enable Stytch settings that require an extra auth step, such as MFA-requi
 - `AUTH_PROVIDER=stytch`
 - `STYTCH_API_BASE_URL`
 - `STYTCH_PROJECT_ID`
+- `STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID` for the branded signup/activation magic-link email. Stytch's B2B Discovery API still sends this as `login_template_id`; create it as a `Magic Links - Login` template in Stytch.
+- `STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID` for the branded returning-user magic-link email.
+- `STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID` optional shared fallback if login and activation use the same template.
 - `STYTCH_PUBLIC_TOKEN` for Google/Microsoft OAuth discovery starts; store as runtime config/secret and do not render it into public HTML or client bundles
 - `STYTCH_OAUTH_ENABLED_PROVIDERS` only after provider configs are live in Stytch
 - `STYTCH_OAUTH_BRANDED_PROVIDERS` for the subset of OAuth providers whose Google/Microsoft account chooser and consent surfaces have been verified to show Five to Nine/0509, not Stytch. Providers must appear in both allowlists before the app renders or starts OAuth.
@@ -42,6 +45,8 @@ Do not enable Stytch settings that require an extra auth step, such as MFA-requi
 ## Cost Guardrail
 
 Use Stytch B2B within the included/free setup first. Do not enable paid custom branding, fraud add-ons, or extra paid SSO/SCIM connections without an explicit product/cost decision.
+
+Custom Stytch auth emails may require Stytch's full email customization add-on and a custom email domain before the sender, body, and "Powered by Stytch" footer can be fully branded. The app only passes template IDs; the template/domain setup remains in the Stytch dashboard.
 
 ## Supabase Status
 
