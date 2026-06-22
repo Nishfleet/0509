@@ -76,6 +76,9 @@
   // - WHATSAPP_WEBHOOK_VERIFY_TOKEN
   // - DODO_PAYMENTS_API_KEY
   // - STYTCH_PROJECT_ID
+  // - STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID (branded signup/activation discovery email)
+  // - STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID (branded returning-user discovery email)
+  // - STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID (optional shared branded discovery email fallback)
   // - STYTCH_PUBLIC_TOKEN (runtime-only for Stytch OAuth discovery starts)
   // - STYTCH_OAUTH_ENABLED_PROVIDERS (provider allowlist after Google/Microsoft provider configs are verified)
   // - STYTCH_OAUTH_BRANDED_PROVIDERS (subset verified to show Five to Nine/0509 on provider screens)

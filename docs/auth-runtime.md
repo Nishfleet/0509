@@ -39,9 +39,19 @@ Do not enable Stytch settings that require an extra auth step, such as MFA-requi
 - `STYTCH_SESSION_DURATION_MINUTES` optional, defaults to 30 days
 - `UNSUBSCRIBE_SIGNING_SECRET` for signed unsubscribe links. `BETTER_AUTH_SECRET` remains a legacy fallback only during migration.
 
+## Optional Stytch Email Templates
+
+- `STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID` for a branded signup/activation magic-link email.
+- `STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID` for a branded returning-user magic-link email.
+- `STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID` optional shared fallback if login and activation use the same template.
+
+Stytch's B2B Discovery API sends these template IDs as `login_template_id`; create custom templates as `Magic Links - Login` templates in Stytch. Leave these unset while using Stytch's included pre-built email template.
+
 ## Cost Guardrail
 
 Use Stytch B2B within the included/free setup first. Do not enable paid custom branding, fraud add-ons, or extra paid SSO/SCIM connections without an explicit product/cost decision.
+
+Custom Stytch auth emails may require Stytch's full email customization add-on and a custom email domain before the sender, body, and "Powered by Stytch" footer can be fully branded. The app only passes template IDs; the template/domain setup remains in the Stytch dashboard.
 
 ## Supabase Status
 
