@@ -13,9 +13,9 @@ import type { AppSession } from "~/lib/types";
 
 export const BETTER_AUTH_BASE_PATH = "/api/auth";
 export const BETTER_AUTH_OAUTH_PROVIDERS = ["google", "microsoft"] as const;
-const BETTER_AUTH_MAGIC_LINK_COOKIE = "f9_better_magic";
+const BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE = "f9_better_magic";
 const BETTER_AUTH_MAGIC_LINK_STATE_COOKIE = "f9_better_magic_state";
-
+const BETTER_AUTH_MAGIC_LINK_CONTEXT_TTL_MS = 15 * 60 * 1000;
 export type BetterAuthOAuthProvider = (typeof BETTER_AUTH_OAUTH_PROVIDERS)[number];
 
 export class BetterAuthUnknownUserError extends Error {
@@ -323,22 +323,16 @@ export async function verifyBetterAuthMagicLink(
   request: Request,
   input: BetterAuthMagicLinkConfirmation,
 ) {
-  const verifyUrl = new URL(`${BETTER_AUTH_BASE_PATH}/magic-link/verify`, betterAuthBaseURL(env, request));
-  verifyUrl.searchParams.set("token", input.token);
-  verifyUrl.searchParams.set("callbackURL", input.callbackURL);
-  if (input.newUserCallbackURL) {
-    verifyUrl.searchParams.set("newUserCallbackURL", input.newUserCallbackURL);
-  }
-  if (input.errorCallbackURL) {
-    verifyUrl.searchParams.set("errorCallbackURL", input.errorCallbackURL);
-  }
-
-  return getBetterAuth(env, request).handler(
-    new Request(verifyUrl, {
-      headers: request.headers,
-      method: "GET",
-    }),
-  );
+  return (await getBetterAuth(env, request).api.magicLinkVerify({
+    asResponse: true,
+    headers: request.headers,
+    query: {
+      callbackURL: input.callbackURL,
+      ...(input.errorCallbackURL ? { errorCallbackURL: input.errorCallbackURL } : {}),
+      ...(input.newUserCallbackURL ? { newUserCallbackURL: input.newUserCallbackURL } : {}),
+      token: input.token,
+    },
+  } as never)) as Response;
 }
 
 export interface BetterAuthPasskeyRecord {
@@ -413,194 +407,8 @@ export function appendBetterAuthSetCookieHeaders(target: Headers, source: Header
 export interface BetterAuthMagicLinkConfirmation {
   token: string;
   callbackURL: string;
-  browserBound: boolean;
-  challengeId?: string;
-  email: string;
   newUserCallbackURL?: string;
   errorCallbackURL?: string;
-}
-
-export async function betterAuthMagicLinkConfirmationCookie(
-  env: AppEnv,
-  request: Request,
-  verificationUrl: string,
-) {
-  const url = new URL(verificationUrl);
-  const token = url.searchParams.get("token") || "";
-  if (!token) {
-    throw new BetterAuthMagicLinkCallbackError();
-  }
-  const email = await betterAuthMagicLinkEmailForToken(env, token);
-  if (!email) {
-    throw new BetterAuthMagicLinkCallbackError();
-  }
-  const requestState = url.searchParams.get("state") || "";
-  const cookieState = readCookie(request, BETTER_AUTH_MAGIC_LINK_STATE_COOKIE);
-
-  const payload: BetterAuthMagicLinkConfirmation = {
-    browserBound: Boolean(requestState && cookieState === requestState),
-    callbackURL: sameOriginMagicLinkUrl(url, "callbackURL", "/app"),
-    email,
-    errorCallbackURL:
-      optionalSameOriginMagicLinkUrl(url, "errorCallbackURL") ??
-      optionalSameOriginMagicLinkUrl(url, "errorCallbackURI"),
-    newUserCallbackURL: optionalSameOriginMagicLinkUrl(url, "newUserCallbackURL"),
-    token,
-  };
-
-  return buildBetterAuthCookie(
-    request,
-    BETTER_AUTH_MAGIC_LINK_COOKIE,
-    await encodeCookiePayload(env, payload),
-    {
-      maxAge: 10 * 60,
-      path: "/auth/better/magic-link",
-    },
-  );
-}
-
-export async function readBetterAuthMagicLinkConfirmation(
-  env: AppEnv,
-  request: Request,
-): Promise<BetterAuthMagicLinkConfirmation | null> {
-  const value = readCookie(request, BETTER_AUTH_MAGIC_LINK_COOKIE);
-  if (!value) {
-    return null;
-  }
-
-  const payload = await decodeCookiePayload(env, value);
-  if (
-    !payload ||
-    typeof payload.token !== "string" ||
-    typeof payload.callbackURL !== "string" ||
-    typeof payload.email !== "string" ||
-    typeof payload.browserBound !== "boolean"
-  ) {
-    return null;
-  }
-
-  return {
-    browserBound: payload.browserBound,
-    callbackURL: payload.callbackURL,
-    challengeId: typeof payload.challengeId === "string" ? payload.challengeId : undefined,
-    email: payload.email,
-    errorCallbackURL:
-      typeof payload.errorCallbackURL === "string" ? payload.errorCallbackURL : undefined,
-    newUserCallbackURL:
-      typeof payload.newUserCallbackURL === "string" ? payload.newUserCallbackURL : undefined,
-    token: payload.token,
-  };
-}
-
-export function clearBetterAuthMagicLinkConfirmationCookie(request: Request) {
-  return buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_COOKIE, "", {
-    maxAge: 0,
-    path: "/auth/better/magic-link",
-  });
-}
-
-export function clearBetterAuthMagicLinkStateCookie(request: Request) {
-  return buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_STATE_COOKIE, "", {
-    maxAge: 0,
-    path: "/auth/better/magic-link",
-  });
-}
-
-export async function startBetterAuthMagicLinkFallbackChallenge(
-  env: AppEnv,
-  request: Request,
-  confirmation: BetterAuthMagicLinkConfirmation,
-) {
-  if (!env.DB || !isEmailSendingConfigured(env)) {
-    throw new BetterAuthMagicLinkCallbackError();
-  }
-
-  const code = randomBetterAuthChallengeCode();
-  const challengeId = randomBetterAuthState();
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
-  const tokenHash = await betterAuthStoredMagicLinkToken(confirmation.token);
-  const codeHash = await hashBetterAuthValue(normalizeBetterAuthChallengeCode(code));
-  await env.DB.prepare(
-    "INSERT INTO verification (id, identifier, value, expiresAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
-  )
-    .bind(
-      `f9-magic-challenge-${challengeId}`,
-      betterAuthMagicLinkChallengeIdentifier(challengeId),
-      JSON.stringify({
-        codeHash,
-        email: confirmation.email,
-        tokenHash,
-      }),
-      expiresAt.toISOString(),
-      now.toISOString(),
-      now.toISOString(),
-    )
-    .run();
-
-  await sendMagicLinkChallengeEmail(env, {
-    code,
-    email: confirmation.email,
-    mode: confirmation.newUserCallbackURL ? "signup" : "login",
-  });
-
-  return buildBetterAuthCookie(
-    request,
-    BETTER_AUTH_MAGIC_LINK_COOKIE,
-    await encodeCookiePayload(env, {
-      ...confirmation,
-      challengeId,
-    }),
-    {
-      maxAge: 10 * 60,
-      path: "/auth/better/magic-link",
-    },
-  );
-}
-
-export async function verifyBetterAuthMagicLinkFallbackChallenge(
-  env: AppEnv,
-  confirmation: BetterAuthMagicLinkConfirmation,
-  code: string,
-) {
-  if (!env.DB || !confirmation.challengeId) {
-    return false;
-  }
-
-  const row = await env.DB.prepare(
-    "SELECT value FROM verification WHERE identifier = ? AND expiresAt > ? LIMIT 1",
-  )
-    .bind(betterAuthMagicLinkChallengeIdentifier(confirmation.challengeId), new Date().toISOString())
-    .first<{ value: string }>();
-  if (!row?.value) {
-    return false;
-  }
-
-  let value: { codeHash?: unknown; email?: unknown; tokenHash?: unknown };
-  try {
-    value = JSON.parse(row.value) as typeof value;
-  } catch {
-    return false;
-  }
-
-  const expectedCodeHash = typeof value.codeHash === "string" ? value.codeHash : "";
-  const expectedEmail = typeof value.email === "string" ? value.email : "";
-  const expectedTokenHash = typeof value.tokenHash === "string" ? value.tokenHash : "";
-  const actualCodeHash = await hashBetterAuthValue(normalizeBetterAuthChallengeCode(code));
-  const actualTokenHash = await betterAuthStoredMagicLinkToken(confirmation.token);
-  if (
-    !expectedCodeHash ||
-    actualCodeHash !== expectedCodeHash ||
-    expectedEmail.trim().toLowerCase() !== confirmation.email.trim().toLowerCase() ||
-    actualTokenHash !== expectedTokenHash
-  ) {
-    return false;
-  }
-
-  await env.DB.prepare("DELETE FROM verification WHERE identifier = ?")
-    .bind(betterAuthMagicLinkChallengeIdentifier(confirmation.challengeId))
-    .run();
-  return true;
 }
 
 export function betterAuthBaseURL(env: AppEnv, request: Request) {
@@ -696,13 +504,14 @@ async function sendMagicLinkEmail(
     throw new Error("Cloudflare Email is not configured for Better Auth magic links.");
   }
 
-  const confirmationUrl = betterAuthMagicLinkConfirmationUrl(
-    input.url,
-    input.requestState,
-  );
   const email = buildBetterAuthMagicLinkEmail({
     mode: input.mode,
-    url: confirmationUrl,
+    url: await betterAuthMagicLinkConfirmationUrl(env, {
+      email: input.email,
+      mode: input.mode,
+      requestState: input.requestState,
+      url: input.url,
+    }),
   });
   await env.EMAIL!.send({
     from: {
@@ -727,85 +536,186 @@ async function betterAuthUserExists(env: AppEnv, email: string) {
   return Boolean(row?.id);
 }
 
-async function betterAuthMagicLinkEmailForToken(env: AppEnv, token: string) {
-  if (!env.DB) {
-    return null;
-  }
-
-  const storedToken = await betterAuthStoredMagicLinkToken(token);
-  const row = await env.DB.prepare(
-    "SELECT value FROM verification WHERE identifier = ? AND expiresAt > ? LIMIT 1",
-  )
-    .bind(storedToken, new Date().toISOString())
-    .first<{ value: string }>();
-  if (!row?.value) {
-    return null;
-  }
-
-  try {
-    const value = JSON.parse(row.value) as { email?: unknown };
-    return typeof value.email === "string" && value.email ? value.email : null;
-  } catch {
-    return null;
-  }
+export interface BetterAuthMagicLinkConfirmationContext {
+  browserBound: boolean;
+  email: string;
+  mode: "login" | "signup";
 }
 
-async function betterAuthStoredMagicLinkToken(token: string) {
-  return hashBetterAuthValue(token);
+interface BetterAuthMagicLinkConfirmationTicket
+  extends BetterAuthMagicLinkConfirmation,
+    BetterAuthMagicLinkConfirmationContext {
+  expiresAt: number;
 }
 
-async function hashBetterAuthValue(value: string) {
-  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return base64UrlEncodeBytes(new Uint8Array(hash));
-}
-
-function betterAuthMagicLinkConfirmationUrl(
-  verificationUrl: string,
-  requestState: string,
+export async function betterAuthMagicLinkConfirmationUrl(
+  env: AppEnv,
+  input: {
+    email: string;
+    mode: "login" | "signup";
+    requestState: string;
+    url: string;
+  },
 ) {
-  const url = new URL(verificationUrl);
+  const url = new URL(input.url);
+  const token = url.searchParams.get("token") || "";
+  if (!token) {
+    throw new BetterAuthMagicLinkCallbackError();
+  }
+
   const confirmationUrl = new URL("/auth/better/magic-link", url.origin);
-  for (const key of [
-    "token",
-    "callbackURL",
-    "newUserCallbackURL",
-    "errorCallbackURL",
-    "errorCallbackURI",
-  ]) {
+  for (const key of ["token", "callbackURL", "newUserCallbackURL", "errorCallbackURL"]) {
     const value = url.searchParams.get(key);
     if (value) {
       confirmationUrl.searchParams.set(key, value);
     }
   }
-  confirmationUrl.searchParams.set("state", requestState);
+  confirmationUrl.searchParams.set("state", input.requestState);
+  confirmationUrl.searchParams.set(
+    "context",
+    await encryptBetterAuthMagicLinkPayload(env, {
+      email: input.email,
+      expiresAt: Date.now() + BETTER_AUTH_MAGIC_LINK_CONTEXT_TTL_MS,
+      mode: input.mode,
+      requestState: input.requestState,
+      tokenDigest: await betterAuthMagicLinkTokenDigest(token),
+    }),
+  );
   return confirmationUrl.toString();
 }
 
-async function sendMagicLinkChallengeEmail(
+export async function readBetterAuthMagicLinkConfirmationContext(
   env: AppEnv,
-  input: {
-    code: string;
-    email: string;
-    mode: "login" | "signup";
-  },
-) {
-  if (!isEmailSendingConfigured(env)) {
-    throw new Error("Cloudflare Email is not configured for Better Auth magic-link challenges.");
+  request: Request,
+): Promise<BetterAuthMagicLinkConfirmationContext | null> {
+  const url = new URL(request.url);
+  const context = await decryptBetterAuthMagicLinkPayload(env, url.searchParams.get("context") ?? "");
+  if (
+    !context ||
+    typeof context.email !== "string" ||
+    typeof context.expiresAt !== "number" ||
+    (context.mode !== "login" && context.mode !== "signup") ||
+    typeof context.requestState !== "string" ||
+    typeof context.tokenDigest !== "string" ||
+    context.expiresAt < Date.now()
+  ) {
+    return null;
   }
 
-  const email = buildBetterAuthMagicLinkChallengeEmail({
-    code: input.code,
-    mode: input.mode,
-  });
-  await env.EMAIL!.send({
-    from: {
-      email: emailFromAddress(env),
-      name: input.mode === "signup" ? "0509 Account Activation" : "0509 Sign In",
+  const token = url.searchParams.get("token") || "";
+  if (!token || context.tokenDigest !== (await betterAuthMagicLinkTokenDigest(token))) {
+    return null;
+  }
+
+  const requestState = url.searchParams.get("state") || "";
+  const cookieState = readCookie(request, BETTER_AUTH_MAGIC_LINK_STATE_COOKIE);
+  return {
+    browserBound: Boolean(
+      requestState && requestState === context.requestState && cookieState === context.requestState,
+    ),
+    email: context.email,
+    mode: context.mode,
+  };
+}
+
+export async function betterAuthMagicLinkConfirmationTicketCookie(
+  env: AppEnv,
+  request: Request,
+  input: BetterAuthMagicLinkConfirmation & BetterAuthMagicLinkConfirmationContext,
+) {
+  return buildBetterAuthCookie(
+    request,
+    BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE,
+    await encryptBetterAuthMagicLinkPayload(env, {
+      ...input,
+      expiresAt: Date.now() + BETTER_AUTH_MAGIC_LINK_CONTEXT_TTL_MS,
+    }),
+    {
+      maxAge: 15 * 60,
+      path: "/auth/better/magic-link",
     },
-    html: email.html,
-    subject: email.subject,
-    text: email.text,
-    to: input.email,
+  );
+}
+
+export async function readBetterAuthMagicLinkConfirmationTicket(
+  env: AppEnv,
+  request: Request,
+): Promise<BetterAuthMagicLinkConfirmationTicket | null> {
+  const parsed = await decryptBetterAuthMagicLinkPayload(
+    env,
+    readCookie(request, BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE) ?? "",
+  );
+  if (
+    !parsed ||
+    typeof parsed.browserBound !== "boolean" ||
+    typeof parsed.callbackURL !== "string" ||
+    typeof parsed.email !== "string" ||
+    typeof parsed.expiresAt !== "number" ||
+    (parsed.mode !== "login" && parsed.mode !== "signup") ||
+    typeof parsed.token !== "string" ||
+    parsed.expiresAt < Date.now()
+  ) {
+    return null;
+  }
+
+  const origin = new URL(request.url).origin;
+  const callbackURL = parseSameOriginUrl(parsed.callbackURL, origin);
+  const errorCallbackURL =
+    typeof parsed.errorCallbackURL === "string"
+      ? parseSameOriginUrl(parsed.errorCallbackURL, origin)
+      : undefined;
+  const newUserCallbackURL =
+    typeof parsed.newUserCallbackURL === "string"
+      ? parseSameOriginUrl(parsed.newUserCallbackURL, origin)
+      : undefined;
+  if (
+    !callbackURL ||
+    (typeof parsed.errorCallbackURL === "string" && !errorCallbackURL) ||
+    (typeof parsed.newUserCallbackURL === "string" && !newUserCallbackURL)
+  ) {
+    return null;
+  }
+
+  return {
+    browserBound: parsed.browserBound,
+    callbackURL,
+    email: parsed.email,
+    expiresAt: parsed.expiresAt,
+    mode: parsed.mode,
+    ...(errorCallbackURL ? { errorCallbackURL } : {}),
+    ...(newUserCallbackURL ? { newUserCallbackURL } : {}),
+    token: parsed.token,
+  };
+}
+
+export function clearBetterAuthMagicLinkConfirmationCookie(request: Request) {
+  return buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE, "", {
+    maxAge: 0,
+    path: "/auth/better/magic-link",
+  });
+}
+
+export function betterAuthMagicLinkConfirmationFromRequest(
+  request: Request,
+): BetterAuthMagicLinkConfirmation {
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token") || "";
+  if (!token) {
+    throw new BetterAuthMagicLinkCallbackError();
+  }
+
+  return {
+    callbackURL: sameOriginMagicLinkUrl(url, "callbackURL", "/app"),
+    errorCallbackURL: optionalSameOriginMagicLinkUrl(url, "errorCallbackURL"),
+    newUserCallbackURL: optionalSameOriginMagicLinkUrl(url, "newUserCallbackURL"),
+    token,
+  };
+}
+
+export function clearBetterAuthMagicLinkStateCookie(request: Request) {
+  return buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_STATE_COOKIE, "", {
+    maxAge: 0,
+    path: "/auth/better/magic-link",
   });
 }
 
@@ -851,75 +761,6 @@ export function buildBetterAuthMagicLinkEmail(input: {
       "Five to Nine - 0509.io",
     ].join("\n"),
   };
-}
-
-export function buildBetterAuthMagicLinkChallengeEmail(input: {
-  code: string;
-  mode: "login" | "signup";
-}) {
-  const isSignup = input.mode === "signup";
-  const subject = isSignup ? "Your 0509 activation code" : "Your 0509 sign-in code";
-  const heading = isSignup ? "Confirm your 0509 workspace" : "Confirm your 0509 sign-in";
-  const preview = "Use this one-time code to finish the secure link confirmation.";
-  const htmlCode = escapeHtml(input.code);
-
-  return {
-    html: [
-      '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">',
-      escapeHtml(preview),
-      "</div>",
-      '<div style="font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; background-color:#ffffff; color:#101828; line-height:1.55; padding:0;">',
-      '<p style="margin:0 0 8px; color:#667085; font-size:13px; letter-spacing:.08em; text-transform:uppercase;">0509 Account Activation</p>',
-      `<h1 style="margin:0 0 16px; font-size:24px; line-height:1.25; font-weight:700;">${escapeHtml(heading)}</h1>`,
-      `<p style="margin:0 0 18px; color:#344054; font-size:15px;">${escapeHtml(preview)}</p>`,
-      `<p style="margin:0 0 22px; font-size:28px; letter-spacing:0.16em; font-weight:800;">${htmlCode}</p>`,
-      '<p style="margin:0 0 10px; color:#667085; font-size:13px;">This code expires in 10 minutes. If you did not request it, you can ignore this email.</p>',
-      '<p style="margin:0; color:#98a2b3; font-size:12px;">Five to Nine - 0509.io</p>',
-      "</div>",
-    ].join(""),
-    subject,
-    text: [
-      heading,
-      "",
-      preview,
-      "",
-      input.code,
-      "",
-      "This code expires in 10 minutes. If you did not request it, you can ignore this email.",
-      "",
-      "Five to Nine - 0509.io",
-    ].join("\n"),
-  };
-}
-
-function sameOriginMagicLinkUrl(url: URL, key: string, fallback: string) {
-  const value = url.searchParams.get(key) || fallback;
-  const parsed = parseSameOriginUrl(value, url.origin);
-  if (!parsed) {
-    throw new BetterAuthMagicLinkCallbackError();
-  }
-  return parsed;
-}
-
-function optionalSameOriginMagicLinkUrl(url: URL, key: string) {
-  const value = url.searchParams.get(key);
-  if (!value) {
-    return undefined;
-  }
-  const parsed = parseSameOriginUrl(value, url.origin);
-  if (!parsed) {
-    throw new BetterAuthMagicLinkCallbackError();
-  }
-  return parsed;
-}
-
-function parseSameOriginUrl(value: string, origin: string) {
-  try {
-    const parsed = new URL(value, origin);
-    return parsed.origin === origin ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
 }
 
 function absoluteAppUrl(env: AppEnv, request: Request, path: string) {
@@ -993,60 +834,52 @@ function readCookie(request: Request, name: string) {
     ?.slice(name.length + 1) ?? null;
 }
 
-async function encodeCookiePayload(env: AppEnv, payload: BetterAuthMagicLinkConfirmation) {
-  const encoded = base64UrlEncode(JSON.stringify(payload));
-  return `${encoded}.${await signCookiePayload(env, encoded)}`;
+async function encryptBetterAuthMagicLinkPayload(
+  env: AppEnv,
+  payload: Record<string, unknown>,
+) {
+  const iv = new Uint8Array(12);
+  crypto.getRandomValues(iv);
+  const encrypted = await crypto.subtle.encrypt(
+    { iv, name: "AES-GCM" },
+    await betterAuthMagicLinkContextKey(env),
+    new TextEncoder().encode(JSON.stringify(payload)),
+  );
+  return `v1.${base64UrlEncodeBytes(iv)}.${base64UrlEncodeBytes(new Uint8Array(encrypted))}`;
 }
 
-async function decodeCookiePayload(env: AppEnv, value: string): Promise<Record<string, unknown> | null> {
+async function decryptBetterAuthMagicLinkPayload(env: AppEnv, value: string) {
   try {
-    const [encoded, signature, extra] = value.split(".");
-    if (!encoded || !signature || extra !== undefined) {
+    const [version, encodedIv, encodedCiphertext, extra] = value.split(".");
+    if (version !== "v1" || !encodedIv || !encodedCiphertext || extra !== undefined) {
       return null;
     }
-    if (!(await verifyCookiePayloadSignature(env, encoded, signature))) {
-      return null;
-    }
-    return JSON.parse(base64UrlDecode(encoded)) as Record<string, unknown>;
+    const decrypted = await crypto.subtle.decrypt(
+      { iv: base64UrlToBytes(encodedIv), name: "AES-GCM" },
+      await betterAuthMagicLinkContextKey(env),
+      base64UrlToBytes(encodedCiphertext),
+    );
+    return JSON.parse(new TextDecoder().decode(decrypted)) as Record<string, unknown>;
   } catch {
     return null;
   }
 }
 
-async function signCookiePayload(env: AppEnv, encoded: string) {
-  const key = await cookieSigningKey(env);
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encoded));
-  return base64UrlEncodeBytes(new Uint8Array(signature));
+async function betterAuthMagicLinkTokenDigest(token: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return base64UrlEncodeBytes(new Uint8Array(digest));
 }
 
-async function verifyCookiePayloadSignature(env: AppEnv, encoded: string, signature: string) {
-  const key = await cookieSigningKey(env);
-  const normalizedSignature = signature.replaceAll("-", "+").replaceAll("_", "/");
-  const paddedSignature = normalizedSignature.padEnd(
-    normalizedSignature.length + ((4 - (normalizedSignature.length % 4)) % 4),
-    "=",
-  );
-  const signatureBytes = Uint8Array.from(atob(paddedSignature), (char) => char.charCodeAt(0));
-  return crypto.subtle.verify("HMAC", key, signatureBytes, new TextEncoder().encode(encoded));
-}
-
-async function cookieSigningKey(env: AppEnv) {
+async function betterAuthMagicLinkContextKey(env: AppEnv) {
   const secret = env.BETTER_AUTH_SECRET?.trim();
   if (!secret) {
     throw new BetterAuthMagicLinkCallbackError();
   }
-  return crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { hash: "SHA-256", name: "HMAC" },
-    false,
-    ["sign", "verify"],
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`0509:better-auth:magic-link-context:${secret}`),
   );
-}
-
-function base64UrlEncode(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  return base64UrlEncodeBytes(bytes);
+  return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["decrypt", "encrypt"]);
 }
 
 function base64UrlEncodeBytes(bytes: Uint8Array) {
@@ -1057,12 +890,11 @@ function base64UrlEncodeBytes(bytes: Uint8Array) {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-function base64UrlDecode(value: string) {
+function base64UrlToBytes(value: string) {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
   const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
   const binary = atob(padded);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
 function originFromUrl(value: string | null) {
@@ -1094,19 +926,34 @@ function randomBetterAuthState() {
   return base64UrlEncodeBytes(bytes);
 }
 
-function randomBetterAuthChallengeCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+function sameOriginMagicLinkUrl(url: URL, key: string, fallback: string) {
+  const value = url.searchParams.get(key) || fallback;
+  const parsed = parseSameOriginUrl(value, url.origin);
+  if (!parsed) {
+    throw new BetterAuthMagicLinkCallbackError();
+  }
+  return parsed;
 }
 
-function normalizeBetterAuthChallengeCode(code: string) {
-  return code.replace(/[^a-z0-9]/gi, "").toUpperCase();
+function optionalSameOriginMagicLinkUrl(url: URL, key: string) {
+  const value = url.searchParams.get(key);
+  if (!value) {
+    return undefined;
+  }
+  const parsed = parseSameOriginUrl(value, url.origin);
+  if (!parsed) {
+    throw new BetterAuthMagicLinkCallbackError();
+  }
+  return parsed;
 }
 
-function betterAuthMagicLinkChallengeIdentifier(challengeId: string) {
-  return `0509:magic-link-challenge:${challengeId}`;
+function parseSameOriginUrl(value: string, origin: string) {
+  try {
+    const parsed = new URL(value, origin);
+    return parsed.origin === origin ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function escapeHtml(value: string) {

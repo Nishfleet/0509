@@ -154,7 +154,7 @@ function authErrorMessage(code: string | null) {
   if (code === "better_auth_not_configured") {
     return "Better Auth is not configured yet. Add the Better Auth secret and database binding before signing in.";
   }
-  if (code === "callback_failed") {
+  if (code === "callback_failed" || code === "INVALID_TOKEN") {
     return "That sign-in link could not be verified. Request a fresh link and try again.";
   }
   if (code === "no_workspace") {

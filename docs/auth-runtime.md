@@ -14,7 +14,7 @@ Cloudflare D1 remains the app data store. Product data, billing links, watchlist
 - Better Auth is mounted at `/api/auth/*` through `app/routes/api.auth.$.ts`.
 - Better Auth uses the Cloudflare D1 binding directly for `user`, `session`, `account`, `verification`, and `passkey`.
 - Magic-link email is the primary auth path. The app sends links through the Cloudflare Email binding, not a third-party email API key.
-- Magic-link emails open `/auth/better/magic-link`, which requires the same-browser request-state cookie, stores the token in a short-lived HTTP-only cookie, and verifies only after an explicit continue action. Link scanners should not consume one-time tokens by fetching the email URL.
+- Magic-link emails open `/auth/better/magic-link`, which requires the same-browser request-state cookie, validates the encrypted token-bound context, stores the Better Auth token in a short-lived HTTP-only confirmation cookie, redirects to a clean confirmation URL, and verifies only after an explicit same-origin POST. Link scanners should not consume one-time tokens by fetching the email URL, and copied/cross-device links must request a fresh link instead of falling back to email-only proof.
 - Google and Microsoft OAuth are optional. Buttons render only when their Better Auth client ID and secret are configured and the provider is present in `BETTER_AUTH_OAUTH_BRANDED_PROVIDERS`. Microsoft also requires `BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED=true` before it is registered for same-email account linking.
 - Passkeys use `@better-auth/passkey`; the app no longer owns WebAuthn challenge or credential verification routes.
 - Protected routes call `app/lib/auth.server.ts`, which reads the Better Auth session and maps it into the app `AppSession` shape.
