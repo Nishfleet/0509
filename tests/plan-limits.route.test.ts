@@ -529,7 +529,7 @@ describe("pricing CTA rendering", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("0 ads checked");
-    expect(markup).toContain("Quiet still counts");
+    expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("quiet means we looked");
     expect(markup).not.toContain("Next sweep: tomorrow morning");
   });
@@ -567,8 +567,8 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Evidence attempts have run, but no successful proof is attached yet.");
-    expect(markup).toContain("Proof waiting");
+    expect(markup).toContain("Evidence attempts ran; open the watchlist to retry or inspect the failed proof.");
+    expect(markup).toContain("Capture proof");
     expect(markup).not.toContain("Screenshots and landing-page evidence are attached to the trail.");
   });
 
@@ -610,7 +610,7 @@ describe("pricing CTA rendering", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("1 evidence check");
-    expect(markup).toContain("Screenshots and landing-page evidence are attached to the trail.");
+    expect(markup).toContain("1 evidence check attached.");
   });
 
   it("does not mark delivery complete just because email is configured", async () => {
@@ -649,11 +649,10 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Email ready");
-    expect(markup).toContain("A delivery path exists for future eligible briefs.");
-    expect(markup).toMatch(
-      /class="f9-value-loop-step " href="\/app\/sources"><span class="f9-value-loop-index">05<\/span><strong>Delivered<\/strong><em>Email ready<\/em>/,
-    );
+    expect(markup).toContain("Prove delivery");
+    expect(markup).toContain("Delivery target is saved; send the first proof-backed brief to prove it reaches the team.");
+    expect(markup).not.toContain("A successful delivery trail exists.");
+    expect(markup).not.toContain("Retained value loop");
   });
 
   it("offers an upgrade path on collections plan-limit errors", async () => {

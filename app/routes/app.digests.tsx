@@ -7,7 +7,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
+import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import { CopyButton } from "~/components/copy-button";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { LocalTime } from "~/components/local-time";
@@ -284,6 +284,8 @@ export default function DigestsRoute() {
                 </section>
 
                 {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
+
+                <DigestProofPacket items={data.selectedDigest.items} />
 
                 <DigestMovementSummary items={data.selectedDigest.items} />
 

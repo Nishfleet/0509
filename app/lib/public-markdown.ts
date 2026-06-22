@@ -43,6 +43,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Recommended first agent workflow: ${AGENT_FIRST_WORKFLOW.map((step) => step.label).join(" -> ")}.
 - Live audited action groups: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}. ${WRITE_ENABLED_API_KEY_REQUIREMENT}
 - Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
+- Signed-in support cases cover paid-customer account help, with email fallback for users who cannot sign in.
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
 - Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
 - The public status page shows coarse launch blockers and safety posture without account activity, aggregate counts, timestamps, or private canary evidence.
@@ -57,7 +58,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Account access uses verified access paths.
 - Public demo proof is sample-only, including the example tracked competitor and digest preview. Public live search is read-only; retained monitoring and saved evidence require an account.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
-- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, and provider-canary success.
+- Launch status is readiness-gated: checkout and signed webhook billing are verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, provider-canary success, Dodo portal subscription-update confirmation, and external uptime monitoring.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
@@ -95,7 +96,7 @@ Current product truth:
 - Public read-only live search is available for buyer evaluation, and public demo proof is sample-only at /api/demo-proof with an example tracked competitor and digest preview.
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
-- Launch status is readiness-gated: billing is verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, and provider-canary success.
+- Launch status is readiness-gated: checkout and signed webhook billing are verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, provider-canary success, Dodo portal subscription-update confirmation, and external uptime monitoring.
 - Email delivery uses Cloudflare Email Service through the app's send_email binding.
 - Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly briefs plus 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
@@ -108,7 +109,7 @@ Current product truth:
 - Write-enabled customer API keys support narrow audited workspace actions through /api/v1/actions and /api/mcp for ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
 - Recommended first agent workflow: ${AGENT_FIRST_WORKFLOW.map((step) => step.label).join(" -> ")}.
 - Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
-- Paid customer support paths cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests.
+- Signed-in support cases cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests, with email fallback when a user cannot sign in.
 - Slack incoming-webhook setup exists for configured account destinations; broad launch still requires a configured Slack target with successful live delivery proof.
 - The public status page shows blockers and safety posture only; detailed monitoring, proof-capture, digest, Slack, Dodo, and uptime evidence stays in private canaries and signed-in operational views.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.

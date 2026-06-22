@@ -31,6 +31,7 @@ import {
 } from "~/lib/agent-action-catalog";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { parseReportId } from "~/lib/report";
+import { SupportCaseInputError } from "~/lib/support";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { CounterMoveFollowUpChannel } from "~/lib/counter-move-brief.server";
 import type {
@@ -46,6 +47,8 @@ import type {
   DiscoveryFailureClass,
   SensitivityMode,
   ShareResourceType,
+  SupportCaseRecord,
+  SupportCaseStatus,
   WatchEventRecord,
   WebMentionSource,
   WebMentionTargetRecord,
@@ -68,6 +71,7 @@ const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
   "report.share",
   "memory.upsert",
   "client_room.upsert",
+  "support_case.create",
   "delivery_settings.update",
   "delivery_target.update",
 ]);
@@ -77,6 +81,7 @@ const IDEMPOTENCY_IGNORED_ACTIONS = new Set<CustomerAgentActionName>([
   "web_mentions.list",
   "memory.list",
   "client_room.list",
+  "support_case.list",
 ]);
 
 export interface CustomerAgentActionContext {
@@ -165,6 +170,21 @@ export function customerAgentActionRequiresIdempotency(actionName: CustomerAgent
 
 function customerAgentActionSupportsIdempotency(actionName: CustomerAgentActionName) {
   return !IDEMPOTENCY_IGNORED_ACTIONS.has(actionName);
+}
+
+function actionReversal(
+  action: CustomerAgentActionName,
+  input: Record<string, unknown>,
+  note: string,
+  options: { requiresExplicitApproval?: boolean } = {},
+) {
+  return {
+    action,
+    input,
+    requiresNewIdempotencyKey: true,
+    requiresExplicitApproval: options.requiresExplicitApproval ?? false,
+    note,
+  };
 }
 
 export async function runCustomerAgentAction(
@@ -445,6 +465,33 @@ export async function runCustomerAgentAction(
         };
       }
 
+      if (actionName === "support_case.create") {
+        const result = await createSupportCaseFromAgent(env, context, input);
+        return {
+          resourceType: "support_case",
+          resourceId: result.supportCase.id,
+          result,
+          metadata: {
+            supportCaseId: result.supportCase.id,
+            category: result.supportCase.category,
+            priority: result.supportCase.priority,
+          },
+        };
+      }
+
+      if (actionName === "support_case.list") {
+        const result = await listSupportCasesFromAgent(env, context.userId, input);
+        return {
+          resourceType: "support_case",
+          resourceId: result.status ?? "all",
+          result,
+          metadata: {
+            status: result.status ?? "all",
+            count: result.cases.length,
+          },
+        };
+      }
+
       throw new CustomerAgentActionError("unsupported_action", "Unsupported agent action.", { status: 404 });
     } catch (error) {
       if (error instanceof Response) {
@@ -612,6 +659,11 @@ async function createWatchlistFromAgent(
     action: "watchlist.create",
     watchlist,
     firstScanQueued,
+    reversal: actionReversal(
+      "watchlist.pause",
+      { watchlistId: watchlist.id },
+      "Pause this watchlist to stop future scans and alerts. History and audit records stay intact.",
+    ),
   };
 }
 
@@ -1115,6 +1167,132 @@ async function listClientRoomsFromAgent(
   };
 }
 
+async function createSupportCaseFromAgent(
+  env: AppEnv,
+  context: CustomerAgentActionContext,
+  input: Record<string, unknown>,
+) {
+  const { createSupportCase } = await import("~/lib/data.server");
+  let supportCase;
+  try {
+    supportCase = await createSupportCase(env, {
+      userId: context.userId,
+      category: input.category,
+      priority: input.priority ?? "normal",
+      subject: input.subject,
+      detail: input.detail,
+      requestKey: context.idempotencyKey,
+      context: {
+        createdFrom: "agent_action",
+        source: context.source,
+        apiKeyId: context.apiKeyId,
+      },
+    });
+  } catch (error) {
+    if (error instanceof SupportCaseInputError) {
+      throw new CustomerAgentActionError(error.code, error.message, { status: error.status });
+    }
+    throw error;
+  }
+
+  if (!supportCase) {
+    throw new CustomerAgentActionError("support_case_create_failed", "Could not open this support case.", {
+      status: 500,
+    });
+  }
+  const requester = await getSupportRequesterProfile(env, context.userId);
+  const operatorNotified = await notifySupportCaseOperatorFromAgent(env, {
+    caseId: supportCase.id,
+    requesterEmail: requester?.email ?? "unknown",
+    input,
+    source: context.source,
+  });
+
+  return {
+    ok: operatorNotified,
+    action: "support_case.create",
+    supportCase: safeSupportCaseSummary(supportCase),
+    message: operatorNotified
+      ? "Support case opened. Support will reply by email."
+      : "Support case saved, but support could not be notified. Email support@0509.io now so we can reply.",
+  };
+}
+
+async function getSupportRequesterProfile(env: AppEnv, userId: string) {
+  try {
+    const { getUserDeliveryProfile } = await import("~/lib/data.server");
+    return await getUserDeliveryProfile(env, userId);
+  } catch (error) {
+    console.error("[support] requester profile lookup failed", error);
+    return null;
+  }
+}
+
+async function notifySupportCaseOperatorFromAgent(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    requesterEmail: string;
+    input: Record<string, unknown>;
+    source: CustomerAgentActionContext["source"];
+  },
+) {
+  const idempotencyKey = `support-case:${input.caseId}`;
+  try {
+    const { getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
+    const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    if (existingAttempt?.status === "sent") {
+      return true;
+    }
+
+    const { SUPPORT_CASE_CATEGORY_LABELS, SUPPORT_CASE_PRIORITY_LABELS, normalizeSupportCaseInput } = await import("~/lib/support");
+    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+    const normalized = normalizeSupportCaseInput({
+      category: input.input.category,
+      priority: input.input.priority ?? "normal",
+      subject: input.input.subject,
+      detail: input.input.detail,
+    });
+
+    return await sendOperatorAlertEmail(env, {
+      subject: `0509 support case: ${normalized.subject}`,
+      lines: [
+        `Case: ${input.caseId}`,
+        `Requester: ${input.requesterEmail}`,
+        `Source: ${input.source}`,
+        `Category: ${SUPPORT_CASE_CATEGORY_LABELS[normalized.category]}`,
+        `Priority: ${SUPPORT_CASE_PRIORITY_LABELS[normalized.priority]}`,
+        `Subject: ${normalized.subject}`,
+        `Details: ${normalized.detail}`,
+      ],
+      idempotencyKey,
+    });
+  } catch (error) {
+    console.error("[support] agent operator alert failed", error);
+    return false;
+  }
+}
+
+async function listSupportCasesFromAgent(
+  env: AppEnv,
+  userId: string,
+  input: Record<string, unknown>,
+) {
+  const { listSupportCases } = await import("~/lib/data.server");
+  const status = readOptionalSupportCaseStatus(input) ?? "all";
+  const cases = await listSupportCases(env, userId, {
+    status,
+    limit: readInteger(input, "limit", 20),
+  });
+
+  return {
+    ok: true,
+    action: "support_case.list",
+    status,
+    cases: cases.map(safeSupportCaseSummary),
+  };
+}
+
 async function listDeliveryTargetsFromAgent(
   env: AppEnv,
   userId: string,
@@ -1199,6 +1377,23 @@ async function updateDeliverySettingsFromAgent(
     ok: true,
     action: "delivery_settings.update",
     config,
+    reversal: actionReversal(
+      "delivery_settings.update",
+      {
+        watchlistId: watchlist.id,
+        explicitApproval: true,
+        sensitivityMode: base.sensitivityMode,
+        instantEnabled: base.instantEnabled,
+        digestEnabled: base.digestEnabled,
+        emailEnabled: base.emailEnabled,
+        whatsappEnabled: base.whatsappEnabled,
+        slackEnabled: base.slackEnabled,
+        quietHours: base.quietHours,
+        timezone: base.timezone,
+      },
+      "Restore the previous delivery policy with explicit approval and a fresh idempotency key.",
+      { requiresExplicitApproval: true },
+    ),
     message: "Delivery settings updated.",
   };
 }
@@ -1222,6 +1417,17 @@ async function updateDeliveryTargetFromAgent(
   const isPaused = readOptionalBoolean(input, "isPaused");
   if (typeof isPaused === "undefined") {
     throw new CustomerAgentActionError("missing_field", "isPaused is required.");
+  }
+
+  if (existing.isPaused === isPaused) {
+    return {
+      ok: true,
+      action: "delivery_target.update",
+      target: safeDeliveryTargetRecord(existing),
+      message: isPaused
+        ? "Delivery target was already paused. No change was made."
+        : "Delivery target was already active. No change was made.",
+    };
   }
 
   await upsertDeliveryTarget(env, {
@@ -1252,6 +1458,18 @@ async function updateDeliveryTargetFromAgent(
     ok: true,
     action: "delivery_target.update",
     target: safeDeliveryTargetRecord(updated ?? existing),
+    reversal: actionReversal(
+      "delivery_target.update",
+      {
+        targetId,
+        isPaused: existing.isPaused,
+        explicitApproval: true,
+      },
+      existing.isPaused
+        ? "Return this delivery target to paused with explicit approval and a fresh idempotency key."
+        : "Return this delivery target to active with explicit approval and a fresh idempotency key.",
+      { requiresExplicitApproval: true },
+    ),
     message: isPaused ? "Delivery target paused." : "Delivery target resumed.",
   };
 }
@@ -1436,11 +1654,14 @@ async function setWatchlistActiveFromAgent(
     }
   }
 
-  const changed = await setWatchlistActive(env, userId, watchlist.id, isActive);
-  if (!changed) {
-    throw new CustomerAgentActionError("watchlist_update_failed", "Could not update this watchlist.", {
-      status: 500,
-    });
+  const changedState = watchlist.isActive !== isActive;
+  if (changedState) {
+    const changed = await setWatchlistActive(env, userId, watchlist.id, isActive);
+    if (!changed) {
+      throw new CustomerAgentActionError("watchlist_update_failed", "Could not update this watchlist.", {
+        status: 500,
+      });
+    }
   }
 
   return {
@@ -1450,9 +1671,24 @@ async function setWatchlistActiveFromAgent(
       ...watchlist,
       isActive,
     },
-    message: isActive
-      ? "Watchlist resumed. It rejoins the next scheduled scan."
-      : "Watchlist paused. Scans and alerts stop, the history stays, and the plan slot is free.",
+    ...(changedState
+      ? {
+          reversal: actionReversal(
+            watchlist.isActive ? "watchlist.resume" : "watchlist.pause",
+            { watchlistId: watchlist.id },
+            watchlist.isActive
+              ? "Resume this watchlist to restore the active state it had before this action."
+              : "Pause this watchlist again to restore the inactive state it had before this action.",
+          ),
+        }
+      : {}),
+    message: changedState
+      ? isActive
+        ? "Watchlist resumed. It rejoins the next scheduled scan."
+        : "Watchlist paused. Scans and alerts stop, the history stays, and the plan slot is free."
+      : isActive
+        ? "Watchlist was already active. No change was made."
+        : "Watchlist was already paused. No change was made.",
   };
 }
 
@@ -1760,6 +1996,29 @@ function safeClientRoomRecord(room: ClientRoomRecord): ClientRoomRecord {
     })),
     notes: sanitizeClientRoomNotesForResponse(room.notes),
   };
+}
+
+function safeSupportCaseSummary(supportCase: SupportCaseRecord) {
+  return {
+    id: supportCase.id,
+    category: supportCase.category,
+    priority: supportCase.priority,
+    status: supportCase.status,
+    subject: supportCase.subject,
+    createdAt: supportCase.createdAt,
+    updatedAt: supportCase.updatedAt,
+  };
+}
+
+function readOptionalSupportCaseStatus(input: Record<string, unknown>): SupportCaseStatus | "all" | null {
+  const value = readString(input, "status");
+  if (!value) {
+    return null;
+  }
+  if (value === "open" || value === "closed" || value === "all") {
+    return value;
+  }
+  throw new CustomerAgentActionError("invalid_support_case_status", "status must be open, closed, or all.");
 }
 
 function safeDeliveryTargetRecord(target: DeliveryTargetRecord) {

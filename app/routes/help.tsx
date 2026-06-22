@@ -52,7 +52,8 @@ export default function HelpRoute() {
           Plans and extra evidence-check packs use Dodo Payments. Signed-in customers can open the
           billing portal from <Link to="/app/billing">Plan &amp; billing</Link> when their account has
           a linked Dodo customer id. Portal subscription updates still depend on the Dodo dashboard
-          setting described in the launch runbook.
+          setting being confirmed, so plan changes and cancellation stay backed by{" "}
+          <Link to="/app/support?category=billing">signed-in support cases</Link>.
         </p>
       </PublicDocBlock>
 
@@ -69,8 +70,9 @@ export default function HelpRoute() {
 
       <PublicDocBlock title="Contact support">
         <p>
-          Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> for account access, billing changes,
-          cancellation help, deletion requests, security reports, or migration support.
+          Signed-in customers can open <Link to="/app/support">support cases</Link> for account access,
+          billing changes, cancellation help, deletion requests, security reports, or migration
+          support. Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you cannot sign in.
         </p>
       </PublicDocBlock>
     </PublicDocShell>

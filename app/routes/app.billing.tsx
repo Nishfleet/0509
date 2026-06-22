@@ -66,8 +66,7 @@ export default function BillingRoute() {
           <p>
             You already have an active {planLabel} plan, so we stopped that checkout — finishing it
             would have started a second, overlapping subscription. To switch plans or change billing,
-            email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email} and we'll handle it
-            the same day.
+            <Link to="/app/support?category=billing"> open a billing support case</Link> from {data.email}.
           </p>
         </div>
       ) : null}
@@ -86,7 +85,9 @@ export default function BillingRoute() {
         <div className="f9-message is-error">
           <p>
             We couldn't open your billing portal just now. Email{" "}
-            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll handle the change directly.
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> or{" "}
+            <Link to="/app/support?category=billing">open a billing support case</Link> and we'll handle
+            the change directly.
           </p>
         </div>
       ) : null}
@@ -208,7 +209,8 @@ export default function BillingRoute() {
             <div className="f9-work-row">
               <strong>Manage subscription</strong>
               <span>
-                Update your card, download invoices, or cancel — self-serve, takes a minute.{" "}
+                Open Dodo's hosted portal for card and invoice tasks. Plan changes and cancellation
+                stay backed by support until the subscription-update setting is confirmed.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
                   <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
                     Open billing portal
@@ -221,17 +223,18 @@ export default function BillingRoute() {
             <strong>Change or cancel your plan</strong>
             <span>
               {isPaid && data.hasPortal
-                ? "Prefer a human? Email "
-                : "Email "}
-              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email}. Cancellation stops
-              future renewals — you keep access until the end of the period you've paid for.
+                ? "Prefer support? "
+                : ""}
+              <Link to="/app/support?category=billing">Open a billing support case</Link> from{" "}
+              {data.email}. Cancellation stops future renewals — you keep access until the end of the
+              period you've paid for.
             </span>
           </div>
           <div className="f9-work-row">
             <strong>Receipts and invoices</strong>
             <span>
-              Dodo Payments emails a receipt for every charge. Need a copy or a GST invoice? Email{" "}
-              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
+              Dodo Payments emails a receipt for every charge. Need a copy or a GST invoice?{" "}
+              <Link to="/app/support?category=billing">Open a billing support case</Link>.
             </span>
           </div>
           <div className="f9-work-row">
@@ -239,8 +242,8 @@ export default function BillingRoute() {
             <span>
               Five to Nine is a digital product delivered immediately, so purchases are final and we
               don't offer refunds (<Link to="/terms">terms</Link>). Something not working as
-              expected? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll sort it out —
-              we're committed to 100% customer satisfaction.
+              expected? <Link to="/app/support?category=billing">Open a billing support case</Link> and
+              we'll troubleshoot it with the account trail attached.
             </span>
           </div>
         </div>

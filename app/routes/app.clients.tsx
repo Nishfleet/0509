@@ -10,7 +10,7 @@ import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import type { AppEnv } from "~/lib/env.server";
 import { createReportId } from "~/lib/report";
-import type { ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
+import type { AgentMemoryRecord, ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 export const meta = () => [{ title: "Clients | Five to Nine" }];
 
@@ -19,6 +19,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     listAgentMemory,
+    listAgentMemoryForClientRooms,
     listClientRooms,
     listCollections,
     listWatchlists,
@@ -26,12 +27,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { safeAgentMemoryRecord, summarizeAgentMemoryValue } = await import("~/lib/agent-memory.server");
   const env = getEnv(context);
   const { workspaceUserId } = await requireWorkspaceSession(env, request);
-  const [rooms, watchlists, collections, memories] = await Promise.all([
+  const [rooms, watchlists, collections, recentMemories] = await Promise.all([
     listClientRooms(env, workspaceUserId, { status: "all", limit: 50 }),
     listWatchlists(env, workspaceUserId, { includeInactive: true }),
     listCollections(env, workspaceUserId),
     listAgentMemory(env, workspaceUserId, { limit: 20 }),
   ]);
+  let roomMemories: AgentMemoryRecord[] = [];
+  try {
+    roomMemories = await listAgentMemoryForClientRooms(
+      env,
+      workspaceUserId,
+      rooms.map((room) => room.id),
+      { limitPerRoom: 20 },
+    );
+  } catch (error) {
+    console.error("[clients] room memory lookup failed", error);
+  }
+  const memories = uniqueAgentMemories([...recentMemories, ...roomMemories]);
 
   return {
     rooms: rooms.map(safeClientRoomForUi),
@@ -171,6 +184,16 @@ export default function ClientsRoute() {
   const actionData = useActionData<typeof action>();
   const activeRooms = data.rooms.filter((room) => room.status === "active");
   const archivedRooms = data.rooms.filter((room) => room.status === "archived");
+  const memoriesByClientRoomId = new Map<string, Array<(typeof data.memories)[number]>>();
+  for (const memory of data.memories) {
+    if (!memory.clientRoomId) {
+      continue;
+    }
+    memoriesByClientRoomId.set(memory.clientRoomId, [
+      ...(memoriesByClientRoomId.get(memory.clientRoomId) ?? []),
+      memory,
+    ]);
+  }
 
   return (
     <section className="f9-app-stack">
@@ -270,38 +293,11 @@ export default function ClientsRoute() {
 
           <div className="f9-work-list">
             {activeRooms.map((room) => (
-              <article className="f9-work-row" key={room.id}>
-                <div className="f9-panel-toolbar">
-                  <div>
-                    <h3>{room.name}</h3>
-                    <p className="f9-muted-copy">{room.clientLabel ?? "No client label yet."}</p>
-                  </div>
-                  <Form method="post">
-                    <input name="intent" type="hidden" value="set-client-room-status" />
-                    <input name="roomId" type="hidden" value={room.id} />
-                    <input name="status" type="hidden" value="archived" />
-                    <SubmitButton
-                      className="f9-secondary-button"
-                      intent="set-client-room-status"
-                      match={{ roomId: room.id }}
-                      pendingLabel="Archiving..."
-                    >
-                      Archive
-                    </SubmitButton>
-                  </Form>
-                </div>
-                <p>{formatRoomNotes(room.notes)}</p>
-                <div className="f9-action-row">
-                  {room.resourceRefs.map((ref) => (
-                    <Link className="f9-secondary-button" key={`${ref.resourceType}:${ref.resourceId}`} to={resourceHref(ref)}>
-                      {ref.label ?? resourceLabel(ref)}
-                    </Link>
-                  ))}
-                  {room.resourceRefs.length === 0 ? (
-                    <span className="f9-status-pill">No linked resources</span>
-                  ) : null}
-                </div>
-              </article>
+              <ClientRoomCard
+                key={room.id}
+                memories={memoriesByClientRoomId.get(room.id) ?? []}
+                room={room}
+              />
             ))}
             {activeRooms.length === 0 ? (
               <div className="f9-empty-panel">
@@ -409,6 +405,128 @@ export default function ClientsRoute() {
       </div>
     </section>
   );
+}
+
+function uniqueAgentMemories<T extends { id: string }>(memories: T[]) {
+  const seen = new Set<string>();
+  return memories.filter((memory) => {
+    if (seen.has(memory.id)) {
+      return false;
+    }
+    seen.add(memory.id);
+    return true;
+  });
+}
+
+function ClientRoomCard({
+  memories,
+  room,
+}: {
+  memories: Array<{ key: string }>;
+  room: ClientRoomRecord;
+}) {
+  const handoff = summarizeClientRoomHandoff(room, memories);
+
+  return (
+    <article className="f9-work-row">
+      <div className="f9-panel-toolbar">
+        <div>
+          <h3>{room.name}</h3>
+          <p className="f9-muted-copy">{room.clientLabel ?? "No client label yet."}</p>
+        </div>
+        <Form method="post">
+          <input name="intent" type="hidden" value="set-client-room-status" />
+          <input name="roomId" type="hidden" value={room.id} />
+          <input name="status" type="hidden" value="archived" />
+          <SubmitButton
+            className="f9-secondary-button"
+            intent="set-client-room-status"
+            match={{ roomId: room.id }}
+            pendingLabel="Archiving..."
+          >
+            Archive
+          </SubmitButton>
+        </Form>
+      </div>
+      <p>{formatRoomNotes(room.notes)}</p>
+
+      <dl className="proof-trail-list" aria-label={`${room.name} handoff status`}>
+        <div>
+          <dt>Handoff</dt>
+          <dd>{handoff.status}</dd>
+        </div>
+        <div>
+          <dt>Proof</dt>
+          <dd>{handoff.proof}</dd>
+        </div>
+        <div>
+          <dt>Context</dt>
+          <dd>{handoff.context}</dd>
+        </div>
+        <div>
+          <dt>Next</dt>
+          <dd>{handoff.next}</dd>
+        </div>
+      </dl>
+
+      <div className="f9-action-row">
+        {room.resourceRefs.map((ref) => (
+          <Link className="f9-secondary-button" key={`${ref.resourceType}:${ref.resourceId}`} to={resourceHref(ref)}>
+            {ref.label ?? resourceLabel(ref)}
+          </Link>
+        ))}
+        {room.resourceRefs.length === 0 ? (
+          <span className="f9-status-pill">No linked resources</span>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function summarizeClientRoomHandoff(
+  room: ClientRoomRecord,
+  memories: Array<{ key: string }>,
+) {
+  const watchlistCount = countRoomRefs(room.resourceRefs, "watchlist");
+  const collectionCount = countRoomRefs(room.resourceRefs, "collection");
+  const reportCount = countRoomRefs(room.resourceRefs, "report");
+  const digestCount = countRoomRefs(room.resourceRefs, "digest");
+  const linkedProofCount = watchlistCount + collectionCount;
+  const hasRoomNotes = formatRoomNotes(room.notes) !== "No room notes yet.";
+  const hasContext = hasRoomNotes || memories.length > 0;
+  const proof = linkedProofCount > 0
+    ? `${linkedProofCount} proof source${linkedProofCount === 1 ? "" : "s"} · ${reportCount} report${reportCount === 1 ? "" : "s"}`
+    : "No linked proof yet";
+  const memorySummary = `${memories.length} saved memor${memories.length === 1 ? "y" : "ies"}`;
+  const context = memories.length > 0 && hasRoomNotes
+    ? `${memorySummary} · room notes saved`
+    : memories.length > 0
+      ? memorySummary
+      : hasRoomNotes
+        ? "Room notes saved"
+        : "No client context saved";
+  const status =
+    linkedProofCount > 0 && reportCount > 0 && hasContext
+      ? "Ready for client review"
+      : "Needs setup before client review";
+  const next = linkedProofCount === 0
+    ? "Link a watchlist or board to this room."
+    : reportCount === 0
+      ? "Add a report link for the client packet."
+      : !hasContext
+        ? "Save room notes or client-scoped memory."
+        : digestCount > 0
+          ? "Review the linked digest before sending."
+          : "Open the report and share the snapshot when ready.";
+
+  return { status, proof, context, next };
+}
+
+function countRoomRefs(
+  resourceRefs: ClientRoomResourceRef[],
+  resourceType: ClientRoomResourceRef["resourceType"],
+) {
+  return resourceRefs.filter((ref) => ref.resourceType === resourceType).length;
 }
 
 async function readOwnedResourceRefs(
