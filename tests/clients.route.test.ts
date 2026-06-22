@@ -264,6 +264,7 @@ describe("clients route agent memory", () => {
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
+      listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
       listClientRooms: vi.fn().mockResolvedValue([]),
       listCollections: vi.fn().mockResolvedValue([]),
       listWatchlists: vi.fn().mockResolvedValue([]),
@@ -284,27 +285,24 @@ describe("clients route agent memory", () => {
 
   it("loads room-scoped memory for displayed client rooms beyond the recent workspace list", async () => {
     mockAuth();
-    const listAgentMemory = vi.fn(async (_env, _userId, options: { clientRoomId?: string } = {}) => {
-      if (options.clientRoomId === "room-1") {
-        return [
-          {
-            id: "memory-room-1",
-            userId: "user-1",
-            scope: "customer",
-            key: "client_review_tone",
-            watchlistId: null,
-            clientRoomId: "room-1",
-            value: { value: "Direct weekly review with proof links." },
-            source: "owner_ui",
-            createdAt: "2026-06-20T00:00:00.000Z",
-            updatedAt: "2026-06-20T00:00:00.000Z",
-          },
-        ];
-      }
-      return [];
-    });
+    const listAgentMemory = vi.fn().mockResolvedValue([]);
+    const listAgentMemoryForClientRooms = vi.fn().mockResolvedValue([
+      {
+        id: "memory-room-1",
+        userId: "user-1",
+        scope: "customer",
+        key: "client_review_tone",
+        watchlistId: null,
+        clientRoomId: "room-1",
+        value: { value: "Direct weekly review with proof links." },
+        source: "owner_ui",
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+      },
+    ]);
     vi.doMock("~/lib/data.server", () => ({
       listAgentMemory,
+      listAgentMemoryForClientRooms,
       listClientRooms: vi.fn().mockResolvedValue([
         {
           id: "room-1",
@@ -329,7 +327,7 @@ describe("clients route agent memory", () => {
     } as never);
 
     expect(listAgentMemory).toHaveBeenCalledWith({}, "user-1", { limit: 20 });
-    expect(listAgentMemory).toHaveBeenCalledWith({}, "user-1", { clientRoomId: "room-1", limit: 20 });
+    expect(listAgentMemoryForClientRooms).toHaveBeenCalledWith({}, "user-1", ["room-1"], { limitPerRoom: 20 });
     expect(result.memories).toHaveLength(1);
     expect(result.memories[0]).toMatchObject({
       id: "memory-room-1",
@@ -339,10 +337,63 @@ describe("clients route agent memory", () => {
     });
   });
 
+  it("keeps client rooms available when optional room memory lookup fails", async () => {
+    mockAuth();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.doMock("~/lib/data.server", () => ({
+      listAgentMemory: vi.fn().mockResolvedValue([
+        {
+          id: "memory-recent-1",
+          userId: "user-1",
+          scope: "workspace",
+          key: "review_cadence",
+          watchlistId: null,
+          clientRoomId: null,
+          value: { value: "Weekly review." },
+          source: "owner_ui",
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ]),
+      listAgentMemoryForClientRooms: vi.fn().mockRejectedValue(new Error("D1 unavailable")),
+      listClientRooms: vi.fn().mockResolvedValue([
+        {
+          id: "room-1",
+          userId: "user-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {},
+          resourceRefs: [],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([]),
+    }));
+
+    const { loader } = await import("~/routes/app.clients");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients"),
+    } as never);
+
+    expect(result.rooms).toHaveLength(1);
+    expect(result.memories).toHaveLength(1);
+    expect(result.memories[0]).toMatchObject({
+      id: "memory-recent-1",
+      key: "review_cadence",
+      preview: "Weekly review.",
+    });
+    expect(consoleError).toHaveBeenCalledWith("[clients] room memory lookup failed", expect.any(Error));
+  });
+
   it("redacts legacy secret-like client-room fields from loader data", async () => {
     mockAuth();
     vi.doMock("~/lib/data.server", () => ({
       listAgentMemory: vi.fn().mockResolvedValue([]),
+      listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
       listClientRooms: vi.fn().mockResolvedValue([
         {
           id: "room-1",

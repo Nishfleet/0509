@@ -10,7 +10,7 @@ import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import type { AppEnv } from "~/lib/env.server";
 import { createReportId } from "~/lib/report";
-import type { ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
+import type { AgentMemoryRecord, ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 export const meta = () => [{ title: "Clients | Five to Nine" }];
 
@@ -19,6 +19,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     listAgentMemory,
+    listAgentMemoryForClientRooms,
     listClientRooms,
     listCollections,
     listWatchlists,
@@ -32,9 +33,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listCollections(env, workspaceUserId),
     listAgentMemory(env, workspaceUserId, { limit: 20 }),
   ]);
-  const roomMemories = (await Promise.all(
-    rooms.map((room) => listAgentMemory(env, workspaceUserId, { clientRoomId: room.id, limit: 20 })),
-  )).flat();
+  let roomMemories: AgentMemoryRecord[] = [];
+  try {
+    roomMemories = await listAgentMemoryForClientRooms(
+      env,
+      workspaceUserId,
+      rooms.map((room) => room.id),
+      { limitPerRoom: 20 },
+    );
+  } catch (error) {
+    console.error("[clients] room memory lookup failed", error);
+  }
   const memories = uniqueAgentMemories([...recentMemories, ...roomMemories]);
 
   return {

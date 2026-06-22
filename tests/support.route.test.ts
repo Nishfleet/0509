@@ -47,6 +47,18 @@ function mockAuth(options: { workspaceUserId?: string; operatorNotified?: boolea
   return { sendOperatorAlertEmail };
 }
 
+function mockDataServer(overrides: Record<string, unknown>) {
+  const getDeliveryAttemptByIdempotencyKey =
+    overrides.getDeliveryAttemptByIdempotencyKey ?? vi.fn().mockResolvedValue(null);
+
+  vi.doMock("~/lib/data.server", () => ({
+    getDeliveryAttemptByIdempotencyKey,
+    ...overrides,
+  }));
+
+  return { getDeliveryAttemptByIdempotencyKey };
+}
+
 async function mockRouter(loaderData: unknown, actionData?: unknown) {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
@@ -91,9 +103,7 @@ describe("support route", () => {
         updatedAt: "2026-06-20T10:00:00.000Z",
       },
     ]);
-    vi.doMock("~/lib/data.server", () => ({
-      listSupportCases,
-    }));
+    mockDataServer({ listSupportCases });
 
     const { loader } = await import("~/routes/app.support");
     const result = await loader({
@@ -126,15 +136,14 @@ describe("support route", () => {
   it("creates a support case for the workspace owner", async () => {
     const { sendOperatorAlertEmail } = mockAuth({ operatorNotified: true });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1" });
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
     formData.set("priority", "urgent");
+    formData.set("requestKey", "support-request-1");
     formData.set("subject", "Cancel Starter at period end");
     formData.set("detail", "Please cancel renewal but keep access through the paid period.");
 
@@ -157,6 +166,7 @@ describe("support route", () => {
       priority: "urgent",
       subject: "Cancel Starter at period end",
       detail: "Please cancel renewal but keep access through the paid period.",
+      requestKey: "support-request-1",
       context: {
         accountEmail: "owner@example.com",
         createdFrom: "signed_in_support",
@@ -175,12 +185,72 @@ describe("support route", () => {
     }));
   });
 
+  it("does not resend operator alerts for duplicate support submissions after a sent attempt", async () => {
+    const { sendOperatorAlertEmail } = mockAuth();
+    const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1", alreadyExists: true });
+    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue({ status: "sent" });
+    mockDataServer({ createSupportCase, getDeliveryAttemptByIdempotencyKey });
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "delivery");
+    formData.set("requestKey", "support-request-1");
+    formData.set("subject", "Digest did not arrive");
+    formData.set("detail", "Please check the digest delivery trail.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      caseId: "case-1",
+      message: "Support case opened. We'll reply by email.",
+    });
+    expect(createSupportCase).toHaveBeenCalledWith({}, expect.objectContaining({
+      requestKey: "support-request-1",
+    }));
+    expect(getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith({}, "support-case:case-1");
+    expect(sendOperatorAlertEmail).not.toHaveBeenCalled();
+  });
+
+  it("retries operator alerts for duplicate support submissions after a failed attempt", async () => {
+    const { sendOperatorAlertEmail } = mockAuth();
+    const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1", alreadyExists: true });
+    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue({ status: "failed" });
+    mockDataServer({ createSupportCase, getDeliveryAttemptByIdempotencyKey });
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "delivery");
+    formData.set("requestKey", "support-request-1");
+    formData.set("subject", "Digest did not arrive");
+    formData.set("detail", "Please check the digest delivery trail.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: true, caseId: "case-1" });
+    expect(sendOperatorAlertEmail).toHaveBeenCalledWith({}, expect.objectContaining({
+      idempotencyKey: "support-case:case-1",
+    }));
+  });
+
   it("does not claim a support case is opened when operator notification fails", async () => {
     mockAuth({ operatorNotified: false });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1" });
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -204,12 +274,64 @@ describe("support route", () => {
     });
   });
 
+  it("does not claim a support case is opened when operator notification rejects", async () => {
+    const { sendOperatorAlertEmail } = mockAuth();
+    sendOperatorAlertEmail.mockRejectedValue(new Error("email unavailable"));
+    const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1" });
+    mockDataServer({ createSupportCase });
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "delivery");
+    formData.set("subject", "Digest did not arrive");
+    formData.set("detail", "Please check the digest delivery trail.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Support case saved, but we could not notify support. Email support@0509.io now so we can reply.",
+      caseId: "case-1",
+    });
+  });
+
+  it("returns an email fallback when support case persistence fails", async () => {
+    mockAuth();
+    const createSupportCase = vi.fn().mockRejectedValue(new Error("D1 unavailable"));
+    mockDataServer({ createSupportCase });
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "delivery");
+    formData.set("subject", "Digest did not arrive");
+    formData.set("detail", "Please check the digest delivery trail.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Support case could not be saved. Email support@0509.io now so we can reply.",
+    });
+  });
+
   it("blocks workspace members from opening owner-authority billing cases", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -236,9 +358,7 @@ describe("support route", () => {
   it("blocks workspace members from opening owner-authority team cases", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -265,9 +385,7 @@ describe("support route", () => {
   it("blocks workspace members from hiding owner-authority requests under another category", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -294,9 +412,7 @@ describe("support route", () => {
   it("allows workspace members to open personal billing and invoice cases", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-invoice" });
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -327,9 +443,7 @@ describe("support route", () => {
   it("allows workspace members to open personal billing cancellation cases", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-cancel" });
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -360,9 +474,7 @@ describe("support route", () => {
   it("allows workspace members to open non-owner-authority support cases", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-2" });
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -392,9 +504,7 @@ describe("support route", () => {
   it("allows workspace members to open personal security and deletion cases", async () => {
     mockAuth({ workspaceUserId: "owner-1" });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-3" });
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -424,9 +534,7 @@ describe("support route", () => {
   it("rejects invalid submitted categories instead of silently rerouting", async () => {
     mockAuth();
     const createSupportCase = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -450,9 +558,7 @@ describe("support route", () => {
   it("rejects secret-like details before persistence", async () => {
     mockAuth();
     const createSupportCase = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -479,9 +585,7 @@ describe("support route", () => {
   it("rejects card-like details before persistence", async () => {
     mockAuth();
     const createSupportCase = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -508,9 +612,7 @@ describe("support route", () => {
   it("rejects card-like details with common separators before persistence", async () => {
     mockAuth();
     const createSupportCase = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -534,12 +636,37 @@ describe("support route", () => {
     expect(createSupportCase).not.toHaveBeenCalled();
   });
 
+  it("rejects comma-separated card-like details before persistence", async () => {
+    mockAuth();
+    const createSupportCase = vi.fn();
+    mockDataServer({ createSupportCase });
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "billing");
+    formData.set("subject", "Billing card issue");
+    formData.set("detail", "The card was 4242, 4242, 4242, 4242.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Support cases cannot contain secrets, tokens, webhook URLs, card numbers, or private credentials.",
+    });
+    expect(createSupportCase).not.toHaveBeenCalled();
+  });
+
   it("rejects non-text support form values before persistence", async () => {
     mockAuth();
     const createSupportCase = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createSupportCase,
-    }));
+    mockDataServer({ createSupportCase });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -564,6 +691,7 @@ describe("support route", () => {
     await mockRouter({
       email: "owner@example.com",
       supportEmail: "support@0509.io",
+      supportRequestKey: "support-request-render-1",
       selectedCategory: "billing",
       isWorkspaceMember: false,
       cases: [
@@ -589,6 +717,8 @@ describe("support route", () => {
     expect(markup).toContain("Cancel Starter at period end");
     expect(markup).toContain("Billing, cancellation, or invoice");
     expect(markup).toContain("Open support case");
+    expect(markup).toContain("name=\"requestKey\"");
+    expect(markup).toContain("value=\"support-request-render-1\"");
     expect(markup).toContain("hosted portal setting is confirmed");
     expect(markup).toContain("support@0509.io");
   });

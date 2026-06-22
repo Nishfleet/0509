@@ -131,7 +131,7 @@ function normalizeSupportCaseText(value: unknown, fieldName: "subject" | "detail
 }
 
 function containsPaymentCardNumber(value: string) {
-  const separators = new Set([" ", "-", ".", "/", "\t", "\n", "\r", "\u00a0"]);
+  const separators = new Set([" ", "-", ".", ",", "/", "_", "\t", "\n", "\r", "\u00a0", "\u2007", "\u2009", "\u202f"]);
   const candidates: string[] = [];
 
   for (let index = 0; index < value.length; index += 1) {

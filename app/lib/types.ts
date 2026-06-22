@@ -584,6 +584,7 @@ export interface ClientRoomRecord {
 export interface SupportCaseRecord {
   id: string;
   userId: string;
+  requestKey: string | null;
   category: SupportCaseCategory;
   priority: SupportCasePriority;
   status: SupportCaseStatus;

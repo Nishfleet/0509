@@ -208,6 +208,12 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       updatedAt: "2026-06-19T00:00:00.000Z",
     }),
     getDeliveryTargetById: vi.fn().mockResolvedValue(deliveryTarget),
+    getUserDeliveryProfile: vi.fn().mockResolvedValue({
+      id: "user-1",
+      email: "owner@example.com",
+      name: "Owner",
+    }),
+    getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
     upsertDeliveryTarget: vi.fn().mockResolvedValue({
       ...deliveryTarget,
       isPaused: true,
@@ -340,6 +346,40 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
         updatedAt: "2026-06-19T00:00:00.000Z",
       },
     ]),
+    createSupportCase: vi.fn().mockResolvedValue({
+      id: "case-1",
+      userId: "user-1",
+      requestKey: "support-1",
+      category: "delivery",
+      priority: "normal",
+      status: "open",
+      subject: "Digest did not arrive",
+      detail: "Private support detail should not return to the agent.",
+      context: {
+        apiKeyId: "api-key-1",
+        createdFrom: "agent_action",
+      },
+      createdAt: "2026-06-20T00:00:00.000Z",
+      updatedAt: "2026-06-20T00:00:00.000Z",
+    }),
+    listSupportCases: vi.fn().mockResolvedValue([
+      {
+        id: "case-1",
+        userId: "user-1",
+        requestKey: "support-1",
+        category: "delivery",
+        priority: "normal",
+        status: "open",
+        subject: "Digest did not arrive",
+        detail: "Private support detail should not return to the agent.",
+        context: {
+          apiKeyId: "api-key-1",
+          createdFrom: "agent_action",
+        },
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+      },
+    ]),
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
     claimAgentActionAudit: vi.fn().mockResolvedValue({
       audit: auditRecord(),
@@ -355,6 +395,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
         metadata: input.metadata as Record<string, unknown>,
       })),
     ),
+    sendOperatorAlertEmail: vi.fn().mockResolvedValue(true),
   };
 
   vi.doMock("~/lib/plan.server", () => ({
@@ -365,6 +406,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     addExternalProofToCollection: mocks.addExternalProofToCollection,
     createCollection: mocks.createCollection,
     createShareLink: mocks.createShareLink,
+    createSupportCase: mocks.createSupportCase,
     createWatchlist: mocks.createWatchlist,
     getDeliveryTargetById: mocks.getDeliveryTargetById,
     getClientRoom: mocks.getClientRoom,
@@ -373,12 +415,15 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     getShareLinkById: mocks.getShareLinkById,
     getWatchlist: mocks.getWatchlist,
     getWatchlistDeliveryConfig: mocks.getWatchlistDeliveryConfig,
+    getUserDeliveryProfile: mocks.getUserDeliveryProfile,
+    getDeliveryAttemptByIdempotencyKey: mocks.getDeliveryAttemptByIdempotencyKey,
     getWorkspaceDeliveryConfig: mocks.getWorkspaceDeliveryConfig,
     listAdsByIds: mocks.listAdsByIds,
     listAgentMemory: mocks.listAgentMemory,
     listClientRooms: mocks.listClientRooms,
     listCollectionItems: mocks.listCollectionItems,
     listDeliveryTargets: mocks.listDeliveryTargets,
+    listSupportCases: mocks.listSupportCases,
     listWatchEvents: mocks.listWatchEvents,
     listWebMentionObservations: mocks.listWebMentionObservations,
     listWebMentionTargets: mocks.listWebMentionTargets,
@@ -391,6 +436,9 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     findAgentActionAuditByIdempotencyKey: mocks.findAgentActionAuditByIdempotencyKey,
     claimAgentActionAudit: mocks.claimAgentActionAudit,
     finishAgentActionAudit: mocks.finishAgentActionAudit,
+  }));
+  vi.doMock("~/lib/delivery.server", () => ({
+    sendOperatorAlertEmail: mocks.sendOperatorAlertEmail,
   }));
   vi.doMock("~/lib/monitoring.server", () => ({
     queueFirstWatchlistScan: mocks.queueFirstWatchlistScan,
@@ -1455,6 +1503,41 @@ describe("runCustomerAgentAction", () => {
     );
   });
 
+  it("does not return reversal hints for no-op delivery target updates", async () => {
+    const mocks = setupMocks();
+    mocks.getDeliveryTargetById.mockResolvedValue(deliveryTarget);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "resume-target-no-op-1",
+        source: "api_v1",
+      },
+      "delivery_target.update",
+      {
+        targetId: "target-1",
+        isPaused: false,
+        explicitApproval: true,
+      },
+    );
+
+    expect(outcome.result).toMatchObject({
+      ok: true,
+      action: "delivery_target.update",
+      message: "Delivery target was already active. No change was made.",
+      target: {
+        id: "target-1",
+        targetValue: "slack:[redacted]",
+        isPaused: false,
+      },
+    });
+    expect(outcome.result).not.toHaveProperty("reversal");
+    expect(mocks.upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
   it("lists only narrow proof-backed web mention beta sources", async () => {
     const mocks = setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
@@ -1686,6 +1769,327 @@ describe("runCustomerAgentAction", () => {
     ).rejects.toBeInstanceOf(CustomerAgentActionError);
 
     expect(mocks.upsertAgentMemory).not.toHaveBeenCalled();
+  });
+
+  it("creates and lists support cases as agent-accessible summaries", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const createOutcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "support-1",
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail: "Private support detail should not return to the agent.",
+      },
+    );
+    const createResult = createOutcome.result as {
+      supportCase: { id: string; subject: string; detail?: string; context?: unknown };
+    };
+
+    expect(createResult.supportCase).toMatchObject({
+      id: "case-1",
+      subject: "Digest did not arrive",
+    });
+    expect(createResult.supportCase).not.toHaveProperty("detail");
+    expect(createResult.supportCase).not.toHaveProperty("context");
+    expect(mocks.createSupportCase).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      category: "delivery",
+      priority: "normal",
+      subject: "Digest did not arrive",
+      detail: "Private support detail should not return to the agent.",
+      requestKey: "support-1",
+      context: {
+        createdFrom: "agent_action",
+        source: "api_v1",
+        apiKeyId: "api-key-1",
+      },
+    });
+    expect(mocks.sendOperatorAlertEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      subject: "0509 support case: Digest did not arrive",
+      idempotencyKey: "support-case:case-1",
+      lines: expect.arrayContaining([
+        "Case: case-1",
+        "Requester: owner@example.com",
+        "Source: api_v1",
+        "Category: Digest, Slack, or email delivery",
+        "Details: Private support detail should not return to the agent.",
+      ]),
+    }));
+
+    const listOutcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "support-list-1",
+        source: "api_v1",
+      },
+      "support_case.list",
+      {
+        status: "all",
+        limit: 5,
+      },
+    );
+    const listResult = listOutcome.result as { cases: Array<{ id: string; detail?: string; context?: unknown }> };
+
+    expect(listResult.cases[0]).toMatchObject({
+      id: "case-1",
+      subject: "Digest did not arrive",
+      status: "open",
+    });
+    expect(listResult.cases[0]).not.toHaveProperty("detail");
+    expect(listResult.cases[0]).not.toHaveProperty("context");
+    expect(mocks.listSupportCases).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      status: "all",
+      limit: 5,
+    });
+    expect(mocks.claimAgentActionAudit).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionName: "support_case.list",
+        idempotencyKey: null,
+      }),
+    );
+  });
+
+  it("requires idempotency for agent-created support cases", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail: "Please check the digest delivery trail.",
+      },
+    )).rejects.toMatchObject({
+      code: "missing_idempotency_key",
+      status: 400,
+    });
+    expect(mocks.createSupportCase).not.toHaveBeenCalled();
+    expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
+  });
+
+  it("returns a support fallback when agent operator notification resolves false", async () => {
+    const mocks = setupMocks();
+    mocks.sendOperatorAlertEmail.mockResolvedValueOnce(false);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "support-operator-false",
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail: "Please check the digest delivery trail.",
+      },
+    );
+    const result = outcome.result as {
+      ok: boolean;
+      message: string;
+      supportCase: { id: string; detail?: string; context?: unknown };
+    };
+
+    expect(result).toMatchObject({
+      ok: false,
+      message: "Support case saved, but support could not be notified. Email support@0509.io now so we can reply.",
+      supportCase: { id: "case-1" },
+    });
+    expect(result.supportCase).not.toHaveProperty("detail");
+    expect(result.supportCase).not.toHaveProperty("context");
+    expect(mocks.createSupportCase).toHaveBeenCalled();
+  });
+
+  it("returns a support fallback when agent operator notification rejects", async () => {
+    const mocks = setupMocks();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.sendOperatorAlertEmail.mockRejectedValueOnce(new Error("operator email down"));
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "support-operator-reject",
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail: "Please check the digest delivery trail.",
+      },
+    );
+    const result = outcome.result as { ok: boolean; message: string; supportCase: { id: string } };
+
+    expect(result).toMatchObject({
+      ok: false,
+      message: "Support case saved, but support could not be notified. Email support@0509.io now so we can reply.",
+      supportCase: { id: "case-1" },
+    });
+    consoleError.mockRestore();
+  });
+
+  it("opens an agent support case when requester profile lookup fails", async () => {
+    const mocks = setupMocks();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.getUserDeliveryProfile.mockRejectedValueOnce(new Error("profile lookup down"));
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "support-profile-fallback",
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail: "Please check the digest delivery trail.",
+      },
+    );
+    const result = outcome.result as { ok: boolean; supportCase: { id: string } };
+
+    expect(result).toMatchObject({
+      ok: true,
+      supportCase: { id: "case-1" },
+    });
+    expect(mocks.sendOperatorAlertEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      lines: expect.arrayContaining(["Requester: unknown"]),
+    }));
+    consoleError.mockRestore();
+  });
+
+  it("does not resend agent support alerts after a sent delivery attempt", async () => {
+    const mocks = setupMocks();
+    mocks.createSupportCase.mockResolvedValueOnce({
+      id: "case-1",
+      userId: "user-1",
+      requestKey: "support-1",
+      category: "delivery",
+      priority: "normal",
+      status: "open",
+      subject: "Digest did not arrive",
+      detail: "Private support detail should not return to the agent.",
+      context: {},
+      alreadyExists: true,
+      createdAt: "2026-06-20T00:00:00.000Z",
+      updatedAt: "2026-06-20T00:00:00.000Z",
+    });
+    mocks.getDeliveryAttemptByIdempotencyKey.mockResolvedValueOnce({ status: "sent" });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "support-1",
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail: "Private support detail should not return to the agent.",
+      },
+    );
+    const result = outcome.result as { ok: boolean; supportCase: { id: string } };
+
+    expect(result).toMatchObject({
+      ok: true,
+      supportCase: { id: "case-1" },
+    });
+    expect(mocks.getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith(expect.anything(), "support-case:case-1");
+    expect(mocks.sendOperatorAlertEmail).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["secret-like", "https://hooks.slack.com/services/T/B/C"],
+    ["card-like", "The card was 4242 4242 4242 4242."],
+    ["comma-separated card-like", "The card was 4242, 4242, 4242, 4242."],
+  ])("rejects %s agent support details before operator notification", async (_label, detail) => {
+    const mocks = setupMocks();
+    mocks.createSupportCase.mockImplementation(async (_env, input) => {
+      const { normalizeSupportCaseInput } = await import("~/lib/support");
+      normalizeSupportCaseInput({
+        category: input.category,
+        priority: input.priority,
+        subject: input.subject,
+        detail: input.detail,
+      });
+      throw new Error("unexpected support persistence");
+    });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: `support-reject-${String(_label)}`,
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail,
+      },
+    )).rejects.toMatchObject({
+      code: "secret_support_case_rejected",
+      status: 400,
+    });
+    expect(mocks.sendOperatorAlertEmail).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid agent support list status", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "support-list-invalid",
+        source: "api_v1",
+      },
+      "support_case.list",
+      {
+        status: "pending",
+      },
+    )).rejects.toMatchObject({
+      code: "invalid_support_case_status",
+      status: 400,
+    });
+    expect(mocks.listSupportCases).not.toHaveBeenCalled();
   });
 
   it("saves and lists client rooms with owned resource refs", async () => {

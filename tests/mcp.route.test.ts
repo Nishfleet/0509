@@ -343,6 +343,8 @@ describe("MCP route", () => {
       "list_memory",
       "upsert_client_room",
       "list_client_rooms",
+      "create_support_case",
+      "list_support_cases",
       "list_web_mentions",
     ]);
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
@@ -378,6 +380,10 @@ describe("MCP route", () => {
     });
     expect(listMemorySchema?.properties).not.toHaveProperty("idempotencyKey");
     expect(body.result.tools.find((tool) => tool.name === "list_client_rooms")?.inputSchema.properties).not.toHaveProperty("idempotencyKey");
+    expect(body.result.tools.find((tool) => tool.name === "create_support_case")?.inputSchema).toMatchObject({
+      required: ["category", "subject", "detail", "idempotencyKey"],
+    });
+    expect(body.result.tools.find((tool) => tool.name === "list_support_cases")?.inputSchema.properties).not.toHaveProperty("idempotencyKey");
   });
 
   it("hides write tools for read-only API keys", async () => {
@@ -803,6 +809,22 @@ describe("MCP route", () => {
       {
         toolName: "list_client_rooms",
         actionName: "client_room.list",
+        args: { status: "all" },
+      },
+      {
+        toolName: "create_support_case",
+        actionName: "support_case.create",
+        args: {
+          category: "delivery",
+          subject: "Digest missing",
+          detail: "Weekly digest did not arrive.",
+          idempotencyKey: "support-1",
+        },
+        idempotencyKey: "support-1",
+      },
+      {
+        toolName: "list_support_cases",
+        actionName: "support_case.list",
         args: { status: "all" },
       },
       {

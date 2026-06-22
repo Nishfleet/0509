@@ -14,6 +14,7 @@ import {
   createAgentActionAudit,
   createLandingPageSnapshot,
   createProofCapture,
+  createSupportCase,
   createWatchEvent,
   DODO_PLAN_CHECKOUT_LOCK_MINUTES,
   grantDodoPlanAccess,
@@ -32,6 +33,8 @@ import {
   listRecentAgentActionAudits,
   listClientRooms,
   listAgentMemory,
+  listAgentMemoryForClientRooms,
+  listSupportCases,
   listActiveWatchlists,
   listCollectionItems,
   listDigests,
@@ -528,16 +531,229 @@ describe("agent memory persistence", () => {
         watchlistId: "watchlist-1",
         limit: 10,
       });
+      const clientRoomMemories = await listAgentMemoryForClientRooms(
+        { DB: sqlite.db } as never,
+        "user-1",
+        ["room-1"],
+        { limitPerRoom: 2 },
+      );
 
       expect(global).toMatchObject({ watchlistId: null, clientRoomId: null });
       expect(watchlistScoped).toMatchObject({ watchlistId: "watchlist-1", clientRoomId: null });
       expect(clientScoped).toMatchObject({ watchlistId: null, clientRoomId: "room-1" });
       expect(memories).toHaveLength(3);
+      expect(clientRoomMemories).toHaveLength(1);
+      expect(clientRoomMemories[0]).toMatchObject({
+        clientRoomId: "room-1",
+        value: { tone: "client" },
+      });
       expect(watchlistMemories).toHaveLength(1);
       expect(watchlistMemories[0]).toMatchObject({
         watchlistId: "watchlist-1",
         value: { tone: "watchlist updated" },
         source: "mcp",
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("lists client-room memory across multiple rooms with a per-room limit", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);
+        CREATE TABLE watchlist (id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL);
+      `);
+      applyMigration(sqlite.sqlite, "migrations/0036_agent_memory.sql");
+      applyMigration(sqlite.sqlite, "migrations/0037_client_rooms.sql");
+      applyMigration(sqlite.sqlite, "migrations/0040_agent_memory_client_room_index.sql");
+      sqlite.sqlite.exec(`
+        INSERT INTO user (id) VALUES ('user-1'), ('user-2');
+        INSERT INTO watchlist (id, user_id) VALUES ('watchlist-1', 'user-1');
+        INSERT INTO client_room (
+          id,
+          user_id,
+          name,
+          status,
+          notes_json,
+          created_at,
+          updated_at
+        )
+        VALUES
+          ('room-1', 'user-1', 'Beauty client', 'active', '{}', '2026-06-19T00:00:00.000Z', '2026-06-19T00:00:00.000Z'),
+          ('room-2', 'user-1', 'Retail client', 'active', '{}', '2026-06-19T00:00:00.000Z', '2026-06-19T00:00:00.000Z'),
+          ('room-other', 'user-2', 'Other client', 'active', '{}', '2026-06-19T00:00:00.000Z', '2026-06-19T00:00:00.000Z');
+        INSERT INTO agent_memory (
+          id,
+          user_id,
+          scope,
+          memory_key,
+          watchlist_id,
+          client_room_id,
+          value_json,
+          source,
+          created_at,
+          updated_at
+        )
+        VALUES
+          ('room-1-new', 'user-1', 'brand', 'room-1-new', NULL, 'room-1', '{"rank":1}', 'api_v1', '2026-06-20T10:05:00.000Z', '2026-06-20T10:05:00.000Z'),
+          ('room-1-next', 'user-1', 'brand', 'room-1-next', NULL, 'room-1', '{"rank":2}', 'api_v1', '2026-06-20T10:04:00.000Z', '2026-06-20T10:04:00.000Z'),
+          ('room-1-old', 'user-1', 'brand', 'room-1-old', NULL, 'room-1', '{"rank":3}', 'api_v1', '2026-06-20T10:03:00.000Z', '2026-06-20T10:03:00.000Z'),
+          ('room-2-new', 'user-1', 'brand', 'room-2-new', NULL, 'room-2', '{"rank":1}', 'api_v1', '2026-06-20T10:02:00.000Z', '2026-06-20T10:02:00.000Z'),
+          ('room-2-next', 'user-1', 'brand', 'room-2-next', NULL, 'room-2', '{"rank":2}', 'api_v1', '2026-06-20T10:01:00.000Z', '2026-06-20T10:01:00.000Z'),
+          ('room-2-old', 'user-1', 'brand', 'room-2-old', NULL, 'room-2', '{"rank":3}', 'api_v1', '2026-06-20T10:00:00.000Z', '2026-06-20T10:00:00.000Z'),
+          ('global-new', 'user-1', 'brand', 'global-new', NULL, NULL, '{"rank":0}', 'api_v1', '2026-06-20T10:06:00.000Z', '2026-06-20T10:06:00.000Z'),
+          ('watchlist-new', 'user-1', 'brand', 'watchlist-new', 'watchlist-1', NULL, '{"rank":0}', 'api_v1', '2026-06-20T10:06:00.000Z', '2026-06-20T10:06:00.000Z'),
+          ('other-user-room', 'user-2', 'brand', 'other-user-room', NULL, 'room-other', '{"rank":0}', 'api_v1', '2026-06-20T10:06:00.000Z', '2026-06-20T10:06:00.000Z');
+      `);
+
+      const memories = await listAgentMemoryForClientRooms(
+        { DB: sqlite.db } as never,
+        "user-1",
+        ["room-1", "room-2", "room-1"],
+        { limitPerRoom: 2 },
+      );
+      const memoryKeys = memories.map((memory) => memory.key);
+
+      expect(memories).toHaveLength(4);
+      expect(memories.filter((memory) => memory.clientRoomId === "room-1")).toHaveLength(2);
+      expect(memories.filter((memory) => memory.clientRoomId === "room-2")).toHaveLength(2);
+      expect(memoryKeys).toEqual(expect.arrayContaining([
+        "room-1-new",
+        "room-1-next",
+        "room-2-new",
+        "room-2-next",
+      ]));
+      expect(memoryKeys).not.toEqual(expect.arrayContaining([
+        "room-1-old",
+        "room-2-old",
+        "global-new",
+        "watchlist-new",
+        "other-user-room",
+      ]));
+    } finally {
+      sqlite.close();
+    }
+  });
+});
+
+describe("support case persistence", () => {
+  it("creates and lists support cases through the migration schema", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
+      applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1'), ('user-2');");
+
+      const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        category: "billing",
+        priority: "urgent",
+        subject: "Need invoice copy",
+        detail: "Please send the latest invoice to finance.",
+        requestKey: "support-request-1",
+        context: { accountEmail: "owner@example.com" },
+      });
+      const duplicateSupportCase = await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        category: "billing",
+        priority: "urgent",
+        subject: "Need invoice copy",
+        detail: "Please send the latest invoice to finance.",
+        requestKey: "support-request-1",
+        context: { accountEmail: "owner@example.com" },
+      });
+      await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-2",
+        category: "delivery",
+        subject: "Digest missing",
+        detail: "The weekly digest did not arrive.",
+        context: { accountEmail: "other@example.com" },
+      });
+
+      const allCases = await listSupportCases({ DB: sqlite.db } as never, "user-1", {
+        status: "all",
+        limit: 500,
+      });
+      const openCases = await listSupportCases({ DB: sqlite.db } as never, "user-1", {
+        status: "open",
+        limit: 1,
+      });
+
+      expect(supportCase).toMatchObject({
+        userId: "user-1",
+        requestKey: "support-request-1",
+        category: "billing",
+        priority: "urgent",
+        status: "open",
+        subject: "Need invoice copy",
+        context: { accountEmail: "owner@example.com" },
+      });
+      expect(duplicateSupportCase?.id).toBe(supportCase?.id);
+      expect(allCases).toHaveLength(1);
+      expect(allCases[0].userId).toBe("user-1");
+      expect(openCases).toHaveLength(1);
+      expect(openCases[0]).toMatchObject({
+        id: supportCase?.id,
+        status: "open",
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("returns the existing case when a request-key insert is ignored", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
+      applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
+      sqlite.sqlite.exec(`
+        INSERT INTO user (id) VALUES ('user-1');
+        INSERT INTO support_case (
+          id,
+          user_id,
+          request_key,
+          category,
+          priority,
+          status,
+          subject,
+          detail,
+          context_json,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          'case-existing',
+          'user-1',
+          'support-request-race',
+          'delivery',
+          'normal',
+          'open',
+          'Digest missing',
+          'The digest did not arrive.',
+          '{}',
+          '2026-06-20T00:00:00.000Z',
+          '2026-06-20T00:00:00.000Z'
+        );
+      `);
+
+      const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        category: "delivery",
+        subject: "Digest missing",
+        detail: "The digest did not arrive.",
+        requestKey: "support-request-race",
+      });
+
+      const rows = sqlite.sqlite.prepare("SELECT id FROM support_case WHERE user_id = ?").all("user-1");
+      expect(rows).toHaveLength(1);
+      expect(supportCase).toMatchObject({
+        id: "case-existing",
+        requestKey: "support-request-race",
+        alreadyExists: true,
       });
     } finally {
       sqlite.close();

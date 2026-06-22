@@ -282,6 +282,7 @@ interface ClientRoomResourceRow {
 interface SupportCaseRow {
   id: string;
   user_id: string;
+  request_key: string | null;
   category: SupportCaseCategory;
   priority: SupportCasePriority;
   status: SupportCaseStatus;
@@ -978,6 +979,52 @@ export async function listAgentMemory(
   return rows.map(toAgentMemoryRecord);
 }
 
+export async function listAgentMemoryForClientRooms(
+  env: AppEnv,
+  userId: string,
+  roomIds: string[],
+  options: {
+    limitPerRoom?: number | null;
+  } = {},
+) {
+  const uniqueRoomIds = Array.from(new Set(roomIds.filter(Boolean)));
+  if (uniqueRoomIds.length === 0) {
+    return [];
+  }
+
+  const limitPerRoom = Math.max(1, Math.min(100, Math.floor(options.limitPerRoom ?? 20)));
+  const chunks = await Promise.all(
+    chunkForBoundParams(uniqueRoomIds, 80).map((chunk) => {
+      const placeholders = chunk.map(() => "?").join(", ");
+      return many<AgentMemoryRow>(
+        env,
+        `
+          SELECT *
+          FROM (
+            SELECT
+              agent_memory.*,
+              ROW_NUMBER() OVER (
+                PARTITION BY client_room_id
+                ORDER BY updated_at DESC
+              ) AS room_rank
+            FROM agent_memory
+            WHERE user_id = ?
+              AND watchlist_id IS NULL
+              AND client_room_id IN (${placeholders})
+          )
+          WHERE room_rank <= ?
+          ORDER BY updated_at DESC
+        `,
+        userId,
+        ...chunk,
+        limitPerRoom,
+      );
+    }),
+  );
+
+  return chunks.flat().map(toAgentMemoryRecord);
+}
+
 export async function getClientRoom(env: AppEnv, userId: string, roomId: string) {
   const row = await one<ClientRoomRow>(
     env,
@@ -1173,6 +1220,7 @@ export async function createSupportCase(
     detail: unknown;
     priority?: unknown;
     context?: JsonRecord | null;
+    requestKey?: string | null;
   },
 ) {
   const normalized = normalizeSupportCaseInput({
@@ -1183,13 +1231,36 @@ export async function createSupportCase(
   });
   const id = createId();
   const timestamp = nowIso();
+  const requestKey = normalizeOptionalIdempotencyKey(input.requestKey);
+
+  if (requestKey) {
+    const existing = await one<SupportCaseRow>(
+      env,
+      `
+        SELECT *
+        FROM support_case
+        WHERE user_id = ?
+          AND request_key = ?
+        LIMIT 1
+      `,
+      input.userId,
+      requestKey,
+    );
+    if (existing) {
+      return {
+        ...toSupportCaseRecord(existing),
+        alreadyExists: true,
+      };
+    }
+  }
 
   await run(
     env,
     `
-      INSERT INTO support_case (
+      INSERT OR IGNORE INTO support_case (
         id,
         user_id,
+        request_key,
         category,
         priority,
         status,
@@ -1199,10 +1270,11 @@ export async function createSupportCase(
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)
     `,
     id,
     input.userId,
+    requestKey,
     normalized.category,
     normalized.priority,
     normalized.subject,
@@ -1211,6 +1283,28 @@ export async function createSupportCase(
     timestamp,
     timestamp,
   );
+
+  if (requestKey) {
+    const row = await one<SupportCaseRow>(
+      env,
+      `
+        SELECT *
+        FROM support_case
+        WHERE user_id = ?
+          AND request_key = ?
+        LIMIT 1
+      `,
+      input.userId,
+      requestKey,
+    );
+
+    return row
+      ? {
+        ...toSupportCaseRecord(row),
+        alreadyExists: row.id !== id,
+      }
+      : null;
+  }
 
   const row = await one<SupportCaseRow>(
     env,
@@ -1225,7 +1319,20 @@ export async function createSupportCase(
     input.userId,
   );
 
-  return row ? toSupportCaseRecord(row) : null;
+  return row
+    ? {
+      ...toSupportCaseRecord(row),
+      alreadyExists: false,
+    }
+    : null;
+}
+
+function normalizeOptionalIdempotencyKey(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= 120 ? trimmed : null;
 }
 
 export async function listSupportCases(
@@ -6926,6 +7033,7 @@ function toSupportCaseRecord(row: SupportCaseRow): SupportCaseRecord {
   return {
     id: row.id,
     userId: row.user_id,
+    requestKey: row.request_key ?? null,
     category: row.category,
     priority: row.priority,
     status: row.status,

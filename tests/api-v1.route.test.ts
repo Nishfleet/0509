@@ -30,6 +30,8 @@ const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
   "memory.list",
   "client_room.upsert",
   "client_room.list",
+  "support_case.create",
+  "support_case.list",
   "delivery_targets.list",
   "delivery_settings.update",
   "delivery_target.update",

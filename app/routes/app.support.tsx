@@ -55,6 +55,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     cases: cases.map(toSupportCaseSummary),
     selectedCategory,
     supportEmail: SUPPORT_EMAIL,
+    supportRequestKey: crypto.randomUUID(),
     isWorkspaceMember: workspaceUserId !== session.user.id,
   };
 }
@@ -84,7 +85,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (error instanceof SupportCaseInputError) {
       return { ok: false, message: error.message };
     }
-    throw error;
+    console.error("[support] case persistence failed", error);
+    return {
+      ok: false,
+      message: `Support case could not be saved. Email ${SUPPORT_EMAIL} now so we can reply.`,
+    };
   }
 
   const isWorkspaceMember = workspaceUserId !== session.user.id;
@@ -96,6 +101,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   let supportCase;
+  const requestKeyValue = formData.get("requestKey");
   try {
     supportCase = await createSupportCase(env, {
       userId: session.user.id,
@@ -103,6 +109,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       priority: input.priority,
       subject: input.subject,
       detail: input.detail,
+      requestKey: typeof requestKeyValue === "string" ? requestKeyValue : null,
       context: {
         accountEmail: session.user.email,
         createdFrom: "signed_in_support",
@@ -113,7 +120,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (error instanceof SupportCaseInputError) {
       return { ok: false, message: error.message };
     }
-    throw error;
+    console.error("[support] case persistence failed", error);
+    return {
+      ok: false,
+      message: `Support case could not be saved. Email ${SUPPORT_EMAIL} now so we can reply.`,
+    };
   }
 
   if (!supportCase) {
@@ -175,6 +186,7 @@ export default function SupportRoute() {
 
           <Form className="f9-auth-form" method="post">
             <input name="intent" type="hidden" value="create-support-case" />
+            <input name="requestKey" type="hidden" value={data.supportRequestKey} />
             <label className="f9-field">
               <span>Category</span>
               <select name="category" defaultValue={data.selectedCategory}>
@@ -354,9 +366,16 @@ async function notifySupportCaseOperator(
     isWorkspaceMember: boolean;
   },
 ) {
+  const idempotencyKey = `support-case:${input.caseId}`;
   try {
+    const { getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
+    const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    if (existingAttempt?.status === "sent") {
+      return true;
+    }
+
     const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
-    return sendOperatorAlertEmail(env, {
+    return await sendOperatorAlertEmail(env, {
       subject: `0509 support case: ${input.input.subject}`,
       lines: [
         `Case: ${input.caseId}`,
@@ -367,7 +386,7 @@ async function notifySupportCaseOperator(
         `Subject: ${input.input.subject}`,
         `Details: ${input.input.detail}`,
       ],
-      idempotencyKey: `support-case:${input.caseId}`,
+      idempotencyKey,
     });
   } catch (error) {
     console.error("[support] operator alert failed", error);
