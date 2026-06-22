@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 
 const loginRoute = readFileSync("app/routes/auth.login.tsx", "utf8");
 const signupRoute = readFileSync("app/routes/auth.signup.tsx", "utf8");
-const callbackRoute = readFileSync("app/routes/auth.stytch.callback.tsx", "utf8");
+const apiAuthRoute = readFileSync("app/routes/api.auth.$.ts", "utf8");
+const betterAuthServer = readFileSync("app/lib/better-auth.server.ts", "utf8");
+const magicLinkRoute = readFileSync("app/routes/auth.better.magic-link.tsx", "utf8");
 const authForm = readFileSync("app/components/auth-form.tsx", "utf8");
-const authSurface = `${loginRoute}\n${signupRoute}\n${authForm}`;
+const authSurface = `${loginRoute}\n${signupRoute}\n${magicLinkRoute}\n${authForm}`;
 const authClasses = Array.from(
   authSurface.matchAll(/className=(?:"([^"]+)"|{`([^`]+)`})/g),
 ).flatMap((match) =>
@@ -47,9 +49,32 @@ describe("auth rebuild", () => {
     expect(authSurface).toContain("<BrandWordmark />");
   });
 
-  it("does not render one-time Stytch tokens into auth HTML", () => {
-    expect(callbackRoute).not.toContain('name="token"');
-    expect(callbackRoute).not.toContain('value={token}');
-    expect(callbackRoute).toContain("Checking this sign-in.");
+  it("keeps auth provider tokens out of rendered auth HTML", () => {
+    expect(authSurface).not.toContain('name="token"');
+    expect(authSurface).not.toContain('value={token}');
+    expect(magicLinkRoute).toContain("readBetterAuthMagicLinkConfirmation");
+    expect(magicLinkRoute).toContain("data.email");
+    expect(apiAuthRoute).toContain("getBetterAuth");
+    expect(apiAuthRoute).toContain("/api/auth/magic-link/verify");
+    expect(apiAuthRoute).toContain("/api/auth/sign-in/magic-link");
+  });
+
+  it("keeps OAuth login sign-in-only unless signup explicitly requests account creation", () => {
+    expect(betterAuthServer).toContain("encryptOAuthTokens: true");
+    expect(betterAuthServer).toContain("BETTER_AUTH_OAUTH_BRANDED_PROVIDERS");
+    expect(betterAuthServer).toContain("BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED");
+    expect(betterAuthServer).toContain("trustedProviders");
+    expect(betterAuthServer.match(/disableImplicitSignUp:\s*true/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(betterAuthServer).toContain('requestSignUp: input.mode === "signup"');
+    expect(
+      betterAuthServer.match(
+        /newUserCallbackURL:\s*input\.mode === "signup" \? callbackURL : undefined/g,
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("requires discoverable passkeys for username-less passkey login", () => {
+    expect(betterAuthServer).toContain('residentKey: "required"');
+    expect(betterAuthServer).toContain("requireResidentKey: true");
   });
 });

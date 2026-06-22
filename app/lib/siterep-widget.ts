@@ -48,7 +48,7 @@ export function hasSiteRepAuthCookie(request: Pick<Request, "headers">) {
   return (request.headers.get("cookie") ?? "")
     .split(";")
     .map((cookie) => cookie.trim().split("=")[0])
-    .some((name) => name.startsWith("f9_stytch_"));
+    .some((name) => name.includes("better-auth"));
 }
 
 export function canUseSiteRepWidgetScript(request: Request) {

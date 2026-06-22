@@ -9,25 +9,24 @@ export const meta = () => [{ title: "Account | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
+  const { isBetterAuthPasskeyEnabled, listBetterAuthPasskeys } = await import(
+    "~/lib/better-auth.server"
+  );
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlan } = await import("~/lib/plan.server");
-  const { getWorkspaceBranding, listPasskeyCredentialsForUser } = await import("~/lib/data.server");
-  const { isPasskeyAuthConfigured, publicPasskeyCredential } = await import("~/lib/passkeys.server");
+  const { getWorkspaceBranding } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
 
   const plan = await getUserPlan(env, session.user.id);
   const branding =
     plan === "agency" ? await getWorkspaceBranding(env, session.user.id) : { brandName: null };
-  const passkeysEnabled = isPasskeyAuthConfigured(env);
-  const passkeys = passkeysEnabled
-    ? (await listPasskeyCredentialsForUser(env, session.user.id)).map(publicPasskeyCredential)
-    : [];
+  const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
+  const passkeys = passkeysEnabled ? await listBetterAuthPasskeys(env, request) : [];
 
   return {
     email: session.user.email,
     name: session.user.name,
-    currentSessionId: session.session.id,
     sessionExpiresAt: session.session.expiresAt,
     plan,
     brandName: branding.brandName,
@@ -89,8 +88,8 @@ export default function AccountRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          Sign-in is handled by Stytch B2B. Five to Nine supports secure email links
-          and configured work sign-in methods, while workspace data stays in Five to Nine.
+          Sign-in is handled by Better Auth. Five to Nine supports secure email links,
+          configured work sign-in methods, and passkeys while workspace data stays in Five to Nine.
         </p>
       </article>
 
@@ -194,13 +193,13 @@ export default function AccountRoute() {
           </div>
         </div>
         <p className="f9-muted-copy">
-          Current Stytch session: {data.currentSessionId}. The session expires at{" "}
-          {data.sessionExpiresAt}. Sign out from the app header to revoke this device.
+          This device is signed in until {data.sessionExpiresAt}. Sign out from the app header to
+          revoke it.
         </p>
         <p className="f9-muted-copy">
           To change your account email, remove a user, or delete a workspace, email{" "}
           <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>. We keep this operator-assisted until the
-          Stytch admin portal is enabled for customers.
+          customer account portal is enabled.
         </p>
       </article>
 
@@ -236,29 +235,12 @@ async function registerPasskey(input: {
   input.setMessage(null);
   input.setPending(true);
   try {
-    const { startRegistration } = await import("@simplewebauthn/browser");
-    const optionsResponse = await fetch("/auth/passkeys/registration/options", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
+    const { authClient } = await import("~/lib/auth-client");
+    const result = await authClient.passkey.addPasskey({
+      name: "Five to Nine passkey",
     });
-    const optionsPayload = (await optionsResponse.json().catch(() => null)) as
-      | { options?: unknown; state?: string }
-      | null;
-    if (!optionsResponse.ok || !optionsPayload?.options || !optionsPayload.state) {
-      throw new Error("options_failed");
-    }
-
-    const credential = await startRegistration({ optionsJSON: optionsPayload.options as never });
-    const verifyResponse = await fetch("/auth/passkeys/registration/verify", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ credential, state: optionsPayload.state }),
-    });
-    if (!verifyResponse.ok) {
-      throw new Error("verify_failed");
+    if (result.error) {
+      throw new Error(result.error.message || "passkey_failed");
     }
 
     input.setMessage("Passkey added.");

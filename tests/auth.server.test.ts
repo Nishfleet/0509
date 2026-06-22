@@ -1,1630 +1,606 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-import { getCachedOptionalSession, getOptionalSession, requireSession } from "~/lib/auth.server";
-import { upsertStytchAuthenticatedUser } from "~/lib/data.server";
 import {
-  authRequestPkceCookie,
-  authRequestStateCookie,
-  createStytchAuthRequest,
-  createStytchPkcePair,
-  enabledStytchOAuthProviders,
+  BetterAuthMagicLinkStateError,
+  BetterAuthUnknownUserError,
+  betterAuthMagicLinkConfirmationCookie,
+  enabledBetterAuthOAuthProviders,
+  isBetterAuthConfigured,
+  isBetterAuthOAuthProviderConfigured,
   isSameOriginAuthFormPost,
-  isSameBrowserAuthRequest,
-  isStytchConfigured,
-  isStytchOAuthConfigured,
-  isStytchOAuthProviderConfigured,
-  readStytchPkceVerifier,
-  sendDiscoveryEmail,
-  stytchConfirmationCookie,
-  attestTrustedAuthToken,
-  stytchOAuthDiscoveryStartUrl,
-  stytchWorkspaceCreationReason,
-  verifyStytchConfirmationNonce,
-  verifyStytchConfirmationSecret,
-  type StytchAuthRequest,
-} from "~/lib/stytch-b2b.server";
-import {
-  createPasskeyAuthenticationOptions,
-  isPasskeyAuthConfigured,
-} from "~/lib/passkeys.server";
-import { action as loginAction } from "~/routes/auth.login";
-import { action as logoutAction, loader as logoutLoader } from "~/routes/auth.logout";
-import { action as signupAction } from "~/routes/auth.signup";
-import { action as callbackAction, loader as callbackLoader } from "~/routes/auth.stytch.callback";
-import { loader as confirmLoader } from "~/routes/auth.stytch.confirm";
-import { action as oauthAction } from "~/routes/auth.stytch.oauth";
+  readBetterAuthMagicLinkConfirmation,
+  sendBetterAuthMagicLink,
+} from "~/lib/better-auth.server";
+import type { AppEnv } from "~/lib/env.server";
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+const db = {} as D1Database;
 
-function stytchActionTestEnv(db: unknown) {
+function env(overrides: Partial<AppEnv> = {}): AppEnv {
   return {
     APP_ORIGIN: "https://0509.io",
-    AUTH_PROVIDER: "stytch",
-    DB: db as D1Database,
-    STYTCH_API_BASE_URL: "https://api.stytch.test",
-    STYTCH_PROJECT_ID: "project-test",
-    STYTCH_SECRET: "secret-test",
+    AUTH_PROVIDER: "better-auth",
+    BETTER_AUTH_SECRET: "secret-test",
+    BETTER_AUTH_URL: "https://0509.io",
+    DB: db,
+    EMAIL: { send: vi.fn().mockResolvedValue({ messageId: "msg-1" }) },
+    EMAIL_FROM_EMAIL: "alerts@0509.io",
+    ...overrides,
   };
 }
 
-function authFormPost(url: string, values: Record<string, string>) {
-  return new Request(url, {
-    method: "POST",
-    body: new URLSearchParams(values),
-    headers: { origin: "https://0509.io" },
-  });
+function dbWithUser(userId: string | null) {
+  return {
+    prepare: vi.fn().mockReturnValue({
+      bind: vi.fn().mockReturnValue({
+        first: vi.fn().mockResolvedValue(userId ? { id: userId } : null),
+      }),
+    }),
+  } as unknown as D1Database;
 }
 
-describe("Stytch auth boundary", () => {
-  it("does not create a session without the D1 app database", async () => {
-    await expect(getOptionalSession({}, new Request("https://0509.io/app"))).resolves.toBeNull();
+function context(testEnv: AppEnv) {
+  return {
+    cloudflare: {
+      country: null,
+      ctx: {} as ExecutionContext,
+      env: testEnv,
+    },
+  };
+}
+
+beforeEach(() => {
+  vi.doUnmock("react-router");
+  vi.doUnmock("~/lib/auth.server");
+  vi.doUnmock("~/lib/better-auth.server");
+  vi.doUnmock("~/lib/workspace.server");
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+});
+
+describe("Better Auth configuration", () => {
+  it("requires the Better Auth provider, secret, and D1 binding", () => {
+    expect(isBetterAuthConfigured(env())).toBe(true);
+    expect(isBetterAuthConfigured(env({ AUTH_PROVIDER: "legacy" }))).toBe(false);
+    expect(isBetterAuthConfigured(env({ BETTER_AUTH_SECRET: "" }))).toBe(false);
+    expect(isBetterAuthConfigured(env({ DB: undefined }))).toBe(false);
   });
 
-  it("does not call Stytch without a session cookie", async () => {
-    await expect(
-      getOptionalSession({ DB: {} as D1Database }, new Request("https://0509.io/app")),
-    ).resolves.toBeNull();
-  });
+  it("enables OAuth providers only when credentials and branded verification exist", () => {
+    expect(enabledBetterAuthOAuthProviders(env())).toEqual([]);
 
-  it("reads Stytch sessions from the local cache without calling Stytch", async () => {
-    const fetchSpy = vi.fn();
-    const calls: Array<{ sql: string; bindings: unknown[] }> = [];
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind(...bindings: unknown[]) {
-            calls.push({ sql, bindings });
-            return {
-              async all() {
-                return {
-                  results: sql.includes("FROM stytch_session")
-                    ? [
-                        {
-                          sessionId: "member-session-1",
-                          sessionUserId: "user-1",
-                          expiresAt: "2099-01-01T00:00:00.000Z",
-                          id: "user-1",
-                          email: "asha@agency.com",
-                          name: "Asha",
-                          image: null,
-                          onboardedAt: "2026-06-01T00:00:00.000Z",
-                        },
-                      ]
-                    : [],
-                };
-              },
-            };
-          },
-        };
-      },
-    };
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const session = await getCachedOptionalSession(
-      { DB: db as unknown as D1Database },
-      new Request("https://0509.io/app", {
-        headers: { cookie: "f9_stytch_session=session-123" },
-      }),
-    );
-
-    expect(session?.user.email).toBe("asha@agency.com");
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(calls.map((call) => call.sql).join("\n")).not.toMatch(/\b(INSERT|UPDATE)\b/i);
-  });
-
-  it("revalidates optional Stytch sessions before returning private account state", async () => {
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind() {
-            return {
-              async all() {
-                return {
-                  results: sql.includes("FROM stytch_session")
-                    ? [
-                        {
-                          sessionId: "member-session-1",
-                          sessionUserId: "user-1",
-                          expiresAt: "2099-01-01T00:00:00.000Z",
-                          id: "user-1",
-                          email: "asha@agency.com",
-                          name: "Asha",
-                          image: null,
-                          onboardedAt: "2026-06-01T00:00:00.000Z",
-                        },
-                      ]
-                    : [],
-                };
-              },
-            };
-          },
-        };
-      },
-    };
-    const fetchSpy = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => {
-      return new Response(
-        JSON.stringify({
-          member_session: {
-            member_session_id: "member-session-1",
-            expires_at: "2099-01-01T00:00:00.000Z",
-          },
-          member: {
-            organization_id: "org-1",
-            member_id: "member-1",
-            email_address: "asha@agency.com",
-          },
-          organization: {
-            organization_id: "org-1",
-            organization_name: "Agency",
-          },
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      );
+    const credentialsOnlyEnv = env({
+      BETTER_AUTH_GOOGLE_CLIENT_ID: "google-client",
+      BETTER_AUTH_GOOGLE_CLIENT_SECRET: "google-secret",
     });
-    vi.stubGlobal("fetch", fetchSpy);
+    expect(enabledBetterAuthOAuthProviders(credentialsOnlyEnv)).toEqual([]);
+    expect(isBetterAuthOAuthProviderConfigured(credentialsOnlyEnv, "google")).toBe(false);
 
-    const session = await getOptionalSession(
-      {
-        DB: db as unknown as D1Database,
-        STYTCH_API_BASE_URL: "https://api.stytch.test",
-        STYTCH_PROJECT_ID: "project-test",
-        STYTCH_SECRET: "secret-test",
-      },
-      new Request("https://0509.io/search", {
-        headers: { cookie: "f9_stytch_session=session-123" },
-      }),
-    );
-
-    expect(session?.user.email).toBe("asha@agency.com");
-    expect(fetchSpy).toHaveBeenCalledOnce();
-  });
-
-  it("revalidates cached Stytch sessions before protected route access", async () => {
-    const calls: Array<{ sql: string; bindings: unknown[] }> = [];
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind(...bindings: unknown[]) {
-            calls.push({ sql, bindings });
-            return {
-              async all() {
-                return {
-                  results: sql.includes("FROM stytch_session")
-                    ? [
-                        {
-                          sessionId: "member-session-1",
-                          sessionUserId: "user-1",
-                          expiresAt: "2099-01-01T00:00:00.000Z",
-                          id: "user-1",
-                          email: "asha@agency.com",
-                          name: "Asha",
-                          image: null,
-                          onboardedAt: "2026-06-01T00:00:00.000Z",
-                        },
-                      ]
-                    : [],
-                };
-              },
-            };
-          },
-        };
-      },
-    };
-    const fetchSpy = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => {
-      return new Response(
-        JSON.stringify({
-          member_session: {
-            member_session_id: "member-session-1",
-            expires_at: "2099-01-01T00:00:00.000Z",
-          },
-          member: {
-            organization_id: "org-1",
-            member_id: "member-1",
-            email_address: "asha@agency.com",
-          },
-          organization: {
-            organization_id: "org-1",
-            organization_name: "Agency",
-          },
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      );
+    const googleEnv = env({
+      BETTER_AUTH_GOOGLE_CLIENT_ID: "google-client",
+      BETTER_AUTH_GOOGLE_CLIENT_SECRET: "google-secret",
+      BETTER_AUTH_OAUTH_BRANDED_PROVIDERS: "google",
     });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const session = await requireSession(
-      {
-        DB: db as unknown as D1Database,
-        STYTCH_API_BASE_URL: "https://api.stytch.test",
-        STYTCH_PROJECT_ID: "project-test",
-        STYTCH_SECRET: "secret-test",
-      },
-      new Request("https://0509.io/app", {
-        headers: { cookie: "f9_stytch_session=session-123" },
-      }),
-    );
-
-    expect(session.user.email).toBe("asha@agency.com");
-    expect(fetchSpy).toHaveBeenCalledOnce();
-    const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"));
-    expect(body).toEqual({ session_token: "session-123" });
-    expect(calls.map((call) => call.sql).join("\n")).not.toMatch(/\b(INSERT|UPDATE)\b/i);
-  });
-
-  it("preserves cached Stytch sessions on transient provider failures", async () => {
-    const calls: Array<{ sql: string; bindings: unknown[] }> = [];
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind(...bindings: unknown[]) {
-            calls.push({ sql, bindings });
-            return {
-              async all() {
-                return {
-                  results: sql.includes("FROM stytch_session")
-                    ? [
-                        {
-                          sessionId: "member-session-1",
-                          sessionUserId: "user-1",
-                          expiresAt: "2099-01-01T00:00:00.000Z",
-                          id: "user-1",
-                          email: "asha@agency.com",
-                          name: "Asha",
-                          image: null,
-                          onboardedAt: "2026-06-01T00:00:00.000Z",
-                        },
-                      ]
-                    : [],
-                };
-              },
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-    vi.stubGlobal("fetch", async () => {
-      return new Response(JSON.stringify({ error_message: "temporary unavailable" }), {
-        headers: { "Content-Type": "application/json" },
-        status: 503,
-      });
-    });
-
-    try {
-      await requireSession(
-        {
-          DB: db as unknown as D1Database,
-          STYTCH_API_BASE_URL: "https://api.stytch.test",
-          STYTCH_PROJECT_ID: "project-test",
-          STYTCH_SECRET: "secret-test",
-        },
-        new Request("https://0509.io/app", {
-          headers: { cookie: "f9_stytch_session=session-123" },
-        }),
-      );
-      throw new Error("Expected stale provider response to redirect.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(302);
-    }
-
-    expect(calls.map((call) => call.sql).join("\n")).not.toMatch(/\bDELETE\b/i);
-  });
-
-  it("binds automatic callback completion to the browser that requested the link", () => {
-    const request = new Request("https://0509.io/auth/login");
-    const cookie = authRequestStateCookie(request, "state-123");
-    const pkceCookie = authRequestPkceCookie(request, "state-123", "verifier-123");
-    expect(cookie).toContain("f9_stytch_state=state-123");
-    expect(cookie).toContain("HttpOnly");
-    expect(cookie).toContain("SameSite=Lax");
-    expect(pkceCookie).toContain("f9_stytch_pkce=state-123.verifier-123");
-    expect(pkceCookie).toContain("HttpOnly");
-    expect(readStytchPkceVerifier(
-      new Request("https://0509.io/auth/stytch/callback", {
-        headers: { cookie: "f9_stytch_pkce=state-123.verifier-123" },
-      }),
-      "state-123",
-    )).toBe("verifier-123");
+    expect(enabledBetterAuthOAuthProviders(googleEnv)).toEqual(["google"]);
+    expect(isBetterAuthOAuthProviderConfigured(googleEnv, "google")).toBe(true);
+    expect(isBetterAuthOAuthProviderConfigured(googleEnv, "microsoft")).toBe(false);
 
     expect(
-      isSameBrowserAuthRequest(
-        new Request("https://0509.io/auth/stytch/callback", {
-          headers: { cookie: "f9_stytch_state=state-123" },
-        }),
-        "state-123",
-      ),
-    ).toBe(true);
-    expect(isSameBrowserAuthRequest(new Request("https://0509.io/auth/stytch/callback"), "state-123")).toBe(false);
-  });
-
-  it("only creates Stytch auth requests from same-origin form posts", () => {
-    expect(
-      isSameOriginAuthFormPost(
-        { APP_ORIGIN: "https://0509.io" },
-        new Request("https://0509.io/auth/login", {
-          method: "POST",
-          headers: { origin: "https://0509.io" },
+      enabledBetterAuthOAuthProviders(
+        env({
+          BETTER_AUTH_MICROSOFT_CLIENT_ID: "microsoft-client",
+          BETTER_AUTH_MICROSOFT_CLIENT_SECRET: "microsoft-secret",
+          BETTER_AUTH_OAUTH_BRANDED_PROVIDERS: "microsoft",
         }),
       ),
-    ).toBe(true);
-    expect(
-      isSameOriginAuthFormPost(
-        { APP_ORIGIN: "https://0509.io" },
-        new Request("https://preview.0509.dev/auth/login", {
-          method: "POST",
-          headers: { referer: "https://preview.0509.dev/auth/login" },
-        }),
-      ),
-    ).toBe(true);
-    expect(
-      isSameOriginAuthFormPost(
-        { APP_ORIGIN: "https://0509.io" },
-        new Request("https://0509.io/auth/login", {
-          method: "POST",
-          headers: { origin: "https://attacker.example" },
-        }),
-      ),
-    ).toBe(false);
-    expect(isSameOriginAuthFormPost({ APP_ORIGIN: "https://0509.io" }, new Request("https://0509.io/auth/login"))).toBe(
-      false,
-    );
-  });
-
-  it("removes expired auth exchange rows before creating a new request", async () => {
-    const statements: string[] = [];
-    const db = {
-      prepare(sql: string) {
-        statements.push(sql);
-        return {
-          bind() {
-            return {
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-
-    await createStytchAuthRequest(
-      { DB: db as unknown as D1Database },
-      {
-        email: "asha@agency.com",
-        mode: "login",
-        redirectTo: "/app",
-      },
-    );
-
-    expect(statements[0]).toContain("DELETE FROM stytch_auth_request WHERE expires_at <= ?");
-    expect(statements[1]).toContain("INSERT INTO stytch_auth_request");
-  });
-
-  it("keeps app redirect targets out of Stytch magic link URLs", async () => {
-    const sentBodies: Array<{ discovery_redirect_url?: unknown }> = [];
-    vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {
-      sentBodies.push(JSON.parse(String(init?.body ?? "{}")) as { discovery_redirect_url?: unknown });
-      return new Response(JSON.stringify({ request_id: "request-1" }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-
-    await sendDiscoveryEmail(
-      {
-        APP_ORIGIN: "https://0509.io",
-        STYTCH_API_BASE_URL: "https://api.stytch.test",
-        STYTCH_PROJECT_ID: "project-test",
-        STYTCH_SECRET: "secret-test",
-      },
-      new Request("https://0509.io/auth/login"),
-      {
-        email: "asha@agency.com",
-        mode: "login",
-        state: "state-123",
-      },
-    );
-
-    const redirectUrl = new URL(String(sentBodies[0]?.discovery_redirect_url ?? ""));
-    expect(redirectUrl.pathname).toBe("/auth/stytch/callback");
-    expect(redirectUrl.search).toBe("");
-  });
-
-  it("uses branded Stytch discovery email templates by auth flow", async () => {
-    const sentBodies: Array<Record<string, unknown>> = [];
-    const brandedTemplateEnv = {
-      APP_ORIGIN: "https://0509.io",
-      STYTCH_API_BASE_URL: "https://api.stytch.test",
-      STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID: "template-shared",
-      STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID: "template-login",
-      STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID: "template-activation",
-      STYTCH_PROJECT_ID: "project-test",
-      STYTCH_SECRET: "secret-test",
-    };
-    vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {
-      sentBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
-      return new Response(JSON.stringify({ request_id: "request-1" }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-
-    await sendDiscoveryEmail(
-      brandedTemplateEnv,
-      new Request("https://0509.io/auth/login"),
-      {
-        email: "asha@agency.com",
-        mode: "login",
-        state: "state-123",
-      },
-    );
-
-    await sendDiscoveryEmail(
-      brandedTemplateEnv,
-      new Request("https://0509.io/auth/signup"),
-      {
-        email: "asha@agency.com",
-        mode: "signup",
-        state: "state-456",
-      },
-    );
-
-    await sendDiscoveryEmail(
-      {
-        APP_ORIGIN: "https://0509.io",
-        STYTCH_API_BASE_URL: "https://api.stytch.test",
-        STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID: "template-shared",
-        STYTCH_PROJECT_ID: "project-test",
-        STYTCH_SECRET: "secret-test",
-      },
-      new Request("https://0509.io/auth/signup"),
-      {
-        email: "asha@agency.com",
-        mode: "signup",
-        state: "state-789",
-      },
-    );
-
-    expect(sentBodies[0]?.login_template_id).toBe("template-login");
-    expect(sentBodies[1]?.login_template_id).toBe("template-activation");
-    expect(sentBodies[2]?.login_template_id).toBe("template-shared");
-  });
-
-  it("can add PKCE to Stytch magic links without exposing the verifier", async () => {
-    const sentBodies: Array<Record<string, unknown>> = [];
-    vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {
-      sentBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
-      return new Response(JSON.stringify({ request_id: "request-1" }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-
-    const pkce = await createStytchPkcePair();
-    await sendDiscoveryEmail(
-      {
-        APP_ORIGIN: "https://0509.io",
-        STYTCH_API_BASE_URL: "https://api.stytch.test",
-        STYTCH_PROJECT_ID: "project-test",
-        STYTCH_SECRET: "secret-test",
-      },
-      new Request("https://0509.io/auth/login"),
-      {
-        email: "asha@agency.com",
-        mode: "login",
-        pkceCodeChallenge: pkce.challenge,
-        state: "state-123",
-      },
-    );
-
-    const redirectUrl = new URL(String(sentBodies[0]?.discovery_redirect_url ?? ""));
-    expect(redirectUrl.search).toBe("");
-    expect(sentBodies[0]?.pkce_code_challenge).toBe(pkce.challenge);
-    expect(JSON.stringify(sentBodies[0])).not.toContain(pkce.verifier);
-  });
-
-  it("keeps email magic links on the cross-browser confirmation path", async () => {
-    const sentBodies: Array<Record<string, unknown>> = [];
-    const db = {
-      prepare() {
-        return {
-          bind() {
-            return {
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-    vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {
-      sentBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
-      return new Response(JSON.stringify({ request_id: "request-1" }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-
-    try {
-      await loginAction({
-        context: {
-          cloudflare: {
-            env: stytchActionTestEnv(db),
-          },
-        },
-        params: {},
-        request: authFormPost("https://0509.io/auth/login", {
-          email: "asha@agency.com",
-          redirectTo: "/app",
-        }),
-      } as never);
-      throw new Error("Expected login action to redirect after sending a magic link.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      const response = error as Response;
-      expect(response.status).toBe(302);
-      expect(response.headers.get("Location")).toContain("/auth/login?sent=1");
-      expect(response.headers.get("Set-Cookie")).toContain("f9_stytch_state=");
-      expect(response.headers.get("Set-Cookie")).not.toContain("f9_stytch_pkce=");
-    }
-
-    const redirectUrl = new URL(String(sentBodies[0]?.discovery_redirect_url ?? ""));
-    expect(redirectUrl.searchParams.has("pkce")).toBe(false);
-    expect(sentBodies[0]?.pkce_code_challenge).toBeUndefined();
-  });
-
-  it("builds server-owned Stytch OAuth discovery starts for Google and Microsoft", () => {
-    const url = new URL(
-      stytchOAuthDiscoveryStartUrl(
-        {
-          APP_ORIGIN: "https://0509.io",
-          STYTCH_API_BASE_URL: "https://api.stytch.test",
-          STYTCH_PROJECT_ID: "project-test",
-          STYTCH_PUBLIC_TOKEN: "public-token-test",
-          STYTCH_SECRET: "secret-test",
-        },
-        {
-          loginHint: "asha@agency.com",
-          mode: "login",
-          pkceCodeChallenge: "challenge-123",
-          provider: "google",
-          state: "state-123",
-        },
-      ),
-    );
-
-    expect(url.origin).toBe("https://api.stytch.test");
-    expect(url.pathname).toBe("/v1/b2b/public/oauth/google/discovery/start");
-    expect(url.searchParams.get("public_token")).toBe("public-token-test");
-    expect(url.searchParams.get("pkce_code_challenge")).toBe("challenge-123");
-    expect(url.searchParams.get("provider_login_hint")).toBe("asha@agency.com");
-
-    const redirectUrl = new URL(String(url.searchParams.get("discovery_redirect_url")));
-    expect(redirectUrl.origin).toBe("https://0509.io");
-    expect(redirectUrl.pathname).toBe("/auth/stytch/callback");
-    expect(redirectUrl.search).toBe("");
-  });
-
-  it("keeps Stytch OAuth disabled until provider configs and branding are verified", () => {
-    const baseEnv = {
-      APP_ORIGIN: "https://0509.io",
-      STYTCH_PROJECT_ID: "project-test",
-      STYTCH_PUBLIC_TOKEN: "public-token-test",
-      STYTCH_SECRET: "secret-test",
-    };
-
-    expect(isStytchOAuthConfigured(baseEnv)).toBe(false);
-    expect(
-      isStytchOAuthConfigured({
-        ...baseEnv,
-        STYTCH_OAUTH_PROVIDERS_ENABLED: "true",
-      }),
-    ).toBe(false);
-    expect(
-      enabledStytchOAuthProviders({
-        ...baseEnv,
-        STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
-      }),
     ).toEqual([]);
+
     expect(
-      enabledStytchOAuthProviders({
-        ...baseEnv,
-        STYTCH_OAUTH_PROVIDERS_ENABLED: "true",
-        STYTCH_OAUTH_BRANDED_PROVIDERS: "google, unknown, GOOGLE",
-      }),
-    ).toEqual(["google"]);
-    expect(
-      enabledStytchOAuthProviders({
-        ...baseEnv,
-        STYTCH_OAUTH_ENABLED_PROVIDERS: "google, unknown, GOOGLE",
-        STYTCH_OAUTH_BRANDED_PROVIDERS: "google",
-      }),
-    ).toEqual(["google"]);
-    expect(
-      isStytchOAuthProviderConfigured(
-        {
-          ...baseEnv,
-          STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
-          STYTCH_OAUTH_BRANDED_PROVIDERS: "google",
-        },
-        "google",
+      enabledBetterAuthOAuthProviders(
+        env({
+          BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED: "true",
+          BETTER_AUTH_MICROSOFT_CLIENT_ID: "microsoft-client",
+          BETTER_AUTH_MICROSOFT_CLIENT_SECRET: "microsoft-secret",
+          BETTER_AUTH_OAUTH_BRANDED_PROVIDERS: "microsoft",
+        }),
       ),
-    ).toBe(true);
+    ).toEqual(["microsoft"]);
+  });
+
+  it("accepts only same-origin auth form posts", () => {
     expect(
-      isStytchOAuthProviderConfigured(
-        {
-          ...baseEnv,
-          STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
-          STYTCH_OAUTH_BRANDED_PROVIDERS: "google",
-        },
-        "microsoft",
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps passkeys disabled until every Stytch attestation secret is configured", () => {
-    const baseEnv = {
-      APP_ORIGIN: "https://0509.io",
-      STYTCH_PROJECT_ID: "project-test",
-      STYTCH_SECRET: "secret-test",
-    };
-
-    expect(isPasskeyAuthConfigured(baseEnv)).toBe(false);
-    expect(
-      isPasskeyAuthConfigured({
-        ...baseEnv,
-        STYTCH_B2B_PASSKEYS_ENABLED: "true",
-        STYTCH_TAT_AUDIENCE: "0509-passkeys",
-        STYTCH_TAT_ISSUER: "https://0509.io",
-        STYTCH_TAT_PRIVATE_KEY_B64: "private-key",
-        STYTCH_TAT_PROFILE_ID: "trusted-auth-token-profile-test",
-      }),
-    ).toBe(true);
-    expect(
-      isPasskeyAuthConfigured({
-        ...baseEnv,
-        STYTCH_B2B_PASSKEYS_ENABLED: "true",
-        STYTCH_TAT_AUDIENCE: "0509-passkeys",
-        STYTCH_TAT_ISSUER: "https://0509.io",
-        STYTCH_TAT_PROFILE_ID: "trusted-auth-token-profile-test",
-      }),
-    ).toBe(false);
-  });
-
-  it("creates passkey login challenges without revealing account credentials", async () => {
-    const calls: Array<{ sql: string; bindings: unknown[] }> = [];
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind(...bindings: unknown[]) {
-            calls.push({ sql, bindings });
-            return {
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-
-    const result = await createPasskeyAuthenticationOptions(
-      {
-        APP_ORIGIN: "https://0509.io",
-        DB: db as unknown as D1Database,
-        STYTCH_B2B_PASSKEYS_ENABLED: "true",
-        STYTCH_PROJECT_ID: "project-test",
-        STYTCH_SECRET: "secret-test",
-        STYTCH_TAT_AUDIENCE: "0509-passkeys",
-        STYTCH_TAT_ISSUER: "https://0509.io",
-        STYTCH_TAT_PRIVATE_KEY_B64: "private-key",
-        STYTCH_TAT_PROFILE_ID: "trusted-auth-token-profile-test",
-      },
-      new Request("https://0509.io/auth/login", {
-        method: "POST",
-        headers: { origin: "https://0509.io" },
-      }),
-      { redirectTo: "https://attacker.example/app" },
-    );
-
-    expect(result.state).toBeTruthy();
-    expect(result.options.challenge).toBeTruthy();
-    expect(result.options.allowCredentials).toBeUndefined();
-    const insert = calls.find((call) => call.sql.includes("INSERT INTO passkey_challenge"));
-    expect(insert?.bindings[1]).toBe("authentication");
-    expect(insert?.bindings[2]).toBeNull();
-    expect(insert?.bindings[4]).toBe("/app");
-  });
-
-  it("rejects passkey challenge creation without same-origin proof", async () => {
-    await expect(
-      createPasskeyAuthenticationOptions(
-        {
-          APP_ORIGIN: "https://0509.io",
-          DB: {} as D1Database,
-          STYTCH_B2B_PASSKEYS_ENABLED: "true",
-          STYTCH_PROJECT_ID: "project-test",
-          STYTCH_SECRET: "secret-test",
-          STYTCH_TAT_AUDIENCE: "0509-passkeys",
-          STYTCH_TAT_ISSUER: "https://0509.io",
-          STYTCH_TAT_PRIVATE_KEY_B64: "private-key",
-          STYTCH_TAT_PROFILE_ID: "trusted-auth-token-profile-test",
-        },
-        new Request("https://0509.io/auth/login", { method: "POST" }),
-        { redirectTo: "/app" },
-      ),
-    ).rejects.toThrow("passkey request could not be verified");
-  });
-
-  it("exchanges trusted auth tokens through the backend Stytch session endpoint", async () => {
-    const sentBodies: Array<Record<string, unknown>> = [];
-    const sentUrls: string[] = [];
-    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
-      sentUrls.push(String(url));
-      sentBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
-      return new Response(
-        JSON.stringify({
-          member_id: "member-1",
-          session_token: "session-1",
-          session_jwt: "jwt-1",
-          member_authenticated: true,
-          member_session: {
-            member_session_id: "member-session-1",
-            expires_at: "2099-01-01T00:00:00.000Z",
-          },
-          member: {
-            organization_id: "organization-1",
-            member_id: "member-1",
-            email_address: "asha@agency.com",
-          },
-          organization: {
-            organization_id: "organization-1",
-            organization_name: "Agency",
-          },
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      );
-    });
-
-    await attestTrustedAuthToken(
-      {
-        STYTCH_API_BASE_URL: "https://api.stytch.test",
-        STYTCH_PROJECT_ID: "project-test",
-        STYTCH_SECRET: "secret-test",
-      },
-      {
-        organizationId: "organization-1",
-        profileId: "trusted-auth-token-profile-test",
-        token: "signed-jwt",
-      },
-    );
-
-    expect(sentUrls[0]).toBe("https://api.stytch.test/v1/b2b/sessions/attest");
-    expect(sentBodies[0]).toMatchObject({
-      organization_id: "organization-1",
-      profile_id: "trusted-auth-token-profile-test",
-      token: "signed-jwt",
-    });
-  });
-
-  it("starts Stytch OAuth from a same-origin server action with HTTP-only verifier cookies", async () => {
-    const statements: string[] = [];
-    const db = {
-      prepare(sql: string) {
-        statements.push(sql);
-        return {
-          bind() {
-            return {
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-
-    try {
-      await oauthAction({
-        context: {
-          cloudflare: {
-            env: {
-              ...stytchActionTestEnv(db),
-              STYTCH_OAUTH_ENABLED_PROVIDERS: "microsoft",
-              STYTCH_OAUTH_BRANDED_PROVIDERS: "microsoft",
-              STYTCH_PUBLIC_TOKEN: "public-token-test",
-            },
-          },
-        },
-        params: {},
-        request: new Request("https://preview.0509.dev/auth/stytch/oauth", {
-          method: "POST",
-          body: new URLSearchParams({
-            email: "asha@agency.com",
-            mode: "login",
-            provider: "microsoft",
-            redirectTo: "/app",
-          }),
-          headers: { origin: "https://preview.0509.dev" },
-        }),
-      } as never);
-      throw new Error("Expected OAuth action to redirect to Stytch.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      const response = error as Response;
-      expect(response.status).toBe(302);
-      const location = new URL(response.headers.get("Location") ?? "");
-      expect(location.pathname).toBe("/v1/b2b/public/oauth/microsoft/discovery/start");
-      expect(location.searchParams.get("public_token")).toBe("public-token-test");
-      expect(location.searchParams.has("pkce_code_challenge")).toBe(true);
-      const redirectUrl = new URL(String(location.searchParams.get("discovery_redirect_url")));
-      expect(redirectUrl.origin).toBe("https://preview.0509.dev");
-      expect(redirectUrl.pathname).toBe("/auth/stytch/callback");
-      expect(redirectUrl.search).toBe("");
-      expect(response.headers.get("Set-Cookie")).toContain("f9_stytch_state=");
-      expect(response.headers.get("Set-Cookie")).toContain("f9_stytch_pkce=");
-      expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
-    }
-    expect(statements.some((sql) => sql.includes("INSERT INTO stytch_auth_request"))).toBe(true);
-  });
-
-  it("rejects a Stytch OAuth provider that is not explicitly enabled", async () => {
-    const db = {
-      prepare() {
-        throw new Error("No auth request should be stored for a disabled provider.");
-      },
-    };
-
-    try {
-      await oauthAction({
-        context: {
-          cloudflare: {
-            env: {
-              ...stytchActionTestEnv(db),
-              STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
-              STYTCH_OAUTH_BRANDED_PROVIDERS: "google",
-              STYTCH_PUBLIC_TOKEN: "public-token-test",
-            },
-          },
-        },
-        params: {},
-        request: new Request("https://preview.0509.dev/auth/stytch/oauth", {
-          method: "POST",
-          body: new URLSearchParams({
-            email: "asha@agency.com",
-            mode: "login",
-            provider: "microsoft",
-            redirectTo: "/app",
-          }),
-          headers: { origin: "https://preview.0509.dev" },
-        }),
-      } as never);
-      throw new Error("Expected disabled OAuth provider to redirect.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      const response = error as Response;
-      expect(response.status).toBe(302);
-      expect(response.headers.get("Location")).toBe("/auth/login?error=oauth_not_configured");
-    }
-  });
-
-  it("rejects a Stytch OAuth provider that is enabled but not branded-verified", async () => {
-    const db = {
-      prepare() {
-        throw new Error("No auth request should be stored before OAuth branding is verified.");
-      },
-    };
-
-    try {
-      await oauthAction({
-        context: {
-          cloudflare: {
-            env: {
-              ...stytchActionTestEnv(db),
-              STYTCH_OAUTH_ENABLED_PROVIDERS: "google",
-              STYTCH_PUBLIC_TOKEN: "public-token-test",
-            },
-          },
-        },
-        params: {},
-        request: new Request("https://preview.0509.dev/auth/stytch/oauth", {
-          method: "POST",
-          body: new URLSearchParams({
-            email: "asha@agency.com",
-            mode: "login",
-            provider: "google",
-            redirectTo: "/app",
-          }),
-          headers: { origin: "https://preview.0509.dev" },
-        }),
-      } as never);
-      throw new Error("Expected unbranded OAuth provider to redirect.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      const response = error as Response;
-      expect(response.status).toBe(302);
-      expect(response.headers.get("Location")).toBe("/auth/login?error=oauth_not_configured");
-    }
-  });
-
-  it("requires an explicit HTTPS app origin before sending Stytch magic links", async () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const env = {
-      STYTCH_API_BASE_URL: "https://api.stytch.test",
-      STYTCH_PROJECT_ID: "project-test",
-      STYTCH_SECRET: "secret-test",
-    };
-
-    expect(isStytchConfigured(env)).toBe(false);
-    await expect(
-      sendDiscoveryEmail(
-        env,
+      isSameOriginAuthFormPost(
+        env(),
         new Request("https://0509.io/auth/login", {
-          headers: {
-            forwarded: "proto=https;host=attacker.example",
-            "x-forwarded-host": "attacker.example",
-          },
+          headers: { origin: "https://0509.io" },
+          method: "POST",
         }),
-        {
-          email: "asha@agency.com",
-          mode: "login",
-          state: "state-123",
-        },
       ),
-    ).rejects.toThrow("APP_ORIGIN must be configured");
-    expect(fetchSpy).not.toHaveBeenCalled();
+    ).toBe(true);
+
+    expect(
+      isSameOriginAuthFormPost(
+        env({ BETTER_AUTH_TRUSTED_ORIGINS: "https://preview.0509.dev" }),
+        new Request("https://preview.0509.dev/auth/login", {
+          headers: { origin: "https://preview.0509.dev" },
+          method: "POST",
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isSameOriginAuthFormPost(
+        env(),
+        new Request("https://0509.io/auth/login", {
+          headers: { origin: "https://evil.example" },
+          method: "POST",
+        }),
+      ),
+    ).toBe(false);
+    expect(isSameOriginAuthFormPost(env(), new Request("https://0509.io/auth/login"))).toBe(false);
+  });
+});
+
+describe("auth session boundary", () => {
+  it("returns null when no database binding is present", async () => {
+    const { getOptionalSession } = await import("~/lib/auth.server");
+    await expect(getOptionalSession(env({ DB: undefined }), new Request("https://0509.io/app"))).resolves.toBeNull();
   });
 
-  it("names each allowed Stytch workspace creation path", () => {
-    expect(
-      stytchWorkspaceCreationReason({
-        mode: "login",
-        organizationName: null,
-        redirectTo: "/app",
+  it("maps Better Auth sessions into the app session shape", async () => {
+    vi.doMock("~/lib/better-auth.server", () => ({
+      getBetterAuthSession: vi.fn().mockResolvedValue({
+        session: {
+          expiresAt: "2026-06-30T00:00:00.000Z",
+          id: "session-1",
+          userId: "user-1",
+        },
+        user: {
+          email: "owner@example.com",
+          id: "user-1",
+          image: null,
+          name: "Owner",
+          onboardedAt: null,
+        },
       }),
-    ).toBeNull();
-    expect(
-      stytchWorkspaceCreationReason({
-        mode: "signup",
-        organizationName: "Agency",
-        redirectTo: "/app/onboard",
-      }),
-    ).toBe("signup");
-    expect(
-      stytchWorkspaceCreationReason({
-        mode: "login",
-        organizationName: null,
-        redirectTo: "/team/accept?token=invite-1",
-      }),
-    ).toBe("team_invite");
-    expect(
-      stytchWorkspaceCreationReason(
+    }));
+
+    const { getOptionalSession } = await import("~/lib/auth.server");
+    const session = await getOptionalSession(env(), new Request("https://0509.io/app"));
+    expect(session?.session.id).toBe("session-1");
+    expect(session?.user.email).toBe("owner@example.com");
+  });
+
+  it("redirects protected routes without a Better Auth session", async () => {
+    vi.doMock("~/lib/better-auth.server", () => ({
+      getBetterAuthSession: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { requireSession } = await import("~/lib/auth.server");
+    await expect(requireSession(env(), new Request("https://0509.io/app/billing"))).rejects.toMatchObject({
+      status: 302,
+    });
+  });
+});
+
+describe("Better Auth magic links", () => {
+  it("does not send login links for unknown users", async () => {
+    await expect(
+      sendBetterAuthMagicLink(
+        env({ DB: dbWithUser(null) }),
+        new Request("https://0509.io/auth/login"),
         {
+          email: "unknown@example.com",
           mode: "login",
-          organizationName: null,
           redirectTo: "/app",
         },
-        { hasExistingLocalUser: true },
       ),
-    ).toBe("local_user_migration");
+    ).rejects.toBeInstanceOf(BetterAuthUnknownUserError);
   });
 
-  it("rejects cross-site callback form posts before authenticating magic links", async () => {
-    const request = new Request("https://0509.io/auth/stytch/callback", {
-      method: "POST",
+  it("stores Better Auth magic-link tokens in a short-lived HTTP-only confirmation cookie", () => {
+    const request = new Request("https://0509.io/auth/better/magic-link", {
+      headers: {
+        cookie: "f9_better_magic_state=request-state",
+      },
+    });
+    const cookie = betterAuthMagicLinkConfirmationCookie(
+      request,
+      "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&newUserCallbackURL=https%3A%2F%2F0509.io%2Fapp%2Fonboard&email=owner%40example.com&state=request-state",
+    );
+
+    expect(cookie).toContain("f9_better_magic=");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("Max-Age=600");
+    expect(cookie).not.toContain("secret-token");
+
+    const payload = readBetterAuthMagicLinkConfirmation(
+      new Request("https://0509.io/auth/better/magic-link", {
+        headers: { cookie: `${cookie}; f9_better_magic_state=request-state` },
+      }),
+    );
+    expect(payload).toMatchObject({
+      callbackURL: "https://0509.io/app",
+      email: "owner@example.com",
+      newUserCallbackURL: "https://0509.io/app/onboard",
+      requestState: "request-state",
+      token: "secret-token",
+    });
+  });
+
+  it("rejects magic-link callbacks without the browser request-state cookie", () => {
+    const request = new Request("https://0509.io/auth/better/magic-link");
+
+    expect(() =>
+      betterAuthMagicLinkConfirmationCookie(
+        request,
+        "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&email=owner%40example.com&state=request-state",
+      ),
+    ).toThrow(BetterAuthMagicLinkStateError);
+  });
+
+  it("moves magic-link tokens into a cookie before rendering the confirmation page", async () => {
+    const { loader } = await import("~/routes/auth.better.magic-link");
+    const tokenUrl =
+      "https://0509.io/auth/better/magic-link?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&email=owner%40example.com&state=request-state";
+    const redirectResponse = (await Promise.resolve(
+      loader({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request(tokenUrl, {
+          headers: {
+            cookie: "f9_better_magic_state=request-state",
+          },
+        }),
+        url: tokenUrl,
+      } as never),
+    ).catch((error) => error)) as Response;
+
+    if (!(redirectResponse instanceof Response)) {
+      throw redirectResponse;
+    }
+
+    expect(redirectResponse.status).toBe(302);
+    expect(redirectResponse.headers.get("Location")).toBe("/auth/better/magic-link?mode=login");
+    const cookie = redirectResponse.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toContain("f9_better_magic=");
+    expect(cookie).not.toContain("secret-token");
+
+    const cleanResponse = await loader({
+      context: context(env()),
+      params: {},
+      pattern: "/auth/better/magic-link",
+      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
+        headers: { cookie: `${cookie}; f9_better_magic_state=request-state` },
+      }),
+      url: "https://0509.io/auth/better/magic-link?mode=login",
+    } as never);
+    await expect(cleanResponse.json()).resolves.toEqual({
+      email: "owner@example.com",
+      mode: "login",
+    });
+  });
+});
+
+describe("Better Auth auth page errors", () => {
+  it("shows generic retry messages for unrecognized Better Auth callback error codes", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { loader: loginLoader } = await import("~/routes/auth.login");
+    const { loader: signupLoader } = await import("~/routes/auth.signup");
+
+    await expect(
+      loginLoader({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/login",
+        request: new Request("https://0509.io/auth/login?error=INVALID_TOKEN"),
+        url: "https://0509.io/auth/login?error=INVALID_TOKEN",
+      } as never),
+    ).resolves.toMatchObject({
+      error: "That sign-in request could not be completed. Request a fresh link and try again.",
+    });
+
+    await expect(
+      signupLoader({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/signup",
+        request: new Request("https://0509.io/auth/signup?error=TOKEN_EXPIRED"),
+        url: "https://0509.io/auth/signup?error=TOKEN_EXPIRED",
+      } as never),
+    ).resolves.toMatchObject({
+      error: "That setup request could not be completed. Request a fresh link and try again.",
+    });
+  });
+});
+
+describe("Better Auth routes", () => {
+  it("delegates /api/auth/* requests to the Better Auth handler", async () => {
+    const handler = vi.fn().mockResolvedValue(new Response("handled"));
+    vi.doMock("~/lib/better-auth.server", () => ({
+      getBetterAuth: vi.fn().mockReturnValue({ handler }),
+    }));
+
+    const { loader } = await import("~/routes/api.auth.$");
+    const response = await loader({
+      context: context(env()),
+      params: {},
+      pattern: "/api/auth/*",
+      request: new Request("https://0509.io/api/auth/get-session"),
+      url: "https://0509.io/api/auth/get-session",
+    } as never);
+
+    expect(await response.text()).toBe("handled");
+    expect(handler).toHaveBeenCalledWith(expect.any(Request));
+  });
+
+  it("does not expose native Better Auth magic-link or OAuth token endpoints publicly", async () => {
+    const handler = vi.fn().mockResolvedValue(new Response("handled"));
+    vi.doMock("~/lib/better-auth.server", () => ({
+      getBetterAuth: vi.fn().mockReturnValue({ handler }),
+    }));
+
+    const { action, loader } = await import("~/routes/api.auth.$");
+    const verifyResponse = await loader({
+      context: context(env()),
+      params: {},
+      pattern: "/api/auth/*",
+      request: new Request("https://0509.io/api/auth/magic-link/verify?token=secret-token"),
+      url: "https://0509.io/api/auth/magic-link/verify?token=secret-token",
+    } as never);
+    const signInResponse = await action({
+      context: context(env()),
+      params: {},
+      pattern: "/api/auth/*",
+      request: new Request("https://0509.io/api/auth/sign-in/magic-link", { method: "POST" }),
+      url: "https://0509.io/api/auth/sign-in/magic-link",
+    } as never);
+    const socialSignInResponse = await action({
+      context: context(env()),
+      params: {},
+      pattern: "/api/auth/*",
+      request: new Request("https://0509.io/api/auth/sign-in/social", { method: "POST" }),
+      url: "https://0509.io/api/auth/sign-in/social",
+    } as never);
+    const accessTokenResponse = await action({
+      context: context(env()),
+      params: {},
+      pattern: "/api/auth/*",
+      request: new Request("https://0509.io/api/auth/get-access-token", { method: "POST" }),
+      url: "https://0509.io/api/auth/get-access-token",
+    } as never);
+    const refreshTokenResponse = await action({
+      context: context(env()),
+      params: {},
+      pattern: "/api/auth/*",
+      request: new Request("https://0509.io/api/auth/refresh-token", { method: "POST" }),
+      url: "https://0509.io/api/auth/refresh-token",
+    } as never);
+
+    expect(verifyResponse.status).toBe(404);
+    expect(signInResponse.status).toBe(404);
+    expect(socialSignInResponse.status).toBe(404);
+    expect(accessTokenResponse.status).toBe(404);
+    expect(refreshTokenResponse.status).toBe(404);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("starts only configured Better Auth OAuth providers from same-origin posts", async () => {
+    const startBetterAuthSocialSignIn = vi.fn().mockResolvedValue({
+      headers: new Headers({ "Set-Cookie": "better-auth.state=state-1; HttpOnly; Secure" }),
+      url: "https://accounts.google.com/o/oauth2/v2/auth",
+    });
+    vi.doMock("~/lib/better-auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
+        "~/lib/better-auth.server",
+      );
+      return {
+        ...actual,
+        startBetterAuthSocialSignIn,
+      };
+    });
+
+    const { action } = await import("~/routes/auth.better.oauth");
+    const request = new Request("https://0509.io/auth/better/oauth", {
       body: new URLSearchParams({
         mode: "login",
-        state: "state-123",
-        token: "token-123",
+        provider: "google",
+        redirectTo: "/app",
       }),
-      headers: { origin: "https://attacker.example" },
-    });
-
-    try {
-      await callbackAction({
-        context: {
-          cloudflare: {
-            env: { APP_ORIGIN: "https://0509.io" },
-          },
-        },
-        params: {},
-        request,
-      } as never);
-      throw new Error("Expected callback action to reject the request.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(403);
-    }
-  });
-
-  it("fails closed when a PKCE callback arrives without the same-browser verifier", async () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal("fetch", fetchSpy);
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind() {
-            return {
-              async first<T>() {
-                expect(sql).toContain("FROM stytch_auth_request");
-                return {
-                  state: "state-1",
-                  auth_method: "oauth",
-                  email: "asha@agency.com",
-                  mode: "login",
-                  name: null,
-                  organization_name: null,
-                  redirect_to: "/app",
-                  intermediate_session_token: null,
-                  confirmation_secret: null,
-                  confirmation_nonce: null,
-                  expires_at: "2099-01-01T00:00:00.000Z",
-                } as T;
-              },
-            };
-          },
-        };
-      },
-    };
-
-    try {
-      await callbackLoader({
-        context: {
-          cloudflare: {
-            env: stytchActionTestEnv(db),
-          },
-        },
-        params: {},
-        request: new Request(
-          "https://0509.io/auth/stytch/callback?stytch_token_type=discovery_oauth&token=token-1",
-          {
-            headers: { cookie: "f9_stytch_state=state-1" },
-          },
-        ),
-      } as never);
-      throw new Error("Expected PKCE callback to fail closed.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(302);
-      expect((error as Response).headers.get("Location")).toBe("/auth/login?error=callback_failed");
-    }
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("rejects magic-link callbacks for pending OAuth requests before storing tokens", async () => {
-    const fetchSpy = vi.fn();
-    const updates: string[] = [];
-    vi.stubGlobal("fetch", fetchSpy);
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind() {
-            return {
-              async first<T>() {
-                expect(sql).toContain("FROM stytch_auth_request");
-                return {
-                  state: "state-1",
-                  auth_method: "oauth",
-                  email: "",
-                  mode: "login",
-                  name: null,
-                  organization_name: null,
-                  redirect_to: "/app",
-                  intermediate_session_token: null,
-                  confirmation_secret: null,
-                  confirmation_nonce: null,
-                  expires_at: "2099-01-01T00:00:00.000Z",
-                } as T;
-              },
-              async run() {
-                updates.push(sql);
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-
-    try {
-      await callbackLoader({
-        context: {
-          cloudflare: {
-            env: stytchActionTestEnv(db),
-          },
-        },
-        params: {},
-        request: new Request(
-          "https://0509.io/auth/stytch/callback?discovery_magic_links_token=token-1",
-          {
-            headers: { cookie: "f9_stytch_state=state-1" },
-          },
-        ),
-      } as never);
-      throw new Error("Expected mismatched callback method to fail closed.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(302);
-      expect((error as Response).headers.get("Location")).toBe("/auth/login?error=callback_failed");
-    }
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(updates).toHaveLength(0);
-  });
-
-  it("rejects cross-browser magic-link GETs before authenticating tokens", async () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal("fetch", fetchSpy);
-
-    try {
-      await callbackLoader({
-        context: {
-          cloudflare: {
-            env: stytchActionTestEnv({}),
-          },
-        },
-        params: {},
-        request: new Request(
-          "https://0509.io/auth/stytch/callback?discovery_magic_links_token=token-1",
-        ),
-      } as never);
-      throw new Error("Expected cross-browser callback to fail closed.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      const response = error as Response;
-      expect(response.status).toBe(302);
-      expect(response.headers.get("Location")).toBe("/auth/login?error=callback_failed");
-      expect(response.headers.get("Set-Cookie")).toBeNull();
-    }
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("does not authenticate same-browser magic-link GETs before confirmation", async () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal("fetch", fetchSpy);
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind() {
-            return {
-              async first<T>() {
-                return {
-                  state: "state-1",
-                  auth_method: "magic_link",
-                  email: "asha@agency.com",
-                  mode: "login",
-                  name: null,
-                  organization_name: null,
-                  redirect_to: "/app",
-                  intermediate_session_token: null,
-                  confirmation_secret: null,
-                  confirmation_nonce: null,
-                  expires_at: "2099-01-01T00:00:00.000Z",
-                } as T;
-              },
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-
-    try {
-      await callbackLoader({
-        context: {
-          cloudflare: {
-            env: stytchActionTestEnv(db),
-          },
-        },
-        params: {},
-        request: new Request(
-          "https://0509.io/auth/stytch/callback?discovery_magic_links_token=token-1",
-          {
-            headers: { cookie: "f9_stytch_state=state-1" },
-          },
-        ),
-      } as never);
-      throw new Error("Expected same-browser callback to redirect to confirmation.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).headers.get("Location")).toBe("/auth/stytch/confirm?state=state-1");
-    }
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("turns Stytch login email send failures into retryable auth errors", async () => {
-    const statements: string[] = [];
-    const db = {
-      prepare(sql: string) {
-        statements.push(sql);
-        return {
-          bind() {
-            return {
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-    vi.stubGlobal("fetch", async () => {
-      return new Response(JSON.stringify({ error_message: "Stytch is unavailable" }), {
-        headers: { "Content-Type": "application/json" },
-        status: 503,
-      });
-    });
-
-    try {
-      await loginAction({
-        context: {
-          cloudflare: {
-            env: stytchActionTestEnv(db),
-          },
-        },
-        params: {},
-        request: authFormPost("https://0509.io/auth/login", {
-          email: "asha@agency.com",
-          redirectTo: "/app",
-        }),
-      } as never);
-      throw new Error("Expected login action to redirect with send failure.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(302);
-      expect((error as Response).headers.get("Location")).toBe("/auth/login?error=send_failed");
-      expect((error as Response).headers.get("Set-Cookie")).toBeNull();
-    }
-
-    expect(statements.some((sql) => sql.includes("INSERT INTO stytch_auth_request"))).toBe(true);
-    expect(statements.some((sql) => sql.includes("SET consumed_at = ?"))).toBe(true);
-  });
-
-  it("turns Stytch signup email send failures into retryable auth errors", async () => {
-    const db = {
-      prepare() {
-        return {
-          bind() {
-            return {
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
-    vi.stubGlobal("fetch", async () => {
-      return new Response(JSON.stringify({ error_message: "Stytch is unavailable" }), {
-        headers: { "Content-Type": "application/json" },
-        status: 503,
-      });
-    });
-
-    try {
-      await signupAction({
-        context: {
-          cloudflare: {
-            env: stytchActionTestEnv(db),
-          },
-        },
-        params: {},
-        request: authFormPost("https://0509.io/auth/signup", {
-          email: "asha@agency.com",
-          name: "Asha",
-          organizationName: "Agency",
-          redirectTo: "/app/onboard",
-        }),
-      } as never);
-      throw new Error("Expected signup action to redirect with send failure.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(302);
-      expect((error as Response).headers.get("Location")).toBe("/auth/signup?error=send_failed");
-      expect((error as Response).headers.get("Set-Cookie")).toBeNull();
-    }
-  });
-
-  it("turns expired cross-browser confirmation loads into retryable auth errors", async () => {
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind() {
-            return {
-              async first<T>() {
-                expect(sql).toContain("FROM stytch_auth_request");
-                return {
-                  state: "state-1",
-                  auth_method: "magic_link",
-                  email: "asha@agency.com",
-                  mode: "login",
-                  name: null,
-                  organization_name: null,
-                  redirect_to: "/app",
-                  intermediate_session_token: "expired-intermediate-session",
-                  confirmation_secret: "confirm-secret",
-                  confirmation_nonce: null,
-                  expires_at: "2099-01-01T00:00:00.000Z",
-                } as T;
-              },
-            };
-          },
-        };
-      },
-    };
-    vi.stubGlobal("fetch", async () => {
-      return new Response(JSON.stringify({ error_message: "intermediate session expired" }), {
-        headers: { "Content-Type": "application/json" },
-        status: 401,
-      });
-    });
-
-    try {
-      await confirmLoader({
-        context: {
-          cloudflare: {
-            env: stytchActionTestEnv(db),
-          },
-        },
-        params: {},
-        request: new Request("https://0509.io/auth/stytch/confirm?state=state-1", {
-          headers: { cookie: "f9_stytch_confirm=confirm-secret" },
-        }),
-      } as never);
-      throw new Error("Expected confirm loader to redirect with callback failure.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(302);
-      expect((error as Response).headers.get("Location")).toBe("/auth/login?error=callback_failed");
-    }
-  });
-
-  it("requires the rotated confirmation nonce before cross-browser completion", () => {
-    const authRequest = {
-      confirmationSecret: "secret-1",
-      confirmationNonce: "nonce-1",
-    } as StytchAuthRequest;
-
-    expect(
-      verifyStytchConfirmationSecret(
-        new Request("https://0509.io/auth/stytch/confirm", {
-          headers: { cookie: "f9_stytch_confirm=secret-1" },
-        }),
-        authRequest,
-      ),
-    ).toBe(true);
-    expect(verifyStytchConfirmationSecret(new Request("https://0509.io/auth/stytch/confirm"), authRequest)).toBe(false);
-    expect(verifyStytchConfirmationNonce(authRequest, "nonce-1")).toBe(true);
-    expect(verifyStytchConfirmationNonce(authRequest, "wrong")).toBe(false);
-    expect(verifyStytchConfirmationNonce({ confirmationNonce: null } as StytchAuthRequest, "nonce-1")).toBe(false);
-    expect(stytchConfirmationCookie(new Request("https://0509.io"), "secret-1")).toContain(
-      "f9_stytch_confirm=secret-1",
-    );
-  });
-
-  it("does not revoke sessions from a GET logout request", async () => {
-    try {
-      await logoutLoader();
-      throw new Error("Expected logout loader to redirect.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(302);
-      expect((error as Response).headers.get("Location")).toBe("/");
-      expect((error as Response).headers.get("Set-Cookie")).toBeNull();
-    }
-  });
-
-  it("does not clear the Stytch session from a cross-site logout POST", async () => {
-    const request = new Request("https://0509.io/auth/logout", {
-      method: "POST",
       headers: {
-        cookie: "f9_stytch_session=session-123",
-        origin: "https://attacker.example",
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "https://0509.io",
       },
+      method: "POST",
     });
 
+    const configuredEnv = env({
+      BETTER_AUTH_GOOGLE_CLIENT_ID: "google-client",
+      BETTER_AUTH_GOOGLE_CLIENT_SECRET: "google-secret",
+      BETTER_AUTH_OAUTH_BRANDED_PROVIDERS: "google",
+    });
+    let redirectResponse: Response | null = null;
     try {
-      await logoutAction({
-        context: {
-          cloudflare: {
-            env: { APP_ORIGIN: "https://0509.io" },
-          },
-        },
+      await action({
+        context: context(configuredEnv),
         params: {},
+        pattern: "/auth/better/oauth",
         request,
+        url: "https://0509.io/auth/better/oauth",
       } as never);
-      throw new Error("Expected logout action to reject the request.");
     } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(403);
-      expect((error as Response).headers.get("Set-Cookie")).toBeNull();
+      redirectResponse = error as Response;
     }
+
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe(
+      "https://accounts.google.com/o/oauth2/v2/auth",
+    );
+    expect(redirectResponse?.headers.get("Set-Cookie")).toContain("better-auth.state=state-1");
+    expect(startBetterAuthSocialSignIn).toHaveBeenCalledWith(
+      configuredEnv,
+      expect.any(Request),
+      expect.objectContaining({ provider: "google", redirectTo: "/app" }),
+    );
   });
 
-  it("rejects a Stytch email collision with another local account", async () => {
-    const calls: Array<{ sql: string; bindings: unknown[] }> = [];
-    const identityUser = {
-      id: "user-existing",
-      name: "Asha",
-      email: "old@agency.com",
-      image: null,
-      onboardedAt: "2026-06-01T00:00:00.000Z",
-    };
-    const differentEmailOwner = {
-      id: "user-other",
-      name: "Other",
-      email: "new@agency.com",
-      image: null,
-      onboardedAt: null,
-    };
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind(...bindings: unknown[]) {
-            calls.push({ sql, bindings });
-            return {
-              async all<T>() {
-                if (sql.includes("FROM stytch_identity")) {
-                  return { results: [identityUser] as T[] };
-                }
-                if (sql.includes("FROM user") && sql.includes("WHERE email")) {
-                  return { results: [differentEmailOwner] as T[] };
-                }
-                return { results: [] as T[] };
-              },
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
+  it("rejects unconfigured Better Auth OAuth providers before starting OAuth", async () => {
+    const { action } = await import("~/routes/auth.better.oauth");
+    const request = new Request("https://0509.io/auth/better/oauth", {
+      body: new URLSearchParams({
+        mode: "login",
+        provider: "microsoft",
+        redirectTo: "/app",
+      }),
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "https://0509.io",
       },
-    };
+      method: "POST",
+    });
 
     await expect(
-      upsertStytchAuthenticatedUser(
-        { DB: db as unknown as D1Database },
-        {
-          email: "new@agency.com",
-          name: "Asha New",
-          stytchMemberId: "member-1",
-          stytchOrganizationId: "org-1",
-          stytchOrganizationName: "Agency",
-          stytchOrganizationSlug: "agency",
-        },
-      ),
-    ).rejects.toThrow("already linked to another local account");
-
-    expect(calls.some((call) => call.sql.includes("UPDATE user"))).toBe(false);
+      action({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/better/oauth",
+        request,
+        url: "https://0509.io/auth/better/oauth",
+      } as never),
+    ).rejects.toMatchObject({
+      status: 302,
+    });
   });
 
-  it("rejects a second Stytch organization for an email already linked locally", async () => {
-    const existingEmailOwner = {
-      id: "user-existing",
-      name: "Asha",
-      email: "asha@agency.com",
-      image: null,
-      onboardedAt: null,
-    };
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind() {
-            return {
-              async all<T>() {
-                if (sql.includes("FROM stytch_identity") && sql.includes("JOIN user")) {
-                  return { results: [] as T[] };
-                }
-                if (sql.includes("FROM user") && sql.includes("WHERE email")) {
-                  return { results: [existingEmailOwner] as T[] };
-                }
-                if (sql.includes("FROM stytch_identity") && sql.includes("WHERE user_id")) {
-                  return {
-                    results: [
-                      {
-                        stytchOrganizationId: "org-old",
-                        stytchMemberId: "member-old",
-                      },
-                    ] as T[],
-                  };
-                }
-                return { results: [] as T[] };
-              },
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
+  it("returns the normal sent redirect for unknown login emails", async () => {
+    vi.doMock("~/lib/better-auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
+        "~/lib/better-auth.server",
+      );
+      return {
+        ...actual,
+        sendBetterAuthMagicLink: vi
+          .fn()
+          .mockRejectedValue(new actual.BetterAuthUnknownUserError()),
+      };
+    });
 
-    await expect(
-      upsertStytchAuthenticatedUser(
-        { DB: db as unknown as D1Database },
-        {
-          email: "asha@agency.com",
-          name: "Asha",
-          stytchMemberId: "member-new",
-          stytchOrganizationId: "org-new",
-          stytchOrganizationName: "New org",
-          stytchOrganizationSlug: "new-org",
-        },
-      ),
-    ).rejects.toThrow("already linked to another Stytch organization");
+    const { action } = await import("~/routes/auth.login");
+    const request = new Request("https://0509.io/auth/login", {
+      body: new URLSearchParams({
+        email: "unknown@example.com",
+        redirectTo: "/app",
+      }),
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "https://0509.io",
+      },
+      method: "POST",
+    });
+
+    let redirectResponse: Response | null = null;
+    try {
+      await action({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/login",
+        request,
+        url: "https://0509.io/auth/login",
+      } as never);
+    } catch (error) {
+      redirectResponse = error as Response;
+    }
+
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe(
+      "/auth/login?sent=1&email=unknown%40example.com&redirectTo=%2Fapp",
+    );
+    const setCookie = redirectResponse?.headers.get("Set-Cookie") ?? "";
+    expect(setCookie).toContain("f9_better_magic_state=");
+    expect(setCookie).not.toContain("f9_better_magic=");
+    expect(setCookie).not.toContain("unknown@example.com");
   });
 
-  it("updates the identity mapping when a member is recreated in the same Stytch organization", async () => {
-    const calls: Array<{ sql: string; bindings: unknown[] }> = [];
-    const existingEmailOwner = {
-      id: "user-existing",
-      name: "Asha",
-      email: "asha@agency.com",
-      image: null,
-      onboardedAt: null,
-    };
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind(...bindings: unknown[]) {
-            calls.push({ sql, bindings });
-            return {
-              async all<T>() {
-                if (sql.includes("FROM stytch_identity") && sql.includes("JOIN user")) {
-                  return { results: [] as T[] };
-                }
-                if (sql.includes("FROM user") && sql.includes("WHERE email")) {
-                  return { results: [existingEmailOwner] as T[] };
-                }
-                if (sql.includes("FROM stytch_identity") && sql.includes("WHERE user_id")) {
-                  return {
-                    results: [
-                      {
-                        stytchOrganizationId: "org-1",
-                        stytchMemberId: "member-old",
-                      },
-                    ] as T[],
-                  };
-                }
-                return { results: [] as T[] };
-              },
-              async run() {
-                return {};
-              },
-            };
-          },
-        };
-      },
-    };
+  it("clears Better Auth session cookies when provider sign-out fails", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.doMock("~/lib/better-auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
+        "~/lib/better-auth.server",
+      );
+      return {
+        ...actual,
+        signOutBetterAuth: vi.fn().mockRejectedValue(new Error("d1 unavailable")),
+      };
+    });
 
-    const user = await upsertStytchAuthenticatedUser(
-      { DB: db as unknown as D1Database },
-      {
-        email: "asha@agency.com",
-        name: "Asha",
-        stytchMemberId: "member-new",
-        stytchOrganizationId: "org-1",
-        stytchOrganizationName: "Agency",
-        stytchOrganizationSlug: "agency",
+    const { action } = await import("~/routes/auth.logout");
+    const request = new Request("https://0509.io/auth/logout", {
+      headers: {
+        cookie: "better-auth.session_token=session-123; __Secure-better-auth.session_token=session-123",
+        origin: "https://0509.io",
       },
-    );
+      method: "POST",
+    });
 
-    const identityUpdate = calls.find((call) =>
-      call.sql.includes("UPDATE stytch_identity") && call.sql.includes("SET stytch_member_id = ?"),
+    let redirectResponse: Response | null = null;
+    try {
+      await action({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/logout",
+        request,
+        url: "https://0509.io/auth/logout",
+      } as never);
+    } catch (error) {
+      redirectResponse = error as Response;
+    }
+
+    const setCookies =
+      (redirectResponse?.headers as (Headers & { getSetCookie?: () => string[] }) | undefined)
+        ?.getSetCookie?.() ?? [redirectResponse?.headers.get("Set-Cookie") ?? ""];
+    const combinedSetCookie = setCookies.join("\n");
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe("/");
+    expect(combinedSetCookie).toContain("better-auth.session_token=;");
+    expect(combinedSetCookie).toContain("__Secure-better-auth.session_token=;");
+    expect(combinedSetCookie).toContain("Max-Age=0");
+  });
+
+  it("routes unauthenticated valid team invites through signup", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      peekWorkspaceInvite: vi.fn().mockResolvedValue({
+        invitedEmail: "teammate@example.com",
+        ownerName: "Owner",
+      }),
+    }));
+
+    const { loader } = await import("~/routes/team.accept");
+    let redirectResponse: Response | null = null;
+    try {
+      await loader({
+        context: context(env()),
+        params: {},
+        pattern: "/team/accept",
+        request: new Request("https://0509.io/team/accept?token=invite-token"),
+        url: "https://0509.io/team/accept?token=invite-token",
+      } as never);
+    } catch (error) {
+      redirectResponse = error as Response;
+    }
+
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe(
+      "/auth/signup?email=teammate%40example.com&redirectTo=%2Fteam%2Faccept%3Ftoken%3Dinvite-token",
     );
-    const identityUpsert = calls.find((call) => call.sql.includes("INSERT INTO stytch_identity"));
-    expect(user.id).toBe("user-existing");
-    expect(identityUpdate?.bindings[0]).toBe("member-new");
-    expect(identityUpdate?.bindings[4]).toBe("user-existing");
-    expect(identityUpsert?.bindings[0]).toBe("user-existing");
-    expect(identityUpsert?.bindings[2]).toBe("member-new");
   });
 });

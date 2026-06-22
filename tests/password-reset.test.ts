@@ -134,24 +134,26 @@ describe("account page", () => {
         useLoaderData: vi.fn().mockReturnValue({
           email: "owner@example.com",
           name: "Owner",
-          currentSessionId: "session-1",
           sessionExpiresAt: "2026-06-30T00:00:00.000Z",
           plan: "agency",
           brandName: null,
+          passkeys: [],
+          passkeysEnabled: true,
         }),
       };
     });
   }
 
-  it("renders Stytch-managed account controls and deletion support", async () => {
+  it("renders Better Auth account controls and deletion support", async () => {
     mockAccountPage();
 
     const { default: AccountRoute } = await import("~/routes/app.account");
     const markup = renderToStaticMarkup(createElement(AccountRoute));
 
-    expect(markup).toContain("Stytch B2B");
+    expect(markup).toContain("Better Auth");
     expect(markup).toContain("Session and account controls");
-    expect(markup).toContain("session-1");
+    expect(markup).toContain("This device is signed in until");
+    expect(markup).not.toContain("session-1");
     expect(markup).toContain("Delete this account");
     expect(markup).toContain("support@0509.io");
     expect(markup).toContain("Report branding");

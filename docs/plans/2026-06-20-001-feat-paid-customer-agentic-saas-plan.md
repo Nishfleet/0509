@@ -14,7 +14,7 @@ Raise 0509's paid customer surface toward a full agent-operable SaaS: customers 
 
 ## Problem Frame
 
-0509 already has paid plans, Stytch auth, Dodo billing, Cloudflare Email, watchlists, boards, reports, share links, readiness, memory, client rooms, and audited agent actions. The remaining in-repo gap is not "add AI"; it is making the paid customer experience feel complete: setup, agent operation, customer support, trust, and docs need to line up so a paying customer or their agent can operate the workspace without Nish explaining the system.
+0509 already has paid plans, Better Auth, Dodo billing, Cloudflare Email, watchlists, boards, reports, share links, readiness, memory, client rooms, and audited agent actions. The remaining in-repo gap is not "add AI"; it is making the paid customer experience feel complete: setup, agent operation, customer support, trust, and docs need to line up so a paying customer or their agent can operate the workspace without Nish explaining the system.
 
 ---
 

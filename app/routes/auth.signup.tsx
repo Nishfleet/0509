@@ -20,9 +20,8 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { isStytchAuthEnabled } = await import("~/lib/env.server");
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
-  const { enabledStytchOAuthProviders } = await import("~/lib/stytch-b2b.server");
+  const { enabledBetterAuthOAuthProviders } = await import("~/lib/better-auth.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
@@ -37,7 +36,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       ? "Check your email. The setup link will verify you and create the workspace."
       : null;
   const error = signupErrorMessage(url.searchParams.get("error"));
-  const oauthProviders = isStytchAuthEnabled(env) ? enabledStytchOAuthProviders(env) : [];
+  const oauthProviders = enabledBetterAuthOAuthProviders(env);
 
   return {
     redirectTo,
@@ -51,16 +50,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
-  const { isStytchAuthEnabled } = await import("~/lib/env.server");
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
   const {
-    authRequestStateCookie,
-    consumeStytchAuthRequest,
-    createStytchAuthRequest,
+    isBetterAuthConfigured,
     isSameOriginAuthFormPost,
-    isStytchConfigured,
-    sendDiscoveryEmail,
-  } = await import("~/lib/stytch-b2b.server");
+    sendBetterAuthMagicLink,
+  } = await import("~/lib/better-auth.server");
   const env = getEnv(context);
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -68,32 +63,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const organizationName = String(formData.get("organizationName") ?? "").trim();
   const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app/onboard");
 
-  if (!isStytchAuthEnabled(env) || !isStytchConfigured(env)) {
-    throw redirect("/auth/signup?error=stytch_not_configured");
+  if (!isBetterAuthConfigured(env)) {
+    throw redirect("/auth/signup?error=better_auth_not_configured");
   }
   if (!isSameOriginAuthFormPost(env, request)) {
     throw redirect("/auth/signup?error=request_invalid");
   }
 
-  const state = await createStytchAuthRequest(env, {
-    authMethod: "magic_link",
-    email,
-    mode: "signup",
-    name,
-    organizationName,
-    redirectTo,
-  });
+  let requestStateCookie: string;
   try {
-    await sendDiscoveryEmail(env, request, {
+    requestStateCookie = await sendBetterAuthMagicLink(env, request, {
       email,
       mode: "signup",
-      state,
+      name: name || organizationName,
+      redirectTo,
     });
   } catch (error) {
-    await consumeStytchAuthRequest(env, state).catch((consumeError) => {
-      console.warn("failed to consume unsent Stytch signup request", consumeError);
-    });
-    console.warn("failed to send Stytch signup email", error);
+    console.warn("failed to send Better Auth signup email", error);
     throw redirect("/auth/signup?error=send_failed");
   }
 
@@ -101,9 +87,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   next.searchParams.set("sent", "1");
   next.searchParams.set("email", email);
   next.searchParams.set("redirectTo", redirectTo);
-  const headers = new Headers();
-  headers.append("Set-Cookie", authRequestStateCookie(request, state));
-  throw redirect(`${next.pathname}${next.search}`, { headers });
+  throw redirect(`${next.pathname}${next.search}`, {
+    headers: {
+      "Set-Cookie": requestStateCookie,
+    },
+  });
 }
 
 export default function SignupRoute() {
@@ -157,8 +145,8 @@ export default function SignupRoute() {
 }
 
 function signupErrorMessage(code: string | null) {
-  if (code === "stytch_not_configured") {
-    return "Stytch B2B is not configured yet. Add the Stytch project ID and secret before creating workspaces.";
+  if (code === "better_auth_not_configured") {
+    return "Better Auth is not configured yet. Add the Better Auth secret and database binding before creating workspaces.";
   }
   if (code === "callback_failed") {
     return "That setup link could not be verified. Request a fresh link and try again.";
@@ -167,10 +155,10 @@ function signupErrorMessage(code: string | null) {
     return "No workspace was found for that email. Create a workspace first.";
   }
   if (code === "multiple_workspaces") {
-    return "That email is attached to multiple Stytch workspaces. Ask support to pick the right workspace before continuing.";
+    return "That email is attached to more than one workspace. Ask support to pick the right workspace before continuing.";
   }
   if (code === "unsupported_policy") {
-    return "This Stytch workspace requires an additional sign-in step that Five to Nine has not enabled yet. Ask support to disable that policy for now.";
+    return "This workspace requires an additional sign-in step that Five to Nine has not enabled yet.";
   }
   if (code === "request_invalid") {
     return "That setup request could not be verified. Open this page and try again.";
@@ -180,6 +168,12 @@ function signupErrorMessage(code: string | null) {
   }
   if (code === "oauth_not_configured") {
     return "That sign-in option is not configured yet. Use the email link for now.";
+  }
+  if (code === "oauth_failed") {
+    return "That sign-in option could not start. Use the email link for now.";
+  }
+  if (code) {
+    return "That setup request could not be completed. Request a fresh link and try again.";
   }
   return null;
 }

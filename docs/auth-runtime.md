@@ -1,57 +1,71 @@
 # Auth Runtime
 
-Last checked: 2026-06-16
+Last checked: 2026-06-22
 
 ## Decision
 
-Use Stytch B2B for Five to Nine auth.
+Use Better Auth for Five to Nine auth.
 
-Keep Cloudflare D1 as the app data store. Do not move product data, billing links, watchlists, digests, collections, customer API keys, or delivery targets into Stytch.
+Cloudflare D1 remains the app data store. Product data, billing links, watchlists, digests, collections, customer API keys, and delivery targets stay keyed by the app-owned `user.id`.
 
 ## Current Active Runtime
 
 - Active app code lives in `app/` and `workers/`.
-- Auth is implemented through Stytch B2B discovery magic links, optional Google/Microsoft discovery OAuth starts, and organization member sessions.
-- The app stores the opaque Stytch session token in an HTTP-only `f9_stytch_session` cookie.
-- Magic-link and OAuth requests are stored in D1 with one-time state. OAuth starts use PKCE with an HTTP-only same-browser verifier cookie; email links confirm before token exchange. Callback tokens are exchanged server-side and are never rendered into HTML.
-- On each protected request, `app/lib/auth.server.ts` authenticates the Stytch session and maps the Stytch member/org to the app-owned D1 `user.id`.
-- `migrations/0031_stytch_identity.sql` stores the local `user_id` to Stytch organization/member mapping plus short-lived auth request state.
-- Existing app-owned user IDs remain the owner key for Dodo billing, watchlists, digests, collections, delivery settings, and API keys.
-
-## Current B2B Scope
-
-The current app data model is still keyed by local `user.id`, not by a separate organization/workspace table. Because of that, this runtime supports one Stytch organization per email address. If Stytch discovery returns multiple organizations for one email, the app blocks sign-in and asks for support routing instead of risking cross-workspace data mixing.
-
-Team invite links are supported by allowing the invitee's Stytch login flow to create a Stytch organization when no organization is discovered, then returning the user to `/team/accept`.
-
-Do not enable Stytch settings that require an extra auth step, such as MFA-required flows or SSO-only primary authentication, until Five to Nine has a follow-up flow for those requirements. The app blocks those responses with an `unsupported_policy` auth error instead of silently failing.
+- Better Auth is mounted at `/api/auth/*` through `app/routes/api.auth.$.ts`.
+- Better Auth uses the Cloudflare D1 binding directly for `user`, `session`, `account`, `verification`, and `passkey`.
+- Magic-link email is the primary auth path. The app sends links through the Cloudflare Email binding, not a third-party email API key.
+- Magic-link emails open `/auth/better/magic-link`, which requires the same-browser request-state cookie, stores the token in a short-lived HTTP-only cookie, and verifies only after an explicit continue action. Link scanners should not consume one-time tokens by fetching the email URL.
+- Google and Microsoft OAuth are optional. Buttons render only when their Better Auth client ID and secret are configured and the provider is present in `BETTER_AUTH_OAUTH_BRANDED_PROVIDERS`. Microsoft also requires `BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED=true` before it is registered for same-email account linking.
+- Passkeys use `@better-auth/passkey`; the app no longer owns WebAuthn challenge or credential verification routes.
+- Protected routes call `app/lib/auth.server.ts`, which reads the Better Auth session and maps it into the app `AppSession` shape.
+- Login links are sign-in only: `/auth/login` checks for an existing local `user` before sending a link. `/auth/signup` is the account creation path.
 
 ## Required Runtime Values
 
 - `APP_ORIGIN`
-- `AUTH_PROVIDER=stytch`
-- `STYTCH_API_BASE_URL`
-- `STYTCH_PROJECT_ID`
-- `STYTCH_PUBLIC_TOKEN` for Google/Microsoft OAuth discovery starts; store as runtime config/secret and do not render it into public HTML or client bundles
-- `STYTCH_OAUTH_ENABLED_PROVIDERS` only after provider configs are live in Stytch
-- `STYTCH_OAUTH_BRANDED_PROVIDERS` for the subset of OAuth providers whose Google/Microsoft account chooser and consent surfaces have been verified to show Five to Nine/0509, not Stytch. Providers must appear in both allowlists before the app renders or starts OAuth.
-- `STYTCH_SECRET`
-- `STYTCH_SESSION_DURATION_MINUTES` optional, defaults to 30 days
-- `UNSUBSCRIBE_SIGNING_SECRET` for signed unsubscribe links. `BETTER_AUTH_SECRET` remains a legacy fallback only during migration.
+- `AUTH_PROVIDER=better-auth`
+- `BETTER_AUTH_URL`
+- `BETTER_AUTH_SECRET`
+- `EMAIL_FROM_EMAIL`
+- Cloudflare `EMAIL` send binding
+- Cloudflare `DB` D1 binding
+- `UNSUBSCRIBE_SIGNING_SECRET` for signed unsubscribe links
 
-## Optional Stytch Email Templates
+## Optional Runtime Values
 
-- `STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID` for a branded signup/activation magic-link email.
-- `STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID` for a branded returning-user magic-link email.
-- `STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID` optional shared fallback if login and activation use the same template.
+- `BETTER_AUTH_GOOGLE_CLIENT_ID`
+- `BETTER_AUTH_GOOGLE_CLIENT_SECRET`
+- `BETTER_AUTH_MICROSOFT_CLIENT_ID`
+- `BETTER_AUTH_MICROSOFT_CLIENT_SECRET`
+- `BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED`, set only after accepting same-email Microsoft account linking
+- `BETTER_AUTH_MICROSOFT_TENANT_ID`, defaults to `common`
+- `BETTER_AUTH_OAUTH_BRANDED_PROVIDERS`, comma-separated `google,microsoft` after account chooser branding is verified
+- `BETTER_AUTH_TRUSTED_ORIGINS`, comma-separated preview origins
 
-Stytch's B2B Discovery API sends these template IDs as `login_template_id`; create custom templates as `Magic Links - Login` templates in Stytch. Leave these unset while using Stytch's included pre-built email template.
+## OAuth Callback URLs
 
-## Cost Guardrail
+Configure provider dashboards with the Better Auth callback paths:
 
-Use Stytch B2B within the included/free setup first. Do not enable paid custom branding, fraud add-ons, or extra paid SSO/SCIM connections without an explicit product/cost decision.
+- Google: `https://0509.io/api/auth/callback/google`
+- Microsoft: `https://0509.io/api/auth/callback/microsoft`
 
-Custom Stytch auth emails may require Stytch's full email customization add-on and a custom email domain before the sender, body, and "Powered by Stytch" footer can be fully branded. The app only passes template IDs; the template/domain setup remains in the Stytch dashboard.
+OAuth must stay hidden until each provider's account chooser and consent surface shows Five to Nine or 0509 branding.
+
+## Database Schema
+
+Pre-launch auth state is clean cut over to Better Auth. There is no account/session migration layer.
+
+The base auth schema is in `migrations/0000_auth.sql`:
+
+- `user`
+- `session`
+- `account`
+- `verification`
+- `passkey`
+
+`migrations/0042_better_auth_passkey.sql` creates the same passkey table for any existing pre-launch D1 database whose base migration has already run.
+
+The `user` table remains the owner key for Dodo billing, watchlists, digests, collections, delivery settings, and API keys.
 
 ## Supabase Status
 
@@ -59,10 +73,6 @@ Supabase appears only in `legacy/`, which is the old Next.js prototype reference
 
 Supabase is not part of the active Cloudflare Worker runtime. Do not move legacy Supabase code forward unless a future task explicitly migrates a specific useful idea into the active D1 model.
 
-## Better Auth Status
-
-Better Auth is no longer the active auth provider and is not an app dependency. The old `user`, `session`, `account`, and `verification` tables remain historical schema; the app still uses the `user` table as its local product-data owner record.
-
 ## Guardrail
 
-`tests/auth-runtime.test.ts` checks that active runtime files use Stytch and do not import Better Auth or Supabase.
+`tests/auth-runtime.test.ts` checks that the active runtime uses Better Auth and does not reintroduce legacy auth provider files.

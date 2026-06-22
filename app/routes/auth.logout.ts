@@ -3,33 +3,30 @@ import type { ActionFunctionArgs } from "react-router";
 
 async function logout({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
-  const { deleteStytchSessionByToken } = await import("~/lib/data.server");
   const {
-    clearStytchSessionCookie,
+    clearBetterAuthSessionCookies,
+    isBetterAuthConfigured,
     isSameOriginAuthFormPost,
-    readStytchSessionToken,
-    revokeStytchSession,
-  } = await import("~/lib/stytch-b2b.server");
+    signOutBetterAuth,
+  } = await import("~/lib/better-auth.server");
   const env = getEnv(context);
   if (!isSameOriginAuthFormPost(env, request)) {
     throw new Response("Invalid logout request.", { status: 403 });
   }
 
-  const sessionToken = readStytchSessionToken(request);
-  if (sessionToken) {
-    await deleteStytchSessionByToken(env, sessionToken).catch((error) => {
-      console.warn("local Stytch session delete failed", error);
+  const headers = new Headers();
+  if (isBetterAuthConfigured(env)) {
+    const signOutResponse = await signOutBetterAuth(env, request).catch((error) => {
+      console.warn("Better Auth sign-out failed", error);
+      return null;
     });
-    await revokeStytchSession(env, sessionToken).catch((error) => {
-      console.warn("stytch session revoke failed", error);
-    });
+    appendSetCookieHeaders(headers, signOutResponse?.headers);
+    for (const cookie of clearBetterAuthSessionCookies(request)) {
+      headers.append("Set-Cookie", cookie);
+    }
   }
 
-  throw redirect("/", {
-    headers: {
-      "Set-Cookie": clearStytchSessionCookie(request),
-    },
-  });
+  throw redirect("/", { headers });
 }
 
 export async function loader() {
@@ -38,4 +35,24 @@ export async function loader() {
 
 export async function action(args: ActionFunctionArgs) {
   return logout(args);
+}
+
+function appendSetCookieHeaders(target: Headers, source: Headers | undefined) {
+  if (!source) {
+    return;
+  }
+
+  const getSetCookie = (source as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  const cookies = getSetCookie ? getSetCookie.call(source) : [];
+  if (cookies.length > 0) {
+    for (const cookie of cookies) {
+      target.append("Set-Cookie", cookie);
+    }
+    return;
+  }
+
+  const cookie = source.get("Set-Cookie");
+  if (cookie) {
+    target.append("Set-Cookie", cookie);
+  }
 }

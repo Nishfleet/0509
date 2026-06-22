@@ -2,11 +2,11 @@
 
 const baseUrl = process.env.PUBLIC_HOME_URL ?? "https://0509.io";
 const loginUrl = new URL("/auth/login", baseUrl);
-const oauthUrl = new URL("/auth/stytch/oauth", baseUrl);
+const oauthUrl = new URL("/auth/better/oauth", baseUrl);
 const maxRedirects = 8;
 
 const expectedBrandPatterns = [/\b0509\b/i, /five\s+to\s+nine/i];
-const forbiddenBrandPatterns = [/stytch\.com/i, /\bstytch\b/i];
+const forbiddenBrandPatterns = [/better-auth\.com/i, /\bbetter\s+auth\b/i];
 const googleErrorPatterns = [
   /\berror\s+4\d\d\b/i,
   /\bredirect_uri_mismatch\b/i,
@@ -151,7 +151,7 @@ function assertGoogleBranding(page) {
       [
         "Google OAuth branding check failed.",
         `expected 0509/Five to Nine brand: ${hasExpectedBrand}`,
-        `forbidden Stytch branding present: ${forbiddenMatches.length > 0}`,
+        `forbidden auth-provider branding present: ${forbiddenMatches.length > 0}`,
         `google status: ${page.status}`,
         `google url: ${redactUrl(page.url)}`,
         `page snippet: ${snippet}`,

@@ -36,7 +36,7 @@ describe("public documentation routes", () => {
     expect(markup).toContain("broad public write APIs beyond audited workspace actions");
     expect(markup).not.toContain("fully general write API");
     expect(markup).not.toContain("hooks.slack.com/services/");
-    expect(markup).not.toContain("STYTCH_SECRET");
+    expect(markup).not.toContain("BETTER_AUTH_SECRET");
   });
 
   it("renders help and trust support paths without unsupported claims", async () => {

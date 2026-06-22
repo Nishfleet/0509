@@ -21,7 +21,7 @@ That means customers and their agents can set up monitoring, tune what matters, 
 - Watchlists, watch events, proof captures, digests, boards, reports, share links, and exports.
 - Dodo-backed checkout, proof-credit packs, billing portal redirect, and signed billing webhooks.
 - Cloudflare Email delivery and self-serve Slack incoming-webhook setup.
-- Stytch B2B auth with D1 as the product-data authority.
+- Better Auth with D1 as the auth and product-data authority.
 - Customer API and MCP exports for account-owned readiness, collections, watchlists, digests, memory, and client rooms.
 - A write-enabled, audited agent-action beta for `watchlist.create`, `watchlist.update`, `watchlist.refresh`, `watchlist.pause`, `watchlist.resume`, `collection.create`, `proof.add_external`, `share.create`, `report.create`, `report.share`, `counter_move_brief.create`, `memory.upsert`, `memory.list`, `client_room.upsert`, `client_room.list`, `delivery_targets.list`, `delivery_settings.update`, `delivery_target.update`, and `web_mentions.list`.
 - Write actions require a write-enabled API key, owner-scoped resources, idempotency on retryable mutations, audit records, and secret redaction.

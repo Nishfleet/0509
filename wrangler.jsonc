@@ -57,8 +57,8 @@
   "vars": {
     "APP_NAME": "0509",
     "APP_ORIGIN": "https://0509.io",
-    "AUTH_PROVIDER": "stytch",
-    "STYTCH_API_BASE_URL": "https://api.stytch.com",
+    "AUTH_PROVIDER": "better-auth",
+    "BETTER_AUTH_URL": "https://0509.io",
     "DODO_0509_ADAPTIVE_CURRENCY": "true",
     "DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE": "true",
     "DODO_0509_ENVIRONMENT": "live",
@@ -75,14 +75,15 @@
   // - WHATSAPP_TEMPLATE_NAMESPACE
   // - WHATSAPP_WEBHOOK_VERIFY_TOKEN
   // - DODO_PAYMENTS_API_KEY
-  // - STYTCH_PROJECT_ID
-  // - STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID (branded signup/activation discovery email)
-  // - STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID (branded returning-user discovery email)
-  // - STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID (optional shared branded discovery email fallback)
-  // - STYTCH_PUBLIC_TOKEN (runtime-only for Stytch OAuth discovery starts)
-  // - STYTCH_OAUTH_ENABLED_PROVIDERS (provider allowlist after Google/Microsoft provider configs are verified)
-  // - STYTCH_OAUTH_BRANDED_PROVIDERS (subset verified to show Five to Nine/0509 on provider screens)
-  // - STYTCH_SECRET
+  // - BETTER_AUTH_SECRET
+  // - BETTER_AUTH_GOOGLE_CLIENT_ID (optional Google credential; not enough to expose Google)
+  // - BETTER_AUTH_GOOGLE_CLIENT_SECRET (optional Google credential; store as secret)
+  // - BETTER_AUTH_MICROSOFT_CLIENT_ID (optional Microsoft credential; not enough to expose Microsoft)
+  // - BETTER_AUTH_MICROSOFT_CLIENT_SECRET (optional Microsoft credential; store as secret)
+  // - BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED (optional; set true only after accepting same-email Microsoft account linking)
+  // - BETTER_AUTH_MICROSOFT_TENANT_ID (optional; defaults to common)
+  // - BETTER_AUTH_OAUTH_BRANDED_PROVIDERS (optional comma-separated google,microsoft after account chooser branding is verified)
+  // - BETTER_AUTH_TRUSTED_ORIGINS (optional comma-separated preview origins)
   // - UNSUBSCRIBE_SIGNING_SECRET
   // - DODO_0509_API_KEY (optional override if 0509 ever needs its own key)
   // - DODO_0509_BRAND_ID

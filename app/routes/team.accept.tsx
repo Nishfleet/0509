@@ -17,13 +17,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     return { valid: false as const, reason: "This invite link is incomplete.", token: "" };
   }
 
-  const session = await getOptionalSession(env, request);
-  if (!session) {
-    throw redirect(
-      `/auth/login?redirectTo=${encodeURIComponent(`/team/accept?token=${token}`)}`,
-    );
-  }
-
   const invite = await peekWorkspaceInvite(env, token);
   if (!invite) {
     return {
@@ -31,6 +24,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       reason: "This invite link is no longer valid — ask for a fresh one.",
       token: "",
     };
+  }
+
+  const session = await getOptionalSession(env, request);
+  if (!session) {
+    const next = new URL("/auth/signup", request.url);
+    next.searchParams.set("email", invite.invitedEmail);
+    next.searchParams.set("redirectTo", `/team/accept?token=${token}`);
+    throw redirect(`${next.pathname}${next.search}`);
   }
 
   return {
