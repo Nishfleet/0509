@@ -32,15 +32,20 @@ Do not enable Stytch settings that require an extra auth step, such as MFA-requi
 - `AUTH_PROVIDER=stytch`
 - `STYTCH_API_BASE_URL`
 - `STYTCH_PROJECT_ID`
-- `STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID` for the branded signup/activation magic-link email. Stytch's B2B Discovery API still sends this as `login_template_id`; create it as a `Magic Links - Login` template in Stytch.
-- `STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID` for the branded returning-user magic-link email.
-- `STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID` optional shared fallback if login and activation use the same template.
 - `STYTCH_PUBLIC_TOKEN` for Google/Microsoft OAuth discovery starts; store as runtime config/secret and do not render it into public HTML or client bundles
 - `STYTCH_OAUTH_ENABLED_PROVIDERS` only after provider configs are live in Stytch
 - `STYTCH_OAUTH_BRANDED_PROVIDERS` for the subset of OAuth providers whose Google/Microsoft account chooser and consent surfaces have been verified to show Five to Nine/0509, not Stytch. Providers must appear in both allowlists before the app renders or starts OAuth.
 - `STYTCH_SECRET`
 - `STYTCH_SESSION_DURATION_MINUTES` optional, defaults to 30 days
 - `UNSUBSCRIBE_SIGNING_SECRET` for signed unsubscribe links. `BETTER_AUTH_SECRET` remains a legacy fallback only during migration.
+
+## Optional Stytch Email Templates
+
+- `STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID` for a branded signup/activation magic-link email.
+- `STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID` for a branded returning-user magic-link email.
+- `STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID` optional shared fallback if login and activation use the same template.
+
+Stytch's B2B Discovery API sends these template IDs as `login_template_id`; create custom templates as `Magic Links - Login` templates in Stytch. Leave these unset while using Stytch's included pre-built email template.
 
 ## Cost Guardrail
 
