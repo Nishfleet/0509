@@ -57,6 +57,7 @@ export default [
     route("digests", "routes/app.digests.tsx"),
     route("shares", "routes/app.shares.tsx"),
     route("billing", "routes/app.billing.tsx"),
+    route("support", "routes/app.support.tsx"),
     route("account", "routes/app.account.tsx"),
     route("team", "routes/app.team.tsx"),
     route("sources", "routes/app.sources.tsx"),

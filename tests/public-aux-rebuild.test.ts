@@ -45,4 +45,12 @@ describe("public auxiliary rebuild", () => {
   it("keeps stale launch framing out of auxiliary pages", () => {
     expect(publicAuxSurface).not.toMatch(/pilot|self-serve|not live|fit review|Meta ads tracking beta/i);
   });
+
+  it("keeps terms aligned with support-backed billing truth", () => {
+    expect(publicAuxSurface).toContain("Plan changes and");
+    expect(publicAuxSurface).toContain("cancellation stay backed by signed-in support cases");
+    expect(publicAuxSurface).toContain("team-seat changes may require");
+    expect(publicAuxSurface).toContain("owner confirmation");
+    expect(publicAuxSurface).not.toContain("100% customer satisfaction");
+  });
 });

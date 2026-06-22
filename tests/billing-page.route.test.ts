@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 
 const session = {
   user: {
@@ -86,9 +87,12 @@ function mockReactRouterRender(loaderData: unknown) {
 
     return {
       ...actual,
+      Form: ({ children, ...props }: MockFormProps) =>
+        React.createElement("form", props, children),
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
+      useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
     };
   });
 }
@@ -211,6 +215,38 @@ describe("billing page", () => {
     expect(markup).toContain("/#pricing");
     expect(markup).toContain("Free workspace");
     expect(markup).not.toContain("Payment issue");
+  });
+
+  it("does not overpromise cancellation through the hosted billing portal", async () => {
+    mockReactRouterRender({
+      email: "owner@example.com",
+      billing: {
+        plan: "starter",
+        dodoStatus: "succeeded",
+        dodoCustomerId: "cus_123",
+        dodoProductId: "prod_starter",
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+      proofUsage: { used: 40, limit: 250, extraCredits: 0 },
+      watchlistUsage: { current: 3, limit: 10 },
+      collectionUsage: { current: 5, limit: 25 },
+      planLimits: { digestCadence: "weekly" },
+      dailyProofCap: 40,
+      creditGrants: [],
+      blockedCheckout: false,
+      pendingCheckout: false,
+      portalUnavailable: false,
+      hasPortal: true,
+    });
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Open Dodo");
+    expect(markup).toContain("subscription-update setting is confirmed");
+    expect(markup).toContain("/app/support?category=billing");
+    expect(markup).not.toContain("cancel — self-serve");
+    expect(markup).not.toContain("100% customer satisfaction");
   });
 });
 

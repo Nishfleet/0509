@@ -59,6 +59,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Agent-blocked capabilities");
     expect(PUBLIC_MARKDOWN).toContain("secret-bearing integration setup");
     expect(PUBLIC_MARKDOWN).toContain("customer API key creation, rotation, and revocation");
+    expect(PUBLIC_MARKDOWN).toContain("Signed-in support cases cover paid-customer account help");
     expect(PUBLIC_MARKDOWN).toContain("Paid customer support paths cover");
     expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, and trust pages are available");
     expect(PUBLIC_MARKDOWN).toContain("coarse launch blockers and safety posture");
@@ -71,6 +72,9 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 evidence checks/month");
     expect(PUBLIC_MARKDOWN).toContain("Launch status is readiness-gated");
+    expect(PUBLIC_MARKDOWN).toContain("checkout and signed webhook billing are verified");
+    expect(PUBLIC_MARKDOWN).toContain("Dodo portal subscription-update confirmation");
+    expect(PUBLIC_MARKDOWN).toContain("external uptime monitoring");
     expect(PUBLIC_MARKDOWN).not.toContain("any configured WhatsApp delivery proof");
     expect(PUBLIC_MARKDOWN).toContain("Customer WhatsApp delivery is not launch-scoped today");
     expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
@@ -89,8 +93,11 @@ describe("public markdown", () => {
     });
     expect(LLMS_TEXT).toContain("customer API key creation, rotation, and revocation");
     expect(LLMS_TEXT).toContain("Recommended first agent workflow");
-    expect(LLMS_TEXT).toContain("Paid customer support paths cover billing changes and cancellation");
+    expect(LLMS_TEXT).toContain("Signed-in support cases cover billing changes and cancellation");
     expect(LLMS_TEXT).toContain("broad launch still requires a configured Slack target");
+    expect(LLMS_TEXT).toContain("checkout and signed webhook billing are verified");
+    expect(LLMS_TEXT).toContain("Dodo portal subscription-update confirmation");
+    expect(LLMS_TEXT).toContain("external uptime monitoring");
     expect(LLMS_TEXT).toContain("blockers and safety posture only");
     expect(LLMS_TEXT).toContain("evidence stays in private canaries and signed-in operational views");
     expect(LLMS_TEXT).toContain("Email delivery uses Cloudflare Email Service");

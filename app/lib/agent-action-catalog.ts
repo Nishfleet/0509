@@ -72,6 +72,17 @@ export const AGENT_ACTION_GROUPS = [
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
   },
   {
+    id: "support",
+    label: "Support",
+    detail: "Open and review account support cases without exposing private case details.",
+    actions: [
+      "support_case.create",
+      "support_case.list",
+    ],
+    requiresWriteEnabled: true,
+    credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
+  },
+  {
     id: "delivery",
     label: "Delivery controls",
     detail: "Read redacted delivery targets and update existing delivery policy with explicit approval.",

@@ -38,16 +38,16 @@ export default function TermsRoute() {
 
           <LegalBlock title="Billing">
             <p>
-              Paid access and subscription changes follow the confirmed payment path connected to the account. To
-              cancel, use the billing portal on the Plan &amp; billing page when it is available, or email{" "}
-              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the account email; cancellation stops future renewals
-              and access continues until the end of the period you have paid for.
+              Paid access follows the confirmed payment path connected to the account. Card and invoice tasks can use
+              the hosted billing portal on the Plan &amp; billing page when it is available. Plan changes and
+              cancellation stay backed by signed-in support cases until portal subscription updates are confirmed;
+              cancellation stops future renewals and access continues until the end of the period you have paid for.
             </p>
             <p>
               Five to Nine is a digital product delivered immediately, so purchases are final and refunds cannot be
-              made. If something isn't working the way you expected, email{" "}
-              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will sort things out for you — we are committed to
-              100% customer satisfaction.
+              made. If something isn't working the way you expected, open a signed-in support case or email{" "}
+              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you cannot sign in, and we will troubleshoot it with the
+              account trail attached.
             </p>
           </LegalBlock>
 
@@ -68,9 +68,10 @@ export default function TermsRoute() {
 
           <LegalBlock title="Support">
             <p>
-              For support, billing, cancellation, and refund requests, email{" "}
-              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the address on the account. We aim to respond within
-              two business days.
+              Signed-in customers can open support cases for account access, billing, cancellation, security,
+              deletion, setup, and delivery help. Workspace billing, cancellation, and team-seat changes may require
+              owner confirmation. Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the address on the account if
+              you cannot sign in. We aim to respond within two business days.
             </p>
           </LegalBlock>
         </article>

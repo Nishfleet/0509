@@ -44,6 +44,8 @@ const WRITE_TOOL_NAMES = new Set([
   "list_memory",
   "upsert_client_room",
   "list_client_rooms",
+  "create_support_case",
+  "list_support_cases",
   "list_delivery_targets",
   "update_delivery_settings",
   "update_delivery_target",
@@ -540,6 +542,60 @@ const MCP_TOOLS = [
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
   {
+    name: "create_support_case",
+    title: "Create Support Case",
+    description:
+      "Open an account support case for billing, source, delivery, account, team, security, migration, or setup help. Do not include secrets, tokens, webhook URLs, card numbers, or private credentials.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          enum: ["billing", "source", "delivery", "account", "team", "security", "migration", "other"],
+        },
+        priority: {
+          type: "string",
+          enum: ["normal", "urgent"],
+          default: "normal",
+        },
+        subject: {
+          type: "string",
+          maxLength: 160,
+        },
+        detail: {
+          type: "string",
+          maxLength: 4000,
+        },
+        idempotencyKey: idempotencyKeySchema(),
+      },
+      required: ["category", "subject", "detail", "idempotencyKey"],
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
+    name: "list_support_cases",
+    title: "List Support Cases",
+    description:
+      "Read account support case summaries without exposing private case details or internal context.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["open", "closed", "all"],
+          default: "all",
+        },
+        limit: {
+          type: "number",
+          default: 20,
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: WRITE_TOOL_ANNOTATIONS,
+  },
+  {
     name: "list_web_mentions",
     title: "List Web Mentions Beta",
     description:
@@ -615,6 +671,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Saved Meta and landing-page proof already captured in Five to Nine",
       "Manual external proof links saved in account-owned collections",
       "Client rooms and scoped account memory saved by this account",
+      "Account support case summaries created by this account",
       "Redacted delivery settings and delivery target state owned by this account",
       "Existing proof-backed web, blog, Substack, and Reddit mention observations tied to watchlists",
     ],
@@ -811,6 +868,14 @@ async function callTool(
 
   if (name === "list_client_rooms") {
     return buildAgentActionToolResult(env, apiKey, "client_room.list", args, origin, executionContext);
+  }
+
+  if (name === "create_support_case") {
+    return buildAgentActionToolResult(env, apiKey, "support_case.create", args, origin, executionContext);
+  }
+
+  if (name === "list_support_cases") {
+    return buildAgentActionToolResult(env, apiKey, "support_case.list", args, origin, executionContext);
   }
 
   if (name === "list_web_mentions") {

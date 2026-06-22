@@ -21,6 +21,8 @@ export const MCP_TOOL_NAME_BY_AGENT_ACTION = {
   "memory.list": "list_memory",
   "client_room.upsert": "upsert_client_room",
   "client_room.list": "list_client_rooms",
+  "support_case.create": "create_support_case",
+  "support_case.list": "list_support_cases",
   "delivery_targets.list": "list_delivery_targets",
   "delivery_settings.update": "update_delivery_settings",
   "delivery_target.update": "update_delivery_target",

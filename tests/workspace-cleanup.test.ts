@@ -436,6 +436,54 @@ describe("operator alert FK attribution", () => {
     expect(emailSend).toHaveBeenCalledTimes(1);
     expect(createDeliveryAttempt).not.toHaveBeenCalled();
   });
+
+  it("retries failed operator alerts by updating the existing ledger row", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_op_retry" });
+    const createDeliveryAttempt = vi.fn();
+    const updateDeliveryAttemptResult = vi.fn();
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        id: "attempt-failed-1",
+        status: "failed",
+      }),
+      getOldestUserId: vi.fn().mockResolvedValue("founder-user-id"),
+      getUserIdByEmail: vi.fn().mockResolvedValue(null),
+      getDeliveryTargetById: vi.fn(),
+      getDeliveryTargetByProviderIdentifier: vi.fn(),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult,
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+
+    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+    const sent = await sendOperatorAlertEmail(
+      {
+        EMAIL: { send: emailSend },
+        EMAIL_FROM_EMAIL: "alerts@0509.io",
+        LAUNCH_CANARY_EMAIL: "me@inish.in",
+      } as never,
+      { subject: "test", lines: ["signal"], idempotencyKey: "support-case:case-1" },
+    );
+
+    expect(sent).toBe(true);
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-failed-1",
+      expect.objectContaining({
+        provider: "cloudflare_email",
+        status: "sent",
+        providerMessageId: "msg_op_retry",
+      }),
+    );
+  });
 });
 
 describe("paused_reason semantics", () => {

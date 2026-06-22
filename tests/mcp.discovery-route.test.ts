@@ -38,6 +38,11 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     actions: ["upsert_memory", "list_memory", "upsert_client_room", "list_client_rooms"],
   },
   {
+    label: "Support",
+    requiresWriteEnabled: true,
+    actions: ["create_support_case", "list_support_cases"],
+  },
+  {
     label: "Delivery controls",
     requiresWriteEnabled: true,
     actions: ["list_delivery_targets", "update_delivery_settings", "update_delivery_target"],

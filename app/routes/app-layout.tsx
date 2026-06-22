@@ -9,7 +9,7 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { SignOutButton } from "~/components/sign-out-button";
-import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { SUPPORT_EMAIL } from "~/lib/support";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -54,6 +54,7 @@ export default function AppLayoutRoute() {
           <NavLink to="/app/digests">Digests</NavLink>
           <NavLink to="/app/shares">Shared links</NavLink>
           <NavLink to="/app/billing">Plan &amp; billing</NavLink>
+          <NavLink to="/app/support">Support</NavLink>
           <NavLink to="/app/account">Account</NavLink>
           <NavLink to="/app/sources">Integrations &amp; API</NavLink>
           {showOpsNav ? <NavLink to="/app/ops">Ops</NavLink> : null}
@@ -67,9 +68,9 @@ export default function AppLayoutRoute() {
           <Link className="f9-app-support-link" to="/docs">
             Docs
           </Link>
-          <a className="f9-app-support-link" href={SUPPORT_MAILTO}>
+          <Link className="f9-app-support-link" to="/app/support">
             {SUPPORT_EMAIL}
-          </a>
+          </Link>
           <SignOutButton />
         </div>
       </aside>
@@ -81,6 +82,9 @@ export default function AppLayoutRoute() {
           </Link>
           <Link className="f9-secondary-button" to="/help">
             Help
+          </Link>
+          <Link className="f9-secondary-button" to="/app/support">
+            Support
           </Link>
           <Link className="f9-primary-button f9-app-new-search" to="/search">
             Add competitor

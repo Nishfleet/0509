@@ -1312,7 +1312,7 @@ export async function sendOperatorAlertEmail(
   const dayKey = new Date().toISOString().slice(0, 10);
   const idempotencyKey = input.idempotencyKey ?? `operator-alert:${dayKey}`;
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-  if (duplicate) {
+  if (duplicate?.status === "sent") {
     return false;
   }
 
@@ -1333,6 +1333,20 @@ export async function sendOperatorAlertEmail(
     tag: "operator-alert",
     unsubscribeUrl: null,
   });
+
+  if (duplicate) {
+    await updateDeliveryAttemptResult(env, duplicate.id, {
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      errorMessage: providerResult.errorMessage,
+      sentAt: providerResult.deliveredAt,
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    });
+    return providerResult.status === "sent";
+  }
 
   // delivery_attempt.user_id carries a foreign key to user(id), so the
   // attempt must be attributed to a REAL user row: the operator's own account

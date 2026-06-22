@@ -160,8 +160,8 @@ export function buildLifecycleNudges(input: {
     nudges.push({
       id: "billing_support",
       title: "Cancellation and help path",
-      detail: "Plan changes, cancellation, receipts, invoices, and support are centralized in Plan & billing.",
-      href: "/app/billing",
+      detail: "Plan changes, cancellation, receipts, invoices, and sensitive requests now open as support cases.",
+      href: "/app/support?category=billing",
       priority: "low",
     });
   }

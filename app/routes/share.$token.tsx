@@ -6,7 +6,7 @@ import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
 import { ReportView } from "~/components/report-view";
-import { DigestIntelligence, DigestMovementSummary } from "~/components/digest-intelligence";
+import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { isReportDocument } from "~/lib/report";
 
@@ -146,6 +146,7 @@ export default function ShareRoute() {
                 Download PDF
               </button>
             </div>
+            <DigestProofPacket items={digestSnapshot.items} />
             <DigestMovementSummary items={digestSnapshot.items} />
             <ul className="event-list">
               {digestSnapshot.items.map((item) => (
