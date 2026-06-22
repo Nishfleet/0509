@@ -2,14 +2,19 @@ import type { BrowserWorker } from "@cloudflare/puppeteer";
 
 export type BrowserBinding = BrowserWorker;
 
+export interface EmailAddress {
+  email: string;
+  name?: string;
+}
+
 export interface EmailSendingBinding {
   send(message: {
-    from: string;
-    to: string;
+    from: string | EmailAddress;
+    to: string | EmailAddress | (string | EmailAddress)[];
     subject: string;
     html?: string;
     text?: string;
-    replyTo?: string;
+    replyTo?: string | EmailAddress;
     headers?: Record<string, string>;
   }): Promise<{ messageId: string } | undefined>;
 }
