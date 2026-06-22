@@ -36,15 +36,15 @@ export default function TrustRoute() {
       <PublicDocBlock title="Data handled">
         <p>
           Five to Nine stores account records, saved searches, watchlists, boards, notes, reports,
-          share links, delivery targets, customer API keys, proof captures, landing-page snapshots,
-          source URLs, delivery attempts, and operational logs needed to run the product.
+          share links, delivery settings, API keys, proof captures, landing-page snapshots,
+          source URLs, delivery attempts, and service logs needed to run the product.
         </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Retention and backups">
         <p>
           Product data lives in Cloudflare D1 and optional R2 artifact storage. Retention cleanup
-          runs on bounded scheduled sweeps, and D1 backup/export runbooks are documented internally.
+          runs on bounded scheduled sweeps, and backup/export runbooks stay in private operations notes.
           Account deletion, correction, and export help are handled through support.
         </p>
       </PublicDocBlock>
@@ -55,20 +55,20 @@ export default function TrustRoute() {
           <li>Dodo Payments: checkout, subscriptions, receipts, and billing portal.</li>
           <li>Meta public Ad Library surfaces and customer-provided Meta access when the customer connects it.</li>
           <li>Slack incoming webhooks when a customer connects Slack delivery.</li>
-          <li>WhatsApp Cloud API only after the provider/customer lane is deliberately configured and verified.</li>
+          <li>WhatsApp Cloud API only after WhatsApp delivery is enabled for the account.</li>
         </ul>
       </PublicDocBlock>
 
       <PublicDocBlock title="Honest non-claims">
         <p>
           Five to Nine does not currently claim SOC 2, HIPAA, GDPR compliance, zero retention,
-          no training, automated unsupported-channel ingestion, broad public write APIs beyond audited
-          workspace actions, or automated spend/reach/impression benchmarks. See <Link to="/privacy">Privacy</Link> and{" "}
+          no training, automated unsupported-channel ingestion, broad public write APIs, or automated
+          spend/reach/impression benchmarks. See <Link to="/privacy">Privacy</Link> and{" "}
           <Link to="/terms">Terms</Link> for the plain-English operating policy.
         </p>
         <p>
-          Agent tools also do not perform {AGENT_BLOCKED_CAPABILITIES.join(", ")}. Those stay app-owned,
-          support-owned, or not live until safe approval paths exist.
+          Connected tools also do not perform {AGENT_BLOCKED_CAPABILITIES.join(", ")}. Those require product support,
+          explicit customer approval, or verified self-serve flows before they go live.
         </p>
       </PublicDocBlock>
     </PublicDocShell>

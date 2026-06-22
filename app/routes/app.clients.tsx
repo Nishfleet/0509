@@ -143,8 +143,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
       });
 
       return memory
-        ? { ok: true, message: "Operating memory saved for future agent runs." }
-        : { ok: false, message: "Operating memory could not be saved." };
+        ? { ok: true, message: "Context saved." }
+        : { ok: false, message: "Context could not be saved." };
     } catch (error) {
       if (error instanceof AgentMemoryInputError) {
         return { ok: false, message: error.message };
@@ -209,7 +209,7 @@ export default function ClientsRoute() {
           <h1>Package proof around each client.</h1>
         </div>
         <Link className="f9-secondary-button" to="/app/sources">
-          Agent access
+          Integrations
         </Link>
       </div>
 
@@ -218,7 +218,7 @@ export default function ClientsRoute() {
           <div className="f9-panel-toolbar">
             <div>
               <span className="f9-app-kicker">Create room</span>
-              <h2>Bundle the account context.</h2>
+              <h2>Bundle proof and notes.</h2>
             </div>
           </div>
 
@@ -311,19 +311,19 @@ export default function ClientsRoute() {
 
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel">
-          <span className="f9-app-kicker">Saved memory</span>
-          <h2>Operating context for agents</h2>
+          <span className="f9-app-kicker">Saved context</span>
+          <h2>Report preferences and notes</h2>
           <Form className="f9-auth-form" method="post">
             <input name="intent" type="hidden" value="upsert-agent-memory" />
             <label className="f9-field">
-              <span>Memory key</span>
-              <input name="key" placeholder="review_cadence" required />
+              <span>Label</span>
+              <input name="key" placeholder="Review cadence" required />
             </label>
             <div className="f9-field-grid">
               <label className="f9-field">
                 <span>Scope</span>
                 <select name="scope" defaultValue="workspace">
-                  <option value="workspace">Workspace</option>
+                  <option value="workspace">Account</option>
                   <option value="customer">Customer</option>
                   <option value="brand">Brand</option>
                   <option value="competitor">Competitor</option>
@@ -349,7 +349,7 @@ export default function ClientsRoute() {
               />
             </label>
             <SubmitButton className="f9-primary-button" intent="upsert-agent-memory" pendingLabel="Saving...">
-              Save memory
+              Save context
             </SubmitButton>
           </Form>
           <div className="f9-work-list is-compact">
@@ -367,7 +367,7 @@ export default function ClientsRoute() {
               </div>
             ))}
             {data.memories.length === 0 ? (
-              <p className="f9-muted-copy">Agents can save goals, tone, and review context through the API or MCP tools.</p>
+              <p className="f9-muted-copy">Save goals, tone, and review context so future reports stay consistent.</p>
             ) : null}
           </div>
         </article>

@@ -74,7 +74,7 @@ export default function BillingRoute() {
       {data.pendingCheckout ? (
         <div className="f9-message is-error">
           <p>
-            A Dodo checkout is already open for this workspace. Finish that checkout, or wait until
+            A Dodo checkout is already open for this account. Finish that checkout, or wait until
             that payment link expires before starting a new one. If you need help, email{" "}
             <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email}.
           </p>
@@ -112,7 +112,7 @@ export default function BillingRoute() {
           <div>
             <span className="f9-app-kicker">Plan &amp; billing</span>
             <h2>
-              {planLabel} plan{isPaid ? "" : " — free workspace"}
+              {planLabel} plan{isPaid ? "" : " — free account"}
             </h2>
           </div>
           {!isPaid ? (
@@ -254,10 +254,10 @@ export default function BillingRoute() {
 
 function formatBillingStatus(plan: string, dodoStatus: string | null) {
   if (plan === "free") {
-    if (dodoStatus === "refunded") return "Refunded — reverted to the free workspace";
-    if (dodoStatus === "subscription.cancelled") return "Cancelled — on the free workspace";
-    if (dodoStatus === "subscription.expired") return "Expired — on the free workspace";
-    return "Free workspace";
+    if (dodoStatus === "refunded") return "Refunded — reverted to the free account";
+    if (dodoStatus === "subscription.cancelled") return "Cancelled — on the free account";
+    if (dodoStatus === "subscription.expired") return "Expired — on the free account";
+    return "Free account";
   }
 
   if (dodoStatus && PAYMENT_ISSUE_STATUSES.has(dodoStatus)) {

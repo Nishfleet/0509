@@ -1,7 +1,5 @@
 import {
   AGENT_BLOCKED_CAPABILITIES,
-  AGENT_FIRST_WORKFLOW,
-  WRITE_ENABLED_API_KEY_REQUIREMENT,
   CUSTOMER_SUPPORT_PATHS,
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
@@ -33,22 +31,20 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Product
 
 - Competitor monitoring for growth teams.
-- Public read-only live search trial and Public sample proof loop at /api/demo-proof for buyer evaluation, including an example tracked competitor and digest preview before signup.
-- Account-gated saved search, retained monitoring, and reusable saved evidence.
+- Public read-only search and a sample proof preview are available before signup.
+- Accounts unlock saved competitors, retained monitoring, reusable saved evidence, boards, briefs, and reports.
 - Saving competitor results, saved queries, watchlists, boards, reports, and delivery require an account.
-- Authenticated board, watchlist, and digest exports support CSV, API JSON, and Slack-ready markdown.
+- Authenticated board, watchlist, and digest exports support CSV, JSON export, and Slack-ready markdown.
 - Signed-in boards can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
-- Customer API keys can read account-owned readiness, collection, watchlist, and digest exports at /api/v1.
-- Write-enabled customer API keys can also use /api/v1/actions and /api/mcp for narrow audited workspace actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
-- Recommended first agent workflow: ${AGENT_FIRST_WORKFLOW.map((step) => step.label).join(" -> ")}.
-- Live audited action groups: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}. ${WRITE_ENABLED_API_KEY_REQUIREMENT}
-- Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
+- Customer API keys can read account-owned setup status, collection, watchlist, and digest exports.
+- Write-enabled customer API keys can perform approved account actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
+- Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Signed-in support cases cover paid-customer account help, with email fallback for users who cannot sign in.
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
 - Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
-- The public status page shows coarse launch blockers and safety posture without account activity, aggregate counts, timestamps, or private canary evidence.
-- Email delivery uses Cloudflare Email Service through the app's send_email binding.
-- Slack incoming-webhook setup exists for configured account destinations; broad launch still requires at least one configured Slack target with successful live delivery proof.
+- The public status page summarizes customer-facing surfaces without exposing private account activity.
+- Email delivery is available for eligible accounts.
+- Slack delivery can be connected from Integrations when a team wants channel updates.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily briefs and weekly digests should show priority, recommended next move, and proof trail.
@@ -56,15 +52,14 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 ## Current product truth
 
 - Account access uses verified access paths.
-- Public demo proof is sample-only, including the example tracked competitor and digest preview. Public live search is read-only; retained monitoring and saved evidence require an account.
+- Public proof previews are sample-only. Public search is read-only; retained monitoring and saved evidence require an account.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
-- Launch status is readiness-gated: checkout and signed webhook billing are verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, provider-canary success, Dodo portal subscription-update confirmation, and external uptime monitoring.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Observed campaign duration is based on first-seen and last-observed proof only. Manual external proof links can store user-supplied visible spend, impression, and reach values, but automated spend, reach, impression, and unsupported-channel benchmarks are not live.
-- Customer WhatsApp delivery is not launch-scoped today; it stays behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
+- WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.
 
 ## Pricing
 
@@ -93,28 +88,26 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
-- Public read-only live search is available for buyer evaluation, and public demo proof is sample-only at /api/demo-proof with an example tracked competitor and digest preview.
+- Public read-only search is available for buyer evaluation, and proof previews are sample-only before signup.
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
-- Launch status is readiness-gated: checkout and signed webhook billing are verified, but broad launch still depends on fresh proof capture, digest delivery, Slack delivery proof, provider-canary success, Dodo portal subscription-update confirmation, and external uptime monitoring.
-- Email delivery uses Cloudflare Email Service through the app's send_email binding.
+- Email delivery is available for eligible accounts.
 - Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly briefs plus 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
 - Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved boards, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
-- Account export links support CSV, API JSON, and Slack-ready markdown for signed-in users.
-- Customer API keys support /api/v1 readiness plus collection, watchlist, and digest exports for account-owned data.
-- Write-enabled customer API keys support narrow audited workspace actions through /api/v1/actions and /api/mcp for ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
-- Recommended first agent workflow: ${AGENT_FIRST_WORKFLOW.map((step) => step.label).join(" -> ")}.
-- Agent-blocked capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
+- Account export links support CSV, JSON export, and Slack-ready markdown for signed-in users.
+- Customer API keys support setup status plus collection, watchlist, and digest exports for account-owned data.
+- Write-enabled customer API keys support approved account actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
+- Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Signed-in support cases cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests, with email fallback when a user cannot sign in.
-- Slack incoming-webhook setup exists for configured account destinations; broad launch still requires a configured Slack target with successful live delivery proof.
-- The public status page shows blockers and safety posture only; detailed monitoring, proof-capture, digest, Slack, Dodo, and uptime evidence stays in private canaries and signed-in operational views.
+- Slack delivery can be connected from Integrations when a team wants channel updates.
+- The public status page summarizes customer-facing surfaces without exposing private account activity.
 - Slack webhook URLs are stored encrypted and are not shown again after saving.
-- Customer WhatsApp delivery is not launch-scoped today and must stay behind provider configuration, opt-in, validation, template-readiness, webhook-readiness, and successful delivery proof.
-- Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and broad public write APIs beyond audited workspace actions are not live yet.
+- WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.
+- Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and broad public write APIs beyond approved account actions are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
 Core layers:

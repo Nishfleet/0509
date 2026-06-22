@@ -10,7 +10,6 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
-import { BrandWordmark } from "~/components/brand-wordmark";
 import { SubmitButton } from "~/components/submit-button";
 import {
   applyWebsiteSearchFallback,
@@ -19,14 +18,12 @@ import {
   normalizeCompetitorWebsiteInput,
   watchlistFingerprint,
 } from "~/lib/competitor-website";
-import { sampleQueries } from "~/lib/demo-data";
-import { demoProof } from "~/lib/demo-proof";
 import {
   buildSearchParams,
   normalizeSavedQuery,
   parseSearchParams,
 } from "~/lib/normalize";
-import { defaultCountryForVisitor, SUPPORTED_COUNTRIES } from "~/lib/countries";
+import { defaultCountryForVisitor } from "~/lib/countries";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -34,11 +31,7 @@ import {
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
-import {
-  formatWatchlistTargetNoun,
-  formatWatchlistTrackingRole,
-  normalizeWatchlistTrackingRole,
-} from "~/lib/watchlist-role";
+import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
 
@@ -225,7 +218,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if ((intent === "save-query" || intent === "create-watchlist") && !normalizedQuery.filters.query) {
-    return { ok: false, message: "Enter a competitor website or search term before saving or tracking it." };
+    return { ok: false, message: "Enter a competitor website before saving or tracking it." };
   }
 
   if (intent === "save-query") {
@@ -336,9 +329,8 @@ export default function SearchRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const creativeTextField = data.selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
-  const trackingRole = normalizeWatchlistTrackingRole(data.trackingRole);
-  const trackingRoleLabel = formatWatchlistTrackingRole(trackingRole);
-  const targetNoun = formatWatchlistTargetNoun(trackingRole);
+  const trackingRole: WatchlistTrackingRole = "competitor";
+  const targetNoun = "competitor";
   const currentSearchParams = withTrackingContext(
     buildSearchParams({
       mode: data.mode,
@@ -351,105 +343,79 @@ export default function SearchRoute() {
   const inferredWatchlistName = (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
   const canTrackCurrentCompetitor = Boolean(data.filters.query) && !data.inputError;
   const discoverySummary = formatDiscoverySummary(data.result);
-  const idleSearchMessage = rootData.session
-    ? "Enter a website to see ads and save what matters."
-    : "Enter a website to preview live ads. Create an account to save and track.";
+  const hasSearchQuery = Boolean(data.filters.query);
+  const landingPageCount = data.result.ads.filter((ad) => ad.landingPage || ad.landingPageUrl).length;
 
   return (
     <main className="f9-search-page">
-      <header className="f9-search-nav">
-        <div className="f9-container f9-search-nav-inner">
-          <Link className="f9-brand f9-search-brand" to="/" aria-label="Five to Nine home">
-            <BrandWordmark />
-          </Link>
-
-          <nav className="f9-search-nav-links" aria-label="Search navigation">
-            <Link to="/">Home</Link>
-            <Link to="/search">Search</Link>
-            {rootData.session ? (
-              <Link className="f9-search-nav-pill" to="/app">
-                Account
-              </Link>
-            ) : (
-              <Link className="f9-search-nav-pill" to="/auth/signup?redirectTo=/search">
-                Create account
-              </Link>
-            )}
-          </nav>
-        </div>
-      </header>
-
-      <section className="f9-search-hero">
-        <div className="f9-search-gradient" aria-hidden="true" />
-        <div className="f9-container f9-search-hero-grid">
-          <div>
-            <p className="f9-search-kicker">Market tracking</p>
-            <h1>Track ads from one website.</h1>
-            <p>
-              Start with your site or a competitor site. Five to Nine finds the ads behind it, saves useful
-              examples, and keeps watching for visible changes.
-            </p>
+      <div className="f9-cursor-shell">
+        <aside className="f9-cursor-rail" aria-label="Search navigation">
+          <div className="f9-cursor-account">
+            <span>{rootData.session ? "Account" : "Search"}</span>
+            <strong>Five to Nine</strong>
+            <small>{rootData.session ? "Saved searches and watches" : "Find competitor ads"}</small>
           </div>
-          <div className="f9-search-intake-card">
-            <span>Start here</span>
-            <h2>Which website should we watch?</h2>
-            <Form className="f9-hero-intake-form" method="get">
+          <nav>
+            <Link to="/">Home</Link>
+            <Link className="is-active" to="/search">Overview</Link>
+            <Link to="/app/watchlists">Watchlists</Link>
+            <Link to="/app/collections">Collections</Link>
+            <Link to="/app/digests">Digests</Link>
+            <Link to="/app/support?category=migration">Reports</Link>
+            <Link to="/app/sources">Sources</Link>
+            <Link to="/app/billing">Billing</Link>
+          </nav>
+          {data.result.ads.length > 0 ? (
+            <div className="f9-cursor-rail-note">
+              <span>Saved proof</span>
+              <strong>{landingPageCount}/{data.result.ads.length}</strong>
+              <small>From this search</small>
+            </div>
+          ) : null}
+        </aside>
+
+        <div className="f9-cursor-main">
+          <section className="f9-search-command" aria-labelledby="search-command-title">
+            <div className="f9-search-command-head">
+              <h1 id="search-command-title">Find competitor ads</h1>
+            </div>
+
+            <Form className="f9-search-command-form" method="get">
               <input name="mode" type="hidden" value="advertiser" />
               <input name="country" type="hidden" value={data.filters.country} />
               <input name="platform" type="hidden" value="all" />
               <input name="creativeType" type="hidden" value="all" />
               <input name="status" type="hidden" value="all" />
-              <div className="f9-mode-toggle" aria-label="Track as">
-                <label className={trackingRole === "competitor" ? "is-active" : ""}>
-                  <input
-                    defaultChecked={trackingRole === "competitor"}
-                    name="trackingRole"
-                    type="radio"
-                    value="competitor"
-                  />
-                  Competitor
-                </label>
-                <label className={trackingRole === "self" ? "is-active" : ""}>
-                  <input
-                    defaultChecked={trackingRole === "self"}
-                    name="trackingRole"
-                    type="radio"
-                    value="self"
-                  />
-                  My brand
-                </label>
-              </div>
-              <label className="f9-field is-primary">
-                <span>Website to track</span>
+              <input name="trackingRole" type="hidden" value="competitor" />
+              <label className="f9-search-field">
+                <span>Competitor website</span>
                 <input
                   aria-invalid={Boolean(data.inputError)}
+                  aria-describedby="search-command-hint"
+                  autoComplete="url"
                   defaultValue={competitorWebsite.raw}
+                  inputMode="url"
                   name="website"
                   placeholder="https://nykaa.com"
-                  type="text"
-                />
-                {data.inputError ? <small>{data.inputError}</small> : null}
-              </label>
-              <label className="f9-field">
-                <span>Brand or search term</span>
-                <input
-                  defaultValue={data.filters.query}
-                  name="query"
-                  placeholder="Nykaa"
+                  spellCheck={false}
                   type="text"
                 />
               </label>
-              <div className="f9-action-row">
+              <div className="f9-search-actions">
                 <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
                   See ads
                 </SubmitButton>
-                {!rootData.session ? (
-                  <Link className="f9-secondary-button" to={signupTrackingPath}>
-                    Create account to track
-                  </Link>
-                ) : null}
               </div>
             </Form>
+            <p className="f9-search-command-hint" id="search-command-hint">
+              {data.inputError ?? "Paste one competitor website."}
+              {!rootData.session ? (
+                <>
+                  {" "}
+                  <Link to={signupTrackingPath}>Create account</Link> to save searches.
+                </>
+              ) : null}
+            </p>
             {canTrackCurrentCompetitor && rootData.session ? (
               <Form className="f9-quick-track-form" method="post">
                 <input name="intent" type="hidden" value="create-watchlist" />
@@ -465,19 +431,7 @@ export default function SearchRoute() {
                 </SubmitButton>
               </Form>
             ) : null}
-            <p
-              data-f9-result-cache-status={data.result.cacheStatus ?? "none"}
-              data-f9-result-empty-reason={data.result.discoveryEmptyReason ?? "none"}
-              data-f9-result-source={data.result.source}
-            >
-              {data.result.discoveryStatus === "disabled" ? idleSearchMessage : "Results: "}
-              {data.result.discoveryStatus !== "disabled" ? (
-                <strong>{formatSearchSourceLabel(data.result)}</strong>
-              ) : null}
-            </p>
-          </div>
-        </div>
-      </section>
+          </section>
 
       <section className="f9-search-workspace">
         <div className="f9-container">
@@ -501,225 +455,19 @@ export default function SearchRoute() {
             </div>
           ) : null}
 
-          {discoverySummary ? (
-            <div className="f9-discovery-banner">
-              <span>Results update</span>
-              <p>{discoverySummary}</p>
-            </div>
-          ) : null}
-
+          {hasSearchQuery ? (
+            <>
           <div className="f9-search-grid">
-            <section className="f9-search-controls">
-              <Form className="f9-search-form" method="get">
-                <div className="f9-controls-head">
-                  <span>Search</span>
-                  <h2>Choose a tracked brand</h2>
-                  <p>Enter a website first. Use the brand field if the ad account uses a different name.</p>
-                </div>
-
-                <label className="f9-field is-primary">
-                  <span>{trackingRoleLabel} website</span>
-                  <input
-                    aria-invalid={Boolean(data.inputError)}
-                    defaultValue={competitorWebsite.raw}
-                    name="website"
-                    placeholder="https://mamaearth.in"
-                    type="text"
-                  />
-                  <small>
-                    {data.inputError ?? `This becomes the saved ${targetNoun} when you track it.`}
-                  </small>
-                </label>
-
-                <div className="f9-mode-toggle" aria-label="Track as">
-                  <label className={trackingRole === "competitor" ? "is-active" : ""}>
-                    <input
-                      defaultChecked={trackingRole === "competitor"}
-                      name="trackingRole"
-                      type="radio"
-                      value="competitor"
-                    />
-                    Competitor
-                  </label>
-                  <label className={trackingRole === "self" ? "is-active" : ""}>
-                    <input
-                      defaultChecked={trackingRole === "self"}
-                      name="trackingRole"
-                      type="radio"
-                      value="self"
-                    />
-                    My brand
-                  </label>
-                </div>
-
-                <div className="f9-mode-toggle">
-                  <label className={data.mode === "advertiser" ? "is-active" : ""}>
-                    <input
-                      defaultChecked={data.mode === "advertiser"}
-                      name="mode"
-                      type="radio"
-                      value="advertiser"
-                    />
-                    Advertiser
-                  </label>
-                  <label className={data.mode === "keyword" ? "is-active" : ""}>
-                    <input
-                      defaultChecked={data.mode === "keyword"}
-                      name="mode"
-                      type="radio"
-                      value="keyword"
-                    />
-                    Keyword
-                  </label>
-                </div>
-
-                <label className="f9-field">
-                  <span>Brand or keyword</span>
-                  <input defaultValue={data.filters.query} name="query" placeholder="nykaa, cod, whatsapp, festive sale" />
-                </label>
-
-                <div className="f9-field-grid">
-                  <label className="f9-field">
-                    <span>Country</span>
-                    <select defaultValue={data.filters.country} name="country">
-                      <option value="all">All countries</option>
-                      {SUPPORTED_COUNTRIES.map((country) => (
-                        <option key={country.code} value={country.name}>
-                          {country.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="f9-field">
-                    <span>Platform</span>
-                    <select defaultValue={data.filters.platform} name="platform">
-                      <option value="all">All platforms</option>
-                      <option value="Instagram">Instagram</option>
-                      <option value="Facebook">Facebook</option>
-                      <option value="Messenger">Messenger</option>
-                    </select>
-                  </label>
-                  <label className="f9-field">
-                    <span>Creative type</span>
-                    <select defaultValue={data.filters.creativeType} name="creativeType">
-                      <option value="all">All</option>
-                      <option value="image">Image</option>
-                      <option value="video">Video</option>
-                      <option value="carousel">Carousel</option>
-                    </select>
-                  </label>
-                  <label className="f9-field">
-                    <span>Status</span>
-                    <select defaultValue={data.filters.status} name="status">
-                      <option value="all">All</option>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  </label>
-                </div>
-
-                <div className="f9-field-grid">
-                  <label className="f9-field">
-                    <span>First seen from</span>
-                    <input defaultValue={data.filters.firstSeenFrom} name="firstSeenFrom" type="date" />
-                  </label>
-                  <label className="f9-field">
-                    <span>Last seen from</span>
-                    <input defaultValue={data.filters.lastSeenFrom} name="lastSeenFrom" type="date" />
-                  </label>
-                </div>
-
-                <div className="f9-action-row">
-                  <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
-                    Search ads
-                  </SubmitButton>
-                  <Link
-                    className="f9-secondary-button"
-                    to={`/search?mode=${data.mode}&query=${encodeURIComponent(sampleQueries[data.mode][0])}`}
-                  >
-                    Example search
-                  </Link>
-                </div>
-              </Form>
-
-              <div className="f9-search-samples">
-                <span>Try these</span>
-                {sampleQueries[data.mode].map((query) => {
-                  const params = buildSearchParams({
-                    mode: data.mode,
-                    filters: {
-                      ...data.filters,
-                      query,
-                    },
-                  });
-
-                  return (
-                    <Link key={query} to={`/search?${params.toString()}`}>
-                      {query}
-                    </Link>
-                  );
-                })}
-              </div>
-
-              {data.session ? (
-                data.filters.query ? (
-                  <div className="f9-save-stack">
-                    <Form className="f9-inline-save" method="post">
-                      <input name="intent" type="hidden" value="save-query" />
-                      <SearchStateFields
-                        competitorWebsite={competitorWebsite.raw}
-                        filters={data.filters}
-                        mode={data.mode}
-                        trackingRole={trackingRole}
-                      />
-                      <input name="name" placeholder="Save this search as..." required />
-                      <SubmitButton className="f9-secondary-button" intent="save-query" pendingLabel="Saving…">
-                        Save search
-                      </SubmitButton>
-                    </Form>
-
-                    <Form className="f9-inline-save" method="post">
-                      <input name="intent" type="hidden" value="create-watchlist" />
-                      <SearchStateFields
-                        competitorWebsite={competitorWebsite.raw}
-                        filters={data.filters}
-                        mode={data.mode}
-                        trackingRole={trackingRole}
-                      />
-                      <input
-                        defaultValue={`${inferredWatchlistName} watch`}
-                        name="name"
-                        placeholder="Watchlist name"
-                      />
-                      <SubmitButton className="f9-primary-button" intent="create-watchlist" pendingLabel="Creating…">
-                        Track this {targetNoun}
-                      </SubmitButton>
-                    </Form>
-                  </div>
-                ) : (
-                  <div className="f9-side-note">
-                    <p>Enter a competitor website or brand, then save it or turn it into a watchlist.</p>
-                  </div>
-                )
-              ) : (
-                <div className="f9-side-note">
-                  <span>Save the watch</span>
-                  <p>
-                    Preview live ads here. Create an account to save useful ads and keep tracking the competitor next week.
-                  </p>
-                  <PublicDigestPreview />
-                  <Link className="f9-primary-button" to={signupTrackingPath}>
-                    Create account
-                  </Link>
-                </div>
-              )}
-            </section>
-
-            <section className="f9-results-panel">
+            <section
+              className="f9-results-panel"
+              data-f9-result-cache-status={data.result.cacheStatus ?? undefined}
+              data-f9-result-empty-reason={data.result.discoveryEmptyReason ?? undefined}
+              data-f9-result-source={data.result.provider ?? data.result.source}
+            >
               <div className="f9-panel-head">
                 <div>
                   <span>Results</span>
-                  <h2>{data.result.ads.length} ads found</h2>
+                  <h2>{formatResultsPanelTitle(data.result)}</h2>
                 </div>
                 {data.result.nextCursor ? (
                   <Link
@@ -741,6 +489,12 @@ export default function SearchRoute() {
                   </Link>
                 ) : null}
               </div>
+
+              {discoverySummary && data.result.ads.length > 0 ? (
+                <div className="f9-discovery-banner">
+                  <p>{discoverySummary}</p>
+                </div>
+              ) : null}
 
               <div className="f9-results-list">
                 {data.result.ads.length > 0 ? (
@@ -780,7 +534,7 @@ export default function SearchRoute() {
                     <h3>{formatEmptyResultHeadline(data.result)}</h3>
                     <p>
                       {discoverySummary ??
-                        "Try a broader query or switch between advertiser and keyword mode."}
+                        "Try another competitor website."}
                     </p>
                   </div>
                 )}
@@ -908,40 +662,13 @@ export default function SearchRoute() {
               )}
             </aside>
           </div>
+            </>
+          ) : null}
         </div>
       </section>
+        </div>
+      </div>
     </main>
-  );
-}
-
-function PublicDigestPreview() {
-  return (
-    <div className="f9-public-digest-preview" aria-label="Example tracked competitor digest preview">
-      <div>
-        <strong>Example tracked competitor</strong>
-        <span>{demoProof.trackedPreview.watchlistName}</span>
-      </div>
-      <dl>
-        <div>
-          <dt>Cadence</dt>
-          <dd>{demoProof.trackedPreview.cadence}</dd>
-        </div>
-        <div>
-          <dt>Proof trail</dt>
-          <dd>{demoProof.trackedPreview.proofCount} signals</dd>
-        </div>
-        <div>
-          <dt>Delivery</dt>
-          <dd>{demoProof.trackedPreview.deliveryPreview}</dd>
-        </div>
-      </dl>
-      <div>
-        <strong>Digest preview</strong>
-        <span>{demoProof.digestPreview.subject}</span>
-      </div>
-      <p>{demoProof.digestPreview.recommendedMove}</p>
-      <a href="/api/demo-proof?format=markdown">Open example digest</a>
-    </div>
   );
 }
 
@@ -1068,38 +795,6 @@ function normalizeDisplayText(value: string | null | undefined) {
     .toLowerCase();
 }
 
-function formatSearchSourceLabel(result: SearchResponse) {
-  if (result.discoveryStatus === "disabled") {
-    return "Ready when you are";
-  }
-
-  if (result.discoveryStatus === "degraded" && result.ads.length === 0) {
-    return "Fresh results delayed";
-  }
-
-  if (
-    result.discoveryStatus === "cache_only" ||
-    result.cacheStatus === "hit" ||
-    result.cacheStatus === "stale"
-  ) {
-    return "Recent results";
-  }
-
-  if (result.source === "meta_library_browser") {
-    return "Fresh results";
-  }
-
-  if (result.source === "meta_api") {
-    return "Fresh results";
-  }
-
-  if (result.source === "meta") {
-    return "Fresh results";
-  }
-
-  return "Sample results";
-}
-
 export function formatDiscoverySummary(result: SearchResponse) {
   if (!result.discoverySummary) {
     return null;
@@ -1143,22 +838,42 @@ export function formatDiscoverySummary(result: SearchResponse) {
   return result.discoverySummary
     .replace(/Commercial discovery/gi, "Competitor ad checks")
     .replace(/commercial discovery/gi, "competitor ad checks")
+    .replace(/competitor ad checks is already warming this query\.?/gi, "We are checking this competitor now.")
+    .replace(/query/gi, "competitor")
     .replace(/Browser Run/gi, "visual checks")
     .replace(/API fallback/gi, "alternate Meta ad results")
     .replace(/cached live results/gi, "recent results")
-    .replace(/cached results/gi, "recent results");
+    .replace(/cached results/gi, "recent results")
+    .replace(/recent results should appear shortly/gi, "Results should appear shortly")
+    .replace(/(^|[.!?]\s+)([a-z])/g, (match) => match.toUpperCase());
 }
 
 function formatEmptyResultHeadline(result: SearchResponse) {
   if (result.discoveryStatus === "disabled") {
-    return "Enter a competitor website or keyword";
+    return "Enter a competitor website";
+  }
+
+  if (/warming this query|already warming/i.test(result.discoverySummary ?? "")) {
+    return "Checking this competitor";
   }
 
   if (result.discoveryStatus === "degraded") {
     return "Live search is temporarily unavailable";
   }
 
-  return "No ads found for this query";
+  return "No ads found for this competitor";
+}
+
+function formatResultsPanelTitle(result: SearchResponse) {
+  if (result.ads.length > 0) {
+    return `${result.ads.length} ads found`;
+  }
+
+  if (/warming this query|already warming/i.test(result.discoverySummary ?? "")) {
+    return "Search in progress";
+  }
+
+  return "0 ads found";
 }
 
 function canCreateAdvertiserWatchlist(query: ReturnType<typeof normalizeSavedQuery>) {

@@ -112,7 +112,7 @@ export function buildLifecycleNudges(input: {
     nudges.push({
       id: "agent_setup",
       title: "Agent setup is missing",
-      detail: "Create an API key so agents can read readiness and run audited workspace actions.",
+      detail: "Create an API key so agents can read readiness and run approved account actions.",
       href: "/app/sources",
       priority: "medium",
     });

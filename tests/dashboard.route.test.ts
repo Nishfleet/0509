@@ -96,9 +96,11 @@ async function mockRouter(loaderData: unknown) {
   });
 }
 
-function mockDashboardLoaderDependencies(options: { counterMoveAudits?: unknown[] } = {}) {
+function mockDashboardLoaderDependencies(options: { counterMoveAudits?: unknown[]; watchlists?: unknown[] } = {}) {
   const liveKey = ["f9", "live", "dashboard"].join("_");
   const counterMoveAudits = options.counterMoveAudits ?? [];
+  const listWatchlists = vi.fn().mockResolvedValue(options.watchlists ?? []);
+  const listWatchEvents = vi.fn().mockResolvedValue([]);
 
   vi.doMock("~/lib/auth.server", () => ({
     requireWorkspaceSession: vi.fn(async () => ({
@@ -146,8 +148,8 @@ function mockDashboardLoaderDependencies(options: { counterMoveAudits?: unknown[
     listDigests: vi.fn().mockResolvedValue([]),
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listSavedQueries: vi.fn().mockResolvedValue([]),
-    listWatchEvents: vi.fn().mockResolvedValue([]),
-    listWatchlists: vi.fn().mockResolvedValue([]),
+    listWatchEvents,
+    listWatchlists,
   }));
   vi.doMock("~/lib/plan.server", () => ({
     getProofUsageSummary: vi.fn().mockResolvedValue({
@@ -174,6 +176,11 @@ function mockDashboardLoaderDependencies(options: { counterMoveAudits?: unknown[
   vi.doMock("~/lib/workspace.server", () => ({
     listWorkspaceMembers: vi.fn().mockResolvedValue([]),
   }));
+
+  return {
+    listWatchEvents,
+    listWatchlists,
+  };
 }
 
 beforeEach(() => {
@@ -188,7 +195,7 @@ afterEach(() => {
 
 describe("dashboard route agent memory", () => {
   it("redacts legacy secret-looking memory in loader data and rendered previews", async () => {
-    mockDashboardLoaderDependencies();
+    const deps = mockDashboardLoaderDependencies();
 
     const { loader } = await import("~/routes/app.dashboard");
     const loaderData = await loader({
@@ -196,6 +203,7 @@ describe("dashboard route agent memory", () => {
       request: new Request("http://localhost/app"),
     } as never);
 
+    expect(deps.listWatchlists).toHaveBeenCalledWith(expect.anything(), session.user.id, { includeInactive: true });
     expect(JSON.stringify(loaderData)).not.toContain("hunter2");
     expect(JSON.stringify(loaderData)).not.toContain(["f9", "live", "dashboard"].join("_"));
     expect(loaderData.agentMemories[0]).toMatchObject({
@@ -208,13 +216,37 @@ describe("dashboard route agent memory", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Agent memory ready");
-    expect(markup).toContain("[redacted]: [redacted]");
-    expect(markup).toContain("Counter-move follow-ups");
-    expect(markup).toContain("/app/clients");
+    expect(markup).toContain("Add your first competitor");
+    expect(markup).not.toContain("Account context saved");
+    expect(markup).not.toContain("[redacted]: [redacted]");
+    expect(markup).not.toContain("Counter-move follow-ups");
     expect(markup).not.toContain("hunter2");
     expect(markup).not.toContain(["f9", "live", "dashboard"].join("_"));
     expect(markup).not.toContain("password=");
+  });
+
+  it("does not load dashboard events for paused competitors", async () => {
+    const deps = mockDashboardLoaderDependencies({
+      watchlists: [
+        {
+          id: "paused-watchlist",
+          name: "Nykaa watch",
+          targetType: "advertiser",
+          targetLabel: "Nykaa",
+          isActive: false,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(deps.listWatchEvents).not.toHaveBeenCalled();
+    expect(loaderData.recentEvents).toEqual([]);
   });
 
   it("surfaces safe counter-move follow-ups from agent action audits", async () => {
@@ -400,7 +432,7 @@ describe("dashboard route agent memory", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Counter-move follow-ups");
+    expect(markup).toContain("Briefs that need review");
     expect(markup).toContain("Review pricing move");
     expect(markup).toContain("Growth lead");
     expect(markup).toContain("Client room");
@@ -468,7 +500,7 @@ describe("dashboard route agent memory", () => {
     expect(JSON.stringify(loaderData)).not.toContain("bearer abcdefghijklmnop");
     expect(loaderData.counterMoveFollowUps[0]).toMatchObject({
       title: "Counter-move brief counter-move brief",
-      ownerLabel: "Workspace owner",
+      ownerLabel: "Account owner",
       channelLabel: "Client room",
     });
 
@@ -477,7 +509,7 @@ describe("dashboard route agent memory", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Workspace owner");
+    expect(markup).toContain("Account owner");
     expect(markup).toContain("Client room");
     expect(markup).not.toContain(liveKey);
     expect(markup).not.toContain(slackHook);

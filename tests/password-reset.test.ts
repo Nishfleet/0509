@@ -137,6 +137,7 @@ describe("account page", () => {
           sessionExpiresAt: "2026-06-30T00:00:00.000Z",
           plan: "agency",
           brandName: null,
+          brandWebsite: null,
           passkeys: [],
           passkeysEnabled: true,
         }),
@@ -153,10 +154,13 @@ describe("account page", () => {
     expect(markup).toContain("Better Auth");
     expect(markup).toContain("Session and account controls");
     expect(markup).toContain("This device is signed in until");
+    expect(markup).toContain("sign-in options");
     expect(markup).not.toContain("session-1");
     expect(markup).toContain("Delete this account");
     expect(markup).toContain("support@0509.io");
-    expect(markup).toContain("Report branding");
+    expect(markup).toContain("My brand");
+    expect(markup).toContain("save-brand-profile");
+    expect(markup).toContain("Agency reports");
     expect(markup).toContain("save-report-branding");
   });
 

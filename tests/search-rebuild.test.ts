@@ -41,18 +41,33 @@ describe("search rebuild", () => {
     expect(searchRoute).not.toContain("Sign in to search competitor Meta ads");
   });
 
-  it("uses the Five to Nine wordmark in the search header", () => {
-    expect(searchRoute).toContain("<BrandWordmark />");
+  it("uses a Cursor-style app shell instead of the old marketing header", () => {
+    expect(searchRoute).toContain('className="f9-cursor-shell"');
+    expect(searchRoute).toContain('aria-label="Search navigation"');
+    expect(searchRoute).not.toContain("<BrandWordmark />");
   });
 
   it("keeps public search centered on website-based market tracking", () => {
-    expect(searchRoute).toContain("Market tracking");
-    expect(searchRoute).toContain("Website to track");
-    expect(searchRoute).toContain("My brand");
+    expect(searchRoute).toContain("Competitor website");
+    expect(searchRoute).toContain("Paste one competitor website");
+    expect(searchRoute).not.toContain("Brand or search term");
+    expect(searchRoute).not.toContain("My brand");
+    expect(searchRoute).not.toContain("f9-search-controls");
+    expect(searchRoute).not.toContain("Example tracked competitor");
+    expect(searchRoute).not.toContain("Digest preview");
+    expect(searchRoute).not.toContain("/api/demo-proof?format=markdown");
     expect(searchRoute).toContain("Track this {targetNoun}");
-    expect(searchRoute).toContain("Example tracked competitor");
-    expect(searchRoute).toContain("Digest preview");
-    expect(searchRoute).toContain("/api/demo-proof?format=markdown");
+  });
+
+  it("keeps hidden result markers for production canaries", () => {
+    expect(searchRoute).toContain("data-f9-result-source");
+    expect(searchRoute).toContain("data-f9-result-cache-status");
+    expect(searchRoute).toContain("data-f9-result-empty-reason");
+  });
+
+  it("keeps freshness warnings visible when non-empty results are cached or degraded", () => {
+    expect(searchRoute).toContain("discoverySummary && data.result.ads.length > 0");
+    expect(searchRoute).toContain('className="f9-discovery-banner"');
   });
 
   it("keeps primary search links legible on dark buttons", () => {

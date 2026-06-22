@@ -18,7 +18,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       {
         ok: false,
         error: "actions_write_not_enabled",
-        message: "Create a write-enabled API key before running audited workspace actions.",
+        message: "Create a write-enabled API key before running account actions.",
       },
       403,
     );

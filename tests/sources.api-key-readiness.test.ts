@@ -82,7 +82,7 @@ describe("sources route API-key readiness", () => {
 
     expect(markup).toMatch(/Active keys[\s\S]*?<strong>0<\/strong>/);
     expect(markup).toContain("Needs write key");
-    expect(markup).toContain("audited workspace actions require a write-enabled key");
+    expect(markup).toContain("Allow account actions");
     expect(markup).toContain("customer API key creation, rotation, and revocation");
   });
 

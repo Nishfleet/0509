@@ -42,7 +42,7 @@ export function AuthForm({
 
   return (
     <div className="f9-auth-card">
-      <span>{isSignup ? "Create your workspace" : "Welcome back"}</span>
+      <span>{isSignup ? "Create account" : "Welcome back"}</span>
       <h2>
         {isSignup
           ? "Verify your work email to start."
@@ -50,7 +50,7 @@ export function AuthForm({
       </h2>
       <p>
         {isSignup
-          ? "Five to Nine now uses organization-based sign-in. Your first verified login creates the workspace."
+          ? "Use a work email. After verification, you can add a competitor and start tracking."
           : "Enter your work email and we'll send a one-time link to your inbox."}
       </p>
 
@@ -68,7 +68,7 @@ export function AuthForm({
               <input
                 autoComplete="organization"
                 name="organizationName"
-                placeholder="Your workspace name"
+                placeholder="Company name"
                 required
               />
             </label>

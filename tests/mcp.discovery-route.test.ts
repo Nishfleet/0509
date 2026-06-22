@@ -33,7 +33,7 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     ],
   },
   {
-    label: "Memory and client rooms",
+    label: "Context and client rooms",
     requiresWriteEnabled: true,
     actions: ["upsert_memory", "list_memory", "upsert_client_room", "list_client_rooms"],
   },
