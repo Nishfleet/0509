@@ -80,7 +80,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   ] = await Promise.all([
     listSavedQueries(env, workspaceUserId),
     listCollections(env, workspaceUserId),
-    listWatchlists(env, workspaceUserId),
+    listWatchlists(env, workspaceUserId, { includeInactive: true }),
     listDigests(env, workspaceUserId),
     resolveCommercialAdSourceStatus(env),
     getCustomerMetaConnection(env, workspaceUserId),
@@ -97,8 +97,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     (billingInfo.dodoStatus === "subscription.failed" ||
       billingInfo.dodoStatus === "subscription.on_hold");
   const overnightSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const activeWatchlistsForEvents = watchlists.filter((watchlist) => watchlist.isActive);
   const [recentEvents, recentProofCaptures, deliveryTargets, overnightStats, successfulProofStats] = await Promise.all([
-    Promise.all(watchlists.slice(0, 6).map((watchlist) => listWatchEvents(env, watchlist.id, 6))).then((groups) =>
+    Promise.all(activeWatchlistsForEvents.slice(0, 6).map((watchlist) => listWatchEvents(env, watchlist.id, 6))).then((groups) =>
       groups
         .flat()
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -223,102 +224,42 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function AppDashboardRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const savedQueries = data.savedQueries ?? [];
   const collections = data.collections ?? [];
   const watchlists = data.watchlists ?? [];
   const digests = data.digests ?? [];
   const recentEvents = data.recentEvents ?? [];
   const recentProofCaptures = data.recentProofCaptures ?? [];
-  const deliveryTargets = data.deliveryTargets ?? [];
   const proofUsage = data.proofUsage ?? { warningLevel: "ok", used: 0, limit: 0, remaining: 0, plan: "free" };
   const plan = data.plan ?? "free";
   const nextScanLabel = data.nextScanLabel ?? formatNextScanLabel(plan);
   const hasPaymentIssue = Boolean(data.hasPaymentIssue);
-  const teamMemberCount = data.teamMemberCount ?? 0;
   const checkoutReturn = Boolean(data.checkoutReturn);
-  const metaHeading =
-    data.metaStatus.status === "healthy"
-      ? "Ready to track competitors"
-      : data.metaStatus.status === "cache_only"
-        ? "Recent results available"
-      : data.metaStatus.status === "demo"
-        ? "Setup needed"
-      : data.metaStatus.status === "disabled"
-          ? "Tracking unavailable"
-        : "Needs attention";
   const competitorCount = watchlists.length;
   const activeWatchlists = watchlists.filter((watchlist) => watchlist.isActive).length;
-  const confirmedChanges = recentEvents.filter((event) => event.status === "confirmed" || event.status === "detected").length;
-  const overnightCutoff = Date.now() - 24 * 60 * 60 * 1000;
-  const overnightMoves = recentEvents.filter(
-    (event) =>
-      (event.status === "confirmed" || event.status === "detected") &&
-      Date.parse(event.createdAt) >= overnightCutoff,
-  ).length;
+  const hasSavedCompetitor = competitorCount > 0;
+  const hasOnlyPausedWatchlists = hasSavedCompetitor && activeWatchlists === 0;
+  const visibleRecentEvents = activeWatchlists > 0 ? recentEvents : [];
+  const confirmedChanges = visibleRecentEvents.filter((event) => event.status === "confirmed" || event.status === "detected").length;
   const recentSuccessfulProofs = recentProofCaptures.filter((capture) => capture.status === "succeeded").length;
-  const hasProofAttempts = recentProofCaptures.length > 0;
   const successfulProofs = data.successfulProofStats?.count ?? recentSuccessfulProofs;
   const sentDigests = digests.filter((digest) => digest.delivery?.status === "sent").length;
-  const latestScanAt = watchlists
-    .map((watchlist) => watchlist.lastScannedAt)
-    .filter((value): value is string => Boolean(value))
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
-  const hasActiveEmailDeliveryTarget = deliveryTargets.some(
-    (target) => target.channel === "email" && target.isOptedIn && !target.isPaused && !target.optedOutAt,
-  );
-  const hasActiveSlackDeliveryTarget = deliveryTargets.some(
-    (target) => target.channel === "slack" && target.isOptedIn && !target.isPaused && !target.optedOutAt,
-  );
-  const slackNeedsProof = deliveryTargets.some(
-    (target) => target.channel === "slack" && !target.isPaused && !target.lastSuccessfulDeliveryAt,
-  );
-  const hasActiveDeliveryTarget = hasActiveEmailDeliveryTarget || hasActiveSlackDeliveryTarget;
-  const hasEmailDelivery = hasActiveEmailDeliveryTarget;
-  const firstCompetitorReady = competitorCount > 0;
-  const proofReady = successfulProofs > 0;
-  const sourceReady = data.metaStatus.status === "healthy";
-  const readinessReviewPaths: Record<string, string> = {
-    first_competitor: "/search",
-    first_watchlist: "/app/watchlists",
-    first_proof: "/app/watchlists",
-    first_digest: "/app/digests",
-    delivery: "/app/sources",
-    billing: "/app/billing",
-    team: "/app/team",
-    source: "/app/sources",
-    api: "/app/sources",
-    mcp: "/app/sources",
-    memory: "/app/clients",
-    client_room: "/app/clients",
-  };
-  const readinessItems = data.workspaceReadiness.items.filter((item) => item.status !== "not_applicable");
-  const deliveryReadinessItem = readinessItems.find((item) => item.id === "delivery");
-  const deliveryComplete = deliveryReadinessItem?.status === "ready";
-  const deliveryReady = hasActiveDeliveryTarget;
-  const deliveryNeedsProof = deliveryReady && !deliveryComplete;
-  const setupItems = readinessItems.map((item) => ({
-    label: item.label,
-    detail: item.detail,
-    done: item.status === "ready",
-    href: item.action?.href ?? readinessReviewPaths[item.id] ?? "/app",
-  }));
-  const lifecycleNudges = data.workspaceReadiness.nudges ?? [];
-  const agentMemories = data.agentMemories ?? [];
+  const firstCompetitorReady = activeWatchlists > 0;
   const counterMoveFollowUps = data.counterMoveFollowUps ?? [];
   const counterMoveFollowUpCount = counterMoveFollowUps.length;
-  const agentMemoryCount = data.workspaceReadiness.counts?.agentMemoryEntries ?? agentMemories.length;
-  const hasAgentMemory = agentMemoryCount > 0;
-  const latestAgentMemory = agentMemories[0] ?? null;
   const statusCards = [
     {
       label: "Competitors watched",
       value: competitorCount,
-      detail: competitorCount > 0 ? `${activeWatchlists} active` : "Add your first competitor",
+      detail: hasSavedCompetitor ? (activeWatchlists > 0 ? `${activeWatchlists} active` : "All paused") : "Add your first competitor",
     },
     {
       label: "Changes found",
       value: confirmedChanges,
-      detail: recentEvents.length > 0 ? "Recent watch events" : "Waiting for first scan",
+      detail: hasOnlyPausedWatchlists
+        ? "Paused"
+        : visibleRecentEvents.length > 0
+          ? "Recent watch events"
+          : "Waiting for first scan",
     },
     {
       label: "Evidence checks",
@@ -338,158 +279,6 @@ export default function AppDashboardRoute() {
   const overnightCheckScope = overnightWatchlists > 0
     ? `${overnightWatchlists} competitor${overnightWatchlists === 1 ? "" : "s"}`
     : `${overnightRuns} scan${overnightRuns === 1 ? "" : "s"}`;
-  const proofCount = successfulProofs;
-  const watchedState = activeWatchlists > 0
-    ? `${activeWatchlists} active competitor${activeWatchlists === 1 ? "" : "s"}`
-    : firstCompetitorReady
-      ? "Saved but paused"
-      : "Not started";
-  const valueLoopItems = [
-    {
-      label: "Watched",
-      state: watchedState,
-      detail: firstCompetitorReady
-        ? `${competitorCount} competitor${competitorCount === 1 ? "" : "s"} saved for retained monitoring.`
-        : "Add one competitor website to start the retained watch.",
-      done: activeWatchlists > 0,
-      href: "/app/watchlists",
-    },
-    {
-      label: "Checked",
-      state: hasOvernightCheck
-        ? `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked`
-        : activeWatchlists > 0
-          ? `Next sweep: ${nextScanLabel}`
-          : "Waiting for first sweep",
-      detail: hasOvernightCheck
-        ? overnightAdsSeen > 0
-          ? `Five to Nine looked across ${overnightCheckScope} in the last 24 hours.`
-          : `Quiet still counts: Five to Nine looked across ${overnightCheckScope}.`
-        : "The first sweep starts after a competitor is under watch.",
-      done: hasOvernightCheck,
-      href: "/app/watchlists",
-    },
-    {
-      label: "Changed",
-      state: confirmedChanges > 0
-        ? `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} found`
-        : "No move yet",
-      detail: confirmedChanges > 0
-        ? "Recent watch events are ready for review."
-        : "Quiet scans keep the market desk clean until a real change appears.",
-      done: confirmedChanges > 0,
-      href: "/app/watchlists",
-    },
-    {
-      label: "Proved",
-      state: proofReady
-        ? `${proofCount} evidence check${proofCount === 1 ? "" : "s"}`
-        : "Proof waiting",
-      detail: proofReady
-        ? "Screenshots and landing-page evidence are attached to the trail."
-        : hasProofAttempts
-          ? "Evidence attempts have run, but no successful proof is attached yet."
-        : "The first proof appears after a watchlist catches or confirms a tracked page.",
-      done: proofReady,
-      href: "/app/watchlists",
-    },
-    {
-      label: "Delivered",
-      state: sentDigests > 0
-        ? `${sentDigests} digest${sentDigests === 1 ? "" : "s"} sent`
-        : deliveryComplete
-          ? "Delivery proved"
-          : hasActiveSlackDeliveryTarget
-            ? "Slack target saved"
-            : hasActiveEmailDeliveryTarget
-              ? "Email target saved"
-            : slackNeedsProof
-              ? "Slack needs proof"
-              : "Delivery not set",
-      detail: sentDigests > 0
-        ? "Proof-backed summaries have already left the app."
-        : deliveryComplete
-          ? "A delivery path has successful proof."
-          : deliveryNeedsProof
-            ? "A delivery target exists; the first successful send will complete the proof trail."
-          : "Connect email or Slack when the team wants the proof pushed out.",
-      done: deliveryComplete,
-      href: sentDigests > 0 ? "/app/digests" : "/app/sources",
-    },
-    {
-      label: "Remembered",
-      state: hasAgentMemory
-        ? `${agentMemoryCount} memory ${agentMemoryCount === 1 ? "entry" : "entries"}`
-        : "No context saved",
-      detail: hasAgentMemory
-        ? "Future reports and briefs can use saved goals, tone, and review preferences."
-        : "Save goals, tone, or review cadence so the next agent run has context.",
-      done: hasAgentMemory,
-      href: "/app/clients",
-    },
-  ];
-  const firstFifteenSteps = [
-    {
-      minute: "00-02",
-      title: "Add one competitor",
-      detail: firstCompetitorReady
-        ? `${competitorCount} competitor${competitorCount === 1 ? "" : "s"} saved.`
-        : "Paste one competitor website so the account has a real market watch.",
-      done: firstCompetitorReady,
-      href: "/search",
-      cta: firstCompetitorReady ? "Review search" : "Add competitor",
-    },
-    {
-      minute: "02-05",
-      title: "Start the first sweep",
-      detail: latestScanAt
-        ? "The first scan trail exists."
-        : activeWatchlists > 0
-          ? `The next sweep is ${nextScanLabel}. Open the watchlist if you want to refresh now.`
-          : "Create or resume a watchlist so Five to Nine can check the market.",
-      done: Boolean(latestScanAt),
-      href: "/app/watchlists",
-      cta: latestScanAt ? "Review scan" : "Open watchlist",
-    },
-    {
-      minute: "05-10",
-      title: "Capture proof",
-      detail: proofReady
-        ? `${proofCount} evidence check${proofCount === 1 ? "" : "s"} attached.`
-        : hasProofAttempts
-          ? "Evidence attempts ran; open the watchlist to retry or inspect the failed proof."
-          : "Get the first screenshot and landing-page trail before sharing a claim.",
-      done: proofReady,
-      href: "/app/watchlists",
-      cta: proofReady ? "Review proof" : "Capture proof",
-    },
-    {
-      minute: "10-12",
-      title: deliveryReady ? "Prove delivery" : "Set delivery",
-      detail: deliveryComplete
-        ? "A successful delivery trail exists."
-        : deliveryNeedsProof
-          ? "Delivery target is saved; send the first proof-backed brief to prove it reaches the team."
-        : "Add email or Slack so the proof reaches the team without a manual chase.",
-      done: deliveryComplete,
-      href: "/app/sources",
-      cta: deliveryComplete ? "Review delivery" : deliveryNeedsProof ? "Prove delivery" : "Set delivery",
-    },
-    {
-      minute: "12-15",
-      title: "Save context",
-      detail: hasAgentMemory
-        ? "Goals, tone, or cadence are saved for future agent work."
-        : "Save the account goal or review cadence so briefs sound like the team.",
-      done: hasAgentMemory,
-      href: "/app/clients",
-      cta: hasAgentMemory ? "Review context" : "Save context",
-    },
-  ];
-  const nextActivationStep = firstFifteenSteps.find((step) => !step.done) ?? firstFifteenSteps[firstFifteenSteps.length - 1];
-  const activationComplete = firstFifteenSteps.every((step) => step.done);
-  const showSetupChecklist = activationComplete && setupItems.some((item) => !item.done);
-  const showValueLoop = activationComplete;
   const counterMoveBriefLabel = `${counterMoveFollowUpCount} brief${counterMoveFollowUpCount === 1 ? "" : "s"}`;
   const todaysAnswer = counterMoveFollowUpCount > 0
     ? {
@@ -512,6 +301,13 @@ export default function AppDashboardRoute() {
         href: "/app/watchlists",
         cta: "Review watchlists",
       }
+      : hasOnlyPausedWatchlists
+        ? {
+          title: "Tracking is paused",
+          detail: "Resume a competitor watch to keep checking for changes.",
+          href: "/app/watchlists",
+          cta: "Resume watch",
+        }
       : activeWatchlists > 0
         ? {
           title: "First sweep is queued",
@@ -525,58 +321,38 @@ export default function AppDashboardRoute() {
           href: "/search",
           cta: "Add competitor",
         };
-  const readyCount = data.workspaceReadiness.readyCount;
   const briefTitle = counterMoveFollowUpCount > 0
     ? `${counterMoveBriefLabel} to decide`
     : confirmedChanges > 0
     ? `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} to review`
+    : hasOnlyPausedWatchlists
+      ? "Tracking is paused"
     : firstCompetitorReady
       ? "Watching for the first change"
       : "Add your first competitor";
   const briefSummary = counterMoveFollowUpCount > 0
     ? "A proof-backed follow-up is waiting for a response decision."
     : confirmedChanges > 0
-    ? recentEvents.slice(0, 3).map((event) => event.title).join(". ")
+    ? visibleRecentEvents.slice(0, 3).map((event) => event.title).join(". ")
     : hasOvernightCheck
       ? `All quiet — ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightCheckScope} in the last day. No changes worth your time.`
+      : hasOnlyPausedWatchlists
+        ? "Resume a competitor watch when you want Five to Nine checking changes again."
       : firstCompetitorReady
         ? "Your watchlist is ready. Refresh tracking to capture proof when the landing page or offer changes."
         : "Paste a competitor website and Five to Nine will create the first market watch.";
-  const boardRows = recentEvents.length > 0
-    ? recentEvents.slice(0, 4).map((event) => ({
-        name: event.title,
-        change: event.summary,
-        source: event.eventType.replaceAll("_", " "),
-        state: event.status.replaceAll("_", " "),
-      }))
-    : watchlists.slice(0, 4).map((watchlist) => ({
-        name: watchlist.name,
-        change: watchlist.targetLabel,
-        source: watchlist.targetType.replaceAll("_", " "),
-        state: watchlist.isActive ? "tracking" : "paused",
-      }));
+  const nextDashboardAction =
+    firstCompetitorReady || hasOnlyPausedWatchlists || counterMoveFollowUpCount > 0 || confirmedChanges > 0 || hasOvernightCheck
+      ? todaysAnswer
+      : { href: "/search", cta: "Add competitor" };
+  const hasDashboardMetrics =
+    competitorCount > 0 ||
+    confirmedChanges > 0 ||
+    successfulProofs > 0 ||
+    sentDigests > 0;
 
   return (
-    <section className="f9-app-stack">
-      <div className="f9-watch-strip" role="status">
-        <span className="f9-watch-dot" aria-hidden="true" />
-        <strong>
-          {activeWatchlists > 0
-            ? `On watch — ${activeWatchlists} competitor${activeWatchlists === 1 ? "" : "s"}`
-            : competitorCount > 0
-              ? "Watch paused"
-              : "Watch idle — add a competitor to start"}
-        </strong>
-        <span className="f9-watch-strip-detail">
-          {hasOvernightCheck
-            ? `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked in the last day — quiet means we looked`
-            : activeWatchlists > 0
-              ? `Next sweep: ${nextScanLabel}`
-              : competitorCount > 0
-                ? "All watchlists paused — resume one to keep watch"
-                : "Your first sweep is scheduled the moment you add one"}
-        </span>
-      </div>
+    <section className="f9-app-stack f9-dashboard-clean">
       {checkoutReturn ? <CheckoutReturnBanner plan={plan} /> : null}
       {hasPaymentIssue ? (
         <article className="f9-checkout-banner is-pending" aria-live="polite">
@@ -596,215 +372,61 @@ export default function AppDashboardRoute() {
           </div>
         </article>
       ) : null}
-      <article
-        className={`f9-first-fifteen-panel ${activationComplete ? "is-complete" : ""}`}
-        aria-label={activationComplete ? "Today on Five to Nine" : "First 15 minutes activation plan"}
-      >
+
+      <article className="f9-app-panel f9-dashboard-hero">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">{activationComplete ? "Today" : "First 15 minutes"}</span>
-            <h2>{activationComplete ? todaysAnswer.title : nextActivationStep.title}</h2>
-            <p className="f9-muted-copy">
-              {activationComplete
-                ? todaysAnswer.detail
-                : nextActivationStep.detail}
-            </p>
+            <span className="f9-app-kicker">{hasSavedCompetitor ? "Overview" : "Start here"}</span>
+            <h1>{briefTitle}</h1>
+            <p className="f9-muted-copy">{briefSummary}</p>
           </div>
-          <Link className="f9-primary-button" to={activationComplete ? todaysAnswer.href : nextActivationStep.href}>
-            {activationComplete ? todaysAnswer.cta : nextActivationStep.cta}
+          <Link className="f9-primary-button" to={nextDashboardAction.href}>
+            {nextDashboardAction.cta}
           </Link>
         </div>
 
-        {!activationComplete ? (
-          <>
-            <div className="f9-first-fifteen-current">
-              <span>Today</span>
-              <strong>{todaysAnswer.title}</strong>
-              <p>{todaysAnswer.detail}</p>
-            </div>
-
-            <div className="f9-first-fifteen-list">
-              {firstFifteenSteps.map((step) => (
-                <Link
-                  className={`f9-first-fifteen-step ${step.done ? "is-done" : step === nextActivationStep ? "is-active" : ""}`}
-                  key={step.title}
-                  to={step.href}
-                >
-                  <span>{step.minute}</span>
-                  <strong>{step.title}</strong>
-                  <p>{step.detail}</p>
-                </Link>
-              ))}
-            </div>
-          </>
-        ) : null}
+        <Form action="/search" className="f9-dashboard-search" method="get">
+          <label className="f9-field" htmlFor="dashboard-market-search">
+            <span>Competitor website</span>
+            <input
+              autoComplete="url"
+              id="dashboard-market-search"
+              inputMode="url"
+              name="website"
+              placeholder="https://competitor.com"
+              spellCheck={false}
+              type="text"
+            />
+          </label>
+          <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
+            Search ads
+          </SubmitButton>
+        </Form>
       </article>
 
-      <section className="f9-market-desk" aria-label="Five to Nine market moves dashboard">
-        <div className="f9-market-desk-top">
-          <strong>Five to Nine</strong>
-          <Form action="/search" className="f9-market-search" method="get">
-            <label htmlFor="dashboard-market-search">Competitor website</label>
-            <input
-	              id="dashboard-market-search"
-	              name="website"
-	              placeholder="Search market moves or paste competitor website"
-	              type="text"
-	            />
-            <SubmitButton getAction="/search" pendingLabel="Searching…">Track</SubmitButton>
-          </Form>
+      {hasDashboardMetrics ? (
+        <div className="f9-dashboard-metrics" aria-label="Account summary">
+          {statusCards.map((card) => (
+            <article className="f9-app-panel" key={card.label}>
+              <span className="f9-app-kicker">{card.label}</span>
+              <strong>{card.value}</strong>
+              <small>{card.detail}</small>
+            </article>
+          ))}
         </div>
-
-        <div className="f9-market-desk-body">
-          <aside className="f9-revenue-brief-card" aria-label="Revenue brief">
-            <div className="f9-revenue-brief-token" aria-hidden="true">59</div>
-            <span>Revenue brief</span>
-            <strong>{briefTitle}</strong>
-            <p>{briefSummary}</p>
-            <div>
-              <small>Screenshot</small>
-              <em>{proofReady ? "ready" : "waiting"}</em>
-            </div>
-            <div>
-              <small>Landing page</small>
-              <em>{firstCompetitorReady ? "watched" : "add site"}</em>
-            </div>
-            <div>
-              <small>Offer</small>
-              <em>{confirmedChanges > 0 ? "text changed" : "quiet"}</em>
-            </div>
-          </aside>
-
-          <div className="f9-market-board">
-            <div className="f9-market-board-head">
-              <div>
-                <span className="f9-app-kicker">
-                  <WakeGreeting />
-                </span>
-                <h2>
-                  {overnightMoves > 0
-                    ? `${overnightMoves} move${overnightMoves === 1 ? "" : "s"} found while you slept`
-                    : firstCompetitorReady
-                      ? "Competitor changes"
-                      : "Add your first competitor"}
-                </h2>
-              </div>
-              <span className="f9-board-time">05:09</span>
-            </div>
-
-            <div className="f9-market-board-metrics">
-              {statusCards.map((card) => (
-                <article key={card.label}>
-                  <span>{card.label}</span>
-                  <strong>{card.value}</strong>
-                  <small>{card.detail}</small>
-                </article>
-              ))}
-            </div>
-
-            <div className="f9-market-lines" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
-
-            {boardRows.length > 0 ? (
-              <div className="f9-market-table">
-                {boardRows.map((row) => (
-                  <div key={`${row.name}-${row.state}`}>
-                    <strong>{row.name}</strong>
-                    <span>{row.change}</span>
-                    <small>{row.source}</small>
-                    <em>{row.state}</em>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="f9-market-empty">
-                <h3>Add your first competitor.</h3>
-                <p>
-                  Paste a competitor website above to find their ads and start watching visible offer text, CTA,
-                  headline, and form changes.
-                </p>
-                <Link className="f9-primary-button" to="/search">
-                  Start tracking
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {showSetupChecklist ? (
-        <section className="f9-dashboard-setup-row">
-          <aside className="f9-setup-card" aria-label="Account setup status">
-            <div>
-              <span className="f9-app-kicker">Setup checklist</span>
-              <h3>{readyCount} of {setupItems.length} ready</h3>
-            </div>
-            <div className="f9-setup-list">
-              {setupItems.map((item) => (
-                <div className={item.done ? "is-done" : ""} key={item.label}>
-                  <span>{item.done ? "Done" : "Next"}</span>
-                  <strong>{item.label}</strong>
-                  <p>{item.detail}</p>
-                  <Link to={item.href}>{item.done ? "Review" : "Open"}</Link>
-                </div>
-              ))}
-            </div>
-          </aside>
-
-          <div className="f9-dashboard-quick-links">
-            <Link to="/search?website=https%3A%2F%2Fnykaa.com">Try Nykaa</Link>
-            <Link to="/search?website=https%3A%2F%2Fmamaearth.in">Try Mamaearth</Link>
-            {savedQueries.length > 0 ? <Link to="/search">Saved searches</Link> : null}
-            <Link to="/app/watchlists">Open watchlists</Link>
-            <Link to="/app/clients">Save agent memory</Link>
-          </div>
-        </section>
       ) : null}
 
-      {showValueLoop ? (
-        <article className="f9-app-panel f9-value-loop-panel" aria-label="Retained value loop">
+      {counterMoveFollowUps.length > 0 ? (
+        <article className="f9-app-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Retained value loop</span>
-              <h2>What Five to Nine did for you</h2>
-              <p className="f9-muted-copy">
-                The retained account loop is watched, checked, changed, proved, and delivered.
-              </p>
+              <span className="f9-app-kicker">Decisions</span>
+              <h2>Briefs that need review</h2>
             </div>
             <Link className="f9-secondary-button" to="/app/watchlists">
-              Review proof trail
+              Review changes
             </Link>
           </div>
-          <div className="f9-value-loop-list">
-            {valueLoopItems.map((item, index) => (
-              <Link className={`f9-value-loop-step ${item.done ? "is-done" : ""}`} key={item.label} to={item.href}>
-                <span className="f9-value-loop-index">{String(index + 1).padStart(2, "0")}</span>
-                <strong>{item.label}</strong>
-                <em>{item.state}</em>
-                <p>{item.detail}</p>
-              </Link>
-            ))}
-          </div>
-        </article>
-      ) : null}
-
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">Counter-move follow-ups</span>
-            <h2>Briefs that need a decision</h2>
-            <p className="f9-muted-copy">
-              Recent agent-created briefs stay visible until their review window closes.
-            </p>
-          </div>
-          <Link className="f9-secondary-button" to="/app/watchlists">
-            Review changes
-          </Link>
-        </div>
-        {counterMoveFollowUps.length > 0 ? (
           <div className="f9-work-list is-compact">
             {counterMoveFollowUps.map((followUp) => (
               <article className="f9-work-row" key={followUp.id}>
@@ -823,40 +445,13 @@ export default function AppDashboardRoute() {
               </article>
             ))}
           </div>
-        ) : (
-          <div className="f9-dashboard-empty is-compact">
-            <h3>No counter-move follow-ups yet.</h3>
-            <p>Create a counter-move brief after a proof-backed change to keep the next action visible here.</p>
-          </div>
-        )}
-      </article>
-
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">Lifecycle nudges</span>
-            <h2>What to unblock next</h2>
-          </div>
-        </div>
-        <div className="f9-work-list is-compact">
-          {lifecycleNudges.map((nudge) => (
-            <div className="f9-work-row" key={nudge.title}>
-              <div>
-                <strong>{nudge.title}</strong>
-                <p className="f9-muted-copy">{nudge.detail}</p>
-              </div>
-              <Link className="f9-secondary-button" to={nudge.href}>
-                Open
-              </Link>
-            </div>
-          ))}
-        </div>
-      </article>
+        </article>
+      ) : null}
 
       {proofUsage.warningLevel !== "ok" ? (
         <article className={`f9-app-panel f9-proof-usage-alert is-${proofUsage.warningLevel}`}>
           <div>
-            <span className="f9-app-kicker">Proof usage</span>
+            <span className="f9-app-kicker">Evidence usage</span>
             <h2>
               {proofUsage.warningLevel === "exhausted"
                 ? "Evidence check limit reached."
@@ -866,8 +461,8 @@ export default function AppDashboardRoute() {
           <p>
             {proofUsage.used} of {proofUsage.limit} evidence checks used in the last 30 days.
             {proofUsage.upgradeTarget
-              ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next noisy launch.`
-              : " Add an overflow pack before the next noisy launch."}
+              ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
+              : " Add an overflow pack before the next busy campaign."}
           </p>
           <Link className="f9-secondary-button" to="/#pricing">
             Review capacity
@@ -889,164 +484,85 @@ export default function AppDashboardRoute() {
         </div>
       ) : null}
 
-      <div className="f9-dashboard-grid">
+      {visibleRecentEvents.length > 0 ? (
         <article className="f9-app-panel f9-activity-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Live activity</span>
-              <h2>What changed recently</h2>
+              <span className="f9-app-kicker">Recent changes</span>
+              <h2>What changed</h2>
             </div>
             <Link className="f9-secondary-button" to="/app/watchlists">
               Manage tracking
             </Link>
           </div>
 
-          {recentEvents.length === 0 ? (
-            <div className="f9-dashboard-empty">
-              <h3>No competitor changes captured yet.</h3>
-              <p>
-                Add a competitor website, start tracking from the search results, then refresh the watchlist to capture
-                the first evidence-backed change trail.
-              </p>
-              <Link className="f9-primary-button" to="/search">
-                Add first competitor
-              </Link>
-            </div>
-          ) : (
-            <div className="f9-work-list">
-              {recentEvents.map((event) => (
-                <article className="f9-work-row" key={event.id}>
-                  <div>
-                    <h3>{event.title}</h3>
-                    <p className="f9-muted-copy">{event.summary}</p>
-                    <small>{event.eventType.replaceAll("_", " ")} · <LocalTime iso={event.createdAt} /></small>
-                  </div>
-                  <span className="f9-status-pill">{event.status.replaceAll("_", " ")}</span>
-                </article>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article className="f9-app-panel f9-ops-panel">
-          <div className="f9-panel-toolbar">
-            <div>
-              <span className="f9-app-kicker">Operating status</span>
-              <h2>Monitoring readiness</h2>
-            </div>
+          <div className="f9-work-list">
+            {visibleRecentEvents.map((event) => (
+              <article className="f9-work-row" key={event.id}>
+                <div>
+                  <h3>{event.title}</h3>
+                  <p className="f9-muted-copy">{event.summary}</p>
+                  <small>{event.eventType.replaceAll("_", " ")} · <LocalTime iso={event.createdAt} /></small>
+                </div>
+                <span className="f9-status-pill">{event.status.replaceAll("_", " ")}</span>
+              </article>
+            ))}
           </div>
-          <div className="f9-readiness-list">
-            <div>
-              <span className={`f9-status-dot ${sourceReady ? "is-good" : "is-attention"}`} />
-              <strong>{metaHeading}</strong>
-              <p>{formatTrackingStatusSummary(data.metaStatus.summary)}</p>
-            </div>
-            <div>
-              <span className={`f9-status-dot ${firstCompetitorReady ? "is-good" : "is-attention"}`} />
-              <strong>{firstCompetitorReady ? "Tracking is configured" : "No competitor watch yet"}</strong>
-              <p>{latestScanAt ? <>Last scan <LocalTime iso={latestScanAt} />.</> : "Add a competitor to start monitoring."}</p>
-            </div>
-            <div>
-              <span className={`f9-status-dot ${proofUsage.remaining > 0 ? "is-good" : "is-attention"}`} />
-              <strong>Evidence checks</strong>
-              <p>{proofUsage.limit ? `${proofUsage.remaining} of ${proofUsage.limit} checks left.` : "Evidence checks unlock on a paid plan."}</p>
-            </div>
-            <div>
-              <span className={`f9-status-dot ${hasEmailDelivery ? "is-good" : "is-attention"}`} />
-              <strong>{hasEmailDelivery ? "Email alerts ready" : "Email alert target missing"}</strong>
-              <p>{hasEmailDelivery ? "Digest and instant alert delivery can use the saved target." : "Add delivery from a watchlist after creating it."}</p>
-            </div>
-            <div>
-              <span className={`f9-status-dot ${hasAgentMemory ? "is-good" : "is-attention"}`} />
-              <strong>{hasAgentMemory ? "Agent memory ready" : "Agent memory missing"}</strong>
-              <p>
-                {latestAgentMemory
-                  ? `${latestAgentMemory.key}: ${latestAgentMemory.preview}`
-                  : "Save account context before the next report, brief, or client-room handoff."}
-              </p>
-            </div>
-          </div>
-          <Link className="f9-secondary-button" to="/app/sources">
-            Review tracking access
-          </Link>
         </article>
-      </div>
-
-      <article className="f9-app-panel f9-callout-panel">
-        <span className="f9-app-kicker">Production proof</span>
-        <p>
-          This checklist shows your account setup. Detailed launch evidence stays in the private canary checks and
-          signed-in app; the public status page shows the coarse launch blockers and safety posture without exposing
-          account activity.
-        </p>
-        <Link className="f9-secondary-button" to="/status">
-          Open status
-        </Link>
-      </article>
+      ) : null}
 
       <div className="f9-dashboard-grid">
-        <article className="f9-app-panel">
-          <div className="f9-panel-toolbar">
-            <div>
-              <span className="f9-app-kicker">Competitor watches</span>
-              <h2>Who is being watched</h2>
-              {watchlists.length > 0 ? (
+        {watchlists.length > 0 ? (
+          <article className="f9-app-panel">
+            <div className="f9-panel-toolbar">
+              <div>
+                <span className="f9-app-kicker">Competitors</span>
+                <h2>Being watched</h2>
                 <p className="f9-muted-copy">
                   Next scheduled scan: {formatNextScanLabel(plan)}
                 </p>
-              ) : null}
+              </div>
+              <Link className="f9-secondary-button" to="/app/watchlists">
+                Open watchlists
+              </Link>
             </div>
-            <Link className="f9-secondary-button" to="/app/watchlists">
-              Open watchlists
-            </Link>
-          </div>
-          {watchlists.length === 0 ? (
-            <div className="f9-dashboard-empty is-compact">
-              <h3>No competitors yet.</h3>
-              <p>Start with one site. Five to Nine will remember the ads, notes, and page evidence.</p>
-            </div>
-          ) : (
             <div className="f9-work-list is-compact">
               {watchlists.slice(0, 5).map((watchlist) => (
                 <div className="f9-work-row" key={watchlist.id}>
                   <div>
                     <h3>{watchlist.name}</h3>
-                    <p className="f9-muted-copy">{watchlist.targetType.replace("_", " ")} · {watchlist.targetLabel}</p>
+                    <p className="f9-muted-copy">{watchlist.targetLabel}</p>
                   </div>
                   <small>{watchlist.lastScannedAt ? <>Last scan <LocalTime iso={watchlist.lastScannedAt} mode="date" /></> : "Not scanned yet"}</small>
                 </div>
               ))}
             </div>
-          )}
-        </article>
+          </article>
+        ) : null}
 
-        <article className="f9-app-panel">
-          <div className="f9-panel-toolbar">
-            <div>
-              <span className="f9-app-kicker">Saved evidence</span>
-              <h2>Useful examples for reuse</h2>
+        {collections.length > 0 ? (
+          <article className="f9-app-panel">
+            <div className="f9-panel-toolbar">
+              <div>
+                <span className="f9-app-kicker">Saved evidence</span>
+                <h2>Useful examples</h2>
+              </div>
+              <Link className="f9-secondary-button" to="/app/collections">
+                Open boards
+              </Link>
             </div>
-            <Link className="f9-secondary-button" to="/app/collections">
-              Open boards
-            </Link>
-          </div>
-          <div className="f9-work-list is-compact">
-            {collections.slice(0, 4).map((collection) => (
-              <div className="f9-work-row" key={collection.id}>
-                <div>
-                  <h3>{collection.name}</h3>
-                  <p className="f9-muted-copy">{collection.description || "No description yet."}</p>
+            <div className="f9-work-list is-compact">
+              {collections.slice(0, 4).map((collection) => (
+                <div className="f9-work-row" key={collection.id}>
+                  <div>
+                    <h3>{collection.name}</h3>
+                    <p className="f9-muted-copy">{collection.description || "Saved for reuse."}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-            {collections.length === 0 ? (
-              <div className="f9-dashboard-empty is-compact">
-                <h3>No saved evidence yet.</h3>
-                <p>Save ads, notes, and landing-page evidence from search or watchlist results.</p>
-              </div>
-            ) : null}
-          </div>
-        </article>
+              ))}
+            </div>
+          </article>
+        ) : null}
       </div>
     </section>
   );
@@ -1116,7 +632,7 @@ function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
     title,
     status,
     openCount,
-    ownerLabel: safeDashboardText(readStringValue(workflow?.ownerLabel) ?? readStringValue(firstFollowUp?.ownerLabel), "Workspace owner"),
+    ownerLabel: safeDashboardText(readStringValue(workflow?.ownerLabel) ?? readStringValue(firstFollowUp?.ownerLabel), "Account owner"),
     channelLabel: formatFollowUpChannel(readStringValue(workflow?.channel) ?? readStringValue(firstFollowUp?.channel)),
     expiresAt,
     updatedAt: audit.updatedAt,

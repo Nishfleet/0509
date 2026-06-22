@@ -221,7 +221,7 @@ export async function getWorkspaceReadiness(
     },
     {
       id: "source",
-      label: "Source status",
+      label: "Data sources",
       status:
         sourceStatus.status === "healthy"
           ? "ready"

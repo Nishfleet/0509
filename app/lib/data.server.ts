@@ -466,6 +466,7 @@ interface ShareLinkRow {
 interface WorkspaceBrandingRow {
   user_id: string;
   brand_name: string | null;
+  brand_website: string | null;
   updated_at: string;
 }
 
@@ -1475,6 +1476,11 @@ async function one<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
 async function run(env: AppEnv, sql: string, ...bindings: unknown[]) {
   const db = ensureDb(env);
   await db.prepare(sql).bind(...bindings).run();
+}
+
+function isMissingTableError(error: unknown, tableName: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.toLowerCase().includes("no such table") && message.includes(tableName);
 }
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -6266,9 +6272,15 @@ export async function revokeShareLink(env: AppEnv, userId: string, shareLinkId: 
 }
 
 export const WORKSPACE_BRAND_NAME_MAX_LENGTH = 60;
+export const WORKSPACE_BRAND_WEBSITE_MAX_LENGTH = 2048;
 
 function normalizeWorkspaceBrandName(value: string | null | undefined): string | null {
   const trimmed = (value ?? "").trim().slice(0, WORKSPACE_BRAND_NAME_MAX_LENGTH).trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeWorkspaceBrandWebsite(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim().slice(0, WORKSPACE_BRAND_WEBSITE_MAX_LENGTH).trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -6276,38 +6288,44 @@ export async function getWorkspaceBranding(env: AppEnv, userId: string) {
   const row = await one<WorkspaceBrandingRow>(
     env,
     `
-      SELECT user_id, brand_name, updated_at
+      SELECT user_id, brand_name, brand_website, updated_at
       FROM workspace_branding
       WHERE user_id = ?
     `,
     userId,
   );
 
-  return { brandName: row?.brand_name ?? null };
+  return { brandName: row?.brand_name ?? null, brandWebsite: row?.brand_website ?? null };
 }
 
 export async function upsertWorkspaceBranding(
   env: AppEnv,
   userId: string,
-  input: { brandName: string | null | undefined },
+  input: { brandName?: string | null | undefined; brandWebsite?: string | null | undefined },
 ) {
-  const brandName = normalizeWorkspaceBrandName(input.brandName);
+  const current = await getWorkspaceBranding(env, userId);
+  const hasBrandName = Object.prototype.hasOwnProperty.call(input, "brandName");
+  const hasBrandWebsite = Object.prototype.hasOwnProperty.call(input, "brandWebsite");
+  const brandName = hasBrandName ? normalizeWorkspaceBrandName(input.brandName) : current.brandName;
+  const brandWebsite = hasBrandWebsite ? normalizeWorkspaceBrandWebsite(input.brandWebsite) : current.brandWebsite;
 
   await run(
     env,
     `
-      INSERT INTO workspace_branding (user_id, brand_name, updated_at)
-      VALUES (?, ?, ?)
+      INSERT INTO workspace_branding (user_id, brand_name, brand_website, updated_at)
+      VALUES (?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         brand_name = excluded.brand_name,
+        brand_website = excluded.brand_website,
         updated_at = excluded.updated_at
     `,
     userId,
     brandName,
+    brandWebsite,
     nowIso(),
   );
 
-  return { brandName };
+  return { brandName, brandWebsite };
 }
 
 function toShareLinkRecord(row: ShareLinkRow): ShareLinkRecord {
@@ -6740,74 +6758,89 @@ export async function upsertDiscoveryCacheEntry(
 ) {
   const timestamp = nowIso();
 
-  await run(
-    env,
-    `
-      INSERT INTO discovery_cache_entry (
-        cache_key,
-        provider,
-        route_context,
-        query_fingerprint,
-        country,
-        cursor,
-        payload_json,
-        fetched_at,
-        expires_at,
-        browser_ms_used,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(cache_key) DO UPDATE SET
-        provider = excluded.provider,
-        route_context = excluded.route_context,
-        query_fingerprint = excluded.query_fingerprint,
-        country = excluded.country,
-        cursor = excluded.cursor,
-        payload_json = excluded.payload_json,
-        fetched_at = excluded.fetched_at,
-        expires_at = excluded.expires_at,
-        browser_ms_used = excluded.browser_ms_used,
-        updated_at = excluded.updated_at
-    `,
-    input.cacheKey,
-    input.provider,
-    input.routeContext,
-    input.queryFingerprint,
-    input.country,
-    input.cursor,
-    jsonValue(input.payload),
-    input.fetchedAt,
-    input.expiresAt,
-    input.browserMsUsed ?? null,
-    timestamp,
-    timestamp,
-  );
+  try {
+    await run(
+      env,
+      `
+        INSERT INTO discovery_cache_entry (
+          cache_key,
+          provider,
+          route_context,
+          query_fingerprint,
+          country,
+          cursor,
+          payload_json,
+          fetched_at,
+          expires_at,
+          browser_ms_used,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(cache_key) DO UPDATE SET
+          provider = excluded.provider,
+          route_context = excluded.route_context,
+          query_fingerprint = excluded.query_fingerprint,
+          country = excluded.country,
+          cursor = excluded.cursor,
+          payload_json = excluded.payload_json,
+          fetched_at = excluded.fetched_at,
+          expires_at = excluded.expires_at,
+          browser_ms_used = excluded.browser_ms_used,
+          updated_at = excluded.updated_at
+      `,
+      input.cacheKey,
+      input.provider,
+      input.routeContext,
+      input.queryFingerprint,
+      input.country,
+      input.cursor,
+      jsonValue(input.payload),
+      input.fetchedAt,
+      input.expiresAt,
+      input.browserMsUsed ?? null,
+      timestamp,
+      timestamp,
+    );
+  } catch (error) {
+    if (isMissingTableError(error, "discovery_cache_entry")) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function getDiscoveryCacheEntry(env: AppEnv, cacheKey: string) {
-  const row = await one<DiscoveryCacheEntryRow>(
-    env,
-    `
-      SELECT
-        cache_key,
-        provider,
-        route_context,
-        query_fingerprint,
-        country,
-        cursor,
-        payload_json,
-        fetched_at,
-        expires_at,
-        browser_ms_used,
-        created_at,
-        updated_at
-      FROM discovery_cache_entry
-      WHERE cache_key = ?
-      LIMIT 1
-    `,
-    cacheKey,
-  );
+  let row: DiscoveryCacheEntryRow | null;
+  try {
+    row = await one<DiscoveryCacheEntryRow>(
+      env,
+      `
+        SELECT
+          cache_key,
+          provider,
+          route_context,
+          query_fingerprint,
+          country,
+          cursor,
+          payload_json,
+          fetched_at,
+          expires_at,
+          browser_ms_used,
+          created_at,
+          updated_at
+        FROM discovery_cache_entry
+        WHERE cache_key = ?
+        LIMIT 1
+      `,
+      cacheKey,
+    );
+  } catch (error) {
+    if (isMissingTableError(error, "discovery_cache_entry")) {
+      return null;
+    }
+    throw error;
+  }
 
   if (!row) {
     return null;
@@ -6848,36 +6881,43 @@ export async function createDiscoveryFetchLog(
     metadata?: Record<string, unknown> | null;
   },
 ) {
-  await run(
-    env,
-    `
-      INSERT INTO discovery_fetch_log (
-        id,
-        provider,
-        route_context,
-        query_fingerprint,
-        country,
-        status,
-        cache_status,
-        failure_class,
-        browser_ms_used,
-        metadata_json,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    createId(),
-    input.provider,
-    input.routeContext,
-    input.queryFingerprint,
-    input.country,
-    input.status,
-    input.cacheStatus,
-    input.failureClass,
-    input.browserMsUsed ?? null,
-    jsonValue(input.metadata ?? null),
-    nowIso(),
-  );
+  try {
+    await run(
+      env,
+      `
+        INSERT INTO discovery_fetch_log (
+          id,
+          provider,
+          route_context,
+          query_fingerprint,
+          country,
+          status,
+          cache_status,
+          failure_class,
+          browser_ms_used,
+          metadata_json,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      createId(),
+      input.provider,
+      input.routeContext,
+      input.queryFingerprint,
+      input.country,
+      input.status,
+      input.cacheStatus,
+      input.failureClass,
+      input.browserMsUsed ?? null,
+      jsonValue(input.metadata ?? null),
+      nowIso(),
+    );
+  } catch (error) {
+    if (isMissingTableError(error, "discovery_fetch_log")) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function upsertDiscoveryProviderState(
@@ -6892,59 +6932,74 @@ export async function upsertDiscoveryProviderState(
     metadata?: Record<string, unknown> | null;
   },
 ) {
-  await run(
-    env,
-    `
-      INSERT INTO discovery_provider_state (
-        provider,
-        status,
-        failure_class,
-        summary,
-        last_success_at,
-        last_failure_at,
-        metadata_json,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(provider) DO UPDATE SET
-        status = excluded.status,
-        failure_class = excluded.failure_class,
-        summary = excluded.summary,
-        last_success_at = excluded.last_success_at,
-        last_failure_at = excluded.last_failure_at,
-        metadata_json = excluded.metadata_json,
-        updated_at = excluded.updated_at
-    `,
-    input.provider,
-    input.status,
-    input.failureClass,
-    input.summary,
-    input.lastSuccessAt,
-    input.lastFailureAt,
-    jsonValue(input.metadata ?? null),
-    nowIso(),
-  );
+  try {
+    await run(
+      env,
+      `
+        INSERT INTO discovery_provider_state (
+          provider,
+          status,
+          failure_class,
+          summary,
+          last_success_at,
+          last_failure_at,
+          metadata_json,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(provider) DO UPDATE SET
+          status = excluded.status,
+          failure_class = excluded.failure_class,
+          summary = excluded.summary,
+          last_success_at = excluded.last_success_at,
+          last_failure_at = excluded.last_failure_at,
+          metadata_json = excluded.metadata_json,
+          updated_at = excluded.updated_at
+      `,
+      input.provider,
+      input.status,
+      input.failureClass,
+      input.summary,
+      input.lastSuccessAt,
+      input.lastFailureAt,
+      jsonValue(input.metadata ?? null),
+      nowIso(),
+    );
+  } catch (error) {
+    if (isMissingTableError(error, "discovery_provider_state")) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function getDiscoveryProviderState(env: AppEnv, provider: AdDiscoveryProvider) {
-  const row = await one<DiscoveryProviderStateRow>(
-    env,
-    `
-      SELECT
-        provider,
-        status,
-        failure_class,
-        summary,
-        last_success_at,
-        last_failure_at,
-        metadata_json,
-        updated_at
-      FROM discovery_provider_state
-      WHERE provider = ?
-      LIMIT 1
-    `,
-    provider,
-  );
+  let row: DiscoveryProviderStateRow | null;
+  try {
+    row = await one<DiscoveryProviderStateRow>(
+      env,
+      `
+        SELECT
+          provider,
+          status,
+          failure_class,
+          summary,
+          last_success_at,
+          last_failure_at,
+          metadata_json,
+          updated_at
+        FROM discovery_provider_state
+        WHERE provider = ?
+        LIMIT 1
+      `,
+      provider,
+    );
+  } catch (error) {
+    if (isMissingTableError(error, "discovery_provider_state")) {
+      return null;
+    }
+    throw error;
+  }
 
   if (!row) {
     return null;

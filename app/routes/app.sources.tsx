@@ -5,17 +5,16 @@ import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import {
   AGENT_BLOCKED_CAPABILITIES,
-  AGENT_FIRST_WORKFLOW,
   CUSTOMER_SUPPORT_PATHS,
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const meta: MetaFunction = () => [
-  { title: "Tracking access | Five to Nine" },
+  { title: "Integrations | Five to Nine" },
   {
     name: "description",
-    content: "Review the access that keeps competitor tracking reliable in Five to Nine.",
+    content: "Connect delivery channels and optional backup access for Five to Nine.",
   },
 ];
 
@@ -134,7 +133,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (isMember && ownerOnlySourceIntents.has(intent)) {
     return {
       ok: false,
-      message: "Only the workspace owner can manage integrations, delivery targets, and API keys.",
+      message: "Only the account owner can manage integrations, delivery targets, and API keys.",
     };
   }
 
@@ -344,14 +343,19 @@ export default function AppSourcesRoute() {
   const statusLabel = data.connection ? formatConnectionStatus(data.connection.status) : "Not connected";
   const activeApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt).length;
   const writeEnabledApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt && apiKey.actionsWriteEnabled).length;
+  const hasNewApiKeySecret = Boolean(actionData && "apiKeySecret" in actionData && actionData.apiKeySecret);
+  const canManageWhatsAppDelivery =
+    data.whatsappDelivery.providerConfigured &&
+    data.whatsappDelivery.customerReady &&
+    data.whatsappDelivery.webhookConfigured;
 
   return (
     <section className="f9-app-stack">
       <section className="f9-app-panel f9-source-setup">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Tracking reliability</span>
-            <h2>Keep competitor tracking reliable</h2>
+            <span className="f9-app-kicker">Integrations</span>
+            <h2>Connect delivery and backup access</h2>
           </div>
           <Link className="f9-secondary-button" to="/app/watchlists">
             Open watchlists
@@ -385,29 +389,6 @@ export default function AppSourcesRoute() {
             <strong>{formatDiscoveryStatus(data.discoveryStatus.status)}</strong>
             <p className="f9-muted-copy">{formatTrackingStatusSummary(data.discoveryStatus.summary)}</p>
           </div>
-        </div>
-
-        <div className="f9-source-readiness-panel">
-          <div>
-            <span className="f9-app-kicker">Recent tracking health</span>
-            <strong>{formatReadinessLabel(data.betaReadiness.label)}</strong>
-            <p className="f9-muted-copy">
-              {data.betaReadiness.samples}/{data.betaReadiness.sampleTarget} fresh checks in the last{" "}
-              {data.betaReadiness.windowDays} days · {formatSuccessRate(data.betaReadiness.successRate)} successful
-              {data.betaReadiness.latestSuccessAt ? (
-                <> · last success <LocalTime iso={data.betaReadiness.latestSuccessAt} /></>
-              ) : (
-                " · no recent success yet"
-              )}
-            </p>
-          </div>
-          {data.betaReadiness.blockers.length > 0 ? (
-            <ul className="source-proof-list">
-              {data.betaReadiness.blockers.map((blocker) => (
-                <li key={blocker}>{formatReadinessBlocker(blocker)}</li>
-              ))}
-            </ul>
-          ) : null}
         </div>
 
         {actionData?.message ? (
@@ -483,10 +464,11 @@ export default function AppSourcesRoute() {
         </div>
       </section>
 
-      <section className="f9-app-panel f9-source-setup">
+      <details className="f9-app-panel f9-source-setup f9-settings-details" open={hasNewApiKeySecret ? true : undefined}>
+        <summary>Advanced: API keys and external tools</summary>
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Customer API</span>
+            <span className="f9-app-kicker">API access</span>
             <h2>Use Five to Nine from your tools</h2>
           </div>
           <a className="f9-secondary-button" href="/api/docs" target="_blank" rel="noreferrer">
@@ -495,9 +477,8 @@ export default function AppSourcesRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          API keys expose only account-owned readiness, boards, watchlists, digests, proof trails, export markdown,
-          and narrow audited workspace actions for this account. Readiness and exports work with any active key;
-          audited workspace actions require a write-enabled key.
+          API keys can read saved boards, watchlists, digests, proof trails, and exports for this account.
+          Write-enabled keys can update supported account resources.
         </p>
 
         <div className="f9-status-strip">
@@ -506,31 +487,37 @@ export default function AppSourcesRoute() {
             <strong>{activeApiKeyCount}</strong>
           </div>
           <div>
-            <span className="f9-app-kicker">Agent actions</span>
+            <span className="f9-app-kicker">Write access</span>
             <strong>{writeEnabledApiKeyCount > 0 ? `${writeEnabledApiKeyCount} enabled` : "Needs write key"}</strong>
           </div>
           <div>
-            <span className="f9-app-kicker">Boundary</span>
-            <strong>Audited workspace actions only</strong>
+            <span className="f9-app-kicker">Scope</span>
+            <strong>Saved account data only</strong>
           </div>
         </div>
 
         <div className="f9-dashboard-grid">
           <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">First agent workflow</span>
-            <h3>Operate the desk without exposing secrets</h3>
+            <span className="f9-app-kicker">Tool setup</span>
+            <h3>Connect your tools without exposing secrets</h3>
             <ol className="f9-numbered-guide">
-              {AGENT_FIRST_WORKFLOW.map((step) => (
-                <li key={step.label}>
-                  <strong>{step.label}</strong>
-                  <span>{step.detail}</span>
-                </li>
-              ))}
+              <li>
+                <strong>Create a read key</strong>
+                <span>Use it for saved boards, watchlists, briefs, and reports.</span>
+              </li>
+              <li>
+                <strong>Enable actions only when needed</strong>
+                <span>Allow trusted tools to update supported account resources.</span>
+              </li>
+              <li>
+                <strong>Review and revoke keys</strong>
+                <span>Remove keys you no longer use from this page.</span>
+              </li>
             </ol>
           </section>
 
           <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Live action groups</span>
+            <span className="f9-app-kicker">Available actions</span>
             <h3>What a write-enabled key can do</h3>
             <dl className="proof-trail-list">
               {auditedAgentActionGroups().map((group) => (
@@ -545,8 +532,8 @@ export default function AppSourcesRoute() {
 
         <div className="f9-dashboard-grid">
           <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Blocked for agents</span>
-            <h3>Keep these app-owned or support-owned</h3>
+            <span className="f9-app-kicker">Not available through API</span>
+            <h3>Ask support for sensitive changes</h3>
             <ul className="f9-doc-list">
               {AGENT_BLOCKED_CAPABILITIES.map((capability) => (
                 <li key={capability}>{capability}</li>
@@ -572,7 +559,7 @@ export default function AppSourcesRoute() {
           </section>
         </div>
 
-        {actionData && "apiKeySecret" in actionData && actionData.apiKeySecret ? (
+        {hasNewApiKeySecret && actionData && "apiKeySecret" in actionData ? (
           <div className="f9-message is-success">
             <p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
             <label className="f9-field">
@@ -585,7 +572,7 @@ export default function AppSourcesRoute() {
         <div className="f9-dashboard-grid">
           <section className="f9-app-panel f9-source-guide">
             <span className="f9-app-kicker">Create API key</span>
-            <h3>Exports and audited actions</h3>
+            <h3>Exports and account actions</h3>
             <Form className="f9-auth-form" method="post">
               <input name="intent" type="hidden" value="create-api-key" />
               <label className="f9-field">
@@ -599,7 +586,7 @@ export default function AppSourcesRoute() {
               </label>
               <label className="f9-checkbox-row">
                 <input name="actionsWriteEnabled" type="checkbox" value="1" />
-                <span>Allow audited workspace actions</span>
+                <span>Allow account actions</span>
               </label>
               <SubmitButton className="f9-primary-button" intent="create-api-key" pendingLabel="Creating…">
                 Create API key
@@ -620,17 +607,13 @@ export default function AppSourcesRoute() {
                 <dd>/api/v1/digests/&lbrace;id&rbrace;?format=slack</dd>
               </div>
               <div>
-                <dt>MCP</dt>
-                <dd>POST /api/mcp</dd>
-              </div>
-              <div>
                 <dt>Header</dt>
                 <dd>Authorization: Bearer your Five to Nine API key</dd>
               </div>
             </dl>
             <p className="f9-muted-copy">
-              This API can read saved manual external proof links in boards. Write-enabled keys can run audited
-              workspace actions, but this does not add automated TikTok, Google, LinkedIn, or Pinterest ingestion.
+              This API can read saved manual external proof links in boards. Write-enabled keys can update supported
+              account resources, but this does not add automated TikTok, Google, LinkedIn, or Pinterest ingestion.
             </p>
           </section>
         </div>
@@ -654,7 +637,7 @@ export default function AppSourcesRoute() {
                       ""
                     )}
                     {" · "}
-                    {apiKey.actionsWriteEnabled ? "audited actions enabled" : "read-only"}
+                    {apiKey.actionsWriteEnabled ? "actions enabled" : "read-only"}
                   </p>
                 </div>
                 {apiKey.revokedAt ? null : (
@@ -677,12 +660,12 @@ export default function AppSourcesRoute() {
             <article className="f9-work-row">
               <div>
                 <strong>No API keys yet</strong>
-                <p>Create one when you are ready to connect a tool or agent workflow.</p>
+                <p>Create one when you are ready to connect an external tool.</p>
               </div>
             </article>
           )}
         </div>
-      </section>
+      </details>
 
       <section className="f9-app-panel f9-source-setup">
         <div className="f9-panel-toolbar">
@@ -694,7 +677,7 @@ export default function AppSourcesRoute() {
 
         <p className="f9-muted-copy">
           Add an incoming webhook from your Slack app. Five to Nine stores the webhook encrypted and sends eligible
-          digests and high-priority change alerts through the delivery engine.
+          digests and high-priority change alerts to that channel.
         </p>
 
         <div className="f9-dashboard-grid">
@@ -791,26 +774,27 @@ export default function AppSourcesRoute() {
         </div>
       </section>
 
-      <section className="f9-app-panel f9-source-setup">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">WhatsApp delivery</span>
-            <h2>WhatsApp is guarded until proof exists</h2>
+      {canManageWhatsAppDelivery ? (
+        <details
+          className="f9-app-panel f9-source-setup f9-settings-details"
+          open={data.whatsappTargets.length > 0 || data.whatsappDelivery.usableTargets > 0}
+        >
+          <summary>Advanced: WhatsApp delivery</summary>
+          <div className="f9-panel-toolbar">
+            <div>
+              <span className="f9-app-kicker">WhatsApp delivery</span>
+              <h2>Send changes to WhatsApp</h2>
+            </div>
           </div>
-        </div>
 
-        <p className="f9-muted-copy">
-          WhatsApp delivery stays off for customer channels until provider setup, customer enablement, opt-in,
-          validation, template eligibility, webhook readiness, and successful delivery proof are all present.
-        </p>
+          <p className="f9-muted-copy">
+            WhatsApp delivery is enabled for this account. Only add recipients who have explicitly opted in.
+          </p>
 
-        <div className="f9-dashboard-grid">
-          <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Connect recipient</span>
-            <h3>Validate WhatsApp</h3>
-            {data.whatsappDelivery.providerConfigured &&
-            data.whatsappDelivery.customerReady &&
-            data.whatsappDelivery.webhookConfigured ? (
+          <div className="f9-dashboard-grid">
+            <section className="f9-app-panel f9-source-guide">
+              <span className="f9-app-kicker">Connect recipient</span>
+              <h3>Validate WhatsApp</h3>
               <Form className="f9-auth-form" method="post">
                 <input name="intent" type="hidden" value="save-whatsapp-target" />
                 <label className="f9-field">
@@ -840,104 +824,89 @@ export default function AppSourcesRoute() {
                   Save WhatsApp delivery
                 </SubmitButton>
               </Form>
-            ) : (
-              <div className="f9-message is-error">
-                <p>
-                  WhatsApp is not available for customer setup yet. Use email or Slack until the
-                  provider, customer lane, templates, webhook, and delivered proof are verified.
-                </p>
-              </div>
-            )}
-          </section>
+            </section>
 
-          <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Readiness</span>
-            <h3>What must pass</h3>
-            <dl className="proof-trail-list">
-              <div>
-                <dt>Setup template</dt>
-                <dd>Meta must accept the customer template before the target becomes usable.</dd>
-              </div>
-              <div>
-                <dt>Webhook proof</dt>
-                <dd>Launch readiness waits for delivered status from the WhatsApp webhook.</dd>
-              </div>
-              <div>
-                <dt>Customer lane</dt>
-                <dd>Customer WhatsApp delivery must be explicitly enabled in production.</dd>
-              </div>
-            </dl>
-          </section>
-        </div>
-
-        <dl className="proof-trail-list">
-          <div>
-            <dt>Provider</dt>
-            <dd>{data.whatsappDelivery.providerConfigured ? "Configured" : "Not configured"}</dd>
-          </div>
-          <div>
-            <dt>Customer delivery</dt>
-            <dd>{data.whatsappDelivery.customerReady ? "Enabled" : "Not enabled"}</dd>
-          </div>
-          <div>
-            <dt>Webhook</dt>
-            <dd>{data.whatsappDelivery.webhookConfigured ? "Configured" : "Not configured"}</dd>
-          </div>
-          <div>
-            <dt>Targets</dt>
-            <dd>
-              {data.whatsappDelivery.usableTargets}/{data.whatsappDelivery.configuredTargets} usable
-            </dd>
-          </div>
-          <div>
-            <dt>Last sent</dt>
-            <dd>
-              {data.whatsappDelivery.lastSuccessfulDeliveryAt ? (
-                <LocalTime iso={data.whatsappDelivery.lastSuccessfulDeliveryAt} />
-              ) : (
-                "No successful send yet"
-              )}
-            </dd>
-          </div>
-        </dl>
-
-        <div className="f9-work-list">
-          {data.whatsappTargets.length > 0 ? (
-            data.whatsappTargets.map((target) => (
-              <article className="f9-work-row" key={target.id}>
+            <section className="f9-app-panel f9-source-guide">
+              <span className="f9-app-kicker">Availability</span>
+              <h3>What Five to Nine checks before enabling it</h3>
+              <dl className="proof-trail-list">
                 <div>
-                  <strong>{target.displayName}</strong>
-                  <p>
-                    {target.validationStatus === "validated" && target.templateEligible
-                      ? "Template-ready"
-                      : "Needs validation"}
-                    {target.lastSuccessfulDeliveryAt ? (
-                      <> · last sent <LocalTime iso={target.lastSuccessfulDeliveryAt} /></>
-                    ) : (
-                      " · no delivered proof yet"
-                    )}
-                  </p>
+                  <dt>Recipient opt-in</dt>
+                  <dd>The recipient must agree to receive WhatsApp updates.</dd>
+                </div>
+                <div>
+                  <dt>Template approval</dt>
+                  <dd>Meta must approve the message template before updates can be sent.</dd>
+                </div>
+                <div>
+                  <dt>Successful test send</dt>
+                  <dd>Delivery turns on after the first test message is confirmed.</dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+
+          <dl className="proof-trail-list">
+            <div>
+              <dt>Availability</dt>
+              <dd>{data.whatsappDelivery.providerConfigured ? "Configured" : "Not configured"}</dd>
+            </div>
+            <div>
+              <dt>Account access</dt>
+              <dd>{data.whatsappDelivery.customerReady ? "Enabled" : "Not enabled"}</dd>
+            </div>
+            <div>
+              <dt>Delivery confirmation</dt>
+              <dd>{data.whatsappDelivery.webhookConfigured ? "Configured" : "Not configured"}</dd>
+            </div>
+            <div>
+              <dt>Recipients</dt>
+              <dd>
+                {data.whatsappDelivery.usableTargets}/{data.whatsappDelivery.configuredTargets} usable
+              </dd>
+            </div>
+            <div>
+              <dt>Last sent</dt>
+              <dd>
+                {data.whatsappDelivery.lastSuccessfulDeliveryAt ? (
+                  <LocalTime iso={data.whatsappDelivery.lastSuccessfulDeliveryAt} />
+                ) : (
+                  "No successful send yet"
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="f9-work-list">
+            {data.whatsappTargets.length > 0 ? (
+              data.whatsappTargets.map((target) => (
+                <article className="f9-work-row" key={target.id}>
+                  <div>
+                    <strong>{target.displayName}</strong>
+                    <p>
+                      {target.validationStatus === "validated" && target.templateEligible
+                        ? "Template-ready"
+                        : "Needs validation"}
+                      {target.lastSuccessfulDeliveryAt ? (
+                        <> · last sent <LocalTime iso={target.lastSuccessfulDeliveryAt} /></>
+                      ) : (
+                        " · no successful send yet"
+                      )}
+                    </p>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <article className="f9-work-row">
+                <div>
+                  <strong>No WhatsApp recipient connected</strong>
+                  <p>Add an opted-in recipient when WhatsApp is enabled for this account.</p>
                 </div>
               </article>
-            ))
-          ) : (
-            <article className="f9-work-row">
-              <div>
-                <strong>No WhatsApp recipient connected</strong>
-                <p>Add an opted-in recipient after WhatsApp provider and webhook setup are ready.</p>
-              </div>
-            </article>
-          )}
-        </div>
-      </section>
-
-      <article className="f9-app-panel f9-callout-panel">
-        <span className="f9-app-kicker">Reliability guardrail</span>
-        <p>
-          If fresh ad checks are delayed, website snapshots, visible offer text checks, and reports can
-          still continue independently.
-        </p>
-      </article>
+            )}
+          </div>
+        </details>
+      ) : null}
     </section>
   );
 }

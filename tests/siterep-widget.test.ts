@@ -63,8 +63,6 @@ describe("Site Rep widget install", () => {
 
     for (const pathname of [
       "/",
-      "/search",
-      "/search/",
       "/help",
       "/help/",
       "/docs",
@@ -78,6 +76,11 @@ describe("Site Rep widget install", () => {
       "/compare/magicbrief/",
     ]) {
       expect(shouldLoadSiteRepWidget(pathname), pathname).toBe(true);
+    }
+
+    for (const pathname of ["/search", "/search/"]) {
+      expect(shouldLoadSiteRepWidget(pathname), pathname).toBe(false);
+      expect(isSiteRepWidgetIsolatedPath(pathname), pathname).toBe(false);
     }
 
     for (const pathname of [

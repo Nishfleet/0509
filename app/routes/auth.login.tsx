@@ -152,19 +152,19 @@ export default function LoginRoute() {
 
 function authErrorMessage(code: string | null) {
   if (code === "better_auth_not_configured") {
-    return "Better Auth is not configured yet. Add the Better Auth secret and database binding before signing in.";
+    return "Sign-in is not configured yet. Ask support to finish account access setup.";
   }
   if (code === "callback_failed") {
     return "That sign-in link could not be verified. Request a fresh link and try again.";
   }
   if (code === "no_workspace") {
-    return "No workspace was found for that email. Create a workspace first.";
+    return "No account was found for that email. Create an account first.";
   }
   if (code === "multiple_workspaces") {
-    return "That email is attached to more than one workspace. Ask support to pick the right workspace before signing in.";
+    return "That email is attached to multiple accounts. Ask support to pick the right account before signing in.";
   }
   if (code === "unsupported_policy") {
-    return "This workspace requires an additional sign-in step that Five to Nine has not enabled yet.";
+    return "This account requires an additional sign-in step that Five to Nine has not enabled yet. Ask support to adjust that policy for now.";
   }
   if (code === "passwordless") {
     return "Five to Nine now uses secure email links instead of passwords.";

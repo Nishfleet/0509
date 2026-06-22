@@ -9,7 +9,6 @@ export const SITE_REP_WIDGET = Object.freeze({
 
 export const SITE_REP_PUBLIC_WIDGET_PATHS = Object.freeze([
   "/",
-  "/search",
   "/help",
   "/docs",
   "/status",

@@ -317,6 +317,18 @@ describe("customer API v1", () => {
         supportPaths: Array<{ label: string }>;
         blockedCapabilities: string[];
       };
+      toolActivation: {
+        readinessEndpoint: string;
+        firstWorkflow: Array<{ label: string }>;
+        actionGroups: Array<{
+          label: string;
+          actions: string[];
+          requiresWriteEnabled: boolean;
+          credentialRequirement: string;
+        }>;
+        supportPaths: Array<{ label: string }>;
+        blockedCapabilities: string[];
+      };
       notLiveYet: string[];
     };
 
@@ -343,17 +355,18 @@ describe("customer API v1", () => {
       requiresWriteEnabled: false,
       credentialRequirement: expect.stringContaining(WRITE_ENABLED_API_KEY_REQUIREMENT),
     });
-    expect(body.agentActivation.readinessEndpoint).toBe("/api/v1/workspace-readiness");
-    expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
-    expect(body.agentActivation.actionGroups.map((group) => group.label)).toContain("Proof and reports");
-    expect(body.agentActivation.actionGroups.every((group) => group.requiresWriteEnabled)).toBe(true);
-    expect(body.agentActivation.actionGroups.every((group) => group.credentialRequirement.includes("write-enabled"))).toBe(true);
-    expect(body.agentActivation.actionGroups.flatMap((group) => group.actions)).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
-    expect(body.agentActivation.actionGroups.flatMap((group) => group.actions)).not.toContain("get_workspace_readiness");
-    expect(body.agentActivation.supportPaths.map((path) => path.label)).toContain("Billing changes and cancellation");
-    expect(body.agentActivation.blockedCapabilities).toContain("billing changes");
-    expect(body.agentActivation.blockedCapabilities).toContain("team invites");
-    expect(body.agentActivation.blockedCapabilities).toContain("customer API key creation, rotation, and revocation");
+    expect(body.agentActivation).toEqual(body.toolActivation);
+    expect(body.toolActivation.readinessEndpoint).toBe("/api/v1/workspace-readiness");
+    expect(body.toolActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
+    expect(body.toolActivation.actionGroups.map((group) => group.label)).toContain("Proof and reports");
+    expect(body.toolActivation.actionGroups.every((group) => group.requiresWriteEnabled)).toBe(true);
+    expect(body.toolActivation.actionGroups.every((group) => group.credentialRequirement.includes("write-enabled"))).toBe(true);
+    expect(body.toolActivation.actionGroups.flatMap((group) => group.actions)).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
+    expect(body.toolActivation.actionGroups.flatMap((group) => group.actions)).not.toContain("get_workspace_readiness");
+    expect(body.toolActivation.supportPaths.map((path) => path.label)).toContain("Billing changes and cancellation");
+    expect(body.toolActivation.blockedCapabilities).toContain("billing changes");
+    expect(body.toolActivation.blockedCapabilities).toContain("team invites");
+    expect(body.toolActivation.blockedCapabilities).toContain("customer API key creation, rotation, and revocation");
     expect(body.notLiveYet).not.toContain("MCP server");
     expect(body.notLiveYet).toContain("TikTok ingestion");
     expect(body.notLiveYet).toContain(BROAD_WRITE_API_NON_GOAL);

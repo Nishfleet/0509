@@ -103,7 +103,7 @@ export default function TeamRoute() {
           <div className="f9-panel-toolbar">
             <div>
               <span className="f9-app-kicker">Team</span>
-              <h2>Your seat in {data.ownerName ? `${data.ownerName}'s` : "a shared"} workspace</h2>
+              <h2>Your seat in {data.ownerName ? `${data.ownerName}'s` : "a shared"} account</h2>
             </div>
           </div>
           <p>
@@ -140,7 +140,7 @@ export default function TeamRoute() {
         <p>
           {data.plan === "agency"
             ? "Teammates you invite share your watchlists, boards, and briefs — billing stays with you."
-            : "Upgrade to the Agency plan to share your workspace with teammates."}
+            : "Upgrade to the Agency plan to share your account with teammates."}
         </p>
 
         {data.plan === "agency" && seatsUsed < data.seatLimit ? (

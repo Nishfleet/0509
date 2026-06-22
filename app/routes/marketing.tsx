@@ -571,7 +571,7 @@ export default function MarketingRoute() {
           <div className="ld-bundles-head">
             <span className="ld-kicker">Extra check capacity</span>
             <p>
-              Add page checks for launch weeks or big campaigns without changing the team&rsquo;s
+              Add page checks for busy weeks or big campaigns without changing the team&rsquo;s
               plan.
             </p>
           </div>

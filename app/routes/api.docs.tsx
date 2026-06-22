@@ -4,14 +4,12 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
   AGENT_BLOCKED_CAPABILITIES,
-  AGENT_FIRST_WORKFLOW,
-  BROAD_WRITE_API_NON_GOAL,
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const description =
-  "Five to Nine API and MCP docs for account-owned exports and audited workspace actions.";
+  "Five to Nine API docs for account-owned exports and account actions.";
 
 export const links: LinksFunction = () => canonicalLinks("/api/docs");
 
@@ -27,11 +25,11 @@ export default function ApiDocsRoute() {
     <PublicDocShell
       kicker="API docs"
       title="Use account-owned proof from your tools."
-      intro="The API exports saved Five to Nine data that already belongs to the authenticated account and supports narrow audited workspace actions."
+      intro="The API exports saved Five to Nine data that already belongs to the authenticated account and supports selected account actions."
     >
       <PublicDocBlock title="Authentication">
         <p>
-          Create a customer API key inside <Link to="/app/sources">Integrations &amp; API</Link>.
+          Create a customer API key inside <Link to="/app/sources">Integrations</Link>.
           Send it as a bearer token:
         </p>
         <pre className="f9-code-block">
@@ -39,14 +37,32 @@ export default function ApiDocsRoute() {
         </pre>
       </PublicDocBlock>
 
+      <PublicDocBlock title="MCP for connected tools">
+        <p>
+          Tools that support MCP can connect with the same bearer token. Use an active customer API key for readiness
+          and exports. Use a write-enabled key only when the tool should update supported account resources.
+        </p>
+        <pre className="f9-code-block">
+          <code>{`POST /api/mcp
+Authorization: Bearer f9_live_...
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list",
+  "params": {}
+}`}</code>
+        </pre>
+      </PublicDocBlock>
+
       <PublicDocBlock title="REST endpoints">
         <dl className="proof-trail-list">
           <div>
-            <dt>Workspace readiness</dt>
+            <dt>Account readiness</dt>
             <dd>GET /api/v1/workspace-readiness</dd>
           </div>
           <div>
-            <dt>Audited actions</dt>
+            <dt>Account actions</dt>
             <dd>POST /api/v1/actions</dd>
           </div>
           <div>
@@ -65,36 +81,7 @@ export default function ApiDocsRoute() {
         <p>Supported formats are JSON, CSV, and Slack-ready markdown where the resource supports them.</p>
       </PublicDocBlock>
 
-      <PublicDocBlock title="MCP endpoint">
-        <p>
-          POST JSON-RPC to `/api/mcp` with the same bearer token. The endpoint exposes readiness/export
-          tools plus audited actions for watchlists, boards, manual proof links, share links, reports,
-          counter-move briefs, account memory, client rooms, redacted delivery settings, and existing
-          proof-backed web mentions. Readiness and exports work with any active key; audited action
-          groups require a write-enabled key.
-        </p>
-        <pre className="f9-code-block">
-          <code>{`{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list",
-  "params": {}
-}`}</code>
-        </pre>
-      </PublicDocBlock>
-
-      <PublicDocBlock title="First agent workflow">
-        <ol className="f9-numbered-guide">
-          {AGENT_FIRST_WORKFLOW.map((step) => (
-            <li key={step.label}>
-              <strong>{step.label}</strong>
-              <span>{step.detail}</span>
-            </li>
-          ))}
-        </ol>
-      </PublicDocBlock>
-
-      <PublicDocBlock title="Audited action groups">
+      <PublicDocBlock title="Account actions">
         <dl className="proof-trail-list">
           {auditedAgentActionGroups().map((group) => (
             <div key={group.id}>
@@ -108,18 +95,17 @@ export default function ApiDocsRoute() {
       <PublicDocBlock title="Recipes">
         <ul className="f9-doc-list">
           <li>Export a watchlist as Slack markdown before a weekly sales meeting.</li>
-          <li>Pull a board as JSON into an internal research note.</li>
-          <li>Let an agent inspect readiness, create a counter-move brief, and save account memory through MCP.</li>
+          <li>Pull a board as JSON into a team research note.</li>
+          <li>Create a counter-move brief and save account context for future reports.</li>
         </ul>
       </PublicDocBlock>
 
       <PublicDocBlock title="Limits and non-goals">
         <ul className="f9-doc-list">
           <li>API reads are account-scoped and rate limited.</li>
-          <li>Audited actions are limited to safe workspace operations and store an action log.</li>
-          <li>Keys are shown once, stored hashed, and can be revoked from Integrations &amp; API.</li>
-          <li>Agent-blocked capabilities: {AGENT_BLOCKED_CAPABILITIES.join(", ")}.</li>
-          <li>Not live yet: {BROAD_WRITE_API_NON_GOAL}.</li>
+          <li>Approved account actions are limited to safe operations and store an action log.</li>
+          <li>Keys are shown once, stored hashed, and can be revoked from Integrations.</li>
+          <li>Restricted actions still require signed-in owner review: {AGENT_BLOCKED_CAPABILITIES.join(", ")}.</li>
           <li>Not live yet: X/YouTube listening or broad social listening beyond existing proof-backed observations.</li>
         </ul>
       </PublicDocBlock>

@@ -24,6 +24,7 @@ import {
   revokeDodoAccessForRefundedPayment,
   revokeDodoPlanAccess,
   getDiscoveryCacheEntry,
+  getDiscoveryProviderState,
   getLaunchReadinessSignals,
   getSuccessfulProofCaptureStatsForUser,
   getOperatorSnapshot,
@@ -86,6 +87,25 @@ function createMockDb(
       async batch() {
         return statements.map(() => ({ success: true }));
       },
+    },
+  };
+}
+
+function createMissingTableDb(tableName: string) {
+  return {
+    prepare() {
+      return {
+        bind() {
+          return {
+            async run() {
+              throw new Error(`D1_ERROR: no such table: ${tableName}: SQLITE_ERROR`);
+            },
+            async all() {
+              throw new Error(`D1_ERROR: no such table: ${tableName}: SQLITE_ERROR`);
+            },
+          };
+        },
+      };
     },
   };
 }
@@ -2124,6 +2144,75 @@ describe("discovery state persistence", () => {
     expect(providerStateStatement?.bindings).toContain(
       "Commercial discovery degraded; serving cached results.",
     );
+  });
+
+  it("treats absent discovery cache storage as empty optional state", async () => {
+    const db = createMissingTableDb("discovery_cache_entry");
+
+    await expect(getDiscoveryCacheEntry({ DB: db } as never, "cache-key")).resolves.toBeNull();
+    await expect(
+      upsertDiscoveryCacheEntry(
+        { DB: db } as never,
+        {
+          cacheKey: "cache-key",
+          provider: "meta_library_browser",
+          routeContext: "public_search",
+          queryFingerprint: "fp-nykaa",
+          country: "India",
+          cursor: null,
+          payload: {
+            ads: [],
+            nextCursor: null,
+            source: "meta_library_browser",
+            provider: "meta_library_browser",
+            cacheStatus: "miss",
+          },
+          fetchedAt: "2026-04-19T00:00:00.000Z",
+          expiresAt: "2026-04-19T00:15:00.000Z",
+          browserMsUsed: 2500,
+        },
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("treats absent discovery provider storage as empty optional state", async () => {
+    const db = createMissingTableDb("discovery_provider_state");
+
+    await expect(
+      getDiscoveryProviderState({ DB: db } as never, "meta_library_browser"),
+    ).resolves.toBeNull();
+    await expect(
+      upsertDiscoveryProviderState(
+        { DB: db } as never,
+        {
+          provider: "meta_library_browser",
+          status: "degraded",
+          failureClass: "selector_drift",
+          summary: "Commercial discovery degraded; serving cached results.",
+          lastSuccessAt: null,
+          lastFailureAt: "2026-04-19T00:00:00.000Z",
+        },
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("treats absent discovery fetch logs as optional state", async () => {
+    const db = createMissingTableDb("discovery_fetch_log");
+
+    await expect(
+      createDiscoveryFetchLog(
+        { DB: db } as never,
+        {
+          provider: "meta_library_browser",
+          routeContext: "public_search",
+          queryFingerprint: "fp-nykaa",
+          country: "India",
+          status: "failed",
+          cacheStatus: "miss",
+          failureClass: "selector_drift",
+        },
+      ),
+    ).resolves.toBeUndefined();
   });
 });
 

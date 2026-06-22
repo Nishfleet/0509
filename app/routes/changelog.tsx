@@ -4,7 +4,7 @@ import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const description =
-  "Five to Nine changelog for launch-readiness, delivery, billing, and public trust updates.";
+  "Five to Nine changelog for delivery, billing, and public trust updates.";
 
 export const links: LinksFunction = () => canonicalLinks("/changelog");
 
@@ -25,16 +25,16 @@ export default function ChangelogRoute() {
       <PublicDocBlock title="2026-06-15">
         <ul className="f9-doc-list">
           <li>Made `0509.io` the primary production domain and kept `.in` as redirect compatibility only.</li>
-          <li>Corrected active email-provider truth to Cloudflare Email Service `send_email`.</li>
+          <li>Corrected email delivery documentation to match the live provider.</li>
           <li>Added public help, docs, API docs, status, changelog, and trust surfaces.</li>
-          <li>Kept WhatsApp out of launch scope until provider and delivered proof exist.</li>
+          <li>Kept WhatsApp unavailable for customers until account-level delivery is enabled.</li>
         </ul>
       </PublicDocBlock>
 
       <PublicDocBlock title="2026-06-13">
         <ul className="f9-doc-list">
-          <li>Hardened the Dodo billing canary so signed plan and proof-credit grants clean up after verification.</li>
-          <li>Kept Slack delivery proof as an explicit launch gate instead of overclaiming broad self-serve readiness.</li>
+          <li>Hardened billing verification so signed plan and proof-credit grants clean up after checks.</li>
+          <li>Kept Slack delivery claims limited until real customer delivery could be verified.</li>
         </ul>
       </PublicDocBlock>
     </PublicDocShell>

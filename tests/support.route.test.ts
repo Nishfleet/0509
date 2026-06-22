@@ -350,7 +350,7 @@ describe("support route", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
+      message: "Ask the account owner to open cancellation, plan-change, or team-seat requests.",
     });
     expect(createSupportCase).not.toHaveBeenCalled();
   });
@@ -377,7 +377,7 @@ describe("support route", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
+      message: "Ask the account owner to open cancellation, plan-change, or team-seat requests.",
     });
     expect(createSupportCase).not.toHaveBeenCalled();
   });
@@ -404,7 +404,7 @@ describe("support route", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
+      message: "Ask the account owner to open cancellation, plan-change, or team-seat requests.",
     });
     expect(createSupportCase).not.toHaveBeenCalled();
   });

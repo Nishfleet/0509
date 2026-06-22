@@ -234,7 +234,7 @@ export default function DigestsRoute() {
                       className="f9-secondary-button"
                       href={`/export/digest/${data.selectedDigest.id}?format=json`}
                     >
-                      API JSON
+                      JSON export
                     </a>
                     <a
                       className="f9-secondary-button"

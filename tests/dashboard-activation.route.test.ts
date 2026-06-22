@@ -93,11 +93,12 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("First 15 minutes");
-    expect(markup).toContain("Add one competitor");
-    expect(markup).toContain("No market watch yet");
-    expect(markup).toContain("00-02");
-    expect(markup).toContain("Paste one competitor website");
+    expect(markup).toContain("Start here");
+    expect(markup).toContain("Add your first competitor");
+    expect(markup).toContain("Paste a competitor website");
+    expect(markup).toContain("Competitor website");
+    expect(markup).toContain("Search ads");
+    expect(markup).toContain("f9-primary-button");
     expect(markup).toContain("href=\"/search\"");
   });
 
@@ -170,14 +171,54 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Today");
-    expect(markup).toContain("Quiet check completed");
+    expect(markup).toContain("Overview");
+    expect(markup).toContain("Watching for the first change");
     expect(markup).toContain("0 ads checked across 1 competitor");
-    expect(markup).toContain("1 evidence check");
-    expect(markup).toContain("A delivery path has successful proof");
-    expect(markup).toContain("Future reports and briefs can use saved goals, tone, and review preferences");
-    expect(markup).toContain("Retained value loop");
+    expect(markup).toContain("Competitors watched");
+    expect(markup).toContain("Evidence checks");
+    expect(markup).toContain("Being watched");
     expect(markup).not.toContain("First 15 minutes");
+    expect(markup).not.toContain("Retained value loop");
+  });
+
+  it("shows paused competitors as paused instead of active monitoring", async () => {
+    await mockRouter(baseDashboardData({
+      watchlists: [
+        {
+          id: "watchlist-1",
+          name: "Nykaa watch",
+          targetType: "advertiser",
+          targetLabel: "Nykaa",
+          isActive: false,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+      recentEvents: [
+        {
+          id: "event-1",
+          watchlistId: "watchlist-1",
+          eventType: "offer_change",
+          title: "Old offer changed",
+          summary: "Historical change from before tracking was paused.",
+          status: "confirmed",
+          createdAt: "2026-06-20T08:10:00.000Z",
+        },
+      ],
+    }));
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Tracking is paused");
+    expect(markup).toContain("Resume a competitor watch");
+    expect(markup).toContain("Resume watch");
+    expect(markup).toContain("All paused");
+    expect(markup).toContain("Paused");
+    expect(markup).not.toContain("Watching for the first change");
+    expect(markup).not.toContain("Your watchlist is ready");
+    expect(markup).not.toContain("move need review");
+    expect(markup).not.toContain("Review moves");
+    expect(markup).not.toContain("Old offer changed");
   });
 
   it("keeps delivery incomplete until there is successful delivery proof", async () => {
@@ -249,9 +290,11 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("First 15 minutes");
-    expect(markup).toContain("Prove delivery");
-    expect(markup).toContain("Delivery target is saved; send the first proof-backed brief");
+    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("0 ads checked across 1 competitor");
+    expect(markup).toContain("Being watched");
+    expect(markup).not.toContain("First 15 minutes");
+    expect(markup).not.toContain("Prove delivery");
     expect(markup).not.toContain("Retained value loop");
   });
 
@@ -324,9 +367,11 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("First 15 minutes");
-    expect(markup).toContain("Prove delivery");
-    expect(markup).toContain("Delivery target is saved; send the first proof-backed brief");
+    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("0 ads checked across 1 competitor");
+    expect(markup).toContain("Being watched");
+    expect(markup).not.toContain("First 15 minutes");
+    expect(markup).not.toContain("Prove delivery");
     expect(markup).not.toContain("A successful delivery trail exists");
     expect(markup).not.toContain("Retained value loop");
   });
@@ -395,8 +440,11 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Set delivery");
-    expect(markup).toContain("Add email or Slack so the proof reaches the team");
+    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("Your watchlist is ready.");
+    expect(markup).toContain("Digests sent");
+    expect(markup).toContain("Email trail active");
+    expect(markup).not.toContain("Set delivery");
     expect(markup).not.toContain("A successful delivery trail exists");
     expect(markup).not.toContain("Retained value loop");
   });
@@ -481,7 +529,8 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("1 brief needs a decision");
+    expect(markup).toContain("1 brief to decide");
+    expect(markup).toContain("Briefs that need review");
     expect(markup).toContain("Review briefs");
     expect(markup).toContain("Review Nykaa move");
     expect(markup).not.toContain("no urgent competitor move is waiting");

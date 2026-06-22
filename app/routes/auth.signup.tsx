@@ -33,7 +33,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const message =
     url.searchParams.get("sent") === "1"
-      ? "Check your email. The setup link will verify you and create the workspace."
+      ? "Check your email. The setup link will verify you and create the account."
       : null;
   const error = signupErrorMessage(url.searchParams.get("error"));
   const oauthProviders = enabledBetterAuthOAuthProviders(env);
@@ -118,7 +118,7 @@ export default function SignupRoute() {
           <div className="f9-auth-proof-list">
             <div>
               <strong>Search</strong>
-              <p>Start from a competitor website, brand, keyword, offer, or platform.</p>
+              <p>Start from one competitor website.</p>
             </div>
             <div>
               <strong>Monitor</strong>
@@ -146,19 +146,19 @@ export default function SignupRoute() {
 
 function signupErrorMessage(code: string | null) {
   if (code === "better_auth_not_configured") {
-    return "Better Auth is not configured yet. Add the Better Auth secret and database binding before creating workspaces.";
+    return "Sign-up is not configured yet. Ask support to finish account access setup.";
   }
   if (code === "callback_failed") {
     return "That setup link could not be verified. Request a fresh link and try again.";
   }
   if (code === "no_workspace") {
-    return "No workspace was found for that email. Create a workspace first.";
+    return "No account was found for that email. Create an account first.";
   }
   if (code === "multiple_workspaces") {
-    return "That email is attached to more than one workspace. Ask support to pick the right workspace before continuing.";
+    return "That email is attached to multiple accounts. Ask support to pick the right account before continuing.";
   }
   if (code === "unsupported_policy") {
-    return "This workspace requires an additional sign-in step that Five to Nine has not enabled yet.";
+    return "This account requires an additional sign-in step that Five to Nine has not enabled yet. Ask support to adjust that policy for now.";
   }
   if (code === "request_invalid") {
     return "That setup request could not be verified. Open this page and try again.";

@@ -213,7 +213,7 @@ describe("billing page", () => {
 
     expect(markup).toContain("View plans");
     expect(markup).toContain("/#pricing");
-    expect(markup).toContain("Free workspace");
+    expect(markup).toContain("Free account");
     expect(markup).not.toContain("Payment issue");
   });
 

@@ -114,7 +114,7 @@ export default function OpsRoute() {
             title="Recent delivery failures"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name ?? "Workspace default"}</p>
+                <p className="f9-app-kicker">{item.watchlist_name ?? "Account default"}</p>
                 <h3>
                   {item.channel === "email" ? "Email" : "WhatsApp"} to {item.target_value}
                 </h3>
@@ -130,7 +130,7 @@ export default function OpsRoute() {
             title="What is blocked by provider or template state"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name ?? "Workspace default"}</p>
+                <p className="f9-app-kicker">{item.watchlist_name ?? "Account default"}</p>
                 <h3>{item.target_value}</h3>
                 <p>{describeBlockedTarget(item)}</p>
                 <p className="f9-muted-copy">{formatTimestamp(item.updated_at)}</p>

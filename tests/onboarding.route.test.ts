@@ -164,6 +164,10 @@ describe("onboarding route", () => {
     const createWatchlist = vi.fn().mockResolvedValue({
       id: "watch-1",
     });
+    const upsertWorkspaceBranding = vi.fn().mockResolvedValue({
+      brandName: null,
+      brandWebsite: "https://mybrand.example",
+    });
 
     vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
@@ -182,6 +186,7 @@ describe("onboarding route", () => {
       completeUserOnboarding,
       createSavedQuery: vi.fn(),
       createWatchlist,
+      upsertWorkspaceBranding,
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({
@@ -194,7 +199,8 @@ describe("onboarding route", () => {
     const { action } = await import("~/routes/app.onboard");
     const formData = new FormData();
     formData.set("intent", "create-watchlist");
-    formData.set("query", "boAt");
+    formData.set("website", "https://boat-lifestyle.com");
+    formData.set("brandWebsite", "mybrand.example");
 
     await expectRedirect(
       () =>
@@ -212,12 +218,15 @@ describe("onboarding route", () => {
       {},
       "user-1",
       expect.objectContaining({
-        name: "boAt watch",
+        name: "Boat Lifestyle watch",
         targetType: "advertiser",
-        targetId: "boAt",
-        targetLabel: "boAt",
+        targetId: "https://boat-lifestyle.com",
+        targetLabel: "boat lifestyle",
       }),
     );
+    expect(upsertWorkspaceBranding).toHaveBeenCalledWith({}, "user-1", {
+      brandWebsite: "https://mybrand.example",
+    });
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
 
@@ -243,6 +252,7 @@ describe("onboarding route", () => {
       completeUserOnboarding,
       createSavedQuery: vi.fn(),
       createWatchlist,
+      upsertWorkspaceBranding: vi.fn(),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit,
@@ -270,6 +280,59 @@ describe("onboarding route", () => {
     expect(completeUserOnboarding).not.toHaveBeenCalled();
   });
 
+  it("rejects an invalid brand website before creating the first watchlist", async () => {
+    const completeUserOnboarding = vi.fn();
+    const createWatchlist = vi.fn();
+    const upsertWorkspaceBranding = vi.fn();
+    const checkPlanLimit = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createSavedQuery: vi.fn(),
+      createWatchlist,
+      upsertWorkspaceBranding,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit,
+    }));
+
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("website", "https://boat-lifestyle.com");
+    formData.set("brandWebsite", "samplebrand");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "That website looks incomplete. Add the full domain, like brand.com.",
+    });
+    expect(checkPlanLimit).not.toHaveBeenCalled();
+    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(upsertWorkspaceBranding).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
   it("returns a structured upgrade prompt when onboarding watchlists are capped", async () => {
     const completeUserOnboarding = vi.fn();
     const createWatchlist = vi.fn();
@@ -290,6 +353,7 @@ describe("onboarding route", () => {
     vi.doMock("~/lib/data.server", () => ({
       completeUserOnboarding,
       createWatchlist,
+      upsertWorkspaceBranding: vi.fn(),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       checkPlanLimit: vi.fn().mockResolvedValue({
@@ -326,6 +390,10 @@ describe("onboarding route", () => {
 
   it("marks the user onboarded when they skip setup", async () => {
     const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    const upsertWorkspaceBranding = vi.fn().mockResolvedValue({
+      brandName: null,
+      brandWebsite: "https://mybrand.example",
+    });
 
     vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
@@ -344,11 +412,13 @@ describe("onboarding route", () => {
       completeUserOnboarding,
       createSavedQuery: vi.fn(),
       createWatchlist: vi.fn(),
+      upsertWorkspaceBranding,
     }));
 
     const { action } = await import("~/routes/app.onboard");
     const formData = new FormData();
     formData.set("intent", "finish");
+    formData.set("brandWebsite", "mybrand.example");
 
     await expectRedirect(
       () =>
@@ -362,6 +432,9 @@ describe("onboarding route", () => {
       "/app",
     );
 
+    expect(upsertWorkspaceBranding).toHaveBeenCalledWith({}, "user-1", {
+      brandWebsite: "https://mybrand.example",
+    });
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
 
@@ -380,7 +453,7 @@ describe("onboarding route", () => {
           ok: false,
           error: "plan_limit_exceeded",
           message:
-            "Watchlists are available on paid plans. Starter is the recommended launch plan for monitoring this competitor.",
+            "Watchlists are available on paid plans. Starter is the recommended plan for monitoring this competitor.",
           upgradePath: "/#pricing",
         }),
         useLoaderData: vi.fn().mockReturnValue({
@@ -398,6 +471,8 @@ describe("onboarding route", () => {
             current: 0,
             limit: 0,
           },
+          brandWebsite: null,
+          visitorCountry: "India",
         }),
         useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       };
@@ -408,11 +483,12 @@ describe("onboarding route", () => {
 
     expect(markup).toContain("Choose a plan to start monitoring");
     expect(markup).toContain("Watchlists are available on paid plans.");
-    expect(markup).toContain("Starter is the recommended launch plan");
-    expect(markup).toContain("What happens next");
-    expect(markup).toContain("First sweep starts");
-    expect(markup).toContain("Quiet still counts");
-    expect(markup).toContain("Proof feeds briefs");
+    expect(markup).toContain("Starter is the recommended plan");
+    expect(markup).toContain("Search first instead");
+    expect(markup).not.toContain("What happens next");
+    expect(markup).not.toContain("First sweep starts");
+    expect(markup).not.toContain("Quiet still counts");
+    expect(markup).not.toContain("Proof feeds briefs");
     expect(markup).not.toContain("Choose Scout or higher");
     expect(markup).toContain("View pricing");
     expect(markup).toContain("href=\"/#pricing\"");

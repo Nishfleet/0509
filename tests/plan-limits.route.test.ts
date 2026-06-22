@@ -162,7 +162,7 @@ describe("collection limit", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached your workspace board limit.",
+      message: "You have reached your board limit.",
       ok: false,
     });
     expect(createCollection).not.toHaveBeenCalled();
@@ -529,8 +529,8 @@ describe("pricing CTA rendering", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("0 ads checked");
-    expect(markup).toContain("Quiet check completed");
-    expect(markup).toContain("quiet means we looked");
+    expect(markup).toContain("All quiet");
+    expect(markup).toContain("No changes worth your time");
     expect(markup).not.toContain("Next sweep: tomorrow morning");
   });
 
@@ -567,8 +567,8 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Evidence attempts ran; open the watchlist to retry or inspect the failed proof.");
-    expect(markup).toContain("Capture proof");
+    expect(markup).toContain("Add your first competitor");
+    expect(markup).toContain("Search ads");
     expect(markup).not.toContain("Screenshots and landing-page evidence are attached to the trail.");
   });
 
@@ -609,8 +609,9 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("1 evidence check");
-    expect(markup).toContain("1 evidence check attached.");
+    expect(markup).toContain("Evidence checks");
+    expect(markup).toContain("9");
+    expect(markup).toContain("1 left this month");
   });
 
   it("does not mark delivery complete just because email is configured", async () => {
@@ -649,8 +650,9 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Prove delivery");
-    expect(markup).toContain("Delivery target is saved; send the first proof-backed brief to prove it reaches the team.");
+    expect(markup).toContain("Add your first competitor");
+    expect(markup).not.toContain("Prove delivery");
+    expect(markup).not.toContain("Delivery target is saved; send the first proof-backed brief to prove it reaches the team.");
     expect(markup).not.toContain("A successful delivery trail exists.");
     expect(markup).not.toContain("Retained value loop");
   });

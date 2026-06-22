@@ -72,7 +72,7 @@ describe("status route", () => {
     expect(getLaunchReadinessSignals).not.toHaveBeenCalled();
   });
 
-  it("renders private evidence copy and static broad-launch blockers", async () => {
+  it("renders customer-facing status without private launch details", async () => {
     await mockRouter(() => ({
       generatedAt: "2026-06-20T09:00:00.000Z",
       appServed: true,
@@ -92,14 +92,18 @@ describe("status route", () => {
     const { default: StatusRoute } = await import("~/routes/status");
     const markup = renderToStaticMarkup(createElement(StatusRoute));
 
-    expect(markup).toContain("Detailed production evidence is intentionally private.");
-    expect(markup).toContain("authenticated launch-readiness canary");
-    expect(markup).toContain("Slack broad-launch proof still requires");
-    expect(markup).toContain("WhatsApp is not launch-scoped until");
-    expect(markup).toContain("Dodo portal subscription updates need the dashboard setting confirmed by Nish.");
-    expect(markup).toContain("External uptime monitoring still needs a third-party monitor");
+    expect(markup).toContain("Five to Nine service status.");
+    expect(markup).toContain("Core surfaces");
+    expect(markup).toContain("Public search");
+    expect(markup).toContain("broad launch still needs fresh Slack proof");
+    expect(markup).toContain("Dodo customer portal subscription changes still need dashboard confirmation");
+    expect(markup).toContain("External uptime monitoring still needs to be connected");
+    expect(markup).toContain("WhatsApp delivery is not launch-scoped yet");
+    expect(markup).toContain("portal changes are confirmed");
     expect(markup).not.toContain("Recent Slack delivery proof is visible");
     expect(markup).not.toContain("Last proof");
+    expect(markup).not.toContain("launch-readiness canary");
+    expect(markup).not.toContain("private canary");
     expect(markup).not.toContain("secret-token");
     expect(markup).not.toContain("hooks.slack.com");
   });

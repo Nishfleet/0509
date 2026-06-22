@@ -3,6 +3,10 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useState } from "react";
 
 import { SubmitButton } from "~/components/submit-button";
+import {
+  hasInvalidCompetitorWebsite,
+  normalizeCompetitorWebsiteInput,
+} from "~/lib/competitor-website";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const meta = () => [{ title: "Account | Five to Nine" }];
@@ -19,8 +23,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const session = await requireSession(env, request);
 
   const plan = await getUserPlan(env, session.user.id);
-  const branding =
-    plan === "agency" ? await getWorkspaceBranding(env, session.user.id) : { brandName: null };
+  const branding = await getWorkspaceBranding(env, session.user.id);
   const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
   const passkeys = passkeysEnabled ? await listBetterAuthPasskeys(env, request) : [];
 
@@ -29,7 +32,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     name: session.user.name,
     sessionExpiresAt: session.session.expiresAt,
     plan,
-    brandName: branding.brandName,
+    brandName: plan === "agency" ? branding.brandName : null,
+    brandWebsite: branding.brandWebsite,
     passkeys,
     passkeysEnabled,
   };
@@ -50,6 +54,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (plan !== "agency") {
       return {
         ok: false,
+        intent,
         error: "plan_gated" as const,
         message: "Branded reports are part of Agency.",
       };
@@ -61,18 +66,48 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
+      intent,
       message: result.brandName
         ? `Saved. Shared reports now open with "Prepared by ${result.brandName}".`
         : "Branding cleared. Shared reports show Five to Nine only.",
     };
   }
 
-  return { ok: false, message: "Unknown account action." };
+  if (intent === "save-brand-profile") {
+    const brandWebsiteInput = String(formData.get("brandWebsite") ?? "").trim();
+    const brandWebsite = normalizeCompetitorWebsiteInput(brandWebsiteInput);
+    if (hasInvalidCompetitorWebsite(brandWebsite)) {
+      return {
+        ok: false,
+        intent,
+        error: "invalid_brand_website" as const,
+        message: brandWebsite.error,
+      };
+    }
+
+    const result = await upsertWorkspaceBranding(env, session.user.id, {
+      brandWebsite: brandWebsite.normalizedUrl,
+    });
+
+    return {
+      ok: true,
+      intent,
+      message: result.brandWebsite
+        ? "Saved your brand website."
+        : "Brand website cleared.",
+    };
+  }
+
+  return { ok: false, intent, message: "Unknown account action." };
 }
 
 export default function AccountRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const brandProfileAction =
+    actionData?.intent === "save-brand-profile" ? actionData : null;
+  const reportBrandingAction =
+    actionData?.intent === "save-report-branding" ? actionData : null;
   const [passkeyPending, setPasskeyPending] = useState(false);
   const [passkeyMessage, setPasskeyMessage] = useState<string | null>(null);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
@@ -83,13 +118,13 @@ export default function AccountRoute() {
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Account</span>
-            <h2>Signed in as {data.email}</h2>
+            <h2>{data.name || data.email}</h2>
           </div>
         </div>
 
         <p className="f9-muted-copy">
-          Sign-in is handled by Better Auth. Five to Nine supports secure email links,
-          configured work sign-in methods, and passkeys while workspace data stays in Five to Nine.
+          Signed in as {data.email}. Sign-in is handled by Better Auth. Use this page for brand setup,
+          sign-in options, and sensitive account requests.
         </p>
       </article>
 
@@ -144,13 +179,52 @@ export default function AccountRoute() {
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Report branding</span>
+            <span className="f9-app-kicker">My brand</span>
+            <h2>Set your own website once</h2>
+          </div>
+        </div>
+        {brandProfileAction?.message ? (
+          <div className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}>
+            <p>{brandProfileAction.message}</p>
+          </div>
+        ) : null}
+        <Form className="f9-auth-form" method="post">
+          <input name="intent" type="hidden" value="save-brand-profile" />
+          <label className="f9-field">
+            <span>My brand website</span>
+            <input
+              autoComplete="url"
+              defaultValue={data.brandWebsite ?? ""}
+              inputMode="url"
+              name="brandWebsite"
+              placeholder="https://yourbrand.com"
+              spellCheck={false}
+              type="text"
+            />
+          </label>
+          <SubmitButton
+            className="f9-secondary-button"
+            intent="save-brand-profile"
+            pendingLabel="Saving…"
+          >
+            Save my brand
+          </SubmitButton>
+          <p className="f9-muted-copy">
+            Optional. Set it once; competitor search stays separate.
+          </p>
+        </Form>
+      </article>
+
+      <article className="f9-app-panel">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Agency reports</span>
             <h2>Put your agency name on shared reports</h2>
           </div>
         </div>
-        {actionData?.message ? (
-          <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-            <p>{actionData.message}</p>
+        {reportBrandingAction?.message ? (
+          <div className={`f9-message ${reportBrandingAction.ok ? "is-success" : "is-error"}`}>
+            <p>{reportBrandingAction.message}</p>
           </div>
         ) : null}
         {data.plan === "agency" ? (
@@ -193,13 +267,13 @@ export default function AccountRoute() {
           </div>
         </div>
         <p className="f9-muted-copy">
-          This device is signed in until {data.sessionExpiresAt}. Sign out from the app header to
-          revoke it.
+          This device is signed in until {data.sessionExpiresAt}. Sign out from the sidebar to remove access on this
+          device.
         </p>
         <p className="f9-muted-copy">
-          To change your account email, remove a user, or delete a workspace, email{" "}
-          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>. We keep this operator-assisted until the
-          customer account portal is enabled.
+          To change your email, remove a teammate, or close the account, email{" "}
+          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>. Support handles sensitive account changes
+          until self-service controls are ready.
         </p>
       </article>
 

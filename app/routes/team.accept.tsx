@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { SubmitButton } from "~/components/submit-button";
 
-export const meta = () => [{ title: "Join workspace | Five to Nine" }];
+export const meta = () => [{ title: "Join team | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
@@ -82,15 +82,15 @@ export default function TeamAcceptRoute() {
             </>
           ) : (
             <>
-              <h1>Join {data.ownerName ? `${data.ownerName}'s` : "this"} workspace?</h1>
+              <h1>Join {data.ownerName ? `${data.ownerName}'s` : "this"} team?</h1>
               <p>
                 You&rsquo;ll share their watchlists, boards, and morning briefs. Your sign-in
-                stays your own, and the workspace owner handles billing.
+                stays your own, and the account owner handles billing.
               </p>
               {actionData && !actionData.ok ? <p role="alert">{actionData.reason}</p> : null}
               <Form method="post">
                 <input type="hidden" name="token" value={data.token} />
-                <SubmitButton pendingLabel="Joining…">Join the workspace</SubmitButton>
+                <SubmitButton pendingLabel="Joining…">Join the team</SubmitButton>
               </Form>
             </>
           )}
