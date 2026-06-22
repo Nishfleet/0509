@@ -52,7 +52,9 @@ describe("auth rebuild", () => {
   it("keeps auth provider tokens out of rendered auth HTML", () => {
     expect(authSurface).not.toContain('name="token"');
     expect(authSurface).not.toContain('value={token}');
-    expect(magicLinkRoute).toContain("readBetterAuthMagicLinkConfirmation");
+    expect(magicLinkRoute).toContain("readBetterAuthMagicLinkConfirmationContext");
+    expect(magicLinkRoute).toContain("action={cleanMagicLinkPath(data.mode)}");
+    expect(magicLinkRoute).toContain("readBetterAuthMagicLinkConfirmationTicket");
     expect(magicLinkRoute).toContain("data.email");
     expect(apiAuthRoute).toContain("getBetterAuth");
     expect(apiAuthRoute).toContain("/api/auth/magic-link/verify");
