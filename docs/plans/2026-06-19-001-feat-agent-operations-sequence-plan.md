@@ -26,7 +26,7 @@ Five to Nine already has public search, authenticated monitoring, watchlists, co
 - R4. Delivery and launch blockers must stay honest: Slack proof, Dodo portal confirmation, uptime monitoring, WhatsApp, and unsupported-channel ingestion remain non-claimable until separately verified.
 - R5. Counter-move briefs must carry source proof, confidence, recommended response, owner/channel context, and expiry without inventing spend or unsupported ingestion.
 - R6. Agent/customer memory must be scoped to the account and optionally to a watchlist or client room.
-- R7. Agency/client rooms must group watchlists, boards, reports, and share links around client context without changing the current Stytch/D1 workspace ownership model.
+- R7. Agency/client rooms must group watchlists, boards, reports, and share links around client context without changing the current Better Auth/D1 workspace ownership model.
 - R8. Lifecycle nudges must be tied to product truth: first competitor, first proof, digest, delivery proof, API/MCP readiness, memory, and client-room readiness.
 - R9. Verification must cover API/MCP contracts, account scoping, no-secret output, audit persistence, and unchanged launch-claim boundaries.
 
@@ -191,7 +191,7 @@ The core invariant is one account-scoped truth layer. API and MCP endpoints auth
 
 ## System-Wide Impact
 
-This work touches exported API and MCP contracts, account-scoped persistent data, report payloads, dashboard/onboarding UX, and public launch claims. The implementation must preserve D1 parameter binding, current Stytch/D1 workspace scoping, no-secret output, and the existing launch-gate posture.
+This work touches exported API and MCP contracts, account-scoped persistent data, report payloads, dashboard/onboarding UX, and public launch claims. The implementation must preserve D1 parameter binding, current Better Auth/D1 workspace scoping, no-secret output, and the existing launch-gate posture.
 
 ---
 

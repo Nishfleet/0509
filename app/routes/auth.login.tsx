@@ -20,10 +20,11 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { isStytchAuthEnabled } = await import("~/lib/env.server");
-  const { isPasskeyAuthConfigured } = await import("~/lib/passkeys.server");
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
-  const { enabledStytchOAuthProviders } = await import("~/lib/stytch-b2b.server");
+  const {
+    enabledBetterAuthOAuthProviders,
+    isBetterAuthPasskeyEnabled,
+  } = await import("~/lib/better-auth.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
@@ -38,8 +39,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       ? "Check your email for a secure Five to Nine sign-in link."
       : null;
   const error = authErrorMessage(url.searchParams.get("error"));
-  const oauthProviders = isStytchAuthEnabled(env) ? enabledStytchOAuthProviders(env) : [];
-  const passkeysEnabled = isStytchAuthEnabled(env) && isPasskeyAuthConfigured(env);
+  const oauthProviders = enabledBetterAuthOAuthProviders(env);
+  const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
 
   return {
     redirectTo,
@@ -53,46 +54,39 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
-  const { isStytchAuthEnabled } = await import("~/lib/env.server");
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
   const {
-    authRequestStateCookie,
-    consumeStytchAuthRequest,
-    createStytchAuthRequest,
+    BetterAuthUnknownUserError,
+    dummyBetterAuthMagicLinkRequestStateCookie,
+    isBetterAuthConfigured,
     isSameOriginAuthFormPost,
-    isStytchConfigured,
-    sendDiscoveryEmail,
-  } = await import("~/lib/stytch-b2b.server");
+    sendBetterAuthMagicLink,
+  } = await import("~/lib/better-auth.server");
   const env = getEnv(context);
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app");
 
-  if (!isStytchAuthEnabled(env) || !isStytchConfigured(env)) {
-    throw redirect("/auth/login?error=stytch_not_configured");
+  if (!isBetterAuthConfigured(env)) {
+    throw redirect("/auth/login?error=better_auth_not_configured");
   }
   if (!isSameOriginAuthFormPost(env, request)) {
     throw redirect("/auth/login?error=request_invalid");
   }
 
-  const state = await createStytchAuthRequest(env, {
-    authMethod: "magic_link",
-    email,
-    mode: "login",
-    redirectTo,
-  });
+  let requestStateCookie: string | null = null;
   try {
-    await sendDiscoveryEmail(env, request, {
+    requestStateCookie = await sendBetterAuthMagicLink(env, request, {
       email,
       mode: "login",
-      state,
+      redirectTo,
     });
   } catch (error) {
-    await consumeStytchAuthRequest(env, state).catch((consumeError) => {
-      console.warn("failed to consume unsent Stytch login request", consumeError);
-    });
-    console.warn("failed to send Stytch login email", error);
-    throw redirect("/auth/login?error=send_failed");
+    if (!(error instanceof BetterAuthUnknownUserError)) {
+      console.warn("failed to send Better Auth login email", error);
+      throw redirect("/auth/login?error=send_failed");
+    }
+    requestStateCookie = dummyBetterAuthMagicLinkRequestStateCookie(request);
   }
 
   const next = new URL("/auth/login", request.url);
@@ -100,7 +94,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   next.searchParams.set("email", email);
   next.searchParams.set("redirectTo", redirectTo);
   const headers = new Headers();
-  headers.append("Set-Cookie", authRequestStateCookie(request, state));
+  if (requestStateCookie) {
+    headers.append("Set-Cookie", requestStateCookie);
+  }
   throw redirect(`${next.pathname}${next.search}`, { headers });
 }
 
@@ -155,8 +151,8 @@ export default function LoginRoute() {
 }
 
 function authErrorMessage(code: string | null) {
-  if (code === "stytch_not_configured") {
-    return "Stytch B2B is not configured yet. Add the Stytch project ID and secret before signing in.";
+  if (code === "better_auth_not_configured") {
+    return "Better Auth is not configured yet. Add the Better Auth secret and database binding before signing in.";
   }
   if (code === "callback_failed") {
     return "That sign-in link could not be verified. Request a fresh link and try again.";
@@ -165,10 +161,10 @@ function authErrorMessage(code: string | null) {
     return "No workspace was found for that email. Create a workspace first.";
   }
   if (code === "multiple_workspaces") {
-    return "That email is attached to multiple Stytch workspaces. Ask support to pick the right workspace before signing in.";
+    return "That email is attached to more than one workspace. Ask support to pick the right workspace before signing in.";
   }
   if (code === "unsupported_policy") {
-    return "This Stytch workspace requires an additional sign-in step that Five to Nine has not enabled yet. Ask support to disable that policy for now.";
+    return "This workspace requires an additional sign-in step that Five to Nine has not enabled yet.";
   }
   if (code === "passwordless") {
     return "Five to Nine now uses secure email links instead of passwords.";
@@ -181,6 +177,12 @@ function authErrorMessage(code: string | null) {
   }
   if (code === "oauth_not_configured") {
     return "That sign-in option is not configured yet. Use the email link for now.";
+  }
+  if (code === "oauth_failed") {
+    return "That sign-in option could not start. Use the email link for now.";
+  }
+  if (code) {
+    return "That sign-in request could not be completed. Request a fresh link and try again.";
   }
   return null;
 }

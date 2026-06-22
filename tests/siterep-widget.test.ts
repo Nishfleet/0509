@@ -82,9 +82,9 @@ describe("Site Rep widget install", () => {
 
     for (const pathname of [
       "/auth/login",
-      "/auth/stytch/callback",
+      "/api/auth/callback/google",
       "/auth/reset-password",
-      "/auth/passkeys/authentication/verify",
+      "/api/auth/passkey/verify-authentication",
       "/app",
       "/app/billing",
       "/api/health",
@@ -109,7 +109,7 @@ describe("Site Rep widget install", () => {
 
   it("stays disabled when auth cookies are present but session lookup is anonymous", () => {
     const request = new Request("https://0509.io/", {
-      headers: { cookie: "f9_stytch_session=session-123" },
+      headers: { cookie: "better-auth.session_token=session-123" },
     });
 
     expect(hasSiteRepAuthCookie(request)).toBe(true);

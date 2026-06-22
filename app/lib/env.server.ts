@@ -19,7 +19,15 @@ export interface AppEnv {
   APP_NAME?: string;
   APP_ORIGIN?: string;
   AUTH_PROVIDER?: string;
+  BETTER_AUTH_GOOGLE_CLIENT_ID?: string;
+  BETTER_AUTH_GOOGLE_CLIENT_SECRET?: string;
+  BETTER_AUTH_MICROSOFT_CLIENT_ID?: string;
+  BETTER_AUTH_MICROSOFT_CLIENT_SECRET?: string;
+  BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED?: string;
+  BETTER_AUTH_MICROSOFT_TENANT_ID?: string;
+  BETTER_AUTH_OAUTH_BRANDED_PROVIDERS?: string;
   BETTER_AUTH_SECRET?: string;
+  BETTER_AUTH_TRUSTED_ORIGINS?: string;
   BROWSER?: BrowserBinding;
   BROWSERLESS_PROOF_ALLOWLIST_ORIGINS?: string;
   BROWSERLESS_TOKEN?: string;
@@ -64,23 +72,6 @@ export interface AppEnv {
   RAZORPAY_PLAN_STARTER_MONTHLY?: string;
   RAZORPAY_PLAN_STARTER_YEARLY?: string;
   RAZORPAY_WEBHOOK_SECRET?: string;
-  STYTCH_API_BASE_URL?: string;
-  STYTCH_B2B_PASSKEYS_ENABLED?: string;
-  STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID?: string;
-  STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID?: string;
-  STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID?: string;
-  STYTCH_OAUTH_BRANDED_PROVIDERS?: string;
-  STYTCH_OAUTH_ENABLED_PROVIDERS?: string;
-  STYTCH_PASSKEY_RP_ID?: string;
-  STYTCH_PROJECT_ID?: string;
-  STYTCH_OAUTH_PROVIDERS_ENABLED?: string;
-  STYTCH_PUBLIC_TOKEN?: string;
-  STYTCH_SECRET?: string;
-  STYTCH_SESSION_DURATION_MINUTES?: string;
-  STYTCH_TAT_AUDIENCE?: string;
-  STYTCH_TAT_ISSUER?: string;
-  STYTCH_TAT_PRIVATE_KEY_B64?: string;
-  STYTCH_TAT_PROFILE_ID?: string;
   UNSUBSCRIBE_SIGNING_SECRET?: string;
   WHATSAPP_ACCESS_TOKEN?: string;
   WHATSAPP_APP_SECRET?: string;
@@ -128,8 +119,8 @@ export function appOrigin(env: AppEnv, request: Request) {
   return env.APP_ORIGIN ?? env.BETTER_AUTH_URL ?? forwardedOrigin(request) ?? new URL(request.url).origin;
 }
 
-export function isStytchAuthEnabled(env: AppEnv) {
-  return (env.AUTH_PROVIDER ?? "").trim().toLowerCase() === "stytch";
+export function isBetterAuthEnabled(env: AppEnv) {
+  return (env.AUTH_PROVIDER ?? "").trim().toLowerCase() === "better-auth";
 }
 
 function parseEnvFlag(value: string | undefined) {

@@ -36,7 +36,7 @@ describe("Worker security headers", () => {
     );
     const authResponse = withSecurityHeaders(
       new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
-      new Request("https://0509.io/auth/stytch/callback"),
+      new Request("https://0509.io/api/auth/callback/google"),
     );
     const appResponse = withSecurityHeaders(
       new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
@@ -45,7 +45,7 @@ describe("Worker security headers", () => {
     const publicWithAuthCookieResponse = withSecurityHeaders(
       new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
       new Request("https://0509.io/", {
-        headers: { cookie: "f9_stytch_session=session-123" },
+        headers: { cookie: "better-auth.session_token=session-123" },
       }),
     );
 

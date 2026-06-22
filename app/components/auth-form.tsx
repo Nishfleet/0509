@@ -125,7 +125,7 @@ export function AuthForm({
                 <button
                   className={`f9-oauth-button is-${provider}`}
                   disabled={pending}
-                  formAction="/auth/stytch/oauth"
+                  formAction="/auth/better/oauth"
                   formNoValidate
                   key={provider}
                   name="provider"
@@ -159,35 +159,12 @@ async function startPasskeyLogin(input: {
   input.setError(null);
   input.setPending(true);
   try {
-    const { startAuthentication } = await import("@simplewebauthn/browser");
-    const optionsResponse = await fetch("/auth/passkeys/authentication/options", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ redirectTo: input.redirectTo }),
-    });
-    const optionsPayload = (await optionsResponse.json().catch(() => null)) as
-      | { options?: unknown; state?: string }
-      | null;
-    if (!optionsResponse.ok || !optionsPayload?.options || !optionsPayload.state) {
-      throw new Error("options_failed");
+    const { authClient } = await import("~/lib/auth-client");
+    const result = await authClient.signIn.passkey();
+    if (result.error) {
+      throw new Error(result.error.message || "passkey_failed");
     }
-
-    const credential = await startAuthentication({ optionsJSON: optionsPayload.options as never });
-    const verifyResponse = await fetch("/auth/passkeys/authentication/verify", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ credential, state: optionsPayload.state }),
-    });
-    const verifyPayload = (await verifyResponse.json().catch(() => null)) as
-      | { redirectTo?: string }
-      | null;
-    if (!verifyResponse.ok || !verifyPayload?.redirectTo) {
-      throw new Error("verify_failed");
-    }
-
-    window.location.assign(verifyPayload.redirectTo);
+    window.location.assign(input.redirectTo);
   } catch (error) {
     if (error instanceof Error && error.name === "NotAllowedError") {
       input.setError("Passkey sign-in was cancelled.");

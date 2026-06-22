@@ -4,15 +4,15 @@ import { join } from "node:path";
 
 const ACTIVE_RUNTIME_DIRS = ["app", "workers"];
 const FORBIDDEN_ACTIVE_AUTH_REFERENCES = [
-  "better-auth",
   "@supabase",
   "supabase",
+  "sty" + "tch",
   "legacy/",
   "../legacy",
 ];
 
 describe("auth runtime", () => {
-  it("keeps active runtime on Stytch B2B instead of Better Auth or Supabase", () => {
+  it("keeps active runtime on Better Auth instead of legacy auth providers", () => {
     const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
@@ -22,7 +22,8 @@ describe("auth runtime", () => {
       ...(packageJson.devDependencies ?? {}),
     };
 
-    expect(dependencies).not.toHaveProperty("better-auth");
+    expect(dependencies).toHaveProperty("better-auth");
+    expect(dependencies).toHaveProperty("@better-auth/passkey");
     expect(Object.keys(dependencies).some((name) => name.includes("supabase"))).toBe(false);
 
     const activeRuntimeText = ACTIVE_RUNTIME_DIRS
@@ -33,7 +34,8 @@ describe("auth runtime", () => {
     for (const forbidden of FORBIDDEN_ACTIVE_AUTH_REFERENCES) {
       expect(activeRuntimeText).not.toContain(forbidden);
     }
-    expect(activeRuntimeText).toContain("stytch");
+    expect(activeRuntimeText).toContain("better-auth");
+    expect(activeRuntimeText).toContain("@better-auth/passkey");
   });
 });
 

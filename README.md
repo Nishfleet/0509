@@ -23,7 +23,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 ## Current stack
 
 - React Router v7 on Cloudflare Workers
-- Stytch B2B for organization auth and sessions
+- Better Auth on D1 for email-link auth, sessions, passkeys, and gated Google/Microsoft OAuth
 - D1 for product data
 - Optional R2 for landing-page artifact retention
 - Cloudflare Email Service `send_email` binding for digest and instant-alert email delivery
@@ -53,8 +53,9 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/api/webhooks/dodo`
 - `/auth/login`
 - `/auth/signup`
-- `/auth/stytch/callback`
-- `/auth/stytch/confirm`
+- `/api/auth/*`
+- `/auth/better/oauth`
+- `/auth/better/magic-link`
 - `/auth/logout`
 - `/app/onboard`
 - `/app` workspace dashboard
@@ -73,13 +74,15 @@ Important bindings and secrets:
 - `DB`
 - `LANDING_PAGE_ARTIFACTS` (optional)
 - `APP_ORIGIN`
-- `AUTH_PROVIDER=stytch`
-- `STYTCH_API_BASE_URL`
-- `STYTCH_PROJECT_ID`
-- `STYTCH_PUBLIC_TOKEN` for Google/Microsoft Stytch B2B OAuth discovery starts; keep it in runtime config/secrets, not client code or repo vars
-- `STYTCH_OAUTH_ENABLED_PROVIDERS` and `STYTCH_OAUTH_BRANDED_PROVIDERS` only after each provider config is live in Stytch and its Google/Microsoft account chooser shows Five to Nine/0509, not Stytch
-- `STYTCH_SECRET`
-- `STYTCH_SESSION_DURATION_MINUTES` (optional)
+- `AUTH_PROVIDER=better-auth`
+- `BETTER_AUTH_SECRET`
+- `BETTER_AUTH_URL`
+- `BETTER_AUTH_GOOGLE_CLIENT_ID` / `BETTER_AUTH_GOOGLE_CLIENT_SECRET` only after Google branding is verified for Five to Nine/0509
+- `BETTER_AUTH_MICROSOFT_CLIENT_ID` / `BETTER_AUTH_MICROSOFT_CLIENT_SECRET` only after Microsoft branding is verified for Five to Nine/0509
+- `BETTER_AUTH_MICROSOFT_ACCOUNT_LINKING_TRUSTED=true` only after accepting same-email Microsoft account linking
+- `BETTER_AUTH_MICROSOFT_TENANT_ID` (optional, defaults to `common`)
+- `BETTER_AUTH_OAUTH_BRANDED_PROVIDERS` (optional comma-separated `google,microsoft`; OAuth stays hidden and unregistered until this includes the provider)
+- `BETTER_AUTH_TRUSTED_ORIGINS` (optional comma-separated preview origins)
 - `UNSUBSCRIBE_SIGNING_SECRET`
 - `CANARY_BYPASS_TOKEN`
 - `ALLOW_PLATFORM_META_API_FALLBACK`
@@ -111,15 +114,15 @@ Important bindings and secrets:
 ## Operations
 
 - Run `npm run backup:d1` before risky migrations or data-shape changes. It exports the remote Cloudflare D1 database into `backups/d1/`, which is intentionally gitignored.
-- Apply pending D1 migrations before deploying code that reads new tables. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys; `migrations/0019_slack_delivery.sql` backs Slack delivery channels; `migrations/0031_stytch_identity.sql` backs Stytch identity mapping and one-time auth request state; `migrations/0035_agent_action_audit.sql`, `0036_agent_memory.sql`, and `0037_client_rooms.sql` back audited agent actions, agent memory, and client rooms.
+- Apply pending D1 migrations before deploying code that reads new tables. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys; `migrations/0019_slack_delivery.sql` backs Slack delivery channels; `migrations/0035_agent_action_audit.sql`, `0036_agent_memory.sql`, and `0037_client_rooms.sql` back audited agent actions, agent memory, and client rooms; `migrations/0042_better_auth_passkey.sql` backs Better Auth passkeys on databases that already ran the baseline auth migration.
 
 ## Notes
 
 - For the current Cloudflare Worker app, use `.dev.vars` for local secrets. A starter template now lives at `.dev.vars.example`.
 - Supabase is legacy-only under `legacy/`; it is not part of the active `app/` or `workers/` runtime.
-- Stytch B2B is the active auth provider. D1 remains the source of truth for product data, billing linkage, watchlists, digests, collections, and customer API keys.
-- Auth UI stays intentionally small: email link primary, plus Google/Microsoft only when `STYTCH_PUBLIC_TOKEN` is configured and the provider appears in both `STYTCH_OAUTH_ENABLED_PROVIDERS` and `STYTCH_OAUTH_BRANDED_PROVIDERS`. OAuth PKCE verifier/state cookies are HTTP-only, email-link confirmation happens before token exchange, and callback tokens are never rendered into HTML.
-- Current B2B scope is one Stytch organization per email because the product data model is still keyed by local `user.id`. Multi-organization Stytch discovery is blocked until account data is organization-scoped.
+- Better Auth is the active auth provider. D1 remains the source of truth for auth state, product data, billing linkage, watchlists, digests, collections, and customer API keys.
+- Auth UI stays intentionally small: email link primary, passkeys after sign-in, plus Google/Microsoft only when the corresponding Better Auth OAuth credentials are configured and branded account chooser behavior is verified. Microsoft also requires an explicit same-email account-linking trust flag before it is registered. OAuth state cookies are HTTP-only, provider tokens are encrypted at rest, email-link confirmation is bound to a same-browser state cookie before token exchange, and callback tokens are never rendered into HTML.
+- Current B2B scope is one account workspace per email because the product data model is keyed by local `user.id`. Multi-workspace organization membership is blocked until account data is organization-scoped.
 - `.env.local` and `.env.local.example` are legacy Next.js env files for the old `src/` runtime and should not be treated as the source of truth for the Worker app.
 - Meta ads tracking is a beta feature until the production canary proves fresh discovery, proof capture, and digest delivery are reliable.
 - `META_AD_LIBRARY_TOKEN` should not be treated as proof that live India commercial-ad discovery is production-ready. The official Meta API is diagnostic-only by default. Customer-facing Meta API fallback requires a customer-owned Meta connection that is test-before-save and stored encrypted; the platform token can only be used if `ALLOW_PLATFORM_META_API_FALLBACK=true` is deliberately configured.
