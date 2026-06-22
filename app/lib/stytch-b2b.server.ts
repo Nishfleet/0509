@@ -187,6 +187,14 @@ function stytchConfig(env: AppEnv): StytchConfig {
   };
 }
 
+function stytchDiscoveryEmailTemplateId(env: AppEnv, mode: "login" | "signup") {
+  const modeSpecific =
+    mode === "signup"
+      ? env.STYTCH_DISCOVERY_SIGNUP_TEMPLATE_ID
+      : env.STYTCH_DISCOVERY_LOGIN_TEMPLATE_ID;
+  return modeSpecific?.trim() || env.STYTCH_DISCOVERY_EMAIL_TEMPLATE_ID?.trim() || null;
+}
+
 function stytchRedirectOrigin(env: AppEnv) {
   return stytchHttpsOrigin(env.APP_ORIGIN);
 }
@@ -266,6 +274,11 @@ export async function sendDiscoveryEmail(
     discovery_redirect_url: redirectUrl.toString(),
     discovery_expiration_minutes: 60,
   };
+  const templateId = stytchDiscoveryEmailTemplateId(env, input.mode);
+  if (templateId) {
+    // Stytch Discovery magic links use this field for both login and signup-style emails.
+    body.login_template_id = templateId;
+  }
   if (input.pkceCodeChallenge) {
     body.pkce_code_challenge = input.pkceCodeChallenge;
   }
