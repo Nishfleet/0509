@@ -1547,6 +1547,7 @@ function FirstScanBanner(props: { watchlistId: string }) {
 function formatRunStatusLabel(status: string) {
   if (status === "succeeded") return "Succeeded";
   if (status === "failed") return "Failed";
+  if (status === "skipped") return "Delayed — capacity limit";
   if (status === "running" || status === "pending") return "Running";
   return status;
 }

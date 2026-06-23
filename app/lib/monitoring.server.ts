@@ -181,7 +181,10 @@ export async function runScheduledMonitoring(
         if (Date.now() > deadlineAt) {
           skippedForBudget = watchlists.length - index;
           for (let skipIndex = index; skipIndex < watchlists.length; skipIndex += 1) {
-            await recordWatchlistCapacitySkip(env, watchlists[skipIndex]!.id);
+            await recordWatchlistCapacitySkip(env, watchlists[skipIndex]!.id, {
+              scheduledTime,
+              cron: options.cron,
+            });
           }
           break;
         }
@@ -225,7 +228,10 @@ export async function runScheduledMonitoring(
         }
       }
     } else {
-      const inlineResult = await runScheduledMonitoringInline(env, watchlists, deadlineAt);
+      const inlineResult = await runScheduledMonitoringInline(env, watchlists, deadlineAt, {
+        scheduledTime: options.scheduledTime,
+        cron: options.cron,
+      });
       inlineRuns = inlineResult.inlineRuns;
       inlineFailures = inlineResult.inlineFailures;
       skippedForBudget = inlineResult.skippedForBudget;
@@ -1220,6 +1226,10 @@ async function runScheduledMonitoringInline(
   env: AppEnv,
   watchlists: WatchlistRecord[],
   deadlineAt: number,
+  options: {
+    scheduledTime?: number;
+    cron?: string | null;
+  } = {},
 ) {
   const scanCache = new Map<string, Promise<ScanPayload>>();
   let inlineRuns = 0;
@@ -1232,7 +1242,10 @@ async function runScheduledMonitoringInline(
       // skipped watchlists are reported by the caller instead of vanishing.
       skippedForBudget = watchlists.length - index;
       for (let skipIndex = index; skipIndex < watchlists.length; skipIndex += 1) {
-        await recordWatchlistCapacitySkip(env, watchlists[skipIndex]!.id);
+        await recordWatchlistCapacitySkip(env, watchlists[skipIndex]!.id, {
+          scheduledTime: options.scheduledTime,
+          cron: options.cron,
+        });
       }
       break;
     }
