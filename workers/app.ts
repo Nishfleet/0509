@@ -131,6 +131,25 @@ export default {
 
     if (scheduledTask.kind === "discovery_warmup") {
       ctx.waitUntil(runScheduledDiscoveryWarmup(env));
+      ctx.waitUntil(
+        import("../app/lib/monitoring-fanout.server").then(({ reconcileOrchestratedWatchlistRuns, resolveMonitoringFanoutMode, resolveMonitoringOrchestrationLeaseMs }) =>
+          reconcileOrchestratedWatchlistRuns(env, {
+            mode: resolveMonitoringFanoutMode(env),
+            leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
+          }),
+        ).then(
+          (result) => {
+            if (result.redispatched > 0 || result.recovered > 0 || result.cancelled > 0) {
+              console.log("monitoring fanout reconciliation completed", result);
+            }
+          },
+          (error) => {
+            console.error("monitoring fanout reconciliation failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
+        ),
+      );
       // The six-hourly warmup also hosts the instant-alert flush: alerts
       // deferred by quiet hours get sent once the window ends, and failed
       // instant sends get retried.
