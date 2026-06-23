@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 function createMockDb(options: {
   collectionCount?: number;
-  planRow?: { plan: string } | null;
+  planRow?: {
+    plan: string;
+    dodo_status?: string | null;
+    dodo_next_billing_at?: string | null;
+  } | null;
   proofCreditCount?: number;
   proofUsageCount?: number;
   watchlistCount?: number;
@@ -72,6 +76,21 @@ describe("getUserPlan", () => {
 
     expect(result).toBe("free");
     expect(mock.statements[0]?.bindings).toEqual(["user-1"]);
+  });
+
+  it("treats scheduled cancellations past the effective date as free", async () => {
+    const mock = createMockDb({
+      planRow: {
+        plan: "starter",
+        dodo_status: "cancellation_scheduled",
+        dodo_next_billing_at: "2020-01-01T00:00:00.000Z",
+      },
+    });
+    const { getUserPlan } = await import("~/lib/plan.server");
+
+    const result = await getUserPlan({ DB: mock.db } as never, "user-1");
+
+    expect(result).toBe("free");
   });
 });
 

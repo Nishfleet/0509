@@ -213,9 +213,12 @@ export async function runCustomerAgentAction(
       requestFingerprint,
     },
   }, async () => {
+    const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+    const workspaceUserId = await resolveWorkspaceDataUserId(env, context.userId);
+
     try {
       if (actionName === "source.meta.retest") {
-        const result = await retestMetaSourceFromAgent(env, context.userId);
+        const result = await retestMetaSourceFromAgent(env, workspaceUserId);
         return {
           resourceType: "source_connection",
           resourceId: "meta",
@@ -242,7 +245,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "watchlist.update") {
-        const result = await updateWatchlistFromAgent(env, context.userId, input);
+        const result = await updateWatchlistFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "watchlist",
           resourceId: result.watchlist.id,
@@ -255,7 +258,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "watchlist.refresh") {
-        const result = await refreshWatchlistFromAgent(env, context.userId, input);
+        const result = await refreshWatchlistFromAgent(env, workspaceUserId, context.userId, input);
         return {
           resourceType: "watchlist",
           resourceId: result.watchlist.id,
@@ -267,7 +270,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "watchlist.pause" || actionName === "watchlist.resume") {
-        const result = await setWatchlistActiveFromAgent(env, context.userId, input, actionName === "watchlist.resume");
+        const result = await setWatchlistActiveFromAgent(env, workspaceUserId, context.userId, input, actionName === "watchlist.resume");
         return {
           resourceType: "watchlist",
           resourceId: result.watchlist.id,
@@ -279,7 +282,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "collection.create") {
-        const result = await createCollectionFromAgent(env, context.userId, input);
+        const result = await createCollectionFromAgent(env, workspaceUserId, context.userId, input);
         return {
           resourceType: "collection",
           resourceId: result.collection.id,
@@ -291,7 +294,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "proof.add_external") {
-        const result = await addExternalProofFromAgent(env, context.userId, input);
+        const result = await addExternalProofFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "collection",
           resourceId: result.collectionId,
@@ -304,7 +307,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "delivery_targets.list") {
-        const result = await listDeliveryTargetsFromAgent(env, context.userId, input);
+        const result = await listDeliveryTargetsFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "delivery_target",
           resourceId: result.watchlistId ?? "workspace",
@@ -317,7 +320,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "delivery_settings.update") {
-        const result = await updateDeliverySettingsFromAgent(env, context.userId, input);
+        const result = await updateDeliverySettingsFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "watchlist_delivery_config",
           resourceId: result.config.watchlistId,
@@ -329,7 +332,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "delivery_target.update") {
-        const result = await updateDeliveryTargetFromAgent(env, context.userId, input);
+        const result = await updateDeliveryTargetFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "delivery_target",
           resourceId: result.target.id,
@@ -343,7 +346,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "web_mentions.list") {
-        const result = await listWebMentionsFromAgent(env, context.userId, input);
+        const result = await listWebMentionsFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "web_mentions",
           resourceId: result.watchlistId ?? "workspace",
@@ -371,7 +374,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "report.create") {
-        const result = await buildReportFromAgent(env, context.userId, input);
+        const result = await buildReportFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "report",
           resourceId: result.report.reportId,
@@ -396,7 +399,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "counter_move_brief.create") {
-        const result = await buildCounterMoveBriefFromAgent(env, context.userId, input);
+        const result = await buildCounterMoveBriefFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "watchlist",
           resourceId: result.brief.watchlistId,
@@ -427,7 +430,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "memory.list") {
-        const result = await listMemoryFromAgent(env, context.userId, input);
+        const result = await listMemoryFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "agent_memory",
           resourceId: result.scope ?? "all",
@@ -453,7 +456,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "client_room.list") {
-        const result = await listClientRoomsFromAgent(env, context.userId, input);
+        const result = await listClientRoomsFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "client_room",
           resourceId: result.status ?? "all",
@@ -480,7 +483,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "support_case.list") {
-        const result = await listSupportCasesFromAgent(env, context.userId, input);
+        const result = await listSupportCasesFromAgent(env, workspaceUserId, input);
         return {
           resourceType: "support_case",
           resourceId: result.status ?? "all",
@@ -596,6 +599,7 @@ async function createWatchlistFromAgent(
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const { createWatchlist } = await import("~/lib/data.server");
   const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
 
   const targetLabelInput = readString(input, "targetLabel") ?? readString(input, "query");
   const competitorWebsite = normalizeCompetitorWebsiteInput(readString(input, "competitorWebsite") ?? "");
@@ -611,7 +615,9 @@ async function createWatchlistFromAgent(
     );
   }
 
-  const limit = await checkPlanLimit(env, context.userId, "watchlists");
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, context.userId);
+
+  const limit = await checkPlanLimit(env, workspaceUserId, "watchlists");
   if (!limit.allowed) {
     throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your competitor tracking limit.", {
       status: 402,
@@ -633,7 +639,7 @@ async function createWatchlistFromAgent(
   const inferredName = competitorWebsite.displayName ?? normalizedQuery.filters.query;
   const name = readString(input, "name") ?? `${inferredName} watch`;
   const trackingRole = normalizeWatchlistTrackingRole(readString(input, "trackingRole"));
-  const watchlist = await createWatchlist(env, context.userId, {
+  const watchlist = await createWatchlist(env, workspaceUserId, {
     name,
     targetType: "advertiser",
     targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
@@ -782,13 +788,14 @@ async function updateWatchlistFromAgent(
 
 async function createCollectionFromAgent(
   env: AppEnv,
-  userId: string,
+  workspaceUserId: string,
+  actorUserId: string,
   input: Record<string, unknown>,
 ) {
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const { createCollection } = await import("~/lib/data.server");
   const name = requireString(input, "name");
-  const limit = await checkPlanLimit(env, userId, "collections");
+  const limit = await checkPlanLimit(env, workspaceUserId, "collections");
   if (!limit.allowed) {
     throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your workspace board limit.", {
       status: 402,
@@ -799,7 +806,7 @@ async function createCollectionFromAgent(
     });
   }
 
-  const collection = await createCollection(env, userId, {
+  const collection = await createCollection(env, workspaceUserId, {
     name,
     description: readString(input, "description"),
   });
@@ -1535,19 +1542,24 @@ async function listWebMentionsFromAgent(
   };
 }
 
-async function refreshWatchlistFromAgent(env: AppEnv, userId: string, input: Record<string, unknown>) {
+async function refreshWatchlistFromAgent(
+  env: AppEnv,
+  workspaceUserId: string,
+  actorUserId: string,
+  input: Record<string, unknown>,
+) {
   const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
   const { getWatchlist } = await import("~/lib/data.server");
   const { runWatchlistManual } = await import("~/lib/monitoring.server");
   const { getUserPlan } = await import("~/lib/plan.server");
   const watchlistId = requireString(input, "watchlistId");
-  const watchlist = await getWatchlist(env, watchlistId, userId);
+  const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
 
   if (!watchlist || !watchlist.isActive) {
     throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
   }
 
-  const plan = await getUserPlan(env, userId);
+  const plan = await getUserPlan(env, workspaceUserId);
   if (plan === "free") {
     throw new CustomerAgentActionError(
       "plan_limit_exceeded",
@@ -1624,21 +1636,22 @@ async function assertShareResourceOwned(
 
 async function setWatchlistActiveFromAgent(
   env: AppEnv,
-  userId: string,
+  workspaceUserId: string,
+  actorUserId: string,
   input: Record<string, unknown>,
   isActive: boolean,
 ) {
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const { getWatchlist, setWatchlistActive } = await import("~/lib/data.server");
   const watchlistId = requireString(input, "watchlistId");
-  const watchlist = await getWatchlist(env, watchlistId, userId);
+  const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
 
   if (!watchlist) {
     throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
   }
 
   if (isActive && !watchlist.isActive) {
-    const limit = await checkPlanLimit(env, userId, "watchlists");
+    const limit = await checkPlanLimit(env, workspaceUserId, "watchlists");
     if (!limit.allowed) {
       throw new CustomerAgentActionError(
         "plan_limit_exceeded",
@@ -1656,7 +1669,7 @@ async function setWatchlistActiveFromAgent(
 
   const changedState = watchlist.isActive !== isActive;
   if (changedState) {
-    const changed = await setWatchlistActive(env, userId, watchlist.id, isActive);
+    const changed = await setWatchlistActive(env, workspaceUserId, watchlist.id, isActive);
     if (!changed) {
       throw new CustomerAgentActionError("watchlist_update_failed", "Could not update this watchlist.", {
         status: 500,

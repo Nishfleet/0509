@@ -37,6 +37,10 @@ async function sha256Hex(value: string) {
 }
 
 export async function resolveWorkspace(env: AppEnv, userId: string): Promise<WorkspaceContext> {
+  if (!env.DB?.prepare) {
+    return { workspaceUserId: userId, isMember: false, ownerName: null };
+  }
+
   const membership = await ensureDb(env).prepare(
     `SELECT wm.owner_user_id AS ownerUserId, u.name AS ownerName
        FROM workspace_member wm
@@ -62,6 +66,11 @@ export async function resolveWorkspace(env: AppEnv, userId: string): Promise<Wor
     isMember: true,
     ownerName: membership.ownerName,
   };
+}
+
+export async function resolveWorkspaceDataUserId(env: AppEnv, userId: string) {
+  const workspace = await resolveWorkspace(env, userId);
+  return workspace.workspaceUserId;
 }
 
 export async function listWorkspaceMembers(env: AppEnv, ownerUserId: string) {

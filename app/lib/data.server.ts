@@ -2149,6 +2149,162 @@ export async function grantDodoPlanAccess(
   );
 }
 
+export async function applyDodoPlanGrantWithWatchlistReconcile(
+  env: AppEnv,
+  input: Parameters<typeof grantDodoPlanAccess>[1],
+  watchlistLimit: number,
+) {
+  const db = ensureDb(env);
+  const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
+  const timestamp = nowIso();
+  const keepActive = Math.max(0, Math.floor(watchlistLimit));
+  const activeRow = await one<{ count: number }>(
+    env,
+    "SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1",
+    input.userId,
+  );
+  const reactivateSlots = Math.max(0, keepActive - Number(activeRow?.count ?? 0));
+
+  const statements = [
+    db.prepare(`
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_payment_id,
+        dodo_product_id,
+        dodo_subscription_id,
+        dodo_customer_id,
+        dodo_next_billing_at,
+        dodo_status,
+        plan_updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        plan = excluded.plan,
+        dodo_payment_id = COALESCE(excluded.dodo_payment_id, user_plan.dodo_payment_id),
+        dodo_product_id = COALESCE(excluded.dodo_product_id, user_plan.dodo_product_id),
+        dodo_subscription_id = COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id),
+        dodo_customer_id = COALESCE(excluded.dodo_customer_id, user_plan.dodo_customer_id),
+        dodo_next_billing_at = COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at),
+        dodo_status = excluded.dodo_status,
+        plan_updated_at = excluded.plan_updated_at
+      WHERE
+        (excluded.dodo_payment_id IS NOT NULL AND user_plan.dodo_payment_id = excluded.dodo_payment_id)
+        OR julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+    `).bind(
+      input.userId,
+      input.plan,
+      input.providerPaymentId ?? null,
+      input.providerProductId ?? null,
+      input.providerSubscriptionId ?? null,
+      input.providerCustomerId ?? null,
+      input.nextBillingAt ?? null,
+      input.status,
+      planUpdatedAt,
+    ),
+  ];
+
+  if (reactivateSlots > 0) {
+    statements.push(
+      db.prepare(`
+        UPDATE watchlist
+        SET is_active = 1,
+            paused_reason = NULL,
+            updated_at = ?
+        WHERE user_id = ?
+          AND is_active = 0
+          AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
+          AND id IN (
+            SELECT id
+            FROM watchlist
+            WHERE user_id = ?
+              AND is_active = 0
+              AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
+            ORDER BY updated_at DESC
+            LIMIT ?
+          )
+      `).bind(timestamp, input.userId, input.userId, reactivateSlots),
+    );
+  }
+
+  statements.push(
+    db.prepare(`
+      UPDATE watchlist
+      SET is_active = 0,
+          paused_reason = 'plan_limit',
+          updated_at = ?
+      WHERE user_id = ?
+        AND is_active = 1
+        AND id NOT IN (
+          SELECT id
+          FROM watchlist
+          WHERE user_id = ?
+            AND is_active = 1
+          ORDER BY created_at DESC
+          LIMIT ?
+        )
+    `).bind(timestamp, input.userId, input.userId, keepActive),
+  );
+
+  const results = await db.batch(statements);
+  const watchlistChanges = results
+    .slice(1)
+    .reduce((total, result) => total + Number(result.meta?.changes ?? 0), 0);
+  if (watchlistChanges > 0) {
+    await syncWebMentionTargetsForUser(env, input.userId, timestamp);
+  }
+}
+
+export async function applyDodoPlanRevokeWithWatchlistReconcile(
+  env: AppEnv,
+  input: Parameters<typeof revokeDodoPlanAccess>[1],
+  watchlistLimit: number,
+) {
+  const db = ensureDb(env);
+  const planUpdatedAt = validIsoTimestamp(input.revokedAt) ?? nowIso();
+  const timestamp = nowIso();
+  const keepActive = Math.max(0, Math.floor(watchlistLimit));
+
+  const results = await db.batch([
+    db.prepare(`
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_status,
+        plan_updated_at
+      )
+      VALUES (?, 'free', ?, ?)
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        plan = 'free',
+        dodo_status = excluded.dodo_status,
+        plan_updated_at = excluded.plan_updated_at
+      WHERE julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+    `).bind(input.userId, input.status, planUpdatedAt),
+    db.prepare(`
+      UPDATE watchlist
+      SET is_active = 0,
+          paused_reason = 'plan_limit',
+          updated_at = ?
+      WHERE user_id = ?
+        AND is_active = 1
+        AND id NOT IN (
+          SELECT id
+          FROM watchlist
+          WHERE user_id = ?
+            AND is_active = 1
+          ORDER BY created_at DESC
+          LIMIT ?
+        )
+    `).bind(timestamp, input.userId, input.userId, keepActive),
+  ]);
+
+  if (Number(results[1]?.meta?.changes ?? 0) > 0) {
+    await syncWebMentionTargetsForUser(env, input.userId, timestamp);
+  }
+}
+
 // Dodo checkout links are payable for 24 hours by default, so the local lock
 // must last at least as long as the provider session can still be completed.
 export const DODO_PLAN_CHECKOUT_LOCK_MINUTES = 24 * 60;
@@ -2223,27 +2379,26 @@ export async function revokeDodoPlanAccess(
 
   // Mirrors grantDodoPlanAccess's monotonic guard so a late-arriving older
   // payment webhook can never resurrect a newer cancellation (and vice versa).
+  // Never overwrite dodo_payment_id here — subscription ids belong in
+  // dodo_subscription_id and refunds resolve via the preserved payment id.
   await run(
     env,
     `
       INSERT INTO user_plan (
         user_id,
         plan,
-        dodo_payment_id,
         dodo_status,
         plan_updated_at
       )
-      VALUES (?, 'free', ?, ?, ?)
+      VALUES (?, 'free', ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET
         plan = 'free',
-        dodo_payment_id = excluded.dodo_payment_id,
         dodo_status = excluded.dodo_status,
         plan_updated_at = excluded.plan_updated_at
       WHERE julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
     `,
     input.userId,
-    input.providerSubscriptionId,
     input.status,
     planUpdatedAt,
   );
@@ -2258,6 +2413,11 @@ export async function claimDodoWebhookEvent(
     payloadTimestamp: string | null;
   },
 ) {
+  const eventId = input.eventId.trim();
+  if (!eventId) {
+    throw new Error("Dodo webhook event id is required.");
+  }
+
   const db = ensureDb(env);
   const receivedAt = nowIso();
   // Mirrors claimRazorpayWebhookEvent: first delivery claims the event;
@@ -2287,7 +2447,7 @@ export async function claimDodoWebhookEvent(
         metadata_json = '{}'
       WHERE dodo_webhook_event.outcome = 'failed'
     `).bind(
-      input.eventId,
+      eventId,
       input.eventType,
       input.userId,
       receivedAt,
@@ -2318,7 +2478,7 @@ export async function claimDodoWebhookEvent(
           metadata_json = '{}'
         WHERE dodo_webhook_event.outcome = 'failed'
       `).bind(
-        input.eventId,
+        eventId,
         input.eventType,
         input.userId,
         receivedAt,
@@ -2365,9 +2525,11 @@ export async function markDodoPlanPaymentIssue(
     userId: string;
     status: string;
     occurredAt?: string;
+    cancellationEffectiveAt?: string | null;
   },
 ) {
   const planUpdatedAt = validIsoTimestamp(input.occurredAt) ?? nowIso();
+  const cancellationEffectiveAt = validIsoTimestamp(input.cancellationEffectiveAt ?? undefined);
 
   // Dunning state (subscription.failed / on_hold): the customer keeps the
   // paid plan while Dodo retries the payment; only dodo_status changes so
@@ -2378,12 +2540,18 @@ export async function markDodoPlanPaymentIssue(
     `
       UPDATE user_plan
       SET dodo_status = ?,
+          dodo_next_billing_at = CASE
+            WHEN ? IS NOT NULL THEN ?
+            ELSE dodo_next_billing_at
+          END,
           plan_updated_at = ?
       WHERE user_id = ?
         AND plan != 'free'
         AND julianday(?) >= julianday(plan_updated_at)
     `,
     input.status,
+    cancellationEffectiveAt,
+    cancellationEffectiveAt,
     planUpdatedAt,
     input.userId,
     planUpdatedAt,

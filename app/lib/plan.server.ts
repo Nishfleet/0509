@@ -43,6 +43,8 @@ export const PROOF_USAGE_WARNING_RATIO = 0.8;
 
 interface UserPlanRow {
   plan: string;
+  dodo_status: string | null;
+  dodo_next_billing_at: string | null;
 }
 
 interface CountRow {
@@ -74,6 +76,24 @@ function parseUserPlan(value: string | null | undefined): UserPlan {
   }
 
   return "free";
+}
+
+function effectivePlanFromRow(row: UserPlanRow | null): UserPlan {
+  const parsed = parseUserPlan(row?.plan);
+  if (parsed === "free") {
+    return "free";
+  }
+
+  const effectiveAtMs = row?.dodo_next_billing_at ? Date.parse(row.dodo_next_billing_at) : Number.NaN;
+  if (
+    row?.dodo_status === "cancellation_scheduled" &&
+    Number.isFinite(effectiveAtMs) &&
+    effectiveAtMs <= Date.now()
+  ) {
+    return "free";
+  }
+
+  return parsed;
 }
 
 async function countWatchlists(env: AppEnv, userId: string) {
@@ -109,14 +129,20 @@ export async function getUserPlan(env: AppEnv, userId: string): Promise<UserPlan
   const row = await one<UserPlanRow>(
     env,
     `
-      SELECT plan
+      SELECT plan, dodo_status, dodo_next_billing_at
       FROM user_plan
       WHERE user_id = ?
     `,
     userId,
   );
 
-  return parseUserPlan(row?.plan);
+  return effectivePlanFromRow(row);
+}
+
+export async function getUserPlanForActor(env: AppEnv, actorUserId: string): Promise<UserPlan> {
+  const { resolveWorkspace } = await import("~/lib/workspace.server");
+  const workspace = await resolveWorkspace(env, actorUserId);
+  return getUserPlan(env, workspace.workspaceUserId);
 }
 
 export async function checkPlanLimit(env: AppEnv, userId: string, resource: PlanResource) {
@@ -131,6 +157,16 @@ export async function checkPlanLimit(env: AppEnv, userId: string, resource: Plan
     limit,
     current,
   };
+}
+
+export async function checkPlanLimitForActor(
+  env: AppEnv,
+  actorUserId: string,
+  resource: PlanResource,
+) {
+  const { resolveWorkspace } = await import("~/lib/workspace.server");
+  const workspace = await resolveWorkspace(env, actorUserId);
+  return checkPlanLimit(env, workspace.workspaceUserId, resource);
 }
 
 export async function getProofUsageSummary(env: AppEnv, userId: string) {

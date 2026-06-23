@@ -919,7 +919,9 @@ async function buildWorkspaceReadinessToolResult(
   format: AgentFormat,
 ) {
   const { getWorkspaceReadiness } = await import("~/lib/workspace-readiness.server");
-  const readiness = await getWorkspaceReadiness(env, userId);
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, userId);
+  const readiness = await getWorkspaceReadiness(env, workspaceUserId);
   const structuredContent = readiness as unknown as Record<string, unknown>;
 
   if (format === "slack") {
@@ -950,6 +952,8 @@ async function buildCollectionToolResult(
     return { ok: false as const, message: "collectionId is required." };
   }
 
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, userId);
   const {
     getCollection,
     listCollectionItems,
@@ -958,7 +962,7 @@ async function buildCollectionToolResult(
     buildCollectionExportPayload,
     collectionExportResponse,
   } = await import("~/lib/resource-export");
-  const collection = await getCollection(env, collectionId, userId);
+  const collection = await getCollection(env, collectionId, workspaceUserId);
   if (!collection) {
     return toolNotFound("No account-owned collection was found for this API key.");
   }
@@ -985,6 +989,8 @@ async function buildWatchlistToolResult(
     return { ok: false as const, message: "watchlistId is required." };
   }
 
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, userId);
   const {
     getWatchlist,
     listWatchEvents,
@@ -993,7 +999,7 @@ async function buildWatchlistToolResult(
     buildWatchlistExportPayload,
     watchlistExportResponse,
   } = await import("~/lib/resource-export");
-  const watchlist = await getWatchlist(env, watchlistId, userId);
+  const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
   if (!watchlist) {
     return toolNotFound("No account-owned watchlist was found for this API key.");
   }
@@ -1020,6 +1026,8 @@ async function buildDigestToolResult(
     return { ok: false as const, message: "digestId is required." };
   }
 
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, userId);
   const {
     getDigest,
   } = await import("~/lib/data.server");
@@ -1028,7 +1036,7 @@ async function buildDigestToolResult(
     digestExportResponse,
   } = await import("~/lib/resource-export");
   const digest = await getDigest(env, digestId);
-  if (!digest || digest.userId !== userId) {
+  if (!digest || digest.userId !== workspaceUserId) {
     return toolNotFound("No account-owned digest was found for this API key.");
   }
 
