@@ -12,8 +12,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     betterAuthMagicLinkConfirmationFromRequest,
     betterAuthMagicLinkConfirmationTicketCookie,
     clearBetterAuthMagicLinkConfirmationCookie,
-    clearBetterAuthMagicLinkStateCookie,
-    readBetterAuthMagicLinkConfirmationContext,
+    clearBetterAuthMagicLinkStateCookies,
+    hasBetterAuthMagicLinkRequestState,
     readBetterAuthMagicLinkConfirmationTicket,
   } = await import("~/lib/better-auth.server");
   const url = new URL(request.url);
@@ -23,30 +23,29 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : "login";
   const env = getEnv(context);
 
-  if (url.searchParams.has("token") || url.searchParams.has("context")) {
+  if (url.searchParams.has("token")) {
     try {
-      const confirmation = betterAuthMagicLinkConfirmationFromRequest(request);
-      const confirmationContext = await readBetterAuthMagicLinkConfirmationContext(env, request);
-      if (!confirmationContext?.browserBound) {
+      if (!hasBetterAuthMagicLinkRequestState(request)) {
         throw new BetterAuthMagicLinkCallbackError();
       }
+      const confirmation = betterAuthMagicLinkConfirmationFromRequest(request);
 
       const headers = new Headers();
       headers.append(
         "Set-Cookie",
         await betterAuthMagicLinkConfirmationTicketCookie(env, request, {
           ...confirmation,
-          ...confirmationContext,
+          mode,
         }),
       );
-      throw redirect(cleanMagicLinkPath(confirmationContext.mode), { headers });
+      throw redirect(cleanMagicLinkPath(mode), { headers });
     } catch (error) {
       if (!(error instanceof BetterAuthMagicLinkCallbackError)) {
         throw error;
       }
       const headers = new Headers();
       headers.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
-      headers.append("Set-Cookie", clearBetterAuthMagicLinkStateCookie(request));
+      appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
       throw redirect(`/auth/${mode}?error=callback_failed`, { headers });
     }
   }
@@ -57,7 +56,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       throw new BetterAuthMagicLinkCallbackError();
     }
     return Response.json({
-      email: confirmation.email,
       mode: confirmation.mode,
     });
   } catch (error) {
@@ -66,7 +64,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
     const headers = new Headers();
     headers.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
-    headers.append("Set-Cookie", clearBetterAuthMagicLinkStateCookie(request));
+    appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
     throw redirect(`/auth/${mode}?error=callback_failed`, {
       headers,
     });
@@ -79,7 +77,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     BetterAuthMagicLinkCallbackError,
     appendBetterAuthSetCookieHeaders,
     clearBetterAuthMagicLinkConfirmationCookie,
-    clearBetterAuthMagicLinkStateCookie,
+    clearBetterAuthMagicLinkStateCookies,
     isSameOriginAuthFormPost,
     readBetterAuthMagicLinkConfirmationTicket,
     verifyBetterAuthMagicLink,
@@ -98,7 +96,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   let confirmation;
   try {
     confirmation = await readBetterAuthMagicLinkConfirmationTicket(env, request);
-    if (!confirmation?.browserBound) {
+    if (!confirmation) {
       throw new BetterAuthMagicLinkCallbackError();
     }
   } catch (error) {
@@ -107,7 +105,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
     const headers = new Headers();
     headers.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
-    headers.append("Set-Cookie", clearBetterAuthMagicLinkStateCookie(request));
+    appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
     throw redirect(`/auth/${fallbackMode}?error=callback_failed`, { headers });
   }
 
@@ -116,7 +114,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   headers.delete("Set-Cookie");
   appendBetterAuthSetCookieHeaders(headers, response.headers);
   headers.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
-  headers.append("Set-Cookie", clearBetterAuthMagicLinkStateCookie(request));
+  appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
   return new Response(response.body, {
     headers,
     status: response.status,
@@ -126,7 +124,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
 export default function BetterAuthMagicLinkRoute() {
   const data = useLoaderData() as {
-    email: string;
     mode: "login" | "signup";
   };
   const isSignup = data.mode === "signup";
@@ -149,11 +146,7 @@ export default function BetterAuthMagicLinkRoute() {
         <section className="f9-auth-card">
           <span>{isSignup ? "Confirm setup" : "Confirm sign-in"}</span>
           <h2>{isSignup ? "Create your workspace" : "Open your account"}</h2>
-          <p>
-            {data.email
-              ? `We will verify the link for ${data.email} after you continue.`
-              : "We will verify the email link after you continue."}
-          </p>
+          <p>We will verify this email link after you continue.</p>
           <Form className="f9-auth-form" method="post" action={cleanMagicLinkPath(data.mode)}>
             <button className="f9-primary-button" type="submit">
               {isSignup ? "Create workspace" : "Sign in"}
@@ -167,4 +160,10 @@ export default function BetterAuthMagicLinkRoute() {
 
 function cleanMagicLinkPath(mode: "login" | "signup") {
   return `/auth/better/magic-link?mode=${mode}`;
+}
+
+function appendSetCookies(headers: Headers, cookies: string[]) {
+  for (const cookie of cookies) {
+    headers.append("Set-Cookie", cookie);
+  }
 }
