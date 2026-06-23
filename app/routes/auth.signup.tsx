@@ -70,9 +70,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     throw redirect("/auth/signup?error=request_invalid");
   }
 
-  let requestStateCookie: string;
   try {
-    requestStateCookie = await sendBetterAuthMagicLink(env, request, {
+    await sendBetterAuthMagicLink(env, request, {
       email,
       mode: "signup",
       name: name || organizationName,
@@ -87,11 +86,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   next.searchParams.set("sent", "1");
   next.searchParams.set("email", email);
   next.searchParams.set("redirectTo", redirectTo);
-  throw redirect(`${next.pathname}${next.search}`, {
-    headers: {
-      "Set-Cookie": requestStateCookie,
-    },
-  });
+  throw redirect(`${next.pathname}${next.search}`);
 }
 
 export default function SignupRoute() {

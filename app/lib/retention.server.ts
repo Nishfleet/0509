@@ -15,6 +15,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_LOG_RETENTION_DAYS = 30;
 const META_LOG_RETENTION_DAYS = 30;
 const EXPIRED_CACHE_GRACE_DAYS = 7;
+const MAGIC_LINK_TICKET_GRACE_DAYS = 1;
 const WATCHLIST_RUN_RETENTION_DAYS = 90;
 const WATCHLIST_RUN_KEEP_NEWEST = 5;
 const DELIVERY_ATTEMPT_RETENTION_DAYS = 180;
@@ -52,6 +53,19 @@ export async function runRetentionSweep(env: AppEnv) {
         )
       `,
       bindings: [cutoff(EXPIRED_CACHE_GRACE_DAYS)],
+    },
+    {
+      name: "better_auth_magic_link_ticket",
+      sql: `
+        DELETE FROM better_auth_magic_link_ticket
+        WHERE id IN (
+          SELECT id FROM better_auth_magic_link_ticket
+          WHERE expires_at < ?
+             OR consumed_at < ?
+          LIMIT 500
+        )
+      `,
+      bindings: [cutoff(MAGIC_LINK_TICKET_GRACE_DAYS), cutoff(MAGIC_LINK_TICKET_GRACE_DAYS)],
     },
     {
       name: "meta_integration_log",

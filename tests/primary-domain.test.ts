@@ -22,6 +22,25 @@ describe("primary domain redirects", () => {
     ).toBe("https://0509.io/privacy");
   });
 
+  it("does not publicly cache auth redirects with query credentials", () => {
+    const ticketRedirect = primaryDomainRedirect(
+      new Request("https://www.0509.io/auth/better/magic-link?ticket=ticket-1&mode=login"),
+    );
+    expect(ticketRedirect?.status).toBe(308);
+    expect(ticketRedirect?.headers.get("location")).toBe(
+      "https://0509.io/auth/better/magic-link?ticket=ticket-1&mode=login",
+    );
+    expect(ticketRedirect?.headers.get("cache-control")).toBe("no-store");
+
+    const legacyTokenRedirect = primaryDomainRedirect(
+      new Request("https://www.0509.io/api/auth/magic-link/verify?token=secret-token"),
+    );
+    expect(legacyTokenRedirect?.headers.get("location")).toBe(
+      "https://0509.io/api/auth/magic-link/verify?token=secret-token",
+    );
+    expect(legacyTokenRedirect?.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("redirects safe legacy API hostname requests to the global API hostname", () => {
     const response = primaryDomainRedirect(
       new Request("https://api.0509.in/api/health?probe=1", { method: "HEAD" }),
