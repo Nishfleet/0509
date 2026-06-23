@@ -23,12 +23,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
   const {
     enabledBetterAuthOAuthProviders,
+    hasBetterAuthPasskeysForEmail,
     isBetterAuthPasskeyEnabled,
   } = await import("~/lib/better-auth.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
   const redirectTo = safeRedirectPath(url.searchParams.get("redirectTo"), "/app");
+  const prefillEmail = url.searchParams.get("email")?.trim() || "";
 
   if (session) {
     throw redirect(redirectTo);
@@ -40,11 +42,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : null;
   const error = authErrorMessage(url.searchParams.get("error"));
   const oauthProviders = enabledBetterAuthOAuthProviders(env);
-  const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
+  const passkeysEnabled =
+    isBetterAuthPasskeyEnabled(env) &&
+    Boolean(prefillEmail) &&
+    (await hasBetterAuthPasskeysForEmail(env, prefillEmail));
 
   return {
     redirectTo,
-    prefillEmail: url.searchParams.get("email")?.trim() || "",
+    prefillEmail,
     ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
     ...(passkeysEnabled ? { passkeysEnabled } : {}),
     ...(message ? { message } : {}),

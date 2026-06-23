@@ -205,17 +205,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
     );
   }
 
-  const headers = new Headers(response.headers);
+  const headers = new Headers();
   headers.set("Cache-Control", "no-store");
-  headers.delete("Set-Cookie");
   appendBetterAuthSetCookieHeaders(headers, response.headers);
   headers.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
   appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
-  return new Response(response.body, {
-    headers,
-    status: response.status,
-    statusText: response.statusText,
-  });
+
+  const location =
+    response.headers.get("Location") ??
+    (confirmation.mode === "signup" && confirmation.newUserCallbackURL
+      ? confirmation.newUserCallbackURL
+      : confirmation.callbackURL);
+  throw redirect(location, { headers });
 }
 
 export default function BetterAuthMagicLinkRoute() {
