@@ -1549,9 +1549,19 @@ function formatRunStatusLabel(status: string, errorCode?: string | null) {
   if (status === "failed") return "Failed";
   if (status === "skipped") {
     if (errorCode === "capacity_budget") return "Delayed — capacity limit";
+    if (errorCode === "workflow_binding_missing" || errorCode === "dispatch_createbatch_missing") {
+      return "Delayed — monitoring service unavailable";
+    }
     return "Cancelled";
   }
   if (status === "pending") {
+    if (
+      errorCode === "workflow_binding_missing" ||
+      errorCode === "dispatch_createbatch_missing" ||
+      errorCode === "dispatch_rate_limited"
+    ) {
+      return "Delayed — monitoring service unavailable";
+    }
     if (errorCode === "dispatch_failed" || errorCode === "reconcile_dispatch_failed") {
       return "Retrying";
     }
