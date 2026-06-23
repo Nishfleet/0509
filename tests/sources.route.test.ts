@@ -406,7 +406,7 @@ describe("sources route action", () => {
     expect(createCustomerApiKey).not.toHaveBeenCalled();
     expect(result).toEqual({
       ok: false,
-      message: "Only the workspace owner can manage integrations, delivery targets, and API keys.",
+      message: "Only the account owner can manage integrations, delivery targets, and API keys.",
     });
   });
 
@@ -846,24 +846,23 @@ describe("sources route component", () => {
     const { default: AppSourcesRoute } = await import("~/routes/app.sources");
     const markup = renderToStaticMarkup(createElement(AppSourcesRoute));
 
-    expect(markup).toContain("Keep competitor tracking reliable");
-    expect(markup).toContain("Tracking reliability");
+    expect(markup).toContain("Connect delivery and backup access");
+    expect(markup).toContain("Tracking status");
     expect(markup).not.toContain("Meta coverage is beta");
     expect(markup).not.toContain("f9-beta-pill");
     expect(markup).toContain("Test and save access");
     expect(markup).toContain("Ad Library API page");
-    expect(markup).toContain("Recent tracking health");
-    expect(markup).toContain("Customer API");
-    expect(markup).toContain("First agent workflow");
-    expect(markup).toContain("Check readiness");
-    expect(markup).toContain("Set up monitoring");
-    expect(markup).toContain("Package proof");
-    expect(markup).toContain("Preserve context");
-    expect(markup).toContain("Live action groups");
+    expect(markup).not.toContain("Recent tracking health");
+    expect(markup).toContain("Advanced: API keys and external tools");
+    expect(markup).toContain("Tool setup");
+    expect(markup).toContain("Create a read key");
+    expect(markup).toContain("Enable actions only when needed");
+    expect(markup).toContain("Review and revoke keys");
+    expect(markup).toContain("Available actions");
     expect(markup).toContain("Watchlists");
     expect(markup).toContain("Proof and reports");
-    expect(markup).toContain("Memory and client rooms");
-    expect(markup).toContain("Blocked for agents");
+    expect(markup).toContain("Context and client rooms");
+    expect(markup).toContain("Not available through API");
     expect(markup).toContain("billing changes");
     expect(markup).toContain("secret-bearing integration setup");
     expect(markup).toContain("Paid customer support");
@@ -873,17 +872,17 @@ describe("sources route component", () => {
     expect(markup).toContain("Slack delivery");
     expect(markup).toContain("Save Slack delivery");
     expect(markup).toContain("encrypted and never shown again");
-    expect(markup).toContain("WhatsApp delivery");
-    expect(markup).toContain("WhatsApp is guarded until proof exists");
-    expect(markup).toContain("WhatsApp is not available for customer setup yet");
+    expect(markup).not.toContain("WhatsApp delivery");
+    expect(markup).not.toContain("WhatsApp delivery is enabled for this account");
+    expect(markup).not.toContain("WhatsApp is not available for this account yet");
     expect(markup).not.toContain("Save WhatsApp delivery");
-    expect(markup).toContain("Webhook");
-    expect(markup).toContain("0/3 usable");
-    expect(markup).toContain("No successful send yet");
+    expect(markup).not.toContain("Delivery confirmation");
+    expect(markup).not.toContain("0/3 usable");
+    expect(markup).not.toContain("No successful send yet");
     expect(markup).toContain("/api/v1/watchlists/");
-    expect(markup).toContain("POST /api/mcp");
+    expect(markup).not.toContain("POST /api/mcp");
     expect(markup).not.toContain("MCP yet");
-    expect(markup).toContain("needs proof");
+    expect(markup).not.toContain("Successful test send");
     expect(markup).toContain("recent results are available");
     expect(markup).not.toContain("Cached live results");
   });

@@ -69,7 +69,7 @@ export default function TermsRoute() {
           <LegalBlock title="Support">
             <p>
               Signed-in customers can open support cases for account access, billing, cancellation, security,
-              deletion, setup, and delivery help. Workspace billing, cancellation, and team-seat changes may require
+              deletion, setup, and delivery help. Account billing, cancellation, and team-seat changes may require
               owner confirmation. Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from the address on the account if
               you cannot sign in. We aim to respond within two business days.
             </p>

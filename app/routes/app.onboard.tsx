@@ -9,7 +9,6 @@ import {
   watchlistFingerprint,
 } from "~/lib/competitor-website";
 import {
-  buildSearchParams,
   normalizeSavedQuery,
 } from "~/lib/normalize";
 import { defaultCountryForVisitor } from "~/lib/countries";
@@ -25,6 +24,7 @@ export const meta: MetaFunction = () => [
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { getWorkspaceBranding } = await import("~/lib/data.server");
   const { checkPlanLimit, getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
@@ -39,15 +39,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect("/app");
   }
 
-  const [plan, watchlistLimit] = await Promise.all([
+  const [plan, watchlistLimit, branding] = await Promise.all([
     getUserPlan(env, workspaceUserId),
     checkPlanLimit(env, workspaceUserId, "watchlists"),
+    getWorkspaceBranding(env, workspaceUserId),
   ]);
 
   return {
     session,
     plan,
     watchlistLimit,
+    brandWebsite: branding.brandWebsite,
     visitorCountry: defaultCountryForVisitor(
       (context.cloudflare as { country?: string | null } | undefined)?.country ??
         request.headers.get("cf-ipcountry"),
@@ -59,7 +61,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
-  const { completeUserOnboarding, createWatchlist } = await import("~/lib/data.server");
+  const { completeUserOnboarding, createWatchlist, upsertWorkspaceBranding } = await import("~/lib/data.server");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
 
@@ -72,8 +74,25 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
   const websiteInput = String(formData.get("website") ?? "").trim();
   const queryInput = String(formData.get("query") ?? "").trim();
+  const brandWebsiteInput = String(formData.get("brandWebsite") ?? "").trim();
   const competitorWebsite = normalizeCompetitorWebsiteInput(websiteInput);
+  const brandWebsite = normalizeCompetitorWebsiteInput(brandWebsiteInput);
   const query = queryInput || competitorWebsite.searchTerm || "";
+
+  if (brandWebsiteInput && hasInvalidCompetitorWebsite(brandWebsite)) {
+    return {
+      ok: false,
+      message: brandWebsite.error,
+    };
+  }
+
+  async function saveOptionalBrandWebsite() {
+    if (brandWebsiteInput || formData.has("brandWebsite")) {
+      await upsertWorkspaceBranding(env, workspaceUserId, {
+        brandWebsite: brandWebsite.normalizedUrl,
+      });
+    }
+  }
 
   if (intent === "create-watchlist") {
     if (hasInvalidCompetitorWebsite(competitorWebsite)) {
@@ -129,12 +148,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
 
+    await saveOptionalBrandWebsite();
     await completeUserOnboarding(env, session.user.id);
 
     throw redirect(watchlist ? `/app/watchlists?watchlist=${watchlist.id}` : "/app/watchlists");
   }
 
   if (intent === "finish") {
+    await saveOptionalBrandWebsite();
     await completeUserOnboarding(env, session.user.id);
     throw redirect("/app");
   }
@@ -149,20 +170,13 @@ export default function AppOnboardRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [website, setWebsite] = useState("");
+  const [brandWebsite, setBrandWebsite] = useState(data.brandWebsite ?? "");
   const trimmedWebsite = website.trim();
+  const trimmedBrandWebsite = brandWebsite.trim();
   const competitorWebsite = normalizeCompetitorWebsiteInput(trimmedWebsite);
+  const ownBrandWebsite = normalizeCompetitorWebsiteInput(trimmedBrandWebsite);
   const competitorQuery = competitorWebsite.searchTerm ?? "";
-  const watchlistCapacity = data.watchlistLimit.limit - data.watchlistLimit.current;
   const canCreateWatchlist = data.watchlistLimit.allowed && data.watchlistLimit.limit > 0;
-  const previewParams = buildSearchParams(
-    normalizeSavedQuery("advertiser", {
-      query: competitorQuery,
-      country: data.visitorCountry,
-    }),
-  );
-  if (trimmedWebsite) {
-    previewParams.set("website", trimmedWebsite);
-  }
 
   return (
     <main className="f9-onboard-page">
@@ -186,115 +200,75 @@ export default function AppOnboardRoute() {
             </div>
           ) : null}
 
-          <div className="f9-onboard-steps">
-            <section className="f9-onboard-step">
-              <span className="f9-app-kicker">Step 1</span>
-              <h2>Paste the site you want to watch</h2>
-              <Form action="/search" className="f9-auth-form" method="get">
-                <input name="mode" type="hidden" value="advertiser" />
-                <input name="country" type="hidden" value={data.visitorCountry} />
-                <input name="platform" type="hidden" value="all" />
-                <input name="creativeType" type="hidden" value="all" />
-                <input name="status" type="hidden" value="all" />
-                <input name="query" type="hidden" value={competitorQuery} />
+          {canCreateWatchlist ? (
+            <Form className="f9-auth-form f9-onboard-single-form" method="post">
+              <input name="intent" type="hidden" value="create-watchlist" />
+              <label className="f9-field">
+                <span>Competitor website</span>
+                <input
+                  autoComplete="url"
+                  inputMode="url"
+                  name="website"
+                  onChange={(event) => setWebsite(event.currentTarget.value)}
+                  placeholder="https://competitor.com"
+                  spellCheck={false}
+                  value={website}
+                />
+                {competitorWebsite.error ? <small>{competitorWebsite.error}</small> : null}
+              </label>
+
+              <details className="f9-inline-details">
+                <summary>Optional: add your brand website</summary>
                 <label className="f9-field">
-                  <span>Website to track</span>
+                  <span>My brand website</span>
                   <input
-                    name="website"
-                    onChange={(event) => setWebsite(event.currentTarget.value)}
-                    placeholder="https://competitor.com"
-                    value={website}
+                    autoComplete="url"
+                    inputMode="url"
+                    name="brandWebsite"
+                    onChange={(event) => setBrandWebsite(event.currentTarget.value)}
+                    placeholder="https://yourbrand.com"
+                    spellCheck={false}
+                    value={brandWebsite}
                   />
-                  {competitorWebsite.error ? <small>{competitorWebsite.error}</small> : null}
+                  {ownBrandWebsite.error ? <small>{ownBrandWebsite.error}</small> : null}
                 </label>
-                <div className="f9-action-row">
-                  <SubmitButton
-                    className="f9-secondary-button"
-                    disabled={!trimmedWebsite}
-                    getAction="/search"
-                    pendingLabel="Searching…"
-                  >
-                    Search competitor ads
-                  </SubmitButton>
-                  <small className="f9-muted-copy">
-                    You can edit the brand name on the search page.
-                  </small>
-                </div>
-              </Form>
-            </section>
+              </details>
 
+              <SubmitButton
+                className="f9-primary-button"
+                disabled={!trimmedWebsite}
+                intent="create-watchlist"
+                pendingLabel="Creating…"
+              >
+                Start tracking {competitorWebsite.displayName ?? (competitorQuery || "this competitor")}
+              </SubmitButton>
+            </Form>
+          ) : (
             <section className="f9-onboard-step">
-              <span className="f9-app-kicker">Step 2</span>
-              {canCreateWatchlist ? (
-                <>
-                  <h2>Create your first watchlist</h2>
-                  <p className="f9-muted-copy">
-                    One click starts tracking this competitor inside your account.
-                    You have {watchlistCapacity} watchlist{watchlistCapacity === 1 ? "" : "s"} available.
-                  </p>
-                  <Form className="f9-auth-form" method="post">
-                    <input name="intent" type="hidden" value="create-watchlist" />
-                    <input name="website" type="hidden" value={trimmedWebsite} />
-                    <SubmitButton
-                      className="f9-primary-button"
-                      disabled={!trimmedWebsite}
-                      intent="create-watchlist"
-                      pendingLabel="Creating…"
-                    >
-                      Create watchlist for {competitorWebsite.displayName ?? (competitorQuery || "this site")}
-                    </SubmitButton>
-                  </Form>
-                </>
-              ) : (
-                <>
-                  <h2>Choose a plan to start monitoring</h2>
-                  <p className="f9-muted-copy">
-                    Starter is the recommended plan for retained competitor tracking and weekly change briefs.
-                  </p>
-                  <div className="f9-action-row">
-                    <Link className="f9-primary-button" to="/#pricing">
-                      View plans
-                    </Link>
-                    <span className="f9-muted-copy">Current plan: {data.plan}</span>
-                  </div>
-                </>
-              )}
+              <span className="f9-app-kicker">Plan required</span>
+              <h2>Choose a plan to start monitoring</h2>
+              <p className="f9-muted-copy">
+                Starter is the recommended plan for retained competitor tracking and weekly change briefs.
+              </p>
+              <div className="f9-action-row">
+                <Link className="f9-primary-button" to="/#pricing">
+                  View plans
+                </Link>
+                <span className="f9-muted-copy">Current plan: {data.plan}</span>
+              </div>
             </section>
-          </div>
-
-          <section className="f9-onboard-value-loop" aria-label="What happens next after setup">
-            <div>
-              <span className="f9-app-kicker">What happens next</span>
-              <h2>Your first competitor starts the loop.</h2>
-            </div>
-            <div className="f9-onboard-touchpoints">
-              <div>
-                <span>01</span>
-                <strong>First sweep starts</strong>
-                <p>Five to Nine queues the first check as soon as the watchlist is created.</p>
-              </div>
-              <div>
-                <span>02</span>
-                <strong>Quiet still counts</strong>
-                <p>If nothing changed, the dashboard still shows that the account was checked.</p>
-              </div>
-              <div>
-                <span>03</span>
-                <strong>Proof feeds briefs</strong>
-                <p>When a real move appears, screenshots, landing-page proof, and digests keep the trail visible.</p>
-              </div>
-            </div>
-          </section>
+          )}
 
           <div className="f9-onboard-actions">
             <Form method="post">
               <input name="intent" type="hidden" value="finish" />
+              <input name="brandWebsite" type="hidden" value={trimmedBrandWebsite} />
               <SubmitButton className="f9-secondary-button" intent="finish" pendingLabel="Working…">
                 Skip for now
               </SubmitButton>
             </Form>
-            <Link className="f9-text-link" to={previewParams ? `/search?${previewParams}` : "/search"}>
-              Go straight to search instead
+            <Link className="f9-text-link" to="/search">
+              Search first instead
             </Link>
           </div>
         </article>

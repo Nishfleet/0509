@@ -45,9 +45,8 @@ export default function PrivacyRoute() {
 
           <LegalBlock title="Delivery data">
             <p>
-              Email delivery uses Cloudflare Email Service through the app's `send_email` binding.
-              Slack delivery uses customer-provided incoming webhooks. WhatsApp delivery is not launch-scoped yet;
-              when enabled, it requires opt-in, template readiness, validation, webhook readiness, and delivered proof.
+              Email delivery is handled by Five to Nine's email provider. Slack delivery uses customer-provided
+              incoming webhooks. WhatsApp is not launch-scoped for customer delivery yet.
             </p>
           </LegalBlock>
 

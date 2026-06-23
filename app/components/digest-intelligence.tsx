@@ -142,7 +142,7 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
     summary: `${top.item.title}: ${
       topIsProofBacked
         ? "ready to send as a client or teammate brief without rereading every event."
-        : "ready for internal review; add page proof before sending externally."
+        : "ready to review; add page proof before sharing."
     }`,
     decision: top.intelligence.recommendedAction,
     evidence: [

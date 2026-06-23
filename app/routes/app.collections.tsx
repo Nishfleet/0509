@@ -81,7 +81,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: collectionLimit.limit,
         current: collectionLimit.current,
-        message: "You have reached your workspace board limit.",
+        message: "You have reached your board limit.",
       };
     }
 
@@ -299,12 +299,12 @@ export default function CollectionsRoute() {
                   >
                     Export CSV
                   </a>
-                  <a
-                    className="f9-secondary-button"
-                    href={`/export/collection/${data.selectedCollection.id}?format=json`}
-                  >
-                    API JSON
-                  </a>
+                    <a
+                      className="f9-secondary-button"
+                      href={`/export/collection/${data.selectedCollection.id}?format=json`}
+                    >
+                      JSON export
+                    </a>
                   <a
                     className="f9-secondary-button"
                     href={`/export/collection/${data.selectedCollection.id}?format=slack`}

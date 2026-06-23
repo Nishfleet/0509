@@ -96,7 +96,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (isWorkspaceMember && requiresWorkspaceOwnerAuthority(input)) {
     return {
       ok: false,
-      message: "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
+      message: "Ask the account owner to open cancellation, plan-change, or team-seat requests.",
     };
   }
 
@@ -259,7 +259,7 @@ export default function SupportRoute() {
           {data.isWorkspaceMember ? (
             <div className="f9-message">
               <p>
-                Your support history is private to your login. Workspace billing changes may still need
+                Your support history is private to your login. Account billing changes may still need
                 the owner to confirm.
               </p>
             </div>
@@ -382,7 +382,7 @@ async function notifySupportCaseOperator(
         `Requester: ${input.requesterEmail}`,
         `Category: ${SUPPORT_CASE_CATEGORY_LABELS[input.input.category]}`,
         `Priority: ${SUPPORT_CASE_PRIORITY_LABELS[input.input.priority]}`,
-        `Workspace member: ${input.isWorkspaceMember ? "yes" : "no"}`,
+        `Team member: ${input.isWorkspaceMember ? "yes" : "no"}`,
         `Subject: ${input.input.subject}`,
         `Details: ${input.input.detail}`,
       ],

@@ -96,11 +96,11 @@ const SOCIAL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" he
     <text x="86" y="318" fill="#07111a" font-size="78">change the offer.</text>
     <text x="88" y="418" fill="#344052" font-size="34" font-weight="600">Watch ads and landing pages with proof.</text>
     <rect x="780" y="118" width="340" height="330" rx="34" fill="#ffffff" opacity="0.9"/>
-    <text x="818" y="180" fill="#07111a" font-size="28">Signal desk</text>
+    <text x="818" y="180" fill="#07111a" font-size="28">Competitor changes</text>
     <path d="M820 260 L884 230 L944 246 L1014 186 L1080 206" fill="none" stroke="#635bff" stroke-width="7" stroke-linecap="round"/>
     <text x="818" y="340" fill="#425466" font-size="26" font-weight="700">Offer changed</text>
     <text x="818" y="386" fill="#425466" font-size="26" font-weight="700">Landing page saved</text>
-    <text x="818" y="432" fill="#425466" font-size="26" font-weight="700">Proof ready</text>
+    <text x="818" y="432" fill="#425466" font-size="26" font-weight="700">Saved proof</text>
   </g>
 </svg>
 `;

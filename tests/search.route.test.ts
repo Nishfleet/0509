@@ -824,7 +824,7 @@ describe("search actions", () => {
 
       expect(result).toEqual({
         ok: false,
-        message: "Enter a competitor website or search term before saving or tracking it.",
+        message: "Enter a competitor website before saving or tracking it.",
       });
       expect(checkPlanLimit).not.toHaveBeenCalled();
       expect(createSavedQuery).not.toHaveBeenCalled();

@@ -24,17 +24,21 @@ afterEach(() => {
 });
 
 describe("public documentation routes", () => {
-  it("renders API docs with agent boundaries and write-key requirements", async () => {
+  it("renders API docs with customer-facing boundaries and write-key requirements", async () => {
     const { default: ApiDocsRoute } = await import("~/routes/api.docs");
     const markup = renderToStaticMarkup(createElement(ApiDocsRoute));
 
-    expect(markup).toContain("First agent workflow");
-    expect(markup).toContain("Audited action groups");
+    expect(markup).toContain("Account actions");
+    expect(markup).toContain("MCP for connected tools");
+    expect(markup).toContain("POST /api/mcp");
+    expect(markup).toContain("tools/list");
+    expect(markup).toContain("Use a write-enabled key only when the tool should update supported account resources.");
     expect(markup).toContain("Requires a write-enabled customer API key");
-    expect(markup).toContain("Agent-blocked capabilities");
+    expect(markup).toContain("Restricted actions still require signed-in owner review");
     expect(markup).toContain("customer API key creation, rotation, and revocation");
-    expect(markup).toContain("broad public write APIs beyond audited workspace actions");
+    expect(markup).toContain("Not live yet: X/YouTube listening or broad social listening");
     expect(markup).not.toContain("fully general write API");
+    expect(markup).not.toContain("First agent workflow");
     expect(markup).not.toContain("hooks.slack.com/services/");
     expect(markup).not.toContain("BETTER_AUTH_SECRET");
   });
@@ -48,10 +52,10 @@ describe("public documentation routes", () => {
     expect(helpMarkup).toContain("Paid customer support paths");
     expect(helpMarkup).toContain("Billing changes and cancellation");
     expect(helpMarkup).toContain("Security and deletion requests");
-    expect(trustMarkup).toContain("Agent tools also do not perform");
+    expect(trustMarkup).toContain("Connected tools also do not perform");
     expect(trustMarkup).toContain("secret-bearing integration setup");
     expect(trustMarkup).toContain("customer API key creation, rotation, and revocation");
-    expect(trustMarkup).toContain("broad public write APIs beyond audited");
+    expect(trustMarkup).toContain("broad public write APIs");
     expect(trustMarkup).toContain("does not currently claim");
     expect(trustMarkup).not.toContain("SOC 2 compliant");
     expect(helpMarkup).not.toContain("hooks.slack.com/services/");

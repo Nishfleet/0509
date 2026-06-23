@@ -98,7 +98,7 @@ describe("clients route agent memory", () => {
       }),
     } as never);
 
-    expect(result).toEqual({ ok: true, message: "Operating memory saved for future agent runs." });
+    expect(result).toEqual({ ok: true, message: "Context saved." });
     expect(upsertAgentMemory).toHaveBeenCalledWith({}, "user-1", {
       scope: "customer",
       key: "review_cadence",
@@ -501,8 +501,8 @@ describe("clients route agent memory", () => {
     const { default: ClientsRoute } = await import("~/routes/app.clients");
     const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
-    expect(markup).toContain("Operating context for agents");
-    expect(markup).toContain("Save memory");
+    expect(markup).toContain("Report preferences and notes");
+    expect(markup).toContain("Save context");
     expect(markup).toContain("review_cadence");
     expect(markup).toContain("Weekly client-ready review with direct tone.");
     expect(markup).toContain("Nykaa weekly desk");
