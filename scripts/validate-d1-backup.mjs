@@ -9,6 +9,10 @@ const requiredFiles = [
   "migrations/0046_dodo_ledger_lease_and_capacity_skip_idempotency.sql",
   "migrations/0047_monitoring_fanout_orchestration.sql",
   "migrations/0048_monitoring_concurrency_slots.sql",
+  "migrations/0049_evidence_usage_periods.sql",
+  "migrations/0050_evidence_top_up_grants.sql",
+  "migrations/0051_evidence_usage_reservations.sql",
+  "migrations/0052_monitoring_queue_priority.sql",
 ];
 
 for (const relativePath of requiredFiles) {
