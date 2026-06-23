@@ -600,23 +600,26 @@ describe("Better Auth magic links", () => {
       mode: "login",
     });
 
-    const response = await action({
-      context: context(env()),
-      params: {},
-      pattern: "/auth/better/magic-link",
-      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
-        body: new URLSearchParams(),
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          cookie: ticketCookie,
-          origin: "https://0509.io",
-        },
-        method: "POST",
-      }),
-      url: "https://0509.io/auth/better/magic-link?mode=login",
-    } as never);
+    const response = (await Promise.resolve(
+      action({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
+          body: new URLSearchParams(),
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            cookie: ticketCookie,
+            origin: "https://0509.io",
+          },
+          method: "POST",
+        }),
+        url: "https://0509.io/auth/better/magic-link?mode=login",
+      } as never),
+    ).catch((error) => error)) as Response;
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://0509.io/app");
     expect(verifyBetterAuthMagicLink).toHaveBeenCalledWith(
       expect.anything(),
       expect.any(Request),
@@ -721,7 +724,10 @@ describe("Better Auth magic links", () => {
   });
 
   it("redeems through Better Auth only after a same-origin clean confirmation post", async () => {
-    const betterAuthResponse = new Response(null, { status: 204 });
+    const betterAuthResponse = new Response(null, {
+      headers: { Location: "https://0509.io/app/onboard" },
+      status: 302,
+    });
     Object.defineProperty(betterAuthResponse.headers, "getSetCookie", {
       value: () => [
         "better-auth.session_token=session-1; HttpOnly; Secure",
@@ -758,25 +764,28 @@ describe("Better Auth magic links", () => {
     ).catch((error) => error)) as Response;
     const ticketCookie = cookieHeader(setCookieValues(redirectResponse.headers), "f9_better_magic");
 
-    const response = await action({
-      context: context(testEnv),
-      params: {},
-      pattern: "/auth/better/magic-link",
-      request: new Request("https://0509.io/auth/better/magic-link?mode=signup", {
-        body: new URLSearchParams({ email: "owner@example.com" }),
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          cookie: ticketCookie,
-          origin: "https://0509.io",
-        },
-        method: "POST",
-      }),
-      url: "https://0509.io/auth/better/magic-link?mode=signup",
-    } as never);
+    const response = (await Promise.resolve(
+      action({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request("https://0509.io/auth/better/magic-link?mode=signup", {
+          body: new URLSearchParams({ email: "owner@example.com" }),
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            cookie: ticketCookie,
+            origin: "https://0509.io",
+          },
+          method: "POST",
+        }),
+        url: "https://0509.io/auth/better/magic-link?mode=signup",
+      } as never),
+    ).catch((error) => error)) as Response;
 
     const setCookies = setCookieValues(response.headers);
     const combinedSetCookie = setCookies.join("\n");
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://0509.io/app/onboard");
     expect(verifyBetterAuthMagicLink).toHaveBeenCalledWith(
       expect.anything(),
       expect.any(Request),
