@@ -92,6 +92,46 @@ describe("getUserPlan", () => {
 
     expect(result).toBe("free");
   });
+
+  it("keeps paid access before the scheduled cancellation effective timestamp", async () => {
+    const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const mock = createMockDb({
+      planRow: {
+        plan: "starter",
+        dodo_status: "cancellation_scheduled",
+        dodo_next_billing_at: future,
+      },
+    });
+    const { getUserPlan } = await import("~/lib/plan.server");
+
+    await expect(getUserPlan({ DB: mock.db } as never, "user-1")).resolves.toBe("starter");
+  });
+
+  it("treats malformed billing timestamps as still paid until a valid expiry is stored", async () => {
+    const mock = createMockDb({
+      planRow: {
+        plan: "starter",
+        dodo_status: "cancellation_scheduled",
+        dodo_next_billing_at: "not-a-date",
+      },
+    });
+    const { getUserPlan } = await import("~/lib/plan.server");
+
+    await expect(getUserPlan({ DB: mock.db } as never, "user-1")).resolves.toBe("starter");
+  });
+
+  it("treats missing dodo_next_billing_at as still paid while cancellation is scheduled", async () => {
+    const mock = createMockDb({
+      planRow: {
+        plan: "agency",
+        dodo_status: "cancellation_scheduled",
+        dodo_next_billing_at: null,
+      },
+    });
+    const { getUserPlan } = await import("~/lib/plan.server");
+
+    await expect(getUserPlan({ DB: mock.db } as never, "user-1")).resolves.toBe("agency");
+  });
 });
 
 describe("checkPlanLimit", () => {
