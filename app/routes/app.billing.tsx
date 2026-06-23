@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
+import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const PAYMENT_ISSUE_STATUSES = new Set(["subscription.failed", "subscription.on_hold"]);
@@ -164,15 +165,23 @@ export default function BillingRoute() {
             </span>
           </div>
           <div className="f9-work-row">
-            <strong>Evidence checks (30 days)</strong>
+            <strong>Evidence checks (this month)</strong>
             <span>
               {data.proofUsage.limit > 0 ? (
                 <>
-                  {data.proofUsage.used} of {data.proofUsage.limit} used · up to {data.dailyProofCap}{" "}
-                  per day
-                  {data.proofUsage.extraCredits > 0
-                    ? ` (includes ${data.proofUsage.extraCredits} purchased credits)`
+                  {data.proofUsage.includedUsed ?? data.proofUsage.used} of{" "}
+                  {data.proofUsage.baseLimit} included used
+                  {data.proofUsage.topUpRemaining && data.proofUsage.topUpRemaining > 0
+                    ? ` · ${data.proofUsage.topUpRemaining} purchased checks remaining`
                     : ""}
+                  {data.proofUsage.periodStart && data.proofUsage.periodEnd ? (
+                    <>
+                      {" "}
+                      · period{" "}
+                      <LocalTime iso={data.proofUsage.periodStart} mode="date" /> –{" "}
+                      <LocalTime iso={data.proofUsage.periodEnd} mode="date" />
+                    </>
+                  ) : null}
                 </>
               ) : (
                 <>
@@ -181,12 +190,12 @@ export default function BillingRoute() {
               )}
             </span>
           </div>
+          <p className="f9-muted-copy">{EVIDENCE_USAGE_CUSTOMER_COPY}</p>
           {data.creditGrants.map((grant) => (
-            <div className="f9-work-row" key={grant.expiresAt}>
-              <strong>Purchased credits</strong>
+            <div className="f9-work-row" key={`${grant.skuSlug ?? "grant"}-${grant.grantedAt}`}>
+              <strong>Purchased pack</strong>
               <span>
-                {grant.credits} evidence checks expire on {formatDate(grant.expiresAt)} — unused
-                credits lapse, so spend them on busy weeks.
+                {grant.credits} evidence checks from {grant.skuSlug ?? "top-up"} — never expire
               </span>
             </div>
           ))}
