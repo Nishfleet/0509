@@ -8,12 +8,17 @@ export interface MonitoringWorkflowParams {
   watchlistId: string;
   triggerType: WatchlistRunRecord["triggerType"];
   executionKey: string;
+  workflowInstanceId: string;
   proofCaptureRequestKeyPrefix: string;
   queuedAt: string;
   runId: string;
   scheduledSlot: string;
   cron?: string | null;
 }
+
+export const MONITORING_WORKFLOW_ID_PREFIX = "monitor-v1-";
+export const MONITORING_WORKFLOW_ID_PATTERN = /^[a-zA-Z0-9_][a-zA-Z0-9-_]*$/;
+export const MONITORING_WORKFLOW_ID_MAX_LENGTH = 100;
 
 export function buildWatchlistExecutionIdempotencyKey(input: {
   watchlistId: string;
@@ -28,16 +33,45 @@ export function buildWatchlistExecutionIdempotencyKey(input: {
   return `watchlist-run:${input.triggerType}:${input.watchlistId}:${cronFragment}:${slot}`;
 }
 
+export function buildShadowExecutionIdempotencyKey(input: {
+  watchlistId: string;
+  triggerType: WatchlistRunRecord["triggerType"];
+  scheduledTime?: number;
+  cron?: string | null;
+}) {
+  return `shadow:${buildWatchlistExecutionIdempotencyKey(input)}`;
+}
+
 function normalizeIdempotencySegment(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+export async function buildMonitoringWorkflowInstanceId(executionKey: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(executionKey));
+  const bytes = new Uint8Array(digest);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  const base64url = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  const id = `${MONITORING_WORKFLOW_ID_PREFIX}${base64url.slice(0, 80)}`;
+  if (id.length > MONITORING_WORKFLOW_ID_MAX_LENGTH) {
+    throw new Error("Derived monitoring workflow instance ID exceeds Cloudflare limit.");
+  }
+  if (!MONITORING_WORKFLOW_ID_PATTERN.test(id)) {
+    throw new Error("Derived monitoring workflow instance ID is invalid for Cloudflare Workflows.");
+  }
+  return id;
 }
 
 export type MonitoringFanoutMode = "inline" | "fanout" | "shadow";
 
 export const DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT = 8;
-export const DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS = 15 * 60 * 1000;
-export const MONITORING_DISPATCH_BATCH_SIZE = 25;
+export const DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS = 45 * 60 * 1000;
+export const DEFAULT_MONITORING_CONCURRENCY_SLOT_LEASE_MS = 45 * 60 * 1000;
+export const MONITORING_DISPATCH_BATCH_SIZE = 100;
 export const MONITORING_RECONCILIATION_LIMIT = 40;
+export const MONITORING_CONCURRENCY_WAIT_MAX_ROUNDS = 240;
 
 export interface MonitoringFanoutScheduleResult {
   eligible: number;
@@ -78,24 +112,77 @@ function parsePositiveInt(value: string | undefined, fallback: number) {
 }
 
 export function resolveMonitoringFanoutMode(env: AppEnv): MonitoringFanoutMode {
-  const configured = (env.MONITORING_FANOUT_MODE ?? "fanout").trim().toLowerCase();
+  const configured = (env.MONITORING_FANOUT_MODE ?? "inline").trim().toLowerCase();
   if (configured === "inline" || configured === "shadow") {
     return configured;
   }
-  if (!env.MONITORING_WORKFLOW) {
-    return "inline";
+  if (configured === "fanout") {
+    if (!env.MONITORING_WORKFLOW) {
+      return "inline";
+    }
+    return "fanout";
   }
-  return "fanout";
+  logAppEvent("warn", "monitoring_fanout_invalid_mode", "Invalid MONITORING_FANOUT_MODE; using inline", {
+    details: { configured },
+  });
+  return "inline";
+}
+
+export function parseMonitoringFanoutAllowlist(env: AppEnv) {
+  const raw = env.MONITORING_FANOUT_ALLOWLIST?.trim();
+  if (!raw) {
+    return null;
+  }
+  if (raw === "*") {
+    return new Set(["*"]);
+  }
+  return new Set(
+    raw
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+}
+
+export function isFanoutEnabledForWorkspace(env: AppEnv, userId: string) {
+  const mode = resolveMonitoringFanoutMode(env);
+  if (mode === "inline") {
+    return false;
+  }
+  if (mode === "shadow") {
+    return true;
+  }
+  if (env.MONITORING_FANOUT_GLOBAL === "1") {
+    return true;
+  }
+  const allowlist = parseMonitoringFanoutAllowlist(env);
+  if (!allowlist || allowlist.size === 0) {
+    return false;
+  }
+  if (allowlist.has("*")) {
+    return true;
+  }
+  return allowlist.has(userId);
 }
 
 export function resolveMonitoringFanoutMaxInflight(env: AppEnv) {
-  return parsePositiveInt(env.MONITORING_FANOUT_MAX_INFLIGHT, DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT);
+  return Math.min(
+    parsePositiveInt(env.MONITORING_FANOUT_MAX_INFLIGHT, DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT),
+    64,
+  );
 }
 
 export function resolveMonitoringOrchestrationLeaseMs(env: AppEnv) {
   return parsePositiveInt(
     env.MONITORING_ORCHESTRATION_LEASE_MS,
     DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS,
+  );
+}
+
+export function resolveMonitoringConcurrencySlotLeaseMs(env: AppEnv) {
+  return parsePositiveInt(
+    env.MONITORING_CONCURRENCY_SLOT_LEASE_MS,
+    DEFAULT_MONITORING_CONCURRENCY_SLOT_LEASE_MS,
   );
 }
 
@@ -251,15 +338,122 @@ export async function markOrchestratedDispatchFailure(
   );
 }
 
-export async function countActiveOrchestratedRuns(env: AppEnv) {
+export async function claimMonitoringConcurrencySlot(
+  env: AppEnv,
+  input: {
+    runId: string;
+    leaseMs?: number;
+  },
+) {
+  const maxSlots = resolveMonitoringFanoutMaxInflight(env);
+  const leaseMs = input.leaseMs ?? resolveMonitoringConcurrencySlotLeaseMs(env);
+  const token = createProcessingToken();
+  const timestamp = nowIso();
+  const staleBefore = new Date(Date.now() - leaseMs).toISOString();
+
+  const result = await runStatement(
+    env,
+    `
+      UPDATE monitoring_concurrency_slot
+      SET holder_run_id = ?1,
+          holder_token = ?2,
+          leased_at = ?3
+      WHERE slot_index = (
+        SELECT slot_index
+        FROM monitoring_concurrency_slot
+        WHERE slot_index < ?4
+          AND (
+            holder_run_id IS NULL
+            OR leased_at < ?5
+          )
+        ORDER BY CASE WHEN holder_run_id IS NULL THEN 0 ELSE 1 END, leased_at ASC
+        LIMIT 1
+      )
+      AND (
+        holder_run_id IS NULL
+        OR leased_at < ?5
+      )
+    `,
+    input.runId,
+    token,
+    timestamp,
+    maxSlots,
+    staleBefore,
+  );
+
+  if (Number(result.meta?.changes ?? 0) === 0) {
+    return { claimed: false as const };
+  }
+
+  const slot = await one<{ slot_index: number }>(
+    env,
+    `
+      SELECT slot_index
+      FROM monitoring_concurrency_slot
+      WHERE holder_token = ?
+      LIMIT 1
+    `,
+    token,
+  );
+
+  return {
+    claimed: true as const,
+    token,
+    slotIndex: slot?.slot_index ?? null,
+  };
+}
+
+export async function releaseMonitoringConcurrencySlot(
+  env: AppEnv,
+  input: {
+    token: string;
+  },
+) {
+  const result = await runStatement(
+    env,
+    `
+      UPDATE monitoring_concurrency_slot
+      SET holder_run_id = NULL,
+          holder_token = NULL,
+          leased_at = NULL
+      WHERE holder_token = ?
+    `,
+    input.token,
+  );
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function renewMonitoringConcurrencySlot(
+  env: AppEnv,
+  input: {
+    token: string;
+  },
+) {
+  const timestamp = nowIso();
+  const result = await runStatement(
+    env,
+    `
+      UPDATE monitoring_concurrency_slot
+      SET leased_at = ?
+      WHERE holder_token = ?
+    `,
+    timestamp,
+    input.token,
+  );
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function countHeldMonitoringConcurrencySlots(env: AppEnv) {
+  const maxSlots = resolveMonitoringFanoutMaxInflight(env);
   const row = await one<{ count: number }>(
     env,
     `
       SELECT COUNT(*) AS count
-      FROM watchlist_run
-      WHERE status = 'running'
-        AND trigger_type = 'scheduled'
+      FROM monitoring_concurrency_slot
+      WHERE slot_index < ?
+        AND holder_run_id IS NOT NULL
     `,
+    maxSlots,
   );
   return Number(row?.count ?? 0);
 }
@@ -306,6 +500,32 @@ export async function claimOrchestratedWatchlistRun(
     return { claimed: false as const };
   }
   return { claimed: true as const, processingToken: token };
+}
+
+export async function renewOrchestratedWatchlistRunLease(
+  env: AppEnv,
+  input: {
+    runId: string;
+    processingToken: string;
+  },
+) {
+  const timestamp = nowIso();
+  const result = await runStatement(
+    env,
+    `
+      UPDATE watchlist_run
+      SET processing_started_at = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND processing_token = ?
+        AND status = 'running'
+    `,
+    timestamp,
+    timestamp,
+    input.runId,
+    input.processingToken,
+  );
+  return Number(result.meta?.changes ?? 0) > 0;
 }
 
 export async function finishOrchestratedWatchlistRun(
@@ -381,6 +601,50 @@ export async function markOrchestratedRunCancelled(
   );
 }
 
+export async function cancelOrchestratedRunsForInlineRollback(env: AppEnv) {
+  const timestamp = nowIso();
+  const result = await runStatement(
+    env,
+    `
+      UPDATE watchlist_run
+      SET status = 'skipped',
+          finished_at = ?,
+          error_code = 'fanout_disabled',
+          error_message = 'Scheduled fan-out was disabled before this scan could run.',
+          processing_token = NULL,
+          processing_started_at = NULL,
+          updated_at = ?
+      WHERE trigger_type = 'scheduled'
+        AND status IN ('pending', 'running')
+    `,
+    timestamp,
+    timestamp,
+  );
+  return Number(result.meta?.changes ?? 0);
+}
+
+export async function hasOrchestratedRunBlockingInlineScan(
+  env: AppEnv,
+  watchlistId: string,
+  executionKey: string,
+) {
+  const row = await one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM watchlist_run
+      WHERE watchlist_id = ?
+        AND idempotency_key = ?
+        AND trigger_type = 'scheduled'
+        AND status IN ('pending', 'running')
+      LIMIT 1
+    `,
+    watchlistId,
+    executionKey,
+  );
+  return Boolean(row?.id);
+}
+
 export async function listOrchestratedRunsForReconciliation(
   env: AppEnv,
   input: {
@@ -430,17 +694,128 @@ export async function isWatchlistEligibleForScheduledScan(
   return { eligible: true as const, plan };
 }
 
+type WorkflowBinding = Workflow<MonitoringWorkflowParams> & {
+  createBatch?: (
+    batch: Array<{ id: string; params: MonitoringWorkflowParams }>,
+  ) => Promise<Array<{ id: string }>>;
+};
+
 function getMonitoringWorkflowBinding(env: AppEnv) {
-  return env.MONITORING_WORKFLOW as Workflow<MonitoringWorkflowParams> | undefined;
+  return env.MONITORING_WORKFLOW as WorkflowBinding | undefined;
 }
 
-function isDuplicateWorkflowCreateError(error: unknown) {
+function isRateLimitWorkflowError(error: unknown) {
   if (!(error instanceof Error)) {
     return false;
   }
-  return /already exists|already been created|instance .* exists|duplicate/i.test(
-    error.message.toLowerCase(),
-  );
+  return /rate.?limit|too many|throttl|429/i.test(error.message);
+}
+
+function buildWorkflowParams(input: {
+  watchlist: WatchlistRecord;
+  runId: string;
+  executionKey: string;
+  workflowInstanceId: string;
+  triggerType: WatchlistRunRecord["triggerType"];
+  scheduledTime: number;
+  cron?: string | null;
+}): MonitoringWorkflowParams {
+  const queuedAt = new Date(input.scheduledTime).toISOString();
+  return {
+    watchlistId: input.watchlist.id,
+    triggerType: input.triggerType,
+    executionKey: input.executionKey,
+    workflowInstanceId: input.workflowInstanceId,
+    proofCaptureRequestKeyPrefix: `proof:${input.executionKey}`,
+    queuedAt,
+    runId: input.runId,
+    scheduledSlot: queuedAt,
+    cron: input.cron ?? null,
+  };
+}
+
+export async function dispatchOrchestratedWatchlistJobsBatch(
+  env: AppEnv,
+  input: {
+    jobs: Array<{
+      watchlist: WatchlistRecord;
+      runId: string;
+      executionKey: string;
+      workflowInstanceId: string;
+      triggerType: WatchlistRunRecord["triggerType"];
+      scheduledTime: number;
+      cron?: string | null;
+    }>;
+    shadowOnly?: boolean;
+  },
+) {
+  if (input.shadowOnly || input.jobs.length === 0) {
+    return {
+      dispatched: 0,
+      duplicates: 0,
+      failures: [] as Array<{ runId: string; error: string }>,
+    };
+  }
+
+  const workflow = getMonitoringWorkflowBinding(env);
+  if (!workflow) {
+    throw new Error("MONITORING_WORKFLOW binding is not configured.");
+  }
+
+  const batch = input.jobs.map((job) => ({
+    id: job.workflowInstanceId,
+    params: buildWorkflowParams(job),
+  }));
+
+  let createdIds: Set<string>;
+  try {
+    if (typeof workflow.createBatch === "function") {
+      const instances = await workflow.createBatch(batch);
+      createdIds = new Set(instances.map((instance) => instance.id));
+    } else {
+      createdIds = new Set<string>();
+      for (const item of batch) {
+        const instance = await workflow.create(item);
+        createdIds.add(instance.id);
+      }
+    }
+  } catch (error) {
+    if (isRateLimitWorkflowError(error)) {
+      return {
+        dispatched: 0,
+        duplicates: 0,
+        failures: input.jobs.map((job) => ({
+          runId: job.runId,
+          error: error instanceof Error ? error.message : "Workflow rate limited.",
+        })),
+        rateLimited: true as const,
+      };
+    }
+    throw error;
+  }
+
+  let dispatched = 0;
+  let duplicates = 0;
+  const failures: Array<{ runId: string; error: string }> = [];
+
+  for (const job of input.jobs) {
+    if (createdIds.has(job.workflowInstanceId)) {
+      await markOrchestratedRunDispatched(env, {
+        runId: job.runId,
+        workflowInstanceId: job.workflowInstanceId,
+      });
+      dispatched += 1;
+      continue;
+    }
+
+    duplicates += 1;
+    await markOrchestratedRunDispatched(env, {
+      runId: job.runId,
+      workflowInstanceId: job.workflowInstanceId,
+    });
+  }
+
+  return { dispatched, duplicates, failures };
 }
 
 export async function dispatchOrchestratedWatchlistJob(
@@ -449,39 +824,23 @@ export async function dispatchOrchestratedWatchlistJob(
     watchlist: WatchlistRecord;
     runId: string;
     executionKey: string;
+    workflowInstanceId: string;
     triggerType: WatchlistRunRecord["triggerType"];
     scheduledTime: number;
     cron?: string | null;
     shadowOnly?: boolean;
   },
 ) {
+  const result = await dispatchOrchestratedWatchlistJobsBatch(env, {
+    jobs: [input],
+    shadowOnly: input.shadowOnly,
+  });
+  if (result.failures.length > 0) {
+    throw new Error(result.failures[0]!.error);
+  }
   if (input.shadowOnly) {
     return { status: "shadow" as const };
   }
-
-  const workflow = getMonitoringWorkflowBinding(env);
-  if (!workflow) {
-    throw new Error("MONITORING_WORKFLOW binding is not configured.");
-  }
-
-  const queuedAt = new Date(input.scheduledTime).toISOString();
-  await workflow.create({
-    id: input.executionKey,
-    params: {
-      watchlistId: input.watchlist.id,
-      triggerType: input.triggerType,
-      executionKey: input.executionKey,
-      proofCaptureRequestKeyPrefix: `proof:${input.executionKey}`,
-      queuedAt,
-      runId: input.runId,
-      scheduledSlot: queuedAt,
-      cron: input.cron ?? null,
-    },
-  });
-  await markOrchestratedRunDispatched(env, {
-    runId: input.runId,
-    workflowInstanceId: input.executionKey,
-  });
   return { status: "dispatched" as const };
 }
 
@@ -504,9 +863,23 @@ export async function scheduleWatchlistFanout(
 
   for (let offset = 0; offset < input.watchlists.length; offset += MONITORING_DISPATCH_BATCH_SIZE) {
     const batch = input.watchlists.slice(offset, offset + MONITORING_DISPATCH_BATCH_SIZE);
+    const dispatchJobs: Array<{
+      watchlist: WatchlistRecord;
+      runId: string;
+      executionKey: string;
+      workflowInstanceId: string;
+      triggerType: WatchlistRunRecord["triggerType"];
+      scheduledTime: number;
+      cron?: string | null;
+    }> = [];
+
     for (const watchlist of batch) {
       const eligibility = await isWatchlistEligibleForScheduledScan(env, watchlist);
       if (!eligibility.eligible) {
+        continue;
+      }
+
+      if (!isFanoutEnabledForWorkspace(env, watchlist.userId)) {
         continue;
       }
 
@@ -516,6 +889,11 @@ export async function scheduleWatchlistFanout(
         scheduledTime: input.scheduledTime,
         cron: input.cron,
       });
+
+      if (shadowOnly) {
+        shadowOnlyCount += 1;
+        continue;
+      }
 
       const ensured = await ensureOrchestratedWatchlistRun(env, {
         watchlistId: watchlist.id,
@@ -530,44 +908,59 @@ export async function scheduleWatchlistFanout(
       }
       queued += 1;
 
-      try {
-        const dispatch = await dispatchOrchestratedWatchlistJob(env, {
-          watchlist,
-          runId: ensured.runId,
-          executionKey,
-          triggerType: "scheduled",
-          scheduledTime: input.scheduledTime,
-          cron: input.cron,
-          shadowOnly,
-        });
-        if (dispatch.status === "shadow") {
-          shadowOnlyCount += 1;
-        }
-      } catch (error) {
-        if (isDuplicateWorkflowCreateError(error)) {
-          duplicates += 1;
-          await markOrchestratedRunDispatched(env, {
-            runId: ensured.runId,
-            workflowInstanceId: executionKey,
-          });
-          continue;
-        }
+      const workflowInstanceId = await buildMonitoringWorkflowInstanceId(executionKey);
+      dispatchJobs.push({
+        watchlist,
+        runId: ensured.runId,
+        executionKey,
+        workflowInstanceId,
+        triggerType: "scheduled",
+        scheduledTime: input.scheduledTime,
+        cron: input.cron,
+      });
+    }
+
+    if (dispatchJobs.length === 0) {
+      continue;
+    }
+
+    try {
+      const dispatch = await dispatchOrchestratedWatchlistJobsBatch(env, {
+        jobs: dispatchJobs,
+        shadowOnly: false,
+      });
+      duplicates += dispatch.duplicates;
+      for (const failure of dispatch.failures) {
         dispatchFailures += 1;
         await markOrchestratedDispatchFailure(env, {
-          runId: ensured.runId,
-          errorCode: "dispatch_failed",
-          errorMessage: error instanceof Error ? error.message : "Dispatch failed.",
+          runId: failure.runId,
+          errorCode: dispatch.rateLimited ? "dispatch_rate_limited" : "dispatch_failed",
+          errorMessage: failure.error,
           retryAfterIso: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
         });
         logAppEvent("error", "monitoring_fanout_dispatch_failed", "Workflow dispatch failed", {
-          watchlistId: watchlist.id,
           details: {
-            runId: ensured.runId,
-            executionKey,
-            error: error instanceof Error ? error.message : String(error),
+            runId: failure.runId,
+            error: failure.error,
           },
         });
       }
+    } catch (error) {
+      for (const job of dispatchJobs) {
+        dispatchFailures += 1;
+        await markOrchestratedDispatchFailure(env, {
+          runId: job.runId,
+          errorCode: isRateLimitWorkflowError(error) ? "dispatch_rate_limited" : "dispatch_failed",
+          errorMessage: error instanceof Error ? error.message : "Dispatch failed.",
+          retryAfterIso: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        });
+      }
+      logAppEvent("error", "monitoring_fanout_dispatch_batch_failed", "Workflow batch dispatch failed", {
+        details: {
+          batchSize: dispatchJobs.length,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -591,7 +984,8 @@ export async function reconcileOrchestratedWatchlistRuns(
   },
 ) {
   if (input.mode === "inline") {
-    return { recovered: 0, cancelled: 0, redispatched: 0 };
+    const cancelled = await cancelOrchestratedRunsForInlineRollback(env);
+    return { recovered: 0, cancelled, redispatched: 0 };
   }
 
   const leaseMs = input.leaseMs ?? resolveMonitoringOrchestrationLeaseMs(env);
@@ -628,6 +1022,16 @@ export async function reconcileOrchestratedWatchlistRuns(
       continue;
     }
 
+    if (!isFanoutEnabledForWorkspace(env, watchlist.user_id)) {
+      await markOrchestratedRunCancelled(env, {
+        runId: row.id,
+        reason: "workspace_not_allowlisted",
+        message: "Scheduled fan-out is not enabled for this workspace.",
+      });
+      cancelled += 1;
+      continue;
+    }
+
     if (row.status === "running") {
       recovered += 1;
     }
@@ -641,11 +1045,16 @@ export async function reconcileOrchestratedWatchlistRuns(
       continue;
     }
 
+    const workflowInstanceId =
+      row.workflow_instance_id ??
+      (await buildMonitoringWorkflowInstanceId(row.idempotency_key));
+
     try {
       await dispatchOrchestratedWatchlistJob(env, {
         watchlist: watchlistRecord,
         runId: row.id,
         executionKey: row.idempotency_key,
+        workflowInstanceId,
         triggerType: "scheduled",
         scheduledTime: input.scheduledTime ?? Date.now(),
         cron: input.cron,
@@ -653,23 +1062,15 @@ export async function reconcileOrchestratedWatchlistRuns(
       });
       redispatched += 1;
     } catch (error) {
-      if (!isDuplicateWorkflowCreateError(error)) {
-        await markOrchestratedDispatchFailure(env, {
-          runId: row.id,
-          errorCode: "reconcile_dispatch_failed",
-          errorMessage: error instanceof Error ? error.message : "Re-dispatch failed.",
-        });
-      }
+      await markOrchestratedDispatchFailure(env, {
+        runId: row.id,
+        errorCode: isRateLimitWorkflowError(error) ? "dispatch_rate_limited" : "reconcile_dispatch_failed",
+        errorMessage: error instanceof Error ? error.message : "Re-dispatch failed.",
+      });
     }
   }
 
   return { recovered, cancelled, redispatched };
-}
-
-export async function acquireMonitoringConcurrencySlot(env: AppEnv) {
-  const maxInflight = resolveMonitoringFanoutMaxInflight(env);
-  const active = await countActiveOrchestratedRuns(env);
-  return active < maxInflight;
 }
 
 export async function collectMonitoringOrchestrationMetrics(
@@ -710,7 +1111,11 @@ export async function collectMonitoringOrchestrationMetrics(
             oldestQueuedAt === null ? queuedAt : Math.min(oldestQueuedAt, queuedAt);
         }
       }
-      if (row.error_code === "dispatch_failed" || row.error_code === "reconcile_dispatch_failed") {
+      if (
+        row.error_code === "dispatch_failed" ||
+        row.error_code === "reconcile_dispatch_failed" ||
+        row.error_code === "dispatch_rate_limited"
+      ) {
         metrics.retrying += 1;
       }
     } else if (row.status === "running") {
