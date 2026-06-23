@@ -6,6 +6,7 @@ const requiredFiles = [
   "scripts/d1-backup.mjs",
   "wrangler.jsonc",
   "migrations/0045_dodo_plan_lookup_indexes.sql",
+  "migrations/0046_dodo_ledger_lease_and_capacity_skip_idempotency.sql",
 ];
 
 for (const relativePath of requiredFiles) {
