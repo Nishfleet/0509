@@ -95,5 +95,15 @@ Items below were **not completed by the launch-hardening code run**. They requir
 **Status:** PARTIALLY ADDRESSED IN CODE — WORKFLOW FAN-OUT STILL DEFERRED
 
 - Agency allows **75** active watchlists per workspace, but the nightly cron still runs **inline** with a **12-minute** global budget when browser scraping is active.
-- Skipped watchlists now receive a `watchlist_run` row with `status = skipped` and `error_code = capacity_budget`, surfaced in `/app/watchlists`.
+- Skipped watchlists now receive at most **one** `watchlist_run` row per nightly window (`idempotency_key` on `watchlist_run`, migration `0046`), with `status = skipped` and `error_code = capacity_budget`, surfaced in `/app/watchlists` as **Delayed — capacity limit**.
 - Full Agency-scale nightly coverage still requires reviving `MonitoringWorkflow` fan-out without bypassing digest-before-scan ordering. Track as a post-hardening infrastructure project.
+
+## Dodo webhook processing (operator note)
+
+**Status:** HARDENED IN CODE — REMOTE MIGRATION `0046` REQUIRED AFTER DEPLOY
+
+1. Deploy the Worker build that includes `beginDodoWebhookEventProcessing` and atomic `db.batch()` application.
+2. Run `npx wrangler d1 migrations list 0509 --remote`, then `npx wrangler d1 migrations apply 0509 --remote` to apply `0045` (if pending) and `0046`.
+3. `0046` adds `dodo_webhook_event.processing_started_at` (5-minute reclaim lease) and `watchlist_run.idempotency_key`.
+4. Redelivered webhooks stuck in `failed` or stale `processing` are retried safely; `processed` events are deduped without reapplying grants.
+5. No dashboard change required beyond existing Dodo webhook subscription (all 8 handled events).
