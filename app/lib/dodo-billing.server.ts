@@ -1,21 +1,25 @@
 import type { AppEnv } from "~/lib/env.server";
 import { appOrigin } from "~/lib/env.server";
 import {
+  checkoutTargetFromSku,
+  legacyBundleSlugForSku,
+  readProviderProductId,
+  resolveBillingSku,
+  resolveBillingSkuFromProviderProductId,
+  topUpQuantityForSku,
+  type BillingSkuSlug,
+  type CheckoutTarget,
+} from "~/lib/billing-sku-catalog";
+import { isPaidPlanFamily } from "~/lib/plan-entitlements";
+import {
   dodo0509ApiKey,
   dodo0509BaseUrl,
   dodo0509BrandId,
-  dodo0509PlanForProductId,
-  dodo0509ProductIds,
-  dodo0509UsageBundleForProductId,
-  dodo0509UsageBundleProductIds,
-  usageBundleCreditCount,
 } from "~/lib/dodo-pricing.server";
-import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
+import type { PricingBillingCycle, PricingPlanSlug } from "~/lib/pricing";
 import type { AppSession } from "~/lib/types";
 
-export type DodoCheckoutTarget =
-  | { kind: "plan"; plan: PricingPlanSlug; cycle: PricingBillingCycle }
-  | { kind: "usage_bundle"; bundle: UsageBundleSlug };
+export type DodoCheckoutTarget = CheckoutTarget;
 
 export interface DodoCheckoutSession {
   checkoutUrl: string;
@@ -58,9 +62,10 @@ export async function createDodo0509CheckoutSession({
         app: "0509",
         user_id: session.user.id,
         target_kind: target.kind,
+        sku: target.sku,
         ...(target.kind === "plan"
-          ? { plan: target.plan, cycle: target.cycle }
-          : { bundle: target.bundle, credits: usageBundleCreditCount(target.bundle) }),
+          ? { plan: target.planFamily, cycle: target.cycle }
+          : { bundle: legacyBundleSlugForSku(target.sku) }),
       },
     }),
   });
@@ -172,25 +177,26 @@ export function extractDodoProofCreditGrant(env: AppEnv, payload: unknown) {
 
   const product = firstProduct(root);
   const productId = readString(product, "product_id");
-  const bundle = productId ? dodo0509UsageBundleForProductId(env, productId) : undefined;
-  if (!productId || !bundle) return null;
+  const sku = productId ? resolveBillingSkuFromProviderProductId(env, productId) : null;
+  if (!productId || !sku || !sku.topUpQuantity) return null;
 
-	  const quantity = Math.max(1, Math.floor(Number(readValue(product, "quantity") ?? 1)));
-	  const credits = usageBundleCreditCount(bundle) * quantity;
-	  const grantedAt = readString(root, "created_at") || new Date().toISOString();
+  const quantity = Math.max(1, Math.floor(Number(readValue(product, "quantity") ?? 1)));
+  const credits = topUpQuantityForSku(sku) * quantity;
+  const grantedAt = readString(root, "created_at") || new Date().toISOString();
+  const legacyBundle = legacyBundleSlugForSku(sku.slug);
 
-	  return {
-	    userId,
+  return {
+    userId,
     paymentId,
     productId,
-    bundle,
-	    quantity,
-	    credits,
-	    grantedAt,
-	    expiresAt: addDaysIso(grantedAt, 30),
-	    metadata: root,
-	  };
-	}
+    skuSlug: sku.slug,
+    bundle: legacyBundle ?? sku.slug,
+    quantity,
+    credits,
+    grantedAt,
+    metadata: root,
+  };
+}
 
 export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
   if (!isSuccessfulDodoPaymentWebhook(payload)) return null;
@@ -207,7 +213,13 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
 
   const product = firstProduct(root);
   const productId = readString(product, "product_id");
-  const planMatch = productId ? dodo0509PlanForProductId(env, productId) : null;
+  const skuMatch = productId ? resolveBillingSkuFromProviderProductId(env, productId) : null;
+  const planMatch = skuMatch?.planFamily
+    ? {
+        plan: skuMatch.planFamily,
+        cycle: skuMatch.billingInterval === "annual" ? ("yearly" as const) : ("monthly" as const),
+      }
+    : null;
   const metadataPlan = planFromTrustedMetadata(metadata);
   const plan = planMatch?.plan ?? metadataPlan?.plan ?? null;
   const cycle = planMatch?.cycle ?? metadataPlan?.cycle ?? "monthly";
@@ -215,7 +227,7 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
   // Real subscription payments arrive with product_cart: null (verified
   // against live Dodo payloads — the cart is only populated for one-time
   // purchases). Metadata fallback is allowed only for 0509 plan checkouts.
-  if (!plan) return null;
+  if (!plan || !isPaidPlanFamily(plan)) return null;
 
   // Don't let a plan-purchase payment that ALSO matches a usage bundle fall
   // through ambiguously: bundle payments carry the bundle product id and no
@@ -260,11 +272,17 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
   if (!userId || !subscriptionId) return null;
 
   const productId = readString(root, "product_id");
-  const planMatch = productId ? dodo0509PlanForProductId(env, productId) : null;
+  const skuMatch = productId ? resolveBillingSkuFromProviderProductId(env, productId) : null;
+  const planMatch = skuMatch?.planFamily
+    ? {
+        plan: skuMatch.planFamily,
+        cycle: skuMatch.billingInterval === "annual" ? ("yearly" as const) : ("monthly" as const),
+      }
+    : null;
   const metadataPlan = planFromTrustedMetadata(metadata);
   const plan = planMatch?.plan ?? metadataPlan?.plan ?? null;
   const cycle = planMatch?.cycle ?? metadataPlan?.cycle ?? "monthly";
-  if (!plan) return null;
+  if (!plan || !isPaidPlanFamily(plan)) return null;
 
   const grantedAt =
     readString(root, "previous_billing_date") ||
@@ -286,7 +304,7 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
   };
 }
 
-function planFromMetadata(metadata: Record<string, unknown>): PricingPlanSlug | null {
+function planFromMetadata(metadata: Record<string, unknown>) {
   const metadataPlan = readString(metadata, "plan");
   return metadataPlan === "scout" || metadataPlan === "starter" || metadataPlan === "agency"
     ? metadataPlan
@@ -299,7 +317,7 @@ function planFromTrustedMetadata(
   if (readString(metadata, "app") !== "0509") return null;
   if (readString(metadata, "target_kind") !== "plan") return null;
   const plan = planFromMetadata(metadata);
-  if (!plan) return null;
+  if (!plan || !isPaidPlanFamily(plan)) return null;
 
   return {
     plan,
@@ -350,7 +368,13 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
   const customerId = readString(customer, "customer_id") || null;
   const customerEmail = readString(customer, "email") || null;
   const productId = readString(root, "product_id");
-  const planMatch = productId ? dodo0509PlanForProductId(env, productId) : null;
+  const skuMatch = productId ? resolveBillingSkuFromProviderProductId(env, productId) : null;
+  const planMatch = skuMatch?.planFamily
+    ? {
+        plan: skuMatch.planFamily,
+        cycle: skuMatch.billingInterval === "annual" ? ("yearly" as const) : ("monthly" as const),
+      }
+    : null;
   const metadataPlan = planFromTrustedMetadata(metadata);
   const hasPlanProof = Boolean(planMatch || metadataPlan);
   const rawSubscriptionId = readString(root, "subscription_id") || readString(root, "id");
@@ -422,11 +446,17 @@ function readDodoPaymentGrantTimestamp(root: Record<string, unknown>) {
 }
 
 function productIdForTarget(env: AppEnv, target: DodoCheckoutTarget) {
-  if (target.kind === "plan") {
-    return dodo0509ProductIds(env)[target.plan][target.cycle];
-  }
+  const sku = resolveBillingSku(target.sku);
+  if (!sku) return "";
+  return readProviderProductId(env, sku);
+}
 
-  return dodo0509UsageBundleProductIds(env)[target.bundle];
+export function checkoutTargetFromSkuSlug(slug: string): DodoCheckoutTarget | null {
+  return checkoutTargetFromSku(slug);
+}
+
+export function billingSkuSlugFromCheckoutTarget(target: DodoCheckoutTarget): BillingSkuSlug {
+  return target.sku;
 }
 
 function isSuccessfulDodoPaymentWebhook(payload: unknown) {
