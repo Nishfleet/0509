@@ -37,21 +37,21 @@ Backup: `../pre-cursor-launch-hardening.patch`
 | 2F | Scheduled cancellation enforcement | fixed | f859d77 | `getUserPlan` + `cancellationEffectiveAt` persistence |
 | 2G | Razorpay hard-disable | fixed | f859d77 | route returns 410, no plan mutations |
 | 3A | Monitoring workflow capacity | deferred | | Inline 12-min budget remains; Workflow revival is infra-scale — see `docs/launch-owner-actions.md` |
-| 3B | Customer-visible scan status | fixed | pending | `recordWatchlistCapacitySkip` + watchlist run UI |
+| 3B | Customer-visible scan status | fixed | cb1cf44 | `recordWatchlistCapacitySkip` + watchlist run UI |
 | 3C | Honest monitoring | protected | | No demo fallback introduced |
-| 4A | Counter-move workflow | fixed | pending | dashboard Mark done + `closeCounterMoveFollowUp` |
+| 4A | Counter-move workflow | fixed | cb1cf44 | dashboard Mark done + `closeCounterMoveFollowUp` |
 | 4B | Self-serve account | already_present | | `/app/account` exists; no Better Auth upgrade performed |
 | 4C | Insight depth honesty | already_present | | existing `insight-depth` pending states preserved |
-| 5A | Cloud backups | partial | pending | `.github/workflows/d1-backup-validate.yml` + `scripts/validate-d1-backup.mjs` |
+| 5A | Cloud backups | partial | cb1cf44 | `.github/workflows/d1-backup-validate.yml` + `scripts/validate-d1-backup.mjs` |
 | 5B | Launch-readiness health | already_present | | `tests/launch-readiness.route.test.ts` covers token gating |
-| 5C | Structured logging | fixed | pending | `app/lib/log.server.ts` + Dodo webhook failures |
+| 5C | Structured logging | fixed | cb1cf44 | `app/lib/log.server.ts` + Dodo webhook failures |
 | 5D | Rate-limit fail modes | already_present | | existing `tests/rate-limit.server.test.ts` |
 | 5E | Email deliverability | manual | | documented in `docs/launch-owner-actions.md` §11 |
 | 5F | CSP / globalThis | deferred | | framework-wide rewrite risk — not attempted |
 | 6A | Split data.server.ts | deferred | | mechanical split deferred to avoid behavioral risk in same run |
-| 6B | Docs reconciliation | partial | pending | this file + `docs/launch-owner-actions.md` |
+| 6B | Docs reconciliation | partial | cb1cf44 | this file + `docs/launch-owner-actions.md` |
 | 6C | Dead CSS/code | not_reproduced | | `.f9-auth-gradient` not removed — not verified unused in this run |
-| 7 | Owner manual actions doc | fixed | pending | `docs/launch-owner-actions.md` |
+| 7 | Owner manual actions doc | fixed | cb1cf44 | `docs/launch-owner-actions.md` |
 
 ## Final validation (this run)
 
