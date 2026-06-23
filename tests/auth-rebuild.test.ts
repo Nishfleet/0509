@@ -6,6 +6,7 @@ const loginRoute = readFileSync("app/routes/auth.login.tsx", "utf8");
 const signupRoute = readFileSync("app/routes/auth.signup.tsx", "utf8");
 const apiAuthRoute = readFileSync("app/routes/api.auth.$.ts", "utf8");
 const betterAuthServer = readFileSync("app/lib/better-auth.server.ts", "utf8");
+const magicLinkSignIn = readFileSync("app/lib/better-auth-magic-link-sign-in.server.ts", "utf8");
 const magicLinkRoute = readFileSync("app/routes/auth.better.magic-link.tsx", "utf8");
 const authForm = readFileSync("app/components/auth-form.tsx", "utf8");
 const authSurface = `${loginRoute}\n${signupRoute}\n${magicLinkRoute}\n${authForm}`;
@@ -55,7 +56,9 @@ describe("auth rebuild", () => {
     expect(magicLinkRoute).not.toContain("hasBetterAuthMagicLinkRequestState");
     expect(magicLinkRoute).toContain("readBetterAuthMagicLinkConfirmationTicket");
     expect(magicLinkRoute).toContain("readBetterAuthMagicLinkVerificationTicket");
-    expect(magicLinkRoute).toContain("consumeBetterAuthMagicLinkConfirmationTicket");
+    expect(magicLinkRoute).toContain("completeBetterAuthMagicLinkSignIn");
+    expect(magicLinkRoute).toContain("requestHasBetterAuthSessionCookie");
+    expect(magicLinkSignIn).toContain("consumeBetterAuthMagicLinkConfirmationTicket");
     expect(magicLinkRoute).toContain("betterAuthMagicLinkConfirmationTicketCookie");
     expect(magicLinkRoute).not.toContain("browserBound");
     expect(magicLinkRoute).not.toContain('name="token"');
