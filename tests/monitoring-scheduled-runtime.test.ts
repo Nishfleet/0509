@@ -2,6 +2,68 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WatchlistRecord } from "~/lib/types";
 
+const scheduleWatchlistFanoutMock = vi.fn();
+const reconcileOrchestratedWatchlistRunsMock = vi.fn();
+const collectMonitoringOrchestrationMetricsMock = vi.fn();
+const resolveMonitoringFanoutModeMock = vi.fn();
+
+vi.mock("~/lib/monitoring-fanout.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/lib/monitoring-fanout.server")>();
+  return {
+    ...actual,
+    scheduleWatchlistFanout: scheduleWatchlistFanoutMock,
+    reconcileOrchestratedWatchlistRuns: reconcileOrchestratedWatchlistRunsMock,
+    collectMonitoringOrchestrationMetrics: collectMonitoringOrchestrationMetricsMock,
+    resolveMonitoringFanoutMode: resolveMonitoringFanoutModeMock,
+  };
+});
+
+vi.doMock("~/lib/plan.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/lib/plan.server")>();
+  return {
+    ...actual,
+    getUserPlan: vi.fn().mockResolvedValue("agency"),
+  };
+});
+
+beforeEach(() => {
+  vi.resetModules();
+  scheduleWatchlistFanoutMock.mockClear();
+  reconcileOrchestratedWatchlistRunsMock.mockClear();
+  collectMonitoringOrchestrationMetricsMock.mockClear();
+  resolveMonitoringFanoutModeMock.mockClear();
+  reconcileOrchestratedWatchlistRunsMock.mockResolvedValue({
+    recovered: 0,
+    cancelled: 0,
+    redispatched: 0,
+  });
+  collectMonitoringOrchestrationMetricsMock.mockResolvedValue({
+    eligible: 0,
+    queued: 0,
+    dispatched: 0,
+    running: 0,
+    succeeded: 0,
+    retrying: 0,
+    failed: 0,
+    delayed: 0,
+    duplicatesPrevented: 0,
+    oldestQueuedAgeMs: null,
+  });
+  resolveMonitoringFanoutModeMock.mockReturnValue("fanout");
+  scheduleWatchlistFanoutMock.mockResolvedValue({
+    eligible: 2,
+    queued: 2,
+    duplicates: 0,
+    dispatchFailures: 0,
+    shadowOnly: 0,
+    inlineFallback: false,
+  });
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+});
+
 const activeWatchlists: WatchlistRecord[] = [
   {
     id: "watch-1",
@@ -32,15 +94,6 @@ const activeWatchlists: WatchlistRecord[] = [
     updatedAt: "2026-03-01T00:00:00.000Z",
   },
 ];
-
-beforeEach(() => {
-  vi.resetModules();
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.resetModules();
-});
 
 function mockMonitoringDependencies(input: {
   provider: "meta_api" | "meta_library_browser";
@@ -126,6 +179,20 @@ function mockMonitoringDependencies(input: {
     finishWatchlistRun,
     recordWatchlistCapacitySkip: vi.fn().mockResolvedValue("run-skip"),
     searchAdsViaSourceResolver,
+  };
+}
+
+function createFanoutDbMock() {
+  const statement = {
+    run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+    first: vi.fn().mockResolvedValue(null),
+    all: vi.fn().mockResolvedValue({ results: [] }),
+  };
+  return {
+    prepare: vi.fn(() => ({
+      bind: vi.fn(() => statement),
+      ...statement,
+    })),
   };
 }
 
@@ -240,7 +307,47 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(5);
   });
 
-  it("runs browser-backed scheduled scans inline even when a workflow binding exists", async () => {
+  it("queues browser-backed scheduled scans through workflow fan-out", async () => {
+    const workflowCreate = vi.fn().mockResolvedValue({ id: "queued" });
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      workflowCreate,
+    });
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: createFanoutDbMock(),
+      MONITORING_WORKFLOW: {
+        create: workflowCreate,
+      },
+      MONITORING_FANOUT_MODE: "fanout",
+    };
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+
+    const result = await runScheduledMonitoring(env as never, {
+      includeDigests: false,
+      cron: "0 4 * * *",
+      scheduledTime: Date.parse("2026-04-21T04:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      queued: 2,
+      duplicates: 0,
+      inlineRuns: 0,
+      digests: 0,
+    });
+    expect(scheduleWatchlistFanoutMock).toHaveBeenCalledTimes(1);
+    expect(workflowCreate).not.toHaveBeenCalled();
+    expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
+  });
+
+  it("runs browser-backed scheduled scans inline only in rollback mode", async () => {
+    resolveMonitoringFanoutModeMock.mockImplementation(() => "inline");
+
     const workflowCreate = vi.fn();
     const mocks = mockMonitoringDependencies({
       provider: "meta_library_browser",
@@ -255,6 +362,7 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       MONITORING_WORKFLOW: {
         create: workflowCreate,
       },
+      MONITORING_FANOUT_MODE: "inline",
     };
 
     const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
@@ -266,18 +374,28 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(result).toMatchObject({
       queued: 0,
       duplicates: 0,
-      inlineRuns: 2,
       digests: 0,
     });
+    expect(scheduleWatchlistFanoutMock).not.toHaveBeenCalled();
     expect(workflowCreate).not.toHaveBeenCalled();
     expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
     expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(2);
     expect(mocks.finishWatchlistRun).toHaveBeenCalledTimes(2);
     expect(mocks.createWatchlistRun.mock.calls[0]?.[2]).toBe("scheduled");
     expect(mocks.createWatchlistRun.mock.calls[1]?.[2]).toBe("scheduled");
+    expect(result.inlineRuns).toBe(2);
   });
 
-  it("falls back to inline scans when workflow queueing fails", async () => {
+  it("records dispatch failures in fan-out mode without inline browser fallback", async () => {
+    scheduleWatchlistFanoutMock.mockResolvedValueOnce({
+      eligible: 2,
+      queued: 2,
+      duplicates: 0,
+      dispatchFailures: 1,
+      shadowOnly: 0,
+      inlineFallback: false,
+    });
+
     const workflowCreate = vi
       .fn()
       .mockRejectedValueOnce(new Error("workflow create failed"))
@@ -288,11 +406,12 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     });
 
     const env = {
-      DB: {},
+      DB: createFanoutDbMock(),
       META_AD_LIBRARY_TOKEN: "token",
       MONITORING_WORKFLOW: {
         create: workflowCreate,
       },
+      MONITORING_FANOUT_MODE: "fanout",
     };
 
     const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
@@ -304,15 +423,14 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     });
 
     expect(result).toMatchObject({
-      queued: 1,
+      queued: 2,
       duplicates: 0,
-      inlineRuns: 1,
+      inlineRuns: 0,
+      skippedForBudget: 1,
       digests: 0,
     });
-    expect(workflowCreate).toHaveBeenCalledTimes(2);
-    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(1);
-    expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(1);
-    expect(mocks.createWatchlistRun.mock.calls[0]?.[1]).toBe("watch-1");
-    expect(mocks.createWatchlistRun.mock.calls[0]?.[2]).toBe("scheduled");
+    expect(scheduleWatchlistFanoutMock).toHaveBeenCalledTimes(1);
+    expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
   });
 });

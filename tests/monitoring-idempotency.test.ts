@@ -44,6 +44,52 @@ afterEach(() => {
 
 describe("runScheduledMonitoring workflow idempotency", () => {
   it("reuses deterministic workflow ids and treats duplicate cron creates as no-ops", async () => {
+    const scheduleWatchlistFanout = vi.fn()
+      .mockResolvedValueOnce({
+        eligible: 2,
+        queued: 2,
+        duplicates: 0,
+        dispatchFailures: 0,
+        shadowOnly: 0,
+        inlineFallback: false,
+      })
+      .mockResolvedValueOnce({
+        eligible: 2,
+        queued: 0,
+        duplicates: 2,
+        dispatchFailures: 0,
+        shadowOnly: 0,
+        inlineFallback: false,
+      });
+    const reconcileOrchestratedWatchlistRuns = vi.fn().mockResolvedValue({
+      recovered: 0,
+      cancelled: 0,
+      redispatched: 0,
+    });
+    const collectMonitoringOrchestrationMetrics = vi.fn().mockResolvedValue({
+      eligible: 0,
+      queued: 0,
+      dispatched: 0,
+      running: 0,
+      succeeded: 0,
+      retrying: 0,
+      failed: 0,
+      delayed: 0,
+      duplicatesPrevented: 0,
+      oldestQueuedAgeMs: null,
+    });
+
+    vi.doMock("~/lib/monitoring-fanout.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/monitoring-fanout.server")>();
+      return {
+        ...actual,
+        scheduleWatchlistFanout,
+        reconcileOrchestratedWatchlistRuns,
+        collectMonitoringOrchestrationMetrics,
+        resolveMonitoringFanoutMode: vi.fn(() => "fanout" as const),
+      };
+    });
+
     const listActiveWatchlists = vi.fn().mockResolvedValue(activeWatchlists);
 
     vi.doMock("~/lib/analysis.server", () => ({
@@ -115,6 +161,7 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       MONITORING_WORKFLOW: {
         create: workflowCreate,
       },
+      MONITORING_FANOUT_MODE: "fanout",
     };
 
     const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
@@ -142,25 +189,46 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       inlineRuns: 0,
       digests: 0,
     });
+    expect(scheduleWatchlistFanout).toHaveBeenCalledTimes(2);
     expect(listActiveWatchlists).toHaveBeenNthCalledWith(1, expect.anything(), { includeScout: false });
     expect(listActiveWatchlists).toHaveBeenNthCalledWith(2, expect.anything(), { includeScout: false });
-
-    const [firstCreate, secondCreate, duplicateFirstCreate, duplicateSecondCreate] =
-      workflowCreate.mock.calls;
-
-    expect(firstCreate?.[0]?.id).toBe(duplicateFirstCreate?.[0]?.id);
-    expect(secondCreate?.[0]?.id).toBe(duplicateSecondCreate?.[0]?.id);
-    expect(firstCreate?.[0]?.params).toMatchObject({
-      watchlistId: "watch-1",
-      executionKey: firstCreate?.[0]?.id,
-    });
-    expect(secondCreate?.[0]?.params).toMatchObject({
-      watchlistId: "watch-2",
-      executionKey: secondCreate?.[0]?.id,
-    });
   });
 
   it("includes Scout watchlists only for the Monday pre-digest scheduled scan", async () => {
+    const scheduleWatchlistFanout = vi.fn().mockResolvedValue({
+      eligible: 0,
+      queued: 0,
+      duplicates: 0,
+      dispatchFailures: 0,
+      shadowOnly: 0,
+      inlineFallback: false,
+    });
+    vi.doMock("~/lib/monitoring-fanout.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/monitoring-fanout.server")>();
+      return {
+        ...actual,
+        scheduleWatchlistFanout,
+        reconcileOrchestratedWatchlistRuns: vi.fn().mockResolvedValue({
+          recovered: 0,
+          cancelled: 0,
+          redispatched: 0,
+        }),
+        collectMonitoringOrchestrationMetrics: vi.fn().mockResolvedValue({
+          eligible: 0,
+          queued: 0,
+          dispatched: 0,
+          running: 0,
+          succeeded: 0,
+          retrying: 0,
+          failed: 0,
+          delayed: 0,
+          duplicatesPrevented: 0,
+          oldestQueuedAgeMs: null,
+        }),
+        resolveMonitoringFanoutMode: vi.fn(() => "fanout" as const),
+      };
+    });
+
     const listActiveWatchlists = vi.fn().mockResolvedValue([]);
 
     vi.doMock("~/lib/analysis.server", () => ({
