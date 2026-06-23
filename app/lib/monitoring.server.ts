@@ -17,6 +17,7 @@ import {
   countProofCapturesForWatchlistSince,
   countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
+  recordWatchlistCapacitySkip,
   getDigest,
   getDigestByPeriod,
   getRecentSuccessfulRuns,
@@ -179,6 +180,9 @@ export async function runScheduledMonitoring(
       for (let index = 0; index < watchlists.length; index += 1) {
         if (Date.now() > deadlineAt) {
           skippedForBudget = watchlists.length - index;
+          for (let skipIndex = index; skipIndex < watchlists.length; skipIndex += 1) {
+            await recordWatchlistCapacitySkip(env, watchlists[skipIndex]!.id);
+          }
           break;
         }
 
@@ -1227,6 +1231,9 @@ async function runScheduledMonitoringInline(
       // Stop before the runtime's wall limit kills the invocation mid-scan;
       // skipped watchlists are reported by the caller instead of vanishing.
       skippedForBudget = watchlists.length - index;
+      for (let skipIndex = index; skipIndex < watchlists.length; skipIndex += 1) {
+        await recordWatchlistCapacitySkip(env, watchlists[skipIndex]!.id);
+      }
       break;
     }
 

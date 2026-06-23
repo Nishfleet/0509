@@ -215,6 +215,27 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
+  if (intent === "close-counter-move") {
+    const { closeCounterMoveFollowUp } = await import("~/lib/data.server");
+    const auditId = String(formData.get("auditId") ?? "").trim();
+    const eventId = String(formData.get("eventId") ?? "").trim();
+    if (!auditId || !eventId) {
+      return { ok: false, message: "Could not mark that follow-up done." };
+    }
+
+    const result = await closeCounterMoveFollowUp(env, {
+      auditId,
+      eventId,
+      userId: workspaceUserId,
+    });
+
+    if (!result.ok) {
+      return { ok: false, message: "That follow-up is no longer open." };
+    }
+
+    return { ok: true, message: "Marked done." };
+  }
+
   return {
     ok: false,
     message: "Unknown dashboard action.",
@@ -490,17 +511,35 @@ export default function AppDashboardRoute() {
             {counterMoveFollowUps.map((followUp) => (
               <article className="f9-work-row" key={followUp.id}>
                 <div>
-                  <h3>{followUp.title}</h3>
+                  <h3>
+                    {followUp.watchlistId ? (
+                      <Link to={`/app/watchlists?watchlist=${followUp.watchlistId}`}>{followUp.title}</Link>
+                    ) : (
+                      followUp.title
+                    )}
+                  </h3>
                   <p className="f9-muted-copy">
                     {followUp.ownerLabel} · {followUp.channelLabel}
                     {followUp.expiresAt ? <> · expires <LocalTime iso={followUp.expiresAt} mode="date" /></> : null}
                   </p>
                 </div>
-                <span className="f9-status-pill">
-                  {followUp.status === "needs_review"
-                    ? `${followUp.openCount} open`
-                    : followUp.status.replaceAll("_", " ")}
-                </span>
+                <div className="f9-inline-actions">
+                  {followUp.eventId ? (
+                    <Form method="post">
+                      <input name="intent" type="hidden" value="close-counter-move" />
+                      <input name="auditId" type="hidden" value={followUp.id} />
+                      <input name="eventId" type="hidden" value={followUp.eventId} />
+                      <SubmitButton className="f9-secondary-button" pendingLabel="Saving…">
+                        Mark done
+                      </SubmitButton>
+                    </Form>
+                  ) : null}
+                  <span className="f9-status-pill">
+                    {followUp.status === "needs_review"
+                      ? `${followUp.openCount} open`
+                      : followUp.status.replaceAll("_", " ")}
+                  </span>
+                </div>
               </article>
             ))}
           </div>
@@ -688,6 +727,8 @@ function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
 
   return {
     id: audit.id,
+    eventId: readStringValue(firstFollowUp?.eventId),
+    watchlistId: readStringValue(brief.watchlistId),
     title,
     status,
     openCount,
