@@ -23,6 +23,8 @@ import {
   markDodoPlanPaymentIssue,
   revokeDodoAccessForRefundedPayment,
   revokeDodoPlanAccess,
+  recordWatchlistCapacitySkip,
+  closeCounterMoveFollowUp,
   getDiscoveryCacheEntry,
   getDiscoveryProviderState,
   getLaunchReadinessSignals,
@@ -1540,6 +1542,78 @@ describe("Dodo billing persistence", () => {
         },
       ),
     ).rejects.toThrow("Dodo webhook event id is required.");
+  });
+
+  it("records a capacity-budget skip on watchlist runs", async () => {
+    const mock = createMockDb();
+
+    await recordWatchlistCapacitySkip(
+      { DB: mock.db } as never,
+      "watchlist-1",
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO watchlist_run", "capacity_budget");
+    expect(statement?.sql).toContain("'skipped'");
+    expect(statement?.sql).toContain("capacity_budget");
+  });
+
+  it("closes a counter-move follow-up inside the stored audit result", async () => {
+    const auditId = "audit-1";
+    const auditRow = {
+      id: auditId,
+      user_id: "user-1",
+      api_key_id: null,
+      action_name: "counter_move_brief.create",
+      resource_type: "watchlist",
+      resource_id: "watchlist-1",
+      idempotency_key: "idem-1",
+      status: "succeeded",
+      result_json: JSON.stringify({
+        brief: {
+          watchlistId: "watchlist-1",
+          workflow: {
+            status: "needs_review",
+            openCount: 1,
+            followUps: [
+              {
+                eventId: "event-1",
+                status: "open",
+                title: "Landing page changed",
+              },
+            ],
+          },
+        },
+      }),
+      error_code: null,
+      error_message: null,
+      metadata_json: "{}",
+      created_at: "2026-06-01T00:00:00.000Z",
+      updated_at: "2026-06-01T00:00:00.000Z",
+    };
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM agent_action_audit",
+        results: [auditRow],
+      },
+      {
+        sqlIncludes: "SELECT * FROM agent_action_audit WHERE id = ?",
+        results: [auditRow],
+      },
+    ]);
+
+    const result = await closeCounterMoveFollowUp(
+      { DB: mock.db } as never,
+      {
+        auditId,
+        userId: "user-1",
+        eventId: "event-1",
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    const update = findStatement(mock.statements, "UPDATE agent_action_audit", "result_json");
+    expect(update?.bindings?.[0]).toBe("succeeded");
+    expect(String(update?.bindings?.[3])).toContain('"status":"closed"');
   });
 });
 

@@ -137,6 +137,7 @@ function mockReliabilityDependencies(input: {
     createWatchEvent,
     createWatchlistRun,
     finishWatchlistRun,
+    recordWatchlistCapacitySkip: vi.fn().mockResolvedValue("run-skip"),
     getDigest,
     getDigestByPeriod: vi.fn().mockResolvedValue(null),
     hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),

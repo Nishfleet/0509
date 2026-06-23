@@ -91,6 +91,7 @@ function mockMonitoringDependencies(input: {
     createWatchEvent: vi.fn(),
     createWatchlistRun,
     finishWatchlistRun,
+    recordWatchlistCapacitySkip: vi.fn().mockResolvedValue("run-skip"),
     getDigestByPeriod: vi.fn(),
     getDigest: vi.fn().mockResolvedValue(null),
     listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
@@ -123,6 +124,7 @@ function mockMonitoringDependencies(input: {
   return {
     createWatchlistRun,
     finishWatchlistRun,
+    recordWatchlistCapacitySkip: vi.fn().mockResolvedValue("run-skip"),
     searchAdsViaSourceResolver,
   };
 }

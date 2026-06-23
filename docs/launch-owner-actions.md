@@ -1,0 +1,99 @@
+# Launch Owner Actions
+
+Items below were **not completed by the launch-hardening code run**. They require owner decisions, dashboard access, or external services outside this repository.
+
+## 1. Configure production Slack delivery
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Open the Five to Nine delivery targets UI (`/app/sources`) as an Agency workspace owner.
+2. Add a validated Slack webhook target and send a test message.
+3. Confirm a `delivery_attempt` row shows `provider = slack` with a successful status.
+4. Re-run `npm run canary:proof` with Slack required once the target exists.
+
+## 2. Run production proof canary with Slack delivery
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Ensure item 1 is complete.
+2. From a machine with production credentials: `npm run canary:proof`.
+3. Verify Slack receives the digest/alert proof and the canary exits 0.
+
+## 3. Enable Dodo customer subscription updates / portal
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Open the Dodo Payments dashboard for the live 0509 brand.
+2. Enable **Allow Subscription Updates** on the customer portal settings.
+3. Confirm `/app/billing` → **Open billing portal** loads and plan changes are allowed.
+
+## 4. Configure external uptime monitoring
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Create an UptimeRobot (or equivalent) HTTP monitor for `https://0509.io/api/health`.
+2. Interval: 5 minutes.
+3. Alert Nish on non-200 or missing `{ "ok": true }`.
+
+## 5. Review orphaned WhatsApp targets
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Query production delivery targets with `channel = whatsapp`.
+2. Hide or remove targets that are not backed by a configured Meta WhatsApp provider.
+3. Keep WhatsApp out of public marketing until Meta-side setup is complete (`docs/whatsapp-setup.md`).
+
+## 6. Decide on public “beta” positioning
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Review current copy on `/status`, pricing, and product surfaces.
+2. Decide whether to remove beta labels or keep them with explicit scope boundaries.
+
+## 7. Decide whether Scout should be publicly marketed
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Review Scout plan visibility in Dodo catalog and on-site pricing.
+2. Decide whether Scout remains a hidden/downgrade tier or becomes a public entry plan.
+
+## 8. Enable cloud D1 backup schedule and secrets
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Review `.github/workflows/d1-backup-validate.yml` (repository validation only).
+2. If moving off the Mac launchd job, configure Cloudflare/API credentials as GitHub Actions secrets.
+3. Schedule a weekly workflow that runs `npm run backup:d1:r2` with production auth.
+4. Confirm an object appears under `backups/d1/` in the R2 bucket.
+
+## 9. Configure external error monitoring / log export
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Decide on a log sink (Cloudflare Logpush, Sentry, etc.).
+2. Wire Workers production logs without exporting secrets or raw auth payloads.
+3. The app now emits structured JSON logs from `app/lib/log.server.ts` on critical paths — point the sink at Workers logs.
+
+## 10. Perform a real restore drill
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Download a recent `backups/d1/*.sql` export.
+2. Restore into an isolated D1 database or local SQLite using the documented procedure in `docs/ops-backup-uptime.md`.
+3. Spot-check `user`, `watchlist`, and `user_plan` row counts against production.
+
+## 11. Evaluate email bounce/suppression provider
+
+**Status:** NOT COMPLETED BY THIS CODE RUN
+
+1. Cloudflare Email Service does not expose bounce webhooks in-app.
+2. If compliance requires list hygiene beyond dashboard review, evaluate a provider with bounce/suppression events.
+3. Document the decision before changing `delivery.server.ts`.
+
+## Monitoring capacity note (product honesty)
+
+**Status:** PARTIALLY ADDRESSED IN CODE — WORKFLOW FAN-OUT STILL DEFERRED
+
+- Agency allows **75** active watchlists per workspace, but the nightly cron still runs **inline** with a **12-minute** global budget when browser scraping is active.
+- Skipped watchlists now receive a `watchlist_run` row with `status = skipped` and `error_code = capacity_budget`, surfaced in `/app/watchlists`.
+- Full Agency-scale nightly coverage still requires reviving `MonitoringWorkflow` fan-out without bypassing digest-before-scan ordering. Track as a post-hardening infrastructure project.

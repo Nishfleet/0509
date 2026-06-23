@@ -3941,6 +3941,144 @@ export async function getRecentSuccessfulRuns(
   return rows.map(toWatchlistRunRecord);
 }
 
+export async function recordWatchlistCapacitySkip(
+  env: AppEnv,
+  watchlistId: string,
+  input: {
+    triggerType?: WatchlistRunRecord["triggerType"];
+    reason?: string;
+  } = {},
+) {
+  const id = createId();
+  const timestamp = nowIso();
+  const triggerType = input.triggerType ?? "scheduled";
+  const summary = {
+    reason: input.reason ?? "capacity_budget",
+    message:
+      "Last night's scan window filled before this watchlist was reached. It stays queued for the next run.",
+  };
+
+  await run(
+    env,
+    `
+      INSERT INTO watchlist_run (
+        id,
+        watchlist_id,
+        trigger_type,
+        status,
+        page_budget,
+        pages_scanned,
+        baseline_from_run_id,
+        summary_json,
+        started_at,
+        finished_at,
+        error_code,
+        error_message,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, 'skipped', 0, 0, NULL, ?, ?, ?, 'capacity_budget', ?, ?, ?)
+    `,
+    id,
+    watchlistId,
+    triggerType,
+    jsonValue(summary),
+    timestamp,
+    timestamp,
+    summary.message,
+    timestamp,
+    timestamp,
+  );
+
+  return id;
+}
+
+export async function closeCounterMoveFollowUp(
+  env: AppEnv,
+  input: {
+    auditId: string;
+    userId: string;
+    eventId: string;
+  },
+) {
+  const audit = await one<AgentActionAuditRow>(
+    env,
+    `
+      SELECT *
+      FROM agent_action_audit
+      WHERE id = ?
+        AND user_id = ?
+        AND action_name = 'counter_move_brief.create'
+        AND status = 'succeeded'
+    `,
+    input.auditId,
+    input.userId,
+  );
+  if (!audit) {
+    return { ok: false as const, reason: "not_found" as const };
+  }
+
+  const result = parseJson<Record<string, unknown>>(audit.result_json, {});
+  const brief =
+    result.brief && typeof result.brief === "object" && !Array.isArray(result.brief)
+      ? (result.brief as Record<string, unknown>)
+      : {};
+  const workflow =
+    brief.workflow && typeof brief.workflow === "object" && !Array.isArray(brief.workflow)
+      ? (brief.workflow as Record<string, unknown>)
+      : {};
+  const followUps = Array.isArray(workflow.followUps) ? workflow.followUps : [];
+  let matched = false;
+  const nextFollowUps = followUps.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return entry;
+    }
+    const followUp = entry as Record<string, unknown>;
+    if (followUp.eventId !== input.eventId || followUp.status === "closed") {
+      return followUp;
+    }
+    matched = true;
+    return {
+      ...followUp,
+      status: "closed",
+    };
+  });
+
+  if (!matched) {
+    return { ok: false as const, reason: "follow_up_not_found" as const };
+  }
+
+  const openCount = nextFollowUps.filter(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      !Array.isArray(entry) &&
+      (entry as Record<string, unknown>).status !== "closed",
+  ).length;
+
+  const nextWorkflow = {
+    ...workflow,
+    followUps: nextFollowUps,
+    openCount,
+    status: openCount > 0 ? workflow.status ?? "needs_review" : "quiet",
+  };
+  const nextBrief = {
+    ...brief,
+    workflow: nextWorkflow,
+  };
+  const nextResult = {
+    ...result,
+    brief: nextBrief,
+  };
+
+  const updated = await finishAgentActionAudit(env, audit.id, {
+    status: "succeeded",
+    result: nextResult,
+  });
+
+  return updated ? { ok: true as const, audit: updated } : { ok: false as const, reason: "update_failed" as const };
+}
+
 export async function listWatchlistRuns(
   env: AppEnv,
   watchlistId: string,

@@ -72,6 +72,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
     return Response.json(result.body);
   } catch (error) {
+    const { logBillingEvent } = await import("~/lib/log.server");
+    logBillingEvent(env, "error", "dodo.webhook.process", "Dodo webhook processing failed", {
+      eventId,
+      details: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
     await markDodoWebhookEventFinished(env, eventId, {
       outcome: "failed",
       metadata: { error: error instanceof Error ? error.message : String(error) },

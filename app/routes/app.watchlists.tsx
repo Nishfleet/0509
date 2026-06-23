@@ -1379,7 +1379,9 @@ function humanizeEventType(eventType: string) {
 }
 
 function formatRunSummary(summary: Record<string, unknown>) {
+  const message = typeof summary.message === "string" ? summary.message.trim() : "";
   const parts = [
+    message || null,
     formatNumericSummaryPart(summary, "adsSeen", "ads seen"),
     formatNumericSummaryPart(summary, "candidatesDetected", "candidates detected"),
     formatNumericSummaryPart(summary, "proofsAttempted", "proofs attempted"),
