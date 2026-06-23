@@ -66,9 +66,13 @@ export async function buildMonitoringWorkflowInstanceId(executionKey: string) {
 
 export type MonitoringFanoutMode = "inline" | "fanout" | "shadow";
 
+export const MONITORING_CONCURRENCY_SLOT_CAPACITY = 64;
+export const MONITORING_WORKFLOW_SCAN_TIMEOUT_MS = 45 * 60 * 1000;
+export const MONITORING_LEASE_SAFETY_MARGIN_MS = 15 * 60 * 1000;
 export const DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT = 8;
-export const DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS = 45 * 60 * 1000;
-export const DEFAULT_MONITORING_CONCURRENCY_SLOT_LEASE_MS = 45 * 60 * 1000;
+export const DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS =
+  MONITORING_WORKFLOW_SCAN_TIMEOUT_MS + MONITORING_LEASE_SAFETY_MARGIN_MS;
+export const DEFAULT_MONITORING_CONCURRENCY_SLOT_LEASE_MS = DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS;
 export const MONITORING_DISPATCH_BATCH_SIZE = 100;
 export const MONITORING_RECONCILIATION_LIMIT = 40;
 export const MONITORING_CONCURRENCY_WAIT_MAX_ROUNDS = 240;
@@ -107,25 +111,100 @@ function nowIso() {
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export function resolveMonitoringFanoutMode(env: AppEnv): MonitoringFanoutMode {
   const configured = (env.MONITORING_FANOUT_MODE ?? "inline").trim().toLowerCase();
-  if (configured === "inline" || configured === "shadow") {
+  if (configured === "inline" || configured === "shadow" || configured === "fanout") {
     return configured;
-  }
-  if (configured === "fanout") {
-    if (!env.MONITORING_WORKFLOW) {
-      return "inline";
-    }
-    return "fanout";
   }
   logAppEvent("warn", "monitoring_fanout_invalid_mode", "Invalid MONITORING_FANOUT_MODE; using inline", {
     details: { configured },
   });
   return "inline";
+}
+
+export function isMonitoringWorkflowBindingAvailable(env: AppEnv) {
+  const workflow = env.MONITORING_WORKFLOW as WorkflowBinding | undefined;
+  return Boolean(workflow && typeof workflow.create === "function");
+}
+
+export function resolveEffectiveMonitoringFanoutMaxInflight(env: AppEnv) {
+  const capacity = MONITORING_CONCURRENCY_SLOT_CAPACITY;
+  const raw = env.MONITORING_FANOUT_MAX_INFLIGHT?.trim();
+  if (!raw) {
+    return Math.min(DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT, capacity);
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!/^\d+$/.test(raw) || !Number.isFinite(parsed) || parsed < 1) {
+    logAppEvent("warn", "monitoring_fanout_invalid_max_inflight", "Invalid MONITORING_FANOUT_MAX_INFLIGHT; using default", {
+      details: { configured: raw, effective: Math.min(DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT, capacity) },
+    });
+    return Math.min(DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT, capacity);
+  }
+
+  if (parsed > capacity) {
+    logAppEvent("warn", "monitoring_fanout_max_inflight_clamped", "MONITORING_FANOUT_MAX_INFLIGHT exceeds slot capacity; clamping", {
+      details: { configured: parsed, capacity, effective: capacity },
+    });
+    return capacity;
+  }
+
+  return parsed;
+}
+
+/** @deprecated Use resolveEffectiveMonitoringFanoutMaxInflight */
+export function resolveMonitoringFanoutMaxInflight(env: AppEnv) {
+  return resolveEffectiveMonitoringFanoutMaxInflight(env);
+}
+
+function resolveEffectiveLeaseMs(
+  env: AppEnv,
+  envKey: "MONITORING_ORCHESTRATION_LEASE_MS" | "MONITORING_CONCURRENCY_SLOT_LEASE_MS",
+  fallback: number,
+) {
+  const minimumLeaseMs = MONITORING_WORKFLOW_SCAN_TIMEOUT_MS + MONITORING_LEASE_SAFETY_MARGIN_MS;
+  const configured = parsePositiveInt(env[envKey], fallback);
+  if (configured < minimumLeaseMs) {
+    logAppEvent("warn", "monitoring_fanout_lease_clamped", "Configured lease is shorter than scan timeout margin; clamping", {
+      details: {
+        envKey,
+        configured,
+        minimumLeaseMs,
+        scanTimeoutMs: MONITORING_WORKFLOW_SCAN_TIMEOUT_MS,
+        safetyMarginMs: MONITORING_LEASE_SAFETY_MARGIN_MS,
+      },
+    });
+    return minimumLeaseMs;
+  }
+  return configured;
+}
+
+export function resolveMonitoringOrchestrationLeaseMs(env: AppEnv) {
+  return resolveEffectiveLeaseMs(
+    env,
+    "MONITORING_ORCHESTRATION_LEASE_MS",
+    DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS,
+  );
+}
+
+export function resolveMonitoringConcurrencySlotLeaseMs(env: AppEnv) {
+  return resolveEffectiveLeaseMs(
+    env,
+    "MONITORING_CONCURRENCY_SLOT_LEASE_MS",
+    DEFAULT_MONITORING_CONCURRENCY_SLOT_LEASE_MS,
+  );
+}
+
+export function buildMonitoringWorkflowConcurrencyStepName(waitRound: number) {
+  return `claim-monitoring-concurrency-${waitRound}`;
+}
+
+export function buildMonitoringWorkflowCapacitySleepStepName(waitRound: number) {
+  return `wait-monitoring-capacity-${waitRound}`;
 }
 
 export function parseMonitoringFanoutAllowlist(env: AppEnv) {
@@ -163,27 +242,6 @@ export function isFanoutEnabledForWorkspace(env: AppEnv, userId: string) {
     return true;
   }
   return allowlist.has(userId);
-}
-
-export function resolveMonitoringFanoutMaxInflight(env: AppEnv) {
-  return Math.min(
-    parsePositiveInt(env.MONITORING_FANOUT_MAX_INFLIGHT, DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT),
-    64,
-  );
-}
-
-export function resolveMonitoringOrchestrationLeaseMs(env: AppEnv) {
-  return parsePositiveInt(
-    env.MONITORING_ORCHESTRATION_LEASE_MS,
-    DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS,
-  );
-}
-
-export function resolveMonitoringConcurrencySlotLeaseMs(env: AppEnv) {
-  return parsePositiveInt(
-    env.MONITORING_CONCURRENCY_SLOT_LEASE_MS,
-    DEFAULT_MONITORING_CONCURRENCY_SLOT_LEASE_MS,
-  );
 }
 
 function createId() {
@@ -345,7 +403,7 @@ export async function claimMonitoringConcurrencySlot(
     leaseMs?: number;
   },
 ) {
-  const maxSlots = resolveMonitoringFanoutMaxInflight(env);
+  const maxSlots = resolveEffectiveMonitoringFanoutMaxInflight(env);
   const leaseMs = input.leaseMs ?? resolveMonitoringConcurrencySlotLeaseMs(env);
   const token = createProcessingToken();
   const timestamp = nowIso();
@@ -444,7 +502,7 @@ export async function renewMonitoringConcurrencySlot(
 }
 
 export async function countHeldMonitoringConcurrencySlots(env: AppEnv) {
-  const maxSlots = resolveMonitoringFanoutMaxInflight(env);
+  const maxSlots = resolveEffectiveMonitoringFanoutMaxInflight(env);
   const row = await one<{ count: number }>(
     env,
     `
@@ -758,8 +816,34 @@ export async function dispatchOrchestratedWatchlistJobsBatch(
   }
 
   const workflow = getMonitoringWorkflowBinding(env);
-  if (!workflow) {
-    throw new Error("MONITORING_WORKFLOW binding is not configured.");
+  if (!workflow || typeof workflow.create !== "function") {
+    logAppEvent("error", "monitoring_fanout_workflow_binding_missing", "MONITORING_WORKFLOW binding is unavailable", {
+      details: { jobCount: input.jobs.length },
+    });
+    return {
+      dispatched: 0,
+      duplicates: 0,
+      failures: input.jobs.map((job) => ({
+        runId: job.runId,
+        error: "MONITORING_WORKFLOW binding is not configured.",
+      })),
+      bindingMissing: true as const,
+    };
+  }
+
+  if (typeof workflow.createBatch !== "function") {
+    logAppEvent("error", "monitoring_fanout_createbatch_missing", "MONITORING_WORKFLOW.createBatch is unavailable", {
+      details: { jobCount: input.jobs.length },
+    });
+    return {
+      dispatched: 0,
+      duplicates: 0,
+      failures: input.jobs.map((job) => ({
+        runId: job.runId,
+        error: "MONITORING_WORKFLOW.createBatch is not available.",
+      })),
+      createBatchMissing: true as const,
+    };
   }
 
   const batch = input.jobs.map((job) => ({
@@ -769,16 +853,8 @@ export async function dispatchOrchestratedWatchlistJobsBatch(
 
   let createdIds: Set<string>;
   try {
-    if (typeof workflow.createBatch === "function") {
-      const instances = await workflow.createBatch(batch);
-      createdIds = new Set(instances.map((instance) => instance.id));
-    } else {
-      createdIds = new Set<string>();
-      for (const item of batch) {
-        const instance = await workflow.create(item);
-        createdIds.add(instance.id);
-      }
-    }
+    const instances = await workflow.createBatch(batch);
+    createdIds = new Set(instances.map((instance) => instance.id));
   } catch (error) {
     if (isRateLimitWorkflowError(error)) {
       return {
@@ -932,9 +1008,16 @@ export async function scheduleWatchlistFanout(
       duplicates += dispatch.duplicates;
       for (const failure of dispatch.failures) {
         dispatchFailures += 1;
+        const errorCode = dispatch.bindingMissing
+          ? "workflow_binding_missing"
+          : dispatch.createBatchMissing
+            ? "dispatch_createbatch_missing"
+            : dispatch.rateLimited
+              ? "dispatch_rate_limited"
+              : "dispatch_failed";
         await markOrchestratedDispatchFailure(env, {
           runId: failure.runId,
-          errorCode: dispatch.rateLimited ? "dispatch_rate_limited" : "dispatch_failed",
+          errorCode,
           errorMessage: failure.error,
           retryAfterIso: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
         });
@@ -1114,7 +1197,9 @@ export async function collectMonitoringOrchestrationMetrics(
       if (
         row.error_code === "dispatch_failed" ||
         row.error_code === "reconcile_dispatch_failed" ||
-        row.error_code === "dispatch_rate_limited"
+        row.error_code === "dispatch_rate_limited" ||
+        row.error_code === "workflow_binding_missing" ||
+        row.error_code === "dispatch_createbatch_missing"
       ) {
         metrics.retrying += 1;
       }
