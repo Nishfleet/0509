@@ -18,19 +18,15 @@ function mockWebhookDependencies(overrides: {
 } = {}) {
   const data = {
     applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockResolvedValue(undefined),
+    applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue(undefined),
     applyDodoPlanRevokeWithWatchlistReconcile: vi.fn().mockResolvedValue(undefined),
-    claimDodoWebhookEvent: vi.fn().mockResolvedValue(true),
-    deactivateWatchlistsBeyondPlanLimit: vi.fn().mockResolvedValue(0),
-    reactivateWatchlistsUpToPlanLimit: vi.fn().mockResolvedValue(0),
-    markDodoWebhookEventFinished: vi.fn().mockResolvedValue(undefined),
-    markDodoPlanPaymentIssue: vi.fn().mockResolvedValue(undefined),
-    revokeDodoAccessForRefundedPayment: vi.fn().mockResolvedValue(undefined),
-    grantDodoPlanAccess: vi.fn().mockResolvedValue(undefined),
-    grantProofUsageCredit: vi.fn().mockResolvedValue(undefined),
-    getUserIdByEmail: vi.fn().mockResolvedValue(null),
+    applyDodoProofCreditGrantWithLedger: vi.fn().mockResolvedValue(undefined),
+    applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue(undefined),
+    beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue({ status: "claimed" }),
+    failDodoWebhookEventProcessing: vi.fn().mockResolvedValue(undefined),
+    finalizeDodoWebhookLedgerOnly: vi.fn().mockResolvedValue(undefined),
     getUserIdForDodoPayment: vi.fn().mockResolvedValue(null),
     getUserIdForDodoLifecycle: vi.fn().mockResolvedValue(null),
-    revokeDodoPlanAccess: vi.fn().mockResolvedValue(undefined),
     ...overrides.data,
   };
   const billing = {
@@ -97,11 +93,10 @@ describe("Dodo webhook route", () => {
         grantedAt: "2026-06-04T12:00:00.000Z",
       }),
       expect.any(Number),
-    );
-    expect(data.markDodoWebhookEventFinished).toHaveBeenCalledWith(
-      expect.anything(),
-      "evt-delayed-success",
-      expect.objectContaining({ outcome: "processed" }),
+      expect.objectContaining({
+        eventId: "evt-delayed-success",
+        outcome: "processed",
+      }),
     );
   });
 
@@ -138,8 +133,8 @@ describe("Dodo webhook route", () => {
         revokedAt: "2026-07-01T00:00:00.000Z",
       }),
       0,
+      expect.objectContaining({ eventId: "evt-cancel", outcome: "processed" }),
     );
-    expect(data.getUserIdByEmail).not.toHaveBeenCalled();
     expect(data.getUserIdForDodoLifecycle).not.toHaveBeenCalled();
   });
 
@@ -182,11 +177,7 @@ describe("Dodo webhook route", () => {
         grantedAt: "2026-07-12T00:00:00.000Z",
       }),
       10,
-    );
-    expect(data.markDodoWebhookEventFinished).toHaveBeenCalledWith(
-      expect.anything(),
-      "evt-renewal",
-      expect.objectContaining({ outcome: "processed" }),
+      expect.objectContaining({ eventId: "evt-renewal", outcome: "processed" }),
     );
   });
 
@@ -220,6 +211,7 @@ describe("Dodo webhook route", () => {
         plan: "scout",
       }),
       3,
+      expect.objectContaining({ eventId: "evt-downgrade", outcome: "processed" }),
     );
   });
 
@@ -247,16 +239,15 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
-    expect(data.markDodoPlanPaymentIssue).toHaveBeenCalledWith(
+    expect(data.applyDodoPlanPaymentIssueWithLedger).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "user-1",
         status: "subscription.on_hold",
         occurredAt: "2026-07-01T00:00:00.000Z",
       }),
+      expect.objectContaining({ eventId: "evt-on-hold", outcome: "processed" }),
     );
-    // the paying customer must NOT lose access over a renewal hiccup
-    expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
     expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
   });
 
@@ -288,12 +279,13 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
-    expect(data.markDodoPlanPaymentIssue).toHaveBeenCalledWith(
+    expect(data.applyDodoPlanPaymentIssueWithLedger).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "user-linked",
         status: "subscription.on_hold",
       }),
+      expect.objectContaining({ eventId: "evt-on-hold-linked", outcome: "processed" }),
     );
     expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledWith(
       expect.anything(),
@@ -303,7 +295,6 @@ describe("Dodo webhook route", () => {
         customerEmail: "owner@example.com",
       },
     );
-    expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
     expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
   });
 
@@ -331,17 +322,15 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, refunded: true });
-    expect(data.revokeDodoAccessForRefundedPayment).toHaveBeenCalledWith(
+    expect(data.applyDodoRefundWithWatchlistReconcile).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         paymentId: "pay-refunded",
         refundedAt: "2026-07-05T00:00:00.000Z",
+        userId: "user-refund",
       }),
-    );
-    expect(data.deactivateWatchlistsBeyondPlanLimit).toHaveBeenCalledWith(
-      expect.anything(),
-      "user-refund",
       0,
+      expect.objectContaining({ eventId: "evt-refund", outcome: "processed" }),
     );
   });
 
@@ -373,7 +362,6 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, revoked: true });
-    expect(data.getUserIdByEmail).not.toHaveBeenCalled();
     expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledWith(
       expect.anything(),
       {
@@ -390,6 +378,7 @@ describe("Dodo webhook route", () => {
         status: "subscription.expired",
       }),
       0,
+      expect.objectContaining({ eventId: "evt-expire", outcome: "processed" }),
     );
   });
 
@@ -426,8 +415,14 @@ describe("Dodo webhook route", () => {
         customerEmail: "stranger@example.com",
       },
     );
-    expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
     expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
+    expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventId: "evt-orphan",
+        outcome: "ignored",
+      }),
+    );
   });
 
   it("skips processing entirely when the event was already claimed", async () => {
@@ -444,7 +439,10 @@ describe("Dodo webhook route", () => {
         })),
       },
       data: {
-        claimDodoWebhookEvent: vi.fn().mockResolvedValue(false),
+        beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue({
+          status: "duplicate",
+          outcome: "processed",
+        }),
       },
     });
 
@@ -457,7 +455,25 @@ describe("Dodo webhook route", () => {
 
     expect(await response.json()).toMatchObject({ ok: true, duplicate: true });
     expect(data.applyDodoPlanGrantWithWatchlistReconcile).not.toHaveBeenCalled();
-    expect(data.markDodoWebhookEventFinished).not.toHaveBeenCalled();
+  });
+
+  it("rejects blank webhook ids before claiming the event", async () => {
+    mockWebhookDependencies();
+    const { action } = await import("~/routes/api.webhooks.dodo");
+
+    await expect(
+      action({
+        context: {},
+        request: new Request("https://0509.io/api/webhooks/dodo", {
+          method: "POST",
+          headers: {
+            "webhook-signature": "v1=signed",
+          },
+          body: JSON.stringify({ type: "payment.succeeded" }),
+        }),
+        params: {},
+      } as never),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it("marks the ledger entry failed when processing throws, so redelivery can retry", async () => {
@@ -488,10 +504,10 @@ describe("Dodo webhook route", () => {
       } as never),
     ).rejects.toThrow("d1 blew up");
 
-    expect(data.markDodoWebhookEventFinished).toHaveBeenCalledWith(
+    expect(data.failDodoWebhookEventProcessing).toHaveBeenCalledWith(
       expect.anything(),
       "evt-fails",
-      expect.objectContaining({ outcome: "failed" }),
+      expect.objectContaining({ error: "d1 blew up" }),
     );
   });
 });
@@ -524,14 +540,16 @@ describe("scheduled cancellation safety", () => {
 
     expect(await response.json()).toMatchObject({ ok: true, cancellationScheduled: true });
     // the customer keeps what they paid for until period end
-    expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
     expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
-    expect(data.deactivateWatchlistsBeyondPlanLimit).not.toHaveBeenCalled();
-    expect(data.markDodoPlanPaymentIssue).toHaveBeenCalledWith(
+    expect(data.applyDodoPlanPaymentIssueWithLedger).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         status: "cancellation_scheduled",
         cancellationEffectiveAt: futureIso,
+      }),
+      expect.objectContaining({
+        eventId: "evt-scheduled-cancel",
+        outcome: "processed",
       }),
     );
   });

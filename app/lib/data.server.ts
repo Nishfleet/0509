@@ -2149,23 +2149,153 @@ export async function grantDodoPlanAccess(
   );
 }
 
+export const DODO_WEBHOOK_PROCESSING_LEASE_MS = 5 * 60 * 1000;
+
+export type DodoWebhookLedgerOutcome = "processed" | "ignored";
+
+export interface DodoWebhookLedgerFinalize {
+  eventId: string;
+  outcome: DodoWebhookLedgerOutcome;
+  metadata: JsonRecord;
+}
+
+export type DodoWebhookProcessingClaim =
+  | { status: "claimed" }
+  | { status: "duplicate"; outcome: "processed" | "ignored" }
+  | { status: "in_progress" };
+
+function dodoWebhookProcessingLeaseDays() {
+  return DODO_WEBHOOK_PROCESSING_LEASE_MS / (24 * 60 * 60 * 1000);
+}
+
+function buildDodoWebhookLedgerFinalizeStatement(
+  db: ReturnType<typeof ensureDb>,
+  ledger: DodoWebhookLedgerFinalize,
+  processedAt: string,
+) {
+  return db.prepare(`
+      UPDATE dodo_webhook_event
+      SET outcome = ?,
+          processed_at = ?,
+          processing_started_at = NULL,
+          metadata_json = ?
+      WHERE event_id = ?
+        AND outcome = 'processing'
+    `).bind(
+    ledger.outcome,
+    processedAt,
+    jsonValue(ledger.metadata),
+    ledger.eventId,
+  );
+}
+
+function buildWatchlistGrantReconcileStatements(
+  db: ReturnType<typeof ensureDb>,
+  userId: string,
+  keepActive: number,
+  timestamp: string,
+) {
+  return [
+    db.prepare(`
+      UPDATE watchlist
+      SET is_active = 0,
+          paused_reason = 'plan_limit',
+          updated_at = ?
+      WHERE user_id = ?
+        AND is_active = 1
+        AND id NOT IN (
+          SELECT id
+          FROM watchlist
+          WHERE user_id = ?
+            AND is_active = 1
+          ORDER BY created_at DESC
+          LIMIT ?
+        )
+    `).bind(timestamp, userId, userId, keepActive),
+    db.prepare(`
+      UPDATE watchlist
+      SET is_active = 1,
+          paused_reason = NULL,
+          updated_at = ?
+      WHERE user_id = ?
+        AND is_active = 0
+        AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
+        AND id IN (
+          SELECT id
+          FROM watchlist
+          WHERE user_id = ?
+            AND is_active = 0
+            AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
+          ORDER BY updated_at DESC
+          LIMIT (
+            SELECT MAX(
+              0,
+              ? - (
+                SELECT COUNT(*)
+                FROM watchlist
+                WHERE user_id = ?
+                  AND is_active = 1
+              )
+            )
+          )
+        )
+    `).bind(timestamp, userId, userId, keepActive, userId),
+  ];
+}
+
+function buildWatchlistRevokeReconcileStatement(
+  db: ReturnType<typeof ensureDb>,
+  userId: string,
+  keepActive: number,
+  timestamp: string,
+) {
+  return db.prepare(`
+      UPDATE watchlist
+      SET is_active = 0,
+          paused_reason = 'plan_limit',
+          updated_at = ?
+      WHERE user_id = ?
+        AND is_active = 1
+        AND id NOT IN (
+          SELECT id
+          FROM watchlist
+          WHERE user_id = ?
+            AND is_active = 1
+          ORDER BY created_at DESC
+          LIMIT ?
+        )
+    `).bind(timestamp, userId, userId, keepActive);
+}
+
+async function syncWatchlistMentionTargetsIfChanged(
+  env: AppEnv,
+  userId: string,
+  timestamp: string,
+  results: Array<{ meta?: { changes?: number } }>,
+  watchlistStatementIndexes: number[],
+) {
+  const watchlistChanges = watchlistStatementIndexes.reduce(
+    (total, index) => total + Number(results[index]?.meta?.changes ?? 0),
+    0,
+  );
+  if (watchlistChanges > 0) {
+    await syncWebMentionTargetsForUser(env, userId, timestamp);
+  }
+}
+
 export async function applyDodoPlanGrantWithWatchlistReconcile(
   env: AppEnv,
   input: Parameters<typeof grantDodoPlanAccess>[1],
   watchlistLimit: number,
+  ledger: DodoWebhookLedgerFinalize,
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
   const timestamp = nowIso();
+  const processedAt = nowIso();
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
-  const activeRow = await one<{ count: number }>(
-    env,
-    "SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1",
-    input.userId,
-  );
-  const reactivateSlots = Math.max(0, keepActive - Number(activeRow?.count ?? 0));
 
-  const statements = [
+  const results = await db.batch([
     db.prepare(`
       INSERT INTO user_plan (
         user_id,
@@ -2203,67 +2333,23 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
       input.status,
       planUpdatedAt,
     ),
-  ];
+    ...buildWatchlistGrantReconcileStatements(db, input.userId, keepActive, timestamp),
+    buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
+  ]);
 
-  if (reactivateSlots > 0) {
-    statements.push(
-      db.prepare(`
-        UPDATE watchlist
-        SET is_active = 1,
-            paused_reason = NULL,
-            updated_at = ?
-        WHERE user_id = ?
-          AND is_active = 0
-          AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
-          AND id IN (
-            SELECT id
-            FROM watchlist
-            WHERE user_id = ?
-              AND is_active = 0
-              AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
-            ORDER BY updated_at DESC
-            LIMIT ?
-          )
-      `).bind(timestamp, input.userId, input.userId, reactivateSlots),
-    );
-  }
-
-  statements.push(
-    db.prepare(`
-      UPDATE watchlist
-      SET is_active = 0,
-          paused_reason = 'plan_limit',
-          updated_at = ?
-      WHERE user_id = ?
-        AND is_active = 1
-        AND id NOT IN (
-          SELECT id
-          FROM watchlist
-          WHERE user_id = ?
-            AND is_active = 1
-          ORDER BY created_at DESC
-          LIMIT ?
-        )
-    `).bind(timestamp, input.userId, input.userId, keepActive),
-  );
-
-  const results = await db.batch(statements);
-  const watchlistChanges = results
-    .slice(1)
-    .reduce((total, result) => total + Number(result.meta?.changes ?? 0), 0);
-  if (watchlistChanges > 0) {
-    await syncWebMentionTargetsForUser(env, input.userId, timestamp);
-  }
+  await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1, 2]);
 }
 
 export async function applyDodoPlanRevokeWithWatchlistReconcile(
   env: AppEnv,
   input: Parameters<typeof revokeDodoPlanAccess>[1],
   watchlistLimit: number,
+  ledger: DodoWebhookLedgerFinalize,
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.revokedAt) ?? nowIso();
   const timestamp = nowIso();
+  const processedAt = nowIso();
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
 
   const results = await db.batch([
@@ -2282,27 +2368,140 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
         plan_updated_at = excluded.plan_updated_at
       WHERE julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
     `).bind(input.userId, input.status, planUpdatedAt),
-    db.prepare(`
-      UPDATE watchlist
-      SET is_active = 0,
-          paused_reason = 'plan_limit',
-          updated_at = ?
-      WHERE user_id = ?
-        AND is_active = 1
-        AND id NOT IN (
-          SELECT id
-          FROM watchlist
-          WHERE user_id = ?
-            AND is_active = 1
-          ORDER BY created_at DESC
-          LIMIT ?
-        )
-    `).bind(timestamp, input.userId, input.userId, keepActive),
+    buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp),
+    buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
   ]);
 
-  if (Number(results[1]?.meta?.changes ?? 0) > 0) {
-    await syncWebMentionTargetsForUser(env, input.userId, timestamp);
+  await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1]);
+}
+
+export async function applyDodoRefundWithWatchlistReconcile(
+  env: AppEnv,
+  input: {
+    paymentId: string;
+    refundedAt?: string;
+    userId: string | null;
+  },
+  watchlistLimit: number,
+  ledger: DodoWebhookLedgerFinalize,
+) {
+  const db = ensureDb(env);
+  const refundedAt = validIsoTimestamp(input.refundedAt) ?? nowIso();
+  const timestamp = nowIso();
+  const processedAt = nowIso();
+  const keepActive = Math.max(0, Math.floor(watchlistLimit));
+
+  const statements = [
+    db.prepare(`
+      UPDATE user_plan
+      SET plan = 'free',
+          dodo_status = 'refunded',
+          plan_updated_at = ?
+      WHERE dodo_payment_id = ?
+        AND julianday(?) >= julianday(plan_updated_at)
+    `).bind(refundedAt, input.paymentId, refundedAt),
+    db.prepare(`
+      UPDATE proof_usage_credit
+      SET expires_at = ?
+      WHERE provider_payment_id = ?
+        AND julianday(expires_at) > julianday(?)
+    `).bind(refundedAt, input.paymentId, refundedAt),
+  ];
+
+  if (input.userId) {
+    statements.push(buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp));
   }
+
+  statements.push(buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt));
+
+  const results = await db.batch(statements);
+  if (input.userId) {
+    const watchlistIndex = statements.length - 2;
+    await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [watchlistIndex]);
+  }
+}
+
+export async function applyDodoPlanPaymentIssueWithLedger(
+  env: AppEnv,
+  input: Parameters<typeof markDodoPlanPaymentIssue>[1],
+  ledger: DodoWebhookLedgerFinalize,
+) {
+  const db = ensureDb(env);
+  const planUpdatedAt = validIsoTimestamp(input.occurredAt) ?? nowIso();
+  const cancellationEffectiveAt = validIsoTimestamp(input.cancellationEffectiveAt ?? undefined);
+  const processedAt = nowIso();
+
+  await db.batch([
+    db.prepare(`
+      UPDATE user_plan
+      SET dodo_status = ?,
+          dodo_next_billing_at = CASE
+            WHEN ? IS NOT NULL THEN ?
+            ELSE dodo_next_billing_at
+          END,
+          plan_updated_at = ?
+      WHERE user_id = ?
+        AND plan != 'free'
+        AND julianday(?) >= julianday(plan_updated_at)
+    `).bind(
+      input.status,
+      cancellationEffectiveAt,
+      cancellationEffectiveAt,
+      planUpdatedAt,
+      input.userId,
+      planUpdatedAt,
+    ),
+    buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
+  ]);
+}
+
+export async function applyDodoProofCreditGrantWithLedger(
+  env: AppEnv,
+  input: Parameters<typeof grantProofUsageCredit>[1],
+  ledger: DodoWebhookLedgerFinalize,
+) {
+  const db = ensureDb(env);
+  const processedAt = nowIso();
+
+  await db.batch([
+    db.prepare(`
+      INSERT INTO proof_usage_credit (
+        id,
+        user_id,
+        provider,
+        provider_payment_id,
+        provider_product_id,
+        bundle_slug,
+        credits,
+        quantity,
+        granted_at,
+        expires_at,
+        metadata_json
+      )
+      VALUES (?, ?, 'dodo', ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(provider_payment_id) DO NOTHING
+    `).bind(
+      createId(),
+      input.userId,
+      input.providerPaymentId,
+      input.providerProductId,
+      input.bundleSlug,
+      Math.max(0, Math.floor(input.credits)),
+      Math.max(1, Math.floor(input.quantity)),
+      input.grantedAt ?? nowIso(),
+      input.expiresAt,
+      jsonValue(input.metadata ?? {}),
+    ),
+    buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
+  ]);
+}
+
+export async function finalizeDodoWebhookLedgerOnly(
+  env: AppEnv,
+  ledger: DodoWebhookLedgerFinalize,
+) {
+  const db = ensureDb(env);
+  await db.batch([buildDodoWebhookLedgerFinalizeStatement(db, ledger, nowIso())]);
 }
 
 // Dodo checkout links are payable for 24 hours by default, so the local lock
@@ -2404,7 +2603,7 @@ export async function revokeDodoPlanAccess(
   );
 }
 
-export async function claimDodoWebhookEvent(
+export async function beginDodoWebhookEventProcessing(
   env: AppEnv,
   input: {
     eventId: string;
@@ -2412,7 +2611,7 @@ export async function claimDodoWebhookEvent(
     userId: string | null;
     payloadTimestamp: string | null;
   },
-) {
+): Promise<DodoWebhookProcessingClaim> {
   const eventId = input.eventId.trim();
   if (!eventId) {
     throw new Error("Dodo webhook event id is required.");
@@ -2420,9 +2619,18 @@ export async function claimDodoWebhookEvent(
 
   const db = ensureDb(env);
   const receivedAt = nowIso();
-  // Mirrors claimRazorpayWebhookEvent: first delivery claims the event;
-  // redeliveries of processed events are skipped; failed events may be
-  // reclaimed so processing can retry.
+  const leaseDays = dodoWebhookProcessingLeaseDays();
+  const reclaimWhere = `
+    dodo_webhook_event.outcome = 'failed'
+    OR (
+      dodo_webhook_event.outcome IN ('received', 'processing')
+      AND (
+        dodo_webhook_event.processing_started_at IS NULL
+        OR julianday(?) > julianday(dodo_webhook_event.processing_started_at) + ?
+      )
+    )
+  `;
+
   let result: D1Result;
   try {
     result = await db.prepare(`
@@ -2433,28 +2641,33 @@ export async function claimDodoWebhookEvent(
         received_at,
         payload_timestamp,
         outcome,
+        processing_started_at,
         metadata_json
       )
-      VALUES (?, ?, ?, ?, ?, 'received', '{}')
+      VALUES (?, ?, ?, ?, ?, 'processing', ?, '{}')
       ON CONFLICT(event_id)
       DO UPDATE SET
         event_type = excluded.event_type,
         user_id = excluded.user_id,
         received_at = excluded.received_at,
         payload_timestamp = excluded.payload_timestamp,
+        outcome = 'processing',
+        processing_started_at = excluded.processing_started_at,
         processed_at = NULL,
-        outcome = 'received',
         metadata_json = '{}'
-      WHERE dodo_webhook_event.outcome = 'failed'
+      WHERE ${reclaimWhere}
     `).bind(
       eventId,
       input.eventType,
       input.userId,
       receivedAt,
       input.payloadTimestamp,
+      receivedAt,
+      receivedAt,
+      leaseDays,
     ).run();
   } catch (error) {
-    if (!isMissingDodoPayloadTimestampColumnError(error)) {
+    if (!isMissingDodoPayloadTimestampColumnError(error) && !isMissingDodoProcessingLeaseColumnError(error)) {
       throw error;
     }
 
@@ -2485,16 +2698,64 @@ export async function claimDodoWebhookEvent(
       ).run();
   }
 
-  return Number(result.meta?.changes ?? 0) > 0;
+  if (Number(result.meta?.changes ?? 0) > 0) {
+    return { status: "claimed" };
+  }
+
+  const row = await one<{ outcome: string }>(
+    env,
+    "SELECT outcome FROM dodo_webhook_event WHERE event_id = ?",
+    eventId,
+  );
+  if (row?.outcome === "processed" || row?.outcome === "ignored") {
+    return { status: "duplicate", outcome: row.outcome };
+  }
+  return { status: "in_progress" };
 }
 
-function isMissingDodoPayloadTimestampColumnError(error: unknown) {
+/** @deprecated Use beginDodoWebhookEventProcessing for lease-aware claiming. */
+export async function claimDodoWebhookEvent(
+  env: AppEnv,
+  input: {
+    eventId: string;
+    eventType: string;
+    userId: string | null;
+    payloadTimestamp: string | null;
+  },
+) {
+  const claim = await beginDodoWebhookEventProcessing(env, input);
+  return claim.status === "claimed";
+}
+
+function isMissingDodoProcessingLeaseColumnError(error: unknown) {
   return (
     error instanceof Error &&
-    /dodo_webhook_event has no column named payload_timestamp/i.test(error.message)
+    /dodo_webhook_event has no column named processing_started_at/i.test(error.message)
   );
 }
 
+export async function failDodoWebhookEventProcessing(
+  env: AppEnv,
+  eventId: string,
+  metadata: JsonRecord = {},
+) {
+  await run(
+    env,
+    `
+      UPDATE dodo_webhook_event
+      SET outcome = 'failed',
+          processing_started_at = NULL,
+          processed_at = NULL,
+          metadata_json = ?
+      WHERE event_id = ?
+        AND outcome = 'processing'
+    `,
+    jsonValue(metadata),
+    eventId.trim(),
+  );
+}
+
+/** @deprecated Ledger finalization is batched with business mutations. */
 export async function markDodoWebhookEventFinished(
   env: AppEnv,
   eventId: string,
@@ -2503,12 +2764,18 @@ export async function markDodoWebhookEventFinished(
     metadata?: JsonRecord;
   },
 ) {
+  if (input.outcome === "failed") {
+    await failDodoWebhookEventProcessing(env, eventId, input.metadata ?? {});
+    return;
+  }
+
   await run(
     env,
     `
       UPDATE dodo_webhook_event
       SET outcome = ?,
           processed_at = ?,
+          processing_started_at = NULL,
           metadata_json = ?
       WHERE event_id = ?
     `,
@@ -2516,6 +2783,13 @@ export async function markDodoWebhookEventFinished(
     nowIso(),
     jsonValue(input.metadata ?? {}),
     eventId,
+  );
+}
+
+function isMissingDodoPayloadTimestampColumnError(error: unknown) {
+  return (
+    error instanceof Error &&
+    /dodo_webhook_event has no column named payload_timestamp/i.test(error.message)
   );
 }
 
@@ -3941,27 +4215,49 @@ export async function getRecentSuccessfulRuns(
   return rows.map(toWatchlistRunRecord);
 }
 
+export function buildCapacitySkipIdempotencyKey(input: {
+  watchlistId: string;
+  scheduledTime?: number;
+  cron?: string | null;
+  triggerType?: WatchlistRunRecord["triggerType"];
+}) {
+  const triggerType = input.triggerType ?? "scheduled";
+  const slot = new Date(input.scheduledTime ?? Date.now()).toISOString().replace(/[:.]/g, "-");
+  const cronFragment = (input.cron ?? "daily").replace(/[^a-zA-Z0-9_-]+/g, "-");
+  return `capacity_budget:${triggerType}:${input.watchlistId}:${cronFragment}:${slot}`;
+}
+
 export async function recordWatchlistCapacitySkip(
   env: AppEnv,
   watchlistId: string,
   input: {
     triggerType?: WatchlistRunRecord["triggerType"];
     reason?: string;
+    scheduledTime?: number;
+    cron?: string | null;
+    idempotencyKey?: string;
   } = {},
 ) {
   const id = createId();
   const timestamp = nowIso();
   const triggerType = input.triggerType ?? "scheduled";
+  const idempotencyKey =
+    input.idempotencyKey ??
+    buildCapacitySkipIdempotencyKey({
+      watchlistId,
+      scheduledTime: input.scheduledTime,
+      cron: input.cron,
+      triggerType,
+    });
   const summary = {
     reason: input.reason ?? "capacity_budget",
     message:
       "Last night's scan window filled before this watchlist was reached. It stays queued for the next run.",
   };
 
-  await run(
-    env,
-    `
-      INSERT INTO watchlist_run (
+  const db = ensureDb(env);
+  const insert = await db.prepare(`
+      INSERT OR IGNORE INTO watchlist_run (
         id,
         watchlist_id,
         trigger_type,
@@ -3974,23 +4270,39 @@ export async function recordWatchlistCapacitySkip(
         finished_at,
         error_code,
         error_message,
+        idempotency_key,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, 'skipped', 0, 0, NULL, ?, ?, ?, 'capacity_budget', ?, ?, ?)
-    `,
-    id,
-    watchlistId,
-    triggerType,
-    jsonValue(summary),
-    timestamp,
-    timestamp,
-    summary.message,
-    timestamp,
-    timestamp,
-  );
+      VALUES (?, ?, ?, 'skipped', 0, 0, NULL, ?, ?, ?, 'capacity_budget', ?, ?, ?, ?)
+    `).bind(
+      id,
+      watchlistId,
+      triggerType,
+      jsonValue(summary),
+      timestamp,
+      timestamp,
+      summary.message,
+      idempotencyKey,
+      timestamp,
+      timestamp,
+    ).run();
 
-  return id;
+  if (Number(insert.meta?.changes ?? 0) > 0) {
+    return id;
+  }
+
+  const existing = await one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM watchlist_run
+      WHERE idempotency_key = ?
+      LIMIT 1
+    `,
+    idempotencyKey,
+  );
+  return existing?.id ?? id;
 }
 
 export async function closeCounterMoveFollowUp(
