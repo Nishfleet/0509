@@ -90,6 +90,26 @@ export function isBetterAuthPasskeyEnabled(env: AppEnv) {
   return isBetterAuthConfigured(env);
 }
 
+export async function hasBetterAuthPasskeysForEmail(env: AppEnv, email: string) {
+  if (!isBetterAuthPasskeyEnabled(env) || !env.DB || !email.trim()) {
+    return false;
+  }
+
+  const row = await env.DB.prepare(
+    `
+      SELECT passkey.id
+      FROM passkey
+      JOIN user ON user.id = passkey.userId
+      WHERE user.email = ? COLLATE NOCASE
+      LIMIT 1
+    `,
+  )
+    .bind(normalizeBetterAuthEmail(email))
+    .first<{ id: string }>();
+
+  return Boolean(row?.id);
+}
+
 export function getBetterAuth(env: AppEnv, request: Request) {
   const secret = env.BETTER_AUTH_SECRET?.trim();
   if (!isBetterAuthEnabled(env) || !env.DB || !secret) {
@@ -391,7 +411,9 @@ export function appendBetterAuthSetCookieHeaders(target: Headers, source: Header
   const cookies = getSetCookie ? getSetCookie.call(source) : [];
   if (cookies.length > 0) {
     for (const cookie of cookies) {
-      target.append("Set-Cookie", cookie);
+      for (const parsed of splitCombinedSetCookieHeader(cookie)) {
+        target.append("Set-Cookie", parsed);
+      }
     }
     return;
   }
