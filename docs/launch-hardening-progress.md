@@ -121,3 +121,22 @@ Revert commits in reverse order on branch `cursor/launch-hardening-20260623-1825
 8. `f62bb15` — auth / onboarding UX
 
 Apply migrations `0045` and `0046` remotely only after deploy. Rollback requires no down migrations (both additive). **Status:** both migrations were applied to production D1 on 2026-06-23 before deploy.
+
+## Plan entitlements + evidence usage (2026-06-23, local only)
+
+Branch: `cursor/plan-entitlements-topups-no-prices-20260623`
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Authoritative entitlement catalog | implemented | `app/lib/plan-entitlements.ts` — no prices |
+| Versioned billing SKU registry | implemented | `app/lib/billing-sku-catalog.ts` — provider IDs from env only |
+| Monthly usage periods | implemented | UTC calendar months; annual subs get monthly buckets (`0049`) |
+| Non-expiring top-ups | implemented | `evidence_top_up_grant` ledger (`0050`); included-first consumption |
+| Usage reservations | implemented | `0051` — idempotent logical keys |
+| Plan-aware monitoring priority | implemented | `queue_priority` on `watchlist_run` (`0052`); fan-out still inline |
+| Pricing/checkout | gated | Checkout disabled when SKU/provider price config missing |
+| Remote D1 / Dodo / deploy | **NOT RUN** | Migrations `0049`–`0052` local only |
+
+Docs: `docs/plan-catalog.md`, `docs/billing-sku-catalog.md`, `docs/evidence-usage-accounting.md`, `docs/top-up-billing.md`, `docs/plan-entitlement-audit.md`.
+
+Owner decisions still open: top-up spend after cancel, partial refund treatment, credit transfer on ownership merge, whether every scheduled scan consumes a check (default: proof capture only).
