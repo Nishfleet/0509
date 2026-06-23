@@ -37,6 +37,7 @@ describe("runRetentionSweep", () => {
     expect(tables).toEqual([
       "discovery_fetch_log",
       "discovery_cache_entry",
+      "better_auth_magic_link_ticket",
       "meta_integration_log",
       "watchlist_run",
       "delivery_attempt",
@@ -49,6 +50,7 @@ describe("runRetentionSweep", () => {
     }
 
     expect(result.deleted).toMatchObject({
+      better_auth_magic_link_ticket: 2,
       discovery_fetch_log: 2,
       watchlist_run: 2,
       delivery_attempt: 2,
@@ -104,7 +106,7 @@ describe("runRetentionSweep", () => {
 
     const result = await runRetentionSweep({ DB: db } as never);
 
-    expect(statements.length).toBe(6);
+    expect(statements.length).toBe(7);
     expect(result.deleted.discovery_cache_entry).toBeUndefined();
     expect(result.deleted.delivery_attempt).toBe(1);
     consoleError.mockRestore();

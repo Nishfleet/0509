@@ -25,8 +25,15 @@ export function primaryDomainRedirect(request: Request): Response | null {
   return new Response(null, {
     status: 308,
     headers: {
-      "cache-control": "public, max-age=3600",
+      "cache-control": authPathHasQueryCredential(url) ? "no-store" : "public, max-age=3600",
       location: url.toString(),
     },
   });
+}
+
+function authPathHasQueryCredential(url: URL) {
+  return (
+    (url.pathname.startsWith("/auth/") || url.pathname.startsWith("/api/auth/")) &&
+    url.search.length > 0
+  );
 }
