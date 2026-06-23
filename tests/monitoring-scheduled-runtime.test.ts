@@ -15,6 +15,8 @@ vi.mock("~/lib/monitoring-fanout.server", async (importOriginal) => {
     reconcileOrchestratedWatchlistRuns: reconcileOrchestratedWatchlistRunsMock,
     collectMonitoringOrchestrationMetrics: collectMonitoringOrchestrationMetricsMock,
     resolveMonitoringFanoutMode: resolveMonitoringFanoutModeMock,
+    isFanoutEnabledForWorkspace: vi.fn(() => true),
+    hasOrchestratedRunBlockingInlineScan: vi.fn().mockResolvedValue(false),
   };
 });
 
