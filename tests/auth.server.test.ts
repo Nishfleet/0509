@@ -492,6 +492,13 @@ describe("Better Auth magic links", () => {
     expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
     const [ticket] = ticketDb.tickets.values();
     expect(ticket?.consumed_at).toBeNull();
+    const stagingCookie = setCookieValues(redirectResponse.headers).join("\n");
+    expect(stagingCookie).toContain("f9_better_magic=");
+    expect(stagingCookie).toContain("HttpOnly");
+    expect(stagingCookie).toContain("SameSite=Lax");
+    expect(stagingCookie).toContain("Path=/auth/better/magic-link");
+    expect(stagingCookie).toContain("Secure");
+    expect(redirectResponse.headers.get("Location")).not.toContain("ticket=");
   });
 
   it("signs in after a same-origin confirmation POST", async () => {
