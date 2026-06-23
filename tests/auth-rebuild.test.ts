@@ -53,12 +53,13 @@ describe("auth rebuild", () => {
     expect(authSurface).not.toContain('name="token"');
     expect(authSurface).not.toContain('value={token}');
     expect(magicLinkRoute).toContain("readBetterAuthMagicLinkConfirmationContext");
-    expect(magicLinkRoute).toContain("action={cleanMagicLinkPath(data.mode)}");
     expect(magicLinkRoute).toContain("readBetterAuthMagicLinkConfirmationTicket");
-    expect(magicLinkRoute).toContain("data.email");
+    expect(magicLinkRoute).toContain("browserBound");
     expect(apiAuthRoute).toContain("getBetterAuth");
     expect(apiAuthRoute).toContain("/api/auth/magic-link/verify");
     expect(apiAuthRoute).toContain("/api/auth/sign-in/magic-link");
+    expect(betterAuthServer).toContain("verifyBetterAuthMagicLink");
+    expect(betterAuthServer).toContain("/auth/better/magic-link");
   });
 
   it("keeps OAuth login sign-in-only unless signup explicitly requests account creation", () => {
