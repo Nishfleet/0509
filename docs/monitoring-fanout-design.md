@@ -42,24 +42,28 @@ Rejected for this slice:
 Cron (orchestrator only)
   → digests (unchanged, still first)
   → reconcile stale queued/running runs (bounded)
-  → for each eligible watchlist:
+  → for each allowlisted eligible watchlist:
        ensure watchlist_run (pending, idempotency_key)
-       MonitoringWorkflow.create(id=executionKey)
+       MonitoringWorkflow.createBatch(id=derivedWorkflowId)
+  → inline fallback for non-allowlisted workspaces when mode=fanout
   → exit (no Browser Rendering in cron)
 
 MonitoringWorkflow instance
-  → step: acquire concurrency slot (bounded, retried)
+  → loop: claim D1 concurrency slot (atomic) or step.sleep
   → step: runWatchlistWorkflowJob
        claim run (processing_token)
-       revalidate watchlist + plan
+       revalidate watchlist + plan + fanout mode
        run existing monitoring pipeline on pre-created runId
+       renew leases during scan pages
        fenced finalize
+  → release concurrency slot
 ```
 
 ### Idempotency
 
-- **Logical scan key:** `watchlist-run:{trigger}:{watchlistId}:{cron}:{scheduledSlot}` (`buildWatchlistExecutionIdempotencyKey`)
-- **Uniqueness:** partial unique index on `watchlist_run.idempotency_key` (0046) + workflow instance ID
+- **Logical scan key (D1):** `watchlist-run:{trigger}:{watchlistId}:{cron}:{scheduledSlot}` (`buildWatchlistExecutionIdempotencyKey`)
+- **Workflow instance ID:** `monitor-v1-{sha256-base64url-prefix}` derived from the logical key (`buildMonitoringWorkflowInstanceId`) — valid for Cloudflare (`^[a-zA-Z0-9_][a-zA-Z0-9-_]*$`, ≤100 chars)
+- **Uniqueness:** partial unique index on `watchlist_run.idempotency_key` (0046) + idempotent `createBatch`
 - **Manual refresh:** separate trigger type / no shared scheduled slot key
 
 ### State machine (`watchlist_run.status`)
@@ -69,23 +73,25 @@ MonitoringWorkflow instance
 | `pending` | Queued; dispatch may be pending or retrying |
 | `running` | Claimed by a workflow consumer |
 | `succeeded` / `failed` | Terminal scan outcomes (existing semantics) |
-| `skipped` | Cancelled ineligible or capacity/dispatch backlog (customer-safe messaging) |
+| `skipped` | Cancelled ineligible, rollback, or capacity/dispatch backlog (customer-safe messaging) |
 
 Orchestration metadata (migration `0047`): `workflow_instance_id`, `processing_token`, `processing_started_at`, `queued_at`, `attempt_count`, `retry_after`.
 
+Concurrency permits (migration `0048`): `monitoring_concurrency_slot` rows claimed atomically.
+
 ### Concurrency
 
-- `MONITORING_FANOUT_MAX_INFLIGHT` (default **8**) — not simultaneous browser sessions for all 75 jobs; caps active `running` scheduled runs.
-- Workflow first step waits/retries when at cap.
-- Operator verifies against Browser Rendering plan limits before raising.
+- `MONITORING_FANOUT_MAX_INFLIGHT` (default **8**) — atomic D1 slot table, not a count-then-update race
+- Workflow waits with `step.sleep` between claim attempts (does not consume step budget)
+- Operator verifies against Browser Rendering plan limits before raising
 
 ### Rollout modes (`MONITORING_FANOUT_MODE`)
 
 | Mode | Behavior |
 |------|----------|
-| `fanout` | Default when workflow binding exists |
-| `inline` | Rollback-only legacy sequential cron scans |
-| `shadow` | Creates durable schedule records without executing scans |
+| `inline` | **Production default.** Rollback-only legacy sequential cron scans |
+| `fanout` | Durable workflow fan-out for allowlisted workspaces (`MONITORING_FANOUT_ALLOWLIST` or `MONITORING_FANOUT_GLOBAL=1`) |
+| `shadow` | Counts eligible watchlists only; no D1 runs, no workflows, no scans |
 
 Missing workflow binding in `fanout` mode falls back to `inline` via `resolveMonitoringFanoutMode`.
 
@@ -94,6 +100,6 @@ Missing workflow binding in `fanout` mode falls back to `inline` via `resolveMon
 - Cloudflare Workflows instance count per nightly window (75+ per Agency workspace)
 - Browser Rendering concurrent session limits
 - Workers Paid plan required (already true for browser crons)
-- Workflow step retries (concurrency wait uses exponential backoff)
+- Workflow `createBatch` rate limits (handled as retryable dispatch failures)
 
 No Cloudflare resources were provisioned during this coding run.
