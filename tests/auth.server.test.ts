@@ -2,9 +2,11 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import {
   BetterAuthUnknownUserError,
+  appendBetterAuthSetCookieHeaders,
   betterAuthMagicLinkConfirmationUrl,
   buildBetterAuthMagicLinkEmail,
   enabledBetterAuthOAuthProviders,
+  hasBetterAuthPasskeysForEmail,
   isBetterAuthConfigured,
   isBetterAuthOAuthProviderConfigured,
   isSameOriginAuthFormPost,
@@ -600,23 +602,26 @@ describe("Better Auth magic links", () => {
       mode: "login",
     });
 
-    const response = await action({
-      context: context(env()),
-      params: {},
-      pattern: "/auth/better/magic-link",
-      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
-        body: new URLSearchParams(),
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          cookie: ticketCookie,
-          origin: "https://0509.io",
-        },
-        method: "POST",
-      }),
-      url: "https://0509.io/auth/better/magic-link?mode=login",
-    } as never);
+    const response = (await Promise.resolve(
+      action({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
+          body: new URLSearchParams(),
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            cookie: ticketCookie,
+            origin: "https://0509.io",
+          },
+          method: "POST",
+        }),
+        url: "https://0509.io/auth/better/magic-link?mode=login",
+      } as never),
+    ).catch((error) => error)) as Response;
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://0509.io/app");
     expect(verifyBetterAuthMagicLink).toHaveBeenCalledWith(
       expect.anything(),
       expect.any(Request),
@@ -721,7 +726,10 @@ describe("Better Auth magic links", () => {
   });
 
   it("redeems through Better Auth only after a same-origin clean confirmation post", async () => {
-    const betterAuthResponse = new Response(null, { status: 204 });
+    const betterAuthResponse = new Response(null, {
+      headers: { Location: "https://0509.io/app/onboard" },
+      status: 302,
+    });
     Object.defineProperty(betterAuthResponse.headers, "getSetCookie", {
       value: () => [
         "better-auth.session_token=session-1; HttpOnly; Secure",
@@ -758,25 +766,28 @@ describe("Better Auth magic links", () => {
     ).catch((error) => error)) as Response;
     const ticketCookie = cookieHeader(setCookieValues(redirectResponse.headers), "f9_better_magic");
 
-    const response = await action({
-      context: context(testEnv),
-      params: {},
-      pattern: "/auth/better/magic-link",
-      request: new Request("https://0509.io/auth/better/magic-link?mode=signup", {
-        body: new URLSearchParams({ email: "owner@example.com" }),
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          cookie: ticketCookie,
-          origin: "https://0509.io",
-        },
-        method: "POST",
-      }),
-      url: "https://0509.io/auth/better/magic-link?mode=signup",
-    } as never);
+    const response = (await Promise.resolve(
+      action({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request("https://0509.io/auth/better/magic-link?mode=signup", {
+          body: new URLSearchParams({ email: "owner@example.com" }),
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            cookie: ticketCookie,
+            origin: "https://0509.io",
+          },
+          method: "POST",
+        }),
+        url: "https://0509.io/auth/better/magic-link?mode=signup",
+      } as never),
+    ).catch((error) => error)) as Response;
 
     const setCookies = setCookieValues(response.headers);
     const combinedSetCookie = setCookies.join("\n");
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://0509.io/app/onboard");
     expect(verifyBetterAuthMagicLink).toHaveBeenCalledWith(
       expect.anything(),
       expect.any(Request),
@@ -797,6 +808,126 @@ describe("Better Auth magic links", () => {
     expect(combinedSetCookie).toContain("Path=/auth/better/magic-link;");
     const [ticket] = ticketDb.tickets.values();
     expect(ticket?.consumed_at).toEqual(expect.any(String));
+  });
+
+  it("round-trips session cookies from magic-link confirmation into session lookup", async () => {
+    const getBetterAuthSession = vi.fn(async (_env, request: Request) => {
+      const cookie = request.headers.get("cookie") ?? "";
+      if (!cookie.includes("__Secure-better-auth.session_token=session-token")) {
+        return null;
+      }
+
+      return {
+        session: {
+          expiresAt: "2026-06-30T00:00:00.000Z",
+          id: "session-1",
+          userId: "user-1",
+        },
+        user: {
+          email: "owner@example.com",
+          id: "user-1",
+          image: null,
+          name: "Owner",
+          onboardedAt: null,
+        },
+      };
+    });
+    const betterAuthResponse = new Response(null, {
+      headers: { Location: "https://0509.io/app" },
+      status: 302,
+    });
+    Object.defineProperty(betterAuthResponse.headers, "getSetCookie", {
+      value: () => [
+        "__Secure-better-auth.session_token=session-token; HttpOnly; Secure; Path=/; SameSite=Lax",
+        "__Secure-better-auth.session_data=session-data; HttpOnly; Secure; Path=/; SameSite=Lax",
+      ],
+    });
+    const verifyBetterAuthMagicLink = vi.fn().mockResolvedValue(betterAuthResponse);
+    vi.doMock("~/lib/better-auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
+        "~/lib/better-auth.server",
+      );
+      return {
+        ...actual,
+        getBetterAuthSession,
+        verifyBetterAuthMagicLink,
+      };
+    });
+
+    const { action, loader } = await import("~/routes/auth.better.magic-link");
+    const ticketDb = dbWithMagicLinkTickets();
+    const testEnv = env({ DB: ticketDb.db });
+    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
+    });
+    const stagedRedirect = (await Promise.resolve(
+      loader({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request(ticketUrl),
+        url: ticketUrl,
+      } as never),
+    ).catch((error) => error)) as Response;
+    const ticketCookie = cookieHeader(setCookieValues(stagedRedirect.headers), "f9_better_magic");
+
+    const redirectResponse = (await Promise.resolve(
+      action({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
+          body: new URLSearchParams({ email: "owner@example.com" }),
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            cookie: ticketCookie,
+            origin: "https://0509.io",
+          },
+          method: "POST",
+        }),
+        url: "https://0509.io/auth/better/magic-link?mode=login",
+      } as never),
+    ).catch((error) => error)) as Response;
+
+    const cookieHeaderValue = setCookieValues(redirectResponse.headers)
+      .map((value) => value.split(";")[0] ?? value)
+      .join("; ");
+    const { getOptionalSession } = await import("~/lib/auth.server");
+    const session = await getOptionalSession(
+      testEnv,
+      new Request("https://0509.io/app", {
+        headers: { cookie: cookieHeaderValue },
+      }),
+    );
+
+    expect(redirectResponse.status).toBe(302);
+    expect(session?.user.email).toBe("owner@example.com");
+    expect(getBetterAuthSession).toHaveBeenCalledWith(
+      testEnv,
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+    const sessionRequest = getBetterAuthSession.mock.calls[0]?.[1] as Request;
+    expect(sessionRequest.headers.get("cookie")).toContain(
+      "__Secure-better-auth.session_token=session-token",
+    );
+  });
+
+  it("forwards every cookie from a comma-joined Set-Cookie fallback", () => {
+    const source = new Headers();
+    source.set(
+      "Set-Cookie",
+      "better-auth.session_token=session-1; HttpOnly; Path=/, better-auth.session_data=session-data; HttpOnly; Path=/",
+    );
+    const target = new Headers();
+    appendBetterAuthSetCookieHeaders(target, source);
+    const cookies = setCookieValues(target);
+    expect(cookies).toHaveLength(2);
+    expect(cookies[0]).toContain("better-auth.session_token=session-1");
+    expect(cookies[1]).toContain("better-auth.session_data=session-data");
   });
 
   it("preserves a staged ticket when Better Auth verification throws", async () => {
@@ -867,6 +998,64 @@ describe("Better Auth magic links", () => {
     expect(email.html).toContain(">Activate account</a>");
     expect(email.html).not.toContain(">https://0509.io/auth/better/magic-link");
     expect(email.text).toContain("Activate account: https://0509.io/auth/better/magic-link");
+  });
+});
+
+describe("Better Auth passkey login gating", () => {
+  it("only exposes passkey login when the known email has registered passkeys", async () => {
+    const prepare = vi.fn((sql: string) => ({
+      bind: vi.fn(() => ({
+        first: vi.fn(async () => {
+          if (sql.includes("FROM passkey")) {
+            return { id: "passkey-1" };
+          }
+          return null;
+        }),
+      })),
+    }));
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+
+    const testEnv = env({ DB: { prepare } as unknown as D1Database });
+    const { hasBetterAuthPasskeysForEmail } = await import("~/lib/better-auth.server");
+    expect(await hasBetterAuthPasskeysForEmail(testEnv, "owner@example.com")).toBe(true);
+    expect(await hasBetterAuthPasskeysForEmail(testEnv, "")).toBe(false);
+
+    const { loader } = await import("~/routes/auth.login");
+    await expect(
+      loader({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/login",
+        request: new Request("https://0509.io/auth/login?email=owner%40example.com"),
+        url: "https://0509.io/auth/login?email=owner%40example.com",
+      } as never),
+    ).resolves.toMatchObject({
+      passkeysEnabled: true,
+      prefillEmail: "owner@example.com",
+    });
+
+    await expect(
+      loader({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/login",
+        request: new Request("https://0509.io/auth/login"),
+        url: "https://0509.io/auth/login",
+      } as never),
+    ).resolves.toMatchObject({
+      prefillEmail: "",
+    });
+    await expect(
+      loader({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/login",
+        request: new Request("https://0509.io/auth/login"),
+        url: "https://0509.io/auth/login",
+      } as never),
+    ).resolves.not.toHaveProperty("passkeysEnabled");
   });
 });
 

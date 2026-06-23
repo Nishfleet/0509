@@ -90,6 +90,26 @@ export function isBetterAuthPasskeyEnabled(env: AppEnv) {
   return isBetterAuthConfigured(env);
 }
 
+export async function hasBetterAuthPasskeysForEmail(env: AppEnv, email: string) {
+  if (!isBetterAuthPasskeyEnabled(env) || !env.DB || !email.trim()) {
+    return false;
+  }
+
+  const row = await env.DB.prepare(
+    `
+      SELECT passkey.id
+      FROM passkey
+      JOIN user ON user.id = passkey.userId
+      WHERE user.email = ? COLLATE NOCASE
+      LIMIT 1
+    `,
+  )
+    .bind(normalizeBetterAuthEmail(email))
+    .first<{ id: string }>();
+
+  return Boolean(row?.id);
+}
+
 export function getBetterAuth(env: AppEnv, request: Request) {
   const secret = env.BETTER_AUTH_SECRET?.trim();
   if (!isBetterAuthEnabled(env) || !env.DB || !secret) {
@@ -391,15 +411,66 @@ export function appendBetterAuthSetCookieHeaders(target: Headers, source: Header
   const cookies = getSetCookie ? getSetCookie.call(source) : [];
   if (cookies.length > 0) {
     for (const cookie of cookies) {
-      target.append("Set-Cookie", cookie);
+      for (const parsed of splitCombinedSetCookieHeader(cookie)) {
+        target.append("Set-Cookie", parsed);
+      }
     }
     return;
   }
 
-  const cookie = source.get("Set-Cookie");
-  if (cookie) {
+  const combined = source.get("Set-Cookie");
+  if (!combined) {
+    return;
+  }
+
+  for (const cookie of splitCombinedSetCookieHeader(combined)) {
     target.append("Set-Cookie", cookie);
   }
+}
+
+function splitCombinedSetCookieHeader(setCookie: string) {
+  const cookies: string[] = [];
+  let start = 0;
+
+  for (let index = 0; index < setCookie.length; index += 1) {
+    if (setCookie[index] !== ",") {
+      continue;
+    }
+
+    let cursor = index + 1;
+    while (cursor < setCookie.length && setCookie[cursor] === " ") {
+      cursor += 1;
+    }
+
+    let tokenEnd = cursor;
+    while (
+      tokenEnd < setCookie.length &&
+      setCookie[tokenEnd] !== "=" &&
+      setCookie[tokenEnd] !== ";" &&
+      setCookie[tokenEnd] !== ","
+    ) {
+      tokenEnd += 1;
+    }
+
+    if (tokenEnd < setCookie.length && setCookie[tokenEnd] === "=") {
+      const cookie = setCookie.slice(start, index).trim();
+      if (cookie) {
+        cookies.push(cookie);
+      }
+      start = index + 1;
+      while (start < setCookie.length && setCookie[start] === " ") {
+        start += 1;
+      }
+      index = start - 1;
+    }
+  }
+
+  const last = setCookie.slice(start).trim();
+  if (last) {
+    cookies.push(last);
+  }
+
+  return cookies;
 }
 
 export interface BetterAuthMagicLinkConfirmation {
