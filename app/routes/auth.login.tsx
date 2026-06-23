@@ -57,7 +57,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
   const {
     BetterAuthUnknownUserError,
-    dummyBetterAuthMagicLinkRequestStateCookie,
     isBetterAuthConfigured,
     isSameOriginAuthFormPost,
     sendBetterAuthMagicLink,
@@ -74,9 +73,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     throw redirect("/auth/login?error=request_invalid");
   }
 
-  let requestStateCookie: string | null = null;
   try {
-    requestStateCookie = await sendBetterAuthMagicLink(env, request, {
+    await sendBetterAuthMagicLink(env, request, {
       email,
       mode: "login",
       redirectTo,
@@ -86,18 +84,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
       console.warn("failed to send Better Auth login email", error);
       throw redirect("/auth/login?error=send_failed");
     }
-    requestStateCookie = dummyBetterAuthMagicLinkRequestStateCookie(request);
   }
 
   const next = new URL("/auth/login", request.url);
   next.searchParams.set("sent", "1");
   next.searchParams.set("email", email);
   next.searchParams.set("redirectTo", redirectTo);
-  const headers = new Headers();
-  if (requestStateCookie) {
-    headers.append("Set-Cookie", requestStateCookie);
-  }
-  throw redirect(`${next.pathname}${next.search}`, { headers });
+  throw redirect(`${next.pathname}${next.search}`);
 }
 
 export default function LoginRoute() {
