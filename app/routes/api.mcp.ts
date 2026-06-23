@@ -577,7 +577,7 @@ const MCP_TOOLS = [
     name: "list_support_cases",
     title: "List Support Cases",
     description:
-      "Read account support case summaries without exposing private case details or internal context.",
+      "Read account support case summaries without exposing private support notes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -731,7 +731,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        `Use these tools to retrieve Five to Nine workspace readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active customer API key; audited workspace action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package proof, and save memory. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these app-owned capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
+        `Use these tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package proof, and save memory. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
     });
   }
 
@@ -931,7 +931,7 @@ async function buildWorkspaceReadinessToolResult(
 
 function formatWorkspaceReadinessSummary(readiness: WorkspaceReadiness) {
   const lines = [
-    `*Five to Nine workspace readiness:* ${readiness.readyCount} of ${readiness.totalCount} ready`,
+    `*Five to Nine account readiness:* ${readiness.readyCount} of ${readiness.totalCount} ready`,
     ...readiness.items
       .filter((item) => item.status !== "not_applicable")
       .map((item) => `- ${item.label}: ${item.status.replaceAll("_", " ")} - ${item.detail}`),

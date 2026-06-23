@@ -66,8 +66,8 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Headline changed: ready for internal review");
-    expect(markup).toContain("add page proof before sending externally");
+    expect(markup).toContain("Headline changed: ready to review");
+    expect(markup).toContain("add page proof before sharing");
     expect(markup).toContain("1 scan-backed change");
     expect(markup).not.toContain("verified snapshot");
   });
@@ -103,8 +103,8 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Breaking offer changed: ready for internal review");
-    expect(markup).toContain("add page proof before sending externally");
+    expect(markup).toContain("Breaking offer changed: ready to review");
+    expect(markup).toContain("add page proof before sharing");
     expect(markup).toContain("1 verified snapshot");
     expect(markup).toContain("1 scan-backed change");
     expect(markup).toContain("Today: review the offer before briefing the client.");

@@ -1,7 +1,7 @@
 export const READINESS_ACTION_NAME = "get_workspace_readiness" as const;
 export const READ_ONLY_API_KEY_REQUIREMENT = "Works with any active customer API key.";
 export const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled customer API key.";
-export const BROAD_WRITE_API_NON_GOAL = "broad public write APIs beyond audited workspace actions";
+export const BROAD_WRITE_API_NON_GOAL = "broad public write APIs beyond approved account actions";
 
 type AgentActionGroup = {
   id: string;
@@ -60,7 +60,7 @@ export const AGENT_ACTION_GROUPS = [
   },
   {
     id: "memory",
-    label: "Memory and client rooms",
+    label: "Context and client rooms",
     detail: "Save account context and keep agency client work organized.",
     actions: [
       "memory.upsert",
@@ -124,7 +124,7 @@ export function isCustomerAgentActionName(actionName: string | null | undefined)
 export const AGENT_FIRST_WORKFLOW = [
   {
     label: "Check readiness",
-    detail: "Use workspace readiness to find missing proof, delivery, billing, API, team, memory, and client-room setup.",
+    detail: "Use account readiness to find missing proof, delivery, billing, API, team, context, and client-room setup.",
   },
   {
     label: "Set up monitoring",
@@ -136,7 +136,7 @@ export const AGENT_FIRST_WORKFLOW = [
   },
   {
     label: "Preserve context",
-    detail: "Save account memory and client-room context so future reports and briefs inherit customer preferences.",
+    detail: "Save account context and client-room notes so future reports and briefs inherit customer preferences.",
   },
 ] as const;
 

@@ -6,7 +6,7 @@ import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const description =
-  "Current public launch status for Five to Nine health, search, billing, delivery, and manual blockers.";
+  "Current service status and launch posture for Five to Nine search, accounts, billing, and delivery.";
 
 export const links: LinksFunction = () => canonicalLinks("/status");
 
@@ -30,63 +30,50 @@ export async function loader({ context }: LoaderFunctionArgs) {
 
 export default function StatusRoute() {
   useLoaderData<typeof loader>();
-  const launchBlockers = [
-    "Slack broad-launch proof still requires one real configured Slack target and a recent successful Slack delivery.",
-    "WhatsApp is not launch-scoped until provider, customer enablement, templates, webhook, and delivered proof are ready.",
-    "Dodo portal subscription updates need the dashboard setting confirmed by Nish.",
-    "External uptime monitoring still needs a third-party monitor pointed at `https://0509.io/api/health`.",
-  ];
 
   return (
     <PublicDocShell
       kicker="Status"
-      title="Pilot-ready. Broad launch is still gated."
-      intro="This page is public product truth, not a substitute for the private launch canaries or an external uptime monitor."
+      title="Five to Nine service status."
+      intro="A plain view of what is available today, what is intentionally limited, and what still blocks broad launch."
     >
-      <PublicDocBlock title="Operational surfaces">
+      <PublicDocBlock title="Core surfaces">
         <dl className="proof-trail-list">
           <div>
-            <dt>Worker health</dt>
-            <dd>`/api/health` is public and should return status `ok` from the same Cloudflare app.</dd>
+            <dt>Public search</dt>
+            <dd>Available for checking competitor ads from a website.</dd>
           </div>
           <div>
-            <dt>Live search</dt>
-            <dd>Fresh live search is launch-gated by the private production canary.</dd>
+            <dt>Accounts</dt>
+            <dd>Secure email-link sign-in for saved competitors, boards, briefs, and reports.</dd>
           </div>
           <div>
             <dt>Billing</dt>
-            <dd>Dodo checkout and signed webhook grants are covered by the private billing canary.</dd>
+            <dd>Checkout, receipts, invoices, and billing support are available for paid plans.</dd>
           </div>
           <div>
-            <dt>Email</dt>
-            <dd>Digest and alert email uses Cloudflare Email Service through the `send_email` binding.</dd>
+            <dt>Email delivery</dt>
+            <dd>Digest and alert emails are available for eligible accounts.</dd>
           </div>
         </dl>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Launch evidence">
-        <div className="f9-message">
-          <p>
-            Detailed production evidence is intentionally private. The authenticated launch-readiness canary and
-            operator views remain the launch gate.
-          </p>
-        </div>
-      </PublicDocBlock>
-
-      <PublicDocBlock title="Launch blockers">
+      <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
-          {launchBlockers.map((blocker) => (
-            <li key={blocker}>{blocker}</li>
-          ))}
+          <li>Slack delivery is available in the product, but broad launch still needs fresh Slack proof.</li>
+          <li>Dodo customer portal subscription changes still need dashboard confirmation.</li>
+          <li>External uptime monitoring still needs to be connected to the public health endpoint.</li>
+          <li>WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.</li>
+          <li>Plan changes, cancellation, deletion, and sensitive account changes are handled through support until portal changes are confirmed.</li>
         </ul>
       </PublicDocBlock>
 
       <PublicDocBlock title="Safety controls">
         <ul className="f9-doc-list">
-          <li>Authentication, writes, public API reads, public search, public status, and account search are rate limited.</li>
+          <li>Sign-in, saved account data, search, and public pages are rate limited.</li>
           <li>Plans have watchlist, board, digest, proof-capture, and team-seat caps.</li>
           <li>Proof usage warns after 80% and hard-stops when paid capacity is exhausted.</li>
-          <li>Operator views and scheduled alerts track failed runs, proof failures, delivery failures, stale watchlists, and capacity risk.</li>
+          <li>Support can review delivery failures, stale tracking, and capacity risk when something needs attention.</li>
         </ul>
       </PublicDocBlock>
     </PublicDocShell>

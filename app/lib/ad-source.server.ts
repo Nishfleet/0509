@@ -823,47 +823,59 @@ async function acquireDiscoveryQueryLease(
   const holderId = crypto.randomUUID();
   const now = new Date().toISOString();
   const leaseExpiresAt = new Date(Date.now() + DISCOVERY_QUERY_LEASE_TTL_MS).toISOString();
-  await db
-    .prepare("DELETE FROM discovery_query_lease WHERE cache_key = ? AND lease_expires_at <= ?")
-    .bind(input.cacheKey, now)
-    .run();
-  await db
-    .prepare(
-      `
-        INSERT OR IGNORE INTO discovery_query_lease (
-          cache_key,
-          provider,
-          route_context,
-          holder_id,
-          lease_expires_at,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-    )
-    .bind(
-      input.cacheKey,
-      input.provider,
-      input.routeContext,
-      holderId,
-      leaseExpiresAt,
-      now,
-      now,
-    )
-    .run();
+  let leaseRow: { holder_id: string; lease_expires_at: string } | null | undefined;
 
-  const leaseRow = await db
-    .prepare(
-      `
-        SELECT holder_id, lease_expires_at
-        FROM discovery_query_lease
-        WHERE cache_key = ?
-        LIMIT 1
-      `,
-    )
-    .bind(input.cacheKey)
-    .first<{ holder_id: string; lease_expires_at: string }>();
+  try {
+    await db
+      .prepare("DELETE FROM discovery_query_lease WHERE cache_key = ? AND lease_expires_at <= ?")
+      .bind(input.cacheKey, now)
+      .run();
+    await db
+      .prepare(
+        `
+          INSERT OR IGNORE INTO discovery_query_lease (
+            cache_key,
+            provider,
+            route_context,
+            holder_id,
+            lease_expires_at,
+            created_at,
+            updated_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .bind(
+        input.cacheKey,
+        input.provider,
+        input.routeContext,
+        holderId,
+        leaseExpiresAt,
+        now,
+        now,
+      )
+      .run();
+
+    leaseRow = await db
+      .prepare(
+        `
+          SELECT holder_id, lease_expires_at
+          FROM discovery_query_lease
+          WHERE cache_key = ?
+          LIMIT 1
+        `,
+      )
+      .bind(input.cacheKey)
+      .first<{ holder_id: string; lease_expires_at: string }>();
+  } catch (error) {
+    if (!isMissingDiscoveryLeaseTableError(error)) {
+      throw error;
+    }
+    leaseRow = {
+      holder_id: holderId,
+      lease_expires_at: leaseExpiresAt,
+    };
+  }
 
   return {
     acquired: leaseRow?.holder_id === holderId,
@@ -887,11 +899,21 @@ async function releaseDiscoveryQueryLease(
   await db
     .prepare("DELETE FROM discovery_query_lease WHERE cache_key = ? AND holder_id = ?")
     .bind(input.cacheKey, input.holderId)
-    .run();
+    .run()
+    .catch((error) => {
+      if (!isMissingDiscoveryLeaseTableError(error)) {
+        throw error;
+      }
+    });
 }
 
 function canUseDistributedDiscoveryLease(db: AppEnv["DB"] | undefined): db is D1Database {
   return Boolean(db && typeof db.prepare === "function");
+}
+
+function isMissingDiscoveryLeaseTableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.toLowerCase().includes("no such table") && message.includes("discovery_query_lease");
 }
 
 async function waitForDiscoveryLeaseResolution(

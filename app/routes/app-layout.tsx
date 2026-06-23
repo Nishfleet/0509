@@ -45,18 +45,18 @@ export default function AppLayoutRoute() {
 
         <nav className="f9-app-nav" aria-label="Account">
           <NavLink end to="/app">
-            Dashboard
+            Overview
           </NavLink>
           <NavLink to="/app/collections">Boards</NavLink>
           <NavLink to="/app/watchlists">Watchlists</NavLink>
-          <NavLink to="/app/clients">Clients</NavLink>
+          <NavLink to="/app/clients">Client rooms</NavLink>
           <NavLink to="/app/team">Team</NavLink>
-          <NavLink to="/app/digests">Digests</NavLink>
+          <NavLink to="/app/digests">Briefs</NavLink>
           <NavLink to="/app/shares">Shared links</NavLink>
           <NavLink to="/app/billing">Plan &amp; billing</NavLink>
           <NavLink to="/app/support">Support</NavLink>
           <NavLink to="/app/account">Account</NavLink>
-          <NavLink to="/app/sources">Integrations &amp; API</NavLink>
+          <NavLink to="/app/sources">Integrations</NavLink>
           {showOpsNav ? <NavLink to="/app/ops">Ops</NavLink> : null}
           <NavLink to="/search">Search</NavLink>
         </nav>
@@ -78,13 +78,7 @@ export default function AppLayoutRoute() {
       <div className="f9-app-main">
         <header className="f9-app-topbar">
           <Link className="f9-app-search-entry" to="/search">
-            Search competitor ads
-          </Link>
-          <Link className="f9-secondary-button" to="/help">
-            Help
-          </Link>
-          <Link className="f9-secondary-button" to="/app/support">
-            Support
+            Search ads
           </Link>
           <Link className="f9-primary-button f9-app-new-search" to="/search">
             Add competitor

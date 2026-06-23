@@ -5,7 +5,7 @@ import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const description =
-  "Five to Nine product docs for setup, launch posture, delivery, billing, integrations, and safety.";
+  "Five to Nine product docs for setup, delivery, billing, integrations, and safety.";
 
 export const links: LinksFunction = () => canonicalLinks("/docs");
 
@@ -20,36 +20,34 @@ export default function DocsRoute() {
   return (
     <PublicDocShell
       kicker="Docs"
-      title="Five to Nine product docs."
-      intro="Current behavior only. Roadmap channels and trust claims stay marked until they are proven."
+      title="Five to Nine docs."
+      intro="Short setup notes for getting from one competitor website to saved tracking and useful evidence."
     >
-      <PublicDocBlock title="Day 0-7 activation checklist">
+      <PublicDocBlock title="Start with one competitor">
         <ol className="f9-numbered-guide">
-          <li>Day 0: paste a competitor website and confirm public live search returns labeled results.</li>
-          <li>Day 0: create the first account watchlist from search or onboarding.</li>
-          <li>Day 1: refresh the watchlist and confirm the first proof capture exists.</li>
-          <li>Day 1-2: review the first digest or quiet-check trail.</li>
-          <li>Day 2: connect Slack from Integrations &amp; API if the team wants channel delivery.</li>
-          <li>Day 3: invite teammates on Agency, or keep the workspace owner-only on smaller plans.</li>
-          <li>Day 7: review Plan &amp; billing for evidence-check usage, renewal state, and capacity.</li>
+          <li>Paste a competitor website into Search.</li>
+          <li>Save the competitor when the results are useful.</li>
+          <li>Open the watchlist to review ads, page evidence, and changes over time.</li>
+          <li>Save useful examples to a board or share a report with the team.</li>
+          <li>Connect Slack from Integrations if the team wants channel updates.</li>
         </ol>
       </PublicDocBlock>
 
-      <PublicDocBlock title="What is live today">
+      <PublicDocBlock title="Available today">
         <ul className="f9-doc-list">
-          <li>Public read-only live search and a sample proof loop.</li>
-          <li>Authenticated watchlists, boards, digests, reports, share links, exports, API keys, MCP exports, and narrow audited workspace actions.</li>
-          <li>Dodo-backed pricing, checkout, signed webhook grants, proof-credit packs, and billing portal redirect.</li>
-          <li>Email delivery through Cloudflare Email Service and self-serve Slack incoming webhooks.</li>
-          <li>Security headers, rate limits, plan caps, proof usage warnings, and operator health views.</li>
+          <li>Public competitor ad search from a website.</li>
+          <li>Saved watchlists, boards, briefs, reports, share links, and exports.</li>
+          <li>Checkout, receipts, proof-credit packs, and billing support.</li>
+          <li>Email delivery and self-serve Slack delivery.</li>
+          <li>Rate limits, plan caps, evidence-usage warnings, and service status.</li>
         </ul>
       </PublicDocBlock>
 
-      <PublicDocBlock title="What is not launch-scoped">
+      <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
-          <li>Customer WhatsApp delivery until Meta provider setup, templates, opt-in, webhook reconciliation, and delivery proof are verified.</li>
-          <li>Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion, or automated spend/reach/impression benchmarks.</li>
-          <li>Broad public write APIs beyond the narrow audited workspace actions.</li>
+          <li>WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.</li>
+          <li>TikTok, Google, YouTube, LinkedIn, and Pinterest ingestion are not included yet.</li>
+          <li>Spend, reach, and impression benchmarks are not included yet.</li>
           <li>SOC 2, HIPAA, GDPR compliance, zero-retention, or no-training guarantees.</li>
         </ul>
       </PublicDocBlock>

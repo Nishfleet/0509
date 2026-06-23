@@ -130,7 +130,7 @@ export default function UnsubscribeRoute() {
               <h1>This unsubscribe link is not valid.</h1>
               <p>
                 The link may be incomplete or expired. Open the latest email from Five to Nine and use its
-                unsubscribe link, manage delivery targets from your workspace settings, or email{" "}
+                unsubscribe link, manage delivery settings from your account, or email{" "}
                 <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
               </p>
             </>
@@ -139,7 +139,7 @@ export default function UnsubscribeRoute() {
               <h1>You're unsubscribed.</h1>
               <p>
                 {data.maskedEmail ?? "This address"} will no longer receive digest or alert emails from this
-                workspace. You can re-enable email delivery anytime from the workspace's delivery settings.
+                account. You can re-enable email delivery anytime from your account's delivery settings.
               </p>
             </>
           ) : (
@@ -147,7 +147,7 @@ export default function UnsubscribeRoute() {
               <h1>Unsubscribe from Five to Nine emails?</h1>
               <p>
                 {data.maskedEmail ?? "This address"} will stop receiving digest and alert emails from this
-                workspace.
+                account.
               </p>
               <Form method="post">
                 <SubmitButton className="f9-primary-button" pendingLabel="Working…">

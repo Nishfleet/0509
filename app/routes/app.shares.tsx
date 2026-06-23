@@ -73,7 +73,7 @@ export default function SharesRoute() {
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Shared links</span>
-            <h2>Everything you've shared outside the workspace</h2>
+            <h2>Everything you've shared outside the account</h2>
           </div>
         </div>
 

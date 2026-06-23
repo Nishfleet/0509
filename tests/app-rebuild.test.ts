@@ -30,8 +30,8 @@ describe("app rebuild", () => {
   it("uses the fresh app shell and dashboard classes", () => {
     expect(appSurface).toContain('className="f9-app-shell"');
     expect(appSurface).toContain('className="f9-app-stack"');
-    expect(appSurface).toContain('className="f9-market-desk"');
-    expect(appSurface).toContain('className="f9-market-search"');
+    expect(appSurface).toContain("f9-dashboard-clean");
+    expect(appSurface).toContain('className="f9-dashboard-search"');
     expect(appSurface).toContain('className="f9-onboard-page"');
     expect(appClasses).not.toEqual(
       expect.arrayContaining([
@@ -71,46 +71,38 @@ describe("app rebuild", () => {
   });
 
   it("matches the advertised competitor-ad dashboard surface", () => {
-    expect(appLayout).toContain("Search competitor ads");
+    expect(appLayout).toContain("Search ads");
     expect(routeConfig).toContain('route("api/v1/workspace-readiness"');
     expect(routeConfig).toContain('route("clients", "routes/app.clients.tsx"');
     expect(dashboardRoute).toContain("getWorkspaceReadiness");
-    expect(dashboardRoute).toContain("data.workspaceReadiness.items");
     expect(dashboardRoute).toContain("Add your first competitor");
-    expect(dashboardRoute).toContain("Revenue brief");
     expect(dashboardRoute).toContain("Competitor website");
-    expect(dashboardRoute).toContain("Retained value loop");
-    expect(dashboardRoute).toContain("What Five to Nine did for you");
-    expect(dashboardRoute).toContain("Production proof");
-    expect(dashboardRoute).toContain("Detailed launch evidence stays in the private canary checks");
-    expect(dashboardRoute).toContain('to="/status"');
-    expect(dashboardRoute).toContain("Watched");
-    expect(dashboardRoute).toContain("Checked");
-    expect(dashboardRoute).toContain("Changed");
-    expect(dashboardRoute).toContain("Proved");
-    expect(dashboardRoute).toContain("Delivered");
-    expect(dashboardRoute).toContain("Remembered");
-    expect(dashboardRoute).toContain("Save agent memory");
+    expect(dashboardRoute).toContain("f9-dashboard-search");
+    expect(dashboardRoute).toContain("f9-dashboard-metrics");
+    expect(dashboardRoute).toContain("Recent changes");
+    expect(dashboardRoute).not.toContain("Retained value loop");
+    expect(dashboardRoute).not.toContain("Account setup");
+    expect(dashboardRoute).not.toContain("Remembered");
     expect(dashboardRoute).not.toContain("Commercial discovery live");
     expect(dashboardRoute).not.toContain("source state visible");
+    expect(dashboardRoute).not.toContain("data.workspaceReadiness.items");
     expect(appSurface).toContain("?format=json");
     expect(appSurface).toContain("?format=slack");
-    expect(appSurface).toContain("API JSON");
+    expect(appSurface).toContain("JSON export");
     expect(appSurface).toContain("Slack copy");
     expect(appSurface).toContain("Insight depth");
     expect(appSurface).toContain("Top hooks");
     expect(appSurface).toContain("Media mix");
     expect(appSurface).toContain("Observed campaign duration");
     expect(appSurface).toContain("Landing-page history");
-    expect(appSurface).toContain("Customer API");
+    expect(appSurface).toContain("Advanced: API keys and external tools");
     expect(appSurface).toContain("Create API key");
     expect(appSurface).toContain("/api/v1");
-    expect(appSurface).toContain("/api/mcp");
     expect(collectionsRoute).toContain("External proof");
     expect(collectionsRoute).toContain("Save proof link");
     expect(collectionsRoute).toContain("Google / YouTube");
     expect(collectionsRoute).toContain("LinkedIn");
-    expect(clientsRoute).toContain("Operating context for agents");
+    expect(clientsRoute).toContain("Report preferences and notes");
     expect(clientsRoute).toContain("upsert-agent-memory");
     expect(digestsRoute).toContain("formatDeliveryChannelLabel");
     expect(digestsRoute).toContain('channel === "slack"');

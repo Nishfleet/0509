@@ -13,6 +13,14 @@ import {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const origin = new URL(request.url).origin;
+  const toolActivation = {
+    firstWorkflow: AGENT_FIRST_WORKFLOW,
+    readinessEndpoint: "/api/v1/workspace-readiness",
+    actionGroups: auditedAgentActionGroups(),
+    supportPaths: CUSTOMER_SUPPORT_PATHS,
+    blockedCapabilities: AGENT_BLOCKED_CAPABILITIES,
+  };
+
   return Response.json(
     {
       name: "Five to Nine Customer API",
@@ -29,7 +37,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           formats: ["mcp-json-rpc"],
           requiresWriteEnabled: false,
           credentialRequirement:
-            `MCP discovery, readiness, and export tools: ${READ_ONLY_API_KEY_REQUIREMENT} Audited workspace action tools: ${WRITE_ENABLED_API_KEY_REQUIREMENT}`,
+            `Tool discovery and export access: ${READ_ONLY_API_KEY_REQUIREMENT} Account action tools: ${WRITE_ENABLED_API_KEY_REQUIREMENT}`,
         },
         {
           method: "GET",
@@ -74,13 +82,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         "Watchlist changes and digest items owned by this account",
         "Manual external proof links, scoped memory, client rooms, redacted delivery settings, and existing web mention observations owned by this account",
       ],
-      agentActivation: {
-        firstWorkflow: AGENT_FIRST_WORKFLOW,
-        readinessEndpoint: "/api/v1/workspace-readiness",
-        actionGroups: auditedAgentActionGroups(),
-        supportPaths: CUSTOMER_SUPPORT_PATHS,
-        blockedCapabilities: AGENT_BLOCKED_CAPABILITIES,
-      },
+      agentActivation: toolActivation,
+      toolActivation,
       notLiveYet: [
         "TikTok ingestion",
         "Google or YouTube ingestion",

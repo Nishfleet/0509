@@ -1715,6 +1715,70 @@ describe("searchAdsViaSourceResolver", () => {
     expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
   });
 
+  it("runs live discovery when the distributed lease table is missing", async () => {
+    const browserSearch = vi.fn().mockResolvedValue(buildLiveBrowserResult());
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+    const missingLeaseTable = new Error("D1_ERROR: no such table: discovery_query_lease");
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockRejectedValue(missingLeaseTable),
+          run: vi.fn().mockRejectedValue(missingLeaseTable),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "missing-lease-table",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    expect(result.discoverySummary).toBeNull();
+    expect(upsertDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
+    expect(createDiscoveryFetchLog).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
+  });
+
   it("honors stored provider cooldown metadata beyond the default cooldown window", async () => {
     const browserSearch = vi.fn();
     const getDiscoveryProviderState = vi.fn().mockResolvedValue({

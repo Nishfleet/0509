@@ -27,7 +27,7 @@ export default function HelpRoute() {
     >
       <PublicDocBlock title="Start here">
         <ol className="f9-numbered-guide">
-          <li>Run a public live search from the homepage or `/search`.</li>
+          <li>Run a public search from the homepage or Search page.</li>
           <li>Create an account and add one competitor website.</li>
           <li>Open the watchlist and refresh tracking to capture the first proof trail.</li>
           <li>Review the digest page after the first monitored change or quiet check.</li>
@@ -36,14 +36,12 @@ export default function HelpRoute() {
 
       <PublicDocBlock title="Delivery setup">
         <p>
-          Email delivery uses Cloudflare Email Service through the app's `send_email` binding. Slack
-          delivery is self-serve from <Link to="/app/sources">Integrations &amp; API</Link>: paste a
-          Slack incoming webhook, let Five to Nine send the setup test, then future eligible digests
-          can post there.
+          Email delivery is available for eligible accounts. Slack delivery is self-serve from{" "}
+          <Link to="/app/sources">Integrations</Link>: paste a Slack incoming webhook, save it, and future eligible
+          digests can post there.
         </p>
         <p>
-          WhatsApp is not launch-scoped today. It stays unavailable for customers until provider
-          setup, opt-in, template eligibility, webhook readiness, and delivered proof are all verified.
+          WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.
         </p>
       </PublicDocBlock>
 
@@ -51,8 +49,7 @@ export default function HelpRoute() {
         <p>
           Plans and extra evidence-check packs use Dodo Payments. Signed-in customers can open the
           billing portal from <Link to="/app/billing">Plan &amp; billing</Link> when their account has
-          a linked Dodo customer id. Portal subscription updates still depend on the Dodo dashboard
-          setting being confirmed, so plan changes and cancellation stay backed by{" "}
+          a linked Dodo customer id. Plan changes and cancellation stay backed by{" "}
           <Link to="/app/support?category=billing">signed-in support cases</Link>.
         </p>
       </PublicDocBlock>

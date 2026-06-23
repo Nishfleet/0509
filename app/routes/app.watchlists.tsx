@@ -673,12 +673,12 @@ export default function WatchlistsRoute() {
                   >
                     Export CSV
                   </a>
-                  <a
-                    className="f9-secondary-button"
-                    href={`/export/watchlist/${data.selectedWatchlist.id}?format=json`}
-                  >
-                    API JSON
-                  </a>
+                    <a
+                      className="f9-secondary-button"
+                      href={`/export/watchlist/${data.selectedWatchlist.id}?format=json`}
+                    >
+                      JSON export
+                    </a>
                   <a
                     className="f9-secondary-button"
                     href={`/export/watchlist/${data.selectedWatchlist.id}?format=slack`}
@@ -847,7 +847,7 @@ export default function WatchlistsRoute() {
                     <article className="f9-app-panel">
                       <h3>Web mentions</h3>
                       <p className="f9-muted-copy">
-                        {`This ${selectedTargetNoun} is ready for mention tracking across Reddit, X, blogs, YouTube, Substack, and web results once the source connectors are enabled.`}
+                        {`Mention tracking will appear here when it is enabled for this ${selectedTargetNoun}.`}
                       </p>
                       <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
                         {["Reddit", "X", "Blogs", "YouTube", "Substack", "Web"].map((source) => (
@@ -1066,7 +1066,7 @@ export default function WatchlistsRoute() {
                               : target.channel === "whatsapp" && !data.whatsappAvailable
                                 ? "Not yet available — WhatsApp delivery isn't live"
                                 : target.channel === "whatsapp" && !target.templateEligible
-                                  ? "Waiting on template readiness"
+                                  ? "Waiting for WhatsApp approval"
                                   : "Ready"}
                           </p>
                         </div>

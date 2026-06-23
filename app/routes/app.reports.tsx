@@ -102,7 +102,7 @@ export default function ReportsRoute() {
 
           <div className="f9-action-row">
             <Link className="f9-secondary-button" to={backHref}>
-              Back to workspace
+              Back to account
             </Link>
             <Form method="post">
               <input name="intent" type="hidden" value="share-report" />
