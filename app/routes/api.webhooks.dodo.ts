@@ -19,18 +19,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
   } = await import("~/lib/dodo-billing.server");
   const {
     applyDodoPlanGrantWithWatchlistReconcile,
+    applyDodoPlanPaymentIssueWithLedger,
     applyDodoPlanRevokeWithWatchlistReconcile,
-    claimDodoWebhookEvent,
-    deactivateWatchlistsBeyondPlanLimit,
-    reactivateWatchlistsUpToPlanLimit,
+    applyDodoProofCreditGrantWithLedger,
+    applyDodoRefundWithWatchlistReconcile,
+    beginDodoWebhookEventProcessing,
+    failDodoWebhookEventProcessing,
+    finalizeDodoWebhookLedgerOnly,
     getUserIdForDodoPayment,
-    grantDodoPlanAccess,
-    grantProofUsageCredit,
     getUserIdForDodoLifecycle,
-    markDodoPlanPaymentIssue,
-    markDodoWebhookEventFinished,
-    revokeDodoAccessForRefundedPayment,
-    revokeDodoPlanAccess,
   } = await import("~/lib/data.server");
   const { PLAN_LIMITS } = await import("~/lib/plan.server");
   const env = getEnv(context);
@@ -52,24 +49,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const payloadTimestamp =
     request.headers.get("webhook-timestamp") ?? request.headers.get("svix-timestamp");
 
-  const claimed = await claimDodoWebhookEvent(env, {
+  const claim = await beginDodoWebhookEventProcessing(env, {
     eventId,
     eventType,
     userId: null,
     payloadTimestamp,
   });
-  if (!claimed) {
-    // Already processed (or mid-processing) — redeliveries must not re-run
-    // billing side effects.
-    return Response.json({ ok: true, duplicate: true });
+  if (claim.status === "duplicate") {
+    return Response.json({ ok: true, duplicate: true, outcome: claim.outcome });
+  }
+  if (claim.status === "in_progress") {
+    return Response.json({ ok: true, duplicate: true, inProgress: true });
   }
 
   try {
     const result = await processDodoEvent();
-    await markDodoWebhookEventFinished(env, eventId, {
-      outcome: result.outcome,
-      metadata: result.metadata,
-    });
     return Response.json(result.body);
   } catch (error) {
     const { logBillingEvent } = await import("~/lib/log.server");
@@ -79,9 +73,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: error instanceof Error ? error.message : String(error),
       },
     });
-    await markDodoWebhookEventFinished(env, eventId, {
-      outcome: "failed",
-      metadata: { error: error instanceof Error ? error.message : String(error) },
+    await failDodoWebhookEventProcessing(env, eventId, {
+      error: error instanceof Error ? error.message : String(error),
     });
     throw error;
   }
@@ -91,6 +84,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     metadata: Record<string, unknown>;
     body: Record<string, unknown>;
   }> {
+    const ledgerBase = { eventId };
+
     const planGrant = extractDodoPlanGrant(env, payload);
     if (planGrant) {
       await applyDodoPlanGrantWithWatchlistReconcile(
@@ -107,6 +102,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: planGrant.metadata,
         },
         PLAN_LIMITS[planGrant.plan].watchlists,
+        {
+          ...ledgerBase,
+          outcome: "processed",
+          metadata: { action: "plan_grant", userId: planGrant.userId, plan: planGrant.plan },
+        },
       );
       return {
         outcome: "processed",
@@ -115,11 +115,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    // subscription.active (first activation) and subscription.renewed (every
-    // successful renewal, including dunning recovery). These keep the plan
-    // fresh month over month and clear a stale payment-issue flag — real
-    // subscription payment.succeeded events carry no product_cart, so this
-    // lane is what keeps long-lived subscriptions healthy.
     const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);
     if (subscriptionGrant) {
       await applyDodoPlanGrantWithWatchlistReconcile(
@@ -137,6 +132,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: subscriptionGrant.metadata,
         },
         PLAN_LIMITS[subscriptionGrant.plan].watchlists,
+        {
+          ...ledgerBase,
+          outcome: "processed",
+          metadata: {
+            action: "subscription_grant",
+            userId: subscriptionGrant.userId,
+            plan: subscriptionGrant.plan,
+            eventType: subscriptionGrant.eventType,
+          },
+        },
       );
       return {
         outcome: "processed",
@@ -160,6 +165,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
           customerEmail: revocation.customerEmail,
         }));
       if (!userId) {
+        await finalizeDodoWebhookLedgerOnly(env, {
+          ...ledgerBase,
+          outcome: "ignored",
+          metadata: { action: "lifecycle", reason: "no_user_match" },
+        });
         return {
           outcome: "ignored",
           metadata: { action: "lifecycle", reason: "no_user_match" },
@@ -168,13 +178,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
       }
 
       if (revocation.action === "payment_issue") {
-        // Renewal payment hiccup: keep the paid plan during Dodo's retry
-        // window and only record the issue so the app can warn the customer.
-        await markDodoPlanPaymentIssue(env, {
-          userId,
-          status: revocation.eventType,
-          occurredAt: revocation.revokedAt,
-        });
+        await applyDodoPlanPaymentIssueWithLedger(
+          env,
+          {
+            userId,
+            status: revocation.eventType,
+            occurredAt: revocation.revokedAt,
+          },
+          {
+            ...ledgerBase,
+            outcome: "processed",
+            metadata: { action: "payment_issue", userId, eventType: revocation.eventType },
+          },
+        );
         return {
           outcome: "processed",
           metadata: { action: "payment_issue", userId, eventType: revocation.eventType },
@@ -182,22 +198,30 @@ export async function action({ context, request }: ActionFunctionArgs) {
         };
       }
 
-      // "You keep access until the end of the period you've paid for" must
-      // hold regardless of which cancel button support clicks in Dodo: a
-      // cancellation effective in the future schedules (status flag only);
-      // the eventual subscription.expired performs the actual revoke.
       const effectiveAtMs = Date.parse(revocation.effectiveAt ?? "");
       if (
         revocation.eventType === "subscription.cancelled" &&
         Number.isFinite(effectiveAtMs) &&
         effectiveAtMs > Date.now() + 60_000
       ) {
-        await markDodoPlanPaymentIssue(env, {
-          userId,
-          status: "cancellation_scheduled",
-          occurredAt: new Date().toISOString(),
-          cancellationEffectiveAt: revocation.effectiveAt,
-        });
+        await applyDodoPlanPaymentIssueWithLedger(
+          env,
+          {
+            userId,
+            status: "cancellation_scheduled",
+            occurredAt: new Date().toISOString(),
+            cancellationEffectiveAt: revocation.effectiveAt,
+          },
+          {
+            ...ledgerBase,
+            outcome: "processed",
+            metadata: {
+              action: "cancellation_scheduled",
+              userId,
+              effectiveAt: revocation.effectiveAt,
+            },
+          },
+        );
         return {
           outcome: "processed",
           metadata: {
@@ -218,6 +242,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
           revokedAt: revocation.revokedAt,
         },
         PLAN_LIMITS.free.watchlists,
+        {
+          ...ledgerBase,
+          outcome: "processed",
+          metadata: { action: "revoke", userId, eventType: revocation.eventType },
+        },
       );
       return {
         outcome: "processed",
@@ -228,15 +257,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const refund = extractDodoRefund(env, payload);
     if (refund) {
-      // Resolve the owner before the revocation clears the payment linkage.
       const refundedUserId = await getUserIdForDodoPayment(env, refund.paymentId);
-      await revokeDodoAccessForRefundedPayment(env, {
-        paymentId: refund.paymentId,
-        refundedAt: refund.refundedAt,
-      });
-      if (refundedUserId) {
-        await deactivateWatchlistsBeyondPlanLimit(env, refundedUserId, PLAN_LIMITS.free.watchlists);
-      }
+      await applyDodoRefundWithWatchlistReconcile(
+        env,
+        {
+          paymentId: refund.paymentId,
+          refundedAt: refund.refundedAt,
+          userId: refundedUserId,
+        },
+        PLAN_LIMITS.free.watchlists,
+        {
+          ...ledgerBase,
+          outcome: "processed",
+          metadata: { action: "refund", paymentId: refund.paymentId },
+        },
+      );
       return {
         outcome: "processed",
         metadata: { action: "refund", paymentId: refund.paymentId },
@@ -246,6 +281,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const grant = extractDodoProofCreditGrant(env, payload);
     if (!grant) {
+      await finalizeDodoWebhookLedgerOnly(env, {
+        ...ledgerBase,
+        outcome: "ignored",
+        metadata: { action: "none" },
+      });
       return {
         outcome: "ignored",
         metadata: { action: "none" },
@@ -253,17 +293,25 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    await grantProofUsageCredit(env, {
-      userId: grant.userId,
-      providerPaymentId: grant.paymentId,
-      providerProductId: grant.productId,
-      bundleSlug: grant.bundle,
-      credits: grant.credits,
-      quantity: grant.quantity,
-      grantedAt: grant.grantedAt,
-      expiresAt: grant.expiresAt,
-      metadata: grant.metadata,
-    });
+    await applyDodoProofCreditGrantWithLedger(
+      env,
+      {
+        userId: grant.userId,
+        providerPaymentId: grant.paymentId,
+        providerProductId: grant.productId,
+        bundleSlug: grant.bundle,
+        credits: grant.credits,
+        quantity: grant.quantity,
+        grantedAt: grant.grantedAt,
+        expiresAt: grant.expiresAt,
+        metadata: grant.metadata,
+      },
+      {
+        ...ledgerBase,
+        outcome: "processed",
+        metadata: { action: "proof_credit_grant", userId: grant.userId, bundle: grant.bundle },
+      },
+    );
 
     return {
       outcome: "processed",

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
   claimDodoPlanCheckout,
+  beginDodoWebhookEventProcessing,
   claimDodoWebhookEvent,
   claimAgentActionAudit,
   claimRazorpayWebhookEvent,
@@ -1450,7 +1451,7 @@ describe("Dodo billing persistence", () => {
 
   it("dedupes Dodo webhook events and allows failed events to be reclaimed", async () => {
     const statements: Array<{ sql: string; bindings: unknown[] }> = [];
-    const changes = [1, 0, 1];
+    let insertAttempts = 0;
     const mock = {
       db: {
         prepare(sql: string) {
@@ -1459,9 +1460,19 @@ describe("Dodo billing persistence", () => {
               statements.push({ sql, bindings });
               return {
                 async run() {
-                  return { success: true, meta: { changes: changes.shift() ?? 0 } };
+                  if (sql.includes("INSERT INTO dodo_webhook_event")) {
+                    insertAttempts += 1;
+                    return {
+                      success: true,
+                      meta: { changes: insertAttempts === 1 || insertAttempts === 3 ? 1 : 0 },
+                    };
+                  }
+                  return { success: true, meta: { changes: 0 } };
                 },
                 async all<T>() {
+                  if (sql.includes("SELECT outcome FROM dodo_webhook_event")) {
+                    return { results: [{ outcome: "processing" }] as T[] };
+                  }
                   return { results: [] as T[] };
                 },
               };
@@ -1478,12 +1489,18 @@ describe("Dodo billing persistence", () => {
       payloadTimestamp: "1765459200",
     };
 
-    expect(await claimDodoWebhookEvent({ DB: mock.db } as never, input)).toBe(true);
-    expect(await claimDodoWebhookEvent({ DB: mock.db } as never, input)).toBe(false);
-    expect(await claimDodoWebhookEvent({ DB: mock.db } as never, input)).toBe(true);
+    expect(await beginDodoWebhookEventProcessing({ DB: mock.db } as never, input)).toEqual({
+      status: "claimed",
+    });
+    expect(await beginDodoWebhookEventProcessing({ DB: mock.db } as never, input)).toEqual({
+      status: "in_progress",
+    });
+    expect(await beginDodoWebhookEventProcessing({ DB: mock.db } as never, input)).toEqual({
+      status: "claimed",
+    });
 
     const claim = statements.find((statement) => statement.sql.includes("INSERT INTO dodo_webhook_event"));
-    expect(claim?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
+    expect(claim?.sql).toContain("outcome = 'failed'");
   });
 
   it("falls back when an existing Dodo webhook ledger lacks payload timestamps", async () => {
@@ -1552,9 +1569,9 @@ describe("Dodo billing persistence", () => {
       "watchlist-1",
     );
 
-    const statement = findStatement(mock.statements, "INSERT INTO watchlist_run", "capacity_budget");
+    const statement = findStatement(mock.statements, "INSERT OR IGNORE INTO watchlist_run", "capacity_budget");
     expect(statement?.sql).toContain("'skipped'");
-    expect(statement?.sql).toContain("capacity_budget");
+    expect(statement?.sql).toContain("idempotency_key");
   });
 
   it("closes a counter-move follow-up inside the stored audit result", async () => {
