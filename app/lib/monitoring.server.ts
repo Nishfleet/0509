@@ -109,6 +109,8 @@ interface ScanOptions {
   customerMetaAdLibraryToken?: string | null;
   existingRunId?: string;
   orchestrationToken?: string;
+  concurrencyPermitToken?: string;
+  orchestrationRunId?: string;
 }
 
 export type {
@@ -119,13 +121,17 @@ export {
 } from "~/lib/monitoring-fanout.server";
 import type { MonitoringWorkflowParams } from "~/lib/monitoring-fanout.server";
 import {
-  acquireMonitoringConcurrencySlot,
+  buildWatchlistExecutionIdempotencyKey,
   claimOrchestratedWatchlistRun,
   collectMonitoringOrchestrationMetrics,
   finishOrchestratedWatchlistRun,
+  hasOrchestratedRunBlockingInlineScan,
+  isFanoutEnabledForWorkspace,
   markOrchestratedRunCancelled,
   markOrchestratedDispatchFailure,
   reconcileOrchestratedWatchlistRuns,
+  renewMonitoringConcurrencySlot,
+  renewOrchestratedWatchlistRunLease,
   resolveMonitoringFanoutMode,
   resolveMonitoringOrchestrationLeaseMs,
   scheduleWatchlistFanout,
@@ -203,8 +209,15 @@ export async function runScheduledMonitoring(
         leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
       });
 
+      const fanoutWatchlists = watchlists.filter((watchlist) =>
+        isFanoutEnabledForWorkspace(env, watchlist.userId),
+      );
+      const inlineFallbackWatchlists = watchlists.filter(
+        (watchlist) => !isFanoutEnabledForWorkspace(env, watchlist.userId),
+      );
+
       const fanoutResult = await scheduleWatchlistFanout(env, {
-        watchlists,
+        watchlists: fanoutWatchlists,
         scheduledTime,
         cron: options.cron,
         mode: fanoutMode,
@@ -212,6 +225,21 @@ export async function runScheduledMonitoring(
       queued = fanoutResult.queued;
       duplicates = fanoutResult.duplicates;
       skippedForBudget = fanoutResult.dispatchFailures;
+
+      if (inlineFallbackWatchlists.length > 0) {
+        const inlineResult = await runScheduledMonitoringInline(
+          env,
+          inlineFallbackWatchlists,
+          deadlineAt,
+          {
+            scheduledTime,
+            cron: options.cron,
+          },
+        );
+        inlineRuns = inlineResult.inlineRuns;
+        inlineFailures += inlineResult.inlineFailures;
+        skippedForBudget += inlineResult.skippedForBudget;
+      }
 
       const metrics = await collectMonitoringOrchestrationMetrics(env);
       const { logAppEvent } = await import("~/lib/log.server");
@@ -553,8 +581,25 @@ export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord
 export async function runWatchlistWorkflowJob(
   env: AppEnv,
   params: MonitoringWorkflowParams,
+  options: {
+    concurrencyPermitToken?: string;
+  } = {},
 ) {
   const fanoutMode = resolveMonitoringFanoutMode(env);
+  if (fanoutMode === "inline") {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: "fanout_disabled",
+      message: "Scheduled fan-out was disabled before this scan could run.",
+    });
+    return {
+      status: "cancelled" as const,
+      reason: "fanout_disabled",
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+      runId: params.runId,
+    };
+  }
   if (fanoutMode === "shadow") {
     return {
       status: "shadow" as const,
@@ -587,6 +632,20 @@ export async function runWatchlistWorkflowJob(
     return {
       status: "skipped" as const,
       reason: "watchlist_unavailable",
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+    };
+  }
+
+  if (!isFanoutEnabledForWorkspace(env, watchlist.userId)) {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: "workspace_not_allowlisted",
+      message: "Scheduled fan-out is not enabled for this workspace.",
+    });
+    return {
+      status: "skipped" as const,
+      reason: "workspace_not_allowlisted",
       watchlistId: params.watchlistId,
       executionKey: params.executionKey,
     };
@@ -631,11 +690,15 @@ export async function runWatchlistWorkflowJob(
       () =>
         performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
           customerMetaAdLibraryToken,
+          orchestrationRunId: params.runId,
+          orchestrationToken: claim.processingToken,
+          concurrencyPermitToken: options.concurrencyPermitToken,
         }),
       {
         customerMetaAdLibraryToken,
         existingRunId: params.runId,
         orchestrationToken: claim.processingToken,
+        concurrencyPermitToken: options.concurrencyPermitToken,
       },
     );
 
@@ -1358,8 +1421,6 @@ async function runScheduledMonitoringInline(
 
   for (let index = 0; index < watchlists.length; index += 1) {
     if (Date.now() > deadlineAt) {
-      // Stop before the runtime's wall limit kills the invocation mid-scan;
-      // skipped watchlists are reported by the caller instead of vanishing.
       skippedForBudget = watchlists.length - index;
       for (let skipIndex = index; skipIndex < watchlists.length; skipIndex += 1) {
         await recordWatchlistCapacitySkip(env, watchlists[skipIndex]!.id, {
@@ -1373,7 +1434,7 @@ async function runScheduledMonitoringInline(
     const watchlist = watchlists[index]!;
 
     try {
-      const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
+      const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache, options);
       inlineRuns += ranInline ? 1 : 0;
     } catch (error) {
       // One watchlist failure must never abort the rest of the nightly run
@@ -1394,9 +1455,23 @@ async function runScheduledWatchlistInline(
   env: AppEnv,
   watchlist: WatchlistRecord,
   scanCache: Map<string, Promise<ScanPayload>>,
+  options: {
+    scheduledTime?: number;
+    cron?: string | null;
+  } = {},
 ) {
   const query = await resolveWatchlistQuery(env, watchlist);
   if (!query) {
+    return false;
+  }
+
+  const executionKey = buildWatchlistExecutionIdempotencyKey({
+    watchlistId: watchlist.id,
+    triggerType: "scheduled",
+    scheduledTime: options.scheduledTime,
+    cron: options.cron,
+  });
+  if (await hasOrchestratedRunBlockingInlineScan(env, watchlist.id, executionKey)) {
     return false;
   }
 
@@ -1454,6 +1529,16 @@ async function performBoundedScan(
     }
     cursor = response.nextCursor;
     pagesScanned += 1;
+
+    if (options.orchestrationRunId && options.orchestrationToken) {
+      await renewOrchestratedWatchlistRunLease(env, {
+        runId: options.orchestrationRunId,
+        processingToken: options.orchestrationToken,
+      });
+    }
+    if (options.concurrencyPermitToken) {
+      await renewMonitoringConcurrencySlot(env, { token: options.concurrencyPermitToken });
+    }
   } while (cursor && pagesScanned < pageBudget);
 
   const hydratedAds = await hydrateAdsWithPersistedCreatives(env, dedupeAds(ads));
