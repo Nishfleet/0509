@@ -101,6 +101,7 @@ describe("search watchlist limit", () => {
       limit: 3,
       message: "You have reached your competitor tracking limit.",
       ok: false,
+      upgradePath: "/#pricing",
     });
     expect(createWatchlist).not.toHaveBeenCalled();
   });

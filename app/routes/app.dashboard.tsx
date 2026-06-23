@@ -246,6 +246,11 @@ export default function AppDashboardRoute() {
   const firstCompetitorReady = activeWatchlists > 0;
   const counterMoveFollowUps = data.counterMoveFollowUps ?? [];
   const counterMoveFollowUpCount = counterMoveFollowUps.length;
+  const workspaceReadiness = data.workspaceReadiness;
+  const readinessGaps =
+    workspaceReadiness?.items.filter(
+      (item) => item.status !== "ready" && item.status !== "not_applicable",
+    ) ?? [];
   const statusCards = [
     {
       label: "Competitors watched",
@@ -369,6 +374,60 @@ export default function AppDashboardRoute() {
             <Link className="f9-secondary-button" to="/app/billing">
               Plan &amp; billing
             </Link>
+          </div>
+        </article>
+      ) : null}
+
+      {plan === "free" && competitorCount === 0 ? (
+        <article className="f9-checkout-banner is-pending" aria-live="polite">
+          <div>
+            <span className="f9-app-kicker">Plan required for monitoring</span>
+            <h2>Search is free. Retained tracking starts on a paid plan.</h2>
+            <p>
+              Upgrade to Starter or above to keep nightly competitor scans, change briefs, and proof
+              capture on a watchlist.
+            </p>
+          </div>
+          <div className="f9-checkout-banner-actions">
+            <Link className="f9-primary-button" to="/#pricing">
+              View plans
+            </Link>
+            <Link className="f9-secondary-button" to="/search">
+              Search competitors
+            </Link>
+          </div>
+        </article>
+      ) : null}
+
+      {readinessGaps.length > 0 ? (
+        <article className="f9-app-panel">
+          <div className="f9-panel-toolbar">
+            <div>
+              <span className="f9-app-kicker">Workspace setup</span>
+              <h2>
+                {workspaceReadiness.readyCount} of {workspaceReadiness.totalCount} launch checks complete
+              </h2>
+            </div>
+            <Link className="f9-secondary-button" to="/status">
+              Platform status
+            </Link>
+          </div>
+          <div className="f9-work-list is-compact">
+            {readinessGaps.slice(0, 5).map((item) => (
+              <article className="f9-work-row" key={item.id}>
+                <div>
+                  <h3>{item.label}</h3>
+                  <p className="f9-muted-copy">{item.detail}</p>
+                </div>
+                {item.action ? (
+                  <Link className="f9-secondary-button" to={item.action.href}>
+                    {item.action.label}
+                  </Link>
+                ) : (
+                  <span className="f9-status-pill">{item.status.replaceAll("_", " ")}</span>
+                )}
+              </article>
+            ))}
           </div>
         </article>
       ) : null}

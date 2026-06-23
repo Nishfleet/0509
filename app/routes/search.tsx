@@ -243,12 +243,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
 
     if (!watchlistLimit.allowed) {
+      const isZeroLimit = watchlistLimit.limit === 0;
       return {
         ok: false,
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message: "You have reached your competitor tracking limit.",
+        message: isZeroLimit
+          ? "Retained competitor monitoring is available on paid plans. Starter is the recommended plan to track this competitor."
+          : "You have reached your competitor tracking limit.",
+        upgradePath: "/#pricing",
       };
     }
 

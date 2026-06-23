@@ -341,16 +341,64 @@ export async function verifyBetterAuthMagicLink(
   request: Request,
   input: BetterAuthMagicLinkConfirmation,
 ) {
-  return (await getBetterAuth(env, request).api.magicLinkVerify({
-    asResponse: true,
-    headers: request.headers,
-    query: {
-      callbackURL: input.callbackURL,
-      ...(input.errorCallbackURL ? { errorCallbackURL: input.errorCallbackURL } : {}),
-      ...(input.newUserCallbackURL ? { newUserCallbackURL: input.newUserCallbackURL } : {}),
-      token: input.token,
-    },
-  } as never)) as Response;
+  const baseURL = betterAuthBaseURL(env, request);
+  const verifyUrl = new URL(`${BETTER_AUTH_BASE_PATH}/magic-link/verify`, baseURL);
+  verifyUrl.searchParams.set("token", input.token);
+  verifyUrl.searchParams.set("callbackURL", input.callbackURL);
+  if (input.errorCallbackURL) {
+    verifyUrl.searchParams.set("errorCallbackURL", input.errorCallbackURL);
+  }
+  if (input.newUserCallbackURL) {
+    verifyUrl.searchParams.set("newUserCallbackURL", input.newUserCallbackURL);
+  }
+
+  const headers = new Headers(request.headers);
+  if (!headers.get("user-agent")) {
+    headers.set("User-Agent", "Five-to-Nine/1.0");
+  }
+
+  return getBetterAuth(env, request).handler(
+    new Request(verifyUrl, {
+      headers,
+      method: "GET",
+    }),
+  );
+}
+
+export function isBetterAuthMagicLinkFailureRedirect(location: string, request: Request) {
+  try {
+    return Boolean(new URL(location, request.url).searchParams.get("error"));
+  } catch {
+    return false;
+  }
+}
+
+export function betterAuthResponseHasSessionCookies(headers: Headers) {
+  const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  const cookies = getSetCookie ? getSetCookie.call(headers) : [];
+  const combined = [...cookies, headers.get("Set-Cookie") ?? ""].join("; ");
+  return combined.includes("session_token");
+}
+
+export function requestHasBetterAuthSessionCookie(request: Request) {
+  const sessionCookieNames = [
+    "better-auth.session_token",
+    "__Secure-better-auth.session_token",
+    "better-auth-session_token",
+    "__Secure-better-auth-session_token",
+  ];
+  return sessionCookieNames.some((name) => Boolean(readCookie(request, name)));
+}
+
+export function betterAuthMagicLinkConfirmPath(
+  mode: "login" | "signup",
+  ticketId?: string | null,
+) {
+  const path = new URLSearchParams({ mode });
+  if (ticketId) {
+    path.set("ticket", ticketId);
+  }
+  return `/auth/better/magic-link?${path.toString()}`;
 }
 
 export interface BetterAuthPasskeyRecord {
@@ -471,6 +519,30 @@ function splitCombinedSetCookieHeader(setCookie: string) {
   }
 
   return cookies;
+}
+
+function appendSetCookies(headers: Headers, cookies: string[]) {
+  for (const cookie of cookies) {
+    headers.append("Set-Cookie", cookie);
+  }
+}
+
+export function appendHeadersSetCookies(target: Headers, source: Headers) {
+  const getSetCookie = (source as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  const cookies = getSetCookie ? getSetCookie.call(source) : [];
+  if (cookies.length > 0) {
+    for (const cookie of cookies) {
+      target.append("Set-Cookie", cookie);
+    }
+    return;
+  }
+
+  const combined = source.get("Set-Cookie");
+  if (combined) {
+    for (const cookie of splitCombinedSetCookieHeader(combined)) {
+      target.append("Set-Cookie", cookie);
+    }
+  }
 }
 
 export interface BetterAuthMagicLinkConfirmation {
@@ -713,7 +785,7 @@ export async function readBetterAuthMagicLinkConfirmationTicket(
   Omit<
     BetterAuthMagicLinkConfirmationTicket,
     "callbackURL" | "token"
-  > & { emailHint?: string } | null
+  > & { emailHint?: string; ticketId?: string } | null
 > {
   const legacy = await readBetterAuthLegacyMagicLinkConfirmationCookie(env, request);
   if (legacy) {
@@ -725,12 +797,12 @@ export async function readBetterAuthMagicLinkConfirmationTicket(
     };
   }
 
-  const ticket = await readBetterAuthMagicLinkConfirmationCookie(env, request);
-  if (!ticket) {
+  const ticketId = await readBetterAuthMagicLinkTicketId(env, request);
+  if (!ticketId) {
     return null;
   }
 
-  const row = await readBetterAuthMagicLinkTicketRow(env, ticket.ticketId);
+  const row = await readBetterAuthMagicLinkTicketRow(env, ticketId);
   const expiresAt = row ? Date.parse(row.expires_at) : Number.NaN;
   if (!row || row.consumed_at || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
     return null;
@@ -746,6 +818,7 @@ export async function readBetterAuthMagicLinkConfirmationTicket(
     emailHint: maskEmail(payload.email),
     expiresAt,
     mode: row.mode,
+    ticketId,
   };
 }
 
@@ -758,12 +831,12 @@ export async function readBetterAuthMagicLinkVerificationTicket(
     return legacy;
   }
 
-  const ticket = await readBetterAuthMagicLinkConfirmationCookie(env, request);
-  if (!ticket) {
+  const ticketId = await readBetterAuthMagicLinkTicketId(env, request);
+  if (!ticketId) {
     return null;
   }
 
-  const row = await readBetterAuthMagicLinkTicketRow(env, ticket.ticketId);
+  const row = await readBetterAuthMagicLinkTicketRow(env, ticketId);
   const expiresAt = row ? Date.parse(row.expires_at) : Number.NaN;
   if (!row || row.consumed_at || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
     return null;
@@ -786,12 +859,12 @@ export async function consumeBetterAuthMagicLinkConfirmationTicket(
     return true;
   }
 
-  const ticket = await readBetterAuthMagicLinkConfirmationCookie(env, request);
-  if (!ticket) {
+  const ticketId = await readBetterAuthMagicLinkTicketId(env, request);
+  if (!ticketId) {
     return false;
   }
 
-  const row = await readBetterAuthMagicLinkTicketRow(env, ticket.ticketId);
+  const row = await readBetterAuthMagicLinkTicketRow(env, ticketId);
   const expiresAt = row ? Date.parse(row.expires_at) : Number.NaN;
   if (!row || row.consumed_at || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
     return false;
@@ -910,7 +983,18 @@ async function parseBetterAuthMagicLinkTicketPayload(
   };
 }
 
-async function readBetterAuthMagicLinkConfirmationCookie(
+async function readBetterAuthMagicLinkTicketId(env: AppEnv, request: Request) {
+  const url = new URL(request.url);
+  const ticketFromUrl = url.searchParams.get("ticket");
+  if (ticketFromUrl && isBetterAuthMagicLinkTicketId(ticketFromUrl)) {
+    return ticketFromUrl;
+  }
+
+  const ticket = await readBetterAuthMagicLinkConfirmationCookie(env, request);
+  return ticket?.ticketId ?? null;
+}
+
+export async function readBetterAuthMagicLinkConfirmationCookie(
   env: AppEnv,
   request: Request,
 ): Promise<BetterAuthMagicLinkTicketCookie | null> {

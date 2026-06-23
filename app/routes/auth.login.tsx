@@ -38,7 +38,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const message =
     url.searchParams.get("sent") === "1"
-      ? "Check your email for a secure Five to Nine sign-in link."
+      ? "If an account exists for that address, you'll receive a secure sign-in link shortly."
       : null;
   const error = authErrorMessage(url.searchParams.get("error"));
   const oauthProviders = enabledBetterAuthOAuthProviders(env);
@@ -154,15 +154,6 @@ function authErrorMessage(code: string | null) {
   }
   if (code === "callback_failed" || code === "INVALID_TOKEN") {
     return "That sign-in link could not be verified. Request a fresh link and try again.";
-  }
-  if (code === "no_workspace") {
-    return "No account was found for that email. Create an account first.";
-  }
-  if (code === "multiple_workspaces") {
-    return "That email is attached to multiple accounts. Ask support to pick the right account before signing in.";
-  }
-  if (code === "unsupported_policy") {
-    return "This account requires an additional sign-in step that Five to Nine has not enabled yet. Ask support to adjust that policy for now.";
   }
   if (code === "passwordless") {
     return "Five to Nine now uses secure email links instead of passwords.";

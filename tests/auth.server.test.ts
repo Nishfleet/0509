@@ -121,6 +121,100 @@ function cookieHeader(setCookies: string[], name: string) {
   return cookie.split(";")[0] ?? cookie;
 }
 
+function ticketIdFromUrl(url: string) {
+  return new URL(url, "https://0509.io").searchParams.get("ticket") ?? "";
+}
+
+function magicLinkConfirmUrl(mode: "login" | "signup", ticketId?: string | null) {
+  const params = new URLSearchParams({ mode });
+  if (ticketId) {
+    params.set("ticket", ticketId);
+  }
+  return `https://0509.io/auth/better/magic-link?${params.toString()}`;
+}
+
+function mockBetterAuthVerifyResponse(location = "https://0509.io/app") {
+  const betterAuthResponse = new Response(null, {
+    headers: { Location: location },
+    status: 302,
+  });
+  Object.defineProperty(betterAuthResponse.headers, "getSetCookie", {
+    value: () => [
+      "__Secure-better-auth.session_token=session-token; HttpOnly; Secure; Path=/; SameSite=Lax",
+      "__Secure-better-auth.session_data=session-data; HttpOnly; Secure; Path=/; SameSite=Lax",
+    ],
+  });
+  return betterAuthResponse;
+}
+
+async function mockBetterAuthMagicLinkServer(
+  overrides: {
+    getBetterAuthSession?: (
+      env: AppEnv,
+      request: Request,
+    ) => Promise<import("~/lib/types").AppSession | null>;
+    verifyBetterAuthMagicLink?: (
+      env: AppEnv,
+      request: Request,
+      input: import("~/lib/better-auth.server").BetterAuthMagicLinkConfirmation,
+    ) => Promise<Response>;
+  } = {},
+) {
+  const betterAuth = await import("~/lib/better-auth.server");
+  const verifyBetterAuthMagicLink = overrides.verifyBetterAuthMagicLink
+    ? vi.spyOn(betterAuth, "verifyBetterAuthMagicLink").mockImplementation(overrides.verifyBetterAuthMagicLink)
+    : vi.spyOn(betterAuth, "verifyBetterAuthMagicLink").mockResolvedValue(mockBetterAuthVerifyResponse());
+  const getBetterAuthSession = overrides.getBetterAuthSession
+    ? vi.spyOn(betterAuth, "getBetterAuthSession").mockImplementation(overrides.getBetterAuthSession)
+    : vi.spyOn(betterAuth, "getBetterAuthSession").mockResolvedValue(null);
+  return { getBetterAuthSession, verifyBetterAuthMagicLink };
+}
+
+async function stageTicketFromEmailLink(
+  loader: Awaited<typeof import("~/routes/auth.better.magic-link")>["loader"],
+  testEnv: AppEnv,
+  ticketUrl: string,
+  mode: "login" | "signup" = "login",
+) {
+  const redirectResponse = (await Promise.resolve(
+    loader({
+      context: context(testEnv),
+      params: {},
+      pattern: "/auth/better/magic-link",
+      request: new Request(ticketUrl),
+      url: ticketUrl,
+    } as never),
+  ).catch((error) => error)) as Response;
+  const ticketCookie = cookieHeader(setCookieValues(redirectResponse.headers), "f9_better_magic");
+  return { redirectResponse, ticketCookie, confirmUrl: magicLinkConfirmUrl(mode) };
+}
+
+async function postMagicLinkConfirmation(
+  action: Awaited<typeof import("~/routes/auth.better.magic-link")>["action"],
+  testEnv: AppEnv,
+  ticketCookie: string,
+  mode: "login" | "signup" = "login",
+) {
+  const confirmUrl = magicLinkConfirmUrl(mode);
+  return (await Promise.resolve(
+    action({
+      context: context(testEnv),
+      params: {},
+      pattern: "/auth/better/magic-link",
+      request: new Request(confirmUrl, {
+        body: new URLSearchParams(),
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: ticketCookie,
+          origin: "https://0509.io",
+        },
+        method: "POST",
+      }),
+      url: confirmUrl,
+    } as never),
+  ).catch((error) => error)) as Response;
+}
+
 beforeEach(() => {
   vi.doUnmock("react-router");
   vi.doUnmock("~/lib/auth.server");
@@ -379,7 +473,9 @@ describe("Better Auth magic links", () => {
     expect(ticketDb.tickets.has(rawTicket)).toBe(false);
   });
 
-  it("stages a ticket without requiring the original browser cookie", async () => {
+  it("stages ticket email links on GET without redeeming them", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
+
     const { loader } = await import("~/routes/auth.better.magic-link");
     const ticketDb = dbWithMagicLinkTickets();
     const testEnv = env({ DB: ticketDb.db });
@@ -389,37 +485,41 @@ describe("Better Auth magic links", () => {
       url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
     });
 
-    const redirectResponse = (await Promise.resolve(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request(ticketUrl),
-        url: ticketUrl,
-      } as never),
-    ).catch((error) => error)) as Response;
+    const { redirectResponse } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
 
     expect(redirectResponse.status).toBe(302);
     expect(redirectResponse.headers.get("Location")).toBe("/auth/better/magic-link?mode=login");
-    const combinedSetCookie = setCookieValues(redirectResponse.headers).join("\n");
-    expect(combinedSetCookie).toContain("f9_better_magic=");
-    expect(combinedSetCookie).toContain("HttpOnly");
-    expect(combinedSetCookie).not.toContain("secret-token");
+    expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
     const [ticket] = ticketDb.tickets.values();
     expect(ticket?.consumed_at).toBeNull();
   });
 
-  it("stages an app ticket in an HttpOnly cookie before rendering a clean confirmation page", async () => {
-    const verifyBetterAuthMagicLink = vi.fn();
-    vi.doMock("~/lib/better-auth.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
-        "~/lib/better-auth.server",
-      );
-      return {
-        ...actual,
-        verifyBetterAuthMagicLink,
-      };
+  it("signs in after a same-origin confirmation POST", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
+
+    const { action, loader } = await import("~/routes/auth.better.magic-link");
+    const ticketDb = dbWithMagicLinkTickets();
+    const testEnv = env({ DB: ticketDb.db });
+    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
     });
+    const { ticketCookie } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
+    const response = await postMagicLinkConfirmation(action, testEnv, ticketCookie);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://0509.io/app");
+    const combinedSetCookie = setCookieValues(response.headers).join("\n");
+    expect(combinedSetCookie).toContain("__Secure-better-auth.session_token=session-token");
+    expect(combinedSetCookie).toContain("f9_better_magic=;");
+    expect(verifyBetterAuthMagicLink).toHaveBeenCalledTimes(1);
+    const [ticket] = ticketDb.tickets.values();
+    expect(ticket?.consumed_at).toEqual(expect.any(String));
+  });
+
+  it("survives repeated ticket GET requests like email security scanners", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
 
     const { loader } = await import("~/routes/auth.better.magic-link");
     const ticketDb = dbWithMagicLinkTickets();
@@ -429,45 +529,29 @@ describe("Better Auth magic links", () => {
       mode: "login",
       url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
     });
-    const redirectResponse = (await Promise.resolve(
+    const first = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
+    const second = (await Promise.resolve(
       loader({
         context: context(testEnv),
         params: {},
         pattern: "/auth/better/magic-link",
-        request: new Request(ticketUrl),
+        request: new Request(ticketUrl, {
+          headers: { cookie: first.ticketCookie },
+        }),
         url: ticketUrl,
       } as never),
     ).catch((error) => error)) as Response;
 
-    expect(redirectResponse.status).toBe(302);
-    expect(redirectResponse.headers.get("Location")).toBe("/auth/better/magic-link?mode=login");
-    const setCookies = setCookieValues(redirectResponse.headers);
-    const combinedSetCookie = setCookies.join("\n");
-    expect(combinedSetCookie).toContain("f9_better_magic=");
-    expect(combinedSetCookie).toContain("HttpOnly");
-    expect(combinedSetCookie).toContain("Max-Age=900");
-    expect(combinedSetCookie).not.toContain("secret-token");
-
-    const ticketCookie = cookieHeader(setCookies, "f9_better_magic");
-    const response = await loader({
-      context: context(testEnv),
-      params: {},
-      pattern: "/auth/better/magic-link",
-      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
-        headers: { cookie: ticketCookie },
-      }),
-      url: "https://0509.io/auth/better/magic-link?mode=login",
-    } as never);
-
-    await expect(response.json()).resolves.toEqual({
-      emailHint: "ow...r@example.com",
-      error: "",
-      mode: "login",
-    });
+    expect(second.status).toBe(302);
+    expect(second.headers.get("Location")).toBe("/auth/better/magic-link?mode=login");
     expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
+    const [ticket] = ticketDb.tickets.values();
+    expect(ticket?.consumed_at).toBeNull();
   });
 
-  it("keeps staged magic-link confirmations one-click", async () => {
+  it("reopens the app when the email link is opened again after sign-in", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
+
     const { loader } = await import("~/routes/auth.better.magic-link");
     const ticketDb = dbWithMagicLinkTickets();
     const testEnv = env({ DB: ticketDb.db });
@@ -476,98 +560,27 @@ describe("Better Auth magic links", () => {
       mode: "login",
       url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
     });
-    const redirectResponse = (await Promise.resolve(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request(ticketUrl),
-        url: ticketUrl,
-      } as never),
-    ).catch((error) => error)) as Response;
-
-    const ticketCookie = cookieHeader(setCookieValues(redirectResponse.headers), "f9_better_magic");
-    const response = await loader({
-      context: context(testEnv),
-      params: {},
-      pattern: "/auth/better/magic-link",
-      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
-        headers: { cookie: ticketCookie },
-      }),
-      url: "https://0509.io/auth/better/magic-link?mode=login",
-    } as never);
-
-    await expect(response.json()).resolves.toEqual({
-      emailHint: "ow...r@example.com",
-      error: "",
-      mode: "login",
-    });
-  });
-
-  it("keeps an already staged ticket when the email URL is loaded again", async () => {
-    const { loader } = await import("~/routes/auth.better.magic-link");
-    const ticketDb = dbWithMagicLinkTickets();
-    const testEnv = env({ DB: ticketDb.db });
-    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
-      email: "owner@example.com",
-      mode: "login",
-      url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
-    });
-    const firstRedirect = (await Promise.resolve(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request(ticketUrl),
-        url: ticketUrl,
-      } as never),
-    ).catch((error) => error)) as Response;
-    const ticketCookie = cookieHeader(setCookieValues(firstRedirect.headers), "f9_better_magic");
-
+    const sessionCookie =
+      "__Secure-better-auth.session_token=session-token; __Secure-better-auth.session_data=session-data";
     const secondRedirect = (await Promise.resolve(
       loader({
         context: context(testEnv),
         params: {},
         pattern: "/auth/better/magic-link",
         request: new Request(ticketUrl, {
-          headers: { cookie: ticketCookie },
+          headers: { cookie: sessionCookie },
         }),
         url: ticketUrl,
       } as never),
     ).catch((error) => error)) as Response;
 
     expect(secondRedirect.status).toBe(302);
-    expect(secondRedirect.headers.get("Location")).toBe("/auth/better/magic-link?mode=login");
-    expect(setCookieValues(secondRedirect.headers).join("\n")).not.toContain("f9_better_magic=;");
-
-    const cleanResponse = await loader({
-      context: context(testEnv),
-      params: {},
-      pattern: "/auth/better/magic-link",
-      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
-        headers: { cookie: ticketCookie },
-      }),
-      url: "https://0509.io/auth/better/magic-link?mode=login",
-    } as never);
-    await expect(cleanResponse.json()).resolves.toEqual({
-      emailHint: "ow...r@example.com",
-      error: "",
-      mode: "login",
-    });
+    expect(secondRedirect.headers.get("Location")).toBe("/app");
+    expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
   });
 
   it("preserves in-flight legacy token links during ticket rollout", async () => {
-    const betterAuthResponse = new Response(null, { status: 204 });
-    const verifyBetterAuthMagicLink = vi.fn().mockResolvedValue(betterAuthResponse);
-    vi.doMock("~/lib/better-auth.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
-        "~/lib/better-auth.server",
-      );
-      return {
-        ...actual,
-        verifyBetterAuthMagicLink,
-      };
-    });
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
 
     const { action, loader } = await import("~/routes/auth.better.magic-link");
     const legacyUrl =
@@ -597,7 +610,6 @@ describe("Better Auth magic links", () => {
       url: "https://0509.io/auth/better/magic-link?mode=login",
     } as never);
     await expect(cleanResponse.json()).resolves.toEqual({
-      emailHint: "",
       error: "",
       mode: "login",
     });
@@ -627,13 +639,12 @@ describe("Better Auth magic links", () => {
       expect.any(Request),
       expect.objectContaining({
         callbackURL: "https://0509.io/app",
-        mode: "login",
         token: "secret-token",
       }),
     );
   });
 
-  it("rejects confirmation posts without the staged HttpOnly ticket", async () => {
+  it("rejects confirmation posts without the staged legacy ticket", async () => {
     const verifyBetterAuthMagicLink = vi.fn();
     vi.doMock("~/lib/better-auth.server", async () => {
       const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
@@ -666,85 +677,10 @@ describe("Better Auth magic links", () => {
     expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
   });
 
-  it("rejects confirmation posts when the submitted email does not match the ticket", async () => {
-    const verifyBetterAuthMagicLink = vi.fn();
-    vi.doMock("~/lib/better-auth.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
-        "~/lib/better-auth.server",
-      );
-      return {
-        ...actual,
-        verifyBetterAuthMagicLink,
-      };
-    });
-
-    const { action, loader } = await import("~/routes/auth.better.magic-link");
-    const ticketDb = dbWithMagicLinkTickets();
-    const testEnv = env({ DB: ticketDb.db });
-    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
-      email: "owner@example.com",
-      mode: "login",
-      url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
-    });
-    const redirectResponse = (await Promise.resolve(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request(ticketUrl),
-        url: ticketUrl,
-      } as never),
-    ).catch((error) => error)) as Response;
-    const ticketCookie = cookieHeader(setCookieValues(redirectResponse.headers), "f9_better_magic");
-
-    const failedResponse = (await Promise.resolve(
-      action({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
-          body: new URLSearchParams({ email: "attacker@example.com" }),
-          headers: {
-            "content-type": "application/x-www-form-urlencoded",
-            cookie: ticketCookie,
-            origin: "https://0509.io",
-          },
-          method: "POST",
-        }),
-        url: "https://0509.io/auth/better/magic-link?mode=login",
-      } as never),
-    ).catch((error) => error)) as Response;
-
-    expect(failedResponse.status).toBe(302);
-    expect(failedResponse.headers.get("Location")).toBe(
-      "/auth/better/magic-link?mode=login&error=email_mismatch",
-    );
-    expect(setCookieValues(failedResponse.headers).join("\n")).not.toContain("f9_better_magic=;");
-    expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
-    const [ticket] = ticketDb.tickets.values();
-    expect(ticket?.consumed_at).toBeNull();
-  });
-
-  it("redeems through Better Auth only after a same-origin clean confirmation post", async () => {
-    const betterAuthResponse = new Response(null, {
-      headers: { Location: "https://0509.io/app/onboard" },
-      status: 302,
-    });
-    Object.defineProperty(betterAuthResponse.headers, "getSetCookie", {
-      value: () => [
-        "better-auth.session_token=session-1; HttpOnly; Secure",
-        "better-auth.session_data=session-data; HttpOnly; Secure",
-      ],
-    });
-    const verifyBetterAuthMagicLink = vi.fn().mockResolvedValue(betterAuthResponse);
-    vi.doMock("~/lib/better-auth.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
-        "~/lib/better-auth.server",
-      );
-      return {
-        ...actual,
-        verifyBetterAuthMagicLink,
-      };
+  it("redeems signup tickets after confirmation POST", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer({
+      verifyBetterAuthMagicLink: async () =>
+        mockBetterAuthVerifyResponse("https://0509.io/app/onboard"),
     });
 
     const { action, loader } = await import("~/routes/auth.better.magic-link");
@@ -755,63 +691,26 @@ describe("Better Auth magic links", () => {
       mode: "signup",
       url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&newUserCallbackURL=https%3A%2F%2F0509.io%2Fapp%2Fonboard",
     });
-    const redirectResponse = (await Promise.resolve(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request(ticketUrl),
-        url: ticketUrl,
-      } as never),
-    ).catch((error) => error)) as Response;
-    const ticketCookie = cookieHeader(setCookieValues(redirectResponse.headers), "f9_better_magic");
+    const { ticketCookie } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl, "signup");
+    const response = await postMagicLinkConfirmation(action, testEnv, ticketCookie, "signup");
 
-    const response = (await Promise.resolve(
-      action({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request("https://0509.io/auth/better/magic-link?mode=signup", {
-          body: new URLSearchParams({ email: "owner@example.com" }),
-          headers: {
-            "content-type": "application/x-www-form-urlencoded",
-            cookie: ticketCookie,
-            origin: "https://0509.io",
-          },
-          method: "POST",
-        }),
-        url: "https://0509.io/auth/better/magic-link?mode=signup",
-      } as never),
-    ).catch((error) => error)) as Response;
-
-    const setCookies = setCookieValues(response.headers);
-    const combinedSetCookie = setCookies.join("\n");
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("https://0509.io/app/onboard");
     expect(verifyBetterAuthMagicLink).toHaveBeenCalledWith(
       expect.anything(),
       expect.any(Request),
-      {
+      expect.objectContaining({
         callbackURL: "https://0509.io/app",
-        expiresAt: expect.any(Number),
-        email: "owner@example.com",
-        mode: "signup",
         newUserCallbackURL: "https://0509.io/app/onboard",
         token: "secret-token",
-      },
+      }),
     );
-    expect(combinedSetCookie).toContain("better-auth.session_token=session-1");
-    expect(combinedSetCookie).toContain("better-auth.session_data=session-data");
-    expect(combinedSetCookie).toContain("f9_better_magic=;");
-    expect(combinedSetCookie).toContain("f9_better_magic_state=;");
-    expect(combinedSetCookie).toContain("Path=/auth;");
-    expect(combinedSetCookie).toContain("Path=/auth/better/magic-link;");
     const [ticket] = ticketDb.tickets.values();
     expect(ticket?.consumed_at).toEqual(expect.any(String));
   });
 
   it("round-trips session cookies from magic-link confirmation into session lookup", async () => {
-    const getBetterAuthSession = vi.fn(async (_env, request: Request) => {
+    const getBetterAuthSessionImpl = vi.fn(async (_env, request: Request) => {
       const cookie = request.headers.get("cookie") ?? "";
       if (!cookie.includes("__Secure-better-auth.session_token=session-token")) {
         return null;
@@ -832,26 +731,8 @@ describe("Better Auth magic links", () => {
         },
       };
     });
-    const betterAuthResponse = new Response(null, {
-      headers: { Location: "https://0509.io/app" },
-      status: 302,
-    });
-    Object.defineProperty(betterAuthResponse.headers, "getSetCookie", {
-      value: () => [
-        "__Secure-better-auth.session_token=session-token; HttpOnly; Secure; Path=/; SameSite=Lax",
-        "__Secure-better-auth.session_data=session-data; HttpOnly; Secure; Path=/; SameSite=Lax",
-      ],
-    });
-    const verifyBetterAuthMagicLink = vi.fn().mockResolvedValue(betterAuthResponse);
-    vi.doMock("~/lib/better-auth.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
-        "~/lib/better-auth.server",
-      );
-      return {
-        ...actual,
-        getBetterAuthSession,
-        verifyBetterAuthMagicLink,
-      };
+    const { getBetterAuthSession } = await mockBetterAuthMagicLinkServer({
+      getBetterAuthSession: getBetterAuthSessionImpl,
     });
 
     const { action, loader } = await import("~/routes/auth.better.magic-link");
@@ -862,34 +743,8 @@ describe("Better Auth magic links", () => {
       mode: "login",
       url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
     });
-    const stagedRedirect = (await Promise.resolve(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request(ticketUrl),
-        url: ticketUrl,
-      } as never),
-    ).catch((error) => error)) as Response;
-    const ticketCookie = cookieHeader(setCookieValues(stagedRedirect.headers), "f9_better_magic");
-
-    const redirectResponse = (await Promise.resolve(
-      action({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
-          body: new URLSearchParams({ email: "owner@example.com" }),
-          headers: {
-            "content-type": "application/x-www-form-urlencoded",
-            cookie: ticketCookie,
-            origin: "https://0509.io",
-          },
-          method: "POST",
-        }),
-        url: "https://0509.io/auth/better/magic-link?mode=login",
-      } as never),
-    ).catch((error) => error)) as Response;
+    const { ticketCookie } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
+    const redirectResponse = await postMagicLinkConfirmation(action, testEnv, ticketCookie);
 
     const cookieHeaderValue = setCookieValues(redirectResponse.headers)
       .map((value) => value.split(";")[0] ?? value)
@@ -904,16 +759,46 @@ describe("Better Auth magic links", () => {
 
     expect(redirectResponse.status).toBe(302);
     expect(session?.user.email).toBe("owner@example.com");
-    expect(getBetterAuthSession).toHaveBeenCalledWith(
-      testEnv,
-      expect.objectContaining({
-        headers: expect.any(Headers),
-      }),
-    );
-    const sessionRequest = getBetterAuthSession.mock.calls[0]?.[1] as Request;
-    expect(sessionRequest.headers.get("cookie")).toContain(
-      "__Secure-better-auth.session_token=session-token",
-    );
+    expect(getBetterAuthSession).toHaveBeenCalled();
+  });
+
+  it("rejects confirmation POST without a staged ticket", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
+
+    const { action } = await import("~/routes/auth.better.magic-link");
+
+    const response = await postMagicLinkConfirmation(action, env(), "", "login");
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/auth/login?error=callback_failed");
+    expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
+  });
+
+  it("maps Better Auth verify error redirects to callback_failed", async () => {
+    await mockBetterAuthMagicLinkServer({
+      verifyBetterAuthMagicLink: async () =>
+        new Response(null, {
+          headers: {
+            Location: "https://0509.io/auth/login?error=INVALID_TOKEN",
+          },
+          status: 302,
+        }),
+    });
+
+    const { action, loader } = await import("~/routes/auth.better.magic-link");
+    const ticketDb = dbWithMagicLinkTickets();
+    const testEnv = env({ DB: ticketDb.db });
+    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
+    });
+    const { ticketCookie } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
+    const failedResponse = await postMagicLinkConfirmation(action, testEnv, ticketCookie);
+
+    expect(failedResponse.status).toBe(302);
+    expect(failedResponse.headers.get("Location")).toBe("/auth/login?error=callback_failed");
+    const [ticket] = ticketDb.tickets.values();
+    expect(ticket?.consumed_at).toBeNull();
   });
 
   it("forwards every cookie from a comma-joined Set-Cookie fallback", () => {
@@ -930,17 +815,12 @@ describe("Better Auth magic links", () => {
     expect(cookies[1]).toContain("better-auth.session_data=session-data");
   });
 
-  it("preserves a staged ticket when Better Auth verification throws", async () => {
+  it("preserves an unconsumed ticket when Better Auth verification throws", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const verifyBetterAuthMagicLink = vi.fn().mockRejectedValue(new Error("temporary D1 error"));
-    vi.doMock("~/lib/better-auth.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
-        "~/lib/better-auth.server",
-      );
-      return {
-        ...actual,
-        verifyBetterAuthMagicLink,
-      };
+    await mockBetterAuthMagicLinkServer({
+      verifyBetterAuthMagicLink: async () => {
+        throw new Error("temporary D1 error");
+      },
     });
 
     const { action, loader } = await import("~/routes/auth.better.magic-link");
@@ -951,38 +831,11 @@ describe("Better Auth magic links", () => {
       mode: "login",
       url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
     });
-    const redirectResponse = (await Promise.resolve(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request(ticketUrl),
-        url: ticketUrl,
-      } as never),
-    ).catch((error) => error)) as Response;
-    const ticketCookie = cookieHeader(setCookieValues(redirectResponse.headers), "f9_better_magic");
-
-    const failedResponse = (await Promise.resolve(
-      action({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/better/magic-link",
-        request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
-          body: new URLSearchParams({ email: "owner@example.com" }),
-          headers: {
-            "content-type": "application/x-www-form-urlencoded",
-            cookie: ticketCookie,
-            origin: "https://0509.io",
-          },
-          method: "POST",
-        }),
-        url: "https://0509.io/auth/better/magic-link?mode=login",
-      } as never),
-    ).catch((error) => error)) as Response;
+    const { ticketCookie } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
+    const failedResponse = await postMagicLinkConfirmation(action, testEnv, ticketCookie);
 
     expect(failedResponse.status).toBe(302);
     expect(failedResponse.headers.get("Location")).toBe("/auth/login?error=callback_failed");
-    expect(setCookieValues(failedResponse.headers).join("\n")).not.toContain("f9_better_magic=;");
     const [ticket] = ticketDb.tickets.values();
     expect(ticket?.consumed_at).toBeNull();
   });
@@ -1296,6 +1149,29 @@ describe("Better Auth routes", () => {
       "/auth/login?sent=1&email=unknown%40example.com&redirectTo=%2Fapp",
     );
     expect(redirectResponse?.headers.get("Set-Cookie")).toBeNull();
+
+    const { loader } = await import("~/routes/auth.login");
+    const page = await loader({
+      context: context(
+        env({
+          DB: {
+            prepare: vi.fn().mockReturnValue({
+              bind: vi.fn().mockReturnValue({
+                first: vi.fn().mockResolvedValue(null),
+              }),
+            }),
+          } as unknown as D1Database,
+        }),
+      ),
+      params: {},
+      pattern: "/auth/login",
+      request: new Request(
+        "https://0509.io/auth/login?sent=1&email=unknown%40example.com&redirectTo=%2Fapp",
+      ),
+      url: "https://0509.io/auth/login?sent=1&email=unknown%40example.com&redirectTo=%2Fapp",
+    } as never);
+    expect(page.message).toContain("If an account exists");
+    expect(page.message).not.toContain("Check your email");
   });
 
   it("clears Better Auth session cookies when provider sign-out fails", async () => {

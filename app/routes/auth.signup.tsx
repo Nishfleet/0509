@@ -146,15 +146,6 @@ function signupErrorMessage(code: string | null) {
   if (code === "callback_failed" || code === "INVALID_TOKEN") {
     return "That setup link could not be verified. Request a fresh link and try again.";
   }
-  if (code === "no_workspace") {
-    return "No account was found for that email. Create an account first.";
-  }
-  if (code === "multiple_workspaces") {
-    return "That email is attached to multiple accounts. Ask support to pick the right account before continuing.";
-  }
-  if (code === "unsupported_policy") {
-    return "This account requires an additional sign-in step that Five to Nine has not enabled yet. Ask support to adjust that policy for now.";
-  }
   if (code === "request_invalid") {
     return "That setup request could not be verified. Open this page and try again.";
   }
