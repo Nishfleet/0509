@@ -682,6 +682,13 @@ export async function runWatchlistWorkflowJob(
   }
 
   const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
+  if (options.concurrencyPermitToken) {
+    await renewMonitoringConcurrencySlot(env, { token: options.concurrencyPermitToken });
+  }
+  await renewOrchestratedWatchlistRunLease(env, {
+    runId: params.runId,
+    processingToken: claim.processingToken,
+  });
   try {
     const result = await runWatchlist(
       env,

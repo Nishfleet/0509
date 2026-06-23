@@ -6,8 +6,11 @@ import {
 
 import type { AppEnv } from "../app/lib/env.server";
 import {
+  buildMonitoringWorkflowCapacitySleepStepName,
+  buildMonitoringWorkflowConcurrencyStepName,
   claimMonitoringConcurrencySlot,
   MONITORING_CONCURRENCY_WAIT_MAX_ROUNDS,
+  MONITORING_WORKFLOW_SCAN_TIMEOUT_MS,
   releaseMonitoringConcurrencySlot,
   resolveMonitoringConcurrencySlotLeaseMs,
   resolveMonitoringFanoutMode,
@@ -46,7 +49,7 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
         throw new NonRetryableError("fanout_disabled");
       }
 
-      const claim = await step.do(`claim monitoring concurrency ${waitRound}`, async () =>
+      const claim = await step.do(buildMonitoringWorkflowConcurrencyStepName(waitRound), async () =>
         claimMonitoringConcurrencySlot(this.env, {
           runId: event.payload.runId,
           leaseMs: resolveMonitoringConcurrencySlotLeaseMs(this.env),
@@ -59,7 +62,7 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
       }
 
       await step.sleep(
-        `wait for monitoring capacity ${waitRound}`,
+        buildMonitoringWorkflowCapacitySleepStepName(waitRound),
         concurrencySleepDuration(waitRound),
       );
     }
@@ -70,9 +73,9 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
 
     try {
       return await step.do(
-        "run watchlist monitoring",
+        "run-watchlist-monitoring",
         {
-          timeout: "45 minutes",
+          timeout: `${Math.floor(MONITORING_WORKFLOW_SCAN_TIMEOUT_MS / 60_000)} minutes`,
           retries: {
             limit: 3,
             delay: "2 minutes",
@@ -85,7 +88,7 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
           }),
       );
     } finally {
-      await step.do("release monitoring concurrency", async () => {
+      await step.do("release-monitoring-concurrency", async () => {
         await releaseMonitoringConcurrencySlot(this.env, { token: permitToken! });
       });
     }
