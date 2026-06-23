@@ -29,7 +29,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     getUserIdForDodoPayment,
     getUserIdForDodoLifecycle,
   } = await import("~/lib/data.server");
-  const { PLAN_LIMITS } = await import("~/lib/plan.server");
+  const { getPlanLimit } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const rawBody = await request.text();
 
@@ -101,7 +101,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           grantedAt: planGrant.grantedAt,
           metadata: planGrant.metadata,
         },
-        PLAN_LIMITS[planGrant.plan].watchlists,
+        getPlanLimit(planGrant.plan, "watchlists"),
         {
           ...ledgerBase,
           outcome: "processed",
@@ -131,7 +131,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           grantedAt: subscriptionGrant.grantedAt,
           metadata: subscriptionGrant.metadata,
         },
-        PLAN_LIMITS[subscriptionGrant.plan].watchlists,
+        getPlanLimit(subscriptionGrant.plan, "watchlists"),
         {
           ...ledgerBase,
           outcome: "processed",
@@ -241,7 +241,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           status: revocation.eventType,
           revokedAt: revocation.revokedAt,
         },
-        PLAN_LIMITS.free.watchlists,
+        getPlanLimit("free", "watchlists"),
         {
           ...ledgerBase,
           outcome: "processed",
@@ -265,7 +265,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           refundedAt: refund.refundedAt,
           userId: refundedUserId,
         },
-        PLAN_LIMITS.free.watchlists,
+        getPlanLimit("free", "watchlists"),
         {
           ...ledgerBase,
           outcome: "processed",
@@ -300,10 +300,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
         providerPaymentId: grant.paymentId,
         providerProductId: grant.productId,
         bundleSlug: grant.bundle,
+        skuSlug: grant.skuSlug,
         credits: grant.credits,
         quantity: grant.quantity,
         grantedAt: grant.grantedAt,
-        expiresAt: grant.expiresAt,
         metadata: grant.metadata,
       },
       {
