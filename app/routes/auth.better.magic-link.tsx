@@ -9,12 +9,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     BetterAuthMagicLinkCallbackError,
-    betterAuthMagicLinkConfirmationTicketCookie,
     betterAuthMagicLinkConfirmationFromRequest,
+    betterAuthMagicLinkConfirmationTicketCookie,
     clearBetterAuthMagicLinkConfirmationCookie,
     clearBetterAuthMagicLinkStateCookie,
-    readBetterAuthMagicLinkConfirmationTicket,
     readBetterAuthMagicLinkConfirmationContext,
+    readBetterAuthMagicLinkConfirmationTicket,
   } = await import("~/lib/better-auth.server");
   const url = new URL(request.url);
   const mode =
@@ -53,13 +53,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   try {
     const confirmation = await readBetterAuthMagicLinkConfirmationTicket(env, request);
-    if (!confirmation?.browserBound) {
+    if (!confirmation) {
       throw new BetterAuthMagicLinkCallbackError();
     }
     return Response.json({
       email: confirmation.email,
       mode: confirmation.mode,
-      requiresEmailConfirmation: false,
     });
   } catch (error) {
     if (!(error instanceof BetterAuthMagicLinkCallbackError)) {
@@ -129,7 +128,6 @@ export default function BetterAuthMagicLinkRoute() {
   const data = useLoaderData() as {
     email: string;
     mode: "login" | "signup";
-    requiresEmailConfirmation: boolean;
   };
   const isSignup = data.mode === "signup";
 
@@ -152,25 +150,11 @@ export default function BetterAuthMagicLinkRoute() {
           <span>{isSignup ? "Confirm setup" : "Confirm sign-in"}</span>
           <h2>{isSignup ? "Create your workspace" : "Open your account"}</h2>
           <p>
-            {data.requiresEmailConfirmation
-              ? "Enter the email address that received this link before continuing."
-              : data.email
+            {data.email
               ? `We will verify the link for ${data.email} after you continue.`
               : "We will verify the email link after you continue."}
           </p>
           <Form className="f9-auth-form" method="post" action={cleanMagicLinkPath(data.mode)}>
-            {data.requiresEmailConfirmation ? (
-              <label className="f9-field">
-                <span>Email</span>
-                <input
-                  autoComplete="email"
-                  name="email"
-                  placeholder="you@company.com"
-                  required
-                  type="email"
-                />
-              </label>
-            ) : null}
             <button className="f9-primary-button" type="submit">
               {isSignup ? "Create workspace" : "Sign in"}
             </button>

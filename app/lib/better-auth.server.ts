@@ -603,16 +603,19 @@ export async function readBetterAuthMagicLinkConfirmationContext(
   }
 
   const token = url.searchParams.get("token") || "";
-  if (!token || context.tokenDigest !== (await betterAuthMagicLinkTokenDigest(token))) {
+  const tokenDigest = token ? await betterAuthMagicLinkTokenDigest(token) : "";
+  if (!token || !constantTimeEqual(context.tokenDigest, tokenDigest)) {
     return null;
   }
 
   const requestState = url.searchParams.get("state") || "";
   const cookieState = readCookie(request, BETTER_AUTH_MAGIC_LINK_STATE_COOKIE);
+  if (!requestState || requestState !== context.requestState || cookieState !== context.requestState) {
+    return null;
+  }
+
   return {
-    browserBound: Boolean(
-      requestState && requestState === context.requestState && cookieState === context.requestState,
-    ),
+    browserBound: true,
     email: context.email,
     mode: context.mode,
   };
@@ -695,6 +698,14 @@ export function clearBetterAuthMagicLinkConfirmationCookie(request: Request) {
   });
 }
 
+export function clearBetterAuthMagicLinkStateCookie(request: Request) {
+  return buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_STATE_COOKIE, "", {
+    domain: parentAuthCookieDomain(request),
+    maxAge: 0,
+    path: "/auth/better/magic-link",
+  });
+}
+
 export function betterAuthMagicLinkConfirmationFromRequest(
   request: Request,
 ): BetterAuthMagicLinkConfirmation {
@@ -710,13 +721,6 @@ export function betterAuthMagicLinkConfirmationFromRequest(
     newUserCallbackURL: optionalSameOriginMagicLinkUrl(url, "newUserCallbackURL"),
     token,
   };
-}
-
-export function clearBetterAuthMagicLinkStateCookie(request: Request) {
-  return buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_STATE_COOKIE, "", {
-    maxAge: 0,
-    path: "/auth/better/magic-link",
-  });
 }
 
 export function buildBetterAuthMagicLinkEmail(input: {
@@ -797,6 +801,7 @@ function createBetterAuthMagicLinkRequestState(request: Request) {
   const requestState = randomBetterAuthState();
   return {
     cookie: buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_STATE_COOKIE, requestState, {
+      domain: parentAuthCookieDomain(request),
       maxAge: 15 * 60,
       path: "/auth/better/magic-link",
     }),
@@ -809,6 +814,7 @@ function buildBetterAuthCookie(
   name: string,
   value: string,
   options: {
+    domain?: string;
     maxAge: number;
     path: string;
   },
@@ -820,6 +826,9 @@ function buildBetterAuthCookie(
     `Path=${options.path}`,
     "SameSite=Lax",
   ];
+  if (options.domain) {
+    parts.push(`Domain=${options.domain}`);
+  }
   if (new URL(request.url).protocol === "https:") {
     parts.push("Secure");
   }
@@ -868,6 +877,18 @@ async function decryptBetterAuthMagicLinkPayload(env: AppEnv, value: string) {
 async function betterAuthMagicLinkTokenDigest(token: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return base64UrlEncodeBytes(new Uint8Array(digest));
+}
+
+function constantTimeEqual(left: string, right: string) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  let diff = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return diff === 0;
 }
 
 async function betterAuthMagicLinkContextKey(env: AppEnv) {
@@ -924,6 +945,17 @@ function randomBetterAuthState() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return base64UrlEncodeBytes(bytes);
+}
+
+function parentAuthCookieDomain(request: Request) {
+  const hostname = new URL(request.url).hostname.toLowerCase();
+  if (hostname === "0509.io" || hostname.endsWith(".0509.io")) {
+    return "0509.io";
+  }
+  if (hostname === "0509.in" || hostname.endsWith(".0509.in")) {
+    return "0509.in";
+  }
+  return undefined;
 }
 
 function sameOriginMagicLinkUrl(url: URL, key: string, fallback: string) {
