@@ -1160,7 +1160,7 @@ export default function WatchlistsRoute() {
                           <div className="f9-panel-toolbar">
                             <div>
                               <p className="f9-app-kicker">
-                                {formatRunStatusLabel(run.status)} · {formatRunTriggerLabel(run.triggerType)}
+                                {formatRunStatusLabel(run.status, run.errorCode)} · {formatRunTriggerLabel(run.triggerType)}
                               </p>
                               <h3>
                                 Started <LocalTime iso={run.startedAt} />
@@ -1544,11 +1544,30 @@ function FirstScanBanner(props: { watchlistId: string }) {
   );
 }
 
-function formatRunStatusLabel(status: string) {
+function formatRunStatusLabel(status: string, errorCode?: string | null) {
   if (status === "succeeded") return "Succeeded";
   if (status === "failed") return "Failed";
-  if (status === "skipped") return "Delayed — capacity limit";
-  if (status === "running" || status === "pending") return "Running";
+  if (status === "skipped") {
+    if (errorCode === "capacity_budget") return "Delayed — capacity limit";
+    if (errorCode === "workflow_binding_missing" || errorCode === "dispatch_createbatch_missing") {
+      return "Delayed — monitoring service unavailable";
+    }
+    return "Cancelled";
+  }
+  if (status === "pending") {
+    if (
+      errorCode === "workflow_binding_missing" ||
+      errorCode === "dispatch_createbatch_missing" ||
+      errorCode === "dispatch_rate_limited"
+    ) {
+      return "Delayed — monitoring service unavailable";
+    }
+    if (errorCode === "dispatch_failed" || errorCode === "reconcile_dispatch_failed") {
+      return "Retrying";
+    }
+    return "Queued";
+  }
+  if (status === "running") return "Running";
   return status;
 }
 
