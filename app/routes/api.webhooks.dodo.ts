@@ -18,6 +18,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     verifyDodoWebhookRequest,
   } = await import("~/lib/dodo-billing.server");
   const {
+    applyDodoPlanGrantWithWatchlistReconcile,
+    applyDodoPlanRevokeWithWatchlistReconcile,
     claimDodoWebhookEvent,
     deactivateWatchlistsBeyondPlanLimit,
     reactivateWatchlistsUpToPlanLimit,
@@ -43,8 +45,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     (typeof envelope.type === "string" && envelope.type) ||
     (typeof envelope.event === "string" && envelope.event) ||
     "unknown";
-  const eventId =
-    request.headers.get("webhook-id") ?? request.headers.get("svix-id") ?? "";
+  const eventId = (request.headers.get("webhook-id") ?? request.headers.get("svix-id") ?? "").trim();
+  if (!eventId) {
+    throw new Response("Missing Dodo webhook id.", { status: 400 });
+  }
   const payloadTimestamp =
     request.headers.get("webhook-timestamp") ?? request.headers.get("svix-timestamp");
 
@@ -82,28 +86,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }> {
     const planGrant = extractDodoPlanGrant(env, payload);
     if (planGrant) {
-      await grantDodoPlanAccess(env, {
-        userId: planGrant.userId,
-        plan: planGrant.plan,
-        providerPaymentId: planGrant.paymentId,
-        providerProductId: planGrant.productId,
-        providerSubscriptionId: planGrant.subscriptionId,
-        providerCustomerId: planGrant.customerId,
-        status: planGrant.status,
-        grantedAt: planGrant.grantedAt,
-        metadata: planGrant.metadata,
-      });
-      // Reconcile watchlists with the granted plan in both directions: a
-      // resubscribe brings auto-paused watchlists back (newest first), and a
-      // downgrade pauses anything beyond the new limit.
-      await reactivateWatchlistsUpToPlanLimit(
+      await applyDodoPlanGrantWithWatchlistReconcile(
         env,
-        planGrant.userId,
-        PLAN_LIMITS[planGrant.plan].watchlists,
-      );
-      await deactivateWatchlistsBeyondPlanLimit(
-        env,
-        planGrant.userId,
+        {
+          userId: planGrant.userId,
+          plan: planGrant.plan,
+          providerPaymentId: planGrant.paymentId,
+          providerProductId: planGrant.productId,
+          providerSubscriptionId: planGrant.subscriptionId,
+          providerCustomerId: planGrant.customerId,
+          status: planGrant.status,
+          grantedAt: planGrant.grantedAt,
+          metadata: planGrant.metadata,
+        },
         PLAN_LIMITS[planGrant.plan].watchlists,
       );
       return {
@@ -120,26 +115,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
     // lane is what keeps long-lived subscriptions healthy.
     const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);
     if (subscriptionGrant) {
-      await grantDodoPlanAccess(env, {
-        userId: subscriptionGrant.userId,
-        plan: subscriptionGrant.plan,
-        providerPaymentId: null,
-        providerProductId: subscriptionGrant.productId,
-        providerSubscriptionId: subscriptionGrant.subscriptionId,
-        providerCustomerId: subscriptionGrant.customerId,
-        nextBillingAt: subscriptionGrant.nextBillingAt,
-        status: subscriptionGrant.status,
-        grantedAt: subscriptionGrant.grantedAt,
-        metadata: subscriptionGrant.metadata,
-      });
-      await reactivateWatchlistsUpToPlanLimit(
+      await applyDodoPlanGrantWithWatchlistReconcile(
         env,
-        subscriptionGrant.userId,
-        PLAN_LIMITS[subscriptionGrant.plan].watchlists,
-      );
-      await deactivateWatchlistsBeyondPlanLimit(
-        env,
-        subscriptionGrant.userId,
+        {
+          userId: subscriptionGrant.userId,
+          plan: subscriptionGrant.plan,
+          providerPaymentId: null,
+          providerProductId: subscriptionGrant.productId,
+          providerSubscriptionId: subscriptionGrant.subscriptionId,
+          providerCustomerId: subscriptionGrant.customerId,
+          nextBillingAt: subscriptionGrant.nextBillingAt,
+          status: subscriptionGrant.status,
+          grantedAt: subscriptionGrant.grantedAt,
+          metadata: subscriptionGrant.metadata,
+        },
         PLAN_LIMITS[subscriptionGrant.plan].watchlists,
       );
       return {
@@ -200,6 +189,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           userId,
           status: "cancellation_scheduled",
           occurredAt: new Date().toISOString(),
+          cancellationEffectiveAt: revocation.effectiveAt,
         });
         return {
           outcome: "processed",
@@ -212,13 +202,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
         };
       }
 
-      await revokeDodoPlanAccess(env, {
-        userId,
-        providerSubscriptionId: revocation.subscriptionId,
-        status: revocation.eventType,
-        revokedAt: revocation.revokedAt,
-      });
-      await deactivateWatchlistsBeyondPlanLimit(env, userId, PLAN_LIMITS.free.watchlists);
+      await applyDodoPlanRevokeWithWatchlistReconcile(
+        env,
+        {
+          userId,
+          providerSubscriptionId: revocation.subscriptionId,
+          status: revocation.eventType,
+          revokedAt: revocation.revokedAt,
+        },
+        PLAN_LIMITS.free.watchlists,
+      );
       return {
         outcome: "processed",
         metadata: { action: "revoke", userId, eventType: revocation.eventType },

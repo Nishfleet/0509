@@ -24,18 +24,18 @@ Backup: `../pre-cursor-launch-hardening.patch`
 
 | ID | Item | Status | Commit | Evidence |
 |----|------|--------|--------|----------|
-| 1A | Scanner-resistant magic link | fixed | pending | GET stages ticket; POST consumes; tests in `auth.server.test.ts` |
-| 1B | Unknown-account login copy | fixed | pending | `auth.login.tsx` + loader test |
-| 1C | Workspace readiness UI | fixed | pending | `app.dashboard.tsx` readiness panel |
-| 1D | Free-plan dead end | fixed | pending | dashboard banner + search `upgradePath` |
-| 1E | Stale auth error paths | fixed | pending | removed dead error codes from login/signup |
-| 2A | Atomic Dodo webhooks | pending | | |
-| 2B | Empty webhook-id dedup | pending | | |
-| 2C | revokeDodoPlanAccess payment id | pending | | |
-| 2D | Dodo lookup indexes | pending | | |
-| 2E | MCP workspace plan resolution | pending | | |
-| 2F | Scheduled cancellation enforcement | pending | | |
-| 2G | Razorpay hard-disable | pending | | |
+| 1A | Scanner-resistant magic link | fixed | f62bb15 | GET stages ticket; POST consumes; tests in `auth.server.test.ts` |
+| 1B | Unknown-account login copy | fixed | f62bb15 | `auth.login.tsx` + loader test |
+| 1C | Workspace readiness UI | fixed | f62bb15 | `app.dashboard.tsx` readiness panel |
+| 1D | Free-plan dead end | fixed | f62bb15 | dashboard banner + search `upgradePath` |
+| 1E | Stale auth error paths | fixed | f62bb15 | removed dead error codes from login/signup |
+| 2A | Atomic Dodo webhooks | fixed | pending | D1 batch in `applyDodoPlanGrant/RevokeWithWatchlistReconcile` |
+| 2B | Empty webhook-id dedup | fixed | pending | `claimDodoWebhookEvent` + route guard |
+| 2C | revokeDodoPlanAccess payment id | fixed | pending | no longer overwrites `dodo_payment_id` |
+| 2D | Dodo lookup indexes | fixed | pending | `migrations/0045_dodo_plan_lookup_indexes.sql` |
+| 2E | MCP workspace plan resolution | fixed | pending | `resolveWorkspaceDataUserId` in MCP + agent actions |
+| 2F | Scheduled cancellation enforcement | fixed | pending | `getUserPlan` + `cancellationEffectiveAt` persistence |
+| 2G | Razorpay hard-disable | fixed | pending | route returns 410, no plan mutations |
 | 3A | Monitoring workflow capacity | pending | | |
 | 3B | Customer-visible scan status | pending | | |
 | 3C | Honest monitoring | protected | | |

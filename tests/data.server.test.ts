@@ -1275,10 +1275,9 @@ describe("Dodo billing persistence", () => {
     const statement = findStatement(mock.statements, "INSERT INTO user_plan", "'free'");
 
     expect(statement?.sql).toContain("julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)");
-    expect(statement?.sql).not.toContain("dodo_payment_id = excluded.dodo_payment_id\n");
+    expect(statement?.sql).not.toContain("dodo_payment_id = excluded.dodo_payment_id");
     expect(statement?.bindings).toEqual([
       "user-1",
-      "sub_123",
       "subscription.cancelled",
       "2026-07-01T00:00:00.000Z",
     ]);
@@ -1303,6 +1302,8 @@ describe("Dodo billing persistence", () => {
     expect(statement?.sql).toContain("julianday(?) >= julianday(plan_updated_at)");
     expect(statement?.bindings).toEqual([
       "subscription.on_hold",
+      null,
+      null,
       "2026-07-01T00:00:00.000Z",
       "user-1",
       "2026-07-01T00:00:00.000Z",
@@ -1525,6 +1526,20 @@ describe("Dodo billing persistence", () => {
     expect(statements[0]?.sql).toContain("payload_timestamp");
     expect(statements[1]?.sql).not.toContain("payload_timestamp");
     expect(statements[1]?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
+  });
+
+  it("rejects blank Dodo webhook event ids", async () => {
+    await expect(
+      claimDodoWebhookEvent(
+        { DB: { prepare: vi.fn() } } as never,
+        {
+          eventId: "   ",
+          eventType: "payment.succeeded",
+          userId: null,
+          payloadTimestamp: null,
+        },
+      ),
+    ).rejects.toThrow("Dodo webhook event id is required.");
   });
 });
 

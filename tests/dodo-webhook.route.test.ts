@@ -17,6 +17,8 @@ function mockWebhookDependencies(overrides: {
   data?: Record<string, unknown>;
 } = {}) {
   const data = {
+    applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockResolvedValue(undefined),
+    applyDodoPlanRevokeWithWatchlistReconcile: vi.fn().mockResolvedValue(undefined),
     claimDodoWebhookEvent: vi.fn().mockResolvedValue(true),
     deactivateWatchlistsBeyondPlanLimit: vi.fn().mockResolvedValue(0),
     reactivateWatchlistsUpToPlanLimit: vi.fn().mockResolvedValue(0),
@@ -88,12 +90,13 @@ describe("Dodo webhook route", () => {
       params: {},
     } as never);
 
-    expect(data.grantDodoPlanAccess).toHaveBeenCalledWith(
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         providerPaymentId: "pay-delayed-success",
         grantedAt: "2026-06-04T12:00:00.000Z",
       }),
+      expect.any(Number),
     );
     expect(data.markDodoWebhookEventFinished).toHaveBeenCalledWith(
       expect.anything(),
@@ -126,7 +129,7 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, revoked: true });
-    expect(data.revokeDodoPlanAccess).toHaveBeenCalledWith(
+    expect(data.applyDodoPlanRevokeWithWatchlistReconcile).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "user-1",
@@ -134,11 +137,6 @@ describe("Dodo webhook route", () => {
         status: "subscription.cancelled",
         revokedAt: "2026-07-01T00:00:00.000Z",
       }),
-    );
-    // free plan allows 0 watchlists — all of them stop scanning on revocation
-    expect(data.deactivateWatchlistsBeyondPlanLimit).toHaveBeenCalledWith(
-      expect.anything(),
-      "user-1",
       0,
     );
     expect(data.getUserIdByEmail).not.toHaveBeenCalled();
@@ -172,7 +170,7 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true });
-    expect(data.grantDodoPlanAccess).toHaveBeenCalledWith(
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "user-1",
@@ -183,17 +181,12 @@ describe("Dodo webhook route", () => {
         status: "active",
         grantedAt: "2026-07-12T00:00:00.000Z",
       }),
+      10,
     );
     expect(data.markDodoWebhookEventFinished).toHaveBeenCalledWith(
       expect.anything(),
       "evt-renewal",
       expect.objectContaining({ outcome: "processed" }),
-    );
-    // resubscribe/renewal brings auto-paused watchlists back up to the limit
-    expect(data.reactivateWatchlistsUpToPlanLimit).toHaveBeenCalledWith(
-      expect.anything(),
-      "user-1",
-      10,
     );
   });
 
@@ -220,9 +213,12 @@ describe("Dodo webhook route", () => {
     } as never);
 
     // scout keeps its newest 3 watchlists scanning; the rest pause
-    expect(data.deactivateWatchlistsBeyondPlanLimit).toHaveBeenCalledWith(
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
       expect.anything(),
-      "user-1",
+      expect.objectContaining({
+        userId: "user-1",
+        plan: "scout",
+      }),
       3,
     );
   });
@@ -261,6 +257,7 @@ describe("Dodo webhook route", () => {
     );
     // the paying customer must NOT lose access over a renewal hiccup
     expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
+    expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
   });
 
   it("resolves payment-issue lifecycle events without metadata user id by Dodo linkage", async () => {
@@ -307,6 +304,7 @@ describe("Dodo webhook route", () => {
       },
     );
     expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
+    expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
   });
 
   it("revokes plan and expires credits when a full refund succeeds", async () => {
@@ -384,13 +382,14 @@ describe("Dodo webhook route", () => {
         customerEmail: "owner@example.com",
       },
     );
-    expect(data.revokeDodoPlanAccess).toHaveBeenCalledWith(
+    expect(data.applyDodoPlanRevokeWithWatchlistReconcile).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "user-linked",
         providerSubscriptionId: "sub_456",
         status: "subscription.expired",
       }),
+      0,
     );
   });
 
@@ -428,6 +427,7 @@ describe("Dodo webhook route", () => {
       },
     );
     expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
+    expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
   });
 
   it("skips processing entirely when the event was already claimed", async () => {
@@ -456,7 +456,7 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, duplicate: true });
-    expect(data.grantDodoPlanAccess).not.toHaveBeenCalled();
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).not.toHaveBeenCalled();
     expect(data.markDodoWebhookEventFinished).not.toHaveBeenCalled();
   });
 
@@ -474,7 +474,7 @@ describe("Dodo webhook route", () => {
         })),
       },
       data: {
-        grantDodoPlanAccess: vi.fn().mockRejectedValue(new Error("d1 blew up")),
+        applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockRejectedValue(new Error("d1 blew up")),
       },
     });
 
@@ -525,10 +525,14 @@ describe("scheduled cancellation safety", () => {
     expect(await response.json()).toMatchObject({ ok: true, cancellationScheduled: true });
     // the customer keeps what they paid for until period end
     expect(data.revokeDodoPlanAccess).not.toHaveBeenCalled();
+    expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
     expect(data.deactivateWatchlistsBeyondPlanLimit).not.toHaveBeenCalled();
     expect(data.markDodoPlanPaymentIssue).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: "cancellation_scheduled" }),
+      expect.objectContaining({
+        status: "cancellation_scheduled",
+        cancellationEffectiveAt: futureIso,
+      }),
     );
   });
 
@@ -557,6 +561,6 @@ describe("scheduled cancellation safety", () => {
       params: {},
     } as never);
 
-    expect(data.revokeDodoPlanAccess).toHaveBeenCalled();
+    expect(data.applyDodoPlanRevokeWithWatchlistReconcile).toHaveBeenCalled();
   });
 });
