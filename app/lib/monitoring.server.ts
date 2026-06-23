@@ -107,15 +107,29 @@ interface ScanPayload {
 
 interface ScanOptions {
   customerMetaAdLibraryToken?: string | null;
+  existingRunId?: string;
+  orchestrationToken?: string;
 }
 
-export interface MonitoringWorkflowParams {
-  watchlistId: string;
-  triggerType: WatchlistRunRecord["triggerType"];
-  executionKey: string;
-  proofCaptureRequestKeyPrefix: string;
-  queuedAt: string;
-}
+export type {
+  MonitoringWorkflowParams,
+} from "~/lib/monitoring-fanout.server";
+export {
+  buildWatchlistExecutionIdempotencyKey,
+} from "~/lib/monitoring-fanout.server";
+import type { MonitoringWorkflowParams } from "~/lib/monitoring-fanout.server";
+import {
+  acquireMonitoringConcurrencySlot,
+  claimOrchestratedWatchlistRun,
+  collectMonitoringOrchestrationMetrics,
+  finishOrchestratedWatchlistRun,
+  markOrchestratedRunCancelled,
+  markOrchestratedDispatchFailure,
+  reconcileOrchestratedWatchlistRuns,
+  resolveMonitoringFanoutMode,
+  resolveMonitoringOrchestrationLeaseMs,
+  scheduleWatchlistFanout,
+} from "~/lib/monitoring-fanout.server";
 
 interface RunScheduledMonitoringOptions {
   includeScans?: boolean;
@@ -170,74 +184,59 @@ export async function runScheduledMonitoring(
       includeScout: shouldIncludeScoutInScheduledMonitoring(options),
     });
 
-    const workflowBinding = getMonitoringWorkflowBinding(env);
-    const shouldBypassWorkflow = shouldRunScheduledMonitoringInline(env);
+    const fanoutMode = resolveMonitoringFanoutMode(env);
+    const scheduledTime = options.scheduledTime ?? Date.now();
 
-    if (workflowBinding && !shouldBypassWorkflow) {
-      const scheduledTime = options.scheduledTime ?? Date.now();
-      const scanCache = new Map<string, Promise<ScanPayload>>();
-
-      for (let index = 0; index < watchlists.length; index += 1) {
-        if (Date.now() > deadlineAt) {
-          skippedForBudget = watchlists.length - index;
-          for (let skipIndex = index; skipIndex < watchlists.length; skipIndex += 1) {
-            await recordWatchlistCapacitySkip(env, watchlists[skipIndex]!.id, {
-              scheduledTime,
-              cron: options.cron,
-            });
-          }
-          break;
-        }
-
-        const watchlist = watchlists[index]!;
-        const executionKey = buildWatchlistExecutionIdempotencyKey({
-          watchlistId: watchlist.id,
-          triggerType: "scheduled",
-          scheduledTime,
-          cron: options.cron,
-        });
-
-        try {
-          await workflowBinding.create({
-            id: executionKey,
-            params: {
-              watchlistId: watchlist.id,
-              triggerType: "scheduled",
-              executionKey,
-              proofCaptureRequestKeyPrefix: `proof:${executionKey}`,
-              queuedAt: new Date(scheduledTime).toISOString(),
-            },
-          });
-          queued += 1;
-        } catch (error) {
-          if (isDuplicateWorkflowCreateError(error)) {
-            duplicates += 1;
-            continue;
-          }
-
-          try {
-            const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache);
-            inlineRuns += ranInline ? 1 : 0;
-          } catch (inlineError) {
-            inlineFailures += 1;
-            console.error(
-              `Scheduled scan failed for watchlist ${watchlist.id}; continuing with remaining watchlists.`,
-              inlineError,
-            );
-          }
-        }
-      }
-    } else {
+    if (fanoutMode === "inline") {
       const inlineResult = await runScheduledMonitoringInline(env, watchlists, deadlineAt, {
-        scheduledTime: options.scheduledTime,
+        scheduledTime,
         cron: options.cron,
       });
       inlineRuns = inlineResult.inlineRuns;
       inlineFailures = inlineResult.inlineFailures;
       skippedForBudget = inlineResult.skippedForBudget;
+    } else {
+      await reconcileOrchestratedWatchlistRuns(env, {
+        scheduledTime,
+        cron: options.cron,
+        mode: fanoutMode,
+        leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
+      });
+
+      const fanoutResult = await scheduleWatchlistFanout(env, {
+        watchlists,
+        scheduledTime,
+        cron: options.cron,
+        mode: fanoutMode,
+      });
+      queued = fanoutResult.queued;
+      duplicates = fanoutResult.duplicates;
+      skippedForBudget = fanoutResult.dispatchFailures;
+
+      const metrics = await collectMonitoringOrchestrationMetrics(env);
+      const { logAppEvent } = await import("~/lib/log.server");
+      logAppEvent("info", "monitoring_fanout_scheduled", "Scheduled monitoring fan-out", {
+        details: {
+        cron: options.cron ?? null,
+        mode: fanoutMode,
+        eligible: fanoutResult.eligible,
+        queued: fanoutResult.queued,
+        duplicates: fanoutResult.duplicates,
+        dispatchFailures: fanoutResult.dispatchFailures,
+        shadowOnly: fanoutResult.shadowOnly,
+        running: metrics.running,
+        oldestQueuedAgeMs: metrics.oldestQueuedAgeMs,
+        },
+      });
+
+      if (fanoutResult.dispatchFailures > 0) {
+        console.error(
+          `Scheduled monitoring could not dispatch ${fanoutResult.dispatchFailures} watchlist job(s); reconciliation will retry.`,
+        );
+      }
     }
 
-    if (skippedForBudget > 0) {
+    if (skippedForBudget > 0 && fanoutMode === "inline") {
       console.error(
         `Scheduled monitoring hit its time budget with ${skippedForBudget} of ${watchlists.length} watchlists left unscanned; scan capacity must grow before more watchlists are added.`,
       );
@@ -555,8 +554,36 @@ export async function runWatchlistWorkflowJob(
   env: AppEnv,
   params: MonitoringWorkflowParams,
 ) {
+  const fanoutMode = resolveMonitoringFanoutMode(env);
+  if (fanoutMode === "shadow") {
+    return {
+      status: "shadow" as const,
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+      runId: params.runId,
+    };
+  }
+
+  const claim = await claimOrchestratedWatchlistRun(env, {
+    runId: params.runId,
+    leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
+  });
+  if (!claim.claimed) {
+    return {
+      status: "duplicate" as const,
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+      runId: params.runId,
+    };
+  }
+
   const watchlist = await getWatchlist(env, params.watchlistId);
   if (!watchlist || !watchlist.isActive) {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: "watchlist_unavailable",
+      message: "This competitor is no longer being tracked.",
+    });
     return {
       status: "skipped" as const,
       reason: "watchlist_unavailable",
@@ -565,8 +592,28 @@ export async function runWatchlistWorkflowJob(
     };
   }
 
+  const plan = await getUserPlan(env, watchlist.userId);
+  if (plan === "free") {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: "plan_ineligible",
+      message: "Scheduled scans paused for this workspace.",
+    });
+    return {
+      status: "skipped" as const,
+      reason: "plan_ineligible",
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+    };
+  }
+
   const query = await resolveWatchlistQuery(env, watchlist);
   if (!query) {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: "watchlist_target_unresolved",
+      message: "This competitor could not be resolved for scanning.",
+    });
     return {
       status: "skipped" as const,
       reason: "watchlist_target_unresolved",
@@ -576,25 +623,80 @@ export async function runWatchlistWorkflowJob(
   }
 
   const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
-  const result = await runWatchlist(
-    env,
-    watchlist,
-    params.triggerType,
-    () =>
-      performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+  try {
+    const result = await runWatchlist(
+      env,
+      watchlist,
+      params.triggerType,
+      () =>
+        performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+          customerMetaAdLibraryToken,
+        }),
+      {
         customerMetaAdLibraryToken,
-      }),
-    {
-      customerMetaAdLibraryToken,
-    },
-  );
+        existingRunId: params.runId,
+        orchestrationToken: claim.processingToken,
+      },
+    );
 
-  return {
-    status: "completed" as const,
-    executionKey: params.executionKey,
-    proofCaptureRequestKeyPrefix: params.proofCaptureRequestKeyPrefix,
-    ...result,
-  };
+    return {
+      status: "completed" as const,
+      executionKey: params.executionKey,
+      proofCaptureRequestKeyPrefix: params.proofCaptureRequestKeyPrefix,
+      ...result,
+    };
+  } catch (error) {
+    if (isRetryableMonitoringFailure(error)) {
+      await markOrchestratedDispatchFailure(env, {
+        runId: params.runId,
+        errorCode: "retryable_scan_failure",
+        errorMessage: error instanceof Error ? error.message : "Retryable scan failure.",
+        retryAfterIso: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      });
+    }
+    throw error;
+  }
+}
+
+async function completeWatchlistRun(
+  env: AppEnv,
+  runId: string,
+  input: {
+    status: WatchlistRunRecord["status"];
+    pagesScanned: number;
+    summary: Record<string, unknown>;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  },
+  options: ScanOptions,
+) {
+  if (options.orchestrationToken) {
+    const finalized = await finishOrchestratedWatchlistRun(env, {
+      runId,
+      processingToken: options.orchestrationToken,
+      status: input.status,
+      pagesScanned: input.pagesScanned,
+      summary: input.summary,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+    });
+    if (!finalized) {
+      throw new Error("Stale orchestrated watchlist run token; refusing to finalize.");
+    }
+    return;
+  }
+
+  await finishWatchlistRun(env, runId, input);
+}
+
+function isRetryableMonitoringFailure(error: unknown) {
+  if (error instanceof CommercialDiscoveryError) {
+    return error.failureClass === "rate_limited" || error.failureClass === "browser_launch_failed";
+  }
+  if (error instanceof Error) {
+    return /timeout|throttl|temporar|network|concurrency_limited/i.test(error.message);
+  }
+  return false;
 }
 
 export async function runWatchlist(
@@ -609,23 +711,27 @@ export async function runWatchlist(
   // One scan at a time per watchlist: the first-scan waitUntil, an eager
   // "Refresh now" click, and the nightly cron can otherwise overlap — double
   // Browser Rendering spend and duplicate baseline events.
-  const inFlightCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  if (await hasInFlightWatchlistRun(env, watchlist.id, inFlightCutoff)) {
-    throw new Error(
-      "A scan for this watchlist is already running. Fresh results land in a couple of minutes.",
-    );
+  if (!options.existingRunId) {
+    const inFlightCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    if (await hasInFlightWatchlistRun(env, watchlist.id, inFlightCutoff)) {
+      throw new Error(
+        "A scan for this watchlist is already running. Fresh results land in a couple of minutes.",
+      );
+    }
   }
 
   const recentRuns = await getRecentSuccessfulRuns(env, watchlist.id, 3);
   const baselineRun = recentRuns[0] ?? null;
   const priorRun = recentRuns[1] ?? null;
-  const runId = await createWatchlistRun(
-    env,
-    watchlist.id,
-    triggerType,
-    baselineRun?.id ?? null,
-    DEFAULT_PAGE_BUDGET,
-  );
+  const runId =
+    options.existingRunId ??
+    (await createWatchlistRun(
+      env,
+      watchlist.id,
+      triggerType,
+      baselineRun?.id ?? null,
+      DEFAULT_PAGE_BUDGET,
+    ));
 
   try {
     const { ads, pagesScanned, degraded } = await scan();
@@ -697,24 +803,29 @@ export async function runWatchlist(
           })
         : { attempts: 0, channels: [] };
 
-    await finishWatchlistRun(env, runId, {
-      status: "succeeded",
-      pagesScanned,
-      summary: {
-        adsSeen: currentObservations.length,
-        websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
-        candidatesDetected:
-          eventDrafts.length + proofEvaluation.candidateCount + directWebsiteProofEvaluation.candidateCount,
-        proofsAttempted: proofEvaluation.proofAttemptCount + directWebsiteProofEvaluation.proofAttemptCount,
-        eventsConfirmed:
-          scanNativeEvents.length +
-          proofEvaluation.confirmedEventCount +
-          directWebsiteProofEvaluation.confirmedEventCount,
-        sendsTriggered: alertDelivery.attempts,
-        events: allEvents.length,
-        eventTypes: summarizeEventTypes(allEvents),
+    await completeWatchlistRun(
+      env,
+      runId,
+      {
+        status: "succeeded",
+        pagesScanned,
+        summary: {
+          adsSeen: currentObservations.length,
+          websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+          candidatesDetected:
+            eventDrafts.length + proofEvaluation.candidateCount + directWebsiteProofEvaluation.candidateCount,
+          proofsAttempted: proofEvaluation.proofAttemptCount + directWebsiteProofEvaluation.proofAttemptCount,
+          eventsConfirmed:
+            scanNativeEvents.length +
+            proofEvaluation.confirmedEventCount +
+            directWebsiteProofEvaluation.confirmedEventCount,
+          sendsTriggered: alertDelivery.attempts,
+          events: allEvents.length,
+          eventTypes: summarizeEventTypes(allEvents),
+        },
       },
-    });
+      options,
+    );
     await touchWatchlistScanned(env, watchlist.id);
     const commercialProvider = resolveCommercialDiscoveryProvider(env, {
       customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
@@ -755,25 +866,30 @@ export async function runWatchlist(
         watchlistRunAttemptCount: 0,
       });
       if (!directWebsiteProofEvaluation.proofCaptureSucceeded) {
-        await finishWatchlistRun(env, runId, {
-          status: "failed",
-          pagesScanned: 0,
-          summary: {
-            adsSeen: 0,
-            websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
-            candidatesDetected: directWebsiteProofEvaluation.candidateCount,
-            proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
-            eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
-            sendsTriggered: 0,
-            events: directWebsiteProofEvaluation.events.length,
-            eventTypes: summarizeEventTypes(directWebsiteProofEvaluation.events),
-            scanStatus: "failed",
-            scanErrorCode: errorCode,
-            scanErrorMessage: details,
+        await completeWatchlistRun(
+          env,
+          runId,
+          {
+            status: "failed",
+            pagesScanned: 0,
+            summary: {
+              adsSeen: 0,
+              websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+              candidatesDetected: directWebsiteProofEvaluation.candidateCount,
+              proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
+              eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
+              sendsTriggered: 0,
+              events: directWebsiteProofEvaluation.events.length,
+              eventTypes: summarizeEventTypes(directWebsiteProofEvaluation.events),
+              scanStatus: "failed",
+              scanErrorCode: errorCode,
+              scanErrorMessage: details,
+            },
+            errorCode,
+            errorMessage: details,
           },
-          errorCode,
-          errorMessage: details,
-        });
+          options,
+        );
         await logMetaIntegrationStatus(env, {
           status: "degraded",
           summary: "Commercial discovery failed and direct website proof did not complete.",
@@ -804,23 +920,28 @@ export async function runWatchlist(
             })
           : { attempts: 0, channels: [] };
 
-      await finishWatchlistRun(env, runId, {
-        status: "succeeded",
-        pagesScanned: 0,
-        summary: {
-          adsSeen: 0,
-          websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
-          candidatesDetected: directWebsiteProofEvaluation.candidateCount,
-          proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
-          eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
-          sendsTriggered: alertDelivery.attempts,
-          events: directWebsiteProofEvaluation.events.length,
-          eventTypes: summarizeEventTypes(directWebsiteProofEvaluation.events),
-          scanStatus: "degraded",
-          scanErrorCode: errorCode,
-          scanErrorMessage: details,
+      await completeWatchlistRun(
+        env,
+        runId,
+        {
+          status: "succeeded",
+          pagesScanned: 0,
+          summary: {
+            adsSeen: 0,
+            websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+            candidatesDetected: directWebsiteProofEvaluation.candidateCount,
+            proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
+            eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
+            sendsTriggered: alertDelivery.attempts,
+            events: directWebsiteProofEvaluation.events.length,
+            eventTypes: summarizeEventTypes(directWebsiteProofEvaluation.events),
+            scanStatus: "degraded",
+            scanErrorCode: errorCode,
+            scanErrorMessage: details,
+          },
         },
-      });
+        options,
+      );
       await touchWatchlistScanned(env, watchlist.id);
       await logMetaIntegrationStatus(env, {
         status: "degraded",
@@ -837,16 +958,21 @@ export async function runWatchlist(
       return { runId, events: directWebsiteProofEvaluation.events.length };
     }
 
-    await finishWatchlistRun(env, runId, {
-      status: "failed",
-      pagesScanned: 0,
-      summary: {
-        adsSeen: 0,
-        events: 0,
+    await completeWatchlistRun(
+      env,
+      runId,
+      {
+        status: "failed",
+        pagesScanned: 0,
+        summary: {
+          adsSeen: 0,
+          events: 0,
+        },
+        errorCode,
+        errorMessage: details,
       },
-      errorCode,
-      errorMessage: details,
-    });
+      options,
+    );
     await logMetaIntegrationStatus(env, {
       status: "degraded",
       summary:
@@ -1214,12 +1340,6 @@ async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {
 
   const savedQuery = await getSavedQuery(env, watchlist.targetId);
   return savedQuery?.normalizedQuery ?? null;
-}
-
-function shouldRunScheduledMonitoringInline(env: AppEnv) {
-  // Browser-backed discovery currently needs the main Worker runtime so the
-  // Browser binding stays available during the scheduled scan.
-  return resolveCommercialDiscoveryProvider(env) === "meta_library_browser";
 }
 
 async function runScheduledMonitoringInline(
@@ -2125,19 +2245,6 @@ function isWithinDirectWebsiteProofInterval(value: string | null | undefined) {
   return Number.isFinite(timestamp) && Date.now() - timestamp < DIRECT_WEBSITE_PROOF_INTERVAL_MS;
 }
 
-export function buildWatchlistExecutionIdempotencyKey(input: {
-  watchlistId: string;
-  triggerType: WatchlistRunRecord["triggerType"];
-  scheduledTime?: number;
-  cron?: string | null;
-}) {
-  const slot = new Date(input.scheduledTime ?? Date.now())
-    .toISOString()
-    .replace(/[:.]/g, "-");
-  const cronFragment = normalizeIdempotencySegment(input.cron ?? "adhoc");
-  return `watchlist-run:${input.triggerType}:${input.watchlistId}:${cronFragment}:${slot}`;
-}
-
 export function buildProofCaptureRequestIdempotencyKey(input: {
   watchlistId: string;
   adId: string | null;
@@ -2151,20 +2258,6 @@ export function buildProofCaptureRequestIdempotencyKey(input: {
     normalizeIdempotencySegment(input.adId ?? "none"),
     normalizeIdempotencySegment(normalizeIdempotencyUrl(input.landingPageUrl) ?? "none"),
   ].join(":");
-}
-
-function getMonitoringWorkflowBinding(env: AppEnv) {
-  return env.MONITORING_WORKFLOW as Workflow<MonitoringWorkflowParams> | undefined;
-}
-
-function isDuplicateWorkflowCreateError(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  return /already exists|already been created|instance .* exists|duplicate/i.test(
-    error.message.toLowerCase(),
-  );
 }
 
 function normalizeIdempotencyUrl(value: string | null) {
