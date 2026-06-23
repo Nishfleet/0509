@@ -1,6 +1,7 @@
 import type { AppEnv } from "~/lib/env.server";
 import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
+import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
 import { getUserPlan } from "~/lib/plan.server";
 import type { WatchlistRecord, WatchlistRunRecord } from "~/lib/types";
 
@@ -281,6 +282,7 @@ export async function ensureOrchestratedWatchlistRun(
     executionKey: string;
     pageBudget: number;
     scheduledTime: number;
+    queuePriority?: number;
   },
 ) {
   const timestamp = nowIso();
@@ -305,9 +307,10 @@ export async function ensureOrchestratedWatchlistRun(
         updated_at,
         idempotency_key,
         queued_at,
-        attempt_count
+        attempt_count,
+        queue_priority
       )
-      VALUES (?, ?, ?, 'pending', ?, 0, NULL, '{}', ?, NULL, NULL, NULL, ?, ?, ?, ?, 0)
+      VALUES (?, ?, ?, 'pending', ?, 0, NULL, '{}', ?, NULL, NULL, NULL, ?, ?, ?, ?, 0, ?)
     `,
     id,
     input.watchlistId,
@@ -318,6 +321,7 @@ export async function ensureOrchestratedWatchlistRun(
     timestamp,
     input.executionKey,
     timestamp,
+    input.queuePriority ?? 2,
   );
 
   if (Number(result.meta?.changes ?? 0) > 0) {
@@ -977,6 +981,9 @@ export async function scheduleWatchlistFanout(
         executionKey,
         pageBudget,
         scheduledTime: input.scheduledTime,
+        queuePriority: getScheduledMonitoringPolicy(
+          await getUserPlan(env, watchlist.userId),
+        ).monitoringQueuePriority,
       });
       if (!ensured.created) {
         duplicates += 1;

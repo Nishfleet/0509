@@ -74,7 +74,8 @@ async function seedSlotSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"
       processing_started_at TEXT,
       queued_at TEXT,
       attempt_count INTEGER NOT NULL DEFAULT 0,
-      retry_after TEXT
+      retry_after TEXT,
+      queue_priority INTEGER NOT NULL DEFAULT 2
     );
   `);
   const insert = sqlite.prepare(

@@ -56,6 +56,8 @@ import {
 } from "~/lib/ad-source.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
+import { planAllowsDigestCadence } from "~/lib/plan-entitlements";
+import { getEvidenceUsageSummary } from "~/lib/evidence-usage.server";
 import {
   buildCanonicalPageIdentity,
   buildProofTargetIdentity,
@@ -1388,16 +1390,6 @@ function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoring
   return scheduledAt.getUTCDay() === WEEKLY_DIGEST_UTC_DAY;
 }
 
-function planAllowsDigestCadence(plan: keyof typeof PLAN_LIMITS, cadence: DigestCadence) {
-  const planCadence = PLAN_LIMITS[plan].digestCadence;
-
-  if (cadence === "daily") {
-    return planCadence === "daily_and_weekly";
-  }
-
-  return planCadence === "weekly" || planCadence === "daily_and_weekly";
-}
-
 async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {
   if (watchlist.targetType === "advertiser") {
     return normalizeSavedQuery("advertiser", {
@@ -1692,6 +1684,65 @@ async function persistScanNativeEvents(
   return createdEvents;
 }
 
+async function resolveWorkspaceEvidenceCapacity(env: AppEnv, workspaceUserId: string) {
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    const userPlan = await getProofCapturePlan(env, workspaceUserId);
+    const purchasedProofCredits = 0;
+    const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
+    return {
+      userPlan,
+      purchasedProofCredits,
+      workspaceMonthlyCap,
+      workspaceMonthlyRemaining: workspaceMonthlyCap,
+      workspaceDailyCap: dailyProofCapForPlan(userPlan, purchasedProofCredits),
+      includedUsed: 0,
+    };
+  }
+
+  try {
+    const summary = await getEvidenceUsageSummary(env, workspaceUserId);
+    const userPlan = summary.plan;
+    const purchasedProofCredits = summary.topUpRemaining;
+    return {
+      userPlan,
+      purchasedProofCredits,
+      workspaceMonthlyCap: summary.includedAllowance + purchasedProofCredits,
+      workspaceMonthlyRemaining: summary.totalAvailable,
+      workspaceDailyCap: dailyProofCapForPlan(userPlan, purchasedProofCredits),
+      includedUsed: summary.includedUsed,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/evidence_usage_period|no such table/i.test(message)) {
+      throw error;
+    }
+
+    const now = new Date().toISOString();
+    const proofWindowStart = startOfRollingProofWindowIso();
+    const userPlan = await getProofCapturePlan(env, workspaceUserId);
+    const purchasedProofCredits = await sumActiveProofUsageCredits(
+      env,
+      workspaceUserId,
+      proofWindowStart,
+      now,
+    );
+    const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
+    const workspaceMonthlyAttempts = await countProofCapturesForWorkspaceSince(
+      env,
+      workspaceUserId,
+      proofWindowStart,
+    );
+    return {
+      userPlan,
+      purchasedProofCredits,
+      workspaceMonthlyCap,
+      workspaceMonthlyRemaining: Math.max(0, workspaceMonthlyCap - workspaceMonthlyAttempts),
+      workspaceDailyCap: dailyProofCapForPlan(userPlan, purchasedProofCredits),
+      includedUsed: workspaceMonthlyAttempts,
+    };
+  }
+}
+
 async function evaluateSelectiveProofCandidates(
   env: AppEnv,
   input: {
@@ -1705,17 +1756,12 @@ async function evaluateSelectiveProofCandidates(
   const proofEvents: WatchEventRecord[] = [];
   const eventTypesByAd = mapEventTypesByAdId(input.scanNativeDrafts);
   const todayStart = startOfUtcDayIso();
-  const proofWindowStart = startOfRollingProofWindowIso();
   const now = new Date().toISOString();
-  const userPlan = await getProofCapturePlan(env, input.watchlist.userId);
-  const purchasedProofCredits = await sumActiveProofUsageCredits(
-    env,
-    input.watchlist.userId,
-    proofWindowStart,
-    now,
-  );
-  const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
-  const workspaceDailyCap = dailyProofCapForPlan(userPlan, purchasedProofCredits);
+  const capacity = await resolveWorkspaceEvidenceCapacity(env, input.watchlist.userId);
+  const userPlan = capacity.userPlan;
+  const purchasedProofCredits = capacity.purchasedProofCredits;
+  const workspaceMonthlyCap = capacity.workspaceMonthlyCap;
+  const workspaceDailyCap = capacity.workspaceDailyCap;
   const watchlistDailyAttempts = await countProofCapturesForWatchlistSince(
     env,
     input.watchlist.id,
@@ -1726,11 +1772,7 @@ async function evaluateSelectiveProofCandidates(
     input.watchlist.userId,
     todayStart,
   );
-  const workspaceMonthlyAttempts = await countProofCapturesForWorkspaceSince(
-    env,
-    input.watchlist.userId,
-    proofWindowStart,
-  );
+  const workspaceMonthlyAttempts = capacity.includedUsed;
   const workspaceRecentAttempts = await listRecentWorkspaceProofCaptures(env, input.watchlist.userId, 20);
   const proofAwareRecentEvents = [...input.recentWatchEvents];
   let watchlistRunAttemptCount = 0;
@@ -2009,20 +2051,15 @@ async function evaluateDirectWebsiteProofCandidate(
 
   const now = new Date().toISOString();
   const todayStart = startOfUtcDayIso();
-  const proofWindowStart = startOfRollingProofWindowIso();
-  const userPlan = await getProofCapturePlan(env, input.watchlist.userId);
-  const purchasedProofCredits = await sumActiveProofUsageCredits(
-    env,
-    input.watchlist.userId,
-    proofWindowStart,
-    now,
-  );
-  const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
-  const workspaceDailyCap = dailyProofCapForPlan(userPlan, purchasedProofCredits);
+  const capacity = await resolveWorkspaceEvidenceCapacity(env, input.watchlist.userId);
+  const userPlan = capacity.userPlan;
+  const purchasedProofCredits = capacity.purchasedProofCredits;
+  const workspaceMonthlyCap = capacity.workspaceMonthlyCap;
+  const workspaceDailyCap = capacity.workspaceDailyCap;
   const [watchlistDailyAttempts, workspaceDailyAttempts, workspaceMonthlyAttempts] = await Promise.all([
     countProofCapturesForWatchlistSince(env, input.watchlist.id, todayStart),
     countProofCapturesForWorkspaceSince(env, input.watchlist.userId, todayStart),
-    countProofCapturesForWorkspaceSince(env, input.watchlist.userId, proofWindowStart),
+    Promise.resolve(capacity.includedUsed),
   ]);
 
   if (
