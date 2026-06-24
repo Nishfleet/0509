@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { evaluatePresenceWorkspaceAccess } from "~/lib/presence-internal-access.server";
 import type {
   ConnectorRolloutState,
   PresenceConnectorId,
@@ -22,7 +23,7 @@ function parseRolloutState(value: string | undefined, fallback: ConnectorRollout
 function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId): ConnectorRolloutState {
   switch (connectorId) {
     case "website":
-      return parseRolloutState(env.PRESENCE_WEBSITE_ROLLOUT, "internal");
+      return parseRolloutState(env.PRESENCE_WEBSITE_ROLLOUT, "disabled");
     case "x":
       return parseRolloutState(env.PRESENCE_X_ROLLOUT, "disabled");
     case "reddit":
@@ -53,8 +54,21 @@ export function evaluateConnectorAccessGate(
   env: AppEnv,
   connectorId: PresenceConnectorId,
   trackingMode: PresenceTrackingMode,
+  workspaceUserId?: string,
 ): ConnectorAccessGateResult {
   const rolloutState = connectorRolloutFromEnv(env, connectorId);
+
+  if (connectorId === "website" && workspaceUserId) {
+    const workspaceAccess = evaluatePresenceWorkspaceAccess(env, workspaceUserId);
+    if (!workspaceAccess.allowed) {
+      return {
+        allowed: false,
+        rolloutState: workspaceAccess.rolloutState,
+        reasonCode: workspaceAccess.reasonCode,
+        reasonMessage: workspaceAccess.reasonMessage,
+      };
+    }
+  }
 
   if (rolloutState === "disabled") {
     return {
@@ -104,10 +118,11 @@ export function connectorOperationalForPolling(
   env: AppEnv,
   connectorId: PresenceConnectorId,
   trackingMode: PresenceTrackingMode,
+  workspaceUserId?: string,
 ): boolean {
-  const gate = evaluateConnectorAccessGate(env, connectorId, trackingMode);
+  const gate = evaluateConnectorAccessGate(env, connectorId, trackingMode, workspaceUserId);
   if (!gate.allowed) {
-    return connectorId === "website" && gate.rolloutState !== "disabled";
+    return false;
   }
   return gate.rolloutState === "internal" || gate.rolloutState === "pilot" || gate.rolloutState === "ga";
 }

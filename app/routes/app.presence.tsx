@@ -13,13 +13,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlan } = await import("~/lib/plan.server");
   const { getPresenceLimits, presenceModeAllowed } = await import("~/lib/presence-entitlements");
-  const { getPresenceWorkspaceSnapshot } = await import("~/lib/presence-service.server");
+  const { getPresenceWorkspaceSnapshot, requirePresenceWorkspaceAccess } = await import(
+    "~/lib/presence-service.server"
+  );
   const {
     connectorRolloutState,
     listPresenceConnectors,
   } = await import("~/lib/presence-connector-registry.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  await requirePresenceWorkspaceAccess(env, workspaceUserId);
   const plan = await getUserPlan(env, workspaceUserId);
   const snapshot = await getPresenceWorkspaceSnapshot(env, workspaceUserId);
   const limits = getPresenceLimits(plan);
@@ -33,8 +36,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     connectors: listPresenceConnectors().map((connector) => ({
       id: connector.id,
       supportedModes: connector.supportedModes,
-      rolloutSelf: connectorRolloutState(env, connector.id, "self"),
-      rolloutCompetitor: connectorRolloutState(env, connector.id, "competitor"),
+      rolloutSelf: connectorRolloutState(env, connector.id, "self", workspaceUserId),
+      rolloutCompetitor: connectorRolloutState(env, connector.id, "competitor", workspaceUserId),
     })),
     userEmail: session.user.email,
   };

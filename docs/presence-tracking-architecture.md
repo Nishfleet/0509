@@ -26,8 +26,9 @@ Track **self** (customer-owned, OAuth where applicable) and **competitor** (publ
 - `presence_poll_cursor` — ETag/Last-Modified and connector cursors
 - `presence_entity_link` — verified links only (no name-similarity auto-merge)
 - `presence_alert_cursor` — digest/alert de-duplication per entity
+- `presence_oauth_transaction` — one-time HMAC-signed OAuth state + PKCE verifier (migration `0056`)
 
-Migration: `migrations/0055_presence_tracking.sql`
+Migrations: `migrations/0055_presence_tracking.sql`, `migrations/0056_presence_oauth_transaction.sql`
 
 ## Connector framework
 
@@ -41,19 +42,45 @@ Contract per connector:
 
 Rollout states: `disabled` | `internal` | `pilot` | `ga` (env: `PRESENCE_*_ROLLOUT`)
 
-Access gates: `app/lib/presence-access-gates.server.ts`
-- Website: no external approval; default `internal`
+Access gates: `app/lib/presence-access-gates.server.ts` + `app/lib/presence-internal-access.server.ts`
+- Website: default `disabled`; `internal` requires `PRESENCE_INTERNAL_WORKSPACE_ID` match (fail closed)
 - X: requires `X_API_BEARER_TOKEN` + rollout ≠ disabled
 - Reddit: requires credentials + `REDDIT_COMMERCIAL_ACCESS=approved`
-- LinkedIn self: OAuth structure; competitor = `LIMITED_COVERAGE` / blocked
+- LinkedIn self: OAuth with HMAC transactions; competitor = `LIMITED_COVERAGE` / blocked
 
 Mocks for tests: `PRESENCE_X_MOCK`, `PRESENCE_REDDIT_MOCK`, `PRESENCE_LINKEDIN_MOCK`
+
+## OAuth security
+
+Module: `app/lib/presence-oauth-transaction.server.ts`
+
+- `PRESENCE_OAUTH_STATE_SECRET` (32+ bytes) required — fail closed when missing
+- One-time transaction row: user, workspace, connector, callback URI, return path, PKCE verifier, ~10min expiry
+- State param: `{transactionId}.{hmac-sha256}` — constant-time verify, atomic consume
+- Callback verifies user/workspace/connector/redirect match before token exchange
+- Tokens encrypted at rest; state/tokens never logged (`redactOAuthStateForLogs`)
+
+Routes: `/api/presence/oauth/linkedin` + callback
+
+## Robots & safe fetch
+
+Module: `app/lib/presence-robots.server.ts`
+
+- Product token: `FiveToNinePresenceBot/1.0 (+https://0509.io/bots/presence)`
+- RFC 9309-style parser: groups, Allow/Disallow, `*` wildcards, `$` end anchor, longest match, 500KiB cap
+- Fetch policy: 2xx parse+obey; 4xx unavailable (disallow); 5xx/network/timeout failed (disallow); never auto-allow on failure
+- Cache per scheme+authority, max 24h
+- Applied **before** feed discovery, sitemaps, pages, and redirects
+- `robots_disallowed` / `robots_unavailable` / `robots_fetch_failed` recorded in poll cursor metadata
+
+SSRF: `presenceSafeFetch` + `public-url.server.ts` + `bounded-response.server.ts`
 
 ## Scheduling
 
 - Batch poll on six-hourly warmup cron (`workers/app.ts`) via `runPresencePollingBatch`
 - Bounded concurrency: 20 targets per tick, 40 cost units budget
 - Oldest `last_polled_at` first
+- No polling when rollout `disabled` or workspace not on internal allowlist
 
 ## Entitlements
 
@@ -64,7 +91,7 @@ Extended in `app/lib/plan-entitlements.ts` + `app/lib/presence-entitlements.ts`:
 
 ## Delivery
 
-Presence digests use `sendPresenceDigestEmail` in `delivery.server.ts` with idempotency keys and `delivery_attempt` records.
+Presence digests use `sendPresenceDigestEmail` in `delivery.server.ts` with idempotency keys and `delivery_attempt` records. Internal canary does not trigger customer delivery.
 
 ## Privacy & deletion
 
@@ -75,25 +102,32 @@ Presence digests use `sendPresenceDigestEmail` in `delivery.server.ts` with idem
 
 ## Product UX
 
-- `/app/presence` — setup, entity list, unified feed, connector rollout status
+- `/app/presence` — setup, entity list, unified feed (nav hidden unless workspace allowed)
 - `/app/presence/:entityId` — sources, poll, compare view, feed
-- `/api/presence/oauth/linkedin` + callback — OAuth structure (gated until credentials)
+- Social Connect UI hidden while X/Reddit/LinkedIn rollout = `disabled`
 
 ## Reuse
 
-- SSRF: `public-url.server.ts`, `bounded-response.server.ts`
+- SSRF: `public-url.server.ts`, `bounded-response.server.ts`, `presence-robots.server.ts`
 - Token encryption: `credential-crypto.server.ts`
 - Delivery: `delivery.server.ts`
 - Plan gating: `plan-entitlements.ts`, `plan.server.ts`
 
 ## Rollout (v1)
 
-| Connector | v1 state |
-|-----------|----------|
-| Website/blog | `internal` — fully functional without external approval |
-| X | Framework + mocks; `disabled` until owner configures credentials |
-| Reddit | Framework + mocks; gated on commercial access |
-| LinkedIn | OAuth structure; self only; competitor pending |
+| Connector | Production default | Next step |
+|-----------|-------------------|-----------|
+| Website/blog | `disabled` | `internal` after schema deploy + owner sets `PRESENCE_INTERNAL_WORKSPACE_ID` + `PRESENCE_OAUTH_STATE_SECRET` |
+| X | `disabled` | credentials + rollout |
+| Reddit | `disabled` | commercial access + credentials |
+| LinkedIn | `disabled` | OAuth secret + credentials; self only |
+
+Internal canary: `npm run canary:presence` (requires `PRESENCE_INTERNAL_WORKSPACE_ID`)
+
+## Owner secrets (never commit values)
+
+- `PRESENCE_OAUTH_STATE_SECRET` — wrangler secret
+- `PRESENCE_INTERNAL_WORKSPACE_ID` — wrangler secret
 
 ## Relationship to legacy `web_mention_*`
 

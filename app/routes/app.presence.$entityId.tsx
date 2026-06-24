@@ -16,9 +16,12 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const { getTrackedEntity, listPresenceItems, listSourceTargetsForEntity } = await import(
     "~/lib/presence-data.server"
   );
-  const { getPresenceWorkspaceSnapshot } = await import("~/lib/presence-service.server");
+  const { getPresenceWorkspaceSnapshot, requirePresenceWorkspaceAccess } = await import(
+    "~/lib/presence-service.server"
+  );
   const env = getEnv(context);
   const { workspaceUserId } = await requireWorkspaceSession(env, request);
+  await requirePresenceWorkspaceAccess(env, workspaceUserId);
   const entityId = params.entityId ?? "";
   const entity = await getTrackedEntity(env, workspaceUserId, entityId);
   if (!entity) {
