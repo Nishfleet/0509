@@ -95,9 +95,10 @@ describe("status route", () => {
     expect(markup).toContain("Five to Nine service status.");
     expect(markup).toContain("Core surfaces");
     expect(markup).toContain("Public search");
+    expect(markup).toContain("Email digest delivery is the GA launch gate");
+    expect(markup).toContain("External uptime monitoring on");
     expect(markup).not.toContain("broad launch still needs fresh Slack proof");
     expect(markup).toContain("Dodo customer portal subscription changes still need dashboard confirmation");
-    expect(markup).toContain("External uptime monitoring still needs to be connected");
     expect(markup).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(markup).toContain("portal changes are confirmed");
     expect(markup).not.toContain("Recent Slack delivery proof is visible");

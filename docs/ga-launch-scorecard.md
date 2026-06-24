@@ -6,13 +6,13 @@ Last updated: 2026-06-24 (branch `cursor/ga-final-integration-20260624`, GA fina
 
 **GA LIVE — SCOUT AND STARTER FOR SALE, AGENCY HELD**
 
-Billing + email canaries pass on production. Scout/Starter checkout and top-ups open in code. Agency held until live fan-out ladder proof. Slack removed from public GA offer (Workstream C); backend dormant. Fan-out stays `inline`; simulated vitest + canary evaluator PASS; live ladder NOT RUN.
+Billing + email canaries pass on production. Scout/Starter checkout and top-ups open. Agency held until live fan-out ladder proof. Slack removed from public GA offer; backend dormant. Read-only ops gates on email (Slack → advisories). Fan-out stays `inline`; simulated proof PASS; live ladder NOT RUN.
 
 ## Phase tracker
 
 | Phase | Name | Status | Notes |
 |-------|------|--------|-------|
-| 0 | Protect & baseline | PASS | `0252461`; 1043+ tests; remote D1 through `0053` |
+| 0 | Protect & baseline | PASS | `0252461`; 1062+ tests; remote D1 through `0053` |
 | 1 | Customer journey audit | DONE | `docs/ga-customer-journey-audit.md` |
 | 2 | SKU registry → Dodo | PASS | All 9 `DODO_0509_PRODUCT_*` secrets present |
 | 3 | Localized pricing | PASS | `npm run canary:pricing` ok (IN/US/GB) |
@@ -24,9 +24,9 @@ Billing + email canaries pass on production. Scout/Starter checkout and top-ups 
 | 9 | Public pricing page | PASS | `/api/pricing-preview` live |
 | 10 | Remove beta | PARTIAL | Product-wide beta graduated; Meta ads still beta-labeled |
 | 11 | Support | DONE | `docs/ga-support-runbook.md` |
-| 12 | Ops readiness | PARTIAL | Health 200; email canary PASS; UptimeRobot owner gate |
+| 12 | Ops readiness | PARTIAL | Health 200; email gate in code; UptimeRobot owner gate |
 | 13 | Analytics | DONE | `docs/ga-metrics.md` |
-| 14 | Quality | PASS | 1057+ tests |
+| 14 | Quality | PASS | 1062+ tests |
 | 15 | Test matrix | PASS | billing, fan-out, launch-readiness suites |
 | 16 | Commits & PR | IN PROGRESS | Integration branch open |
 | 17–19 | Merge/deploy/smokes | IN PROGRESS | Integration PR pending |
@@ -36,12 +36,13 @@ Billing + email canaries pass on production. Scout/Starter checkout and top-ups 
 | Gate | Scope | Result | Evidence |
 |------|-------|--------|----------|
 | Preflight | Branch | PASS | `0252461` base + 4 workstream commits |
-| Tests/build | Local | PENDING | Full validation post-integration |
+| Tests/build | Local | PASS | 1062 passed post-integration |
 | D1 remote | Prod | PASS | Migrations through `0053` |
 | 9 Dodo SKU secrets | Prod | PASS | All nine names in `wrangler secret list` |
 | Internal workspace secret | Prod | PASS | `MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID` |
+| Internal workspace D1 | Prod | PASS | Canary user; email targets; 0 slack targets |
 | Email proof canary | Prod | PASS | `npm run canary:proof` — 1 email sent |
-| Slack proof canary | Prod | ADVISORY | Not GA-blocking; 0 slack targets in canary workspace |
+| Slack proof canary | Prod | ADVISORY | Not GA-blocking |
 | Prod canary ops | Prod | PASS (post-deploy) | Email blockers; Slack → advisories |
 | Pricing canary | Prod | PASS | IN ₹999, US $11, GB £9 |
 | Billing canary | Prod | PASS | Plan grant + proof credits |
