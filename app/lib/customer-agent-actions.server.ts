@@ -1,5 +1,6 @@
 import {
   applyWebsiteSearchFallback,
+  competitorTrackingLabel,
   hasInvalidCompetitorWebsite,
   isHttpCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
@@ -654,7 +655,7 @@ async function createWatchlistFromAgent(
     targetType: "advertiser",
     targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
     targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
-    targetLabel: normalizedQuery.filters.query,
+    targetLabel: competitorTrackingLabel(competitorWebsite, normalizedQuery.filters.query),
     targetCountry: normalizedQuery.filters.country,
     trackingRole,
   });
@@ -759,7 +760,9 @@ async function updateWatchlistFromAgent(
           targetFingerprint: targetFieldsChanged
             ? watchlistFingerprint(normalizedQuery, competitorWebsite)
             : watchlist.targetFingerprint,
-          targetLabel: targetFieldsChanged ? normalizedQuery.filters.query : watchlist.targetLabel,
+          targetLabel: targetFieldsChanged
+            ? competitorTrackingLabel(competitorWebsite, normalizedQuery.filters.query)
+            : watchlist.targetLabel,
           targetCountry: countryForStorage,
           trackingRole,
         };

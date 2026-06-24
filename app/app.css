@@ -929,6 +929,13 @@ img {
   gap: 12px;
 }
 
+.f9-search-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .f9-search-intake-card p {
   margin: 0;
   font-size: 0.96rem;

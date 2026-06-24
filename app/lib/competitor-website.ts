@@ -3,6 +3,7 @@ import {
   hashString,
   stableStringify,
 } from "~/lib/normalize";
+import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
 import type { NormalizedSavedQuery, SearchFilters } from "~/lib/types";
 
 export interface CompetitorWebsiteState {
@@ -38,13 +39,21 @@ export function normalizeCompetitorWebsiteInput(value: string): CompetitorWebsit
     url.hash = "";
     url.search = "";
     const path = url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "");
-    const searchTerm = inferSearchTermFromHost(host);
+    const parsedDomain = parseSearchInputFromWebsiteField(raw);
+    const searchTerm =
+      parsedDomain.intent === "domain"
+        ? parsedDomain.registrableDomain ?? host
+        : inferSearchTermFromHost(host) || host;
+    const brandLabel =
+      parsedDomain.intent === "domain"
+        ? inferSearchTermFromHost(host) || parsedDomain.registrableDomain?.split(".")[0] || host
+        : searchTerm;
 
     return {
       raw,
       normalizedUrl: `${url.protocol}//${host}${path}`,
       host,
-      displayName: searchTerm ? titleCase(searchTerm) : host,
+      displayName: brandLabel ? titleCase(brandLabel) : host,
       searchTerm: searchTerm || host,
       error: null,
     };
@@ -70,6 +79,19 @@ export function invalidCompetitorWebsite(raw: string, error: string): Competitor
     raw,
     error,
   };
+}
+
+export function competitorTrackingLabel(
+  competitorWebsite: CompetitorWebsiteState,
+  query?: string | null,
+) {
+  return (
+    competitorWebsite.displayName ??
+    query ??
+    competitorWebsite.searchTerm ??
+    competitorWebsite.host ??
+    "Competitor"
+  );
 }
 
 export function hasInvalidCompetitorWebsite(competitorWebsite: CompetitorWebsiteState) {
