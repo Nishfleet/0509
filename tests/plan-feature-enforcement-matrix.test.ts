@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
@@ -14,8 +16,38 @@ describe("plan feature enforcement matrix", () => {
         "export.$resourceType.$resourceId",
         "app.reports",
         "app.team",
+        "app.watchlists",
+        "app.account",
+        "share.$token",
+        "delivery.server",
       ]),
     );
+  });
+
+  it("covers delivery save and execution surfaces", () => {
+    const serialized = JSON.stringify(ROUTE_FEATURE_REQUIREMENTS);
+    expect(serialized).toContain("save-delivery-config");
+    expect(serialized).toContain("slack_delivery");
+    expect(serialized).toContain("high_priority_alerts");
+    expect(serialized).toContain("email_delivery");
+    expect(serialized).toContain("deliverWatchlistAlerts");
+  });
+
+  it("covers agency branding save and render surfaces", () => {
+    const serialized = JSON.stringify(ROUTE_FEATURE_REQUIREMENTS);
+    expect(serialized).toContain("save-report-branding");
+    expect(serialized).toContain("agency_branding");
+    expect(serialized).toContain("preparedBy");
+  });
+
+  it("keeps server entry points wired to authoritative gates", () => {
+    const watchlists = readFileSync(join(process.cwd(), "app/routes/app.watchlists.tsx"), "utf8");
+    const delivery = readFileSync(join(process.cwd(), "app/lib/delivery.server.ts"), "utf8");
+    const share = readFileSync(join(process.cwd(), "app/routes/share.$token.tsx"), "utf8");
+
+    expect(watchlists).toContain("requireDeliveryConfigSave");
+    expect(delivery).toContain("resolveEntitledDeliveryConfigs");
+    expect(share).toContain("resolveWorkspacePreparedBy");
   });
 
   it("keeps agency-only surfaces off scout and starter", () => {
@@ -29,5 +61,12 @@ describe("plan feature enforcement matrix", () => {
     expect(canUsePlanFeature("scout", "export_csv")).toBe(false);
     expect(canUsePlanFeature("starter", "export_csv")).toBe(true);
     expect(canUsePlanFeature("starter", "share_links")).toBe(false);
+  });
+
+  it("keeps scout off slack delivery and instant alerts", () => {
+    expect(canUsePlanFeature("scout", "slack_delivery")).toBe(false);
+    expect(canUsePlanFeature("scout", "high_priority_alerts")).toBe(false);
+    expect(canUsePlanFeature("starter", "slack_delivery")).toBe(true);
+    expect(canUsePlanFeature("starter", "agency_branding")).toBe(false);
   });
 });

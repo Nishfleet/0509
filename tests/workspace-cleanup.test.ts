@@ -260,6 +260,9 @@ describe("sendDeliveryTestEmail", () => {
   it("sends through the shared email path and records a delivery_test attempt", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_test_1" });
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+    }));
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),

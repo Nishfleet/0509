@@ -21,6 +21,9 @@ function emailSendPayload(sendMock: ReturnType<typeof vi.fn>) {
 beforeEach(() => {
   vi.resetModules();
   emailSend = vi.fn();
+  vi.doMock("~/lib/plan.server", () => ({
+    getUserPlan: vi.fn().mockResolvedValue("starter"),
+  }));
 });
 
 afterEach(() => {
