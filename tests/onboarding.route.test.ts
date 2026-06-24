@@ -221,7 +221,7 @@ describe("onboarding route", () => {
         name: "Boat Lifestyle watch",
         targetType: "advertiser",
         targetId: "https://boat-lifestyle.com",
-        targetLabel: "boat lifestyle",
+        targetLabel: "Boat Lifestyle",
       }),
     );
     expect(upsertWorkspaceBranding).toHaveBeenCalledWith({}, "user-1", {

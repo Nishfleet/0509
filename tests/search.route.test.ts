@@ -312,7 +312,7 @@ describe("search loader", () => {
       expect.objectContaining({
         mode: "advertiser",
         filters: expect.objectContaining({
-          query: "samplebrand",
+          query: "samplebrand.com",
         }),
       }),
       null,
@@ -322,7 +322,7 @@ describe("search loader", () => {
       inputError: null,
       competitorWebsite: {
         normalizedUrl: "https://samplebrand.com",
-        searchTerm: "samplebrand",
+        searchTerm: "samplebrand.com",
       },
     });
   });
@@ -613,7 +613,7 @@ describe("search loader", () => {
       expect.objectContaining({
         mode: "advertiser",
         filters: expect.objectContaining({
-          query: "nykaa",
+          query: "nykaa.com",
           country: "all",
         }),
       }),
@@ -629,14 +629,14 @@ describe("search loader", () => {
     );
     expect(result).toMatchObject({
       filters: expect.objectContaining({
-        query: "nykaa",
+        query: "nykaa.com",
       }),
       competitorWebsite: {
         raw: "https://www.nykaa.com",
         normalizedUrl: "https://nykaa.com",
         host: "nykaa.com",
         displayName: "Nykaa",
-        searchTerm: "nykaa",
+        searchTerm: "nykaa.com",
       },
     });
   });
@@ -912,7 +912,7 @@ describe("search actions", () => {
           name: "Nykaa watch",
           targetType: "advertiser",
           targetId: "https://nykaa.com",
-          targetLabel: "nykaa",
+          targetLabel: "Nykaa",
           trackingRole: "competitor",
         }),
       );
@@ -1039,7 +1039,7 @@ describe("search actions", () => {
       expect.objectContaining({
         name: "Samplebrand watch",
         targetId: "https://samplebrand.com",
-        targetLabel: "samplebrand",
+        targetLabel: "Samplebrand",
         trackingRole: "self",
       }),
     );
