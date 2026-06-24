@@ -889,7 +889,7 @@ describe("runCustomerAgentAction", () => {
       "watchlist-1",
       expect.objectContaining({
         targetId: "https://rhode.com",
-        targetLabel: "rhode",
+        targetLabel: "Rhode",
         targetCountry: null,
       }),
     );

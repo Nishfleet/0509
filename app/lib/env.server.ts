@@ -93,6 +93,7 @@ export interface AppEnv {
   MONITORING_FANOUT_MAX_INFLIGHT?: string;
   MONITORING_ORCHESTRATION_LEASE_MS?: string;
   MONITORING_CONCURRENCY_SLOT_LEASE_MS?: string;
+  SEARCH_ROLLOUT_MODE?: string;
 }
 
 export interface CloudflareRuntimeContext {
