@@ -31,7 +31,7 @@ export const linkedinConnector = {
       };
     }
 
-    const gate = evaluateConnectorAccessGate(ctx.env, "linkedin", input.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "linkedin", input.trackingMode);
     if (!gate.allowed) {
       return {
         ok: false,
@@ -61,7 +61,7 @@ export const linkedinConnector = {
   },
 
   async healthCheck(ctx: PresenceConnectorContext): Promise<HealthCheckResult> {
-    const gate = evaluateConnectorAccessGate(ctx.env, "linkedin", ctx.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "linkedin", ctx.trackingMode);
     if (!gate.allowed) {
       return {
         ok: false,
@@ -104,7 +104,7 @@ export const linkedinConnector = {
       };
     }
 
-    const gate = evaluateConnectorAccessGate(ctx.env, "linkedin", ctx.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "linkedin", ctx.trackingMode);
     return {
       ok: false,
       items: [],

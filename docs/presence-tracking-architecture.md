@@ -113,16 +113,26 @@ Presence digests use `sendPresenceDigestEmail` in `delivery.server.ts` with idem
 - Delivery: `delivery.server.ts`
 - Plan gating: `plan-entitlements.ts`, `plan.server.ts`
 
-## Rollout (v1)
+## Rollout (v1 → pilot)
 
 | Connector | Production default | Next step |
 |-----------|-------------------|-----------|
-| Website/blog | `disabled` | `internal` after schema deploy + owner sets `PRESENCE_INTERNAL_WORKSPACE_ID` + `PRESENCE_OAUTH_STATE_SECRET` |
+| Website/blog | `internal` (2026-06-24) | `pilot` after hashed allowlist enrollment + 3 sync cycles |
 | X | `disabled` | credentials + rollout |
 | Reddit | `disabled` | commercial access + credentials |
 | LinkedIn | `disabled` | OAuth secret + credentials; self only |
 
-Internal canary: `npm run canary:presence` (requires `PRESENCE_INTERNAL_WORKSPACE_ID`)
+### Pilot allowlist
+
+- Migration `0057_presence_pilot_workspace.sql` — stores `workspace_id_hash` (SHA-256), never raw ids
+- Module: `app/lib/presence-pilot-access.server.ts`
+- Rollout `pilot`: D1 allowlist required; fail closed when not enrolled
+- Digest delivery: `PRESENCE_DIGEST_ROLLOUT=disabled` by default
+
+Internal canary: `npm run canary:presence`
+Pilot canary: `npm run canary:presence-pilot`
+Runbooks: `docs/presence-pilot-runbook.md`, `docs/presence-incident-runbook.md`
+Coordinator tracker: `docs/presence-pilot-master-progress.md`
 
 ## Owner secrets (never commit values)
 
