@@ -12,6 +12,8 @@ type ApiResourceType = "collection" | "watchlist" | "digest";
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { authenticateApiKeyRequest } = await import("~/lib/api-keys.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { requireExportFeature, requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
   const {
     getCollection,
     getDigest,
@@ -24,10 +26,19 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   if (!auth.ok) {
     return auth.response;
   }
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, auth.apiKey.userId);
+  const apiGate = await requireWorkspacePlanFeature(env, workspaceUserId, "api_access");
+  if (!apiGate.ok) {
+    return apiGate.response;
+  }
 
   const resourceType = normalizeResourceType(params.resourceType);
   const resourceId = params.resourceId;
   const format = exportFormatForRequest(request, "json");
+  const exportGate = await requireExportFeature(env, workspaceUserId, format);
+  if (!exportGate.ok) {
+    return exportGate.response;
+  }
 
   if (!resourceType || !resourceId) {
     return notFoundResponse();

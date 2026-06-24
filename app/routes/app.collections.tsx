@@ -175,6 +175,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "share-collection") {
+    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
+    if (!shareGate.ok) {
+      return { ok: false, message: "Share links are included in the Agency plan." };
+    }
     const collectionId = String(formData.get("collectionId") ?? "");
     const collection = await getCollection(env, collectionId, workspaceUserId);
     if (!collection) {

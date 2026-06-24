@@ -10,6 +10,7 @@ import {
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { requireExportFeature } = await import("~/lib/plan-feature-gate.server");
   const {
     getCollection,
     getDigest,
@@ -22,6 +23,10 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const resourceType = params.resourceType;
   const resourceId = params.resourceId;
   const format = exportFormatForRequest(request);
+  const exportGate = await requireExportFeature(env, workspaceUserId, format);
+  if (!exportGate.ok) {
+    throw exportGate.response;
+  }
 
   if (!resourceType || !resourceId) {
     throw new Response("Not found", { status: 404 });

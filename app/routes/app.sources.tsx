@@ -165,6 +165,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "create-api-key") {
+    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const apiGate = await requireWorkspacePlanFeature(env, workspaceUserId, "api_access");
+    if (!apiGate.ok) {
+      return { ok: false, message: "API access is included in the Agency plan." };
+    }
     const { createCustomerApiKey } = await import("~/lib/api-keys.server");
     const name = String(formData.get("apiKeyName") ?? "");
     const result = await createCustomerApiKey(env, workspaceUserId, name, {
@@ -194,6 +199,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "save-slack-webhook") {
+    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const slackGate = await requireWorkspacePlanFeature(env, workspaceUserId, "slack_delivery");
+    if (!slackGate.ok) {
+      return { ok: false, message: "Slack delivery is included in Starter and Agency plans." };
+    }
     const { saveSlackWebhookTarget } = await import("~/lib/slack.server");
     const {
       getWorkspaceDeliveryConfig,
