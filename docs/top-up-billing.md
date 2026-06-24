@@ -31,3 +31,7 @@ Prices remain unconfigured in Dodo until owner activates checkout.
 ## Webhook path
 
 - `applyDodoProofCreditGrantWithLedger()` in `data.server.ts` inserts grants idempotently by `provider_payment_id`.
+
+## Production status (2026-06-24)
+
+Top-up grants and ledger consumption are deployed with migrations `0050`/`0053`. Purchases stay disabled until Dodo products/prices are wired for `burst_500_v1`, `campaign_2000_v1`, and `scale_7500_v1`.
