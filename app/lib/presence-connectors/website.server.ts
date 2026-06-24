@@ -1,8 +1,8 @@
-import {
-  contentLengthExceeds,
-  readResponseTextWithinLimit,
-} from "~/lib/bounded-response.server";
 import { presenceContentHash } from "~/lib/presence-hash";
+import {
+  assertRobotsAllowedForUrls,
+  presenceSafeFetch,
+} from "~/lib/presence-robots.server";
 import type {
   CostEstimate,
   HealthCheckResult,
@@ -12,14 +12,9 @@ import type {
   ValidateTargetInput,
   ValidateTargetResult,
 } from "~/lib/presence-types";
-import {
-  resolvePublicHttpUrl,
-  resolvePublicRedirectUrl,
-} from "~/lib/public-url.server";
+import { resolvePublicHttpUrl } from "~/lib/public-url.server";
 
 const MAX_WEBSITE_FETCH_BYTES = 750_000;
-const MAX_WEBSITE_REDIRECTS = 5;
-const USER_AGENT = "0509-presence/1.0 (+https://0509.io)";
 
 export const websiteConnector = {
   id: "website" as const,
@@ -90,19 +85,66 @@ export const websiteConnector = {
 
     const fetchImpl = ctx.fetchImpl ?? fetch;
     const feedUrl = typeof target.metadata.feedUrl === "string" ? target.metadata.feedUrl : null;
+    const candidateUrls = [target.targetUrl];
+    if (feedUrl) {
+      candidateUrls.push(feedUrl);
+    } else {
+      candidateUrls.push(...guessFeedCandidates(target.targetUrl));
+    }
+
+    const robotsCheck = await assertRobotsAllowedForUrls(target.targetUrl, candidateUrls, fetchImpl);
+    if (!robotsCheck.allowed) {
+      return {
+        ok: false,
+        items: [],
+        errorCode: robotsCheck.errorCode ?? "robots_disallowed",
+        errorMessage: robotsCheck.errorMessage ?? "robots.txt blocks crawling.",
+        cursor: {
+          robotsStatus: robotsCheck.policy.status,
+          robotsCheckedAt: robotsCheck.policy.fetchedAt,
+        },
+      };
+    }
+
     const discoveredFeed = feedUrl ?? (await discoverFeedUrl(target.targetUrl, fetchImpl));
     if (discoveredFeed) {
+      const feedRobots = await assertRobotsAllowedForUrls(target.targetUrl, [discoveredFeed], fetchImpl);
+      if (!feedRobots.allowed) {
+        return {
+          ok: false,
+          items: [],
+          errorCode: feedRobots.errorCode ?? "robots_disallowed",
+          errorMessage: feedRobots.errorMessage ?? "robots.txt blocks the feed URL.",
+          cursor: {
+            robotsStatus: feedRobots.policy.status,
+            robotsCheckedAt: feedRobots.policy.fetchedAt,
+          },
+        };
+      }
+
       const feedResult = await fetchFeed(discoveredFeed, fetchImpl, cursor);
       if (feedResult.ok) {
         return {
           ...feedResult,
-          cursor: { feedUrl: discoveredFeed, ...(feedResult.cursor ?? {}) },
+          cursor: {
+            feedUrl: discoveredFeed,
+            robotsStatus: robotsCheck.policy.status,
+            robotsCheckedAt: robotsCheck.policy.fetchedAt,
+            ...(feedResult.cursor ?? {}),
+          },
         };
       }
     }
 
     const pageResult = await fetchPageChange(target.targetUrl, fetchImpl, cursor);
-    return pageResult;
+    return {
+      ...pageResult,
+      cursor: {
+        robotsStatus: robotsCheck.policy.status,
+        robotsCheckedAt: robotsCheck.policy.fetchedAt,
+        ...(pageResult.cursor ?? {}),
+      },
+    };
   },
 };
 
@@ -303,80 +345,25 @@ async function fetchPublicResource(
     lastModified?: string | null;
   } = {},
 ) {
-  let currentUrl = await resolvePublicHttpUrl(url);
-  for (let redirects = 0; currentUrl && redirects <= MAX_WEBSITE_REDIRECTS; redirects += 1) {
-    const headers: Record<string, string> = {
-      accept: "text/html,application/xhtml+xml,application/xml,text/xml,*/*",
-      "user-agent": USER_AGENT,
-    };
-    if (options.etag) headers["if-none-match"] = options.etag;
-    if (options.lastModified) headers["if-modified-since"] = options.lastModified;
-
-    const response = await fetchImpl(currentUrl.toString(), {
-      method: options.method ?? "GET",
-      redirect: "manual",
-      headers,
-    });
-
-    if (response.status === 304) {
-      return {
-        ok: true,
-        notModified: true,
-        status: 304,
-        etag: response.headers.get("etag"),
-        lastModified: response.headers.get("last-modified"),
-        body: null,
-        contentType: response.headers.get("content-type"),
-      };
-    }
-
-    if (response.status >= 300 && response.status < 400) {
-      const redirected = resolvePublicRedirectUrl(response.headers.get("location"), currentUrl);
-      currentUrl = redirected ? await resolvePublicHttpUrl(redirected) : null;
-      continue;
-    }
-
-    if (options.method === "HEAD") {
-      return {
-        ok: response.ok,
-        notModified: false,
-        status: response.status,
-        etag: response.headers.get("etag"),
-        lastModified: response.headers.get("last-modified"),
-        body: null,
-        contentType: response.headers.get("content-type"),
-      };
-    }
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        notModified: false,
-        status: response.status,
-        etag: null,
-        lastModified: null,
-        body: null,
-        contentType: null,
-      };
-    }
-
-    if (contentLengthExceeds(response.headers, MAX_WEBSITE_FETCH_BYTES)) {
-      return null;
-    }
-
-    const body = await readResponseTextWithinLimit(response, MAX_WEBSITE_FETCH_BYTES);
-    return {
-      ok: true,
-      notModified: false,
-      status: response.status,
-      etag: response.headers.get("etag"),
-      lastModified: response.headers.get("last-modified"),
-      body,
-      contentType: response.headers.get("content-type"),
-    };
+  const response = await presenceSafeFetch(url, fetchImpl, {
+    method: options.method,
+    maxBytes: MAX_WEBSITE_FETCH_BYTES,
+    etag: options.etag,
+    lastModified: options.lastModified,
+  });
+  if (!response) {
+    return null;
   }
 
-  return null;
+  return {
+    ok: response.ok,
+    notModified: response.notModified ?? false,
+    status: response.status,
+    etag: response.etag,
+    lastModified: response.lastModified,
+    body: response.body,
+    contentType: response.contentType,
+  };
 }
 
 function extractTitle(html: string) {
