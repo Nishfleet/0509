@@ -6,13 +6,13 @@ import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
 
 const RESOURCE_LABELS: Record<string, string> = {
-  collection: "Board",
+  collection: "Collection",
   watchlist: "Watchlist",
   digest: "Digest",
   report: "Report",
 };
 
-export const meta = () => [{ title: "Shared links | Five to Nine" }];
+export const meta = () => [{ title: "Reports & shared links | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -72,14 +72,14 @@ export default function SharesRoute() {
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Shared links</span>
-            <h2>Everything you've shared outside the account</h2>
+            <span className="f9-app-kicker">Reports</span>
+            <h2>Shared links and report access</h2>
           </div>
         </div>
 
         {data.shares.length === 0 ? (
           <p>
-            No active share links. Share a watchlist, board, digest, or report and it will
+            No active share links. Share a watchlist, collection, digest, or report and it will
             appear here so you can revoke it any time.
           </p>
         ) : (

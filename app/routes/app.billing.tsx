@@ -174,7 +174,7 @@ export default function BillingRoute() {
             </span>
           </div>
           <div className="f9-work-row">
-            <strong>Boards</strong>
+            <strong>Collections</strong>
             <span>
               {data.collectionUsage.limit > 0 ? (
                 `${data.collectionUsage.current} of ${data.collectionUsage.limit} used`

@@ -1,6 +1,8 @@
 import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { formatCoverageLabel, formatRolloutState } from "~/lib/presence-display";
@@ -98,7 +100,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       const result = await pollPresenceSourceTarget(env, workspaceUserId, targetId);
       return {
         ok: true,
-        message: `Polled ${result.target.connectorId}: ${result.upsertStats.inserted} new, ${result.upsertStats.updated} updated.`,
+        message: `Checked ${result.target.connectorId}: ${result.upsertStats.inserted} new, ${result.upsertStats.updated} updated.`,
       };
     }
 
@@ -122,146 +124,150 @@ export default function PresenceIndexRoute() {
   const actionData = useActionData<typeof action>();
 
   return (
-    <section className="f9-page">
-      <header className="f9-page-header">
-        <div>
-          <p className="f9-eyebrow">Presence tracking</p>
-          <h1>Track your brand and competitors across the web</h1>
-          <p className="f9-page-lead">
-            Website and blog coverage ships first. Social connectors stay gated until platform access is approved.
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          kicker="Presence"
+          lead="Track public websites and blogs for your brand and competitors. Social connectors roll out as platform access is approved."
+          title="Website and content presence"
+        />
+
+        {actionData?.message ? (
+          <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`} role="status">
+            <p>{actionData.message}</p>
+          </div>
+        ) : null}
+
+        {data.access.rolloutState === "ga" ? (
+          <p className="f9-dash-state f9-dash-state-partial" role="status">
+            Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on each
+            source.
           </p>
+        ) : null}
+
+        <div className="f9-dashboard-grid">
+          <article className="f9-app-panel">
+            <span className="f9-app-kicker">Add tracked entity</span>
+            <h2>Start with a website</h2>
+            <Form className="f9-auth-form" method="post">
+              <input name="intent" type="hidden" value="create-entity" />
+              <label className="f9-field">
+                <span>Label</span>
+                <input name="label" placeholder="Acme Corp" required />
+              </label>
+              <label className="f9-field">
+                <span>Mode</span>
+                <select defaultValue="competitor" name="trackingMode">
+                  {data.competitorAllowed ? <option value="competitor">Competitor (public)</option> : null}
+                  {data.selfAllowed ? <option value="self">Self (your brand)</option> : null}
+                </select>
+              </label>
+              <label className="f9-field">
+                <span>Website URL</span>
+                <input name="websiteUrl" placeholder="https://brand.com/blog" />
+              </label>
+              <label className="f9-field">
+                <span>Canonical URL (optional)</span>
+                <input name="canonicalUrl" placeholder="https://brand.com" />
+              </label>
+              <SubmitButton className="f9-primary-button" pendingLabel="Saving…">
+                Start tracking
+              </SubmitButton>
+            </Form>
+            <p className="f9-muted-copy">
+              Limits: {data.limits.maxTrackedEntities} entities, {data.limits.maxWebsiteSourcesPerEntity} website sources
+              each.
+            </p>
+          </article>
+
+          <article className="f9-app-panel">
+            <span className="f9-app-kicker">Connectors</span>
+            <h2>Platform availability</h2>
+            <div className="f9-work-list is-compact">
+              {data.connectors.map((connector) => (
+                <div className="f9-work-row" key={connector.id}>
+                  <div>
+                    <strong>{connector.id}</strong>
+                    <p className="f9-muted-copy">
+                      Your brand: {formatRolloutState(connector.rolloutSelf)} · Competitors:{" "}
+                      {formatRolloutState(connector.rolloutCompetitor)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
         </div>
-      </header>
 
-      {actionData?.message ? (
-        <p className={actionData.ok ? "f9-banner f9-banner-success" : "f9-banner f9-banner-warning"} role="status">
-          {actionData.message}
-        </p>
-      ) : null}
-
-      {data.access.rolloutState === "internal" ? (
-        <p className="f9-banner f9-banner-info" role="status">
-          Internal canary — website tracking only. Social connectors remain disabled.
-        </p>
-      ) : null}
-
-      {data.access.rolloutState === "ga" ? (
-        <p className="f9-banner f9-banner-info" role="status">
-          Track public websites and blogs you add. Coverage depends on robots rules and public accessibility.
-          Notifications stay off until you opt in.
-        </p>
-      ) : null}
-
-      <div className="f9-grid-two">
-        <article className="f9-card">
-          <h2>Add tracked entity</h2>
-          <Form method="post" className="f9-stack">
-            <input type="hidden" name="intent" value="create-entity" />
-            <label className="f9-field">
-              <span>Label</span>
-              <input name="label" required placeholder="Acme Corp" />
-            </label>
-            <label className="f9-field">
-              <span>Mode</span>
-              <select name="trackingMode" defaultValue="competitor">
-                {data.competitorAllowed ? <option value="competitor">Competitor (public)</option> : null}
-                {data.selfAllowed ? <option value="self">Self (your brand)</option> : null}
-              </select>
-            </label>
-            <label className="f9-field">
-              <span>Website URL</span>
-              <input name="websiteUrl" placeholder="https://brand.com/blog" />
-            </label>
-            <label className="f9-field">
-              <span>Canonical URL (optional)</span>
-              <input name="canonicalUrl" placeholder="https://brand.com" />
-            </label>
-            <SubmitButton>Start tracking</SubmitButton>
-          </Form>
-          <p className="f9-muted">
-            Limits: {data.limits.maxTrackedEntities} entities, {data.limits.maxWebsiteSourcesPerEntity} website sources each.
-          </p>
-        </article>
-
-        <article className="f9-card">
-          <h2>Connector rollout</h2>
-          <ul className="f9-list-plain">
-            {data.connectors.map((connector) => (
-              <li key={connector.id}>
-                <strong>{connector.id}</strong> — self {formatRolloutState(connector.rolloutSelf)}, competitor{" "}
-                {formatRolloutState(connector.rolloutCompetitor)}
-              </li>
-            ))}
-          </ul>
-        </article>
-      </div>
-
-      <section className="f9-section">
-        <div className="f9-section-header">
-          <h2>Tracked entities</h2>
-        </div>
-        {data.snapshot.entities.length === 0 ? (
-          <p className="f9-muted">No entities yet. Add your brand or a competitor to start.</p>
-        ) : (
-          <div className="f9-table-wrap">
-            <table className="f9-table">
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th>Mode</th>
-                  <th>Sources</th>
-                  <th>Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.snapshot.entities.map(({ entity, sources }) => (
-                  <tr key={entity.id}>
-                    <td>
+        <article className="f9-app-panel">
+          <div className="f9-panel-toolbar">
+            <div>
+              <span className="f9-app-kicker">Tracked entities</span>
+              <h2>Brands and competitors</h2>
+            </div>
+          </div>
+          {data.snapshot.entities.length === 0 ? (
+            <EmptyState
+              action={{ label: "Add from search", to: "/search" }}
+              description="Add your brand or a competitor website to start collecting public content updates."
+              title="No entities yet"
+            />
+          ) : (
+            <div className="f9-work-list is-compact">
+              {data.snapshot.entities.map(({ entity, sources }) => (
+                <div className="f9-work-row" key={entity.id}>
+                  <div>
+                    <h3>
                       <Link to={`/app/presence/${entity.id}`}>{entity.label}</Link>
-                    </td>
-                    <td>{entity.trackingMode}</td>
-                    <td>
+                    </h3>
+                    <p className="f9-muted-copy">
+                      {entity.trackingMode} ·{" "}
                       {sources.map((source) => (
-                        <span key={source.id} className="f9-pill">
-                          {source.connectorId}: {formatCoverageLabel(source.coverageLabel)}
+                        <span key={source.id}>
+                          {source.connectorId}: {formatCoverageLabel(source.coverageLabel)}{" "}
                         </span>
                       ))}
-                    </td>
-                    <td>
-                      <LocalTime iso={entity.updatedAt} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                    </p>
+                  </div>
+                  <small>
+                    Updated <LocalTime iso={entity.updatedAt} />
+                  </small>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
 
-      <section className="f9-section">
-        <div className="f9-section-header">
-          <h2>Unified feed</h2>
-        </div>
-        {data.snapshot.recentItems.length === 0 ? (
-          <p className="f9-muted">No presence items yet. Poll a website source to fetch updates.</p>
-        ) : (
-          <ul className="f9-feed">
-            {data.snapshot.recentItems.map((item) => (
-              <li key={item.id} className="f9-feed-item">
-                <p className="f9-feed-title">
-                  <a href={item.canonicalUrl} rel="noreferrer" target="_blank">
-                    {item.title}
-                  </a>
-                </p>
-                <p className="f9-muted">
-                  {item.connectorId} · <LocalTime iso={item.observedAt} />
-                </p>
-                {item.bodyExcerpt ? <p>{item.bodyExcerpt}</p> : null}
-              </li>
-            ))}
-          </ul>
-        )}
+        <article className="f9-app-panel">
+          <div className="f9-panel-toolbar">
+            <div>
+              <span className="f9-app-kicker">Feed</span>
+              <h2>Recent public updates</h2>
+            </div>
+          </div>
+          {data.snapshot.recentItems.length === 0 ? (
+            <p className="f9-muted-copy">No presence items yet. Check a website source to fetch updates.</p>
+          ) : (
+            <div className="f9-work-list is-compact">
+              {data.snapshot.recentItems.map((item) => (
+                <div className="f9-work-row" key={item.id}>
+                  <div>
+                    <h3>
+                      <a href={item.canonicalUrl} rel="noreferrer" target="_blank">
+                        {item.title}
+                      </a>
+                    </h3>
+                    <p className="f9-muted-copy">
+                      {item.connectorId} · <LocalTime iso={item.observedAt} />
+                    </p>
+                    {item.bodyExcerpt ? <p>{item.bodyExcerpt}</p> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
       </section>
-    </section>
+    </DashboardPage>
   );
 }

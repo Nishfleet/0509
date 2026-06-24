@@ -262,7 +262,7 @@ export default function ClientsRoute() {
             </div>
 
             <div className="f9-work-list is-compact">
-              <p className="f9-app-kicker">Boards</p>
+              <p className="f9-app-kicker">Collections</p>
               {data.collections.map((collection) => (
                 <label className="f9-work-row" key={collection.id}>
                   <input name="collectionIds" type="checkbox" value={collection.id} />
@@ -270,7 +270,7 @@ export default function ClientsRoute() {
                 </label>
               ))}
               {data.collections.length === 0 ? (
-                <p className="f9-muted-copy">Create a board before linking saved proof.</p>
+                <p className="f9-muted-copy">Create a collection before linking saved proof.</p>
               ) : null}
             </div>
 
@@ -287,7 +287,7 @@ export default function ClientsRoute() {
               <h2>{activeRooms.length} client {activeRooms.length === 1 ? "room" : "rooms"}</h2>
             </div>
             <Link className="f9-secondary-button" to="/app/collections">
-              Boards
+              Collections
             </Link>
           </div>
 
@@ -302,7 +302,7 @@ export default function ClientsRoute() {
             {activeRooms.length === 0 ? (
               <div className="f9-empty-panel">
                 <h2>Create the first client room</h2>
-                <p>Use rooms to keep watchlists, boards, reports, and client context together for agency delivery.</p>
+                <p>Use rooms to keep watchlists, collections, reports, and client context together for agency delivery.</p>
               </div>
             ) : null}
           </div>
@@ -510,7 +510,7 @@ function summarizeClientRoomHandoff(
       ? "Ready for client review"
       : "Needs setup before client review";
   const next = linkedProofCount === 0
-    ? "Link a watchlist or board to this room."
+    ? "Link a watchlist or collection to this room."
     : reportCount === 0
       ? "Add a report link for the client packet."
       : !hasContext
@@ -658,7 +658,7 @@ function resourceHref(ref: ClientRoomResourceRef) {
 
 function resourceLabel(ref: ClientRoomResourceRef) {
   if (ref.resourceType === "collection") {
-    return "Board";
+    return "Collection";
   }
   if (ref.resourceType === "watchlist") {
     return "Watchlist";

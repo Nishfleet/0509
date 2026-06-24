@@ -2,20 +2,17 @@ import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
+import { DashboardPage } from "~/components/dashboard-page";
 import { SubmitButton } from "~/components/submit-button";
-import {
-  AGENT_BLOCKED_CAPABILITIES,
-  CUSTOMER_SUPPORT_PATHS,
-  auditedAgentActionGroups,
-} from "~/lib/agent-action-catalog";
+import { CUSTOMER_SUPPORT_PATHS } from "~/lib/agent-action-catalog";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
 export const meta: MetaFunction = () => [
-  { title: "Integrations | Five to Nine" },
+  { title: "Notifications | Five to Nine" },
   {
     name: "description",
-    content: "Connect delivery channels and optional backup access for Five to Nine.",
+    content: "Manage delivery channels, backup Meta access, and API keys for Five to Nine.",
   },
 ];
 
@@ -380,12 +377,13 @@ export default function AppSourcesRoute() {
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
 
   return (
+    <DashboardPage>
     <section className="f9-app-stack">
       <section className="f9-app-panel f9-source-setup">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Integrations</span>
-            <h2>Connect delivery and backup access</h2>
+            <span className="f9-app-kicker">Notifications</span>
+            <h2>Delivery channels and backup access</h2>
           </div>
           <Link className="f9-secondary-button" to="/app/watchlists">
             Open watchlists
@@ -507,8 +505,12 @@ export default function AppSourcesRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          API keys can read saved boards, watchlists, digests, proof trails, and exports for this account.
-          Write-enabled keys can update supported account resources.
+          API keys can read saved collections, watchlists, digests, proof trails, and exports for this account.
+          Write-enabled keys can update supported account resources. See the{" "}
+          <a href="/api/docs" rel="noreferrer" target="_blank">
+            API documentation
+          </a>{" "}
+          for the full capability list.
         </p>
 
         <div className="f9-status-strip">
@@ -533,10 +535,10 @@ export default function AppSourcesRoute() {
             <ol className="f9-numbered-guide">
               <li>
                 <strong>Create a read key</strong>
-                <span>Use it for saved boards, watchlists, briefs, and reports.</span>
+                <span>Use it for saved collections, watchlists, digests, and reports.</span>
               </li>
               <li>
-                <strong>Enable actions only when needed</strong>
+                <strong>Enable write access only when needed</strong>
                 <span>Allow trusted tools to update supported account resources.</span>
               </li>
               <li>
@@ -547,33 +549,8 @@ export default function AppSourcesRoute() {
           </section>
 
           <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Available actions</span>
-            <h3>What a write-enabled key can do</h3>
-            <dl className="proof-trail-list">
-              {auditedAgentActionGroups().map((group) => (
-                <div key={group.id}>
-                  <dt>{group.label}</dt>
-                  <dd>{group.detail} {group.credentialRequirement}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        </div>
-
-        <div className="f9-dashboard-grid">
-          <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Not available through API</span>
-            <h3>Ask support for sensitive changes</h3>
-            <ul className="f9-doc-list">
-              {AGENT_BLOCKED_CAPABILITIES.map((capability) => (
-                <li key={capability}>{capability}</li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="f9-app-panel f9-source-guide">
-            <span className="f9-app-kicker">Paid customer support</span>
-            <h3>Human help stays visible</h3>
+            <span className="f9-app-kicker">Sensitive changes</span>
+            <h3>Ask support when automation is not enough</h3>
             <dl className="proof-trail-list">
               {CUSTOMER_SUPPORT_PATHS.map((path) => (
                 <div key={path.label}>
@@ -583,7 +560,7 @@ export default function AppSourcesRoute() {
               ))}
             </dl>
             <p className="f9-muted-copy">
-              Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> for sensitive changes, migration help, security reports,
+              Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> for billing changes, migration help, security reports,
               or deletion requests.
             </p>
           </section>
@@ -610,7 +587,7 @@ export default function AppSourcesRoute() {
                 <input
                   autoComplete="off"
                   name="apiKeyName"
-                  placeholder="Claude, Slack workflow, Zapier..."
+                  placeholder="Zapier, internal script, Claude…"
                   type="text"
                 />
               </label>
@@ -644,8 +621,9 @@ export default function AppSourcesRoute() {
               </div>
             </dl>
             <p className="f9-muted-copy">
-              This API can read saved manual external proof links in boards. Write-enabled keys can update supported
-              account resources, but this does not add automated TikTok, Google, LinkedIn, or Pinterest ingestion.
+              This API can read saved manual external proof links in collections. Write-enabled keys can update
+              supported account resources, but this does not add automated TikTok, Google, LinkedIn, or Pinterest
+              ingestion.
             </p>
           </section>
         </div>
@@ -942,6 +920,7 @@ export default function AppSourcesRoute() {
         </details>
       ) : null}
     </section>
+    </DashboardPage>
   );
 }
 
