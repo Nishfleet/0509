@@ -298,6 +298,48 @@ describe("Dodo webhook route", () => {
     expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
   });
 
+  it("grants proof credits through evidence_top_up_grant on payment.succeeded", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoProofCreditGrant: vi.fn(() => ({
+          userId: "user-1",
+          paymentId: "pay-topup-500",
+          productId: "prod_pack_500",
+          skuSlug: "burst_500_v1",
+          bundle: "proof_500",
+          quantity: 1,
+          credits: 500,
+          grantedAt: "2026-06-24T12:00:00.000Z",
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-topup", { type: "payment.succeeded" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true });
+    expect(data.applyDodoProofCreditGrantWithLedger).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        providerPaymentId: "pay-topup-500",
+        providerProductId: "prod_pack_500",
+        bundleSlug: "proof_500",
+        skuSlug: "burst_500_v1",
+        credits: 500,
+        quantity: 1,
+        grantedAt: "2026-06-24T12:00:00.000Z",
+      }),
+      expect.objectContaining({ eventId: "evt-topup", outcome: "processed" }),
+    );
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).not.toHaveBeenCalled();
+  });
+
   it("revokes plan and expires credits when a full refund succeeds", async () => {
     const { data } = mockWebhookDependencies({
       billing: {

@@ -165,6 +165,26 @@ describe("billing page", () => {
     expect(result).toMatchObject({ pendingCheckout: true });
   });
 
+  it("flags agency-held checkout from the query string", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: null,
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=agency-held"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ agencyCheckoutHeld: true });
+  });
+
   it("renders the payment-issue banner and support path for a dunning customer", async () => {
     mockReactRouterRender({
       email: "owner@example.com",
@@ -215,6 +235,82 @@ describe("billing page", () => {
     expect(markup).toContain("/#pricing");
     expect(markup).toContain("Free account");
     expect(markup).not.toContain("Payment issue");
+  });
+
+  it("renders the agency-held checkout banner", async () => {
+    mockReactRouterRender({
+      email: "owner@example.com",
+      billing: { plan: "free", dodoStatus: null, dodoProductId: null, planUpdatedAt: null },
+      proofUsage: { used: 0, limit: 0, extraCredits: 0 },
+      watchlistUsage: { current: 0, limit: 0 },
+      collectionUsage: { current: 0, limit: 0 },
+      planLimits: { digestCadence: "none" },
+      dailyProofCap: 0,
+      creditGrants: [],
+      blockedCheckout: false,
+      pendingCheckout: false,
+      agencyCheckoutHeld: true,
+      planCheckoutUnavailable: false,
+      portalUnavailable: false,
+      hasPortal: false,
+    });
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Agency checkout is held");
+    expect(markup).toContain("Scout and Starter are available now");
+    expect(markup).toContain("support@0509.io");
+  });
+
+  it("renders evidence usage with purchased top-up balance and grant rows", async () => {
+    mockReactRouterRender({
+      email: "owner@example.com",
+      billing: {
+        plan: "starter",
+        dodoStatus: "succeeded",
+        dodoProductId: "prod_starter_monthly",
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+      proofUsage: {
+        used: 200,
+        includedUsed: 200,
+        baseLimit: 250,
+        extraCredits: 500,
+        limit: 750,
+        remaining: 550,
+        topUpRemaining: 500,
+        usageRatio: 0.27,
+        warningLevel: "ok",
+        canSpendTopUps: true,
+        topUpRetainedWhileInactive: 0,
+      },
+      watchlistUsage: { current: 3, limit: 10 },
+      collectionUsage: { current: 5, limit: 25 },
+      planLimits: { digestCadence: "weekly" },
+      dailyProofCap: 40,
+      creditGrants: [
+        {
+          skuSlug: "burst_500_v1",
+          credits: 500,
+          grantedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ],
+      blockedCheckout: false,
+      pendingCheckout: false,
+      agencyCheckoutHeld: false,
+      planCheckoutUnavailable: false,
+      portalUnavailable: false,
+      hasPortal: true,
+    });
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("200 of 250 included used");
+    expect(markup).toContain("500 purchased checks remaining");
+    expect(markup).toContain("burst_500_v1");
+    expect(markup).toContain("never expire");
   });
 
   it("does not overpromise cancellation through the hosted billing portal", async () => {
@@ -374,6 +470,36 @@ describe("Dodo checkout double-subscription guard", () => {
     }
 
     expect(createDodo0509CheckoutSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a free user start scout checkout via canonical SKU", async () => {
+    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("free");
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    try {
+      await action({
+        context: {},
+        request: checkoutRequest({ sku: "scout_monthly_v1" }),
+        params: {},
+      } as never);
+      throw new Error("expected redirect");
+    } catch (response) {
+      expect((response as Response).status).toBe(303);
+      expect((response as Response).headers.get("Location")).toBe(
+        "https://checkout.dodo.example/session",
+      );
+    }
+
+    expect(createDodo0509CheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: expect.objectContaining({
+          kind: "plan",
+          planFamily: "scout",
+          sku: "scout_monthly_v1",
+        }),
+      }),
+    );
   });
 
   it("blocks a second pending Dodo plan checkout before opening another session", async () => {
