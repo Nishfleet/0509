@@ -88,6 +88,8 @@ export interface AppEnv {
   MONITORING_FANOUT_MODE?: string;
   MONITORING_FANOUT_ALLOWLIST?: string;
   MONITORING_FANOUT_GLOBAL?: string;
+  /** Owner-documented internal workspace user id for fan-out pilot proof (never a customer id). */
+  MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID?: string;
   MONITORING_FANOUT_MAX_INFLIGHT?: string;
   MONITORING_ORCHESTRATION_LEASE_MS?: string;
   MONITORING_CONCURRENCY_SLOT_LEASE_MS?: string;
