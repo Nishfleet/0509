@@ -1,4 +1,4 @@
--- Monthly included evidence-check usage periods (UTC calendar months).
+-- Monthly included evidence-check usage periods (subscription-anchored months).
 CREATE TABLE IF NOT EXISTS evidence_usage_period (
   id TEXT PRIMARY KEY,
   workspace_user_id TEXT NOT NULL,

@@ -2338,6 +2338,13 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   ]);
 
   await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1, 2]);
+
+  try {
+    const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
+    await persistWorkspaceEntitlementAnchor(env, input.userId, planUpdatedAt, "plan_activation");
+  } catch {
+    // Anchor columns may be absent on pre-migration databases during local dev.
+  }
 }
 
 export async function applyDodoPlanRevokeWithWatchlistReconcile(
