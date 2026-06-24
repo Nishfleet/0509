@@ -47,6 +47,11 @@ export const PLAN_FEATURES = [
   "mcp_access",
   "mcp_account_actions",
   "team_workspace",
+  "presence_competitor_tracking",
+  "presence_self_tracking",
+  "presence_website_sources",
+  "presence_social_connect",
+  "presence_digest_alerts",
 ] as const;
 
 export type PlanFeature = (typeof PLAN_FEATURES)[number];
@@ -68,6 +73,9 @@ const SCOUT_FEATURES: PlanFeature[] = [
   "competitor_research",
   "weekly_digest",
   "email_delivery",
+  "presence_competitor_tracking",
+  "presence_website_sources",
+  "presence_digest_alerts",
 ];
 
 const STARTER_FEATURES: PlanFeature[] = [
@@ -81,6 +89,8 @@ const STARTER_FEATURES: PlanFeature[] = [
   "export_csv",
   "export_json",
   "export_slack_ready",
+  "presence_self_tracking",
+  "presence_social_connect",
 ];
 
 const AGENCY_FEATURES: PlanFeature[] = [
