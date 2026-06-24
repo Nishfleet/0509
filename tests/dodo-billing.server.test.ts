@@ -35,7 +35,7 @@ describe("Dodo billing", () => {
       },
       request: new Request("https://0509.io/app"),
       session,
-      target: { kind: "usage_bundle", bundle: "proof_500" },
+      target: { kind: "top_up", sku: "burst_500_v1", quantity: 500 },
       fetcher: fetcher as never,
     });
 
@@ -57,9 +57,9 @@ describe("Dodo billing", () => {
       metadata: {
         app: "0509",
         user_id: "user-1",
-        target_kind: "usage_bundle",
+        target_kind: "top_up",
+        sku: "burst_500_v1",
         bundle: "proof_500",
-        credits: 500,
       },
     });
   });
@@ -93,10 +93,11 @@ describe("Dodo billing", () => {
       paymentId: "pay_123",
       productId: "prod_pack_2000",
       bundle: "proof_2000",
+      skuSlug: "campaign_2000_v1",
       quantity: 2,
       credits: 4000,
-      expiresAt: "2026-06-19T00:00:00.000Z",
     });
+    expect(grant).not.toHaveProperty("expiresAt");
   });
 
   it("extracts a paid plan grant from a Dodo payment payload", () => {

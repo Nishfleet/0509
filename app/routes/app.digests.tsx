@@ -84,6 +84,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "share-digest") {
+    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
+    if (!shareGate.ok) {
+      return { ok: false, message: "Share links are included in the Agency plan." };
+    }
     const digestId = String(formData.get("digestId") ?? "");
     const digest = await getDigest(env, digestId);
 

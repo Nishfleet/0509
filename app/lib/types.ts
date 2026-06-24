@@ -648,14 +648,21 @@ export interface PricingPlan {
   yearlyLabel: string;
   detail: string;
   features: string[];
+  monthlySku?: string;
+  yearlySku?: string;
+  watchlistLimit?: number;
+  boardLimit?: number;
+  evidenceChecksPerMonth?: number;
 }
 
 export interface UsageBundle {
   slug: "proof_500" | "proof_2000" | "proof_7500";
+  sku?: string;
   name: string;
   priceLabel: string;
   creditLabel: string;
   detail: string;
+  creditQuantity?: number;
 }
 
 export interface MetaIntegrationStatus {

@@ -211,6 +211,7 @@ describe("PLAN_LIMITS", () => {
       watchlists: 3,
       collections: 10,
     });
+    expect(PLAN_LIMITS.starter.digestCadence).toBe("daily_and_weekly");
     expect(PLAN_LIMITS.agency.digestCadence).toBe("daily_and_weekly");
   });
 });

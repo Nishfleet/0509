@@ -2338,6 +2338,13 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   ]);
 
   await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1, 2]);
+
+  try {
+    const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
+    await persistWorkspaceEntitlementAnchor(env, input.userId, planUpdatedAt, "plan_activation");
+  } catch {
+    // Anchor columns may be absent on pre-migration databases during local dev.
+  }
 }
 
 export async function applyDodoPlanRevokeWithWatchlistReconcile(
@@ -2457,39 +2464,49 @@ export async function applyDodoPlanPaymentIssueWithLedger(
 
 export async function applyDodoProofCreditGrantWithLedger(
   env: AppEnv,
-  input: Parameters<typeof grantProofUsageCredit>[1],
+  input: {
+    userId: string;
+    providerPaymentId: string;
+    providerProductId: string;
+    bundleSlug: string;
+    skuSlug?: string;
+    credits: number;
+    quantity: number;
+    grantedAt?: string;
+    metadata?: JsonRecord;
+  },
   ledger: DodoWebhookLedgerFinalize,
 ) {
   const db = ensureDb(env);
   const processedAt = nowIso();
+  const credits = Math.max(0, Math.floor(input.credits));
 
   await db.batch([
     db.prepare(`
-      INSERT INTO proof_usage_credit (
+      INSERT INTO evidence_top_up_grant (
         id,
-        user_id,
-        provider,
+        workspace_user_id,
+        sku_slug,
         provider_payment_id,
         provider_product_id,
-        bundle_slug,
-        credits,
-        quantity,
+        quantity_granted,
+        quantity_remaining,
         granted_at,
-        expires_at,
+        status,
+        catalog_version,
         metadata_json
       )
-      VALUES (?, ?, 'dodo', ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'v1', ?)
       ON CONFLICT(provider_payment_id) DO NOTHING
     `).bind(
       createId(),
       input.userId,
+      input.skuSlug ?? input.bundleSlug,
       input.providerPaymentId,
       input.providerProductId,
-      input.bundleSlug,
-      Math.max(0, Math.floor(input.credits)),
-      Math.max(1, Math.floor(input.quantity)),
+      credits,
+      credits,
       input.grantedAt ?? nowIso(),
-      input.expiresAt,
       jsonValue(input.metadata ?? {}),
     ),
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),

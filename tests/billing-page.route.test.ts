@@ -276,9 +276,20 @@ describe("Dodo checkout double-subscription guard", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue(currentPlan),
     }));
-    vi.doMock("~/lib/dodo-billing.server", () => ({
-      createDodo0509CheckoutSession,
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn().mockResolvedValue({
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
     }));
+    vi.doMock("~/lib/dodo-billing.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/dodo-billing.server")>();
+      return {
+        ...actual,
+        createDodo0509CheckoutSession,
+      };
+    });
     vi.doMock("~/lib/data.server", () => ({
       claimDodoPlanCheckout,
       clearDodoPlanCheckout,

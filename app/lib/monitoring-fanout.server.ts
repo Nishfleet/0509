@@ -1,6 +1,7 @@
 import type { AppEnv } from "~/lib/env.server";
 import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
+import { getScheduledMonitoringPolicy, shouldScheduleScoutOnDate } from "~/lib/plan-entitlements";
 import { getUserPlan } from "~/lib/plan.server";
 import type { WatchlistRecord, WatchlistRunRecord } from "~/lib/types";
 
@@ -76,6 +77,128 @@ export const DEFAULT_MONITORING_CONCURRENCY_SLOT_LEASE_MS = DEFAULT_MONITORING_O
 export const MONITORING_DISPATCH_BATCH_SIZE = 100;
 export const MONITORING_RECONCILIATION_LIMIT = 40;
 export const MONITORING_CONCURRENCY_WAIT_MAX_ROUNDS = 240;
+export const MONITORING_QUEUE_AGING_INTERVAL_MS = 30 * 60 * 1000;
+export const MONITORING_QUEUE_AGING_MAX_BOOST = 2;
+
+interface PendingRunQueueRow {
+  id: string;
+  watchlist_id: string;
+  queue_priority: number;
+  queued_at: string;
+  started_at: string;
+  user_id: string;
+  plan: string;
+}
+
+export function computeEffectiveQueuePriority(
+  queuePriority: number,
+  queuedAt: string,
+  nowMs = Date.now(),
+) {
+  const ageMs = Math.max(0, nowMs - Date.parse(queuedAt));
+  const boost = Math.min(
+    MONITORING_QUEUE_AGING_MAX_BOOST,
+    Math.floor(ageMs / MONITORING_QUEUE_AGING_INTERVAL_MS),
+  );
+  return Math.max(0, queuePriority - boost);
+}
+
+export function compareQueuedRuns(
+  left: PendingRunQueueRow & { effectivePriority: number },
+  right: PendingRunQueueRow & { effectivePriority: number },
+) {
+  if (left.effectivePriority !== right.effectivePriority) {
+    return left.effectivePriority - right.effectivePriority;
+  }
+  const leftSlot = Date.parse(left.started_at || left.queued_at);
+  const rightSlot = Date.parse(right.started_at || right.queued_at);
+  if (leftSlot !== rightSlot) return leftSlot - rightSlot;
+  const leftQueued = Date.parse(left.queued_at);
+  const rightQueued = Date.parse(right.queued_at);
+  if (leftQueued !== rightQueued) return leftQueued - rightQueued;
+  return left.id.localeCompare(right.id);
+}
+
+export async function selectRankedEligibleOrchestratedRuns(env: AppEnv, now = nowIso()) {
+  const result = await ensureDb(env)
+    .prepare(
+      `
+        SELECT
+          wr.id,
+          wr.watchlist_id,
+          wr.queue_priority,
+          wr.queued_at,
+          wr.started_at,
+          w.user_id,
+          up.plan
+        FROM watchlist_run wr
+        INNER JOIN watchlist w ON w.id = wr.watchlist_id
+        INNER JOIN user_plan up ON up.user_id = w.user_id
+        WHERE wr.status = 'pending'
+          AND wr.trigger_type = 'scheduled'
+          AND (wr.retry_after IS NULL OR wr.retry_after <= ?)
+          AND w.is_active = 1
+          AND up.plan != 'free'
+      `,
+    )
+    .bind(now)
+    .all<PendingRunQueueRow>();
+
+  const nowMs = Date.parse(now);
+  return (result.results ?? [])
+    .filter((row) => {
+      const plan =
+        row.plan === "scout" || row.plan === "starter" || row.plan === "agency" ? row.plan : "free";
+      if (plan === "scout" && !shouldScheduleScoutOnDate(plan, new Date(nowMs))) {
+        return false;
+      }
+      return true;
+    })
+    .map((row) => ({
+      ...row,
+      effectivePriority: computeEffectiveQueuePriority(row.queue_priority, row.queued_at, nowMs),
+    }))
+    .sort(compareQueuedRuns);
+}
+
+export async function selectHeadEligibleOrchestratedRun(env: AppEnv, now = nowIso()) {
+  return (await selectRankedEligibleOrchestratedRuns(env, now))[0] ?? null;
+}
+
+async function countSlotsHeldByRun(env: AppEnv, runId: string) {
+  const row = await one<{ count: number }>(
+    env,
+    `
+      SELECT COUNT(*) AS count
+      FROM monitoring_concurrency_slot
+      WHERE holder_run_id = ?
+    `,
+    runId,
+  );
+  return Number(row?.count ?? 0);
+}
+
+export async function isRunEligibleForConcurrencyClaim(
+  env: AppEnv,
+  runId: string,
+  maxSlots = resolveEffectiveMonitoringFanoutMaxInflight(env),
+) {
+  const ranked = await selectRankedEligibleOrchestratedRuns(env);
+  if (ranked.length === 0) {
+    return false;
+  }
+  const position = ranked.findIndex((row) => row.id === runId);
+  if (position < 0) {
+    return false;
+  }
+  if (position >= maxSlots) {
+    return false;
+  }
+  if ((await countSlotsHeldByRun(env, runId)) > 0) {
+    return false;
+  }
+  return true;
+}
 
 export interface MonitoringFanoutScheduleResult {
   eligible: number;
@@ -281,6 +404,7 @@ export async function ensureOrchestratedWatchlistRun(
     executionKey: string;
     pageBudget: number;
     scheduledTime: number;
+    queuePriority?: number;
   },
 ) {
   const timestamp = nowIso();
@@ -305,9 +429,10 @@ export async function ensureOrchestratedWatchlistRun(
         updated_at,
         idempotency_key,
         queued_at,
-        attempt_count
+        attempt_count,
+        queue_priority
       )
-      VALUES (?, ?, ?, 'pending', ?, 0, NULL, '{}', ?, NULL, NULL, NULL, ?, ?, ?, ?, 0)
+      VALUES (?, ?, ?, 'pending', ?, 0, NULL, '{}', ?, NULL, NULL, NULL, ?, ?, ?, ?, 0, ?)
     `,
     id,
     input.watchlistId,
@@ -318,6 +443,7 @@ export async function ensureOrchestratedWatchlistRun(
     timestamp,
     input.executionKey,
     timestamp,
+    input.queuePriority ?? 2,
   );
 
   if (Number(result.meta?.changes ?? 0) > 0) {
@@ -403,6 +529,11 @@ export async function claimMonitoringConcurrencySlot(
     leaseMs?: number;
   },
 ) {
+  const eligible = await isRunEligibleForConcurrencyClaim(env, input.runId);
+  if (!eligible) {
+    return { claimed: false as const, reason: "queue_not_ready" as const };
+  }
+
   const maxSlots = resolveEffectiveMonitoringFanoutMaxInflight(env);
   const leaseMs = input.leaseMs ?? resolveMonitoringConcurrencySlotLeaseMs(env);
   const token = createProcessingToken();
@@ -729,7 +860,7 @@ export async function listOrchestratedRunsForReconciliation(
             (status = 'pending' AND (retry_after IS NULL OR retry_after <= ?))
             OR (status = 'running' AND processing_started_at IS NOT NULL AND processing_started_at < ?)
           )
-        ORDER BY queued_at ASC, started_at ASC
+        ORDER BY queue_priority ASC, queued_at ASC, started_at ASC, id ASC
         LIMIT ?
       `,
     )
@@ -977,6 +1108,9 @@ export async function scheduleWatchlistFanout(
         executionKey,
         pageBudget,
         scheduledTime: input.scheduledTime,
+        queuePriority: getScheduledMonitoringPolicy(
+          await getUserPlan(env, watchlist.userId),
+        ).monitoringQueuePriority,
       });
       if (!ensured.created) {
         duplicates += 1;

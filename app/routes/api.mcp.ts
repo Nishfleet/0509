@@ -693,10 +693,17 @@ export function loader({ request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { authenticateApiKeyRequest } = await import("~/lib/api-keys.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
   const env = getEnv(context);
   const auth = await authenticateApiKeyRequest(env, request);
   if (!auth.ok) {
     return auth.response;
+  }
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, auth.apiKey.userId);
+  const mcpGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_access");
+  if (!mcpGate.ok) {
+    return mcpGate.response;
   }
 
   const rpcRequest = await readJsonRpcRequest(request);
@@ -776,6 +783,29 @@ async function callTool(
   const format = normalizeAgentFormat(stringField(args, "format"));
   if (!format) {
     return { ok: false, message: "format must be json or slack." };
+  }
+
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+  const { requireExportFeature, requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, apiKey.userId);
+
+  const exportToolNames = new Set([
+    "get_collection_export",
+    "get_watchlist_export",
+    "get_digest_export",
+  ]);
+  if (exportToolNames.has(name)) {
+    const exportGate = await requireExportFeature(env, workspaceUserId, format);
+    if (!exportGate.ok) {
+      return { ok: false, message: "This export format is not included in your current plan." };
+    }
+  }
+
+  if (isWriteToolName(name)) {
+    const actionsGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_account_actions");
+    if (!actionsGate.ok) {
+      return { ok: false, message: "Account actions require the Agency plan." };
+    }
   }
 
   if (name === "get_workspace_readiness") {

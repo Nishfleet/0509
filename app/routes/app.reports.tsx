@@ -16,10 +16,17 @@ export const meta = () => [{ title: "Reports | Five to Nine" }];
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { getWorkspaceBranding } = await import("~/lib/data.server");
+  const {
+    requireWorkspacePlanFeature,
+    resolveWorkspacePreparedBy,
+  } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
-  const branding = await getWorkspaceBranding(env, workspaceUserId);
+  const reportGate = await requireWorkspacePlanFeature(env, workspaceUserId, "client_reports");
+  if (!reportGate.ok) {
+    throw reportGate.response;
+  }
+  const preparedBy = await resolveWorkspacePreparedBy(env, workspaceUserId);
 
   return {
     report: await loadReport({
@@ -27,7 +34,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
       request,
       reportId: params.id,
     }),
-    preparedBy: branding.brandName,
+    preparedBy,
   };
 }
 
@@ -35,6 +42,7 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { createShareLink } = await import("~/lib/data.server");
+  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const report = await loadReport({
@@ -46,6 +54,10 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "share-report") {
+    const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
+    if (!shareGate.ok) {
+      throw shareGate.response;
+    }
     const share = await createShareLink(
       env,
       { ...session, user: { ...session.user, id: workspaceUserId } },

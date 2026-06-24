@@ -230,6 +230,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "share-watchlist") {
+    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
+    if (!shareGate.ok) {
+      return { ok: false, message: "Share links are included in the Agency plan." };
+    }
     const { createShareLink, getWatchlist } = await import("~/lib/data.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
     const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
@@ -355,10 +360,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
       getWorkspaceDeliveryConfig,
       upsertWatchlistDeliveryConfig,
     } = await import("~/lib/data.server");
+    const {
+      planFeatureDeniedActionResult,
+      requireDeliveryConfigSave,
+    } = await import("~/lib/plan-feature-gate.server");
     const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
       return { ok: false, message: "Watchlist not found." };
+    }
+
+    const deliveryGate = await requireDeliveryConfigSave(env, workspaceUserId, {
+      instantEnabled: formData.has("instantEnabled"),
+      slackEnabled: formData.has("slackEnabled"),
+      emailEnabled: formData.has("emailEnabled"),
+    });
+    if (!deliveryGate.ok) {
+      return planFeatureDeniedActionResult(deliveryGate.feature, deliveryGate.plan);
     }
 
     const workspaceConfig =
@@ -387,6 +405,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "add-delivery-target") {
     const { getWatchlist, upsertDeliveryTarget } = await import("~/lib/data.server");
+    const {
+      planFeatureDeniedActionResult,
+      requireDeliveryConfigSave,
+    } = await import("~/lib/plan-feature-gate.server");
     const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
@@ -401,6 +423,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
         ok: false,
         message: "Choose a channel and a target first.",
       };
+    }
+
+    const deliveryGate = await requireDeliveryConfigSave(env, workspaceUserId, { channel });
+    if (!deliveryGate.ok) {
+      return planFeatureDeniedActionResult(deliveryGate.feature, deliveryGate.plan);
     }
 
     const explicitOptIn = formData.has("explicitOptIn") || channel === "email";
@@ -469,6 +496,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "send-test-email") {
     const { getDeliveryTargetById } = await import("~/lib/data.server");
     const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
+    const {
+      planFeatureDeniedActionResult,
+      requireDeliveryConfigSave,
+    } = await import("~/lib/plan-feature-gate.server");
     const targetId = String(formData.get("targetId") ?? "");
     const target = await getDeliveryTargetById(env, {
       userId: workspaceUserId,
@@ -477,6 +508,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     if (!target || target.userId !== workspaceUserId || target.channel !== "email") {
       return { ok: false, message: "Email delivery target not found." };
+    }
+
+    const deliveryGate = await requireDeliveryConfigSave(env, workspaceUserId, { emailEnabled: true });
+    if (!deliveryGate.ok) {
+      return planFeatureDeniedActionResult(deliveryGate.feature, deliveryGate.plan);
     }
 
     const sent = await sendDeliveryTestEmail(env, {

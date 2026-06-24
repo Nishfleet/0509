@@ -1,45 +1,35 @@
 import type { AppEnv } from "~/lib/env.server";
+import {
+  getIncludedEvidenceAllowance,
+  getPlanEntitlements,
+  getPlanLimit,
+  getWorkspaceSeatLimit,
+  parsePlanFamily,
+  PLAN_LIMITS,
+  type PlanFamily,
+  type PlanResource,
+} from "~/lib/plan-entitlements";
+import {
+  getEvidenceUsageSummary,
+  listTopUpGrantHistory,
+} from "~/lib/evidence-usage.server";
 
-export const PLAN_LIMITS = {
-  free: {
-    watchlists: 0,
-    collections: 0,
-    digests: false,
-    digestCadence: "none",
-    proofCapturesPerMonth: 0,
-    metaSourceStatus: "beta_unavailable",
-  },
-  scout: {
-    watchlists: 3,
-    collections: 10,
-    digests: true,
-    digestCadence: "weekly",
-    proofCapturesPerMonth: 50,
-    metaSourceStatus: "beta_limited",
-  },
-  starter: {
-    watchlists: 10,
-    collections: 25,
-    digests: true,
-    digestCadence: "weekly",
-    proofCapturesPerMonth: 250,
-    metaSourceStatus: "beta_limited",
-  },
-  agency: {
-    watchlists: 75,
-    collections: 250,
-    digests: true,
-    digestCadence: "daily_and_weekly",
-    proofCapturesPerMonth: 2500,
-    metaSourceStatus: "beta_priority",
-  },
-} as const;
+export { PLAN_LIMITS };
+export type { PlanFamily as UserPlan, PlanResource };
 
-export type UserPlan = keyof typeof PLAN_LIMITS;
-export type PlanResource = "watchlists" | "collections";
 export type ProofUsageWarningLevel = "ok" | "warning" | "exhausted";
-
 export const PROOF_USAGE_WARNING_RATIO = 0.8;
+
+export {
+  canUsePlanFeature,
+  getPlanEntitlements,
+  getPlanLimit,
+  getIncludedEvidenceAllowance,
+  getWorkspaceSeatLimit,
+  getScheduledMonitoringPolicy,
+  planAllowsDigestCadence,
+  parsePlanFamily,
+} from "~/lib/plan-entitlements";
 
 interface UserPlanRow {
   plan: string;
@@ -70,16 +60,8 @@ async function one<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
   return rows[0] ?? null;
 }
 
-function parseUserPlan(value: string | null | undefined): UserPlan {
-  if (value === "scout" || value === "starter" || value === "agency") {
-    return value;
-  }
-
-  return "free";
-}
-
-function effectivePlanFromRow(row: UserPlanRow | null): UserPlan {
-  const parsed = parseUserPlan(row?.plan);
+function effectivePlanFromRow(row: UserPlanRow | null): PlanFamily {
+  const parsed = parsePlanFamily(row?.plan);
   if (parsed === "free") {
     return "free";
   }
@@ -125,7 +107,7 @@ async function countCollections(env: AppEnv, userId: string) {
   return Number(row?.count ?? 0);
 }
 
-export async function getUserPlan(env: AppEnv, userId: string): Promise<UserPlan> {
+export async function getUserPlan(env: AppEnv, userId: string): Promise<PlanFamily> {
   const row = await one<UserPlanRow>(
     env,
     `
@@ -139,7 +121,16 @@ export async function getUserPlan(env: AppEnv, userId: string): Promise<UserPlan
   return effectivePlanFromRow(row);
 }
 
-export async function getUserPlanForActor(env: AppEnv, actorUserId: string): Promise<UserPlan> {
+export async function getEffectiveWorkspacePlan(env: AppEnv, workspaceUserId: string) {
+  return getUserPlan(env, workspaceUserId);
+}
+
+export async function getEffectiveWorkspaceEntitlements(env: AppEnv, workspaceUserId: string) {
+  const plan = await getEffectiveWorkspacePlan(env, workspaceUserId);
+  return getPlanEntitlements(plan);
+}
+
+export async function getUserPlanForActor(env: AppEnv, actorUserId: string): Promise<PlanFamily> {
   const { resolveWorkspace } = await import("~/lib/workspace.server");
   const workspace = await resolveWorkspace(env, actorUserId);
   return getUserPlan(env, workspace.workspaceUserId);
@@ -147,7 +138,7 @@ export async function getUserPlanForActor(env: AppEnv, actorUserId: string): Pro
 
 export async function checkPlanLimit(env: AppEnv, userId: string, resource: PlanResource) {
   const plan = await getUserPlan(env, userId);
-  const limit = PLAN_LIMITS[plan][resource];
+  const limit = getPlanLimit(plan, resource);
   const current = resource === "watchlists"
     ? await countWatchlists(env, userId)
     : await countCollections(env, userId);
@@ -170,14 +161,58 @@ export async function checkPlanLimitForActor(
 }
 
 export async function getProofUsageSummary(env: AppEnv, userId: string) {
+  try {
+    const summary = await getEvidenceUsageSummary(env, userId);
+    const usageRatio =
+      summary.includedAllowance > 0
+        ? summary.includedUsed / summary.includedAllowance
+        : summary.includedUsed > 0
+          ? Number.POSITIVE_INFINITY
+          : 0;
+    const warningLevel: ProofUsageWarningLevel =
+      summary.includedAllowance > 0 && summary.includedUsed >= summary.includedAllowance
+        ? "exhausted"
+        : summary.includedAllowance > 0 && usageRatio >= PROOF_USAGE_WARNING_RATIO
+          ? "warning"
+          : "ok";
+
+    return {
+      plan: summary.plan,
+      used: summary.includedUsed,
+      includedUsed: summary.includedUsed,
+      baseLimit: summary.includedAllowance,
+      extraCredits: summary.topUpRemaining,
+      limit: summary.includedAllowance + summary.topUpRemaining,
+      remaining: summary.totalAvailable,
+      usageRatio,
+      warningLevel,
+      upgradeTarget:
+        summary.plan === "scout" ? "Starter" : summary.plan === "starter" ? "Agency" : null,
+      periodStart: summary.periodStart,
+      periodEnd: summary.periodEnd,
+      includedRemaining: summary.includedRemaining,
+      topUpRemaining: summary.topUpRemaining,
+      topUpRetainedWhileInactive: summary.topUpRetainedWhileInactive,
+      canSpendTopUps: summary.canSpendTopUps,
+      totalAvailable: summary.totalAvailable,
+      nextPeriodStart: summary.nextPeriodStart,
+    };
+  } catch {
+    return getProofUsageSummaryLegacy(env, userId);
+  }
+}
+
+async function getProofUsageSummaryLegacy(env: AppEnv, userId: string) {
   const plan = await getUserPlan(env, userId);
-  const windowStart = startOfRollingProofWindowIso();
+  const windowStart = new Date(
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+  ).toISOString();
   const now = new Date().toISOString();
   const [used, extraCredits] = await Promise.all([
-    countProofCapturesForWorkspaceSince(env, userId, windowStart),
-    sumActiveProofUsageCredits(env, userId, windowStart, now),
+    countProofCapturesForWorkspaceSinceLegacy(env, userId, windowStart),
+    sumLegacyProofUsageCredits(env, userId, now),
   ]);
-  const baseLimit = PLAN_LIMITS[plan].proofCapturesPerMonth;
+  const baseLimit = getIncludedEvidenceAllowance(plan);
   const limit = baseLimit + extraCredits;
   const usageRatio = limit > 0 ? used / limit : used > 0 ? Number.POSITIVE_INFINITY : 0;
   const warningLevel: ProofUsageWarningLevel =
@@ -190,6 +225,7 @@ export async function getProofUsageSummary(env: AppEnv, userId: string) {
   return {
     plan,
     used,
+    includedUsed: used,
     baseLimit,
     extraCredits,
     limit,
@@ -197,34 +233,22 @@ export async function getProofUsageSummary(env: AppEnv, userId: string) {
     usageRatio,
     warningLevel,
     upgradeTarget: plan === "scout" ? "Starter" : plan === "starter" ? "Agency" : null,
+    periodStart: windowStart,
+    periodEnd: null,
+    includedRemaining: Math.max(0, baseLimit - used),
+    topUpRemaining: extraCredits,
+    topUpRetainedWhileInactive: plan === "free" ? extraCredits : 0,
+    canSpendTopUps: plan !== "free",
+    totalAvailable: Math.max(0, limit - used),
+    nextPeriodStart: null,
   };
 }
 
-export async function listActiveProofCreditGrants(env: AppEnv, userId: string) {
-  try {
-    const rows = await many<{ credits: number; expires_at: string }>(
-      env,
-      `
-        SELECT credits, expires_at
-        FROM proof_usage_credit
-        WHERE user_id = ?
-          AND expires_at > ?
-        ORDER BY expires_at ASC
-      `,
-      userId,
-      new Date().toISOString(),
-    );
-    return rows.map((row) => ({ credits: Number(row.credits), expiresAt: row.expires_at }));
-  } catch {
-    return [];
-  }
-}
-
-function startOfRollingProofWindowIso() {
-  return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-}
-
-async function countProofCapturesForWorkspaceSince(env: AppEnv, userId: string, attemptedSince: string) {
+async function countProofCapturesForWorkspaceSinceLegacy(
+  env: AppEnv,
+  userId: string,
+  attemptedSince: string,
+) {
   const row = await one<CountRow>(
     env,
     `
@@ -238,16 +262,10 @@ async function countProofCapturesForWorkspaceSince(env: AppEnv, userId: string, 
     userId,
     attemptedSince,
   );
-
   return Number(row?.count ?? 0);
 }
 
-async function sumActiveProofUsageCredits(
-  env: AppEnv,
-  userId: string,
-  grantedSince: string,
-  now: string,
-) {
+async function sumLegacyProofUsageCredits(env: AppEnv, userId: string, now: string) {
   try {
     const row = await one<CountRow>(
       env,
@@ -255,19 +273,52 @@ async function sumActiveProofUsageCredits(
         SELECT COALESCE(SUM(credits), 0) AS count
         FROM proof_usage_credit
         WHERE user_id = ?
-          AND granted_at >= ?
           AND expires_at > ?
       `,
       userId,
-      grantedSince,
       now,
     );
-
     return Number(row?.count ?? 0);
-  } catch (error) {
-    if (/proof_usage_credit|no such table/i.test(error instanceof Error ? error.message : String(error))) {
+  } catch {
+    try {
+      const row = await one<CountRow>(
+        env,
+        `
+          SELECT COALESCE(SUM(quantity_remaining), 0) AS count
+          FROM evidence_top_up_grant
+          WHERE workspace_user_id = ?
+            AND status = 'active'
+        `,
+        userId,
+      );
+      return Number(row?.count ?? 0);
+    } catch {
       return 0;
     }
-    throw error;
   }
+}
+
+export async function listActiveProofCreditGrants(env: AppEnv, userId: string) {
+  const grants = await listTopUpGrantHistory(env, userId);
+  return grants
+    .filter((grant) => grant.status === "active" && grant.quantity_remaining > 0)
+    .map((grant) => ({
+      credits: grant.quantity_remaining,
+      skuSlug: grant.sku_slug,
+      grantedAt: grant.granted_at,
+      expiresAt: null as string | null,
+    }));
+}
+
+export async function requirePlanFeature(
+  env: AppEnv,
+  workspaceUserId: string,
+  feature: Parameters<typeof import("~/lib/plan-entitlements").canUsePlanFeature>[1],
+) {
+  const plan = await getUserPlan(env, workspaceUserId);
+  const { canUsePlanFeature } = await import("~/lib/plan-entitlements");
+  if (!canUsePlanFeature(plan, feature)) {
+    return { allowed: false as const, plan };
+  }
+  return { allowed: true as const, plan };
 }

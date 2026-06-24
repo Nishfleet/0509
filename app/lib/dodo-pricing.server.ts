@@ -1,4 +1,11 @@
 import type { AppEnv } from "~/lib/env.server";
+import {
+  listSkusMissingProviderConfiguration,
+  readProviderProductId,
+  resolveBillingSku,
+  resolveBillingSkuFromProviderProductId,
+  type BillingSkuSlug,
+} from "~/lib/billing-sku-catalog";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 
 const DODO_LIVE_URL = "https://live.dodopayments.com";
@@ -75,48 +82,48 @@ export function dodo0509AdaptiveCurrencyFeesInclusive(env: AppEnv) {
 export function dodo0509ProductIds(env: AppEnv): DodoProductMatrix {
   return {
     scout: {
-      monthly: env.DODO_0509_PRODUCT_SCOUT_MONTHLY_ID?.trim() ?? "",
-      yearly: env.DODO_0509_PRODUCT_SCOUT_YEARLY_ID?.trim() ?? "",
+      monthly: readProviderProductId(env, resolveBillingSku("scout_monthly_v1")!),
+      yearly: readProviderProductId(env, resolveBillingSku("scout_annual_v1")!),
     },
     starter: {
-      monthly: env.DODO_0509_PRODUCT_STARTER_MONTHLY_ID?.trim() ?? "",
-      yearly: env.DODO_0509_PRODUCT_STARTER_YEARLY_ID?.trim() ?? "",
+      monthly: readProviderProductId(env, resolveBillingSku("starter_monthly_v1")!),
+      yearly: readProviderProductId(env, resolveBillingSku("starter_annual_v1")!),
     },
     agency: {
-      monthly: env.DODO_0509_PRODUCT_AGENCY_MONTHLY_ID?.trim() ?? "",
-      yearly: env.DODO_0509_PRODUCT_AGENCY_YEARLY_ID?.trim() ?? "",
+      monthly: readProviderProductId(env, resolveBillingSku("agency_monthly_v1")!),
+      yearly: readProviderProductId(env, resolveBillingSku("agency_annual_v1")!),
     },
   };
 }
 
 export function dodo0509PlanForProductId(env: AppEnv, productId: string) {
-  const normalized = productId.trim();
-  const products = dodo0509ProductIds(env);
-  for (const [plan, cycles] of Object.entries(products)) {
-    for (const [cycle, candidate] of Object.entries(cycles)) {
-      if (candidate === normalized) {
-        return { plan: plan as PricingPlanSlug, cycle: cycle as PricingBillingCycle };
-      }
-    }
-  }
-
-  return null;
+  const sku = resolveBillingSkuFromProviderProductId(env, productId);
+  if (!sku?.planFamily) return null;
+  return {
+    plan: sku.planFamily as PricingPlanSlug,
+    cycle: (sku.billingInterval === "annual" ? "yearly" : "monthly") as PricingBillingCycle,
+  };
 }
 
 export function dodo0509UsageBundleProductIds(env: AppEnv): DodoUsageBundleProductMap {
   return {
-    proof_500: env.DODO_0509_PRODUCT_PROOF_PACK_500_ID?.trim() ?? "",
-    proof_2000: env.DODO_0509_PRODUCT_PROOF_PACK_2000_ID?.trim() ?? "",
-    proof_7500: env.DODO_0509_PRODUCT_PROOF_PACK_7500_ID?.trim() ?? "",
+    proof_500: readProviderProductId(env, resolveBillingSku("burst_500_v1")!),
+    proof_2000: readProviderProductId(env, resolveBillingSku("campaign_2000_v1")!),
+    proof_7500: readProviderProductId(env, resolveBillingSku("scale_7500_v1")!),
   };
 }
 
 export function dodo0509UsageBundleForProductId(env: AppEnv, productId: string) {
-  const normalized = productId.trim();
-  const products = dodo0509UsageBundleProductIds(env);
-  return Object.entries(products).find(([, candidate]) => candidate === normalized)?.[0] as
-    | UsageBundleSlug
-    | undefined;
+  const sku = resolveBillingSkuFromProviderProductId(env, productId);
+  if (!sku?.topUpQuantity) return undefined;
+  if (sku.slug === "burst_500_v1" || sku.slug === "proof_500_legacy") return "proof_500" as const;
+  if (sku.slug === "campaign_2000_v1" || sku.slug === "proof_2000_legacy") return "proof_2000" as const;
+  if (sku.slug === "scale_7500_v1" || sku.slug === "proof_7500_legacy") return "proof_7500" as const;
+  return undefined;
+}
+
+export function listMissingDodoCommercialSkus(env: AppEnv) {
+  return listSkusMissingProviderConfiguration(env);
 }
 
 export function usageBundleCreditCount(bundleId: UsageBundleSlug) {

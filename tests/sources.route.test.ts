@@ -2,6 +2,13 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("~/lib/plan.server", () => ({
+  getUserPlan: vi.fn().mockResolvedValue("agency"),
+  getEffectiveWorkspacePlan: vi.fn().mockResolvedValue("agency"),
+  checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 75, current: 1 }),
+  PLAN_LIMITS: { agency: { digests: true } },
+}));
+
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
