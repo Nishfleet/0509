@@ -114,7 +114,11 @@ export const linkedinConnector = {
   },
 };
 
-export function buildLinkedInOAuthAuthorizeUrl(env: import("~/lib/env.server").AppEnv, state: string) {
+export function buildLinkedInOAuthAuthorizeUrl(
+  env: import("~/lib/env.server").AppEnv,
+  state: string,
+  pkceChallenge: string,
+) {
   const clientId = env.LINKEDIN_CLIENT_ID?.trim();
   if (!clientId) {
     return null;
@@ -126,6 +130,8 @@ export function buildLinkedInOAuthAuthorizeUrl(env: import("~/lib/env.server").A
     redirect_uri: redirectUri,
     state,
     scope: LINKEDIN_OAUTH_SCOPES.join(" "),
+    code_challenge: pkceChallenge,
+    code_challenge_method: "S256",
   });
   return `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
 }
