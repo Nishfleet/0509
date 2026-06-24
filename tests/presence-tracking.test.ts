@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
+import { evaluatePresenceWorkspaceAccess } from "~/lib/presence-internal-access.server";
 import { websiteConnector } from "~/lib/presence-connectors/website.server";
 import { xConnector } from "~/lib/presence-connectors/x.server";
 import { redditConnector } from "~/lib/presence-connectors/reddit.server";
@@ -19,6 +20,7 @@ const baseEnv = {
   META_TOKEN_ENCRYPTION_SECRET: "x".repeat(32),
   BETTER_AUTH_URL: "https://0509.io",
   PRESENCE_WEBSITE_ROLLOUT: "internal",
+  PRESENCE_INTERNAL_WORKSPACE_ID: "internal-ws",
   PRESENCE_X_ROLLOUT: "disabled",
   PRESENCE_REDDIT_ROLLOUT: "disabled",
   PRESENCE_LINKEDIN_ROLLOUT: "disabled",
@@ -46,10 +48,33 @@ describe("presence entitlements", () => {
 });
 
 describe("presence access gates", () => {
-  it("allows website internal rollout without credentials", () => {
-    const gate = evaluateConnectorAccessGate(baseEnv, "website", "competitor");
+  it("defaults website rollout to disabled without env", () => {
+    const gate = evaluateConnectorAccessGate(
+      { ...baseEnv, PRESENCE_WEBSITE_ROLLOUT: undefined },
+      "website",
+      "competitor",
+    );
+    expect(gate.allowed).toBe(false);
+    expect(gate.rolloutState).toBe("disabled");
+  });
+
+  it("allows website internal rollout only for internal workspace", () => {
+    const gate = evaluateConnectorAccessGate(baseEnv, "website", "competitor", "internal-ws");
     expect(gate.allowed).toBe(true);
     expect(gate.rolloutState).toBe("internal");
+
+    const blocked = evaluateConnectorAccessGate(baseEnv, "website", "competitor", "customer-ws");
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.reasonCode).toBe("internal_workspace_only");
+  });
+
+  it("fails closed when internal workspace is not configured", () => {
+    const access = evaluatePresenceWorkspaceAccess(
+      { ...baseEnv, PRESENCE_INTERNAL_WORKSPACE_ID: undefined },
+      "internal-ws",
+    );
+    expect(access.allowed).toBe(false);
+    expect(access.reasonCode).toBe("internal_workspace_unconfigured");
   });
 
   it("blocks X without credentials", () => {
@@ -106,6 +131,9 @@ describe("website connector", () => {
   it("parses RSS feed items from mock fetch", async () => {
     const rss = `<?xml version="1.0"?><rss><channel><item><title>Launch post</title><link>https://example.com/post</link><pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate><description>Hello</description></item></channel></rss>`;
     const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: FiveToNinePresenceBot\nAllow: /", { status: 200 });
+      }
       if (url.includes("/feed")) {
         return new Response(rss, {
           status: 200,
