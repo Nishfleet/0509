@@ -22,7 +22,7 @@ export {
 export const SUPPORT_CASE_CATEGORY_LABELS: Record<SupportCaseCategory, string> = {
   billing: "Billing, cancellation, or invoice",
   source: "Competitor source or tracking",
-  delivery: "Digest, Slack, or email delivery",
+  delivery: "Digest or email delivery",
   account: "Login or personal access",
   team: "Team seats or workspace access",
   security: "Security, privacy, or deletion",

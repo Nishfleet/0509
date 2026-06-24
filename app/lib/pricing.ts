@@ -49,15 +49,15 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   );
 
   if (plan === "scout") {
-    features.push("Account-gated competitor research", "Email-ready proof trail");
+    features.push("Account-gated competitor research", "Email digest delivery");
   }
   if (plan === "starter" || plan === "agency") {
     features.push("Landing-page evidence for material changes");
-    features.push("Email + Slack delivery");
+    features.push("Email delivery");
     features.push(
       "Reads ad text in 30+ languages and scripts — auto-translated into English",
     );
-    features.push("CSV, JSON, and Slack-ready exports");
+    features.push("CSV and JSON exports");
   }
   if (plan === "agency") {
     features.push("Client-ready proof reports (share link + PDF print)");

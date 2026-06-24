@@ -876,9 +876,8 @@ describe("sources route component", () => {
     expect(markup).toContain("Billing changes and cancellation");
     expect(markup).toContain("Migration and setup help");
     expect(markup).toContain("Create API key");
-    expect(markup).toContain("Slack delivery");
-    expect(markup).toContain("Save Slack delivery");
-    expect(markup).toContain("encrypted and never shown again");
+    expect(markup).not.toContain("Slack delivery");
+    expect(markup).not.toContain("Save Slack delivery");
     expect(markup).not.toContain("WhatsApp delivery");
     expect(markup).not.toContain("WhatsApp delivery is enabled for this account");
     expect(markup).not.toContain("WhatsApp is not available for this account yet");

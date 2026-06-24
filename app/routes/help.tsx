@@ -36,12 +36,9 @@ export default function HelpRoute() {
 
       <PublicDocBlock title="Delivery setup">
         <p>
-          Email delivery is available for eligible accounts. Slack delivery is self-serve from{" "}
-          <Link to="/app/sources">Integrations</Link>: paste a Slack incoming webhook, save it, and future eligible
-          digests can post there.
-        </p>
-        <p>
-          WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.
+          Email delivery is available for eligible accounts. Connect a delivery target from your
+          watchlist settings or <Link to="/app/sources">Integrations</Link>, then save delivery
+          preferences when you want digests and high-priority alerts in the inbox.
         </p>
       </PublicDocBlock>
 

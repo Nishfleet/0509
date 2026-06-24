@@ -45,8 +45,7 @@ export default function PrivacyRoute() {
 
           <LegalBlock title="Delivery data">
             <p>
-              Email delivery is handled by Five to Nine's email provider. Slack delivery uses customer-provided
-              incoming webhooks. WhatsApp is not launch-scoped for customer delivery yet.
+              Email delivery is handled by Five to Nine's email provider.
             </p>
           </LegalBlock>
 

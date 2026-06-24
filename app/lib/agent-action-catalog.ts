@@ -161,7 +161,7 @@ export const CUSTOMER_SUPPORT_PATHS = [
   },
   {
     label: "Migration and setup help",
-    detail: "Support can help move saved competitor work, Slack delivery, client rooms, and reports into a working account.",
+    detail: "Support can help move saved competitor work, delivery setup, client rooms, and reports into a working account.",
   },
   {
     label: "Security and deletion requests",
