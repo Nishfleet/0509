@@ -130,13 +130,14 @@ Branch: `cursor/plan-entitlements-topups-no-prices-20260623`
 |------|--------|-------|
 | Authoritative entitlement catalog | implemented | `app/lib/plan-entitlements.ts` — no prices |
 | Versioned billing SKU registry | implemented | `app/lib/billing-sku-catalog.ts` — provider IDs from env only |
-| Monthly usage periods | implemented | UTC calendar months; annual subs get monthly buckets (`0049`) |
-| Non-expiring top-ups | implemented | `evidence_top_up_grant` ledger (`0050`); included-first consumption |
+| Monthly usage periods | implemented | Subscription-anchored months (`0049`, `0053`); annual subs get monthly buckets |
+| Non-expiring top-ups | implemented | Immutable grants + ledger (`0050`/`0053`); included-first consumption |
 | Usage reservations | implemented | `0051` — idempotent logical keys |
-| Plan-aware monitoring priority | implemented | `queue_priority` on `watchlist_run` (`0052`); fan-out still inline |
+| Plan-aware monitoring priority | implemented | Queue-ranked slot claims + `queue_priority` (`0052`); fan-out still inline |
+| Server feature gates | implemented | `plan-feature-gate.server.ts` on API/MCP/exports/shares/reports |
 | Pricing/checkout | gated | Checkout disabled when SKU/provider price config missing |
-| Remote D1 / Dodo / deploy | **NOT RUN** | Migrations `0049`–`0052` local only |
+| Remote D1 / Dodo / deploy | **NOT RUN** | Migrations `0049`–`0053` local only |
 
 Docs: `docs/plan-catalog.md`, `docs/billing-sku-catalog.md`, `docs/evidence-usage-accounting.md`, `docs/top-up-billing.md`, `docs/plan-entitlement-audit.md`.
 
-Owner decisions still open: top-up spend after cancel, partial refund treatment, credit transfer on ownership merge, whether every scheduled scan consumes a check (default: proof capture only).
+Top-up spend after cancel: retained but not spendable without active paid plan. Scheduled monitoring does not consume evidence checks.
