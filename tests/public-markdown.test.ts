@@ -42,8 +42,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("visible plan caps");
     expect(PUBLIC_MARKDOWN).toContain("Public read-only search and a sample proof preview");
     expect(PUBLIC_MARKDOWN).toContain("Public proof previews are sample-only");
-    expect(PUBLIC_MARKDOWN).toContain("exports support CSV, JSON export, and Slack-ready markdown");
-    expect(PUBLIC_MARKDOWN).toContain("Slack delivery can be connected from Integrations");
+    expect(PUBLIC_MARKDOWN).toContain("exports support CSV and JSON export");
+    expect(PUBLIC_MARKDOWN).not.toContain("Slack delivery can be connected from Integrations");
     expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned setup status");
     expect(PUBLIC_MARKDOWN).toContain("approved account actions");
     expect(PUBLIC_MARKDOWN).toContain("Write-enabled customer API keys can perform");
@@ -62,7 +62,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 evidence checks/month");
     expect(PUBLIC_MARKDOWN).not.toContain("any configured WhatsApp delivery proof");
-    expect(PUBLIC_MARKDOWN).toContain("WhatsApp delivery is not launch-scoped yet");
+    expect(PUBLIC_MARKDOWN).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
     expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live proof");
     expect(LLMS_TEXT).toContain("Public read-only search is available");
@@ -79,10 +79,10 @@ describe("public markdown", () => {
     });
     expect(LLMS_TEXT).toContain("customer API key creation, rotation, and revocation");
     expect(LLMS_TEXT).toContain("Signed-in support cases cover billing changes and cancellation");
-    expect(LLMS_TEXT).toContain("Slack delivery can be connected from Integrations");
+    expect(LLMS_TEXT).not.toContain("Slack delivery can be connected from Integrations");
     expect(LLMS_TEXT).toContain("summarizes customer-facing surfaces without exposing private account activity");
     expect(LLMS_TEXT).toContain("Email delivery is available for eligible accounts");
-    expect(LLMS_TEXT).toContain("WhatsApp delivery is not launch-scoped yet");
+    expect(LLMS_TEXT).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(LLMS_TEXT).not.toContain("/api/mcp");
     expect(LLMS_TEXT).not.toContain("send_email");
     expect(LLMS_TEXT).not.toContain("MCP are not live yet");

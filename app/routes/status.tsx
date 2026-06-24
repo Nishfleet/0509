@@ -85,10 +85,8 @@ export default function StatusRoute() {
 
       <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
-          <li>Slack delivery is available in the product, but broad launch still needs fresh Slack proof.</li>
           <li>Dodo customer portal subscription changes still need dashboard confirmation.</li>
           <li>External uptime monitoring still needs to be connected to the public health endpoint.</li>
-          <li>WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.</li>
           <li>Plan changes, cancellation, deletion, and sensitive account changes are handled through support until portal changes are confirmed.</li>
         </ul>
       </PublicDocBlock>

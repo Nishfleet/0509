@@ -54,8 +54,6 @@ export default function TrustRoute() {
           <li>Cloudflare: hosting, Workers, D1, R2, Workers AI, and Cloudflare Email Service.</li>
           <li>Dodo Payments: checkout, subscriptions, receipts, and billing portal.</li>
           <li>Meta public Ad Library surfaces and customer-provided Meta access when the customer connects it.</li>
-          <li>Slack incoming webhooks when a customer connects Slack delivery.</li>
-          <li>WhatsApp Cloud API only after WhatsApp delivery is enabled for the account.</li>
         </ul>
       </PublicDocBlock>
 
