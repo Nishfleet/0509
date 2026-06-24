@@ -23,7 +23,12 @@ import { createSqliteD1 } from "./helpers/sqlite-d1";
 import { seedPendingOrchestratedRun } from "./helpers/monitoring-queue-seed";
 
 vi.mock("~/lib/plan.server", () => ({
-  getUserPlan: vi.fn().mockResolvedValue("agency"),
+  getUserPlan: vi.fn(async (_env, userId: string) => {
+    if (userId === "agency-owner") return "agency";
+    if (userId === "starter-owner") return "starter";
+    if (userId === "scout-owner") return "scout";
+    return "agency";
+  }),
 }));
 
 function buildWatchlist(index: number, userId = "agency-owner"): WatchlistRecord {
@@ -267,6 +272,69 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     const row = sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist_run").get() as { count: number };
     expect(result.queued).toBe(80);
     expect(row.count).toBe(80);
+  });
+
+  it("schedules a mixed 75/10/3 fleet with plan-derived queue priorities on Monday", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    sqlite.prepare("INSERT INTO user_plan (user_id, plan) VALUES (?, 'agency')").run("agency-owner");
+    sqlite.prepare("INSERT INTO user_plan (user_id, plan) VALUES (?, 'starter')").run("starter-owner");
+    sqlite.prepare("INSERT INTO user_plan (user_id, plan) VALUES (?, 'scout')").run("scout-owner");
+
+    const watchlists = [
+      ...Array.from({ length: 75 }, (_v, index) => buildWatchlist(index + 1, "agency-owner")),
+      ...Array.from({ length: 10 }, (_v, index) => buildWatchlist(index + 76, "starter-owner")),
+      ...Array.from({ length: 3 }, (_v, index) => buildWatchlist(index + 86, "scout-owner")),
+    ];
+    for (const watchlist of watchlists) {
+      sqlite
+        .prepare(
+          `INSERT INTO watchlist (id, user_id, name, target_type, target_id, target_fingerprint, target_label, target_country, is_active, last_scanned_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z')`,
+        )
+        .run(
+          watchlist.id,
+          watchlist.userId,
+          watchlist.name,
+          watchlist.targetType,
+          watchlist.targetId,
+          watchlist.targetFingerprint,
+          watchlist.targetLabel,
+        );
+    }
+
+    const createBatch = vi.fn(async (batch: Array<{ id: string }>) =>
+      batch.map((item) => ({ id: item.id })),
+    );
+    const env = workflowEnv(db, createBatch);
+    const result = await scheduleWatchlistFanout(env, {
+      watchlists,
+      scheduledTime: Date.parse("2026-06-23T04:00:00.000Z"),
+      cron: "0 4 * * *",
+      mode: "fanout",
+    });
+
+    expect(result.queued).toBe(88);
+    const priorities = sqlite
+      .prepare(
+        `SELECT wr.queue_priority, up.plan
+         FROM watchlist_run wr
+         INNER JOIN watchlist w ON w.id = wr.watchlist_id
+         INNER JOIN user_plan up ON up.user_id = w.user_id
+         ORDER BY wr.queue_priority ASC`,
+      )
+      .all() as Array<{ queue_priority: number; plan: string }>;
+    expect(priorities.filter((row) => row.plan === "agency").every((row) => row.queue_priority === 0)).toBe(
+      true,
+    );
+    expect(priorities.filter((row) => row.plan === "starter").every((row) => row.queue_priority === 1)).toBe(
+      true,
+    );
+    expect(priorities.filter((row) => row.plan === "scout").every((row) => row.queue_priority === 2)).toBe(
+      true,
+    );
+    expect(createBatch).toHaveBeenCalledTimes(1);
+    expect(createBatch.mock.calls[0]?.[0]).toHaveLength(88);
   });
 
   it("deduplicates duplicate cron delivery for the same window", async () => {
