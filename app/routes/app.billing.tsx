@@ -3,7 +3,7 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
-import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
+import { EVIDENCE_USAGE_CUSTOMER_COPY, TOP_UP_INACTIVE_PLAN_COPY } from "~/lib/pricing";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const PAYMENT_ISSUE_STATUSES = new Set(["subscription.failed", "subscription.on_hold"]);
@@ -191,6 +191,11 @@ export default function BillingRoute() {
             </span>
           </div>
           <p className="f9-muted-copy">{EVIDENCE_USAGE_CUSTOMER_COPY}</p>
+          {!data.proofUsage.canSpendTopUps &&
+          data.proofUsage.topUpRetainedWhileInactive &&
+          data.proofUsage.topUpRetainedWhileInactive > 0 ? (
+            <p className="f9-muted-copy">{TOP_UP_INACTIVE_PLAN_COPY}</p>
+          ) : null}
           {data.creditGrants.map((grant) => (
             <div className="f9-work-row" key={`${grant.skuSlug ?? "grant"}-${grant.grantedAt}`}>
               <strong>Purchased pack</strong>

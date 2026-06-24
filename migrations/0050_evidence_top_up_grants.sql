@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS evidence_top_up_grant (
   provider_payment_id TEXT NOT NULL,
   provider_product_id TEXT NOT NULL,
   quantity_granted INTEGER NOT NULL,
+  -- Cache only: authoritative balance = quantity_granted + SUM(ledger.quantity_delta).
   quantity_remaining INTEGER NOT NULL,
   granted_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',

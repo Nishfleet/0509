@@ -192,6 +192,8 @@ export async function getProofUsageSummary(env: AppEnv, userId: string) {
       periodEnd: summary.periodEnd,
       includedRemaining: summary.includedRemaining,
       topUpRemaining: summary.topUpRemaining,
+      topUpRetainedWhileInactive: summary.topUpRetainedWhileInactive,
+      canSpendTopUps: summary.canSpendTopUps,
       totalAvailable: summary.totalAvailable,
       nextPeriodStart: summary.nextPeriodStart,
     };
@@ -235,6 +237,8 @@ async function getProofUsageSummaryLegacy(env: AppEnv, userId: string) {
     periodEnd: null,
     includedRemaining: Math.max(0, baseLimit - used),
     topUpRemaining: extraCredits,
+    topUpRetainedWhileInactive: plan === "free" ? extraCredits : 0,
+    canSpendTopUps: plan !== "free",
     totalAvailable: Math.max(0, limit - used),
     nextPeriodStart: null,
   };
