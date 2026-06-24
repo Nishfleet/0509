@@ -42,6 +42,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     creditGrants,
     blockedCheckout: checkoutNotice === "already-subscribed",
     pendingCheckout: checkoutNotice === "already-started",
+    agencyCheckoutHeld: checkoutNotice === "agency-held",
+    planCheckoutUnavailable: checkoutNotice === "plan-unavailable",
     portalUnavailable: portalNotice === "unavailable",
     hasPortal: Boolean(billing.dodoCustomerId),
   };
@@ -78,6 +80,25 @@ export default function BillingRoute() {
             A Dodo checkout is already open for this account. Finish that checkout, or wait until
             that payment link expires before starting a new one. If you need help, email{" "}
             <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email}.
+          </p>
+        </div>
+      ) : null}
+
+      {data.agencyCheckoutHeld ? (
+        <div className="f9-message is-error">
+          <p>
+            Agency checkout is held until nightly monitoring fan-out is proven on our internal
+            workspace. Scout and Starter are available now. Email{" "}
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need Agency capacity before then.
+          </p>
+        </div>
+      ) : null}
+
+      {data.planCheckoutUnavailable ? (
+        <div className="f9-message is-error">
+          <p>
+            That plan checkout is temporarily unavailable while billing finishes setup. Email{" "}
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email} and we will help.
           </p>
         </div>
       ) : null}

@@ -18,18 +18,22 @@ export const meta: MetaFunction = () =>
   });
 
 export async function loader({ context }: LoaderFunctionArgs) {
+  const { getEnv } = await import("~/lib/context.server");
+  const { summarizeCommercialLaunch } = await import("~/lib/commercial-launch-gate.server");
   const cloudflare = context.cloudflare as { env?: unknown } | undefined;
+  const env = cloudflare?.env as import("~/lib/env.server").AppEnv | undefined;
 
   return {
     generatedAt: new Date().toISOString(),
     appServed: Boolean(cloudflare?.env),
+    commercialLaunch: env ? summarizeCommercialLaunch(env) : null,
     evidence: null,
     evidenceUnavailableReason: "private_canary_only",
   };
 }
 
 export default function StatusRoute() {
-  useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
 
   return (
     <PublicDocShell
@@ -54,6 +58,27 @@ export default function StatusRoute() {
           <div>
             <dt>Email delivery</dt>
             <dd>Digest and alert emails are available for eligible accounts.</dd>
+          </div>
+        </dl>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Commercial availability">
+        <dl className="proof-trail-list">
+          <div>
+            <dt>Scout</dt>
+            <dd>{data.commercialLaunch?.scoutSaleOpen ? "Available for checkout" : "Held — billing configuration"}</dd>
+          </div>
+          <div>
+            <dt>Starter</dt>
+            <dd>{data.commercialLaunch?.starterSaleOpen ? "Available for checkout" : "Held — billing configuration"}</dd>
+          </div>
+          <div>
+            <dt>Agency</dt>
+            <dd>
+              {data.commercialLaunch?.agencySaleOpen
+                ? "Available for checkout"
+                : "Held until monitoring fan-out is proven on the internal workspace"}
+            </dd>
           </div>
         </dl>
       </PublicDocBlock>
