@@ -52,7 +52,7 @@ Integration branch: `cursor/ga-final-integration-20260624`
 |--------|--------|-------|
 | A Billing | PENDING | Canaries pass; verify SKU compat + sale UI |
 | B Monitoring | PENDING | Inline mode; fan-out ladder not run |
-| C Delight | PENDING | Slack still in public pricing copy |
+| C Delight | DONE | Slack removed from public GA offer; UI hidden |
 | D Ops | PENDING | Email canary pass; UptimeRobot owner gate |
 | E Red team | WAITING | After integration |
 | Integration | PENDING | Merge order: A→B→C→D |
@@ -72,4 +72,4 @@ Scheduled monitoring does NOT debit evidence checks.
 
 **GA LIVE — SCOUT AND STARTER FOR SALE, AGENCY HELD**
 
-Billing + email canaries pass on deployed runtime. Agency held for fan-out proof. Slack must be removed from public GA offer before full Starter positioning is truthful.
+Billing + email canaries pass on deployed runtime. Agency held for fan-out proof. Slack removed from public GA offer with server-side GA flag enforcement.

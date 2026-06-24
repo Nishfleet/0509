@@ -4,7 +4,7 @@ Last checked: 2026-06-24
 
 ## Current Verdict
 
-Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green, health is 200, D1 backups validate, and external uptime monitoring is owner-verified. Slack is **optional** — advertised on Starter and Agency but not a GA launch blocker. Scout is email-only.
+Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green, health is 200, D1 backups validate, and external uptime monitoring is owner-verified. Slack is **not offered at GA** — backend code stays dormant and launch readiness surfaces Slack only as optional advisories. Scout and Starter are email-only at GA.
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
@@ -52,16 +52,16 @@ Expected: `launch readiness proof canary: ok` with at least one email delivery a
 
 The read-only `/api/launch-readiness` endpoint blocks on `no_recent_email_delivery_attempt` and `no_recent_email_sent` when production has no recent email sends in the last 36 hours.
 
-## Slack Posture (optional, not GA-blocking)
+## Slack Posture (dormant at GA)
 
-Slack is available on Starter and Agency. Production may report advisories:
+Slack delivery is not part of the GA customer offer. Production may still report advisories for future verification:
 
 - `no_slack_delivery_target`
 - `no_recent_slack_sent`
 
 These appear in the `advisories` array on `/api/launch-readiness` and do **not** fail `npm run canary:prod` or Scout GA.
 
-To verify Slack end-to-end before claiming it as proven on paid tiers:
+To verify Slack end-to-end before re-enabling it on paid tiers:
 
 ```bash
 # After adding a Slack webhook in /app/sources for the canary workspace:

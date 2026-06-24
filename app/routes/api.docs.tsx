@@ -75,10 +75,10 @@ Authorization: Bearer f9_live_...
           </div>
           <div>
             <dt>Digests</dt>
-            <dd>GET /api/v1/digests/&lbrace;digestId&rbrace;?format=slack</dd>
+            <dd>GET /api/v1/digests/&lbrace;digestId&rbrace;?format=json</dd>
           </div>
         </dl>
-        <p>Supported formats are JSON, CSV, and Slack-ready markdown where the resource supports them.</p>
+        <p>Supported formats are JSON and CSV where the resource supports them.</p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Account actions">
@@ -94,7 +94,7 @@ Authorization: Bearer f9_live_...
 
       <PublicDocBlock title="Recipes">
         <ul className="f9-doc-list">
-          <li>Export a watchlist as Slack markdown before a weekly sales meeting.</li>
+          <li>Export a watchlist as CSV before a weekly sales meeting.</li>
           <li>Pull a board as JSON into a team research note.</li>
           <li>Create a counter-move brief and save account context for future reports.</li>
         </ul>
