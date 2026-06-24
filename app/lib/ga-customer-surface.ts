@@ -5,3 +5,7 @@
 export function isSlackDeliveryCustomerFacing() {
   return false;
 }
+
+export function slackDeliveryUnavailableMessage() {
+  return "Slack delivery is not available at general availability yet. Use email delivery.";
+}

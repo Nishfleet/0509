@@ -200,6 +200,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "save-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const slackGate = await requireWorkspacePlanFeature(env, workspaceUserId, "slack_delivery");
     if (!slackGate.ok) {
@@ -303,6 +309,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "pause-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
     const { pauseSlackWebhookTarget } = await import("~/lib/slack.server");
     const targetId = String(formData.get("slackTargetId") ?? "");
     const paused = await pauseSlackWebhookTarget(env, {
@@ -317,6 +329,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "resume-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
     const { resumeSlackWebhookTarget } = await import("~/lib/slack.server");
     const targetId = String(formData.get("slackTargetId") ?? "");
     const resumed = await resumeSlackWebhookTarget(env, {

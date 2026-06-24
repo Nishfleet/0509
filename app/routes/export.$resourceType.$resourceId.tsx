@@ -23,6 +23,10 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const resourceType = params.resourceType;
   const resourceId = params.resourceId;
   const format = exportFormatForRequest(request);
+  const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+  if (format === "slack" && !isSlackDeliveryCustomerFacing()) {
+    throw new Response("Slack exports are not available at general availability yet.", { status: 403 });
+  }
   const exportGate = await requireExportFeature(env, workspaceUserId, format);
   if (!exportGate.ok) {
     throw exportGate.response;
