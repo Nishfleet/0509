@@ -49,3 +49,7 @@ Checkout SKUs and amounts are unconfigured until Dodo products are wired. Unknow
 Scheduled monitoring is included. One evidence check = one successful, unique, newly produced landing-page proof capture.
 
 Customer copy: see `EVIDENCE_USAGE_CUSTOMER_COPY` in `app/lib/pricing.ts`.
+
+## Production status (2026-06-24)
+
+Entitlement catalog and evidence usage accounting are live in production (PR #234). Dodo product IDs for v1 plan and top-up SKUs remain owner-configured; checkout rejects unmapped SKUs.

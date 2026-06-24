@@ -136,8 +136,17 @@ Branch: `cursor/plan-entitlements-topups-no-prices-20260623`
 | Plan-aware monitoring priority | implemented | Queue-ranked slot claims + `queue_priority` (`0052`); fan-out still inline |
 | Server feature gates | implemented | `plan-feature-gate.server.ts` on API/MCP/exports/shares/reports |
 | Pricing/checkout | gated | Checkout disabled when SKU/provider price config missing |
-| Remote D1 / Dodo / deploy | **NOT RUN** | Migrations `0049`–`0053` local only |
+| Remote D1 / Dodo / deploy | **released 2026-06-24** | PR #234 merge `cd3e58f`; remote migrations `0049`–`0053` applied; Worker `50328480-ba13-4acf-8b1e-65ffa2185bf5`; `MONITORING_FANOUT_MODE=inline` |
+| New SKU Dodo product/price wiring | **pending** | Catalog + fail-closed checkout live; owner must map env product IDs before top-up / v1 plan SKUs accept checkout |
 
 Docs: `docs/plan-catalog.md`, `docs/billing-sku-catalog.md`, `docs/evidence-usage-accounting.md`, `docs/top-up-billing.md`, `docs/plan-entitlement-audit.md`.
+
+## Production release — plan entitlements (2026-06-24)
+
+- Merged PR #234 to `main` (`cd3e58f`); feature head `6fa29f3`.
+- Pre-deploy Worker: `ab521a5e-ae73-4366-af9a-cc48c3526e22` → post-deploy `50328480-ba13-4acf-8b1e-65ffa2185bf5`.
+- Remote D1: migrations `0049`–`0053` applied; ledger shows no pending migrations.
+- Smoke: `/api/health` OK; marketing home 200; `/auth/login` + `/auth/signup` 200; `/api/pricing-preview` 200 (legacy plan preview); invalid share token 404.
+- Commercial gate: nine v1 SKUs in code catalog; checkout remains fail-closed when SKU env mapping absent.
 
 Top-up spend after cancel: retained but not spendable without active paid plan. Scheduled monitoring does not consume evidence checks.
