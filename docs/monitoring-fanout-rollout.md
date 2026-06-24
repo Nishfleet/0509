@@ -85,3 +85,5 @@ Branch `cursor/plan-entitlements-topups-no-prices-20260623` adds `watchlist_run.
 | Scout | Monday only | `2` |
 
 Top-up balance does **not** alter cadence or priority. Fan-out remains **dormant** (`MONITORING_FANOUT_MODE=inline`); priority fields are schema-ready for activation ladder above.
+
+**Slot acquisition (final audit):** `claimMonitoringConcurrencySlot()` only succeeds when the run is within the top `MONITORING_FANOUT_MAX_INFLIGHT` ranked pending runs (`selectRankedEligibleOrchestratedRuns`). Ordering: effective priority (with 30-minute aging boosts), scheduled slot, `queued_at`, run id. A run cannot hold more than one slot simultaneously. Scout runs are excluded on non-Mondays.

@@ -1,29 +1,33 @@
-# Top-Up Billing
+# Top-up Billing
 
-## Products (SKU identity only)
+## SKUs (quantities only)
 
-| Pack | SKU | Checks |
-|------|-----|--------|
-| Burst | `burst_500_v1` | 500 |
-| Campaign | `campaign_2000_v1` | 2,000 |
-| Scale | `scale_7500_v1` | 7,500 |
+| Slug | Checks |
+|------|--------|
+| `burst_500_v1` | 500 |
+| `campaign_2000_v1` | 2,000 |
+| `scale_7500_v1` | 7,500 |
 
-## Checkout
+Prices remain unconfigured in Dodo until owner activates checkout.
 
-- Route: `POST /api/billing/dodo/checkout` with `sku=burst_500_v1` (or legacy `bundle=proof_500` mapped server-side)
-- Workspace owner authorization required for top-ups
-- Checkout blocked when provider product ID is unset (503)
+## Grant semantics
 
-## Webhook grant
+- Grants are immutable; provider payment id is unique per grant.
+- No expiry timestamp — ownership survives cancellation, price changes, and SKU retirement.
+- Spending requires an active Scout, Starter, or Agency plan (`topUpSpendRequiresActivePaidPlan`).
+- Canceled workspaces retain balance; UI explains purchased checks return when a paid plan is active.
 
-- `extractDodoProofCreditGrant()` resolves product ID → SKU → quantity
-- `applyDodoProofCreditGrantWithLedger()` inserts into `evidence_top_up_grant` + webhook ledger in one batch
-- Top-up webhooks **never** change `user_plan`
+## Ledger
 
-## What top-ups do not change
+- Consumption, release, refund, and adjustments append to `evidence_top_up_ledger_entry`.
+- `quantity_remaining` on the grant row is a cache updated in the same transaction as ledger writes.
+- Refunds use `applyTopUpRefundAdjustment()` with idempotent keys.
 
-Plan, watchlist/board limits, seats, scan cadence, queue priority, reports, branding, delivery, API/MCP entitlements.
+## Legacy cutover
 
-## Activation gate
+- `migrateLegacyTopUpCreditsIfNeeded()` imports unmigrated `proof_usage_credit` rows once.
+- Migrated legacy ids are excluded from legacy fallback reads.
 
-This task does **not** configure live Dodo prices or products. Checkout remains disabled until commercial configuration is verified.
+## Webhook path
+
+- `applyDodoProofCreditGrantWithLedger()` in `data.server.ts` inserts grants idempotently by `provider_payment_id`.

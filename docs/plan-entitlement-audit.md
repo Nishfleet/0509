@@ -1,76 +1,38 @@
-# Plan Entitlement Audit — 2026-06-23
+# Plan Entitlement Audit — Final adversarial pass (2026-06-24)
 
-Baseline branch: `main` @ `b640f1b` (post fan-out dormant deploy).
-Implementation branch: `cursor/plan-entitlements-topups-no-prices-20260623`.
+Branch: `cursor/plan-entitlements-topups-no-prices-20260623` (PR #234).
 
-## Sources inspected
+## Resolved merge blockers
 
-| Area | Primary files |
+| Area | Final behavior |
 |------|----------------|
-| Plan limits | `app/lib/plan.server.ts` (`PLAN_LIMITS`) |
-| Pricing copy | `app/lib/pricing.ts`, `app/routes/marketing.tsx` |
-| Dodo mapping | `app/lib/dodo-pricing.server.ts`, `app/lib/dodo-billing.server.ts` |
-| Checkout | `app/routes/api.billing.dodo.checkout.ts` |
-| Proof / evidence | `app/lib/proof-policy.server.ts`, `app/lib/monitoring.server.ts` |
-| Top-up credits | `migrations/0014_dodo_usage_bundles.sql`, `proof_usage_credit` |
-| Monitoring cadence | `workers/schedule.ts`, `listActiveWatchlists`, `shouldIncludeScoutInScheduledMonitoring` |
-| Queue order | `listActiveWatchlists` `ORDER BY CASE plan` |
-| Seats | `app/lib/workspace.server.ts` (`AGENCY_SEAT_LIMIT = 3`) |
-| Digests | `planAllowsDigestCadence`, `PLAN_LIMITS.digestCadence` |
-| Tests | `tests/plan.server.test.ts`, `tests/pricing.test.ts`, `tests/plan-monitoring.test.ts` |
+| Monthly periods | Subscription-anchored via `evidence_entitlement_anchor` (`0053`); no UTC calendar reset |
+| Top-up ledger | Immutable grants; `evidence_top_up_ledger_entry` authoritative; `quantity_remaining` cache |
+| Legacy credits | One-time migration via `proof_usage_credit_migration`; no dual-count fallback |
+| Top-up spend | Retained after cancel; spend requires active paid plan |
+| Feature gates | `plan-feature-gate.server.ts` on API, MCP, exports, shares, reports, team, sources |
+| Queue priority | Ranked eligibility before concurrency slot claim; aging prevents starvation |
+| Evidence checks | Scheduled monitoring free; successful unique proof capture debits allowance |
+| Prices | Unconfigured; no hardcoded monetary values in entitlements |
 
-## Discrepancies (pre-implementation)
+## Feature enforcement matrix (server)
 
-### Entitlements vs marketing
+| Feature | Scout | Starter | Agency | Enforced at |
+|---------|:-----:|:-------:|:------:|-------------|
+| `api_access` | — | — | ✓ | `api.v1.*`, sources API key create |
+| `mcp_access` | — | — | ✓ | `api.mcp` action |
+| `mcp_account_actions` | — | — | ✓ | `api.v1.actions`, MCP write tools |
+| `export_csv/json/slack_ready` | — | ✓ | ✓ | `/export/*`, `/api/v1/*`, MCP read exports |
+| `share_links` | — | — | ✓ | watchlists/collections/digests/reports + agent |
+| `client_reports` / `pdf_reports` | — | — | ✓ | `/app/reports` |
+| `slack_delivery` | — | ✓ | ✓ | sources + agent delivery actions |
+| `high_priority_alerts` | — | ✓ | ✓ | delivery toggles when enabling instant |
+| `team_workspace` | — | — | ✓ | `/app/team`, workspace invites |
+| Watchlist/board limits | limit | limit | limit | `checkPlanLimit` |
 
-| Item | Marketing / spec | Server enforcement | Action |
-|------|------------------|-------------------|--------|
-| Starter digests | Daily + weekly | `digestCadence: "weekly"` only — daily digests blocked | Fix in entitlement catalog (`daily_and_weekly`) |
-| Scout scans | Monday scheduled | Correct via `includeScout` on Monday 04:00 cron | Preserve |
-| Agency priority | First in nightly queue | SQL `ORDER BY` agency→starter→scout | Extend with persisted `queue_priority` on runs |
-| Feature flags | Many capabilities listed | No central `canUsePlanFeature`; scattered `plan ===` checks | Centralize |
+## Not activated in this pass
 
-### Evidence / usage accounting
-
-| Item | Spec | Current behavior | Action |
-|------|------|------------------|--------|
-| Monthly included allowance | Calendar/monthly period, no rollover | Rolling 30-day window (`startOfRollingProofWindowIso`) | Replace with `evidence_usage_period` |
-| Annual billing | Monthly buckets, not upfront year | Same rolling window as monthly | Monthly UTC periods regardless of billing interval |
-| Top-up expiry | Never expire | `proof_usage_credit.expires_at` + 30-day grant in webhook | New `evidence_top_up_grant` ledger |
-| Consumption order | Included first, then top-up | Included + expiring credits summed into one cap | Reservation service with ordered pools |
-| Billable unit | Evidence check | Successful `proof_capture` rows counted | Centralize in `evidence-usage-policies.server.ts` |
-| Scheduled scan vs check | Unresolved | Scheduled scans do not directly increment proof_capture; proof policy gates captures | Document; no new charge without policy change |
-
-### Billing / SKU
-
-| Item | Spec | Current behavior | Action |
-|------|------|------------------|--------|
-| SKU identity | Versioned slugs (`burst_500_v1`, etc.) | `proof_500` bundle slugs | `billing-sku-catalog.ts` |
-| Client authority | SKU slug only | `plan`, `cycle`, `bundle` form fields | Accept `sku`; map legacy fields to SKU |
-| Credit quantity | Server-derived from SKU | `usageBundleCreditCount` server-side; metadata also sends `credits` | Remove metadata credits; webhook uses product ID → SKU |
-| Prices in code | None | `pricing.ts` uses "price loading" placeholders; Dodo preview for display | Keep; no hardcoded amounts |
-| Checkout when unconfigured | Disabled | 503 if product ID missing | Unchanged + launch-readiness listing |
-
-### Seats (Agency)
-
-- `AGENCY_SEAT_LIMIT = 3`
-- Invite cap: `existing.length >= AGENCY_SEAT_LIMIT - 1` → owner + up to **2 active/invited teammates** = **3 humans total** (owner occupies one seat; UI: `seatsUsed = members.length + 1`).
-- Marketing: "3 team seats — teammates share…" — **convention: 3 total seats including owner** (not owner + 3 teammates).
-- **Owner decision:** none required unless product intends owner + 3 teammates (would be 4 humans). Current code and UI are consistent at 3 total.
-
-### Unresolved business rules (documented, not invented)
-
-See `app/lib/evidence-usage-policies.server.ts`:
-
-1. Top-up spend after subscription cancellation — preserve legacy credit visibility until owner policy.
-2. Partial top-up refund/chargeback — idempotent adjustment ledger; operator review on ambiguity.
-3. Top-up transfer on workspace ownership change — credits stay on workspace user_id until policy.
-4. Workspace merge — not implemented; credits stay on source workspace.
-5. Whether every scheduled monitoring run consumes an evidence check — **no** today; only billable proof captures count.
-
-## Intentionally unchanged in this task
-
-- No monetary prices finalized or hardcoded.
-- No remote migrations, deploy, or live Dodo mutation.
-- No reduction of numeric entitlements (watchlist/board/check limits match spec).
-- Monitoring fan-out remains `inline` in production config.
+- Remote D1 migrations `0049`–`0053`
+- Dodo product/price configuration
+- Checkout activation
+- Monitoring fan-out (`MONITORING_FANOUT_MODE` remains `inline`)
