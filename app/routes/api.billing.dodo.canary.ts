@@ -16,8 +16,8 @@ interface PlanGrantRow {
 }
 
 interface CreditGrantRow {
-  credits: number;
-  expires_at: string;
+  quantity_granted: number;
+  status: string;
   granted_at: string;
   provider_payment_id: string;
 }
@@ -184,8 +184,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const proofCreditsGranted =
     creditWebhook.ok &&
     creditGrant?.provider_payment_id === creditPaymentId &&
-    Number(creditGrant.credits) === creditCount &&
-    isCurrentActiveCreditGrant(creditGrant, nowIso);
+    Number(creditGrant.quantity_granted) === creditCount &&
+    isCurrentActiveTopUpGrant(creditGrant);
   const [planCleanupOk, creditCleanupOk] = await Promise.all([
     planGrant
       ? cleanupCanaryPlanGrant(
@@ -217,7 +217,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         watchlistCleanupOk: planCleanupOk,
         proofCreditsGranted,
         proofCreditCleanupOk: creditCleanupOk,
-        credits: creditGrant?.credits ?? 0,
+        credits: creditGrant ? Number(creditGrant.quantity_granted) : 0,
       },
     },
     {
@@ -306,9 +306,9 @@ async function getPlanGrant(env: AppEnv, userId: string, providerPaymentId: stri
 
 async function getCreditGrant(env: AppEnv, userId: string, providerPaymentId: string) {
   const result = await env.DB?.prepare(`
-      SELECT credits, expires_at, granted_at, provider_payment_id
-      FROM proof_usage_credit
-      WHERE user_id = ?
+      SELECT quantity_granted, status, granted_at, provider_payment_id
+      FROM evidence_top_up_grant
+      WHERE workspace_user_id = ?
         AND provider_payment_id = ?
       LIMIT 1
     `).bind(userId, providerPaymentId).all<CreditGrantRow>();
@@ -444,27 +444,19 @@ async function restoreWatchlistStateSnapshot(
 async function cleanupCanaryCreditGrant(env: AppEnv, userId: string, providerPaymentId: string) {
   try {
     await env.DB?.prepare(`
-        DELETE FROM proof_usage_credit
-        WHERE user_id = ?
+        DELETE FROM evidence_top_up_grant
+        WHERE workspace_user_id = ?
           AND provider_payment_id = ?
       `).bind(userId, providerPaymentId).run();
-    return true;
+    const remaining = await getCreditGrant(env, userId, providerPaymentId);
+    return !remaining;
   } catch {
     return false;
   }
 }
 
-function isCurrentActiveCreditGrant(grant: CreditGrantRow, nowIso: string) {
-  const now = Date.parse(nowIso);
-  const grantedAt = Date.parse(grant.granted_at);
-  const expiresAt = Date.parse(grant.expires_at);
-  return (
-    Number.isFinite(now) &&
-    Number.isFinite(grantedAt) &&
-    Number.isFinite(expiresAt) &&
-    grantedAt >= now &&
-    expiresAt > now
-  );
+function isCurrentActiveTopUpGrant(grant: CreditGrantRow) {
+  return grant.status === "active" && Number(grant.quantity_granted) > 0;
 }
 
 function planForCanary(value: string | null): PricingPlanSlug {
