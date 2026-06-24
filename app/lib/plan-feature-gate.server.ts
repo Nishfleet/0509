@@ -27,7 +27,30 @@ export const ROUTE_FEATURE_REQUIREMENTS = [
   { routeId: "app.reports", feature: "client_reports" as PlanFeature },
   { routeId: "app.team", feature: "team_workspace" as PlanFeature },
   { routeId: "team.accept", feature: "team_workspace" as PlanFeature },
+  { routeId: "app.watchlists", action: "save-delivery-config", feature: "slack_delivery" as PlanFeature },
+  { routeId: "app.watchlists", action: "save-delivery-config", feature: "high_priority_alerts" as PlanFeature },
+  { routeId: "app.watchlists", action: "add-delivery-target", feature: "slack_delivery" as PlanFeature },
+  { routeId: "app.watchlists", action: "send-test-email", feature: "email_delivery" as PlanFeature },
+  { routeId: "app.sources", action: "save-slack-webhook", feature: "slack_delivery" as PlanFeature },
+  { routeId: "app.account", action: "save-report-branding", feature: "agency_branding" as PlanFeature },
+  { routeId: "share.$token", feature: "agency_branding" as PlanFeature },
+  { routeId: "app.reports", surface: "preparedBy", feature: "agency_branding" as PlanFeature },
+  { routeId: "delivery.server", surface: "deliverWeeklyDigest", feature: "slack_delivery" as PlanFeature },
+  { routeId: "delivery.server", surface: "deliverWatchlistAlerts", feature: "high_priority_alerts" as PlanFeature },
 ] as const;
+
+export interface DeliveryConfigSaveInput {
+  instantEnabled?: boolean;
+  slackEnabled?: boolean;
+  emailEnabled?: boolean;
+  channel?: string;
+}
+
+export interface DeliveryConfigShape {
+  instantEnabled: boolean;
+  slackEnabled: boolean;
+  emailEnabled: boolean;
+}
 
 export function exportFormatFeature(format: ExportFormat): PlanFeature {
   if (format === "csv") return "export_csv";
@@ -118,4 +141,59 @@ function readBoolean(input: Record<string, unknown>, key: string) {
 function readString(input: Record<string, unknown>, key: string) {
   const value = input[key];
   return typeof value === "string" ? value.trim() : "";
+}
+
+export function planFeatureDeniedActionResult(feature: PlanFeature, plan: PlanFamily) {
+  return {
+    ok: false as const,
+    error: "plan_gated" as const,
+    feature,
+    plan,
+    message: "This capability is not included in your current plan.",
+  };
+}
+
+export async function requireDeliveryConfigSave(
+  env: AppEnv,
+  workspaceUserId: string,
+  input: DeliveryConfigSaveInput,
+) {
+  const checks: Array<[boolean, PlanFeature]> = [
+    [Boolean(input.slackEnabled) || input.channel === "slack", "slack_delivery"],
+    [Boolean(input.instantEnabled), "high_priority_alerts"],
+    [Boolean(input.emailEnabled), "email_delivery"],
+  ];
+
+  for (const [enabled, feature] of checks) {
+    if (!enabled) continue;
+    const gate = await requireWorkspacePlanFeature(env, workspaceUserId, feature);
+    if (!gate.ok) {
+      return { ok: false as const, feature, plan: gate.plan };
+    }
+  }
+
+  return { ok: true as const, plan: await getUserPlan(env, workspaceUserId) };
+}
+
+export function applyDeliveryEntitlements<T extends DeliveryConfigShape>(
+  plan: PlanFamily,
+  config: T,
+): T {
+  return {
+    ...config,
+    slackEnabled: config.slackEnabled && canUsePlanFeature(plan, "slack_delivery"),
+    instantEnabled: config.instantEnabled && canUsePlanFeature(plan, "high_priority_alerts"),
+    emailEnabled: config.emailEnabled && canUsePlanFeature(plan, "email_delivery"),
+  };
+}
+
+export async function resolveWorkspacePreparedBy(env: AppEnv, workspaceUserId: string) {
+  const plan = await getUserPlan(env, workspaceUserId);
+  if (!canUsePlanFeature(plan, "agency_branding")) {
+    return null;
+  }
+
+  const { getWorkspaceBranding } = await import("~/lib/data.server");
+  const branding = await getWorkspaceBranding(env, workspaceUserId);
+  return branding.brandName;
 }
