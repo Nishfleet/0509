@@ -11,6 +11,17 @@ export async function deliverPresenceDigestForUser(
   userEmail: string,
   options: { lookbackHours?: number } = {},
 ) {
+  const digestRollout = env.PRESENCE_DIGEST_ROLLOUT?.trim() ?? "disabled";
+  if (digestRollout === "disabled") {
+    return { delivered: false, reason: "digest_disabled" as const };
+  }
+
+  const { evaluatePresenceWorkspaceAccess } = await import("~/lib/presence-internal-access.server");
+  const access = await evaluatePresenceWorkspaceAccess(env, userId);
+  if (!access.allowed) {
+    return { delivered: false, reason: "workspace_gated" as const };
+  }
+
   const plan = await getUserPlan(env, userId);
   if (!canUsePresenceFeature(plan, "presence_digest_alerts")) {
     return { delivered: false, reason: "plan_gated" as const };

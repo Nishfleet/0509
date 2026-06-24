@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { countActivePilotWorkspaces, isPilotWorkspaceEnrolled } from "~/lib/presence-pilot-access.server";
 import type { ConnectorRolloutState } from "~/lib/presence-types";
 
 export interface PresenceWorkspaceAccessResult {
@@ -23,10 +24,10 @@ export function presenceWebsiteRolloutState(env: AppEnv): ConnectorRolloutState 
   return parseRolloutState(env.PRESENCE_WEBSITE_ROLLOUT, "disabled");
 }
 
-export function evaluatePresenceWorkspaceAccess(
+export async function evaluatePresenceWorkspaceAccess(
   env: AppEnv,
   workspaceUserId: string,
-): PresenceWorkspaceAccessResult {
+): Promise<PresenceWorkspaceAccessResult> {
   const rolloutState = presenceWebsiteRolloutState(env);
 
   if (rolloutState === "disabled") {
@@ -56,6 +57,30 @@ export function evaluatePresenceWorkspaceAccess(
         reasonMessage: "Presence tracking is limited to the internal pilot workspace.",
       };
     }
+    return {
+      allowed: true,
+      rolloutState,
+      reasonCode: null,
+      reasonMessage: null,
+    };
+  }
+
+  if (rolloutState === "pilot") {
+    const enrolled = await isPilotWorkspaceEnrolled(env, workspaceUserId);
+    if (!enrolled) {
+      return {
+        allowed: false,
+        rolloutState,
+        reasonCode: "pilot_workspace_only",
+        reasonMessage: "Presence website tracking is in a controlled pilot — access is invite-only.",
+      };
+    }
+    return {
+      allowed: true,
+      rolloutState,
+      reasonCode: null,
+      reasonMessage: null,
+    };
   }
 
   return {
@@ -66,6 +91,10 @@ export function evaluatePresenceWorkspaceAccess(
   };
 }
 
-export function presenceNavVisible(env: AppEnv, workspaceUserId: string) {
-  return evaluatePresenceWorkspaceAccess(env, workspaceUserId).allowed;
+export async function presenceNavVisible(env: AppEnv, workspaceUserId: string) {
+  return (await evaluatePresenceWorkspaceAccess(env, workspaceUserId)).allowed;
+}
+
+export async function hasApprovedPilotWorkspace(env: AppEnv) {
+  return (await countActivePilotWorkspaces(env)) > 0;
 }

@@ -19,11 +19,14 @@ import {
   listPresenceItems,
   listSourceTargetsForEntity,
   listTrackedEntities,
+  reconcilePresenceItemsAfterPoll,
   softDeleteTrackedEntity,
   upsertPollCursor,
   upsertPresenceItems,
   upsertSourceTarget,
 } from "~/lib/presence-data.server";
+import { presenceUrlHash } from "~/lib/presence-hash";
+import { connectorOperationalForPolling } from "~/lib/presence-access-gates.server";
 import { getUserPlan } from "~/lib/plan.server";
 import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
 
@@ -39,7 +42,7 @@ export class PresenceServiceError extends Error {
 }
 
 export async function requirePresenceWorkspaceAccess(env: AppEnv, workspaceUserId: string) {
-  const access = evaluatePresenceWorkspaceAccess(env, workspaceUserId);
+  const access = await evaluatePresenceWorkspaceAccess(env, workspaceUserId);
   if (!access.allowed) {
     throw new PresenceServiceError(
       access.reasonCode ?? "presence_gated",
@@ -203,8 +206,28 @@ export async function pollPresenceSourceTarget(
   });
 
   const now = new Date().toISOString();
+  const priorCursor = cursor?.cursor ?? {};
+
+  let upsertStats = { inserted: 0, updated: 0 };
+  let reconcileStats = { tombstoned: 0 };
+  if (pollResult.ok && pollResult.items.length > 0) {
+    upsertStats = await upsertPresenceItems(env, { sourceTarget: target, items: pollResult.items });
+    const completeSnapshot = Boolean(pollResult.cursor?.completeSnapshot);
+    if (completeSnapshot) {
+      const observedUrlHashes = await Promise.all(
+        pollResult.items.map((item) => presenceUrlHash(item.canonicalUrl)),
+      );
+      reconcileStats = await reconcilePresenceItemsAfterPoll(env, {
+        sourceTarget: target,
+        observedUrlHashes,
+        completeSnapshot,
+      });
+    }
+  }
+
+  const syncCycleCount = Number(priorCursor.syncCycleCount ?? 0) + (pollResult.ok ? 1 : 0);
   await upsertPollCursor(env, target.id, {
-    cursor: pollResult.cursor ?? cursor?.cursor ?? {},
+    cursor: { ...(pollResult.cursor ?? priorCursor), syncCycleCount },
     etag: pollResult.etag ?? cursor?.etag ?? null,
     lastModified: pollResult.lastModified ?? cursor?.lastModified ?? null,
     lastPolledAt: now,
@@ -213,28 +236,37 @@ export async function pollPresenceSourceTarget(
     lastErrorMessage: pollResult.ok ? null : pollResult.errorMessage ?? null,
   });
 
-  let upsertStats = { inserted: 0, updated: 0 };
-  if (pollResult.ok && pollResult.items.length > 0) {
-    upsertStats = await upsertPresenceItems(env, { sourceTarget: target, items: pollResult.items });
-  }
-
-  return { pollResult, upsertStats, target, entity };
+  return { pollResult, upsertStats, reconcileStats, target, entity };
 }
 
 const PRESENCE_POLL_BUDGET_UNITS = 40;
 
 export async function runPresencePollingBatch(env: AppEnv, options: { limit?: number } = {}) {
   const { listActiveSourceTargetsForPolling } = await import("~/lib/presence-data.server");
+  const { getTrackedEntity } = await import("~/lib/presence-data.server");
   const targets = await listActiveSourceTargetsForPolling(env, options.limit ?? 20);
   let spentUnits = 0;
-  const results: Array<{ targetId: string; ok: boolean; errorCode?: string }> = [];
+  let skippedRollout = 0;
+  const results: Array<{ targetId: string; ok: boolean; errorCode?: string; syncCycleCount?: number }> = [];
 
   for (const target of targets) {
     if (spentUnits >= PRESENCE_POLL_BUDGET_UNITS) break;
+    const entity = await getTrackedEntity(env, target.userId, target.trackedEntityId);
+    if (!entity) continue;
+    if (!(await connectorOperationalForPolling(env, target.connectorId, entity.trackingMode, target.userId))) {
+      skippedRollout += 1;
+      continue;
+    }
     try {
       const { pollResult } = await pollPresenceSourceTarget(env, target.userId, target.id);
       spentUnits += pollResult.costUnits ?? 1;
-      results.push({ targetId: target.id, ok: pollResult.ok, errorCode: pollResult.errorCode });
+      const cursor = pollResult.cursor as Record<string, unknown> | undefined;
+      results.push({
+        targetId: target.id,
+        ok: pollResult.ok,
+        errorCode: pollResult.errorCode,
+        syncCycleCount: typeof cursor?.syncCycleCount === "number" ? cursor.syncCycleCount : undefined,
+      });
     } catch (error) {
       results.push({
         targetId: target.id,
@@ -244,7 +276,7 @@ export async function runPresencePollingBatch(env: AppEnv, options: { limit?: nu
     }
   }
 
-  return { spentUnits, results };
+  return { spentUnits, skippedRollout, polled: results.length, results };
 }
 
 export async function getPresenceWorkspaceSnapshot(env: AppEnv, userId: string) {

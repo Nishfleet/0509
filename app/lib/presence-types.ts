@@ -85,6 +85,7 @@ export interface PresenceItemRecord {
   contentHash: string;
   raw: Record<string, unknown> | null;
   isTombstone: boolean;
+  revision: number;
   createdAt: string;
 }
 

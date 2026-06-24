@@ -50,16 +50,16 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
   }
 }
 
-export function evaluateConnectorAccessGate(
+export async function evaluateConnectorAccessGate(
   env: AppEnv,
   connectorId: PresenceConnectorId,
   trackingMode: PresenceTrackingMode,
   workspaceUserId?: string,
-): ConnectorAccessGateResult {
+): Promise<ConnectorAccessGateResult> {
   const rolloutState = connectorRolloutFromEnv(env, connectorId);
 
   if (connectorId === "website" && workspaceUserId) {
-    const workspaceAccess = evaluatePresenceWorkspaceAccess(env, workspaceUserId);
+    const workspaceAccess = await evaluatePresenceWorkspaceAccess(env, workspaceUserId);
     if (!workspaceAccess.allowed) {
       return {
         allowed: false,
@@ -114,13 +114,13 @@ export function evaluateConnectorAccessGate(
   };
 }
 
-export function connectorOperationalForPolling(
+export async function connectorOperationalForPolling(
   env: AppEnv,
   connectorId: PresenceConnectorId,
   trackingMode: PresenceTrackingMode,
   workspaceUserId?: string,
-): boolean {
-  const gate = evaluateConnectorAccessGate(env, connectorId, trackingMode, workspaceUserId);
+): Promise<boolean> {
+  const gate = await evaluateConnectorAccessGate(env, connectorId, trackingMode, workspaceUserId);
   if (!gate.allowed) {
     return false;
   }

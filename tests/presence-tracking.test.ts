@@ -48,8 +48,8 @@ describe("presence entitlements", () => {
 });
 
 describe("presence access gates", () => {
-  it("defaults website rollout to disabled without env", () => {
-    const gate = evaluateConnectorAccessGate(
+  it("defaults website rollout to disabled without env", async () => {
+    const gate = await evaluateConnectorAccessGate(
       { ...baseEnv, PRESENCE_WEBSITE_ROLLOUT: undefined },
       "website",
       "competitor",
@@ -58,18 +58,18 @@ describe("presence access gates", () => {
     expect(gate.rolloutState).toBe("disabled");
   });
 
-  it("allows website internal rollout only for internal workspace", () => {
-    const gate = evaluateConnectorAccessGate(baseEnv, "website", "competitor", "internal-ws");
+  it("allows website internal rollout only for internal workspace", async () => {
+    const gate = await evaluateConnectorAccessGate(baseEnv, "website", "competitor", "internal-ws");
     expect(gate.allowed).toBe(true);
     expect(gate.rolloutState).toBe("internal");
 
-    const blocked = evaluateConnectorAccessGate(baseEnv, "website", "competitor", "customer-ws");
+    const blocked = await evaluateConnectorAccessGate(baseEnv, "website", "competitor", "customer-ws");
     expect(blocked.allowed).toBe(false);
     expect(blocked.reasonCode).toBe("internal_workspace_only");
   });
 
-  it("fails closed when internal workspace is not configured", () => {
-    const access = evaluatePresenceWorkspaceAccess(
+  it("fails closed when internal workspace is not configured", async () => {
+    const access = await evaluatePresenceWorkspaceAccess(
       { ...baseEnv, PRESENCE_INTERNAL_WORKSPACE_ID: undefined },
       "internal-ws",
     );
@@ -77,8 +77,8 @@ describe("presence access gates", () => {
     expect(access.reasonCode).toBe("internal_workspace_unconfigured");
   });
 
-  it("blocks X without credentials", () => {
-    const gate = evaluateConnectorAccessGate(
+  it("blocks X without credentials", async () => {
+    const gate = await evaluateConnectorAccessGate(
       { ...baseEnv, PRESENCE_X_ROLLOUT: "internal" },
       "x",
       "competitor",
@@ -87,8 +87,8 @@ describe("presence access gates", () => {
     expect(gate.reasonCode).toBe("credentials_missing");
   });
 
-  it("blocks Reddit without commercial access approval", () => {
-    const gate = evaluateConnectorAccessGate(
+  it("blocks Reddit without commercial access approval", async () => {
+    const gate = await evaluateConnectorAccessGate(
       {
         ...baseEnv,
         PRESENCE_REDDIT_ROLLOUT: "internal",
@@ -102,8 +102,8 @@ describe("presence access gates", () => {
     expect(gate.reasonCode).toBe("commercial_access_pending");
   });
 
-  it("blocks LinkedIn competitor tracking", () => {
-    const gate = evaluateConnectorAccessGate(
+  it("blocks LinkedIn competitor tracking", async () => {
+    const gate = await evaluateConnectorAccessGate(
       {
         ...baseEnv,
         PRESENCE_LINKEDIN_ROLLOUT: "internal",

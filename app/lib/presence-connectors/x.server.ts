@@ -20,7 +20,7 @@ export const xConnector = {
     input: ValidateTargetInput,
     ctx: PresenceConnectorContext,
   ): Promise<ValidateTargetResult> {
-    const gate = evaluateConnectorAccessGate(ctx.env, "x", input.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "x", input.trackingMode);
     if (!gate.allowed) {
       return {
         ok: false,
@@ -49,7 +49,7 @@ export const xConnector = {
   },
 
   async healthCheck(ctx: PresenceConnectorContext): Promise<HealthCheckResult> {
-    const gate = evaluateConnectorAccessGate(ctx.env, "x", ctx.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "x", ctx.trackingMode);
     if (!gate.allowed) {
       return {
         ok: false,
@@ -86,7 +86,7 @@ export const xConnector = {
       };
     }
 
-    const gate = evaluateConnectorAccessGate(ctx.env, "x", ctx.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "x", ctx.trackingMode);
     return {
       ok: false,
       items: [],
