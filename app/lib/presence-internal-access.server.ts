@@ -1,6 +1,8 @@
 import type { AppEnv } from "~/lib/env.server";
+import { canUsePresenceFeature } from "~/lib/presence-entitlements";
 import { countActivePilotWorkspaces, isPilotWorkspaceEnrolled } from "~/lib/presence-pilot-access.server";
 import type { ConnectorRolloutState } from "~/lib/presence-types";
+import { getUserPlan } from "~/lib/plan.server";
 
 export interface PresenceWorkspaceAccessResult {
   allowed: boolean;
@@ -14,10 +16,22 @@ export function presenceInternalWorkspaceUserId(env: AppEnv) {
 }
 
 function parseRolloutState(value: string | undefined, fallback: ConnectorRolloutState): ConnectorRolloutState {
+  if (value === "generally_available") {
+    return "ga";
+  }
   if (value === "disabled" || value === "internal" || value === "pilot" || value === "ga") {
     return value;
   }
   return fallback;
+}
+
+async function workspaceHasPresenceEntitlement(env: AppEnv, workspaceUserId: string) {
+  const plan = await getUserPlan(env, workspaceUserId);
+  return (
+    canUsePresenceFeature(plan, "presence_website_sources") ||
+    canUsePresenceFeature(plan, "presence_competitor_tracking") ||
+    canUsePresenceFeature(plan, "presence_self_tracking")
+  );
 }
 
 export function presenceWebsiteRolloutState(env: AppEnv): ConnectorRolloutState {
@@ -83,11 +97,29 @@ export async function evaluatePresenceWorkspaceAccess(
     };
   }
 
+  if (rolloutState === "ga") {
+    const entitled = await workspaceHasPresenceEntitlement(env, workspaceUserId);
+    if (!entitled) {
+      return {
+        allowed: false,
+        rolloutState,
+        reasonCode: "plan_gated",
+        reasonMessage: "Website presence tracking is not included in your current plan.",
+      };
+    }
+    return {
+      allowed: true,
+      rolloutState,
+      reasonCode: null,
+      reasonMessage: null,
+    };
+  }
+
   return {
-    allowed: true,
+    allowed: false,
     rolloutState,
-    reasonCode: null,
-    reasonMessage: null,
+    reasonCode: "unknown_rollout",
+    reasonMessage: "Presence tracking is not available.",
   };
 }
 

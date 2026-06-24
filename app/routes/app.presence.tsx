@@ -139,11 +139,16 @@ export default function PresenceIndexRoute() {
         </p>
       ) : null}
 
-      {data.access.rolloutState === "internal" || data.access.rolloutState === "pilot" ? (
+      {data.access.rolloutState === "internal" ? (
         <p className="f9-banner f9-banner-info" role="status">
-          {data.access.rolloutState === "pilot"
-            ? "You are in the controlled Presence website pilot. Digest alerts stay off until explicitly enabled."
-            : "Internal canary — website tracking only. Social connectors remain disabled."}
+          Internal canary — website tracking only. Social connectors remain disabled.
+        </p>
+      ) : null}
+
+      {data.access.rolloutState === "ga" ? (
+        <p className="f9-banner f9-banner-info" role="status">
+          Track public websites and blogs you add. Coverage depends on robots rules and public accessibility.
+          Notifications stay off until you opt in.
         </p>
       ) : null}
 

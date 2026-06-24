@@ -14,6 +14,9 @@ export interface ConnectorAccessGateResult {
 }
 
 function parseRolloutState(value: string | undefined, fallback: ConnectorRolloutState): ConnectorRolloutState {
+  if (value === "generally_available") {
+    return "ga";
+  }
   if (value === "disabled" || value === "internal" || value === "pilot" || value === "ga") {
     return value;
   }
