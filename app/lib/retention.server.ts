@@ -21,6 +21,8 @@ const WATCHLIST_RUN_KEEP_NEWEST = 5;
 const DELIVERY_ATTEMPT_RETENTION_DAYS = 180;
 const SNAPSHOT_RETENTION_DAYS = 90;
 
+const PRESENCE_ITEM_RETENTION_DAYS = 180;
+
 export async function runRetentionSweep(env: AppEnv) {
   if (!env.DB) {
     return { deleted: {} as Record<string, number> };
@@ -140,6 +142,18 @@ export async function runRetentionSweep(env: AppEnv) {
         )
       `,
       bindings: [cutoff(SNAPSHOT_RETENTION_DAYS)],
+    },
+    {
+      name: "presence_item",
+      sql: `
+        DELETE FROM presence_item
+        WHERE id IN (
+          SELECT id FROM presence_item
+          WHERE created_at < ?
+          LIMIT 500
+        )
+      `,
+      bindings: [cutoff(PRESENCE_ITEM_RETENTION_DAYS)],
     },
   ];
 

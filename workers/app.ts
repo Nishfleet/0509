@@ -184,6 +184,22 @@ export default {
           },
         ),
       );
+      ctx.waitUntil(
+        import("../app/lib/presence-service.server").then(({ runPresencePollingBatch }) =>
+          runPresencePollingBatch(env, { limit: 20 }),
+        ).then(
+          (result) => {
+            if (result.results.length > 0) {
+              console.log("presence polling batch completed", result);
+            }
+          },
+          (error) => {
+            console.error("presence polling batch failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
+        ),
+      );
       return;
     }
 
