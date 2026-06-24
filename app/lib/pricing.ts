@@ -124,7 +124,10 @@ const USAGE_BUNDLES: UsageBundle[] = [
 ];
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
-  "Included evidence checks reset monthly and do not roll over. Purchased extra checks never expire.";
+  "Scheduled monitoring is included with your plan. Evidence checks are used when Five to Nine creates a new landing-page proof capture. Included evidence checks refresh every month and do not roll over. Purchased extra checks never expire.";
+
+export const TOP_UP_INACTIVE_PLAN_COPY =
+  "Your purchased checks are saved and will be available when a paid plan is active.";
 
 export function pricingPlans(): PricingPlan[] {
   return PLANS.map((plan) => ({ ...plan, features: [...plan.features] }));

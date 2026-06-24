@@ -18,12 +18,9 @@ export function scheduledMonitoringConsumesEvidenceCheck(): boolean {
   return false;
 }
 
-/**
- * OWNER DECISION PENDING: whether top-up balance remains spendable after subscription cancellation.
- * Current behavior: credits remain visible and spendable while workspace exists.
- */
-export function topUpSpendAllowedAfterSubscriptionCancelled(_planFamily: PlanFamily): boolean {
-  return true;
+/** Purchased checks are retained forever but only spendable on an active paid plan. */
+export function topUpSpendRequiresActivePaidPlan(planFamily: PlanFamily): boolean {
+  return planFamily === "scout" || planFamily === "starter" || planFamily === "agency";
 }
 
 /**
