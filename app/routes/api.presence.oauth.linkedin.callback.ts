@@ -23,7 +23,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     return redirect("/app/presence?oauth=linkedin_failed");
   }
 
-  const gate = evaluateConnectorAccessGate(env, "linkedin", "self", workspaceUserId);
+  const gate = await evaluateConnectorAccessGate(env, "linkedin", "self", workspaceUserId);
   if (!gate.allowed) {
     return redirect("/app/presence?oauth=linkedin_failed");
   }

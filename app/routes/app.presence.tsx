@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
-import { formatCoverageLabel } from "~/lib/presence-display";
+import { formatCoverageLabel, formatRolloutState } from "~/lib/presence-display";
 import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
 
 export const meta = () => [{ title: "Presence | Five to Nine" }];
@@ -16,6 +16,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getPresenceWorkspaceSnapshot, requirePresenceWorkspaceAccess } = await import(
     "~/lib/presence-service.server"
   );
+  const { evaluatePresenceWorkspaceAccess } = await import("~/lib/presence-internal-access.server");
   const {
     connectorRolloutState,
     listPresenceConnectors,
@@ -23,22 +24,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   await requirePresenceWorkspaceAccess(env, workspaceUserId);
+  const access = await evaluatePresenceWorkspaceAccess(env, workspaceUserId);
   const plan = await getUserPlan(env, workspaceUserId);
   const snapshot = await getPresenceWorkspaceSnapshot(env, workspaceUserId);
   const limits = getPresenceLimits(plan);
+  const connectors = listPresenceConnectors();
 
   return {
     snapshot,
     plan,
     limits,
+    access,
     selfAllowed: presenceModeAllowed(plan, "self"),
     competitorAllowed: presenceModeAllowed(plan, "competitor"),
-    connectors: listPresenceConnectors().map((connector) => ({
-      id: connector.id,
-      supportedModes: connector.supportedModes,
-      rolloutSelf: connectorRolloutState(env, connector.id, "self", workspaceUserId),
-      rolloutCompetitor: connectorRolloutState(env, connector.id, "competitor", workspaceUserId),
-    })),
+    connectors: await Promise.all(
+      connectors.map(async (connector) => ({
+        id: connector.id,
+        supportedModes: connector.supportedModes,
+        rolloutSelf: await connectorRolloutState(env, connector.id, "self", workspaceUserId),
+        rolloutCompetitor: await connectorRolloutState(env, connector.id, "competitor", workspaceUserId),
+      })),
+    ),
     userEmail: session.user.email,
   };
 }
@@ -133,6 +139,19 @@ export default function PresenceIndexRoute() {
         </p>
       ) : null}
 
+      {data.access.rolloutState === "internal" ? (
+        <p className="f9-banner f9-banner-info" role="status">
+          Internal canary — website tracking only. Social connectors remain disabled.
+        </p>
+      ) : null}
+
+      {data.access.rolloutState === "ga" ? (
+        <p className="f9-banner f9-banner-info" role="status">
+          Track public websites and blogs you add. Coverage depends on robots rules and public accessibility.
+          Notifications stay off until you opt in.
+        </p>
+      ) : null}
+
       <div className="f9-grid-two">
         <article className="f9-card">
           <h2>Add tracked entity</h2>
@@ -169,7 +188,8 @@ export default function PresenceIndexRoute() {
           <ul className="f9-list-plain">
             {data.connectors.map((connector) => (
               <li key={connector.id}>
-                <strong>{connector.id}</strong> — self {connector.rolloutSelf}, competitor {connector.rolloutCompetitor}
+                <strong>{connector.id}</strong> — self {formatRolloutState(connector.rolloutSelf)}, competitor{" "}
+                {formatRolloutState(connector.rolloutCompetitor)}
               </li>
             ))}
           </ul>

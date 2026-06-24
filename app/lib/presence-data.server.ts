@@ -93,6 +93,7 @@ function mapPresenceItem(row: Record<string, unknown>): PresenceItemRecord {
     contentHash: String(row.content_hash),
     raw: row.raw_json ? parseJsonObject(String(row.raw_json)) : null,
     isTombstone: Number(row.is_tombstone) === 1,
+    revision: Number(row.revision ?? 1),
     createdAt: String(row.created_at),
   };
 }
@@ -375,19 +376,20 @@ export async function upsertPresenceItems(
     const contentHash = item.contentHash || (await presenceContentHash(item));
     const existing = await db
       .prepare(
-        `SELECT id, content_hash FROM presence_item
+        `SELECT id, content_hash, revision FROM presence_item
          WHERE source_target_id = ? AND url_hash = ? AND is_tombstone = 0`,
       )
       .bind(input.sourceTarget.id, urlHash)
-      .first<{ id: string; content_hash: string }>();
+      .first<{ id: string; content_hash: string; revision: number }>();
 
     if (existing) {
-      if (existing.content_hash !== contentHash) {
+      if (existing.content_hash !== contentHash || item.isTombstone) {
+        const nextRevision = (existing.revision ?? 1) + 1;
         await db
           .prepare(
             `UPDATE presence_item
              SET title = ?, body_excerpt = ?, author = ?, published_at = ?, observed_at = ?,
-                 content_hash = ?, raw_json = ?, is_tombstone = ?
+                 content_hash = ?, raw_json = ?, is_tombstone = ?, revision = ?
              WHERE id = ?`,
           )
           .bind(
@@ -399,7 +401,25 @@ export async function upsertPresenceItems(
             contentHash,
             item.raw ? JSON.stringify(item.raw) : null,
             item.isTombstone ? 1 : 0,
+            nextRevision,
             existing.id,
+          )
+          .run();
+        await db
+          .prepare(
+            `INSERT INTO presence_item_revision (
+              id, presence_item_id, revision, content_hash, title, body_excerpt, observed_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            newPresenceId("prev"),
+            existing.id,
+            nextRevision,
+            contentHash,
+            item.title,
+            item.bodyExcerpt ?? null,
+            item.observedAt,
+            now,
           )
           .run();
         updated += 1;
@@ -412,8 +432,8 @@ export async function upsertPresenceItems(
         `INSERT INTO presence_item (
           id, source_target_id, tracked_entity_id, user_id, connector_id, external_id,
           canonical_url, url_hash, title, body_excerpt, author, published_at, observed_at,
-          content_hash, raw_json, is_tombstone, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          content_hash, raw_json, is_tombstone, revision, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         newPresenceId("pitem"),
@@ -432,6 +452,7 @@ export async function upsertPresenceItems(
         contentHash,
         item.raw ? JSON.stringify(item.raw) : null,
         item.isTombstone ? 1 : 0,
+        1,
         now,
       )
       .run();
@@ -439,6 +460,35 @@ export async function upsertPresenceItems(
   }
 
   return { inserted, updated };
+}
+
+export async function reconcilePresenceItemsAfterPoll(
+  env: AppEnv,
+  input: {
+    sourceTarget: SourceTargetRecord;
+    observedUrlHashes: string[];
+    completeSnapshot: boolean;
+  },
+) {
+  if (!input.completeSnapshot || input.observedUrlHashes.length === 0) {
+    return { tombstoned: 0 };
+  }
+
+  const db = requireDb(env);
+  const now = new Date().toISOString();
+  const placeholders = input.observedUrlHashes.map(() => "?").join(", ");
+  const result = await db
+    .prepare(
+      `UPDATE presence_item
+       SET is_tombstone = 1, observed_at = ?, revision = revision + 1
+       WHERE source_target_id = ?
+         AND is_tombstone = 0
+         AND url_hash NOT IN (${placeholders})`,
+    )
+    .bind(now, input.sourceTarget.id, ...input.observedUrlHashes)
+    .run();
+
+  return { tombstoned: result.meta.changes ?? 0 };
 }
 
 export async function listPresenceItems(

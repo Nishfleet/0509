@@ -15,6 +15,7 @@ import type {
 import { resolvePublicHttpUrl } from "~/lib/public-url.server";
 
 const MAX_WEBSITE_FETCH_BYTES = 750_000;
+const MAX_FEED_CANDIDATE_FETCHES = 6;
 
 export const websiteConnector = {
   id: "website" as const,
@@ -149,7 +150,9 @@ export const websiteConnector = {
 };
 
 async function discoverFeedUrl(siteUrl: string, fetchImpl: typeof fetch) {
+  let fetches = 0;
   const page = await fetchPublicResource(siteUrl, fetchImpl);
+  fetches += 1;
   if (!page?.body) {
     return guessFeedCandidates(siteUrl)[0] ?? null;
   }
@@ -167,6 +170,8 @@ async function discoverFeedUrl(siteUrl: string, fetchImpl: typeof fetch) {
   }
 
   for (const candidate of guessFeedCandidates(siteUrl)) {
+    if (fetches >= MAX_FEED_CANDIDATE_FETCHES) break;
+    fetches += 1;
     const head = await fetchPublicResource(candidate, fetchImpl, { method: "HEAD" });
     if (head?.ok) {
       const type = head.contentType ?? "";
@@ -239,6 +244,7 @@ async function fetchFeed(
     lastModified: response.lastModified,
     coverageLabel: "VERIFIED_PUBLIC_FEED",
     costUnits: 1,
+    cursor: { completeSnapshot: true, feedUrl },
   } as PollResult & { coverageLabel?: string };
 }
 

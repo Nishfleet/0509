@@ -124,7 +124,10 @@ describe("presence oauth transactions", () => {
       callbackUri: "https://0509.io/callback",
       returnPath: "/app/presence",
     });
-    const tampered = `${created.state.slice(0, -1)}0`;
+    const sigStart = created.state.lastIndexOf(".") + 1;
+    const sigChars = created.state.slice(sigStart).split("");
+    sigChars[0] = sigChars[0] === "a" ? "b" : "a";
+    const tampered = created.state.slice(0, sigStart) + sigChars.join("");
     const verified = await verifyPresenceOAuthState(baseEnv, tampered);
     expect(verified.ok).toBe(false);
   });

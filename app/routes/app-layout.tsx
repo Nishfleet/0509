@@ -25,7 +25,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   const workspace = await resolveWorkspace(env, session.user.id);
-  const showPresenceNav = presenceNavVisible(env, workspace.workspaceUserId);
+  const showPresenceNav = await presenceNavVisible(env, workspace.workspaceUserId);
 
   return {
     session,
