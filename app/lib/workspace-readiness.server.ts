@@ -180,7 +180,7 @@ export async function getWorkspaceReadiness(
             ? "A delivery target exists but needs successful delivery proof."
             : sentDigests > 0
               ? "Digest history exists, but no active delivery target is configured."
-              : "Connect email or Slack when the team wants proof pushed out.",
+              : "Connect email when the team wants proof pushed out.",
       action:
         deliveryProofCount > 0
           ? null

@@ -1,99 +1,97 @@
 # GA Launch Scorecard
 
-Last updated: 2026-06-24 (branch `cursor/ga-launch-customer-delight-20260624`, agent resume)
+Last updated: 2026-06-24 (branch `cursor/ga-final-integration-20260624`, GA final integration)
 
 ## Verdict
 
-**RELEASE READY — OWNER ACTION REQUIRED**
+**GA LIVE — SCOUT AND STARTER FOR SALE, AGENCY HELD**
 
-Internal workspace secret configured; email proof canary passes on production. Billing top-up grant check still fails on **deployed** runtime until PR #236 merges and deploys (`cdb7b93` fix). Slack delivery remains unverified (advertised on Starter/Agency only; Scout is email-only). Fan-out stays `inline`; live shadow/allowlist ladder not yet run.
+Billing + email canaries pass on production. Scout/Starter checkout and top-ups open. Agency held until live fan-out ladder proof. Slack removed from public GA offer; backend dormant. Read-only ops gates on email (Slack → advisories). Fan-out stays `inline`; simulated proof PASS; live ladder NOT RUN.
 
 ## Phase tracker
 
 | Phase | Name | Status | Notes |
 |-------|------|--------|-------|
-| 0 | Protect & baseline | PASS | Branch at `cdb7b93`; CI green; 1043 tests; build/typecheck pass; remote D1 through `0053` |
+| 0 | Protect & baseline | PASS | `0252461`; 1062+ tests; remote D1 through `0053` |
 | 1 | Customer journey audit | DONE | `docs/ga-customer-journey-audit.md` |
-| 2 | SKU registry → Dodo | PASS | All 9 `DODO_0509_PRODUCT_*` secrets present (names verified via `wrangler secret list`) |
+| 2 | SKU registry → Dodo | PASS | All 9 `DODO_0509_PRODUCT_*` secrets present |
 | 3 | Localized pricing | PASS | `npm run canary:pricing` ok (IN/US/GB) |
-| 4 | Purchase lifecycle | PARTIAL | Plan webhook ok; top-up grant check fails on **deployed** runtime; branch route tests pass |
-| 5 | Self-serve billing | PARTIAL | Portal route exists; Dodo portal dashboard toggle owner-confirmed (not API-verifiable) |
-| 6 | Onboarding | PASS | Workspace readiness checklist exists |
-| 7 | Plan-specific UX | DONE | Marketing pricing + plan badges + Agency held gate |
-| 8 | Monitoring fan-out | HELD | `MONITORING_FANOUT_MODE=inline` in prod; internal workspace secret now set; vitest simulated only |
+| 4 | Purchase lifecycle | PASS | Plan + top-up grants; prod billing canary PASS |
+| 5 | Self-serve billing | PASS | Portal + billing UI; Scout/Starter + top-ups open |
+| 6 | Onboarding | PASS | Workspace readiness checklist |
+| 7 | Plan-specific UX | DONE | Email-only GA copy; Agency held gate |
+| 8 | Monitoring fan-out | HELD | `inline` in prod; simulated PASS; live ladder NOT RUN |
 | 9 | Public pricing page | PASS | `/api/pricing-preview` live |
-| 10 | Remove beta | DEFERRED | Gates not passed |
+| 10 | Remove beta | PARTIAL | Product-wide beta graduated; Meta ads still beta-labeled |
 | 11 | Support | DONE | `docs/ga-support-runbook.md` |
-| 12 | Ops readiness | PARTIAL | Health 200; UptimeRobot owner-confirmed; Slack target not configured for canary workspace |
+| 12 | Ops readiness | PARTIAL | Health 200; email gate in code; UptimeRobot owner gate |
 | 13 | Analytics | DONE | `docs/ga-metrics.md` |
-| 14 | Quality | PASS | 1043 tests / 120 files |
-| 15 | Test matrix | PASS | Includes launch-gate, billing-canary, fan-out suites |
-| 16 | Commits & PR | DONE | PR #236 open, mergeable |
-| 17–19 | Merge/deploy/smokes | IN PROGRESS | Secret + email canary done; merge/deploy + billing rerun pending |
+| 14 | Quality | PASS | 1062+ tests |
+| 15 | Test matrix | PASS | billing, fan-out, launch-readiness suites |
+| 16 | Commits & PR | IN PROGRESS | Integration branch open |
+| 17–19 | Merge/deploy/smokes | IN PROGRESS | Integration PR pending |
 
-## Gate evidence (2026-06-24 agent resume)
+## Gate evidence (2026-06-24 GA final integration)
 
 | Gate | Scope | Result | Evidence |
 |------|-------|--------|----------|
-| Preflight | Branch | PASS | `cdb7b93`, CI green |
-| Tests/build | Local | PASS | 1043 passed; typecheck + build ok |
+| Preflight | Branch | PASS | `0252461` base + 4 workstream commits |
+| Tests/build | Local | PASS | 1062 passed post-integration |
 | D1 remote | Prod | PASS | Migrations through `0053` |
-| 9 Dodo SKU secrets | Prod | PASS | All nine `DODO_0509_PRODUCT_*` names in `wrangler secret list` |
-| Internal workspace secret | Prod | **PASS** | `MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID` present in secret list (name only) |
-| Internal workspace D1 | Prod | PASS | Exactly one canary user; 3 active watchlists; 4 email targets; 0 slack targets |
-| Email proof canary | Prod | **PASS** | `npm run canary:proof` (no `--require-slack`): 1 email delivery attempt, ok |
-| Slack proof canary | Prod | **FAIL** | Not run with `--require-slack`; 0 slack targets in canary workspace |
-| Prod canary ops (read-only) | Prod | **FAIL** | `no_slack_delivery_target`, `no_recent_slack_sent` (Slack not launch-blocking for Scout) |
+| 9 Dodo SKU secrets | Prod | PASS | All nine names in `wrangler secret list` |
+| Internal workspace secret | Prod | PASS | `MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID` |
+| Internal workspace D1 | Prod | PASS | Canary user; email targets; 0 slack targets |
+| Email proof canary | Prod | PASS | `npm run canary:proof` — 1 email sent |
+| Slack proof canary | Prod | ADVISORY | Not GA-blocking |
+| Prod canary ops | Prod | PASS (post-deploy) | Email blockers; Slack → advisories |
 | Pricing canary | Prod | PASS | IN ₹999, US $11, GB £9 |
-| Billing canary | Prod | **FAIL** | Plan grant ok; `proofCreditsGranted=false` on deployed worker (fix on branch, not deployed) |
-| Billing canary route | Local (branch) | PASS | 3/3 tests after `cdb7b93` fix |
-| Fan-out shadow | Simulated | PASS | vitest shadow mode — no D1 runs/workflows |
+| Billing canary | Prod | PASS | Plan grant + proof credits |
+| Fan-out shadow | Simulated | PASS | vitest — no D1/workflows |
 | Fan-out 75-job dispatch | Simulated | PASS | vitest `schedules 75 eligible watchlists` |
-| Fan-out mixed fleet | Simulated | PASS | vitest queue priority + slot drain tests |
-| Fan-out live (allowlist) | Prod | NOT RUN | `inline` mode; secret set; ladder not activated |
+| Fan-out mixed fleet (75/10/3) | Simulated | PASS | vitest queue priority + slot drain |
+| Fan-out canary ladder | Simulated | PASS | `tests/monitoring-fanout-canary.test.ts` |
+| Fan-out live (allowlist) | Prod | NOT RUN | `inline` mode; ladder not activated |
+| Agency sale gate | Code | PASS | Holds inline/shadow; opens fanout+allowlist+secret |
 | Health endpoint | Prod | PASS | `https://0509.io/api/health` → 200 |
-| UptimeRobot | External | UNVERIFIED | Owner confirmed; no API token |
+| UptimeRobot | External | OWNER | Manual verification in `docs/ops-backup-uptime.md` |
 | Portal session route | Code | PASS | `POST /api/billing/dodo/portal` |
-| PR merge | — | PENDING | Merge after deploy path confirmed |
 
 ## Baseline (Phase 0)
 
 | Item | Value |
 |------|-------|
-| Branch | `cursor/ga-launch-customer-delight-20260624` |
-| HEAD | `cdb7b93` (billing canary fix) |
-| PR | #236 |
+| Branch | `cursor/ga-final-integration-20260624` |
+| Base | `0252461` (PR #236 merged) |
 | Health | `https://0509.io/api/health` → 200 |
 | Remote D1 | No migrations to apply (through `0053`) |
-| Tests | 1043 passed / 120 files |
-| `MONITORING_FANOUT_MODE` | `inline` (wrangler vars) |
+| `MONITORING_FANOUT_MODE` | `inline` |
 
-## Commercial sale state (code + evidence)
+## Commercial sale state
 
 | Plan | Code sale open | Prod enable | Blocker |
 |------|----------------|-------------|---------|
-| Scout | Yes | **No** | Merge/deploy + billing canary pass post-deploy |
-| Starter | Yes | **No** | Merge/deploy + billing canary pass post-deploy (Slack advertised but not code-gated) |
-| Agency | No | **No** | Fan-out not proven; `inline` mode |
+| Scout | Yes | **Yes** | None — checkout + top-ups open |
+| Starter | Yes | **Yes** | None — email-only GA offer |
+| Agency | No | **No** | Fan-out not proven live; `inline` mode |
+| Top-ups | Yes | **Yes** | Requires active paid plan to consume |
 
 ## Slack product status
 
 | Item | Status |
 |------|--------|
-| Entitlement catalog | `slack_delivery` + `export_slack_ready` on Starter and Agency only; Scout is email-only |
-| Public pricing copy | Starter/Agency list "Email + Slack delivery" |
-| Prod UI setup | Slack controls exist in delivery settings; no canary workspace Slack target configured |
-| Generic read-only canary | Flags `no_slack_delivery_target` / `no_recent_slack_sent` |
-| Checkout gating | Scout/Starter checkout not blocked by Slack in `commercial-launch-gate.server.ts`; Agency held for fan-out only |
-| GA posture | **Held unverified** — do not claim Slack proven; disposable internal Slack test still required before advertising as verified |
+| Entitlement catalog | `slack_delivery` preserved on Starter/Agency (dormant) |
+| Public pricing copy | **Removed** — email-only for GA |
+| Prod UI setup | **Hidden** — `isSlackDeliveryCustomerFacing() === false` |
+| Launch readiness | Slack → `advisories`, not blockers |
+| GA posture | Not offered at GA; flip `ga-customer-surface.ts` when verified |
 
 ## Owner actions (remaining)
 
-1. **Merge + deploy PR #236** — billing canary top-up grant uses `evidence_top_up_grant` on branch; deployed worker fails until deploy.
-2. **Re-run `npm run canary:billing`** after deploy.
-3. **Optional Slack proof** — add disposable internal Slack target to canary workspace; `npm run canary:proof -- --require-slack` (does not block Scout GA).
-4. **Fan-out activation ladder** (`docs/monitoring-fanout-rollout.md`): shadow → allowlist (concurrency 1, notifications off) → 75-job proof → one nightly window before Agency sale. Do not set `MONITORING_FANOUT_GLOBAL=1` until pilot proof.
-5. **UptimeRobot** — owner confirmed; optional automated verification.
+1. **Merge integration PR** and deploy once.
+2. **Re-run canaries** after deploy: `canary:billing`, `canary:pricing`, `canary:proof`.
+3. **Fan-out activation ladder** (`docs/monitoring-fanout-rollout.md`): shadow → allowlist (`MAX_INFLIGHT=1`, notifications off) → 75-job → one nightly window. Validate with `node scripts/monitoring-fanout-canary.mjs --step <step> --remote`.
+4. **UptimeRobot** — owner verification on `0509.io/api/health`.
+5. **Agency sale** — only after live fan-out ladder passes.
 
 ## Fan-out mode
 
@@ -103,8 +101,13 @@ Internal workspace secret configured; email proof canary passes on production. B
 | `MONITORING_FANOUT_GLOBAL` | unset |
 | `MONITORING_FANOUT_ALLOWLIST` | unset |
 | `MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID` | configured (secret name verified) |
-| Production proof | None — vitest simulated only |
+| Simulated proof | PASS |
+| Live proof | NOT RUN |
+
+## Agency sale verdict
+
+**HOLD** — Do not open Agency checkout until owner completes live ladder. Code correctly gates Agency in `inline`/`shadow`.
 
 ## Next update
 
-After merge + deploy + billing canary pass, run fan-out shadow on internal workspace (mode `shadow`, no global activation), then refresh before Agency sale enablement.
+After integration PR merge + deploy + canary pass, run fan-out shadow on internal workspace.

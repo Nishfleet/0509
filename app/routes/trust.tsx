@@ -44,8 +44,11 @@ export default function TrustRoute() {
       <PublicDocBlock title="Retention and backups">
         <p>
           Product data lives in Cloudflare D1 and optional R2 artifact storage. Retention cleanup
-          runs on bounded scheduled sweeps, and backup/export runbooks stay in private operations notes.
-          Account deletion, correction, and export help are handled through support.
+          runs on bounded scheduled sweeps. Weekly D1 exports upload to R2 via{" "}
+          <code>npm run backup:d1:r2</code>; restore drills and uptime monitoring steps live in{" "}
+          <code>docs/ops-backup-uptime.md</code> (private ops notes). The public health probe is{" "}
+          <code>https://0509.io/api/health</code> — it returns <code>{`{"status":"ok"}`}</code> without
+          touching D1. Account deletion, correction, and export help are handled through support.
         </p>
       </PublicDocBlock>
 
@@ -54,8 +57,6 @@ export default function TrustRoute() {
           <li>Cloudflare: hosting, Workers, D1, R2, Workers AI, and Cloudflare Email Service.</li>
           <li>Dodo Payments: checkout, subscriptions, receipts, and billing portal.</li>
           <li>Meta public Ad Library surfaces and customer-provided Meta access when the customer connects it.</li>
-          <li>Slack incoming webhooks when a customer connects Slack delivery.</li>
-          <li>WhatsApp Cloud API only after WhatsApp delivery is enabled for the account.</li>
         </ul>
       </PublicDocBlock>
 

@@ -59,10 +59,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const blockers = [
     signals.monitoring.recentSuccessfulRuns > 0 ? null : "no_recent_monitoring_run",
     signals.proof.recentSuccessfulCaptures > 0 ? null : "no_recent_proof_capture",
-    signals.digestDelivery.recentAttempts > 0 ? null : "no_recent_digest_delivery_attempt",
-    signals.digestDelivery.recentSent > 0 ? null : "no_recent_digest_sent",
-    signals.slackDelivery.usableTargets > 0 ? null : "no_slack_delivery_target",
-    signals.slackDelivery.recentSent > 0 ? null : "no_recent_slack_sent",
+    signals.emailDelivery.recentAttempts > 0 ? null : "no_recent_email_delivery_attempt",
+    signals.emailDelivery.recentSent > 0 ? null : "no_recent_email_sent",
     whatsappLaunchScoped && !signals.whatsappDelivery.providerConfigured
       ? "whatsapp_provider_not_configured"
       : null,
@@ -80,14 +78,20 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : null,
     ...metaAdsBeta.blockers.map((blocker) => `meta_ads_beta:${blocker}`),
   ].filter((value): value is string => Boolean(value));
+  const advisories = [
+    signals.slackDelivery.usableTargets > 0 ? null : "no_slack_delivery_target",
+    signals.slackDelivery.recentSent > 0 ? null : "no_recent_slack_sent",
+  ].filter((value): value is string => Boolean(value));
 
   return Response.json(
     {
       ok: blockers.length === 0,
       blockers,
+      advisories,
       signals,
       launchScope: {
         whatsapp: whatsappLaunchScoped,
+        slack: false,
       },
       metaAdsBeta,
     },

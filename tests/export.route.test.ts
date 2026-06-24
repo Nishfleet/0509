@@ -10,6 +10,13 @@ import type {
 } from "~/lib/types";
 import { mockAgencyWorkspacePlan } from "./helpers/agency-plan-mock";
 
+vi.mock("~/lib/ga-customer-surface", () => ({
+  isSlackDeliveryCustomerFacing: vi.fn(() => false),
+  slackDeliveryUnavailableMessage: vi.fn(
+    () => "Slack delivery is not available at general availability yet. Use email delivery.",
+  ),
+}));
+
 const session = {
   user: {
     id: "user-1",
@@ -252,7 +259,9 @@ function resourceParams(url: string) {
   return { resourceType, resourceId };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+  vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(false);
   vi.resetModules();
 });
 
@@ -373,6 +382,8 @@ describe("authenticated export route", () => {
   });
 
   it("includes manual metric proof in Slack-ready collection exports", async () => {
+    const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
     setupMocks({ collectionItems: [externalCollectionItem] });
     const response = await loadExport("https://0509.io/export/collection/collection-1?format=slack");
     const body = await response.text();
@@ -384,6 +395,8 @@ describe("authenticated export route", () => {
   });
 
   it("returns Slack-ready markdown for watchlist exports", async () => {
+    const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
     setupMocks();
     const response = await loadExport("https://0509.io/export/watchlist/watchlist-1?format=slack");
     const body = await response.text();
@@ -417,6 +430,8 @@ describe("authenticated export route", () => {
   });
 
   it("returns Slack-ready markdown for digest exports", async () => {
+    const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
     setupMocks();
     const response = await loadExport("https://0509.io/export/digest/digest-1?format=slack");
     const body = await response.text();
@@ -427,5 +442,12 @@ describe("authenticated export route", () => {
     expect(body).toContain("Nykaa watch: Landing page offer changed");
     expect(body).toContain("Next move: Today: brief one counter-test.");
     expect(body).toContain("Evidence: proof capture - source-backed - 18/4/2026");
+  });
+
+  it("rejects Slack exports when GA surface is off", async () => {
+    setupMocks();
+    await expect(
+      loadExport("https://0509.io/export/watchlist/watchlist-1?format=slack"),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });

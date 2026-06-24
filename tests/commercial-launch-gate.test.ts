@@ -53,6 +53,37 @@ describe("commercial launch gate", () => {
     expect(proof.blocker).toBe("internal_workspace_undocumented");
   });
 
+  it("holds Agency in shadow mode even with internal workspace documented", () => {
+    const proof = summarizeMonitoringFanoutProof({
+      MONITORING_FANOUT_MODE: "shadow",
+      MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID: "user_internal",
+      MONITORING_WORKFLOW: workflowBinding,
+    });
+
+    expect(proof.mode).toBe("shadow");
+    expect(proof.agencySaleOpen).toBe(false);
+    expect(proof.blocker).toBe("fanout_shadow_only");
+    expect(isPlanCheckoutAllowed(
+      {
+        MONITORING_FANOUT_MODE: "shadow",
+        MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID: "user_internal",
+      },
+      "agency",
+    )).toBe(false);
+  });
+
+  it("holds Agency when fan-out is allowlisted but not globally enabled without internal workspace", () => {
+    const proof = summarizeMonitoringFanoutProof({
+      MONITORING_FANOUT_MODE: "fanout",
+      MONITORING_FANOUT_ALLOWLIST: "user_internal",
+      MONITORING_WORKFLOW: workflowBinding,
+    });
+
+    expect(proof.allowlistConfigured).toBe(true);
+    expect(proof.agencySaleOpen).toBe(false);
+    expect(proof.blocker).toBe("internal_workspace_undocumented");
+  });
+
   it("opens Scout and Starter regardless of SKU env in the commercial gate", () => {
     expect(isPlanCheckoutAllowed({}, "scout")).toBe(true);
     expect(isPlanCheckoutAllowed({}, "starter")).toBe(true);

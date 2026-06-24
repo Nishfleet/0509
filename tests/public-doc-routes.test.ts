@@ -40,6 +40,8 @@ describe("public documentation routes", () => {
     expect(markup).not.toContain("fully general write API");
     expect(markup).not.toContain("First agent workflow");
     expect(markup).not.toContain("hooks.slack.com/services/");
+    expect(markup).not.toContain("format=slack");
+    expect(markup).not.toContain("Slack-ready");
     expect(markup).not.toContain("BETTER_AUTH_SECRET");
   });
 
