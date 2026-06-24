@@ -13,6 +13,7 @@ import { AdThumb } from "~/components/ad-thumb";
 import { SubmitButton } from "~/components/submit-button";
 import {
   applyWebsiteSearchFallback,
+  competitorTrackingLabel,
   emptyCompetitorWebsite,
   hasInvalidCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
@@ -67,6 +68,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? parsedInput
     : applyWebsiteSearchFallback(parsedInput, competitorWebsite);
   const trackingRole = normalizeWatchlistTrackingRole(url.searchParams.get("trackingRole"));
+  const searchScope = url.searchParams.get("broader") === "1" ? "broader" : "exact";
   const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
 
   if (hasInvalidCompetitorWebsite(competitorWebsite)) {
@@ -137,24 +139,40 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
-  const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+  const { executeSearchWithRelevance } = await import("~/lib/search-execution.server");
+  const { shouldApplySearchV2 } = await import("~/lib/search-rollout.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
   const customerMetaAdLibraryToken = session
     ? await (await import("~/lib/customer-meta.server")).getCustomerMetaAdLibraryToken(env, workspaceUserId!)
     : null;
-  const result = await searchAdsViaSourceResolver(
-    env,
-    normalizeSavedQuery(parsed.mode, parsed.filters),
-    url.searchParams.get("after"),
-    {
-      purpose: "public_search",
-      forceLive,
-      ...(customerMetaAdLibraryToken ? { customerMetaAdLibraryToken } : {}),
-    },
-  );
+
+  const useSearchV2 = shouldApplySearchV2(env) && Boolean(competitorWebsite.raw);
+  const searchExecution = useSearchV2
+    ? await executeSearchWithRelevance({
+        env,
+        competitorWebsite,
+        parsed,
+        scope: searchScope,
+        cursor: url.searchParams.get("after"),
+        forceLive,
+        customerMetaAdLibraryToken,
+      })
+    : {
+        result: await (
+          await import("~/lib/ad-source.server")
+        ).searchAdsViaSourceResolver(env, normalizeSavedQuery(parsed.mode, parsed.filters), url.searchParams.get("after"), {
+          purpose: "public_search",
+          forceLive,
+          ...(customerMetaAdLibraryToken ? { customerMetaAdLibraryToken } : {}),
+        }),
+        query: normalizeSavedQuery(parsed.mode, parsed.filters),
+        searchScope,
+        displayDomain: competitorWebsite.host,
+      };
+
   const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
     env,
-    result,
+    searchExecution.result,
     url.searchParams.get("selected"),
     {
       enrichSelected: Boolean(session),
@@ -172,6 +190,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     session,
     competitorWebsite,
     trackingRole,
+    searchScope: searchExecution.searchScope,
+    displayDomain: searchExecution.displayDomain,
     inputError: null,
   };
 }
@@ -263,7 +283,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetType: "advertiser",
         targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
         targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
-        targetLabel: normalizedQuery.filters.query,
+        targetLabel: competitorTrackingLabel(competitorWebsite, normalizedQuery.filters.query),
         targetCountry: normalizedQuery.filters.country,
         trackingRole,
       });
@@ -283,7 +303,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetType: "saved_query",
         targetId: savedQuery.id,
         targetFingerprint: watchlistFingerprint(normalizedQuery, competitorWebsite),
-        targetLabel: normalizedQuery.filters.query || savedQuery.name,
+        targetLabel: competitorTrackingLabel(competitorWebsite, normalizedQuery.filters.query) || savedQuery.name,
         targetCountry: normalizedQuery.filters.country,
         trackingRole,
       });
@@ -345,10 +365,22 @@ export default function SearchRoute() {
   );
   const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(`/search?${currentSearchParams.toString()}`)}`;
   const inferredWatchlistName = (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
-  const canTrackCurrentCompetitor = Boolean(data.filters.query) && !data.inputError;
+  const canTrackCurrentCompetitor = Boolean(data.filters.query || competitorWebsite.normalizedUrl) && !data.inputError;
   const discoverySummary = formatDiscoverySummary(data.result);
-  const hasSearchQuery = Boolean(data.filters.query);
+  const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
   const landingPageCount = data.result.ads.filter((ad) => ad.landingPage || ad.landingPageUrl).length;
+  const displayDomain = data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
+  const isDomainSearch = Boolean(displayDomain && competitorWebsite.normalizedUrl);
+  const isBroaderScope = data.searchScope === "broader";
+  const broaderSearchParams = withTrackingContext(
+    buildSearchParams({
+      mode: data.mode,
+      filters: data.filters,
+    }),
+    competitorWebsite.raw,
+    trackingRole,
+  );
+  broaderSearchParams.set("broader", "1");
 
   return (
     <main className="f9-search-page">
@@ -471,7 +503,19 @@ export default function SearchRoute() {
               <div className="f9-panel-head">
                 <div>
                   <span>Results</span>
-                  <h2>{formatResultsPanelTitle(data.result)}</h2>
+                  <h2>
+                    {formatResultsPanelTitle(data.result, {
+                      displayDomain,
+                      isDomainSearch,
+                      isBroaderScope,
+                    })}
+                  </h2>
+                  {isDomainSearch && !isBroaderScope ? (
+                    <small>{`Verified ads linked to ${displayDomain}`}</small>
+                  ) : null}
+                  {isDomainSearch && isBroaderScope ? (
+                    <small>{`Broader matches related to ${displayDomain}`}</small>
+                  ) : null}
                 </div>
                 {data.result.nextCursor ? (
                   <Link
@@ -526,6 +570,7 @@ export default function SearchRoute() {
                           <AdLongevityPill ad={ad} />
                         </div>
                         <p>{formatResultCardSummary(ad)}</p>
+                        {ad.domainMatch?.reason ? <strong>{ad.domainMatch.reason}</strong> : null}
                         <small>
                           {ad.offer} · {ad.destinationType} · {ad.languageLabel}
                         </small>
@@ -535,11 +580,46 @@ export default function SearchRoute() {
                   ))
                 ) : (
                   <div className="f9-empty-state">
-                    <h3>{formatEmptyResultHeadline(data.result)}</h3>
+                    <h3>
+                      {formatEmptyResultHeadline(data.result, {
+                        displayDomain,
+                        isDomainSearch,
+                        isBroaderScope,
+                      })}
+                    </h3>
                     <p>
-                      {discoverySummary ??
-                        "Try another competitor website."}
+                      {isDomainSearch && !isBroaderScope
+                        ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
+                        : discoverySummary ?? "Try another competitor website."}
                     </p>
+                    {isDomainSearch && !isBroaderScope ? (
+                      <div className="f9-search-empty-actions">
+                        {rootData.session ? (
+                          <Form className="f9-quick-track-form" method="post">
+                            <input name="intent" type="hidden" value="create-watchlist" />
+                            <SearchStateFields
+                              competitorWebsite={competitorWebsite.raw}
+                              filters={data.filters}
+                              mode={data.mode}
+                              trackingRole={trackingRole}
+                            />
+                            <input name="name" type="hidden" value={`${inferredWatchlistName} watch`} />
+                            <SubmitButton className="f9-secondary-button" intent="create-watchlist" pendingLabel="Creating…">
+                              Track this {targetNoun}
+                            </SubmitButton>
+                          </Form>
+                        ) : null}
+                        <Link className="f9-secondary-button" to={`/search?${broaderSearchParams.toString()}`}>
+                          Search broader matches for “{displayDomain.split(".")[0] ?? displayDomain}”
+                        </Link>
+                        <Link className="f9-secondary-button" to="/search">
+                          Try another domain
+                        </Link>
+                        <Link className="f9-secondary-button" to="/app/watchlists">
+                          View monitoring setup
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -852,7 +932,10 @@ export function formatDiscoverySummary(result: SearchResponse) {
     .replace(/(^|[.!?]\s+)([a-z])/g, (match) => match.toUpperCase());
 }
 
-function formatEmptyResultHeadline(result: SearchResponse) {
+function formatEmptyResultHeadline(
+  result: SearchResponse,
+  context: { displayDomain?: string | null; isDomainSearch?: boolean; isBroaderScope?: boolean } = {},
+) {
   if (result.discoveryStatus === "disabled") {
     return "Enter a competitor website";
   }
@@ -865,16 +948,35 @@ function formatEmptyResultHeadline(result: SearchResponse) {
     return "Live search is temporarily unavailable";
   }
 
+  if (context.isDomainSearch && context.displayDomain && !context.isBroaderScope) {
+    return `No verified ads found for ${context.displayDomain}`;
+  }
+
   return "No ads found for this competitor";
 }
 
-function formatResultsPanelTitle(result: SearchResponse) {
+function formatResultsPanelTitle(
+  result: SearchResponse,
+  context: { displayDomain?: string | null; isDomainSearch?: boolean; isBroaderScope?: boolean } = {},
+) {
   if (result.ads.length > 0) {
+    if (context.isDomainSearch && context.displayDomain && !context.isBroaderScope) {
+      return `${result.ads.length} verified ads linked to ${context.displayDomain}`;
+    }
+
+    if (context.isBroaderScope && context.displayDomain) {
+      return `${result.ads.length} broader matches for ${context.displayDomain}`;
+    }
+
     return `${result.ads.length} ads found`;
   }
 
   if (/warming this query|already warming/i.test(result.discoverySummary ?? "")) {
     return "Search in progress";
+  }
+
+  if (context.isDomainSearch && context.displayDomain && !context.isBroaderScope) {
+    return `No verified ads for ${context.displayDomain}`;
   }
 
   return "0 ads found";

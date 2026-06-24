@@ -134,7 +134,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       country: visitorCountry,
     });
     const targetFingerprint = watchlistFingerprint(normalizedQuery, competitorWebsite);
-    const targetLabel = competitorWebsite.searchTerm || query;
+    const targetLabel = competitorWebsite.displayName ?? competitorWebsite.searchTerm ?? query;
     const watchlist = await createWatchlist(env, workspaceUserId, {
       name: `${competitorWebsite.displayName ?? query} watch`,
       targetType: "advertiser",
