@@ -150,3 +150,14 @@ Docs: `docs/plan-catalog.md`, `docs/billing-sku-catalog.md`, `docs/evidence-usag
 - Commercial gate: nine v1 SKUs in code catalog; checkout remains fail-closed when SKU env mapping absent.
 
 Top-up spend after cancel: retained but not spendable without active paid plan. Scheduled monitoring does not consume evidence checks.
+
+## Presence Tracking v1 hardening (2026-06-24)
+
+- PR #239 branch `cursor/presence-tracking-v1-20260624`
+- Baseline: 1213 tests on merge base; post-hardening 1236 tests
+- Migrations: `0055_presence_tracking.sql` (schema), `0056_presence_oauth_transaction.sql` (OAuth transactions)
+- OAuth: HMAC one-time transactions + PKCE; fail closed without `PRESENCE_OAUTH_STATE_SECRET`
+- Robots: `FiveToNinePresenceBot`, RFC 9309 parser, SSRF-safe fetch, fail-closed on robots errors
+- Rollout: `PRESENCE_WEBSITE_ROLLOUT=disabled` in wrangler vars; internal workspace via `PRESENCE_INTERNAL_WORKSPACE_ID` secret
+- Canary: `npm run canary:presence`
+- Owner actions: set `PRESENCE_OAUTH_STATE_SECRET`, `PRESENCE_INTERNAL_WORKSPACE_ID`, apply remote migrations, redeploy with `internal` rollout after canary

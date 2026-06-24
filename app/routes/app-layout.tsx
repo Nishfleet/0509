@@ -15,6 +15,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { isOpsUserAllowed } = await import("~/lib/env.server");
+  const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
+  const { resolveWorkspace } = await import("~/lib/workspace.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
 
@@ -22,14 +24,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect("/app/onboard");
   }
 
+  const workspace = await resolveWorkspace(env, session.user.id);
+  const showPresenceNav = presenceNavVisible(env, workspace.workspaceUserId);
+
   return {
     session,
     showOpsNav: isOpsUserAllowed(env, session.user.email),
+    showPresenceNav,
   };
 }
 
 export default function AppLayoutRoute() {
-  const { session, showOpsNav } = useLoaderData<typeof loader>();
+  const { session, showOpsNav, showPresenceNav } = useLoaderData<typeof loader>();
 
   return (
     <main className="f9-app-shell">
@@ -49,7 +55,7 @@ export default function AppLayoutRoute() {
           </NavLink>
           <NavLink to="/app/collections">Boards</NavLink>
           <NavLink to="/app/watchlists">Watchlists</NavLink>
-          <NavLink to="/app/presence">Presence</NavLink>
+          {showPresenceNav ? <NavLink to="/app/presence">Presence</NavLink> : null}
           <NavLink to="/app/clients">Client rooms</NavLink>
           <NavLink to="/app/team">Team</NavLink>
           <NavLink to="/app/digests">Briefs</NavLink>

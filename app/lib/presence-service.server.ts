@@ -8,6 +8,7 @@ import {
   pollPresenceTarget,
   validatePresenceTarget,
 } from "~/lib/presence-connector-registry.server";
+import { evaluatePresenceWorkspaceAccess } from "~/lib/presence-internal-access.server";
 import {
   countSourceTargetsForEntity,
   countTrackedEntities,
@@ -35,6 +36,18 @@ export class PresenceServiceError extends Error {
     this.code = code;
     this.status = status;
   }
+}
+
+export async function requirePresenceWorkspaceAccess(env: AppEnv, workspaceUserId: string) {
+  const access = evaluatePresenceWorkspaceAccess(env, workspaceUserId);
+  if (!access.allowed) {
+    throw new PresenceServiceError(
+      access.reasonCode ?? "presence_gated",
+      access.reasonMessage ?? "Presence tracking is not available.",
+      403,
+    );
+  }
+  return access;
 }
 
 export async function requirePresencePlanAccess(
@@ -68,6 +81,7 @@ export async function createPresenceEntity(
     notes?: string | null;
   },
 ) {
+  await requirePresenceWorkspaceAccess(env, userId);
   const { limits } = await requirePresencePlanAccess(env, userId, input.trackingMode);
   const total = await countTrackedEntities(env, userId);
   if (total >= limits.maxTrackedEntities) {
@@ -100,6 +114,7 @@ export async function addPresenceSourceTarget(
     metadata?: Record<string, unknown>;
   },
 ) {
+  await requirePresenceWorkspaceAccess(env, userId);
   const entity = await getTrackedEntity(env, userId, entityId);
   if (!entity) {
     throw new PresenceServiceError("not_found", "Tracked entity not found.", 404);
@@ -163,6 +178,7 @@ export async function pollPresenceSourceTarget(
   targetId: string,
   options: { fetchImpl?: typeof fetch; budgetUnits?: number } = {},
 ) {
+  await requirePresenceWorkspaceAccess(env, userId);
   const { getSourceTarget } = await import("~/lib/presence-data.server");
   const target = await getSourceTarget(env, userId, targetId);
   if (!target) {
@@ -244,6 +260,7 @@ export async function getPresenceWorkspaceSnapshot(env: AppEnv, userId: string) 
 }
 
 export async function deletePresenceEntity(env: AppEnv, userId: string, entityId: string) {
+  await requirePresenceWorkspaceAccess(env, userId);
   const entity = await getTrackedEntity(env, userId, entityId);
   if (!entity) {
     throw new PresenceServiceError("not_found", "Tracked entity not found.", 404);

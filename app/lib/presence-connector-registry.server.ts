@@ -32,8 +32,9 @@ export function connectorRolloutState(
   env: import("~/lib/env.server").AppEnv,
   connectorId: PresenceConnectorId,
   trackingMode: "self" | "competitor",
+  workspaceUserId?: string,
 ): ConnectorRolloutState {
-  return evaluateConnectorAccessGate(env, connectorId, trackingMode).rolloutState;
+  return evaluateConnectorAccessGate(env, connectorId, trackingMode, workspaceUserId).rolloutState;
 }
 
 export async function validatePresenceTarget(
@@ -61,7 +62,7 @@ export async function pollPresenceTarget(
   } = {},
 ): Promise<PollResult> {
   const connector = getPresenceConnector(target.connectorId);
-  if (!connectorOperationalForPolling(env, target.connectorId, entity.trackingMode)) {
+  if (!connectorOperationalForPolling(env, target.connectorId, entity.trackingMode, target.userId)) {
     return {
       ok: false,
       items: [],
