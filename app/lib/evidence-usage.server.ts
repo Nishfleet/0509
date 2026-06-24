@@ -1,25 +1,27 @@
 import type { AppEnv } from "~/lib/env.server";
 import {
   getIncludedEvidenceAllowance,
+  isPaidPlanFamily,
   parsePlanFamily,
   type PlanFamily,
 } from "~/lib/plan-entitlements";
-import { defineEvidenceCheckBillableUnit } from "~/lib/evidence-usage-policies.server";
+import { defineEvidenceCheckBillableUnit, topUpSpendRequiresActivePaidPlan } from "~/lib/evidence-usage-policies.server";
+import {
+  ensureCurrentEvidenceUsagePeriod,
+  ensureWorkspaceEntitlementAnchor,
+} from "~/lib/evidence-usage-period.server";
+import { getUserPlan } from "~/lib/plan.server";
 
 const RESERVATION_TTL_MS = 15 * 60 * 1000;
 
 export { defineEvidenceCheckBillableUnit };
-
-interface UsagePeriodRow {
-  id: string;
-  workspace_user_id: string;
-  period_start: string;
-  period_end: string;
-  plan_family: string;
-  included_allowance: number;
-  included_consumed: number;
-  created_at: string;
-}
+export {
+  addSubscriptionMonthsUtc,
+  clampAnniversaryUtcDay,
+  computeSubscriptionPeriodBounds,
+  ensureCurrentEvidenceUsagePeriod,
+  ensureWorkspaceEntitlementAnchor,
+} from "~/lib/evidence-usage-period.server";
 
 interface TopUpGrantRow {
   id: string;
@@ -42,11 +44,6 @@ interface ReservationRow {
   logical_operation_key: string;
   quantity: number;
   status: string;
-  reserved_at: string;
-  expires_at: string;
-  settled_at: string | null;
-  released_at: string | null;
-  source: string;
 }
 
 function ensureDb(env: AppEnv) {
@@ -62,146 +59,248 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-export function utcCalendarMonthBounds(at: Date = new Date()) {
-  const periodStart = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1, 0, 0, 0, 0));
-  const periodEnd = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1, 0, 0, 0, 0));
-  return {
-    periodStart: periodStart.toISOString(),
-    periodEnd: periodEnd.toISOString(),
-  };
-}
-
 async function readWorkspacePlanFamily(env: AppEnv, workspaceUserId: string): Promise<PlanFamily> {
-  const row = await ensureDb(env)
-    .prepare(`SELECT plan FROM user_plan WHERE user_id = ? LIMIT 1`)
-    .bind(workspaceUserId)
-    .first<{ plan: string }>();
-  return parsePlanFamily(row?.plan);
+  return getUserPlan(env, workspaceUserId);
 }
 
-export async function ensureCurrentEvidenceUsagePeriod(
-  env: AppEnv,
-  workspaceUserId: string,
-  planFamily?: PlanFamily,
-) {
-  const plan = planFamily ?? (await readWorkspacePlanFamily(env, workspaceUserId));
-  const { periodStart, periodEnd } = utcCalendarMonthBounds();
-  const allowance = getIncludedEvidenceAllowance(plan);
+async function sumLedgerDeltaForGrant(env: AppEnv, grantId: string) {
+  try {
+    const row = await ensureDb(env)
+      .prepare(
+        `
+          SELECT COALESCE(SUM(quantity_delta), 0) AS total
+          FROM evidence_top_up_ledger_entry
+          WHERE grant_id = ?
+        `,
+      )
+      .bind(grantId)
+      .first<{ total: number }>();
+    return Number(row?.total ?? 0);
+  } catch {
+    return null;
+  }
+}
 
-  const existing = await ensureDb(env)
+export async function rebuildTopUpGrantBalance(env: AppEnv, grantId: string) {
+  const grant = await ensureDb(env)
     .prepare(
       `
-        SELECT id, workspace_user_id, period_start, period_end, plan_family,
-               included_allowance, included_consumed, created_at
-        FROM evidence_usage_period
-        WHERE workspace_user_id = ?
-          AND period_start = ?
+        SELECT id, quantity_granted, quantity_remaining
+        FROM evidence_top_up_grant
+        WHERE id = ?
         LIMIT 1
       `,
     )
-    .bind(workspaceUserId, periodStart)
-    .first<UsagePeriodRow>();
+    .bind(grantId)
+    .first<{ id: string; quantity_granted: number; quantity_remaining: number }>();
 
-  if (existing) {
-    if (existing.plan_family !== plan) {
-      await ensureDb(env)
-        .prepare(
-          `
-            UPDATE evidence_usage_period
-            SET plan_family = ?,
-                included_allowance = ?
-            WHERE id = ?
-          `,
-        )
-        .bind(plan, allowance, existing.id)
-        .run();
-      return {
-        ...existing,
-        plan_family: plan,
-        included_allowance: allowance,
-      };
-    }
-    return existing;
+  if (!grant) return null;
+
+  const ledgerDelta = await sumLedgerDeltaForGrant(env, grantId);
+  if (ledgerDelta === null) {
+    return Number(grant.quantity_remaining ?? 0);
   }
 
-  const id = createId();
-  await ensureDb(env)
-    .prepare(
-      `
-        INSERT INTO evidence_usage_period (
-          id, workspace_user_id, period_start, period_end, plan_family,
-          included_allowance, included_consumed, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?)
-      `,
-    )
-    .bind(id, workspaceUserId, periodStart, periodEnd, plan, allowance, nowIso())
-    .run();
-
-  return {
-    id,
-    workspace_user_id: workspaceUserId,
-    period_start: periodStart,
-    period_end: periodEnd,
-    plan_family: plan,
-    included_allowance: allowance,
-    included_consumed: 0,
-    created_at: nowIso(),
-  } satisfies UsagePeriodRow;
+  const derived = Math.max(0, Number(grant.quantity_granted) + ledgerDelta);
+  return derived;
 }
 
-async function sumLegacyActiveTopUpCredits(env: AppEnv, workspaceUserId: string, now: string) {
+async function listActiveTopUpGrants(env: AppEnv, workspaceUserId: string) {
   try {
-    const row = await ensureDb(env)
+    const result = await ensureDb(env)
       .prepare(
         `
-          SELECT COALESCE(SUM(credits), 0) AS total
-          FROM proof_usage_credit
-          WHERE user_id = ?
-            AND expires_at > ?
-        `,
-      )
-      .bind(workspaceUserId, now)
-      .first<{ total: number }>();
-    return Number(row?.total ?? 0);
-  } catch {
-    return 0;
-  }
-}
-
-async function sumTopUpGrantRemaining(env: AppEnv, workspaceUserId: string) {
-  try {
-    const row = await ensureDb(env)
-      .prepare(
-        `
-          SELECT COALESCE(SUM(quantity_remaining), 0) AS total
+          SELECT id, workspace_user_id, sku_slug, provider_payment_id, provider_product_id,
+                 quantity_granted, quantity_remaining, granted_at, status, catalog_version
           FROM evidence_top_up_grant
           WHERE workspace_user_id = ?
-            AND status = 'active'
-            AND quantity_remaining > 0
+            AND status IN ('active', 'depleted')
+          ORDER BY granted_at ASC
         `,
       )
       .bind(workspaceUserId)
-      .first<{ total: number }>();
-    return Number(row?.total ?? 0);
+      .all<TopUpGrantRow>();
+    return result.results ?? [];
   } catch {
-    return 0;
+    return [];
   }
 }
 
+async function deriveTopUpRemainingForGrant(env: AppEnv, grant: TopUpGrantRow) {
+  const rebuilt = await rebuildTopUpGrantBalance(env, grant.id);
+  if (rebuilt === null) {
+    return grant.status === "active" ? Math.max(0, Number(grant.quantity_remaining ?? 0)) : 0;
+  }
+  return rebuilt;
+}
+
+async function sumDerivedTopUpRemaining(env: AppEnv, workspaceUserId: string) {
+  const grants = await listActiveTopUpGrants(env, workspaceUserId);
+  let total = 0;
+  for (const grant of grants) {
+    total += await deriveTopUpRemainingForGrant(env, grant);
+  }
+  return total;
+}
+
+async function listUnmigratedLegacyCredits(env: AppEnv, workspaceUserId: string, now: string) {
+  try {
+    const result = await ensureDb(env)
+      .prepare(
+        `
+          SELECT p.id, p.user_id, p.credits, p.provider_payment_id, p.granted_at, p.expires_at
+          FROM proof_usage_credit p
+          LEFT JOIN proof_usage_credit_migration m ON m.legacy_credit_id = p.id
+          WHERE p.user_id = ?
+            AND m.legacy_credit_id IS NULL
+            AND p.expires_at > ?
+            AND p.credits > 0
+        `,
+      )
+      .bind(workspaceUserId, now)
+      .all<{
+        id: string;
+        user_id: string;
+        credits: number;
+        provider_payment_id: string | null;
+        granted_at: string;
+      }>();
+    return result.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function migrateLegacyTopUpCreditsIfNeeded(env: AppEnv, workspaceUserId: string) {
+  const now = nowIso();
+  const legacyRows = await listUnmigratedLegacyCredits(env, workspaceUserId, now);
+  if (legacyRows.length === 0) return { migrated: 0 };
+
+  let migrated = 0;
+  for (const row of legacyRows) {
+    const paymentId = row.provider_payment_id?.trim() || `legacy-credit:${row.id}`;
+    const idempotencyKey = `legacy-migrate:${row.id}`;
+    const grantId = createId();
+    const grantedAt = row.granted_at || now;
+
+    const migrationInsert = await ensureDb(env)
+      .prepare(
+        `
+          INSERT INTO proof_usage_credit_migration (
+            legacy_credit_id, grant_id, workspace_user_id, migrated_at, idempotency_key
+          )
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(legacy_credit_id) DO NOTHING
+        `,
+      )
+      .bind(row.id, grantId, workspaceUserId, now, idempotencyKey)
+      .run();
+
+    if ((migrationInsert.meta?.changes ?? 0) === 0) {
+      continue;
+    }
+
+    await ensureDb(env)
+      .prepare(
+        `
+          INSERT INTO evidence_top_up_grant (
+            id, workspace_user_id, sku_slug, provider_payment_id, provider_product_id,
+            quantity_granted, quantity_remaining, granted_at, status, catalog_version, metadata_json
+          )
+          VALUES (?, ?, 'legacy_migrated_v1', ?, 'legacy', ?, ?, ?, 'active', 'legacy', ?)
+          ON CONFLICT(provider_payment_id) DO NOTHING
+        `,
+      )
+      .bind(
+        grantId,
+        workspaceUserId,
+        paymentId,
+        row.credits,
+        row.credits,
+        grantedAt,
+        JSON.stringify({ legacyCreditId: row.id }),
+      )
+      .run();
+
+    migrated += 1;
+  }
+
+  return { migrated };
+}
+
+async function appendTopUpLedgerEntry(
+  env: AppEnv,
+  input: {
+    grantId: string;
+    workspaceUserId: string;
+    quantityDelta: number;
+    entryType: "consumption" | "release" | "refund" | "adjustment";
+    reservationId?: string | null;
+    idempotencyKey: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const db = ensureDb(env);
+  const entryId = createId();
+  const createdAt = nowIso();
+
+  const insert = await db
+    .prepare(
+      `
+        INSERT INTO evidence_top_up_ledger_entry (
+          id, grant_id, workspace_user_id, quantity_delta, entry_type,
+          reservation_id, idempotency_key, metadata_json, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(idempotency_key) DO NOTHING
+      `,
+    )
+    .bind(
+      entryId,
+      input.grantId,
+      input.workspaceUserId,
+      input.quantityDelta,
+      input.entryType,
+      input.reservationId ?? null,
+      input.idempotencyKey,
+      JSON.stringify(input.metadata ?? {}),
+      createdAt,
+    )
+    .run();
+
+  if ((insert.meta?.changes ?? 0) === 0) {
+    return { applied: false as const };
+  }
+
+  await db
+    .prepare(
+      `
+        UPDATE evidence_top_up_grant
+        SET quantity_remaining = MAX(0, quantity_remaining + ?),
+            status = CASE
+              WHEN MAX(0, quantity_remaining + ?) <= 0 THEN 'depleted'
+              ELSE 'active'
+            END
+        WHERE id = ?
+      `,
+    )
+    .bind(input.quantityDelta, input.quantityDelta, input.grantId)
+    .run();
+
+  return { applied: true as const, entryId };
+}
+
 export async function getEvidenceUsageSummary(env: AppEnv, workspaceUserId: string) {
+  await migrateLegacyTopUpCreditsIfNeeded(env, workspaceUserId);
   const plan = await readWorkspacePlanFamily(env, workspaceUserId);
   const period = await ensureCurrentEvidenceUsagePeriod(env, workspaceUserId, plan);
   const includedUsed = Number(period.included_consumed ?? 0);
   const includedAllowance = Number(period.included_allowance ?? 0);
   const includedRemaining = Math.max(0, includedAllowance - includedUsed);
-  const now = nowIso();
-  const [topUpRemaining, legacyTopUp] = await Promise.all([
-    sumTopUpGrantRemaining(env, workspaceUserId),
-    sumLegacyActiveTopUpCredits(env, workspaceUserId, now),
-  ]);
-  const topUpTotal = topUpRemaining + legacyTopUp;
-  const totalAvailable = includedRemaining + topUpTotal;
+  const topUpRemaining = await sumDerivedTopUpRemaining(env, workspaceUserId);
+  const canSpendTopUps = topUpSpendRequiresActivePaidPlan(plan);
+  const spendableTopUp = canSpendTopUps ? topUpRemaining : 0;
+  const totalAvailable = includedRemaining + spendableTopUp;
 
   return {
     plan,
@@ -210,11 +309,12 @@ export async function getEvidenceUsageSummary(env: AppEnv, workspaceUserId: stri
     includedAllowance,
     includedUsed,
     includedRemaining,
-    topUpRemaining: topUpTotal,
-    topUpGrantRemaining: topUpRemaining,
-    legacyTopUpRemaining: legacyTopUp,
+    topUpRemaining,
+    topUpSpendable: spendableTopUp,
+    topUpRetainedWhileInactive: !canSpendTopUps ? topUpRemaining : 0,
     totalAvailable,
     nextPeriodStart: period.period_end,
+    canSpendTopUps,
     billableUnit: defineEvidenceCheckBillableUnit(),
   };
 }
@@ -292,58 +392,22 @@ export async function applyTopUpRefundAdjustment(
     providerEventId?: string | null;
   },
 ) {
-  const adjustmentId = createId();
-  const createdAt = nowIso();
-  const db = ensureDb(env);
-
-  const insert = await db
-    .prepare(
-      `
-        INSERT INTO evidence_top_up_adjustment (
-          id, grant_id, workspace_user_id, quantity_delta, reason,
-          provider_event_id, idempotency_key, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(idempotency_key) DO NOTHING
-      `,
-    )
-    .bind(
-      adjustmentId,
-      input.grantId,
-      input.workspaceUserId,
-      input.quantityDelta,
-      input.reason,
-      input.providerEventId ?? null,
-      input.idempotencyKey,
-      createdAt,
-    )
-    .run();
-
-  if ((insert.meta?.changes ?? 0) === 0) {
-    return { applied: false as const };
-  }
-
-  await db
-    .prepare(
-      `
-        UPDATE evidence_top_up_grant
-        SET quantity_remaining = MAX(0, quantity_remaining + ?),
-            status = CASE
-              WHEN MAX(0, quantity_remaining + ?) <= 0 THEN 'depleted'
-              ELSE status
-            END
-        WHERE id = ?
-      `,
-    )
-    .bind(input.quantityDelta, input.quantityDelta, input.grantId)
-    .run();
-
-  return { applied: true as const };
+  return appendTopUpLedgerEntry(env, {
+    grantId: input.grantId,
+    workspaceUserId: input.workspaceUserId,
+    quantityDelta: input.quantityDelta,
+    entryType: "refund",
+    idempotencyKey: input.idempotencyKey,
+    metadata: {
+      reason: input.reason,
+      providerEventId: input.providerEventId ?? null,
+    },
+  });
 }
 
 export type EvidenceReservationResult =
   | { ok: true; reservationId: string; pool: "included" | "top_up" }
-  | { ok: false; reason: "exhausted" | "duplicate" | "unavailable" };
+  | { ok: false; reason: "exhausted" | "duplicate" | "unavailable" | "top_up_inactive_plan" };
 
 export async function reserveEvidenceCheck(
   env: AppEnv,
@@ -362,26 +426,29 @@ export async function reserveEvidenceCheck(
   const existing = await db
     .prepare(
       `
-        SELECT id, status
+        SELECT id, status, usage_period_id, top_up_grant_id
         FROM evidence_usage_reservation
         WHERE logical_operation_key = ?
         LIMIT 1
       `,
     )
     .bind(input.logicalOperationKey)
-    .first<{ id: string; status: string }>();
+    .first<ReservationRow & { status: string }>();
 
   if (existing) {
     if (existing.status === "settled") {
       return { ok: false, reason: "duplicate" };
     }
-    if (existing.status === "pending" && existing.id) {
-      return { ok: true, reservationId: existing.id, pool: "included" };
+    if (existing.status === "pending") {
+      return {
+        ok: true,
+        reservationId: existing.id,
+        pool: existing.top_up_grant_id ? "top_up" : "included",
+      };
     }
   }
 
-  const includedRemaining =
-    Number(period.included_allowance) - Number(period.included_consumed);
+  const includedRemaining = Number(period.included_allowance) - Number(period.included_consumed);
   const expiresAt = new Date(Date.parse(now) + RESERVATION_TTL_MS).toISOString();
 
   if (includedRemaining > 0) {
@@ -424,65 +491,53 @@ export async function reserveEvidenceCheck(
     }
   }
 
-  const grant = await db
-    .prepare(
-      `
-        SELECT id
-        FROM evidence_top_up_grant
-        WHERE workspace_user_id = ?
-          AND status = 'active'
-          AND quantity_remaining > 0
-        ORDER BY granted_at ASC
-        LIMIT 1
-      `,
-    )
-    .bind(input.workspaceUserId)
-    .first<{ id: string }>();
-
-  if (grant?.id) {
-    const debit = await db
-      .prepare(
-        `
-          UPDATE evidence_top_up_grant
-          SET quantity_remaining = quantity_remaining - 1,
-              status = CASE WHEN quantity_remaining - 1 <= 0 THEN 'depleted' ELSE status END
-          WHERE id = ?
-            AND quantity_remaining > 0
-        `,
-      )
-      .bind(grant.id)
-      .run();
-
-    if ((debit.meta?.changes ?? 0) === 1) {
-      const reservationId = createId();
-      await db
-        .prepare(
-          `
-            INSERT INTO evidence_usage_reservation (
-              id, workspace_user_id, usage_period_id, top_up_grant_id,
-              logical_operation_key, quantity, status, reserved_at, expires_at, source
-            )
-            VALUES (?, ?, NULL, ?, ?, 1, 'pending', ?, ?, ?)
-            ON CONFLICT(logical_operation_key) DO NOTHING
-          `,
-        )
-        .bind(
-          reservationId,
-          input.workspaceUserId,
-          grant.id,
-          input.logicalOperationKey,
-          now,
-          expiresAt,
-          input.source,
-        )
-        .run();
-      return { ok: true, reservationId, pool: "top_up" };
+  if (!topUpSpendRequiresActivePaidPlan(plan)) {
+    if ((await sumDerivedTopUpRemaining(env, input.workspaceUserId)) > 0) {
+      return { ok: false, reason: "top_up_inactive_plan" };
     }
+    return { ok: false, reason: "exhausted" };
   }
 
-  const legacy = await sumLegacyActiveTopUpCredits(env, input.workspaceUserId, now);
-  if (legacy > 0) {
-    return { ok: true, reservationId: createId(), pool: "top_up" };
+  const grants = await listActiveTopUpGrants(env, input.workspaceUserId);
+  for (const grant of grants) {
+    const remaining = await deriveTopUpRemainingForGrant(env, grant);
+    if (remaining <= 0) continue;
+
+    const reservationId = createId();
+    const ledger = await appendTopUpLedgerEntry(env, {
+      grantId: grant.id,
+      workspaceUserId: input.workspaceUserId,
+      quantityDelta: -1,
+      entryType: "consumption",
+      reservationId,
+      idempotencyKey: `reserve:${input.logicalOperationKey}:${grant.id}`,
+    });
+
+    if (!ledger.applied) continue;
+
+    await db
+      .prepare(
+        `
+          INSERT INTO evidence_usage_reservation (
+            id, workspace_user_id, usage_period_id, top_up_grant_id,
+            logical_operation_key, quantity, status, reserved_at, expires_at, source
+          )
+          VALUES (?, ?, NULL, ?, ?, 1, 'pending', ?, ?, ?)
+          ON CONFLICT(logical_operation_key) DO NOTHING
+        `,
+      )
+      .bind(
+        reservationId,
+        input.workspaceUserId,
+        grant.id,
+        input.logicalOperationKey,
+        now,
+        expiresAt,
+        input.source,
+      )
+      .run();
+
+    return { ok: true, reservationId, pool: "top_up" };
   }
 
   return { ok: false, reason: "exhausted" };
@@ -512,14 +567,14 @@ export async function releaseEvidenceReservation(env: AppEnv, logicalOperationKe
   const row = await db
     .prepare(
       `
-        SELECT id, usage_period_id, top_up_grant_id, status
+        SELECT id, usage_period_id, top_up_grant_id, workspace_user_id, status
         FROM evidence_usage_reservation
         WHERE logical_operation_key = ?
         LIMIT 1
       `,
     )
     .bind(logicalOperationKey)
-    .first<ReservationRow>();
+    .first<ReservationRow & { workspace_user_id: string }>();
 
   if (!row || row.status !== "pending") return;
 
@@ -531,6 +586,7 @@ export async function releaseEvidenceReservation(env: AppEnv, logicalOperationKe
         SET status = 'released',
             released_at = ?
         WHERE id = ?
+          AND status = 'pending'
       `,
     )
     .bind(releasedAt, row.id)
@@ -553,17 +609,14 @@ export async function releaseEvidenceReservation(env: AppEnv, logicalOperationKe
   }
 
   if (row.top_up_grant_id) {
-    await db
-      .prepare(
-        `
-          UPDATE evidence_top_up_grant
-          SET quantity_remaining = quantity_remaining + 1,
-              status = 'active'
-          WHERE id = ?
-        `,
-      )
-      .bind(row.top_up_grant_id)
-      .run();
+    await appendTopUpLedgerEntry(env, {
+      grantId: row.top_up_grant_id,
+      workspaceUserId: row.workspace_user_id,
+      quantityDelta: 1,
+      entryType: "release",
+      reservationId: row.id,
+      idempotencyKey: `release:${logicalOperationKey}`,
+    });
   }
 }
 
@@ -595,4 +648,27 @@ export function buildEvidenceLogicalOperationKey(input: {
   idempotencyKey: string;
 }) {
   return `evidence:${input.workspaceUserId}:${input.proofTargetId}:${input.idempotencyKey}`;
+}
+
+/** @deprecated Use computeSubscriptionPeriodBounds — kept for transitional tests. */
+export function utcCalendarMonthBounds(at: Date = new Date()) {
+  const periodStart = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1, 0, 0, 0, 0));
+  const periodEnd = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+  return {
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+  };
+}
+
+export async function rebuildWorkspaceTopUpBalance(env: AppEnv, workspaceUserId: string) {
+  const grants = await listActiveTopUpGrants(env, workspaceUserId);
+  let total = 0;
+  for (const grant of grants) {
+    total += (await rebuildTopUpGrantBalance(env, grant.id)) ?? 0;
+  }
+  return total;
+}
+
+export function workspaceHasPaidPlanForTopUps(plan: PlanFamily) {
+  return isPaidPlanFamily(plan) && topUpSpendRequiresActivePaidPlan(plan);
 }
