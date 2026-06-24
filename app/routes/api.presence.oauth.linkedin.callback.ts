@@ -2,19 +2,45 @@ import { redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 import { credentialFingerprint, encryptCredential } from "~/lib/credential-crypto.server";
+import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import { upsertSourceConnection } from "~/lib/presence-data.server";
+import {
+  consumePresenceOAuthTransaction,
+  verifyPresenceOAuthState,
+} from "~/lib/presence-oauth-transaction.server";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state") ?? "";
-  const [userId, entityId] = state.split(":");
+  const callbackUri = `${env.BETTER_AUTH_URL?.replace(/\/$/, "") ?? "https://0509.io"}/api/presence/oauth/linkedin/callback`;
 
-  if (!code || userId !== session.user.id) {
+  if (!code) {
+    return redirect("/app/presence?oauth=linkedin_failed");
+  }
+
+  const gate = evaluateConnectorAccessGate(env, "linkedin", "self", workspaceUserId);
+  if (!gate.allowed) {
+    return redirect("/app/presence?oauth=linkedin_failed");
+  }
+
+  const verified = await verifyPresenceOAuthState(env, state);
+  if (!verified.ok) {
+    return redirect("/app/presence?oauth=linkedin_failed");
+  }
+
+  const consumed = await consumePresenceOAuthTransaction(env, {
+    transactionId: verified.transactionId,
+    userId: session.user.id,
+    workspaceUserId,
+    connectorId: "linkedin",
+    callbackUri,
+  });
+  if (!consumed.ok) {
     return redirect("/app/presence?oauth=linkedin_failed");
   }
 
@@ -24,16 +50,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     return redirect("/app/presence?oauth=linkedin_unconfigured");
   }
 
-  const redirectUri = `${env.BETTER_AUTH_URL?.replace(/\/$/, "") ?? "https://0509.io"}/api/presence/oauth/linkedin/callback`;
   const tokenResponse = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: redirectUri,
+      redirect_uri: callbackUri,
       client_id: clientId,
       client_secret: clientSecret,
+      code_verifier: consumed.transaction.pkceVerifier,
     }),
   });
 
@@ -49,9 +75,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const encrypted = await encryptCredential(env, accessToken);
   const fingerprint = await credentialFingerprint(accessToken);
+  const entityId = consumed.transaction.returnPath.startsWith("/app/presence/")
+    ? consumed.transaction.returnPath.split("/").pop() ?? null
+    : null;
+
   await upsertSourceConnection(env, {
     userId: session.user.id,
-    trackedEntityId: entityId || null,
+    trackedEntityId: entityId,
     connectorId: "linkedin",
     encryptedCredentials: encrypted,
     credentialFingerprint: fingerprint,
@@ -62,6 +92,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     lastHealthAt: new Date().toISOString(),
   });
 
-  const destination = entityId ? `/app/presence/${entityId}?oauth=linkedin_connected` : "/app/presence?oauth=linkedin_connected";
+  const destination = entityId
+    ? `/app/presence/${entityId}?oauth=linkedin_connected`
+    : "/app/presence?oauth=linkedin_connected";
   return redirect(destination);
 }

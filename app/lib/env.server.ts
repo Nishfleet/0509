@@ -98,6 +98,10 @@ export interface AppEnv {
   PRESENCE_X_ROLLOUT?: string;
   PRESENCE_REDDIT_ROLLOUT?: string;
   PRESENCE_LINKEDIN_ROLLOUT?: string;
+  /** HMAC secret for one-time OAuth transactions (32+ bytes). Fail closed when missing. */
+  PRESENCE_OAUTH_STATE_SECRET?: string;
+  /** Owner-documented internal workspace user id for presence pilot (never a customer id). */
+  PRESENCE_INTERNAL_WORKSPACE_ID?: string;
   PRESENCE_X_MOCK?: string;
   PRESENCE_REDDIT_MOCK?: string;
   PRESENCE_LINKEDIN_MOCK?: string;
