@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { mockAgencyWorkspacePlan } from "./helpers/agency-plan-mock";
+
 import type {
   AdRecord,
   CollectionItemRecord,
@@ -160,6 +162,7 @@ const digest: DigestRecord = {
 };
 
 function setupMocks(authOk = true, actionsWriteEnabled = true) {
+  mockAgencyWorkspacePlan();
   const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
   const audit = {
     id: "audit-1",

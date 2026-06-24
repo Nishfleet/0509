@@ -584,6 +584,9 @@ describe("watchlists route actions", () => {
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
       upsertWatchlistDeliveryConfig,
     }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+    }));
 
     const { action } = await import("~/routes/app.watchlists");
     const formData = new FormData();

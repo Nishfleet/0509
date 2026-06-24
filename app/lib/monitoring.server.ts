@@ -56,6 +56,12 @@ import {
 } from "~/lib/ad-source.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
+import { planAllowsDigestCadence } from "~/lib/plan-entitlements";
+import {
+  getEvidenceUsageSummary,
+  tryFinalizeEvidenceForProofCapture,
+  tryReserveEvidenceForProofCapture,
+} from "~/lib/evidence-usage.server";
 import {
   buildCanonicalPageIdentity,
   buildProofTargetIdentity,
@@ -1388,16 +1394,6 @@ function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoring
   return scheduledAt.getUTCDay() === WEEKLY_DIGEST_UTC_DAY;
 }
 
-function planAllowsDigestCadence(plan: keyof typeof PLAN_LIMITS, cadence: DigestCadence) {
-  const planCadence = PLAN_LIMITS[plan].digestCadence;
-
-  if (cadence === "daily") {
-    return planCadence === "daily_and_weekly";
-  }
-
-  return planCadence === "weekly" || planCadence === "daily_and_weekly";
-}
-
 async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {
   if (watchlist.targetType === "advertiser") {
     return normalizeSavedQuery("advertiser", {
@@ -1692,6 +1688,65 @@ async function persistScanNativeEvents(
   return createdEvents;
 }
 
+async function resolveWorkspaceEvidenceCapacity(env: AppEnv, workspaceUserId: string) {
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    const userPlan = await getProofCapturePlan(env, workspaceUserId);
+    const purchasedProofCredits = 0;
+    const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
+    return {
+      userPlan,
+      purchasedProofCredits,
+      workspaceMonthlyCap,
+      workspaceMonthlyRemaining: workspaceMonthlyCap,
+      workspaceDailyCap: dailyProofCapForPlan(userPlan, purchasedProofCredits),
+      includedUsed: 0,
+    };
+  }
+
+  try {
+    const summary = await getEvidenceUsageSummary(env, workspaceUserId);
+    const userPlan = summary.plan;
+    const purchasedProofCredits = summary.topUpRemaining;
+    return {
+      userPlan,
+      purchasedProofCredits,
+      workspaceMonthlyCap: summary.includedAllowance + purchasedProofCredits,
+      workspaceMonthlyRemaining: summary.totalAvailable,
+      workspaceDailyCap: dailyProofCapForPlan(userPlan, purchasedProofCredits),
+      includedUsed: summary.includedUsed,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/evidence_usage_period|no such table/i.test(message)) {
+      throw error;
+    }
+
+    const now = new Date().toISOString();
+    const proofWindowStart = startOfRollingProofWindowIso();
+    const userPlan = await getProofCapturePlan(env, workspaceUserId);
+    const purchasedProofCredits = await sumActiveProofUsageCredits(
+      env,
+      workspaceUserId,
+      proofWindowStart,
+      now,
+    );
+    const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
+    const workspaceMonthlyAttempts = await countProofCapturesForWorkspaceSince(
+      env,
+      workspaceUserId,
+      proofWindowStart,
+    );
+    return {
+      userPlan,
+      purchasedProofCredits,
+      workspaceMonthlyCap,
+      workspaceMonthlyRemaining: Math.max(0, workspaceMonthlyCap - workspaceMonthlyAttempts),
+      workspaceDailyCap: dailyProofCapForPlan(userPlan, purchasedProofCredits),
+      includedUsed: workspaceMonthlyAttempts,
+    };
+  }
+}
+
 async function evaluateSelectiveProofCandidates(
   env: AppEnv,
   input: {
@@ -1705,17 +1760,12 @@ async function evaluateSelectiveProofCandidates(
   const proofEvents: WatchEventRecord[] = [];
   const eventTypesByAd = mapEventTypesByAdId(input.scanNativeDrafts);
   const todayStart = startOfUtcDayIso();
-  const proofWindowStart = startOfRollingProofWindowIso();
   const now = new Date().toISOString();
-  const userPlan = await getProofCapturePlan(env, input.watchlist.userId);
-  const purchasedProofCredits = await sumActiveProofUsageCredits(
-    env,
-    input.watchlist.userId,
-    proofWindowStart,
-    now,
-  );
-  const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
-  const workspaceDailyCap = dailyProofCapForPlan(userPlan, purchasedProofCredits);
+  const capacity = await resolveWorkspaceEvidenceCapacity(env, input.watchlist.userId);
+  const userPlan = capacity.userPlan;
+  const purchasedProofCredits = capacity.purchasedProofCredits;
+  const workspaceMonthlyCap = capacity.workspaceMonthlyCap;
+  const workspaceDailyCap = capacity.workspaceDailyCap;
   const watchlistDailyAttempts = await countProofCapturesForWatchlistSince(
     env,
     input.watchlist.id,
@@ -1726,11 +1776,7 @@ async function evaluateSelectiveProofCandidates(
     input.watchlist.userId,
     todayStart,
   );
-  const workspaceMonthlyAttempts = await countProofCapturesForWorkspaceSince(
-    env,
-    input.watchlist.userId,
-    proofWindowStart,
-  );
+  const workspaceMonthlyAttempts = capacity.includedUsed;
   const workspaceRecentAttempts = await listRecentWorkspaceProofCaptures(env, input.watchlist.userId, 20);
   const proofAwareRecentEvents = [...input.recentWatchEvents];
   let watchlistRunAttemptCount = 0;
@@ -1802,6 +1848,7 @@ async function evaluateSelectiveProofCandidates(
       workspaceDailyAttemptCount,
       workspaceMonthlyAttemptCount,
       workspaceMonthlyCap,
+      workspaceEvidenceRemaining: capacity.workspaceMonthlyRemaining,
       workspaceDailyCap,
       workspaceRecentAttempts,
       activeCaptureCount: 0,
@@ -1826,11 +1873,40 @@ async function evaluateSelectiveProofCandidates(
     watchlistRunAttemptCount += 1;
     watchlistDailyAttemptCount += 1;
     workspaceDailyAttemptCount += 1;
-    workspaceMonthlyAttemptCount += 1;
     proofAttemptCount += 1;
+
+    const evidenceReservation = await tryReserveEvidenceForProofCapture(env, {
+      workspaceUserId: input.watchlist.userId,
+      proofTargetId: proofTarget.id,
+      idempotencyKey: proofRequestKey,
+      source: "monitoring.scan",
+    });
+
+    if (evidenceReservation && !evidenceReservation.result.ok) {
+      await createProofCapture(env, {
+        proofTargetId: proofTarget.id,
+        status: "skipped_due_to_budget",
+        skipReason: "skipped_due_to_budget",
+        failureReason:
+          evidenceReservation.result.reason === "top_up_inactive_plan"
+            ? "Purchased checks require an active paid plan."
+            : "Evidence check allowance exhausted.",
+        extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      });
+      continue;
+    }
+
+    if (evidenceReservation?.result.ok || !evidenceReservation) {
+      workspaceMonthlyAttemptCount += 1;
+    }
+
+    const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
     const snapshot = await captureLandingPageSnapshot(env, observation.landing_page_url);
 
     if (!snapshot) {
+      if (evidenceOperationKey) {
+        await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "failed");
+      }
       await createProofCapture(env, {
         proofTargetId: proofTarget.id,
         status: "failed",
@@ -1889,6 +1965,9 @@ async function evaluateSelectiveProofCandidates(
       attemptedAt: snapshot.capturedAt,
       succeededAt: snapshot.capturedAt,
     });
+    if (evidenceOperationKey) {
+      await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "succeeded");
+    }
     await upsertProofTarget(env, {
       watchlistId: input.watchlist.id,
       adId: observation.ad_id,
@@ -2009,20 +2088,15 @@ async function evaluateDirectWebsiteProofCandidate(
 
   const now = new Date().toISOString();
   const todayStart = startOfUtcDayIso();
-  const proofWindowStart = startOfRollingProofWindowIso();
-  const userPlan = await getProofCapturePlan(env, input.watchlist.userId);
-  const purchasedProofCredits = await sumActiveProofUsageCredits(
-    env,
-    input.watchlist.userId,
-    proofWindowStart,
-    now,
-  );
-  const workspaceMonthlyCap = monthlyProofCapForPlan(userPlan) + purchasedProofCredits;
-  const workspaceDailyCap = dailyProofCapForPlan(userPlan, purchasedProofCredits);
+  const capacity = await resolveWorkspaceEvidenceCapacity(env, input.watchlist.userId);
+  const userPlan = capacity.userPlan;
+  const purchasedProofCredits = capacity.purchasedProofCredits;
+  const workspaceMonthlyCap = capacity.workspaceMonthlyCap;
+  const workspaceDailyCap = capacity.workspaceDailyCap;
   const [watchlistDailyAttempts, workspaceDailyAttempts, workspaceMonthlyAttempts] = await Promise.all([
     countProofCapturesForWatchlistSince(env, input.watchlist.id, todayStart),
     countProofCapturesForWorkspaceSince(env, input.watchlist.userId, todayStart),
-    countProofCapturesForWorkspaceSince(env, input.watchlist.userId, proofWindowStart),
+    Promise.resolve(capacity.includedUsed),
   ]);
 
   if (
@@ -2111,11 +2185,50 @@ async function evaluateDirectWebsiteProofCandidate(
     return emptyProofEvaluation(websiteUrl);
   }
 
+  const evidenceReservation = await tryReserveEvidenceForProofCapture(env, {
+    workspaceUserId: input.watchlist.userId,
+    proofTargetId: proofTarget.id,
+    idempotencyKey: proofRequestKey,
+    source: "monitoring.direct_website",
+  });
+
+  if (evidenceReservation && !evidenceReservation.result.ok) {
+    await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "skipped_due_to_budget",
+      skipReason: "skipped_due_to_budget",
+      failureReason:
+        evidenceReservation.result.reason === "top_up_inactive_plan"
+          ? "Purchased checks require an active paid plan."
+          : "Evidence check allowance exhausted.",
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    });
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  if (
+    capacity.workspaceMonthlyRemaining <= 0 &&
+    !evidenceReservation
+  ) {
+    await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "skipped_due_to_budget",
+      skipReason: "skipped_due_to_budget",
+      failureReason: "Evidence check allowance exhausted.",
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    });
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
   const snapshot = await captureLandingPageSnapshot(env, websiteUrl, {
     preferRendered: true,
   });
 
   if (!snapshot) {
+    if (evidenceOperationKey) {
+      await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "failed");
+    }
     await createProofCapture(env, {
       proofTargetId: proofTarget.id,
       status: "failed",
@@ -2183,6 +2296,9 @@ async function evaluateDirectWebsiteProofCandidate(
     attemptedAt: snapshot.capturedAt,
     succeededAt: snapshot.capturedAt,
   });
+  if (evidenceOperationKey) {
+    await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "succeeded");
+  }
   await upsertProofTarget(env, {
     watchlistId: input.watchlist.id,
     adId: null,

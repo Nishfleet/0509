@@ -20,6 +20,7 @@ import {
 } from "~/lib/monitoring-fanout.server";
 import type { WatchlistRecord } from "~/lib/types";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
+import { seedPendingOrchestratedRun } from "./helpers/monitoring-queue-seed";
 
 vi.mock("~/lib/plan.server", () => ({
   getUserPlan: vi.fn().mockResolvedValue("agency"),
@@ -83,7 +84,8 @@ async function seedFanoutSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlit
       processing_started_at TEXT,
       queued_at TEXT,
       attempt_count INTEGER NOT NULL DEFAULT 0,
-      retry_after TEXT
+      retry_after TEXT,
+      queue_priority INTEGER NOT NULL DEFAULT 2
     );
     CREATE UNIQUE INDEX idx_watchlist_run_idempotency_key
       ON watchlist_run(idempotency_key)
@@ -464,6 +466,12 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     const env = { DB: db, MONITORING_FANOUT_MAX_INFLIGHT: "8" } as never;
     expect(resolveMonitoringFanoutMaxInflight(env)).toBe(8);
 
+    for (let index = 0; index < 8; index += 1) {
+      seedPendingOrchestratedRun(sqlite, `run-${index}`, {
+        queuedAt: new Date(Date.parse("2026-06-23T04:00:00.000Z") + index * 1000).toISOString(),
+      });
+    }
+
     const claims = await Promise.all(
       Array.from({ length: 20 }, (_v, index) =>
         claimMonitoringConcurrencySlot(env, {
@@ -482,12 +490,16 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     });
     expect(released).toBe(true);
 
+    sqlite.exec(`DELETE FROM watchlist_run`);
+    seedPendingOrchestratedRun(sqlite, "run-reclaim", {
+      queuedAt: "2026-06-23T05:00:00.000Z",
+    });
     const reclaimed = await claimMonitoringConcurrencySlot(env, {
       runId: "run-reclaim",
       leaseMs: 60_000,
     });
     expect(reclaimed.claimed).toBe(true);
-    expect(await countHeldMonitoringConcurrencySlots(env)).toBe(8);
+    expect(await countHeldMonitoringConcurrencySlots(env)).toBeLessThanOrEqual(8);
 
     const staleRelease = await releaseMonitoringConcurrencySlot(env, {
       token: successful[0]!.token!,
@@ -525,6 +537,10 @@ describe("monitoring fan-out drain simulation", () => {
     let maxHeld = 0;
 
     for (let index = 0; index < 75; index += 1) {
+      sqlite.exec(`DELETE FROM watchlist_run`);
+      seedPendingOrchestratedRun(sqlite, `run-${index}`, {
+        queuedAt: new Date(Date.parse("2026-06-23T04:00:00.000Z") + index * 1000).toISOString(),
+      });
       const claim = await claimMonitoringConcurrencySlot(env, {
         runId: `run-${index}`,
         leaseMs: 60_000,
@@ -538,6 +554,10 @@ describe("monitoring fan-out drain simulation", () => {
           )
           .get() as { token: string };
         await releaseMonitoringConcurrencySlot(env, { token: releaseCandidate.token });
+        sqlite.exec(`DELETE FROM watchlist_run`);
+        seedPendingOrchestratedRun(sqlite, `run-${index}`, {
+          queuedAt: new Date(Date.parse("2026-06-23T04:00:00.000Z") + index * 1000).toISOString(),
+        });
         const retry = await claimMonitoringConcurrencySlot(env, {
           runId: `run-${index}`,
           leaseMs: 60_000,

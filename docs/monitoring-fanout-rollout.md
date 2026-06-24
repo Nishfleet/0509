@@ -73,3 +73,17 @@ Set `MONITORING_FANOUT_MODE=inline` and redeploy.
 - Browser Rendering concurrent session ceiling vs `MONITORING_FANOUT_MAX_INFLIGHT`
 - In-flight workflow drain latency after rollback
 - Proof that 75 jobs complete across real nightly windows (not sqlite mocks alone)
+
+## Plan-aware queue priority (2026-06-23, local only)
+
+Branch `cursor/plan-entitlements-topups-no-prices-20260623` adds `watchlist_run.queue_priority` (migration `0052`) and persists plan-derived priority on orchestrated runs:
+
+| Plan | Scheduled cadence | Queue priority (lower runs first) |
+|------|-------------------|-----------------------------------|
+| Agency | Daily | `0` |
+| Starter | Daily | `1` |
+| Scout | Monday only | `2` |
+
+Top-up balance does **not** alter cadence or priority. Fan-out remains **dormant** (`MONITORING_FANOUT_MODE=inline`); priority fields are schema-ready for activation ladder above.
+
+**Slot acquisition (final audit):** `claimMonitoringConcurrencySlot()` only succeeds when the run is within the top `MONITORING_FANOUT_MAX_INFLIGHT` ranked pending runs (`selectRankedEligibleOrchestratedRuns`). Ordering: effective priority (with 30-minute aging boosts), scheduled slot, `queued_at`, run id. A run cannot hold more than one slot simultaneously. Scout runs are excluded on non-Mondays.

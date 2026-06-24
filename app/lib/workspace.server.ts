@@ -1,3 +1,4 @@
+import { getWorkspaceSeatLimit } from "~/lib/plan-entitlements";
 import { getUserPlan } from "~/lib/plan.server";
 import type { AppEnv } from "~/lib/env.server";
 
@@ -8,7 +9,8 @@ function ensureDb(env: AppEnv) {
   return env.DB;
 }
 
-export const AGENCY_SEAT_LIMIT = 3;
+/** Agency seats include the workspace owner (owner + up to two teammates). */
+export const AGENCY_SEAT_LIMIT = getWorkspaceSeatLimit("agency");
 const INVITE_TTL_DAYS = 7;
 
 export interface WorkspaceMemberRow {

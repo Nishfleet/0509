@@ -143,7 +143,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       limit: 10,
       current: options.planLimitAllowed === false ? 10 : 1,
     }),
-    getUserPlan: vi.fn().mockResolvedValue(options.plan ?? "starter"),
+    getUserPlan: vi.fn().mockResolvedValue(options.plan ?? "agency"),
     createCollection: vi.fn().mockResolvedValue(collection),
     createWatchlist: vi.fn().mockResolvedValue(watchlist),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),

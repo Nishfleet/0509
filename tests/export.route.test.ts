@@ -8,6 +8,7 @@ import type {
   WatchEventRecord,
   WatchlistRecord,
 } from "~/lib/types";
+import { mockAgencyWorkspacePlan } from "./helpers/agency-plan-mock";
 
 const session = {
   user: {
@@ -213,6 +214,7 @@ const digest: DigestRecord = {
 };
 
 function setupMocks(input: { collectionItems?: CollectionItemRecord[] } = {}) {
+  mockAgencyWorkspacePlan();
   const env = { DB: {} };
   vi.doMock("~/lib/auth.server", () => ({
     requireSession: vi.fn().mockResolvedValue(session),

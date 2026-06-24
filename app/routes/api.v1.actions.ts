@@ -3,6 +3,8 @@ import type { ActionFunctionArgs } from "react-router";
 export async function action({ context, request }: ActionFunctionArgs) {
   const { authenticateApiKeyRequest } = await import("~/lib/api-keys.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
   const {
     customerAgentActionErrorPayload,
     normalizeCustomerAgentActionName,
@@ -22,6 +24,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
       },
       403,
     );
+  }
+  const workspaceUserId = await resolveWorkspaceDataUserId(env, auth.apiKey.userId);
+  const apiGate = await requireWorkspacePlanFeature(env, workspaceUserId, "api_access");
+  if (!apiGate.ok) {
+    return apiGate.response;
+  }
+  const actionsGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_account_actions");
+  if (!actionsGate.ok) {
+    return actionsGate.response;
   }
 
   const payload = await readJsonObject(request);

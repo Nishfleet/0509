@@ -214,7 +214,17 @@ export async function runCustomerAgentAction(
     },
   }, async () => {
     const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+    const { requireCustomerAgentActionFeature } = await import("~/lib/plan-feature-gate.server");
     const workspaceUserId = await resolveWorkspaceDataUserId(env, context.userId);
+    const actionGate = await requireCustomerAgentActionFeature(
+      env,
+      workspaceUserId,
+      actionName,
+      input,
+    );
+    if (!actionGate.ok) {
+      throw new CustomerAgentActionError("plan_gated", "This capability is not included in your current plan.");
+    }
 
     try {
       if (actionName === "source.meta.retest") {

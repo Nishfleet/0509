@@ -6,6 +6,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { SubmitButton } from "~/components/submit-button";
 import { demoProof } from "~/lib/demo-proof";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
+import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { RootLoaderData } from "~/root";
@@ -559,6 +560,10 @@ export default function MarketingRoute() {
             );
           })}
         </div>
+
+        <p className="ld-pricing-note">
+          {EVIDENCE_USAGE_CUSTOMER_COPY}
+        </p>
 
         <p className="ld-pricing-note">
           Coming from MagicBrief or another tool that&rsquo;s winding down? See the{" "}
