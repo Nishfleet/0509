@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
+import { DashboardPage } from "~/components/dashboard-page";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
@@ -44,7 +45,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCustomerMetaConnection,
-    listAgentMemory,
     listCollections,
     listDeliveryTargets,
     listDigests,
@@ -54,7 +54,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchEvents,
     listWatchlists,
   } = await import("~/lib/data.server");
-  const { safeAgentMemoryRecord, summarizeAgentMemoryValue } = await import("~/lib/agent-memory.server");
   const { getProofUsageSummary } = await import("~/lib/plan.server");
   const { getWorkspaceReadiness } = await import("~/lib/workspace-readiness.server");
   const { getSuccessfulProofCaptureStatsForUser, getSuccessfulRunStatsForUserBetween, getUserPlanBillingInfo } = await import(
@@ -75,7 +74,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     billingInfo,
     workspaceMembers,
     workspaceReadiness,
-    agentMemories,
     counterMoveFollowUps,
   ] = await Promise.all([
     listSavedQueries(env, workspaceUserId),
@@ -88,7 +86,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getUserPlanBillingInfo(env, workspaceUserId),
     listWorkspaceMembers(env, workspaceUserId),
     getWorkspaceReadiness(env, workspaceUserId),
-    listAgentMemory(env, workspaceUserId, { limit: 5 }),
     listActionableCounterMoveFollowUps(env, workspaceUserId, listRecentAgentActionAudits),
   ]);
   const plan = billingInfo.plan;
@@ -124,16 +121,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     overnightStats,
     successfulProofStats,
     workspaceReadiness,
-    agentMemories: agentMemories.map((memory) => {
-      const safeMemory = safeAgentMemoryRecord(memory);
-      return {
-        id: safeMemory.id,
-        key: safeMemory.key,
-        scope: safeMemory.scope,
-        preview: summarizeAgentMemoryValue(safeMemory.value),
-        updatedAt: safeMemory.updatedAt,
-      };
-    }),
     counterMoveFollowUps,
     plan,
     teamMemberCount: workspaceMembers.length,
@@ -378,6 +365,7 @@ export default function AppDashboardRoute() {
     sentDigests > 0;
 
   return (
+    <DashboardPage>
     <section className="f9-app-stack f9-dashboard-clean">
       {checkoutReturn ? <CheckoutReturnBanner plan={plan} /> : null}
       {hasPaymentIssue ? (
@@ -424,9 +412,9 @@ export default function AppDashboardRoute() {
         <article className="f9-app-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Workspace setup</span>
+              <span className="f9-app-kicker">Setup</span>
               <h2>
-                {workspaceReadiness.readyCount} of {workspaceReadiness.totalCount} launch checks complete
+                {workspaceReadiness.readyCount} of {workspaceReadiness.totalCount} checks complete
               </h2>
             </div>
             <Link className="f9-secondary-button" to="/status">
@@ -500,8 +488,8 @@ export default function AppDashboardRoute() {
         <article className="f9-app-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Decisions</span>
-              <h2>Briefs that need review</h2>
+              <span className="f9-app-kicker">Follow-ups</span>
+              <h2>Responses waiting on you</h2>
             </div>
             <Link className="f9-secondary-button" to="/app/watchlists">
               Review changes
@@ -646,7 +634,7 @@ export default function AppDashboardRoute() {
                 <h2>Useful examples</h2>
               </div>
               <Link className="f9-secondary-button" to="/app/collections">
-                Open boards
+                Open collections
               </Link>
             </div>
             <div className="f9-work-list is-compact">
@@ -663,6 +651,7 @@ export default function AppDashboardRoute() {
         ) : null}
       </div>
     </section>
+    </DashboardPage>
   );
 }
 
@@ -719,10 +708,10 @@ function readCounterMoveFollowUpSummary(audit: AgentActionAuditRecord) {
   ) {
     return null;
   }
-  const targetLabel = safeDashboardText(readStringValue(brief.targetLabel), "Counter-move brief");
+  const targetLabel = safeDashboardText(readStringValue(brief.targetLabel), "Competitive response");
   const title = safeDashboardText(
     readStringValue(firstFollowUp?.title) ?? readStringValue(brief.summary),
-    `${targetLabel} counter-move brief`,
+    `${targetLabel} follow-up`,
   );
 
   return {
@@ -792,13 +781,13 @@ function safeDashboardText(value: string | null, fallback: string) {
 function formatFollowUpChannel(value: string | null) {
   switch (value) {
     case "email":
-      return "Email workflow";
+      return "Email";
     case "slack":
-      return "Slack workflow";
+      return "Slack";
     case "client_room":
       return "Client room";
     default:
-      return "App workflow";
+      return "In app";
   }
 }
 

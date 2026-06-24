@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const appLayout = readFileSync("app/routes/app-layout.tsx", "utf8");
+const shellComponent = readFileSync("app/components/dashboard-shell.tsx", "utf8");
 const routeConfig = readFileSync("app/routes.ts", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
 const onboardRoute = readFileSync("app/routes/app.onboard.tsx", "utf8");
@@ -18,7 +19,7 @@ const insightDepthPanel = readFileSync("app/components/insight-depth-panel.tsx",
 const reportView = readFileSync("app/components/report-view.tsx", "utf8");
 const signOutButton = readFileSync("app/components/sign-out-button.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
-const appSurface = `${appLayout}\n${dashboardRoute}\n${onboardRoute}\n${collectionsRoute}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${sourcesRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${insightDepthPanel}\n${reportView}\n${signOutButton}`;
+const appSurface = `${appLayout}\n${shellComponent}\n${dashboardRoute}\n${onboardRoute}\n${collectionsRoute}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${sourcesRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${insightDepthPanel}\n${reportView}\n${signOutButton}`;
 const appClasses = Array.from(appSurface.matchAll(/className=(?:"([^"]+)"|{`([^`]+)`})/g)).flatMap((match) =>
   (match[1] ?? match[2])
     .split(/\s+/)
@@ -27,8 +28,9 @@ const appClasses = Array.from(appSurface.matchAll(/className=(?:"([^"]+)"|{`([^`
 );
 
 describe("app rebuild", () => {
-  it("uses the fresh app shell and dashboard classes", () => {
-    expect(appSurface).toContain('className="f9-app-shell"');
+  it("uses the Dashboard V2 shell and dashboard classes", () => {
+    expect(appLayout).toContain("DashboardShell");
+    expect(shellComponent).toContain("f9-cursor-shell");
     expect(appSurface).toContain('className="f9-app-stack"');
     expect(appSurface).toContain("f9-dashboard-clean");
     expect(appSurface).toContain('className="f9-dashboard-search"');
@@ -67,7 +69,7 @@ describe("app rebuild", () => {
   });
 
   it("uses the Five to Nine wordmark in the app shell", () => {
-    expect(appLayout).toContain('<BrandWordmark meta="Account" />');
+    expect(appLayout).toContain('accountTitle="Five to Nine"');
   });
 
   it("matches the advertised competitor-ad dashboard surface", () => {

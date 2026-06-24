@@ -906,7 +906,7 @@ describe("sources route component", () => {
     const { default: AppSourcesRoute } = await import("~/routes/app.sources");
     const markup = renderToStaticMarkup(createElement(AppSourcesRoute));
 
-    expect(markup).toContain("Connect delivery and backup access");
+    expect(markup).toContain("Delivery channels and backup access");
     expect(markup).toContain("Tracking status");
     expect(markup).not.toContain("Meta coverage is beta");
     expect(markup).not.toContain("f9-beta-pill");
@@ -916,16 +916,11 @@ describe("sources route component", () => {
     expect(markup).toContain("Advanced: API keys and external tools");
     expect(markup).toContain("Tool setup");
     expect(markup).toContain("Create a read key");
-    expect(markup).toContain("Enable actions only when needed");
+    expect(markup).toContain("Enable write access only when needed");
     expect(markup).toContain("Review and revoke keys");
-    expect(markup).toContain("Available actions");
-    expect(markup).toContain("Watchlists");
-    expect(markup).toContain("Proof and reports");
-    expect(markup).toContain("Context and client rooms");
-    expect(markup).toContain("Not available through API");
+    expect(markup).toContain("API documentation");
+    expect(markup).toContain("Sensitive changes");
     expect(markup).toContain("billing changes");
-    expect(markup).toContain("secret-bearing integration setup");
-    expect(markup).toContain("Paid customer support");
     expect(markup).toContain("Billing changes and cancellation");
     expect(markup).toContain("Migration and setup help");
     expect(markup).toContain("Create API key");

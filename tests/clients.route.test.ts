@@ -539,6 +539,6 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Needs setup before client review");
     expect(markup).toContain("No linked proof yet");
     expect(markup).toContain("No client context saved");
-    expect(markup).toContain("Link a watchlist or board to this room.");
+    expect(markup).toContain("Link a watchlist or collection to this room.");
   });
 });

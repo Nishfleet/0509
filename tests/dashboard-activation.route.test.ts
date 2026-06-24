@@ -530,8 +530,8 @@ describe("dashboard first 15 minutes activation", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("1 brief to decide");
-    expect(markup).toContain("Briefs that need review");
-    expect(markup).toContain("Review briefs");
+    expect(markup).toContain("Responses waiting on you");
+    expect(markup).toContain("Review changes");
     expect(markup).toContain("Review Nykaa move");
     expect(markup).not.toContain("no urgent competitor move is waiting");
     expect(markup).not.toContain("No changes worth your time");
