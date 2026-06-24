@@ -109,8 +109,14 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   const workspaceConfigRecord =
     (await getWorkspaceDeliveryConfig(env, input.userId)) ??
     buildLegacyWorkspaceConfig(input.userId, Boolean(input.accountEmail));
+  const entitledConfigs = await resolveEntitledDeliveryConfigs(
+    env,
+    input.userId,
+    workspaceConfigRecord,
+    null,
+  );
   const config = resolveDeliveryConfig({
-    workspaceConfig: workspaceConfigRecord,
+    workspaceConfig: entitledConfigs.workspaceConfig,
     watchlistConfig: null,
   });
 
@@ -184,11 +190,17 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     (await getWorkspaceDeliveryConfig(env, input.userId)) ??
     buildLegacyWorkspaceConfig(input.userId, Boolean(input.accountEmail));
   const watchlistConfig = await getWatchlistDeliveryConfig(env, input.watchlist.id);
+  const entitledConfigs = await resolveEntitledDeliveryConfigs(
+    env,
+    input.userId,
+    workspaceConfigRecord,
+    watchlistConfig,
+  );
   const batches = buildInstantAlertBatches({
     lane,
     events: input.events,
-    workspaceConfig: workspaceConfigRecord,
-    watchlistConfig,
+    workspaceConfig: entitledConfigs.workspaceConfig,
+    watchlistConfig: entitledConfigs.watchlistConfig,
   });
 
   if (batches.length === 0) {
@@ -1394,6 +1406,12 @@ export async function sendDeliveryTestEmail(
     name: string | null;
   },
 ) {
+  const { requireDeliveryConfigSave } = await import("~/lib/plan-feature-gate.server");
+  const deliveryGate = await requireDeliveryConfigSave(env, input.userId, { emailEnabled: true });
+  if (!deliveryGate.ok) {
+    return false;
+  }
+
   // Cloudflare Email has no bounce webhooks, so a typo'd address shows
   // "sent" forever while the customer receives nothing. This send gives
   // them a way to prove the address works end-to-end.
@@ -1796,6 +1814,21 @@ async function persistDeliveryTargetSuccess(
     providerIdentifier: target.providerIdentifier,
     metadata: target.metadata,
   });
+}
+
+async function resolveEntitledDeliveryConfigs(
+  env: AppEnv,
+  userId: string,
+  workspaceConfig: WorkspaceDeliveryConfigRecord,
+  watchlistConfig: WatchlistDeliveryConfigRecord | null,
+) {
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const { applyDeliveryEntitlements } = await import("~/lib/plan-feature-gate.server");
+  const plan = await getUserPlan(env, userId);
+  return {
+    workspaceConfig: applyDeliveryEntitlements(plan, workspaceConfig),
+    watchlistConfig: watchlistConfig ? applyDeliveryEntitlements(plan, watchlistConfig) : null,
+  };
 }
 
 function buildLegacyWorkspaceConfig(
