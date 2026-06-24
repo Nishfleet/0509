@@ -1,0 +1,181 @@
+import {
+  contentLengthExceeds,
+  readResponseTextWithinLimit,
+} from "~/lib/bounded-response.server";
+import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
+import { registrableDomainFromHostname } from "~/lib/search-query";
+
+export interface WebsiteIdentity {
+  registrableDomain: string;
+  canonicalUrl: string | null;
+  title: string | null;
+  siteName: string | null;
+  aliases: string[];
+  resolvedAt: string;
+}
+
+const MAX_IDENTITY_FETCH_REDIRECTS = 5;
+const MAX_IDENTITY_RESPONSE_BYTES = 250_000;
+const IDENTITY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
+
+export async function resolveWebsiteIdentity(domainUrl: string): Promise<WebsiteIdentity | null> {
+  const safeUrl = await resolvePublicHttpUrl(domainUrl.startsWith("http") ? domainUrl : `https://${domainUrl}`);
+  if (!safeUrl) {
+    return null;
+  }
+
+  const registrableDomain = registrableDomainFromHostname(safeUrl.hostname);
+  if (!registrableDomain) {
+    return null;
+  }
+
+  const cached = identityCache.get(registrableDomain);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.identity;
+  }
+
+  const identity = await fetchWebsiteIdentity(safeUrl, registrableDomain);
+  identityCache.set(registrableDomain, {
+    identity,
+    expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS,
+  });
+
+  return identity;
+}
+
+export function clearWebsiteIdentityCacheForTests() {
+  identityCache.clear();
+}
+
+async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Promise<WebsiteIdentity | null> {
+  let currentUrl: URL | null = safeUrl;
+
+  for (let redirects = 0; currentUrl && redirects <= MAX_IDENTITY_FETCH_REDIRECTS; redirects += 1) {
+    const resolved = await resolvePublicHttpUrl(currentUrl);
+    if (!resolved) {
+      return null;
+    }
+
+    const response = await fetch(resolved.toString(), {
+      redirect: "manual",
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+        "user-agent": "0509-search-identity/1.0",
+      },
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const redirected = resolvePublicRedirectUrl(response.headers.get("location"), resolved);
+      currentUrl = redirected ? new URL(redirected) : null;
+      continue;
+    }
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
+      return null;
+    }
+
+    if (contentLengthExceeds(response.headers, MAX_IDENTITY_RESPONSE_BYTES)) {
+      return null;
+    }
+
+    const html = await readResponseTextWithinLimit(response, MAX_IDENTITY_RESPONSE_BYTES);
+    if (!html) {
+      return null;
+    }
+
+    const title = extractTagContent(html, "title");
+    const siteName =
+      extractMetaContent(html, "og:site_name") ??
+      extractMetaContent(html, "application-name") ??
+      extractJsonLdOrganizationName(html);
+    const canonical = extractCanonicalUrl(html, resolved);
+
+    const aliases = new Set<string>();
+    if (siteName) {
+      aliases.add(siteName.trim());
+    }
+    if (title) {
+      aliases.add(title.trim());
+    }
+
+    return {
+      registrableDomain,
+      canonicalUrl: canonical,
+      title,
+      siteName,
+      aliases: [...aliases].filter(Boolean),
+      resolvedAt: new Date().toISOString(),
+    };
+  }
+
+  return null;
+}
+
+function extractTagContent(html: string, tagName: string) {
+  const match = html.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i"));
+  return match?.[1]?.replace(/\s+/g, " ").trim() ?? null;
+}
+
+function extractMetaContent(html: string, key: string) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, "i"),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      return decodeHtmlEntities(match[1].trim());
+    }
+  }
+
+  return null;
+}
+
+function extractCanonicalUrl(html: string, baseUrl: URL) {
+  const match = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
+  if (!match?.[1]) {
+    return baseUrl.toString();
+  }
+
+  try {
+    const canonical = new URL(match[1], baseUrl);
+    return canonical.toString();
+  } catch {
+    return baseUrl.toString();
+  }
+}
+
+function extractJsonLdOrganizationName(html: string) {
+  const scripts = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) ?? [];
+  for (const script of scripts) {
+    const payload = script.replace(/<\/?script[^>]*>/gi, "").trim();
+    try {
+      const parsed = JSON.parse(payload) as { name?: string; "@type"?: string };
+      if (typeof parsed.name === "string" && (!parsed["@type"] || /organization/i.test(parsed["@type"]))) {
+        return parsed.name.trim();
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
