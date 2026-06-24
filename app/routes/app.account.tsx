@@ -19,10 +19,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlan } = await import("~/lib/plan.server");
   const { getWorkspaceBranding } = await import("~/lib/data.server");
+  const { resolveWorkspacePreparedBy } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
 
   const plan = await getUserPlan(env, session.user.id);
+  const brandName = await resolveWorkspacePreparedBy(env, session.user.id);
   const branding = await getWorkspaceBranding(env, session.user.id);
   const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
   const passkeys = passkeysEnabled ? await listBetterAuthPasskeys(env, request) : [];
@@ -32,7 +34,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     name: session.user.name,
     sessionExpiresAt: session.session.expiresAt,
     plan,
-    brandName: plan === "agency" ? branding.brandName : null,
+    brandName,
     brandWebsite: branding.brandWebsite,
     passkeys,
     passkeysEnabled,
@@ -42,7 +44,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { getUserPlan } = await import("~/lib/plan.server");
   const { upsertWorkspaceBranding } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
@@ -50,8 +51,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "save-report-branding") {
-    const plan = await getUserPlan(env, session.user.id);
-    if (plan !== "agency") {
+    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const brandingGate = await requireWorkspacePlanFeature(env, session.user.id, "agency_branding");
+    if (!brandingGate.ok) {
       return {
         ok: false,
         intent,
