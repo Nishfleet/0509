@@ -650,6 +650,93 @@ export function buildEvidenceLogicalOperationKey(input: {
   return `evidence:${input.workspaceUserId}:${input.proofTargetId}:${input.idempotencyKey}`;
 }
 
+export async function reserveEvidenceForProofCapture(
+  env: AppEnv,
+  input: {
+    workspaceUserId: string;
+    proofTargetId: string;
+    idempotencyKey: string;
+    source: string;
+  },
+) {
+  const logicalOperationKey = buildEvidenceLogicalOperationKey({
+    workspaceUserId: input.workspaceUserId,
+    proofTargetId: input.proofTargetId,
+    idempotencyKey: input.idempotencyKey,
+  });
+  const result = await reserveEvidenceCheck(env, {
+    workspaceUserId: input.workspaceUserId,
+    logicalOperationKey,
+    source: input.source,
+  });
+  return { result, logicalOperationKey };
+}
+
+export async function tryReserveEvidenceForProofCapture(
+  env: AppEnv,
+  input: {
+    workspaceUserId: string;
+    proofTargetId: string;
+    idempotencyKey: string;
+    source: string;
+  },
+) {
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    return null;
+  }
+
+  try {
+    return await reserveEvidenceForProofCapture(env, input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/evidence_usage|evidence_top_up|no such table|D1 binding/i.test(message)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function finalizeEvidenceForProofCapture(
+  env: AppEnv,
+  logicalOperationKey: string,
+  outcome: "succeeded" | "failed",
+) {
+  if (outcome === "succeeded") {
+    await settleEvidenceReservation(env, logicalOperationKey);
+    return;
+  }
+  await tryReleaseEvidenceForProofCapture(env, logicalOperationKey);
+}
+
+export async function tryReleaseEvidenceForProofCapture(
+  env: AppEnv,
+  logicalOperationKey: string,
+) {
+  try {
+    await releaseEvidenceReservation(env, logicalOperationKey);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/evidence_usage|no such table/i.test(message)) {
+      throw error;
+    }
+  }
+}
+
+export async function tryFinalizeEvidenceForProofCapture(
+  env: AppEnv,
+  logicalOperationKey: string,
+  outcome: "succeeded" | "failed",
+) {
+  try {
+    await finalizeEvidenceForProofCapture(env, logicalOperationKey, outcome);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/evidence_usage|no such table/i.test(message)) {
+      throw error;
+    }
+  }
+}
+
 /** @deprecated Use computeSubscriptionPeriodBounds — kept for transitional tests. */
 export function utcCalendarMonthBounds(at: Date = new Date()) {
   const periodStart = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1, 0, 0, 0, 0));

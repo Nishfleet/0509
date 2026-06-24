@@ -37,5 +37,6 @@ Scheduled monitoring scans are not evidence checks unless a billable proof captu
 
 - `getEvidenceUsageSummary()` — workspace usage snapshot
 - `reserveEvidenceCheck()` / `settleEvidenceReservation()` / `releaseEvidenceReservation()`
+- Monitoring proof capture calls `tryReserveEvidenceForProofCapture()` before landing-page capture and finalizes on success/failure.
 - `rebuildTopUpGrantBalance()` / `rebuildWorkspaceTopUpBalance()` — cache verification
 - `getProofUsageSummary()` in `plan.server.ts` wraps evidence usage with legacy fallback

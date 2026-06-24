@@ -37,6 +37,8 @@ export interface ProofPolicyInput {
   workspaceDailyAttemptCount: number;
   workspaceMonthlyAttemptCount?: number;
   workspaceMonthlyCap?: number;
+  /** Subscription-period remaining checks (included + spendable top-up). */
+  workspaceEvidenceRemaining?: number;
   // Per-plan daily ceiling (credits included); falls back to the flat v1
   // budget. A flat 60/day made the agency tier's 2,500 monthly checks and
   // every purchased credit pack mathematically unreachable.
@@ -122,6 +124,13 @@ export function evaluateProofPolicy(input: ProofPolicyInput): ProofPolicyDecisio
 
   if (input.proofRequestDuplicate) {
     return buildSkippedDecision(threshold, score, bucket, forced, "skipped_due_to_dedupe");
+  }
+
+  if (
+    typeof input.workspaceEvidenceRemaining === "number" &&
+    input.workspaceEvidenceRemaining <= 0
+  ) {
+    return buildSkippedDecision(threshold, score, bucket, forced, "skipped_due_to_budget");
   }
 
   if (hasExhaustedMonthlyCap(input.workspaceMonthlyAttemptCount, input.workspaceMonthlyCap)) {

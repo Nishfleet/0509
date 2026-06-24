@@ -57,7 +57,11 @@ import {
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import { planAllowsDigestCadence } from "~/lib/plan-entitlements";
-import { getEvidenceUsageSummary } from "~/lib/evidence-usage.server";
+import {
+  getEvidenceUsageSummary,
+  tryFinalizeEvidenceForProofCapture,
+  tryReserveEvidenceForProofCapture,
+} from "~/lib/evidence-usage.server";
 import {
   buildCanonicalPageIdentity,
   buildProofTargetIdentity,
@@ -1844,6 +1848,7 @@ async function evaluateSelectiveProofCandidates(
       workspaceDailyAttemptCount,
       workspaceMonthlyAttemptCount,
       workspaceMonthlyCap,
+      workspaceEvidenceRemaining: capacity.workspaceMonthlyRemaining,
       workspaceDailyCap,
       workspaceRecentAttempts,
       activeCaptureCount: 0,
@@ -1868,11 +1873,40 @@ async function evaluateSelectiveProofCandidates(
     watchlistRunAttemptCount += 1;
     watchlistDailyAttemptCount += 1;
     workspaceDailyAttemptCount += 1;
-    workspaceMonthlyAttemptCount += 1;
     proofAttemptCount += 1;
+
+    const evidenceReservation = await tryReserveEvidenceForProofCapture(env, {
+      workspaceUserId: input.watchlist.userId,
+      proofTargetId: proofTarget.id,
+      idempotencyKey: proofRequestKey,
+      source: "monitoring.scan",
+    });
+
+    if (evidenceReservation && !evidenceReservation.result.ok) {
+      await createProofCapture(env, {
+        proofTargetId: proofTarget.id,
+        status: "skipped_due_to_budget",
+        skipReason: "skipped_due_to_budget",
+        failureReason:
+          evidenceReservation.result.reason === "top_up_inactive_plan"
+            ? "Purchased checks require an active paid plan."
+            : "Evidence check allowance exhausted.",
+        extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      });
+      continue;
+    }
+
+    if (evidenceReservation?.result.ok || !evidenceReservation) {
+      workspaceMonthlyAttemptCount += 1;
+    }
+
+    const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
     const snapshot = await captureLandingPageSnapshot(env, observation.landing_page_url);
 
     if (!snapshot) {
+      if (evidenceOperationKey) {
+        await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "failed");
+      }
       await createProofCapture(env, {
         proofTargetId: proofTarget.id,
         status: "failed",
@@ -1931,6 +1965,9 @@ async function evaluateSelectiveProofCandidates(
       attemptedAt: snapshot.capturedAt,
       succeededAt: snapshot.capturedAt,
     });
+    if (evidenceOperationKey) {
+      await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "succeeded");
+    }
     await upsertProofTarget(env, {
       watchlistId: input.watchlist.id,
       adId: observation.ad_id,
@@ -2148,11 +2185,50 @@ async function evaluateDirectWebsiteProofCandidate(
     return emptyProofEvaluation(websiteUrl);
   }
 
+  const evidenceReservation = await tryReserveEvidenceForProofCapture(env, {
+    workspaceUserId: input.watchlist.userId,
+    proofTargetId: proofTarget.id,
+    idempotencyKey: proofRequestKey,
+    source: "monitoring.direct_website",
+  });
+
+  if (evidenceReservation && !evidenceReservation.result.ok) {
+    await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "skipped_due_to_budget",
+      skipReason: "skipped_due_to_budget",
+      failureReason:
+        evidenceReservation.result.reason === "top_up_inactive_plan"
+          ? "Purchased checks require an active paid plan."
+          : "Evidence check allowance exhausted.",
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    });
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  if (
+    capacity.workspaceMonthlyRemaining <= 0 &&
+    !evidenceReservation
+  ) {
+    await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "skipped_due_to_budget",
+      skipReason: "skipped_due_to_budget",
+      failureReason: "Evidence check allowance exhausted.",
+      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    });
+    return emptyProofEvaluation(websiteUrl);
+  }
+
+  const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
   const snapshot = await captureLandingPageSnapshot(env, websiteUrl, {
     preferRendered: true,
   });
 
   if (!snapshot) {
+    if (evidenceOperationKey) {
+      await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "failed");
+    }
     await createProofCapture(env, {
       proofTargetId: proofTarget.id,
       status: "failed",
@@ -2220,6 +2296,9 @@ async function evaluateDirectWebsiteProofCandidate(
     attemptedAt: snapshot.capturedAt,
     succeededAt: snapshot.capturedAt,
   });
+  if (evidenceOperationKey) {
+    await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "succeeded");
+  }
   await upsertProofTarget(env, {
     watchlistId: input.watchlist.id,
     adId: null,
