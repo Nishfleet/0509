@@ -11,6 +11,8 @@ Branch: `cursor/plan-entitlements-topups-no-prices-20260623` (PR #234).
 | Legacy credits | One-time migration via `proof_usage_credit_migration`; no dual-count fallback |
 | Top-up spend | Retained after cancel; spend requires active paid plan |
 | Feature gates | `plan-feature-gate.server.ts` on API, MCP, exports, shares, reports, team, sources |
+| Delivery gates | Save-time `requireDeliveryConfigSave` + execution-time `applyDeliveryEntitlements`; config retained on downgrade |
+| Agency branding | Save-time `agency_branding` gate; render-time `resolveWorkspacePreparedBy` on shares/reports/PDF |
 | Queue priority | Ranked eligibility before concurrency slot claim; aging prevents starvation |
 | Evidence checks | Scheduled monitoring free; successful unique proof capture debits allowance |
 | Prices | Unconfigured; no hardcoded monetary values in entitlements |
@@ -25,8 +27,10 @@ Branch: `cursor/plan-entitlements-topups-no-prices-20260623` (PR #234).
 | `export_csv/json/slack_ready` | — | ✓ | ✓ | `/export/*`, `/api/v1/*`, MCP read exports |
 | `share_links` | — | — | ✓ | watchlists/collections/digests/reports + agent |
 | `client_reports` / `pdf_reports` | — | — | ✓ | `/app/reports` |
-| `slack_delivery` | — | ✓ | ✓ | sources + agent delivery actions |
-| `high_priority_alerts` | — | ✓ | ✓ | delivery toggles when enabling instant |
+| `slack_delivery` | — | ✓ | ✓ | `app.sources` save-slack-webhook, watchlists save-delivery-config/add-target, agent delivery actions |
+| `high_priority_alerts` | — | ✓ | ✓ | watchlists save-delivery-config, agent delivery_settings.update when enabling instant |
+| `email_delivery` | ✓ | ✓ | ✓ | watchlists send-test-email, delivery execution (save + send) |
+| `agency_branding` | — | — | ✓ | `app.account` save-report-branding; render-time on `share.$token`, `app.reports` preparedBy |
 | `team_workspace` | — | — | ✓ | `/app/team`, workspace invites |
 | Watchlist/board limits | limit | limit | limit | `checkPlanLimit` |
 

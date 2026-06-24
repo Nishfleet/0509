@@ -29,6 +29,21 @@ Use `canUsePlanFeature(plan, feature)` and `requireWorkspacePlanFeature()` — n
 
 Server routes, API/MCP tools, exports, shares, reports, Slack delivery, and account actions enforce features in `app/lib/plan-feature-gate.server.ts`.
 
+### Delivery
+
+- **Save-time:** `requireDeliveryConfigSave()` rejects forbidden Slack/instant/email toggles before persisting watchlist or workspace delivery config. Stored config is retained on downgrade.
+- **Execution-time:** `applyDeliveryEntitlements()` strips disallowed channels before digest/instant sends. Downgraded workspaces keep webhooks/targets but nothing sends until the plan restores access.
+- **Top-ups** grant evidence checks only — they do not unlock Slack, instant alerts, or agency branding.
+
+### Agency branding
+
+- **Save-time:** only Agency may call `save-report-branding`; branding rows persist on downgrade.
+- **Render-time:** `resolveWorkspacePreparedBy()` checks the share/report owner's live plan before showing "Prepared by …". Starter/Scout/canceled plans always show Five to Nine branding on public shares and PDFs.
+
+### Pricing
+
+Checkout SKUs and amounts are unconfigured until Dodo products are wired. Unknown/inactive SKUs fail closed at checkout. Partial refunds are an owner decision — ledger code revokes on full refund only.
+
 ## Evidence checks
 
 Scheduled monitoring is included. One evidence check = one successful, unique, newly produced landing-page proof capture.
