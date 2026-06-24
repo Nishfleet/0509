@@ -27,12 +27,15 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+  const { summarizeCommercialLaunch } = await import("~/lib/commercial-launch-gate.server");
+  const env = getEnv(context);
 
   return {
     pricingPreview: await previewDodo0509PlanPrices({
-      env: getEnv(context),
+      env,
       request,
     }),
+    commercialLaunch: summarizeCommercialLaunch(env),
   };
 }
 
@@ -131,6 +134,11 @@ function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBund
 export default function MarketingRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const routeData = useLoaderData<typeof loader>();
+  const commercialLaunch = routeData.commercialLaunch ?? {
+    scoutSaleOpen: true,
+    starterSaleOpen: true,
+    agencySaleOpen: false,
+  };
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
   const primaryLabel = rootData.session ? "Open account" : "Start now";
   const [localPricing, setLocalPricing] = useState<LocalPricingPreview | null>(
@@ -512,6 +520,12 @@ export default function MarketingRoute() {
           {rootData.pricingPlans.map((plan) => {
             const monthlyReady = hasPrice(localPricing, plan.slug, "monthly");
             const yearlyReady = hasPrice(localPricing, plan.slug, "yearly");
+            const planSaleOpen =
+              plan.slug === "scout"
+                ? commercialLaunch.scoutSaleOpen
+                : plan.slug === "starter"
+                  ? commercialLaunch.starterSaleOpen
+                  : commercialLaunch.agencySaleOpen;
 
             return (
               <article
@@ -520,6 +534,9 @@ export default function MarketingRoute() {
               >
                 <span>{plan.name}</span>
                 {plan.slug === "starter" ? <em className="f9-plan-badge">Recommended</em> : null}
+                {plan.slug === "agency" && !planSaleOpen ? (
+                  <em className="f9-plan-badge">Held for capacity proof</em>
+                ) : null}
                 <h3>{priceLabel(localPricing, plan.slug, "monthly", plan.monthlyLabel)}</h3>
                 <small>{priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)}</small>
                 <p>{plan.detail}</p>
@@ -529,7 +546,7 @@ export default function MarketingRoute() {
                   ))}
                 </ul>
                 {rootData.session ? (
-                  monthlyReady || yearlyReady ? (
+                  planSaleOpen && (monthlyReady || yearlyReady) ? (
                     <div className="f9-plan-actions">
                       {monthlyReady ? (
                         <Form method="post" action="/api/billing/dodo/checkout">
@@ -550,6 +567,11 @@ export default function MarketingRoute() {
                         </Form>
                       ) : null}
                     </div>
+                  ) : plan.slug === "agency" && !planSaleOpen ? (
+                    <p className="f9-price-sync">
+                      Agency opens after nightly monitoring fan-out is proven. Email{" "}
+                      <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> for early access.
+                    </p>
                   ) : (
                     <span className="f9-price-sync">Prices loading</span>
                   )
@@ -598,6 +620,43 @@ export default function MarketingRoute() {
               </article>
             ))}
           </div>
+        </div>
+
+        <div className="ld-pricing-faq ld-reveal" aria-label="Pricing FAQ">
+          <span className="ld-kicker">FAQ</span>
+          <h3>Common billing questions</h3>
+          <dl className="proof-trail-list">
+            <div>
+              <dt>What is an evidence check?</dt>
+              <dd>
+                Scheduled monitoring is included. A check is consumed when we capture a new
+                landing-page proof for a material change — not for routine scans that find nothing
+                new.
+              </dd>
+            </div>
+            <div>
+              <dt>Do unused checks roll over?</dt>
+              <dd>
+                Included monthly checks reset on your subscription anniversary and do not roll over.
+                Top-up packs never expire.
+              </dd>
+            </div>
+            <div>
+              <dt>Why is Agency held?</dt>
+              <dd>
+                Agency includes 75 watchlists with daily scans and highest queue priority. Checkout
+                opens after nightly monitoring fan-out is proven — Scout and Starter are available
+                now.
+              </dd>
+            </div>
+            <div>
+              <dt>Where do prices come from?</dt>
+              <dd>
+                Display prices load from Dodo Payments in your local currency at preview time. We
+                never hardcode checkout amounts in the app.
+              </dd>
+            </div>
+          </dl>
         </div>
       </section>
 
