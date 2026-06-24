@@ -26,6 +26,7 @@ export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
   forceLive?: boolean;
   customerMetaAdLibraryToken?: string | null;
+  cacheKeyOverride?: string | null;
 }
 
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
@@ -315,12 +316,14 @@ export async function searchAdsViaSourceResolver(
     };
   }
 
-  const cacheKey = buildDiscoveryCacheKey({
-    provider,
-    fingerprint: fingerprintSavedQuery(query),
-    country: query.filters.country || "all",
-    cursor,
-  });
+  const cacheKey =
+    options.cacheKeyOverride ??
+    buildDiscoveryCacheKey({
+      provider,
+      fingerprint: fingerprintSavedQuery(query),
+      country: query.filters.country || "all",
+      cursor,
+    });
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
   if (!forceLive && usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {

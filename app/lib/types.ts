@@ -217,6 +217,11 @@ export interface AdRecord {
   creativeTextMetadata?: Record<string, unknown> | null;
   landingPage?: LandingPageSnapshotData | null;
   tags?: string[];
+  domainMatch?: {
+    level: string;
+    reason: string;
+    matchedDomain: string | null;
+  };
 }
 
 export type AdDiscoveryProvider = "meta_api" | "meta_library_browser" | "demo";
@@ -244,6 +249,12 @@ export interface SearchResponse {
   discoveryStatus?: CommercialDiscoveryStatus;
   discoverySummary?: string | null;
   discoveryFailureClass?: DiscoveryFailureClass | null;
+  searchIntent?: "domain" | "text";
+  searchScope?: "exact" | "broader";
+  displayDomain?: string | null;
+  verifiedCount?: number;
+  broaderCandidateCount?: number;
+  rejectedKeywordOnlyCount?: number;
 }
 
 export interface SavedQueryRecord {
