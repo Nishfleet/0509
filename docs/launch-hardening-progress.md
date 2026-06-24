@@ -161,3 +161,12 @@ Top-up spend after cancel: retained but not spendable without active paid plan. 
 - Rollout: `PRESENCE_WEBSITE_ROLLOUT=disabled` in wrangler vars; internal workspace via `PRESENCE_INTERNAL_WORKSPACE_ID` secret
 - Canary: `npm run canary:presence`
 - Owner actions: set `PRESENCE_OAUTH_STATE_SECRET`, `PRESENCE_INTERNAL_WORKSPACE_ID`, apply remote migrations, redeploy with `internal` rollout after canary
+
+## Production release — presence v1 dormant (2026-06-24)
+
+- Merged PR #239 to `main` (`0cc1bc2`)
+- Pre-deploy Worker: prior main → post-deploy `d2a45e72-1f38-48c2-b757-79484f59de9a`
+- Remote D1: migrations `0055`–`0056` applied; ledger shows no pending migrations
+- Deploy vars: `PRESENCE_WEBSITE_ROLLOUT=disabled`, all social connectors `disabled`
+- Smoke: `/api/health` OK; `/search` 200; presence nav hidden (rollout disabled)
+- Internal canary blocked pending owner secrets (`PRESENCE_OAUTH_STATE_SECRET`, `PRESENCE_INTERNAL_WORKSPACE_ID`)
