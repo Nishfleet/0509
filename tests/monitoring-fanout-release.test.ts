@@ -22,6 +22,7 @@ import {
   scheduleWatchlistFanout,
 } from "~/lib/monitoring-fanout.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
+import { seedPendingOrchestratedRun } from "./helpers/monitoring-queue-seed";
 
 vi.mock("~/lib/plan.server", () => ({
   getUserPlan: vi.fn().mockResolvedValue("agency"),
@@ -114,8 +115,13 @@ describe("monitoring fan-out release safeguards", () => {
     await seedSlotSchema(sqlite);
     const env = { DB: db, MONITORING_FANOUT_MAX_INFLIGHT: "65" } as never;
     const effective = resolveEffectiveMonitoringFanoutMaxInflight(env);
+    for (let index = 0; index < effective; index += 1) {
+      seedPendingOrchestratedRun(sqlite, `run-${index}`, {
+        queuedAt: new Date(Date.parse("2026-06-23T04:00:00.000Z") + index * 1000).toISOString(),
+      });
+    }
     const claims = await Promise.all(
-      Array.from({ length: 100 }, (_v, index) =>
+      Array.from({ length: effective }, (_v, index) =>
         claimMonitoringConcurrencySlot(env, { runId: `run-${index}`, leaseMs: 60_000 }),
       ),
     );
@@ -138,6 +144,7 @@ describe("monitoring fan-out release safeguards", () => {
   it("rejects stale token lease renewal and release", async () => {
     const { db, sqlite } = createSqliteD1();
     await seedSlotSchema(sqlite);
+    seedPendingOrchestratedRun(sqlite, "run-1");
     const env = { DB: db, MONITORING_FANOUT_MAX_INFLIGHT: "1" } as never;
     const claim = await claimMonitoringConcurrencySlot(env, { runId: "run-1", leaseMs: 60_000 });
     expect(claim.claimed).toBe(true);
@@ -147,8 +154,12 @@ describe("monitoring fan-out release safeguards", () => {
 
     sqlite
       .prepare(
-        `INSERT INTO watchlist_run (id, watchlist_id, trigger_type, status, page_budget, pages_scanned, summary_json, started_at, created_at, updated_at, processing_token, processing_started_at, attempt_count)
-         VALUES ('run-1', 'watch-1', 'scheduled', 'running', 2, 0, '{}', '2026-06-23T04:00:00.000Z', '2026-06-23T04:00:00.000Z', '2026-06-23T04:00:00.000Z', ?, '2026-06-23T04:00:00.000Z', 1)`,
+        `UPDATE watchlist_run
+         SET status = 'running',
+             processing_token = ?,
+             processing_started_at = '2026-06-23T04:00:00.000Z',
+             attempt_count = 1
+         WHERE id = 'run-1'`,
       )
       .run(token);
 
