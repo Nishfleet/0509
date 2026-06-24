@@ -14,6 +14,7 @@
 
 - Migrations `0047_monitoring_fanout_orchestration.sql` and `0048_monitoring_concurrency_slots.sql` applied **before** Worker deploy
 - Existing `MONITORING_WORKFLOW` binding in `wrangler.jsonc`
+- `MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID` secret configured (internal pilot workspace; never commit a value)
 - No Cloudflare Queue provisioning required
 
 ## Configuration (`wrangler.jsonc` vars)
@@ -44,14 +45,53 @@
 4. `npm run deploy` with `MONITORING_FANOUT_MODE=inline`
 5. Post-deploy health checks (home, `/api/health`, auth, Dodo webhook route)
 
+## Proof matrix: simulated vs live
+
+| Ladder step | Simulated (vitest) | Live (owner) | Pass criteria |
+|-------------|-------------------|--------------|---------------|
+| **Config** | `tests/monitoring-fanout-canary.test.ts` | `node scripts/monitoring-fanout-canary.mjs --step config` | `inline` default; internal workspace secret set; no `GLOBAL=1` |
+| **Shadow** | `tests/monitoring-fanout.test.ts` shadow mode | Set `MONITORING_FANOUT_MODE=shadow`, observe one cron window | `shadowOnly > 0`; zero `watchlist_run` rows; no deliveries |
+| **Allowlist (1 watchlist)** | dispatch + binding-missing tests | `fanout` + allowlist internal user ID, `MAX_INFLIGHT=1`, notifications off | Exactly one queued/dispatched run; `dispatchFailures = 0` |
+| **75-job fleet** | `schedules 75 eligible watchlists` | Internal workspace with 75 active agency watchlists | `queued >= 75`; `dispatchFailures = 0`; slots ≤ `MAX_INFLIGHT` |
+| **Mixed 75/10/3 fleet** | `monitoring-queue-priority` + mixed scheduling test | Optional stress on internal workspace (Monday window for scout) | Agency queue priority 0 runs first under slot pressure |
+| **One nightly window** | reconciliation + inline rollback tests | Observe 04:00 UTC cron + warmup reconciliation | Pending drains; no unbounded `oldestQueuedAgeMs` |
+| **Agency sale gate** | `tests/commercial-launch-gate.test.ts` | Code opens only after `fanout` + allowlist/global + internal secret | Prod stays **held** until live ladder completes |
+
+**Simulated proof status (2026-06-24):** PASS — shadow, 75-job dispatch, mixed fleet ranking, slot drain, commercial gate holds, canary ladder evaluator.
+
+**Live proof status:** NOT RUN — production remains `MONITORING_FANOUT_MODE=inline`.
+
 ## Activation ladder (not executed in dormant deploy)
 
-1. **Shadow** on preview/staging — verify eligible counts only
+1. **Shadow** on preview/staging — verify eligible counts only (`node scripts/monitoring-fanout-canary.mjs --step shadow --shadow-only N`)
 2. **Fan-out + allowlist** — one internal workspace user ID, `MONITORING_FANOUT_MAX_INFLIGHT=1`, notifications disabled, single watchlist
-3. **75-watchlist scheduling test** — allowlisted workspace only, mocked/browser-disabled validation preferred first
-4. **One full nightly window** + reconciliation warmup observation
+3. **75-watchlist scheduling test** — allowlisted workspace only; validate with `--step fleet75 --remote`
+4. **One full nightly window** + reconciliation warmup observation (`--step nightly --remote`)
 5. **Pilot Agency allowlist** expansion
 6. **`MONITORING_FANOUT_GLOBAL=1`** only after multiple clean windows
+
+### Canary tooling (read-only)
+
+```bash
+# Dormant production config check (expects inline + internal secret in env)
+MONITORING_FANOUT_MODE=inline \
+MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID=1 \
+node scripts/monitoring-fanout-canary.mjs --step config
+
+# After a shadow cron window (pass shadowOnly count from logs)
+node scripts/monitoring-fanout-canary.mjs --step shadow --shadow-only 3
+
+# After allowlist pilot — read-only D1 metrics from production
+node scripts/monitoring-fanout-canary.mjs --step allowlist --remote
+
+# After 75-job proof
+node scripts/monitoring-fanout-canary.mjs --step fleet75 --remote --json
+
+# Offline evaluation from saved wrangler JSON
+node scripts/monitoring-fanout-canary.mjs --step nightly --metrics-file ./tmp/fanout-metrics.json
+```
+
+The canary script never sets vars, triggers crons, or sends customer notifications. Coordinator merges `npm run canary:fanout` separately if desired.
 
 ## Rollback
 
@@ -87,3 +127,11 @@ Branch `cursor/plan-entitlements-topups-no-prices-20260623` adds `watchlist_run.
 Top-up balance does **not** alter cadence or priority. Fan-out remains **dormant** (`MONITORING_FANOUT_MODE=inline`); priority fields are schema-ready for activation ladder above.
 
 **Slot acquisition (final audit):** `claimMonitoringConcurrencySlot()` only succeeds when the run is within the top `MONITORING_FANOUT_MAX_INFLIGHT` ranked pending runs (`selectRankedEligibleOrchestratedRuns`). Ordering: effective priority (with 30-minute aging boosts), scheduled slot, `queued_at`, run id. A run cannot hold more than one slot simultaneously. Scout runs are excluded on non-Mondays.
+
+## Agency sale verdict
+
+**Recommendation: HOLD** until live ladder steps 1–4 complete.
+
+- Code gate (`commercial-launch-gate.server.ts`) correctly holds Agency when `inline` or `shadow`.
+- Simulated vitest proof is green; production has not run shadow/allowlist/75-job/nightly windows.
+- Do not open Agency checkout or set `MONITORING_FANOUT_GLOBAL=1` until owner confirms live proof via canary `--remote` steps.
