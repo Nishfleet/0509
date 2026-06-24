@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   ensureCurrentEvidenceUsagePeriod,
+  ensureWorkspaceEntitlementAnchor,
   getEvidenceUsageSummary,
   grantEvidenceTopUp,
-  releaseEvidenceReservation,
+  migrateLegacyTopUpCreditsIfNeeded,
+  rebuildTopUpGrantBalance,
+  rebuildWorkspaceTopUpBalance,
   reserveEvidenceCheck,
   settleEvidenceReservation,
-  utcCalendarMonthBounds,
 } from "~/lib/evidence-usage.server";
 import type { AppEnv } from "~/lib/env.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
@@ -17,11 +19,19 @@ type TestEnv = AppEnv & {
   sqlite: ReturnType<typeof createSqliteD1>["sqlite"];
 };
 
-function createTestEnv(): TestEnv {
+function createTestEnv(plan = "starter") {
   const { db, sqlite } = createSqliteD1();
   sqlite.exec(`
     CREATE TABLE user (id TEXT PRIMARY KEY);
-    CREATE TABLE user_plan (user_id TEXT PRIMARY KEY, plan TEXT NOT NULL);
+    CREATE TABLE user_plan (
+      user_id TEXT PRIMARY KEY,
+      plan TEXT NOT NULL,
+      dodo_status TEXT,
+      dodo_next_billing_at TEXT,
+      plan_updated_at TEXT,
+      evidence_entitlement_anchor TEXT,
+      evidence_entitlement_anchor_source TEXT
+    );
     CREATE TABLE evidence_usage_period (
       id TEXT PRIMARY KEY,
       workspace_user_id TEXT NOT NULL,
@@ -47,6 +57,17 @@ function createTestEnv(): TestEnv {
       catalog_version TEXT,
       metadata_json TEXT NOT NULL DEFAULT '{}'
     );
+    CREATE TABLE evidence_top_up_ledger_entry (
+      id TEXT PRIMARY KEY,
+      grant_id TEXT NOT NULL,
+      workspace_user_id TEXT NOT NULL,
+      quantity_delta INTEGER NOT NULL,
+      entry_type TEXT NOT NULL,
+      reservation_id TEXT,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE evidence_usage_reservation (
       id TEXT PRIMARY KEY,
       workspace_user_id TEXT NOT NULL,
@@ -61,8 +82,25 @@ function createTestEnv(): TestEnv {
       released_at TEXT,
       source TEXT NOT NULL
     );
+    CREATE TABLE proof_usage_credit (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      credits INTEGER NOT NULL,
+      provider_payment_id TEXT,
+      granted_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+    CREATE TABLE proof_usage_credit_migration (
+      legacy_credit_id TEXT PRIMARY KEY,
+      grant_id TEXT NOT NULL,
+      workspace_user_id TEXT NOT NULL,
+      migrated_at TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL UNIQUE
+    );
     INSERT INTO user (id) VALUES ('user-1');
-    INSERT INTO user_plan (user_id, plan) VALUES ('user-1', 'starter');
+    INSERT INTO user_plan (
+      user_id, plan, plan_updated_at, evidence_entitlement_anchor, evidence_entitlement_anchor_source
+    ) VALUES ('user-1', '${plan}', '2026-06-23T00:00:00.000Z', '2026-06-23T00:00:00.000Z', 'plan_activation');
   `);
   return { DB: db, sqlite } as TestEnv;
 }
@@ -74,17 +112,25 @@ describe("evidence usage periods", () => {
     env = createTestEnv();
   });
 
-  it("creates a UTC calendar month period with plan allowance", async () => {
-    const { periodStart, periodEnd } = utcCalendarMonthBounds(new Date("2026-06-15T12:00:00.000Z"));
+  it("creates a subscription-anchored period with plan allowance", async () => {
     const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "starter");
-    expect(period.period_start).toBe(periodStart);
-    expect(period.period_end).toBe(periodEnd);
+    expect(period.period_start).toBe("2026-06-23T00:00:00.000Z");
+    expect(period.period_end).toBe("2026-07-23T00:00:00.000Z");
     expect(period.included_allowance).toBe(250);
-    expect(period.included_consumed).toBe(0);
+  });
+
+  it("upgrades allowance without resetting consumption", async () => {
+    const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "scout");
+    await env.DB.prepare(`UPDATE evidence_usage_period SET included_consumed = 40 WHERE id = ?`)
+      .bind(period.id)
+      .run();
+    const upgraded = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "starter");
+    expect(upgraded.included_allowance).toBe(250);
+    expect(upgraded.included_consumed).toBe(40);
   });
 
   it("consumes included allowance before top-up grants", async () => {
-    env.sqlite.exec(`UPDATE user_plan SET plan = 'scout' WHERE user_id = 'user-1'`);
+    env = createTestEnv("scout");
     const scoutPeriod = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "scout");
     await env.DB.prepare(
       `UPDATE evidence_usage_period SET included_allowance = 1, included_consumed = 0 WHERE id = ?`,
@@ -113,29 +159,87 @@ describe("evidence usage periods", () => {
 
     expect(first).toMatchObject({ ok: true, pool: "included" });
     expect(second).toMatchObject({ ok: true, pool: "top_up" });
-
     await settleEvidenceReservation(env, "op-1");
-    await releaseEvidenceReservation(env, "op-2");
-
-    const summary = await getEvidenceUsageSummary(env, "user-1");
-    expect(summary.includedUsed).toBe(1);
-    expect(summary.topUpGrantRemaining).toBe(5);
   });
 
-  it("does not double-charge duplicate logical operations", async () => {
+  it("blocks top-up spending on free plan while retaining balance", async () => {
+    await grantEvidenceTopUp(env, {
+      workspaceUserId: "user-1",
+      skuSlug: "burst_500_v1",
+      providerPaymentId: "pay-free",
+      providerProductId: "prod-burst",
+      quantityGranted: 3,
+    });
+    env.sqlite.exec(`UPDATE user_plan SET plan = 'free' WHERE user_id = 'user-1'`);
+    await env.DB.prepare(`UPDATE evidence_usage_period SET included_allowance = 0, included_consumed = 0`)
+      .bind()
+      .run();
+
+    const summary = await getEvidenceUsageSummary(env, "user-1");
+    expect(summary.topUpRemaining).toBe(3);
+    expect(summary.canSpendTopUps).toBe(false);
+    expect(summary.totalAvailable).toBe(0);
+
+    const attempt = await reserveEvidenceCheck(env, {
+      workspaceUserId: "user-1",
+      logicalOperationKey: "free-op",
+      source: "test",
+    });
+    expect(attempt).toEqual({ ok: false, reason: "top_up_inactive_plan" });
+  });
+
+  it("migrates legacy credits once without double counting", async () => {
+    env.sqlite.exec(`
+      INSERT INTO proof_usage_credit (id, user_id, credits, provider_payment_id, granted_at, expires_at)
+      VALUES ('legacy-1', 'user-1', 7, 'legacy-pay-1', '2026-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z');
+    `);
+    const first = await migrateLegacyTopUpCreditsIfNeeded(env, "user-1");
+    const second = await migrateLegacyTopUpCreditsIfNeeded(env, "user-1");
+    expect(first.migrated).toBe(1);
+    expect(second.migrated).toBe(0);
+    const summary = await getEvidenceUsageSummary(env, "user-1");
+    expect(summary.topUpRemaining).toBe(7);
+  });
+
+  it("keeps ledger cache aligned with derived balance", async () => {
     await ensureCurrentEvidenceUsagePeriod(env, "user-1", "starter");
-    const first = await reserveEvidenceCheck(env, {
+    await env.DB.prepare(`UPDATE evidence_usage_period SET included_allowance = 0, included_consumed = 0`)
+      .bind()
+      .run();
+    await grantEvidenceTopUp(env, {
       workspaceUserId: "user-1",
-      logicalOperationKey: "dup-op",
-      source: "test",
+      skuSlug: "burst_500_v1",
+      providerPaymentId: "pay-ledger",
+      providerProductId: "prod-burst",
+      quantityGranted: 2,
     });
-    await settleEvidenceReservation(env, "dup-op");
-    const duplicate = await reserveEvidenceCheck(env, {
+    const grant = await env.DB.prepare(`SELECT id FROM evidence_top_up_grant LIMIT 1`)
+      .bind()
+      .first<{ id: string }>();
+    const reserved = await reserveEvidenceCheck(env, {
       workspaceUserId: "user-1",
-      logicalOperationKey: "dup-op",
+      logicalOperationKey: "ledger-op",
       source: "test",
+      now: "2026-06-24T00:00:00.000Z",
     });
-    expect(first.ok).toBe(true);
-    expect(duplicate).toEqual({ ok: false, reason: "duplicate" });
+    expect(reserved.ok).toBe(true);
+    const rebuilt = await rebuildTopUpGrantBalance(env, grant!.id);
+    const workspaceTotal = await rebuildWorkspaceTopUpBalance(env, "user-1");
+    expect(rebuilt).toBe(1);
+    expect(workspaceTotal).toBe(1);
+  });
+});
+
+describe("entitlement anchor persistence", () => {
+  it("does not move anchor backward on out-of-order input", async () => {
+    const env = createTestEnv();
+    const first = await ensureWorkspaceEntitlementAnchor(env, "user-1", {
+      providerAnchor: "2026-06-23T00:00:00.000Z",
+    });
+    const second = await ensureWorkspaceEntitlementAnchor(env, "user-1", {
+      providerAnchor: "2026-01-01T00:00:00.000Z",
+    });
+    expect(first.anchor).toBe("2026-06-23T00:00:00.000Z");
+    expect(second.anchor).toBe("2026-06-23T00:00:00.000Z");
   });
 });

@@ -13,6 +13,7 @@ const requiredFiles = [
   "migrations/0050_evidence_top_up_grants.sql",
   "migrations/0051_evidence_usage_reservations.sql",
   "migrations/0052_monitoring_queue_priority.sql",
+  "migrations/0053_evidence_entitlement_anchor_and_ledger.sql",
 ];
 
 for (const relativePath of requiredFiles) {

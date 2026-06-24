@@ -12,6 +12,7 @@ import {
   BROAD_WRITE_API_NON_GOAL,
   CUSTOMER_AGENT_ACTION_NAMES,
 } from "~/lib/agent-action-catalog";
+import { mockAgencyWorkspacePlan } from "./helpers/agency-plan-mock";
 
 const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
   "source.meta.retest",
@@ -191,6 +192,7 @@ const digest: DigestRecord = {
 };
 
 function setupMocks(authOk = true, actionsWriteEnabled = true) {
+  mockAgencyWorkspacePlan();
   const mocks = {
     getCollection: vi.fn().mockResolvedValue(collection),
     getDigest: vi.fn().mockResolvedValue(digest),
