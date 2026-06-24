@@ -101,6 +101,7 @@
   // - DODO_0509_PRODUCT_PROOF_PACK_500_ID
   // - DODO_0509_PRODUCT_PROOF_PACK_2000_ID
   // - DODO_0509_PRODUCT_PROOF_PACK_7500_ID
+  // - MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID (owner-documented pilot workspace; never commit a value)
   // - META_TOKEN_ENCRYPTION_SECRET
   // Email sending uses the Cloudflare Email Service `send_email` binding above —
   // no API key secret. The active sender is the 0509.io brand address.

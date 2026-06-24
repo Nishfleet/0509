@@ -118,6 +118,13 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("Meesho added discount hook");
   });
 
+  it("gates Agency checkout on the pricing page until fan-out is proven", () => {
+    expect(marketingRoute).toContain("summarizeCommercialLaunch");
+    expect(marketingRoute).toContain("Held for capacity proof");
+    expect(marketingRoute).toContain("Common billing questions");
+    expect(marketingRoute).toContain("Why is Agency held?");
+  });
+
   it("has incinerated the stale lower-page system", () => {
     expect(marketingRoute).not.toMatch(
       /f9-market-row|f9-platform|f9-proof-section|f9-proof-layout|f9-proof-steps|f9-proof-token|f9-pricing(?!-receipt)|f9-trust|Example watches|Pricing for teams|Built for proof|One proof layer|Every alert|Proof-backed search|proof-ready/i,

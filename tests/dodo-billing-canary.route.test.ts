@@ -25,7 +25,7 @@ function createCanaryDb() {
               if (sql.includes("UPDATE user_plan") && sql.includes("dodo_payment_id = ?")) {
                 cleanedPlanPaymentIds.add(String(bindings.at(-1)));
               }
-              if (sql.includes("DELETE FROM proof_usage_credit")) {
+              if (sql.includes("DELETE FROM evidence_top_up_grant")) {
                 cleanedCreditPaymentIds.add(String(bindings[1]));
               }
               if (sql.includes("UPDATE watchlist") && sql.includes("paused_reason = ?")) {
@@ -99,12 +99,16 @@ function createCanaryDb() {
                 };
               }
 
-              if (sql.includes("FROM proof_usage_credit")) {
+              if (sql.includes("FROM evidence_top_up_grant")) {
+                if (cleanedCreditPaymentIds.has(String(bindings[1]))) {
+                  return { results: [] as T[] };
+                }
+
                 return {
                   results: [
                     {
-                      credits: 500,
-                      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                      quantity_granted: 500,
+                      status: "active",
                       granted_at: new Date().toISOString(),
                       provider_payment_id: bindings[1],
                     },

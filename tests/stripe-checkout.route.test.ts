@@ -134,6 +134,11 @@ describe("marketing route", () => {
             },
             usageBundles: {},
           },
+          commercialLaunch: {
+            scoutSaleOpen: true,
+            starterSaleOpen: true,
+            agencySaleOpen: false,
+          },
         }),
       };
     });

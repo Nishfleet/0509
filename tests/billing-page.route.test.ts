@@ -332,6 +332,28 @@ describe("Dodo checkout double-subscription guard", () => {
     expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
   });
 
+  it("holds Agency checkout until fan-out proof is documented", async () => {
+    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("free");
+
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    try {
+      await action({
+        context: {},
+        request: checkoutRequest({ plan: "agency", cycle: "monthly" }),
+        params: {},
+      } as never);
+      throw new Error("expected redirect");
+    } catch (response) {
+      expect((response as Response).status).toBe(303);
+      expect((response as Response).headers.get("Location")).toBe(
+        "/app/billing?checkout=agency-held",
+      );
+    }
+
+    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
+  });
+
   it("lets a free user start a plan checkout", async () => {
     const { createDodo0509CheckoutSession } = mockCheckoutDependencies("free");
 
