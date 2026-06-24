@@ -34,6 +34,7 @@ import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 import { createReportId } from "~/lib/report";
 import {
   formatWatchlistTargetNoun,
@@ -584,6 +585,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function WatchlistsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const [searchParams] = useSearchParams();
   const proofCapturesById = new Map(
     data.recentProofCaptures.map((capture) => [capture.id, capture]),
@@ -715,12 +717,14 @@ export default function WatchlistsRoute() {
                     >
                       JSON export
                     </a>
+                  {showSlackDelivery ? (
                   <a
                     className="f9-secondary-button"
                     href={`/export/watchlist/${data.selectedWatchlist.id}?format=slack`}
                   >
                     Slack copy
                   </a>
+                  ) : null}
                   <Form method="post">
                     <input name="intent" type="hidden" value="share-watchlist" />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
@@ -1069,10 +1073,12 @@ export default function WatchlistsRoute() {
                           <input defaultChecked={data.effectiveDeliveryConfig.whatsappEnabled} name="whatsappEnabled" type="checkbox" />
                           <span>WhatsApp enabled</span>
                         </label>
+                        {showSlackDelivery ? (
                         <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.slackEnabled} name="slackEnabled" type="checkbox" />
                           <span>Slack enabled</span>
                         </label>
+                        ) : null}
                         <SubmitButton className="f9-primary-button" intent="save-delivery-config" pendingLabel="Saving…">
                           Save delivery settings
                         </SubmitButton>

@@ -1820,7 +1820,7 @@ describe("runCustomerAgentAction", () => {
         "Case: case-1",
         "Requester: owner@example.com",
         "Source: api_v1",
-        "Category: Digest, Slack, or email delivery",
+        "Category: Digest or email delivery",
         "Details: Private support detail should not return to the agent.",
       ]),
     }));

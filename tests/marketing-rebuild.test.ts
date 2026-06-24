@@ -38,8 +38,9 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toMatch(/pilot|manual|fit review|self-serve|not live/i);
   });
 
-  it("labels the public beta and keeps search preview read-only before account", () => {
-    expect(marketingRoute).toContain("Early access");
+  it("labels live search and keeps preview read-only before account", () => {
+    expect(marketingRoute).toContain("Live search");
+    expect(marketingRoute).not.toContain("Early access");
     expect(marketingRoute).toContain("Honest by design.");
     expect(marketingRoute).not.toContain("provider canaries");
     expect(marketingRoute).not.toContain("Readiness-gated");
@@ -116,6 +117,12 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("Nykaa changed onboarding bundle");
     expect(marketingRoute).not.toContain("boAt removed COD offer");
     expect(marketingRoute).not.toContain("Meesho added discount hook");
+  });
+
+  it("keeps Slack out of the public GA offer", () => {
+    expect(marketingRoute).not.toContain("Slack delivery");
+    expect(marketingRoute).not.toContain("Slack-ready");
+    expect(marketingRoute).toContain("Brief export");
   });
 
   it("gates Agency checkout on the pricing page until fan-out is proven", () => {

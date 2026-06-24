@@ -40,7 +40,20 @@ describe("billing SKU catalog", () => {
 
   it("lists only active checkout SKUs", () => {
     const slugs = listCheckoutSkus().map((sku) => sku.slug);
-    expect(slugs).toContain("starter_monthly_v1");
+    expect(slugs).toHaveLength(9);
+    expect(slugs).toEqual(
+      expect.arrayContaining([
+        "scout_monthly_v1",
+        "scout_annual_v1",
+        "starter_monthly_v1",
+        "starter_annual_v1",
+        "agency_monthly_v1",
+        "agency_annual_v1",
+        "burst_500_v1",
+        "campaign_2000_v1",
+        "scale_7500_v1",
+      ]),
+    );
     expect(slugs).not.toContain("proof_500_legacy");
   });
 

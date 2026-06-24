@@ -7657,6 +7657,7 @@ export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Dat
   const [
     proofs,
     deliveries,
+    emailDeliveries,
     slackTargets,
     slackDeliveries,
     whatsappTargets,
@@ -7692,6 +7693,23 @@ export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Dat
           MAX(COALESCE(sent_at, created_at)) AS latest_at
         FROM delivery_attempt
         WHERE digest_run_id IS NOT NULL
+          AND created_at >= ?
+      `,
+      since,
+    ),
+    one<{
+      recent_attempts: number;
+      recent_sent: number;
+      latest_at: string | null;
+    }>(
+      env,
+      `
+        SELECT
+          COUNT(*) AS recent_attempts,
+          SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS recent_sent,
+          MAX(COALESCE(sent_at, created_at)) AS latest_at
+        FROM delivery_attempt
+        WHERE channel = 'email'
           AND created_at >= ?
       `,
       since,
@@ -7824,6 +7842,11 @@ export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Dat
       recentAttempts: Number(deliveries?.recent_attempts ?? 0),
       recentSent: Number(deliveries?.recent_sent ?? 0),
       latestAttemptAt: deliveries?.latest_at ?? null,
+    },
+    emailDelivery: {
+      recentAttempts: Number(emailDeliveries?.recent_attempts ?? 0),
+      recentSent: Number(emailDeliveries?.recent_sent ?? 0),
+      latestAttemptAt: emailDeliveries?.latest_at ?? null,
     },
     slackDelivery: {
       configuredTargets: Number(slackTargets?.configured_targets ?? 0),

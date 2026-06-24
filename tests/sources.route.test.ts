@@ -9,6 +9,13 @@ vi.mock("~/lib/plan.server", () => ({
   PLAN_LIMITS: { agency: { digests: true } },
 }));
 
+vi.mock("~/lib/ga-customer-surface", () => ({
+  isSlackDeliveryCustomerFacing: vi.fn(() => false),
+  slackDeliveryUnavailableMessage: vi.fn(
+    () => "Slack delivery is not available at general availability yet. Use email delivery.",
+  ),
+}));
+
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
@@ -82,7 +89,9 @@ async function mockRouter(loaderData: unknown, actionData?: unknown) {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+  vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(false);
   vi.resetModules();
 });
 
@@ -464,7 +473,42 @@ describe("sources route action", () => {
     });
   });
 
+  it("rejects Slack webhook save when GA surface is off", async () => {
+    vi.resetModules();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+
+    const formData = new FormData();
+    formData.set("intent", "save-slack-webhook");
+    formData.set("slackWebhookUrl", fakeSlackWebhookUrl());
+    formData.set("slackDestinationName", "Sales");
+
+    const { action } = await import("~/routes/app.sources");
+    const result = await action({
+      context: {},
+      request: new Request("https://0509.io/app/sources", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+    });
+  });
+
   it("saves a Slack webhook target", async () => {
+    const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
+
     const saveSlackWebhookTarget = vi.fn().mockResolvedValue({
       id: "slack-target-1",
     });
@@ -555,6 +599,9 @@ describe("sources route action", () => {
   });
 
   it("returns a form error when Slack rejects setup validation", async () => {
+    const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
+
     const saveSlackWebhookTarget = vi.fn().mockRejectedValue(
       new Response("Slack did not accept the test message.", { status: 400 }),
     );
@@ -737,6 +784,9 @@ describe("sources route action", () => {
   });
 
   it("pauses a Slack webhook target", async () => {
+    const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
+
     const pauseSlackWebhookTarget = vi.fn().mockResolvedValue(true);
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -784,6 +834,9 @@ describe("sources route action", () => {
   });
 
   it("resumes a Slack webhook target", async () => {
+    const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
+
     const resumeSlackWebhookTarget = vi.fn().mockResolvedValue(true);
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -876,9 +929,8 @@ describe("sources route component", () => {
     expect(markup).toContain("Billing changes and cancellation");
     expect(markup).toContain("Migration and setup help");
     expect(markup).toContain("Create API key");
-    expect(markup).toContain("Slack delivery");
-    expect(markup).toContain("Save Slack delivery");
-    expect(markup).toContain("encrypted and never shown again");
+    expect(markup).not.toContain("Slack delivery");
+    expect(markup).not.toContain("Save Slack delivery");
     expect(markup).not.toContain("WhatsApp delivery");
     expect(markup).not.toContain("WhatsApp delivery is enabled for this account");
     expect(markup).not.toContain("WhatsApp is not available for this account yet");

@@ -30,10 +30,15 @@ describe("pricingPlans", () => {
 
     expect(scout.features).toContain("3 active watchlists");
     expect(scout.features).toContain("Weekly evidence-backed digest");
+    expect(scout.features).toContain("Email digest delivery");
+    expect(scout.features).not.toContain("Slack");
     expect(scout.features).toContain("50 evidence checks per month");
     expect(starter.features).toContain("10 active watchlists");
+    expect(starter.features).toContain("Email delivery");
+    expect(starter.features).not.toContain("Slack");
     expect(starter.features).toContain("250 evidence checks per month");
     expect(agency.features).toContain("75 active watchlists");
+    expect(agency.features).not.toContain("Slack");
     expect(agency.features).toContain("2,500 evidence checks per month");
   });
 

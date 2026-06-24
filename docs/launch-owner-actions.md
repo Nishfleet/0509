@@ -2,24 +2,50 @@
 
 Items below were **not completed by the launch-hardening code run**. They require owner decisions, dashboard access, or external services outside this repository.
 
-## 1. Configure production Slack delivery
+## GA ops gates (required)
 
-**Status:** NOT COMPLETED BY THIS CODE RUN
+### Email proof canary
+
+**Status:** CODE + OPS — run after each deploy that touches delivery
+
+1. From a machine with `CANARY_BYPASS_TOKEN` and production access: `npm run canary:proof` (no `--require-slack`).
+2. Confirm exit 0 and at least one email delivery attempt with `status = sent`.
+3. Re-run `npm run canary:prod` — read-only ops readiness should pass when monitoring, proof, and email signals are fresh.
+
+### External uptime monitoring
+
+**Status:** NOT COMPLETED BY THIS CODE RUN (owner verification only)
+
+1. Create an UptimeRobot (or equivalent) HTTP monitor for `https://0509.io/api/health`.
+2. Interval: 5 minutes; keyword check: response body contains `ok`.
+3. Alert Nish on non-200 or missing `{ "status": "ok" }`.
+4. **Verify without API token** — full checklist in `docs/ops-backup-uptime.md` § Owner verification.
+5. Record verification date in `docs/ga-launch-scorecard.md`.
+
+## Optional verification (not GA-blocking)
+
+### Configure production Slack delivery
+
+**Status:** OPTIONAL — Starter/Agency marketing verification only
 
 1. Open the Five to Nine delivery targets UI (`/app/sources`) as an Agency workspace owner.
 2. Add a validated Slack webhook target and send a test message.
 3. Confirm a `delivery_attempt` row shows `provider = slack` with a successful status.
-4. Re-run `npm run canary:proof` with Slack required once the target exists.
+4. Run `npm run canary:proof -- --require-slack` once the target exists.
 
-## 2. Run production proof canary with Slack delivery
+Slack advisories (`no_slack_delivery_target`, `no_recent_slack_sent`) may appear on `/api/launch-readiness` without failing GA.
 
-**Status:** NOT COMPLETED BY THIS CODE RUN
+### Run production proof canary with Slack delivery
 
-1. Ensure item 1 is complete.
-2. From a machine with production credentials: `npm run canary:proof`.
+**Status:** OPTIONAL
+
+1. Ensure the Slack target item above is complete.
+2. From a machine with production credentials: `npm run canary:proof -- --require-slack`.
 3. Verify Slack receives the digest/alert proof and the canary exits 0.
 
-## 3. Enable Dodo customer subscription updates / portal
+## Billing and portal
+
+### Enable Dodo customer subscription updates / portal
 
 **Status:** NOT COMPLETED BY THIS CODE RUN
 
@@ -27,15 +53,9 @@ Items below were **not completed by the launch-hardening code run**. They requir
 2. Enable **Allow Subscription Updates** on the customer portal settings.
 3. Confirm `/app/billing` → **Open billing portal** loads and plan changes are allowed.
 
-## 4. Configure external uptime monitoring
+## Data and observability
 
-**Status:** NOT COMPLETED BY THIS CODE RUN
-
-1. Create an UptimeRobot (or equivalent) HTTP monitor for `https://0509.io/api/health`.
-2. Interval: 5 minutes.
-3. Alert Nish on non-200 or missing `{ "ok": true }`.
-
-## 5. Review orphaned WhatsApp targets
+### Review orphaned WhatsApp targets
 
 **Status:** NOT COMPLETED BY THIS CODE RUN
 
@@ -43,21 +63,21 @@ Items below were **not completed by the launch-hardening code run**. They requir
 2. Hide or remove targets that are not backed by a configured Meta WhatsApp provider.
 3. Keep WhatsApp out of public marketing until Meta-side setup is complete (`docs/whatsapp-setup.md`).
 
-## 6. Decide on public “beta” positioning
+### Decide on public “beta” positioning
 
 **Status:** NOT COMPLETED BY THIS CODE RUN
 
 1. Review current copy on `/status`, pricing, and product surfaces.
 2. Decide whether to remove beta labels or keep them with explicit scope boundaries.
 
-## 7. Decide whether Scout should be publicly marketed
+### Decide whether Scout should be publicly marketed
 
 **Status:** NOT COMPLETED BY THIS CODE RUN
 
 1. Review Scout plan visibility in Dodo catalog and on-site pricing.
 2. Decide whether Scout remains a hidden/downgrade tier or becomes a public entry plan.
 
-## 8. Enable cloud D1 backup schedule and secrets
+### Enable cloud D1 backup schedule and secrets
 
 **Status:** NOT COMPLETED BY THIS CODE RUN
 
@@ -66,15 +86,15 @@ Items below were **not completed by the launch-hardening code run**. They requir
 3. Schedule a weekly workflow that runs `npm run backup:d1:r2` with production auth.
 4. Confirm an object appears under `backups/d1/` in the R2 bucket.
 
-## 9. Configure external error monitoring / log export
+### Configure external error monitoring / log export
 
 **Status:** NOT COMPLETED BY THIS CODE RUN
 
 1. Decide on a log sink (Cloudflare Logpush, Sentry, etc.).
 2. Wire Workers production logs without exporting secrets or raw auth payloads.
-3. The app now emits structured JSON logs from `app/lib/log.server.ts` on critical paths — point the sink at Workers logs.
+3. The app emits structured JSON logs from `app/lib/log.server.ts` on critical paths — point the sink at Workers logs.
 
-## 10. Perform a real restore drill
+### Perform a real restore drill
 
 **Status:** NOT COMPLETED BY THIS CODE RUN
 
@@ -82,7 +102,7 @@ Items below were **not completed by the launch-hardening code run**. They requir
 2. Restore into an isolated D1 database or local SQLite using the documented procedure in `docs/ops-backup-uptime.md`.
 3. Spot-check `user`, `watchlist`, and `user_plan` row counts against production.
 
-## 11. Evaluate email bounce/suppression provider
+### Evaluate email bounce/suppression provider
 
 **Status:** NOT COMPLETED BY THIS CODE RUN
 

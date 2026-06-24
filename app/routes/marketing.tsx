@@ -234,7 +234,7 @@ export default function MarketingRoute() {
 
       <section className="ld-hero">
         <Link className="f9-announcement" to={publicSearchTrialPath}>
-          <strong>Early access</strong>
+          <strong>Live search</strong>
           <span>Preview live search before creating an account</span>
         </Link>
 
@@ -460,7 +460,7 @@ export default function MarketingRoute() {
               </ul>
             </article>
             <article>
-              <span className="ld-kicker">Slack-ready export</span>
+              <span className="ld-kicker">Brief export</span>
               <p className="ld-export">{demoProof.exports.slackMarkdown}</p>
             </article>
           </div>

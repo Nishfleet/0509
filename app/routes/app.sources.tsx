@@ -9,6 +9,7 @@ import {
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
 export const meta: MetaFunction = () => [
   { title: "Integrations | Five to Nine" },
@@ -199,6 +200,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "save-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const slackGate = await requireWorkspacePlanFeature(env, workspaceUserId, "slack_delivery");
     if (!slackGate.ok) {
@@ -302,6 +309,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "pause-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
     const { pauseSlackWebhookTarget } = await import("~/lib/slack.server");
     const targetId = String(formData.get("slackTargetId") ?? "");
     const paused = await pauseSlackWebhookTarget(env, {
@@ -316,6 +329,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "resume-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
     const { resumeSlackWebhookTarget } = await import("~/lib/slack.server");
     const targetId = String(formData.get("slackTargetId") ?? "");
     const resumed = await resumeSlackWebhookTarget(env, {
@@ -358,6 +377,7 @@ export default function AppSourcesRoute() {
     data.whatsappDelivery.providerConfigured &&
     data.whatsappDelivery.customerReady &&
     data.whatsappDelivery.webhookConfigured;
+  const showSlackDelivery = isSlackDeliveryCustomerFacing();
 
   return (
     <section className="f9-app-stack">
@@ -612,10 +632,12 @@ export default function AppSourcesRoute() {
                 <dt>JSON</dt>
                 <dd>/api/v1/watchlists/&lbrace;id&rbrace;?format=json</dd>
               </div>
+              {showSlackDelivery ? (
               <div>
                 <dt>Slack copy</dt>
                 <dd>/api/v1/digests/&lbrace;id&rbrace;?format=slack</dd>
               </div>
+              ) : null}
               <div>
                 <dt>Header</dt>
                 <dd>Authorization: Bearer your Five to Nine API key</dd>
@@ -677,6 +699,7 @@ export default function AppSourcesRoute() {
         </div>
       </details>
 
+      {showSlackDelivery ? (
       <section className="f9-app-panel f9-source-setup">
         <div className="f9-panel-toolbar">
           <div>
@@ -783,6 +806,7 @@ export default function AppSourcesRoute() {
           )}
         </div>
       </section>
+      ) : null}
 
       {canManageWhatsAppDelivery ? (
         <details

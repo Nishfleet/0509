@@ -1213,7 +1213,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Why this alerted");
     expect(markup).toContain("Recent evidence checks");
     expect(markup).toContain("Delivery settings");
-    expect(markup).toContain("Slack enabled");
+    expect(markup).not.toContain("Slack enabled");
   });
 
   it("renders cache-only discovery status", async () => {

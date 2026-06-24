@@ -29,7 +29,7 @@ export default function DocsRoute() {
           <li>Save the competitor when the results are useful.</li>
           <li>Open the watchlist to review ads, page evidence, and changes over time.</li>
           <li>Save useful examples to a board or share a report with the team.</li>
-          <li>Connect Slack from Integrations if the team wants channel updates.</li>
+          <li>Turn on email delivery when the team wants briefs in the inbox.</li>
         </ol>
       </PublicDocBlock>
 
@@ -38,14 +38,13 @@ export default function DocsRoute() {
           <li>Public competitor ad search from a website.</li>
           <li>Saved watchlists, boards, briefs, reports, share links, and exports.</li>
           <li>Checkout, receipts, proof-credit packs, and billing support.</li>
-          <li>Email delivery and self-serve Slack delivery.</li>
+          <li>Email delivery for digests and high-priority change alerts.</li>
           <li>Rate limits, plan caps, evidence-usage warnings, and service status.</li>
         </ul>
       </PublicDocBlock>
 
       <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
-          <li>WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.</li>
           <li>TikTok, Google, YouTube, LinkedIn, and Pinterest ingestion are not included yet.</li>
           <li>Spend, reach, and impression benchmarks are not included yet.</li>
           <li>SOC 2, HIPAA, GDPR compliance, zero-retention, or no-training guarantees.</li>

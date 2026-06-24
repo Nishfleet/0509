@@ -34,7 +34,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Public read-only search and a sample proof preview are available before signup.
 - Accounts unlock saved competitors, retained monitoring, reusable saved evidence, boards, briefs, and reports.
 - Saving competitor results, saved queries, watchlists, boards, reports, and delivery require an account.
-- Authenticated board, watchlist, and digest exports support CSV, JSON export, and Slack-ready markdown.
+- Authenticated board, watchlist, and digest exports support CSV and JSON export.
 - Signed-in boards can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
 - Customer API keys can read account-owned setup status, collection, watchlist, and digest exports.
 - Write-enabled customer API keys can perform approved account actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
@@ -44,7 +44,6 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
 - Email delivery is available for eligible accounts.
-- Slack delivery can be connected from Integrations when a team wants channel updates.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily briefs and weekly digests should show priority, recommended next move, and proof trail.
@@ -57,9 +56,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
-- Slack webhook URLs are stored encrypted and are not shown again after saving.
 - Observed campaign duration is based on first-seen and last-observed proof only. Manual external proof links can store user-supplied visible spend, impression, and reach values, but automated spend, reach, impression, and unsupported-channel benchmarks are not live.
-- WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.
 
 ## Pricing
 
@@ -98,15 +95,12 @@ Current product truth:
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
 - Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved boards, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
-- Account export links support CSV, JSON export, and Slack-ready markdown for signed-in users.
+- Account export links support CSV and JSON export for signed-in users.
 - Customer API keys support setup status plus collection, watchlist, and digest exports for account-owned data.
 - Write-enabled customer API keys support approved account actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Signed-in support cases cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests, with email fallback when a user cannot sign in.
-- Slack delivery can be connected from Integrations when a team wants channel updates.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
-- Slack webhook URLs are stored encrypted and are not shown again after saving.
-- WhatsApp delivery is not launch-scoped yet. Use email or Slack for customer delivery.
 - Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and broad public write APIs beyond approved account actions are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
