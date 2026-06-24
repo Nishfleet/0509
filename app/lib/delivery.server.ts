@@ -2367,3 +2367,58 @@ function escapeSlackText(value: string) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 }
+
+export async function sendPresenceDigestEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    subject: string;
+    lines: string[];
+    idempotencyKey: string;
+  },
+) {
+  const htmlLines = input.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: input.subject,
+    html: `
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
+        <p style="margin: 0 0 12px;">Presence tracking updates</p>
+        <ul style="margin: 0 0 16px; padding-left: 20px;">${htmlLines}</ul>
+        <p style="margin: 0;"><a href="${escapeHtml(buildPresenceAppUrl(env))}">Open presence tracking</a></p>
+      </div>
+    `,
+    tag: "presence-digest",
+    unsubscribeUrl: null,
+  });
+
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "presence_digest",
+    eventIds: [],
+    payloadSnapshot: { kind: "presence_digest", lineCount: input.lines.length },
+    idempotencyKey: input.idempotencyKey,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.deliveredAt,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  return providerResult.status === "sent";
+}
+
+function buildPresenceAppUrl(env: AppEnv) {
+  const baseUrl = env.APP_ORIGIN?.trim() || env.BETTER_AUTH_URL?.trim() || "https://0509.io";
+  return `${baseUrl.replace(/\/+$/, "")}/app/presence`;
+}
