@@ -20,7 +20,7 @@ export const redditConnector = {
     input: ValidateTargetInput,
     ctx: PresenceConnectorContext,
   ): Promise<ValidateTargetResult> {
-    const gate = evaluateConnectorAccessGate(ctx.env, "reddit", input.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "reddit", input.trackingMode);
     if (!gate.allowed) {
       return {
         ok: false,
@@ -49,7 +49,7 @@ export const redditConnector = {
   },
 
   async healthCheck(ctx: PresenceConnectorContext): Promise<HealthCheckResult> {
-    const gate = evaluateConnectorAccessGate(ctx.env, "reddit", ctx.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "reddit", ctx.trackingMode);
     if (!gate.allowed) {
       return {
         ok: false,
@@ -82,7 +82,7 @@ export const redditConnector = {
       };
     }
 
-    const gate = evaluateConnectorAccessGate(ctx.env, "reddit", ctx.trackingMode);
+    const gate = await evaluateConnectorAccessGate(ctx.env, "reddit", ctx.trackingMode);
     return {
       ok: false,
       items: [],

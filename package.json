@@ -12,6 +12,7 @@
     "canary:pricing": "node scripts/dodo-pricing-canary.mjs",
     "canary:fanout": "node scripts/monitoring-fanout-canary.mjs",
     "canary:presence": "node scripts/presence-website-canary.mjs",
+    "canary:presence-pilot": "node scripts/presence-pilot-canary.mjs",
     "canary:prod": "node scripts/prod-canary.mjs",
     "check:public-home": "node scripts/check-public-home-current.mjs",
     "check:google-oauth-branding": "node scripts/check-google-oauth-branding.mjs",

@@ -14,7 +14,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
 
-  const gate = evaluateConnectorAccessGate(env, "linkedin", "self", workspaceUserId);
+  const gate = await evaluateConnectorAccessGate(env, "linkedin", "self", workspaceUserId);
   if (!gate.allowed) {
     return new Response(gate.reasonMessage ?? "LinkedIn connector is not available.", { status: 403 });
   }
