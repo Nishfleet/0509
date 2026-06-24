@@ -10,9 +10,10 @@
 
 ## First response (all levels)
 
-1. Check `https://0509.io/api/health`.
-2. Cloudflare Workers dashboard → 0509 Worker → recent errors.
-3. Structured logs: search `operation` field (`monitoring_fanout_*`, `dodo_webhook_*`, `delivery_*`).
+1. Check `https://0509.io/api/health` — expect 200 and `{"status":"ok"}`. This probe does not touch D1.
+2. If UptimeRobot alerted: open the dashboard monitor for `0509.io/api/health` and compare with manual `curl` (see `docs/ops-backup-uptime.md` § Owner verification).
+3. Cloudflare Workers dashboard → 0509 Worker → recent errors.
+4. Structured logs: search `operation` field (`monitoring_fanout_*`, `dodo_webhook_*`, `delivery_*`).
 
 ## S1 — Core outage
 
@@ -34,11 +35,19 @@
 2. Confirm `MONITORING_FANOUT_MODE` — inline has ~12 min global budget.
 3. Agency customers may see "Delayed — capacity limit" until fan-out active.
 
-## S2 — Email delivery
+## S2 — Email delivery (GA gate)
 
 1. Cloudflare Email Service Activity log (dashboard).
-2. `delivery_attempt` table for `provider = cloudflare_email`.
-3. No in-app bounce webhooks — manual list hygiene if needed.
+2. `delivery_attempt` table for `channel = email` and `provider = cloudflare_email`.
+3. Re-run `npm run canary:proof` (no `--require-slack`) after fixing domain/sender issues.
+4. Read-only `/api/launch-readiness` blocks on `no_recent_email_sent` when email proof is stale (>36h).
+5. No in-app bounce webhooks — manual list hygiene if needed.
+
+## S2 — Slack delivery (optional)
+
+1. Slack failures do not block Scout GA.
+2. Check `delivery_target` where `channel = slack` and recent `delivery_attempt` rows.
+3. For marketing verification on Starter/Agency: `npm run canary:proof -- --require-slack`.
 
 ## Rollback
 

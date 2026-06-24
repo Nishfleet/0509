@@ -2822,6 +2822,7 @@ describe("getLaunchReadinessSignals", () => {
     const proofQuery = findStatement(mock.statements, "FROM proof_capture", "launch_readiness_canary");
     expect(proofQuery?.sql).toContain("json_extract(capture_metadata_json, '$.kind')");
     expect(findStatement(mock.statements, "FROM delivery_target", "channel = 'slack'")).toBeTruthy();
+    expect(findStatement(mock.statements, "FROM delivery_attempt", "channel = 'email'")).toBeTruthy();
     expect(findStatement(mock.statements, "FROM delivery_attempt", "channel = 'slack'")).toBeTruthy();
     expect(
       findStatement(
