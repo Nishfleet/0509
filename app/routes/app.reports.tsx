@@ -16,15 +16,17 @@ export const meta = () => [{ title: "Reports | Five to Nine" }];
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { getWorkspaceBranding } = await import("~/lib/data.server");
-  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+  const {
+    requireWorkspacePlanFeature,
+    resolveWorkspacePreparedBy,
+  } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const reportGate = await requireWorkspacePlanFeature(env, workspaceUserId, "client_reports");
   if (!reportGate.ok) {
     throw reportGate.response;
   }
-  const branding = await getWorkspaceBranding(env, workspaceUserId);
+  const preparedBy = await resolveWorkspacePreparedBy(env, workspaceUserId);
 
   return {
     report: await loadReport({
@@ -32,7 +34,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
       request,
       reportId: params.id,
     }),
-    preparedBy: branding.brandName,
+    preparedBy,
   };
 }
 

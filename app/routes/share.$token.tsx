@@ -19,10 +19,10 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     getDigest,
     getShareLink,
     getWatchlist,
-    getWorkspaceBranding,
     listCollectionItems,
     listWatchEvents,
   } = await import("~/lib/data.server");
+  const { resolveWorkspacePreparedBy } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const token = params.token;
 
@@ -35,9 +35,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
-  // Co-branding for agency workspaces: the share owner's brand name renders
-  // as "Prepared by …" while Five to Nine stays in the footer.
-  const preparedBy = (await getWorkspaceBranding(env, share.userId)).brandName;
+  const preparedBy = await resolveWorkspacePreparedBy(env, share.userId);
 
   if (share.isSnapshot) {
     return {
