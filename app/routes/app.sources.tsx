@@ -6,6 +6,7 @@ import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page"
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
 import { CUSTOMER_SUPPORT_PATHS } from "~/lib/agent-action-catalog";
+import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
@@ -227,7 +228,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       if (error instanceof Response && error.status >= 400 && error.status < 500) {
         return {
           ok: false,
-          message: (await error.text()) || "Slack delivery could not be connected.",
+          message: sanitizeCustomerFacingMessage((await error.text()) || "Slack delivery could not be connected."),
         };
       }
 
@@ -277,7 +278,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       if (error instanceof Response && error.status >= 400 && error.status < 500) {
         return {
           ok: false,
-          message: (await error.text()) || "WhatsApp delivery could not be connected.",
+          message: sanitizeCustomerFacingMessage((await error.text()) || "WhatsApp delivery could not be connected."),
         };
       }
 

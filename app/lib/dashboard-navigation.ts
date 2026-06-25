@@ -89,3 +89,25 @@ export function filterDashboardNav(
     }))
     .filter((section) => section.items.length > 0);
 }
+
+/** Primary routes for the fixed mobile navigation bar (≤760px). */
+export function buildDashboardMobileNav(options: { showPresence: boolean }) {
+  const items: DashboardNavItem[] = [
+    { label: "Overview", to: "/app", end: true },
+    { label: "Search", to: "/search" },
+    { label: "Watchlists", to: "/app/watchlists" },
+  ];
+
+  if (options.showPresence) {
+    items.push({ label: "Presence", to: "/app/presence" });
+  }
+
+  items.push(
+    { label: "Collections", to: "/app/collections" },
+    { label: "Digests", to: "/app/digests" },
+    { label: "Notifications", to: "/app/sources" },
+    { label: "Account", to: "/app/account" },
+  );
+
+  return items;
+}
