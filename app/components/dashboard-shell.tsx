@@ -153,6 +153,8 @@ export function DashboardShell({
         {!isPublic && mobileNav.length > 0 ? (
           <>
             <div className="f9-dash-mobile-utility">
+              <Link to="/app/team">Team</Link>
+              <Link to="/app/clients">Client rooms</Link>
               <Link to="/help">Help</Link>
               <Link to="/app/billing">Billing</Link>
               <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>

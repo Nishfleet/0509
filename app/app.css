@@ -5977,9 +5977,13 @@ one signal-green accent.
   }
 }
 
+.f9-dash-mobile-utility {
+  display: none;
+}
+
 @media (max-width: 760px) {
   .f9-cursor-shell {
-    padding: 12px 8px calc(108px + env(safe-area-inset-bottom, 0px));
+    padding: 12px 8px calc(148px + env(safe-area-inset-bottom, 0px));
   }
 
   .f9-cursor-rail-desktop {
@@ -5989,7 +5993,7 @@ one signal-green accent.
   .f9-dash-mobile-utility {
     position: fixed;
     right: 0;
-    bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
     left: 0;
     z-index: 39;
     display: flex;

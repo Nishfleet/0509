@@ -422,7 +422,7 @@ describe("sources route action", () => {
     expect(createCustomerApiKey).not.toHaveBeenCalled();
     expect(result).toEqual({
       ok: false,
-      message: "Only the account owner can manage integrations, delivery targets, and API keys.",
+      message: "Only the account owner can manage notifications, delivery targets, and API keys.",
     });
   });
 

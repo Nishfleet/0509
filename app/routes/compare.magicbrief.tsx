@@ -6,7 +6,7 @@ import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const pageDescription =
-  "Moving from MagicBrief? What transfers to Five to Nine, what's different, and how to migrate your boards and watchlists in an afternoon.";
+  "Moving from MagicBrief? What transfers to Five to Nine, what's different, and how to migrate your collections and watchlists in an afternoon.";
 
 export const links: LinksFunction = () => canonicalLinks("/compare/magicbrief");
 
@@ -20,7 +20,7 @@ export const meta: MetaFunction = () =>
 const transfers = [
   {
     theirs: "Saved ad library and boards",
-    ours: "Boards — save winning ads with notes and tags, share with clients",
+    ours: "Collections — save winning ads with notes and tags, share with clients",
   },
   {
     theirs: "Brand tracking",
@@ -76,10 +76,10 @@ export default function CompareMagicBriefRoute() {
           <span>Migration guide — MagicBrief → Five to Nine</span>
         </p>
         <h1 className="ld-wall ld-wall-compact">
-          Moving from MagicBrief? Bring the boards. Gain the receipts.
+          Moving from MagicBrief? Bring your saved work. Gain the receipts.
         </h1>
         <p className="ld-deck-copy">
-          If your current tool is winding down or just winding you up, your boards and
+          If your current tool is winding down or just winding you up, your collections and
           watchlists set up here in an afternoon — email{" "}
           <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll help you move, person to
           person.
@@ -134,7 +134,7 @@ export default function CompareMagicBriefRoute() {
         </h2>
         <p className="ld-pricing-note">
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> with your MagicBrief export (or just
-          a list of brands you tracked) and we&rsquo;ll set up your boards and watchlists with
+          a list of brands you tracked) and we&rsquo;ll set up your collections and watchlists with
           you. Plans from the <Link to="/#pricing">pricing page</Link> — live search stays free
           either way.
         </p>

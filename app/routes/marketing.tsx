@@ -506,12 +506,12 @@ export default function MarketingRoute() {
           <div className="ld-plan-summary" aria-label="Pricing summary">
             <span>Recommended launch plan</span>
             <strong>Start with Starter</strong>
-            <p>Weekly change briefs, 10 watchlists, and enough checks for a real sales team.</p>
+            <p>Weekly digests, 10 watchlists, and enough checks for a real sales team.</p>
           </div>
           <p className="ld-pricing-note">
             Review live search and the sample proof loop first. Paid plans add account-gated
-            competitor research, watchlists, page checks, saved boards, and clear caps. Save
-            winning ads to boards — and see how long each ad has been running when the Ad Library
+            competitor research, watchlists, page checks, saved collections, and clear caps. Save
+            winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
           </p>
         </div>
@@ -589,7 +589,7 @@ export default function MarketingRoute() {
 
         <p className="ld-pricing-note">
           Coming from MagicBrief or another tool that&rsquo;s winding down? See the{" "}
-          <Link to="/compare/magicbrief">migration guide</Link>. Your boards and
+          <Link to="/compare/magicbrief">migration guide</Link>. Your collections and
           watchlists set up in an afternoon — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>{" "}
           and we&rsquo;ll help you move.
         </p>

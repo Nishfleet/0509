@@ -184,7 +184,7 @@ export async function getWorkspaceReadiness(
       action:
         deliveryProofCount > 0
           ? null
-          : { label: "Open sources", href: "/app/sources" },
+          : { label: "Open notifications", href: "/app/sources" },
     },
     {
       id: "billing",
@@ -221,7 +221,7 @@ export async function getWorkspaceReadiness(
     },
     {
       id: "source",
-      label: "Data sources",
+      label: "Notifications",
       status:
         sourceStatus.status === "healthy"
           ? "ready"
@@ -229,7 +229,7 @@ export async function getWorkspaceReadiness(
             ? "attention"
             : "needs_setup",
       detail: sourceStatus.summary,
-      action: sourceStatus.status === "healthy" ? null : { label: "Open sources", href: "/app/sources" },
+      action: sourceStatus.status === "healthy" ? null : { label: "Open notifications", href: "/app/sources" },
     },
     {
       id: "api",

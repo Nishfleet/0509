@@ -128,7 +128,7 @@ export default function LoginRoute() {
               <p>Track competitor changes over time without losing the evidence.</p>
             </div>
             <div>
-              <strong>Boards</strong>
+              <strong>Collections</strong>
               <p>Share useful ads and landing-page examples with clients or teammates.</p>
             </div>
           </div>
