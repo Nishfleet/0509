@@ -307,7 +307,7 @@ export default function AppDashboardRoute() {
       title: `${counterMoveBriefLabel} ${counterMoveFollowUpCount === 1 ? "needs" : "need"} a decision`,
       detail: "Open the proof-backed follow-ups and choose the next response before the review window closes.",
       href: "/app/watchlists",
-      cta: "Review briefs",
+      cta: "Review digests",
     }
     : confirmedChanges > 0
     ? {
@@ -407,7 +407,7 @@ export default function AppDashboardRoute() {
             <span className="f9-app-kicker">Plan required for monitoring</span>
             <h2>Search is free. Retained tracking starts on a paid plan.</h2>
             <p>
-              Upgrade to Starter or above to keep nightly competitor scans, change briefs, and proof
+              Upgrade to Starter or above to keep nightly competitor scans, change digests, and proof
               capture on a watchlist.
             </p>
           </div>

@@ -86,7 +86,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
   const { isWhatsAppProviderConfigured } = await import("~/lib/env.server");
+  const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
   const whatsappAvailable = isWhatsAppProviderConfigured(env);
+  const showPresenceNav = await presenceNavVisible(env, workspaceUserId);
   const [watchlists, discoveryStatus, plan] = await Promise.all([
     listWatchlists(env, workspaceUserId, { includeInactive: true }),
     resolveCommercialAdSourceStatus(env),
@@ -116,6 +118,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       discoveryStatus,
       plan,
       whatsappAvailable,
+      showPresenceNav,
     };
   }
 
@@ -175,6 +178,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     discoveryStatus,
     plan,
     whatsappAvailable,
+    showPresenceNav,
   };
 }
 
@@ -899,20 +903,18 @@ export default function WatchlistsRoute() {
                         Review tracking access
                       </Link>
                     </article>
-                    <article className="f9-app-panel">
-                      <h3>Web mentions</h3>
-                      <p className="f9-muted-copy">
-                        {`Mention tracking will appear here when it is enabled for this ${selectedTargetNoun}.`}
-                      </p>
-                      <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
-                        {["Reddit", "X", "Blogs", "YouTube", "Substack", "Web"].map((source) => (
-                          <div className="f9-work-row" key={source}>
-                            <p className="f9-muted-copy">{source}</p>
-                            <span className="f9-status-pill">prepared</span>
-                          </div>
-                        ))}
-                      </div>
-                    </article>
+                    {data.showPresenceNav ? (
+                      <article className="f9-app-panel">
+                        <h3>Website presence</h3>
+                        <p className="f9-muted-copy">
+                          Track public website, blog, and feed changes for this competitor in Presence — separate from ad
+                          watchlists.
+                        </p>
+                        <Link className="f9-secondary-button" to="/app/presence">
+                          Open Presence
+                        </Link>
+                      </article>
+                    ) : null}
                   </div>
                 </section>
 

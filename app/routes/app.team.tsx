@@ -117,7 +117,7 @@ export default function TeamRoute() {
       <DashboardPage>
         <section className="f9-app-stack">
           <DashboardPageHeader
-            lead="Watchlists, boards, and morning briefs here are shared with the whole team. Your sign-in stays your own."
+            lead="Watchlists, collections, and digests here are shared with the whole team. Your sign-in stays your own."
             title="Team"
           />
 
@@ -162,7 +162,7 @@ export default function TeamRoute() {
 
         <p>
           {data.plan === "agency"
-            ? "Teammates you invite share your watchlists, boards, and briefs — billing stays with you."
+            ? "Teammates you invite share your watchlists, collections, and digests — billing stays with you."
             : "Upgrade to the Agency plan to share your account with teammates."}
         </p>
 

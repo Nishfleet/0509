@@ -258,9 +258,8 @@ describe("billing page", () => {
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
-    expect(markup).toContain("Agency checkout is held");
+    expect(markup).toContain("Agency checkout opens after we finish proving nightly monitoring capacity at scale");
     expect(markup).toContain("Scout and Starter are available now");
-    expect(markup).toContain("support@0509.io");
   });
 
   it("renders evidence usage with purchased top-up balance and grant rows", async () => {

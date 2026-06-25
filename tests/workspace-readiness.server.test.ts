@@ -191,7 +191,6 @@ describe("getWorkspaceReadiness", () => {
     ]);
     expect(itemStatuses.delivery).toBe("ready");
     expect(itemStatuses.api).toBe("ready");
-    expect(itemStatuses.mcp).toBe("ready");
     expect(serialized).not.toContain("encryptedWebhookUrl");
     expect(serialized).not.toContain("ciphertext");
     expect(serialized).not.toContain("f9_live_abc");
@@ -263,7 +262,7 @@ describe("getWorkspaceReadiness", () => {
     });
   });
 
-  it("marks MCP attention when only read-only API keys exist", async () => {
+  it("marks developer access ready when only read-only API keys exist", async () => {
     setupMocks({
       listCustomerApiKeys: vi.fn().mockResolvedValue([
         {
@@ -281,18 +280,18 @@ describe("getWorkspaceReadiness", () => {
     });
 
     const readiness = await loadReadiness();
-    const mcp = readiness.items.find((item) => item.id === "mcp");
+    const api = readiness.items.find((item) => item.id === "api");
 
-    expect(readiness.status).toBe("attention");
+    expect(readiness.status).toBe("ready");
     expect(readiness.counts).toMatchObject({
       activeApiKeys: 1,
       actionEnabledApiKeys: 0,
     });
-    expect(mcp).toMatchObject({
-      status: "attention",
-      detail: "MCP can use read-only API keys for readiness and exports. Create a write-enabled key for audited actions.",
-      action: { href: "/app/sources" },
+    expect(api).toMatchObject({
+      status: "ready",
+      action: null,
     });
+    expect(JSON.stringify(readiness)).not.toContain("MCP agent");
   });
 
   it("keeps proof ready when the latest successful proof is outside recent captures", async () => {
@@ -392,7 +391,7 @@ describe("getWorkspaceReadiness", () => {
       status: "not_applicable",
       action: null,
     });
-    expect(items.mcp).toMatchObject({
+    expect(items.api).toMatchObject({
       status: "needs_setup",
       action: { href: "/app/sources" },
     });

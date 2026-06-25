@@ -6,6 +6,7 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { formatCoverageLabel } from "~/lib/presence-display";
+import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import type { PresenceConnectorId } from "~/lib/presence-types";
 
 export const meta = ({ data }: { data: Awaited<ReturnType<typeof loader>> | undefined }) => [
@@ -85,7 +86,7 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
     }
   } catch (error) {
     if (error instanceof PresenceServiceError) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: sanitizeCustomerFacingMessage(error.message) };
     }
     throw error;
   }

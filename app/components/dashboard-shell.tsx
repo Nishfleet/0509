@@ -6,6 +6,7 @@ import {
   DASHBOARD_SETTINGS_NAV,
   DASHBOARD_STAFF_NAV,
   PUBLIC_SEARCH_NAV,
+  buildDashboardMobileNav,
   filterDashboardNav,
   type DashboardNavSection,
 } from "~/lib/dashboard-navigation";
@@ -75,11 +76,12 @@ export function DashboardShell({
     showOps: showOpsNav,
   });
   const staff = DASHBOARD_STAFF_NAV.filter((item) => !item.requiresOps || showOpsNav);
+  const mobileNav = isPublic ? [] : buildDashboardMobileNav({ showPresence: showPresenceNav });
 
   return (
     <main className={pageClassName ? `f9-dash-page ${pageClassName}` : "f9-dash-page"}>
       <div className="f9-cursor-shell">
-        <aside className="f9-cursor-rail" aria-label="Application">
+        <aside className="f9-cursor-rail f9-cursor-rail-desktop" aria-label="Application">
           <div className="f9-cursor-account">
             <span>{accountLabel}</span>
             <strong>{accountTitle}</strong>
@@ -147,6 +149,29 @@ export function DashboardShell({
           {headerActions ? <header className="f9-dash-topbar">{headerActions}</header> : null}
           {children}
         </div>
+
+        {!isPublic && mobileNav.length > 0 ? (
+          <>
+            <div className="f9-dash-mobile-utility">
+              <Link to="/help">Help</Link>
+              <Link to="/app/billing">Billing</Link>
+              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+              <SignOutButton />
+            </div>
+            <nav aria-label="Primary" className="f9-dash-mobile-nav">
+              {mobileNav.map((item) => (
+                <NavLink
+                  className={({ isActive }) => (isActive ? "is-active" : undefined)}
+                  end={item.end}
+                  key={item.to}
+                  to={item.to}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          </>
+        ) : null}
       </div>
     </main>
   );

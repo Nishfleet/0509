@@ -6,6 +6,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
@@ -93,7 +94,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     if (error instanceof SupportCaseInputError) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: sanitizeCustomerFacingMessage(error.message) };
     }
     console.error("[support] case persistence failed", error);
     return {
@@ -128,7 +129,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     if (error instanceof SupportCaseInputError) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: sanitizeCustomerFacingMessage(error.message) };
     }
     console.error("[support] case persistence failed", error);
     return {

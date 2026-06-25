@@ -60,7 +60,7 @@ export async function evaluatePresenceWorkspaceAccess(
         allowed: false,
         rolloutState,
         reasonCode: "internal_workspace_unconfigured",
-        reasonMessage: "Presence internal rollout is not configured.",
+        reasonMessage: "Presence is not available on your account yet.",
       };
     }
     if (workspaceUserId !== internalWorkspaceId) {
@@ -68,7 +68,7 @@ export async function evaluatePresenceWorkspaceAccess(
         allowed: false,
         rolloutState,
         reasonCode: "internal_workspace_only",
-        reasonMessage: "Presence tracking is limited to the internal pilot workspace.",
+        reasonMessage: "Presence is not available on your account yet.",
       };
     }
     return {
