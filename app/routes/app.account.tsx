@@ -140,7 +140,7 @@ export default function AccountRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          Signed in as {data.email}. Sign-in is handled by Better Auth. Use this page for brand setup,
+          Signed in as {data.email}. Sign-in security is managed on this page — use it for brand setup,
           sign-in options, and sensitive account requests.
         </p>
       </article>
@@ -284,7 +284,7 @@ export default function AccountRoute() {
           </div>
         </div>
         <p className="f9-muted-copy">
-          This device is signed in until {data.sessionExpiresAt}. Sign out from the sidebar to remove access on this
+          This device is signed in until {data.sessionExpiresAt}. Sign out from the navigation menu to remove access on this
           device.
         </p>
         <p className="f9-muted-copy">

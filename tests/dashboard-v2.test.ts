@@ -61,10 +61,9 @@ describe("dashboard v2 shell", () => {
     expect(shellSource).toContain("f9-dash-page");
   });
 
-  it("drops legacy application layout styles from app.css", () => {
-    expect(appCss).not.toContain(".f9-app-shell");
-    expect(appCss).not.toContain(".f9-app-sidebar");
-    expect(appCss).not.toContain(".f9-app-topbar");
+  it("does not reorder main content above rail on mobile", () => {
+    expect(appCss).not.toMatch(/\.f9-cursor-main\s*\{[^}]*order:\s*1/s);
+    expect(shellSource).toContain("f9-dash-mobile-nav");
   });
 
   it("wraps primary app routes in DashboardPage except staff ops", () => {

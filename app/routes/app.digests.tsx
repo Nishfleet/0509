@@ -163,7 +163,7 @@ export default function DigestsRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          lead="Review generated change briefs with proof attached before they reach your inbox."
+          lead="Review generated change digests with proof attached before they reach your inbox."
           title="Digests"
         />
 
@@ -186,7 +186,7 @@ export default function DigestsRoute() {
 
       {!data.canAccessDigests ? (
         <PlanLimitState
-          message="Digests are included in paid plans. Upgrade to get daily or weekly competitor change reports — with proof attached — in your inbox. Until then, watchlists and boards keep your research organized."
+          message="Digests are included in paid plans. Upgrade to get daily or weekly competitor change reports — with proof attached — in your inbox. Until then, watchlists and collections keep your research organized."
           title="Digests are included in paid plans"
         />
       ) : (

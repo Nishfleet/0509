@@ -49,7 +49,7 @@ export default function StatusRoute() {
           </div>
           <div>
             <dt>Accounts</dt>
-            <dd>Secure email-link sign-in for saved competitors, boards, briefs, and reports.</dd>
+            <dd>Secure email-link sign-in for saved competitors, collections, digests, and reports.</dd>
           </div>
           <div>
             <dt>Billing</dt>
@@ -74,11 +74,7 @@ export default function StatusRoute() {
           </div>
           <div>
             <dt>Agency</dt>
-            <dd>
-              {data.commercialLaunch?.agencySaleOpen
-                ? "Available for checkout"
-                : "Held until monitoring fan-out is proven on the internal workspace"}
-            </dd>
+            <dd>{data.commercialLaunch?.agencySaleOpen ? "Available for checkout" : "Held while we finish proving nightly monitoring capacity at scale"}</dd>
           </div>
         </dl>
       </PublicDocBlock>

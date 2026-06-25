@@ -293,6 +293,30 @@ img {
   gap: 4px;
 }
 
+.f9-app-brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.f9-app-brand:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.72);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.f9-legal-page .f9-app-brand .f9-wordmark {
+  color: #fff;
+}
+
+.f9-legal-page .f9-app-brand small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
 .f9-wordmark {
   display: inline-flex;
   align-items: center;
@@ -5438,6 +5462,10 @@ one signal-green accent.
   margin-bottom: 18px;
 }
 
+.f9-dash-mobile-nav {
+  display: none;
+}
+
 .f9-dash-user-name {
   margin-top: 6px;
 }
@@ -5951,15 +5979,74 @@ one signal-green accent.
 
 @media (max-width: 760px) {
   .f9-cursor-shell {
-    padding: 12px 8px 42px;
+    padding: 12px 8px calc(108px + env(safe-area-inset-bottom, 0px));
   }
 
-  .f9-cursor-main {
-    order: 1;
+  .f9-cursor-rail-desktop {
+    display: none;
   }
 
-  .f9-cursor-rail {
-    order: 2;
+  .f9-dash-mobile-utility {
+    position: fixed;
+    right: 0;
+    bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    left: 0;
+    z-index: 39;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px 12px;
+    padding: 6px 10px;
+    border-top: 1px solid #ebe6db;
+    background: rgba(248, 246, 239, 0.98);
+  }
+
+  .f9-dash-mobile-utility a,
+  .f9-dash-mobile-utility button {
+    color: #5f5a52;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .f9-dash-mobile-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #e0ddd4;
+    background: rgba(255, 253, 248, 0.96);
+    backdrop-filter: blur(10px);
+  }
+
+  .f9-dash-mobile-nav a {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 4px 2px;
+    border-radius: 8px;
+    color: #5f5a52;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1.1;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .f9-dash-mobile-nav a.is-active {
+    background: #efede6;
+    color: #11100d;
+  }
+
+  .f9-dash-mobile-nav a:focus-visible {
+    outline: 2px solid #0aa982;
+    outline-offset: 1px;
   }
 
   .f9-cursor-rail nav {

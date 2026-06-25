@@ -38,8 +38,8 @@ export default function AppLayoutRoute() {
       accountTitle="Five to Nine"
       headerActions={
         <>
-          <Link className="f9-secondary-button" to="/search">
-            Search ads
+          <Link className="f9-secondary-button" to="/app">
+            Overview
           </Link>
           <Link className="f9-primary-button" to="/search">
             Add competitor
