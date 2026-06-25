@@ -10,6 +10,8 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { DashboardShell } from "~/components/dashboard-shell";
 import { SubmitButton } from "~/components/submit-button";
 import {
   applyWebsiteSearchFallback,
@@ -57,6 +59,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const workspaceUserId = session
     ? (await (await import("~/lib/workspace.server")).resolveWorkspace(env, session.user.id)).workspaceUserId
     : null;
+  const navFlags = session
+    ? {
+        showPresenceNav: await (
+          await import("~/lib/presence-internal-access.server")
+        ).presenceNavVisible(env, workspaceUserId!),
+        showOpsNav: (await import("~/lib/env.server")).isOpsUserAllowed(env, session.user.email),
+      }
+    : { showPresenceNav: false, showOpsNav: false };
   const url = new URL(request.url);
   const visitorCountry = defaultCountryForVisitor(
     (context.cloudflare as { country?: string | null } | undefined)?.country ??
@@ -83,6 +93,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       competitorWebsite,
       trackingRole,
       inputError: competitorWebsite.error,
+      searchScope: "exact" as const,
+      displayDomain: null,
+      ...navFlags,
     };
   }
 
@@ -98,6 +111,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       competitorWebsite,
       trackingRole,
       inputError: null,
+      searchScope: "exact" as const,
+      displayDomain: null,
+      ...navFlags,
     };
   }
 
@@ -136,6 +152,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       competitorWebsite,
       trackingRole,
       inputError: null,
+      searchScope: "exact" as const,
+      displayDomain: null,
+      ...navFlags,
     };
   }
 
@@ -193,6 +212,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     searchScope: searchExecution.searchScope,
     displayDomain: searchExecution.displayDomain,
     inputError: null,
+    ...navFlags,
   };
 }
 
@@ -383,34 +403,28 @@ export default function SearchRoute() {
   broaderSearchParams.set("broader", "1");
 
   return (
-    <main className="f9-search-page">
-      <div className="f9-cursor-shell">
-        <aside className="f9-cursor-rail" aria-label="Search navigation">
-          <div className="f9-cursor-account">
-            <span>{rootData.session ? "Account" : "Search"}</span>
-            <strong>Five to Nine</strong>
-            <small>{rootData.session ? "Saved searches and watches" : "Find competitor ads"}</small>
+    <DashboardShell
+      accountDetail={rootData.session ? "Saved searches and watches" : "Find competitor ads"}
+      accountLabel={rootData.session ? "Workspace" : "Search"}
+      accountTitle="Five to Nine"
+      isPublic={!rootData.session}
+      pageClassName="f9-search-page"
+      railNote={
+        data.result.ads.length > 0 ? (
+          <div className="f9-cursor-rail-note">
+            <span>Saved proof</span>
+            <strong>
+              {landingPageCount}/{data.result.ads.length}
+            </strong>
+            <small>From this search</small>
           </div>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link className="is-active" to="/search">Overview</Link>
-            <Link to="/app/watchlists">Watchlists</Link>
-            <Link to="/app/collections">Collections</Link>
-            <Link to="/app/digests">Digests</Link>
-            <Link to="/app/support?category=migration">Reports</Link>
-            <Link to="/app/sources">Sources</Link>
-            <Link to="/app/billing">Billing</Link>
-          </nav>
-          {data.result.ads.length > 0 ? (
-            <div className="f9-cursor-rail-note">
-              <span>Saved proof</span>
-              <strong>{landingPageCount}/{data.result.ads.length}</strong>
-              <small>From this search</small>
-            </div>
-          ) : null}
-        </aside>
-
-        <div className="f9-cursor-main">
+        ) : null
+      }
+      showOpsNav={data.showOpsNav}
+      showPresenceNav={data.showPresenceNav}
+      userEmail={rootData.session?.user.email}
+      userName={rootData.session?.user.name}
+    >
           <section className="f9-search-command" aria-labelledby="search-command-title">
             <div className="f9-search-command-head">
               <h1 id="search-command-title">Find competitor ads</h1>
@@ -750,9 +764,7 @@ export default function SearchRoute() {
           ) : null}
         </div>
       </section>
-        </div>
-      </div>
-    </main>
+    </DashboardShell>
   );
 }
 
@@ -1024,4 +1036,12 @@ function withTrackingContext(
   const next = withCompetitorWebsite(params, website);
   next.set("trackingRole", trackingRole);
   return next;
+}
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="search" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
 }

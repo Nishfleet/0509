@@ -7,6 +7,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
@@ -28,7 +30,15 @@ const externalProofChannels = [
   "Other",
 ];
 
-export const meta = () => [{ title: "Boards | Five to Nine" }];
+export const meta = () => [{ title: "Collections | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Collections" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -72,7 +82,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const description = String(formData.get("description") ?? "").trim();
 
     if (!name) {
-      return { ok: false, message: "Board name is required." };
+      return { ok: false, message: "Collection name is required." };
     }
 
     const collectionLimit = await checkPlanLimit(env, workspaceUserId, "collections");
@@ -82,7 +92,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: collectionLimit.limit,
         current: collectionLimit.current,
-        message: "You have reached your board limit.",
+        message: "You have reached your collection limit.",
       };
     }
 
@@ -112,7 +122,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      message: "Board note updated.",
+      message: "Collection note updated.",
     };
   }
 
@@ -161,8 +171,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const deleted = await deleteCollection(env, workspaceUserId, collectionId);
 
     return deleted
-      ? { ok: true, message: "Board deleted. The plan slot is free again." }
-      : { ok: false, message: "Board not found." };
+      ? { ok: true, message: "Collection deleted. The plan slot is free again." }
+      : { ok: false, message: "Collection not found." };
   }
 
   if (intent === "remove-item") {
@@ -171,8 +181,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const removed = await deleteCollectionItem(env, workspaceUserId, itemId);
 
     return removed
-      ? { ok: true, message: "Removed from the board." }
-      : { ok: false, message: "Board item not found." };
+      ? { ok: true, message: "Removed from the collection." }
+      : { ok: false, message: "Collection item not found." };
   }
 
   if (intent === "share-collection") {
@@ -184,7 +194,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const collectionId = String(formData.get("collectionId") ?? "");
     const collection = await getCollection(env, collectionId, workspaceUserId);
     if (!collection) {
-      return { ok: false, message: "Board not found." };
+      return { ok: false, message: "Collection not found." };
     }
     const share = await createShareLink(
       env,
@@ -203,7 +213,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   return {
     ok: false,
-    message: "Unknown boards action.",
+    message: "Unknown collections action.",
   };
 }
 
@@ -215,7 +225,13 @@ export default function CollectionsRoute() {
   const insightDepth = data.selectedCollection ? buildCollectionInsightDepth(data.items) : null;
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          lead="Save the best competitor examples, external proof, and notes for your team."
+          title="Collections"
+        />
+
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>
@@ -243,7 +259,7 @@ export default function CollectionsRoute() {
         <article className="f9-app-panel f9-side-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Create board</span>
+              <span className="f9-app-kicker">Create collection</span>
               <h2>Keep the best ads reusable.</h2>
             </div>
           </div>
@@ -259,7 +275,7 @@ export default function CollectionsRoute() {
               <textarea name="description" placeholder="Optional context for the team" rows={3} />
             </label>
             <SubmitButton className="f9-primary-button" intent="create-collection" pendingLabel="Creating…">
-              Create board
+              Create collection
             </SubmitButton>
           </Form>
 
@@ -278,7 +294,7 @@ export default function CollectionsRoute() {
             ))}
             {data.collections.length === 0 ? (
               <div className="f9-empty-panel">
-                <h3>Create your first proof board</h3>
+                <h3>Create your first proof collection</h3>
                 <p>Group competitor ads, offers, and landing-page proof for the deal or client you are working on.</p>
               </div>
             ) : null}
@@ -290,7 +306,7 @@ export default function CollectionsRoute() {
             <>
               <div className="f9-panel-toolbar">
                 <div>
-                  <span className="f9-app-kicker">Selected board</span>
+                  <span className="f9-app-kicker">Selected collection</span>
                   <h2>{data.selectedCollection.name}</h2>
                 </div>
                 <div className="f9-action-row">
@@ -330,7 +346,7 @@ export default function CollectionsRoute() {
                   <Form
                     method="post"
                     onSubmit={(event) => {
-                      if (!confirm("Delete this board and everything saved in it?")) {
+                      if (!confirm("Delete this collection and everything saved in it?")) {
                         event.preventDefault();
                       }
                     }}
@@ -338,7 +354,7 @@ export default function CollectionsRoute() {
                     <input name="intent" type="hidden" value="delete-collection" />
                     <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
                     <SubmitButton className="f9-secondary-button" intent="delete-collection" pendingLabel="Deleting…">
-                      Delete board
+                      Delete collection
                     </SubmitButton>
                   </Form>
                 </div>
@@ -485,7 +501,7 @@ export default function CollectionsRoute() {
                           match={{ itemId: item.id }}
                           pendingLabel="Removing…"
                         >
-                          Remove from board
+                          Remove from collection
                         </SubmitButton>
                       </Form>
                     </article>
@@ -495,12 +511,13 @@ export default function CollectionsRoute() {
             </>
           ) : (
             <div className="f9-empty-panel">
-              <h2>Create your first proof board</h2>
-              <p>Boards keep competitor examples, notes, tags, and share links ready for your team.</p>
+              <h2>Create your first proof collection</h2>
+              <p>Collections keep competitor examples, notes, tags, and share links ready for your team.</p>
             </div>
           )}
         </article>
       </div>
-    </section>
+      </section>
+    </DashboardPage>
   );
 }

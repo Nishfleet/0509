@@ -194,7 +194,7 @@ afterEach(() => {
 });
 
 describe("dashboard route agent memory", () => {
-  it("redacts legacy secret-looking memory in loader data and rendered previews", async () => {
+  it("does not expose agent memory on the customer overview", async () => {
     const deps = mockDashboardLoaderDependencies();
 
     const { loader } = await import("~/routes/app.dashboard");
@@ -204,12 +204,8 @@ describe("dashboard route agent memory", () => {
     } as never);
 
     expect(deps.listWatchlists).toHaveBeenCalledWith(expect.anything(), session.user.id, { includeInactive: true });
+    expect(loaderData).not.toHaveProperty("agentMemories");
     expect(JSON.stringify(loaderData)).not.toContain("hunter2");
-    expect(JSON.stringify(loaderData)).not.toContain(["f9", "live", "dashboard"].join("_"));
-    expect(loaderData.agentMemories[0]).toMatchObject({
-      key: "[redacted]",
-      preview: "[redacted]",
-    });
 
     vi.resetModules();
     await mockRouter(loaderData);
@@ -219,7 +215,6 @@ describe("dashboard route agent memory", () => {
     expect(markup).toContain("Add your first competitor");
     expect(markup).not.toContain("Account context saved");
     expect(markup).not.toContain("[redacted]: [redacted]");
-    expect(markup).not.toContain("Counter-move follow-ups");
     expect(markup).not.toContain("hunter2");
     expect(markup).not.toContain(["f9", "live", "dashboard"].join("_"));
     expect(markup).not.toContain("password=");
@@ -432,7 +427,7 @@ describe("dashboard route agent memory", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Briefs that need review");
+    expect(markup).toContain("Responses waiting on you");
     expect(markup).toContain("Review pricing move");
     expect(markup).toContain("Growth lead");
     expect(markup).toContain("Client room");
@@ -499,7 +494,7 @@ describe("dashboard route agent memory", () => {
     expect(JSON.stringify(loaderData)).not.toContain(slackHook);
     expect(JSON.stringify(loaderData)).not.toContain("bearer abcdefghijklmnop");
     expect(loaderData.counterMoveFollowUps[0]).toMatchObject({
-      title: "Counter-move brief counter-move brief",
+      title: "Competitive response follow-up",
       ownerLabel: "Account owner",
       channelLabel: "Client room",
     });

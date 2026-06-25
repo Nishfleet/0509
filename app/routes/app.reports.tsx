@@ -6,12 +6,22 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ReportView } from "~/components/report-view";
 import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
 import { parseReportId } from "~/lib/report";
 
 export const meta = () => [{ title: "Reports | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Reports" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -89,7 +99,8 @@ export default function ReportsRoute() {
       : `/app/watchlists?watchlist=${report.resourceId}`;
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
       {actionData?.message ? (
         <p className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           {actionData.ok && actionData.message.startsWith("http") ? (
@@ -140,7 +151,8 @@ export default function ReportsRoute() {
 
         <ReportView report={report} />
       </article>
-    </section>
+      </section>
+    </DashboardPage>
   );
 }
 

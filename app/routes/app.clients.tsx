@@ -6,6 +6,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import type { AppEnv } from "~/lib/env.server";
@@ -13,6 +15,14 @@ import { createReportId } from "~/lib/report";
 import type { AgentMemoryRecord, ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 export const meta = () => [{ title: "Clients | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Client rooms" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -196,22 +206,19 @@ export default function ClientsRoute() {
   }
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          action={{ label: "Integrations", to: "/app/sources" }}
+          lead="Package proof around each client."
+          title="Client rooms"
+        />
+
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>{actionData.message}</p>
         </div>
       ) : null}
-
-      <div className="f9-panel-toolbar">
-        <div>
-          <span className="f9-app-kicker">Client rooms</span>
-          <h1>Package proof around each client.</h1>
-        </div>
-        <Link className="f9-secondary-button" to="/app/sources">
-          Integrations
-        </Link>
-      </div>
 
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel f9-side-panel">
@@ -262,7 +269,7 @@ export default function ClientsRoute() {
             </div>
 
             <div className="f9-work-list is-compact">
-              <p className="f9-app-kicker">Boards</p>
+              <p className="f9-app-kicker">Collections</p>
               {data.collections.map((collection) => (
                 <label className="f9-work-row" key={collection.id}>
                   <input name="collectionIds" type="checkbox" value={collection.id} />
@@ -270,7 +277,7 @@ export default function ClientsRoute() {
                 </label>
               ))}
               {data.collections.length === 0 ? (
-                <p className="f9-muted-copy">Create a board before linking saved proof.</p>
+                <p className="f9-muted-copy">Create a collection before linking saved proof.</p>
               ) : null}
             </div>
 
@@ -287,7 +294,7 @@ export default function ClientsRoute() {
               <h2>{activeRooms.length} client {activeRooms.length === 1 ? "room" : "rooms"}</h2>
             </div>
             <Link className="f9-secondary-button" to="/app/collections">
-              Boards
+              Collections
             </Link>
           </div>
 
@@ -302,7 +309,7 @@ export default function ClientsRoute() {
             {activeRooms.length === 0 ? (
               <div className="f9-empty-panel">
                 <h2>Create the first client room</h2>
-                <p>Use rooms to keep watchlists, boards, reports, and client context together for agency delivery.</p>
+                <p>Use rooms to keep watchlists, collections, reports, and client context together for agency delivery.</p>
               </div>
             ) : null}
           </div>
@@ -404,6 +411,7 @@ export default function ClientsRoute() {
         </article>
       </div>
     </section>
+    </DashboardPage>
   );
 }
 
@@ -510,7 +518,7 @@ function summarizeClientRoomHandoff(
       ? "Ready for client review"
       : "Needs setup before client review";
   const next = linkedProofCount === 0
-    ? "Link a watchlist or board to this room."
+    ? "Link a watchlist or collection to this room."
     : reportCount === 0
       ? "Add a report link for the client packet."
       : !hasContext
@@ -658,7 +666,7 @@ function resourceHref(ref: ClientRoomResourceRef) {
 
 function resourceLabel(ref: ClientRoomResourceRef) {
   if (ref.resourceType === "collection") {
-    return "Board";
+    return "Collection";
   }
   if (ref.resourceType === "watchlist") {
     return "Watchlist";

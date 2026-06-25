@@ -163,7 +163,7 @@ describe("collection limit", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached your board limit.",
+      message: "You have reached your collection limit.",
       ok: false,
     });
     expect(createCollection).not.toHaveBeenCalled();
@@ -663,7 +663,7 @@ describe("pricing CTA rendering", () => {
       actionData: {
         ok: false,
         error: "plan_limit_exceeded",
-        message: "You have reached your workspace board limit.",
+        message: "You have reached your collection limit.",
       },
       loaderData: {
         collections: [],
@@ -675,7 +675,7 @@ describe("pricing CTA rendering", () => {
     const { default: CollectionsRoute } = await import("~/routes/app.collections");
     const markup = renderToStaticMarkup(createElement(CollectionsRoute));
 
-    expect(markup).toContain("You have reached your workspace board limit.");
+    expect(markup).toContain("You have reached your collection limit.");
     expect(markup).toContain("View plans");
     expect(markup).toContain("/#pricing");
   });
@@ -836,6 +836,10 @@ describe("pricing CTA rendering", () => {
   });
 
   it("does not render a pricing CTA on search plan-limit errors", async () => {
+    vi.doMock("~/components/dashboard-shell", () => ({
+      DashboardShell: ({ children }: { children: React.ReactNode }) => children,
+    }));
+
     await mockRouter({
       actionData: {
         ok: false,

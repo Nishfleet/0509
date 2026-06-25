@@ -1,6 +1,8 @@
 import { Form, Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { EVIDENCE_USAGE_CUSTOMER_COPY, TOP_UP_INACTIVE_PLAN_COPY } from "~/lib/pricing";
@@ -8,7 +10,15 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const PAYMENT_ISSUE_STATUSES = new Set(["subscription.failed", "subscription.on_hold"]);
 
-export const meta = () => [{ title: "Plan & billing | Five to Nine" }];
+export const meta = () => [{ title: "Billing & usage | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Billing & usage" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -63,6 +73,11 @@ export default function BillingRoute() {
         : "Not included";
 
   return (
+    <DashboardPage>
+      <DashboardPageHeader
+        lead="Current plan, evidence usage, and renewal status."
+        title="Billing & usage"
+      />
     <section className="f9-app-stack">
       {data.blockedCheckout ? (
         <div className="f9-message is-error">
@@ -174,7 +189,7 @@ export default function BillingRoute() {
             </span>
           </div>
           <div className="f9-work-row">
-            <strong>Boards</strong>
+            <strong>Collections</strong>
             <span>
               {data.collectionUsage.limit > 0 ? (
                 `${data.collectionUsage.current} of ${data.collectionUsage.limit} used`
@@ -284,6 +299,7 @@ export default function BillingRoute() {
         </div>
       </article>
     </section>
+    </DashboardPage>
   );
 }
 

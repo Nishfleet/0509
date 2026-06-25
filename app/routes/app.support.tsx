@@ -6,6 +6,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
@@ -39,6 +41,14 @@ const TEAM_AUTHORITY_TEXT_PATTERNS = [
 ];
 
 export const meta = () => [{ title: "Support | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Help & support" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -158,22 +168,24 @@ export default function SupportRoute() {
   const actionData = useActionData<typeof action>();
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          lead="Get account help without losing the trail."
+          title="Help & support"
+        />
+
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>{actionData.message}</p>
         </div>
       ) : null}
 
-      <div className="f9-panel-toolbar">
-        <div>
-          <span className="f9-app-kicker">Support</span>
-          <h1>Get account help without losing the trail.</h1>
-        </div>
+      <p className="f9-action-row">
         <a className="f9-secondary-button" href={SUPPORT_MAILTO}>
           Email support
         </a>
-      </div>
+      </p>
 
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel f9-side-panel">
@@ -287,7 +299,8 @@ export default function SupportRoute() {
           </div>
         </article>
       </div>
-    </section>
+      </section>
+    </DashboardPage>
   );
 }
 

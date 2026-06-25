@@ -10,6 +10,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { CopyButton } from "~/components/copy-button";
 import { LocalTime } from "~/components/local-time";
@@ -54,6 +56,14 @@ import type {
 } from "~/lib/types";
 
 export const meta = () => [{ title: "Watchlists | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Watchlists" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -606,7 +616,13 @@ export default function WatchlistsRoute() {
   }
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          lead="Monitor competitor ads over time and get alerted when messaging, creative, or landing pages change."
+          title="Watchlists"
+        />
+
       {actionData?.message ? (
         <p className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           {actionData.ok && actionData.message.startsWith("http") ? (
@@ -626,7 +642,6 @@ export default function WatchlistsRoute() {
         <article className="f9-app-panel f9-side-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <p className="f9-app-kicker">Watchlists</p>
               <h2>Tracking desk</h2>
             </div>
           </div>
@@ -1265,7 +1280,8 @@ export default function WatchlistsRoute() {
           )}
         </article>
       </div>
-    </section>
+      </section>
+    </DashboardPage>
   );
 }
 
