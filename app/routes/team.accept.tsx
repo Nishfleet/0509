@@ -84,7 +84,7 @@ export default function TeamAcceptRoute() {
             <>
               <h1>Join {data.ownerName ? `${data.ownerName}'s` : "this"} team?</h1>
               <p>
-                You&rsquo;ll share their watchlists, boards, and morning briefs. Your sign-in
+                You&rsquo;ll share their watchlists, collections, and morning digests. Your sign-in
                 stays your own, and the account owner handles billing.
               </p>
               {actionData && !actionData.ok ? <p role="alert">{actionData.reason}</p> : null}

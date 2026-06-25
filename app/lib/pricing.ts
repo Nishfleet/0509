@@ -29,14 +29,14 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
     }
   }
 
-  features.push(`${entitlements.collections} saved boards`);
+  features.push(`${entitlements.collections} saved collections`);
 
   if (entitlements.digestCadence === "weekly") {
     features.push("Weekly evidence-backed digest");
   } else if (entitlements.digestCadence === "daily_and_weekly") {
     features.push("Daily and weekly evidence-backed digests");
     if (plan === "agency") {
-      features.push("Daily and weekly evidence-backed briefs");
+      features.push("Daily and weekly evidence-backed digests");
     }
   }
 
@@ -64,7 +64,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
     features.push("Your agency name on shared reports");
     features.push("API + MCP exports and approved account actions");
     features.push(
-      `${entitlements.workspaceSeats} team seats — teammates share watchlists, boards, and briefs`,
+      `${entitlements.workspaceSeats} team seats — teammates share watchlists, collections, and digests`,
     );
   }
 

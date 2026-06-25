@@ -348,7 +348,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       .filter(Boolean);
 
     if (!collectionId || !adJson) {
-      return { ok: false, message: "Choose a board and ad before saving." };
+      return { ok: false, message: "Choose a collection and ad before saving." };
     }
 
     const ad = JSON.parse(adJson) as AdRecord;
@@ -361,7 +361,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       tags,
     );
 
-    return { ok: true, message: `Saved ${ad.advertiser?.trim() || "the ad"} to your board.` };
+    return { ok: true, message: `Saved ${ad.advertiser?.trim() || "the ad"} to your collection.` };
   }
 
   return { ok: false, message: "Unknown search action." };
@@ -722,7 +722,7 @@ export default function SearchRoute() {
                       <input name="intent" type="hidden" value="save-to-collection" />
                       <input name="adJson" type="hidden" value={JSON.stringify(data.selectedAd)} />
                       <label className="f9-field">
-                        <span>Board</span>
+                        <span>Collection</span>
                         <select name="collectionId" required>
                           {data.collections.map((collection) => (
                             <option key={collection.id} value={collection.id}>
@@ -740,14 +740,14 @@ export default function SearchRoute() {
                         <input name="tags" placeholder="discount, COD, creator-led" />
                       </label>
                       <SubmitButton className="f9-primary-button" intent="save-to-collection" pendingLabel="Saving…">
-                        Save to board
+                        Save to collection
                       </SubmitButton>
                     </Form>
                   ) : data.session ? (
                     <div className="f9-side-note">
-                      <p>Create a board first, then save ads from search.</p>
+                      <p>Create a collection first, then save ads from search.</p>
                       <Link className="f9-secondary-button" to="/app/collections">
-                        Open boards
+                        Open collections
                       </Link>
                     </div>
                   ) : null}

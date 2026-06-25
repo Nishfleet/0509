@@ -32,10 +32,10 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 
 - Competitor monitoring for growth teams.
 - Public read-only search and a sample proof preview are available before signup.
-- Accounts unlock saved competitors, retained monitoring, reusable saved evidence, boards, briefs, and reports.
-- Saving competitor results, saved queries, watchlists, boards, reports, and delivery require an account.
-- Authenticated board, watchlist, and digest exports support CSV and JSON export.
-- Signed-in boards can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
+- Accounts unlock saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports.
+- Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
+- Authenticated collection, watchlist, and digest exports support CSV and JSON export.
+- Signed-in collections can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
 - Customer API keys can read account-owned setup status, collection, watchlist, and digest exports.
 - Write-enabled customer API keys can perform approved account actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
@@ -46,7 +46,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Email delivery is available for eligible accounts.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
-- Daily briefs and weekly digests should show priority, recommended next move, and proof trail.
+- Daily and weekly digests should show priority, recommended next move, and proof trail.
 
 ## Current product truth
 
@@ -63,9 +63,9 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Pricing display is localized from checkout preview for the buyer location.
 - There is no free retained-monitoring plan. Public live search is read-only; saved monitoring requires an account.
 - Starter is the recommended plan for retained competitor monitoring.
-- Scout is the entry plan after the public read-only search and sample proof loop: 3 watchlists, 10 boards, account-gated research, weekly digest delivery, and 50 evidence checks/month.
-- Starter includes 10 watchlists, 25 boards, weekly digest delivery, and 250 evidence checks/month.
-- Agency includes 75 watchlists, 250 boards, daily and weekly briefs, and 2,500 evidence checks/month.
+- Scout is the entry plan after the public read-only search and sample proof loop: 3 watchlists, 10 collections, account-gated research, weekly digest delivery, and 50 evidence checks/month.
+- Starter includes 10 watchlists, 25 collections, weekly digest delivery, and 250 evidence checks/month.
+- Agency includes 75 watchlists, 250 collections, daily and weekly digests, and 2,500 evidence checks/month.
 - Usage bundles add extra evidence checks for 30-day spikes. They do not make monitoring unlimited.
 - Accounts warn after 80% evidence-check usage and hard-stop when paid capacity is exhausted.
 - Tracking reliability stays visible in the account.
@@ -89,12 +89,12 @@ Current product truth:
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Email delivery is available for eligible accounts.
-- Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly briefs plus 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
+- Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly digests plus 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
-- Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved boards, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
+- Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved collections, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
 - Account export links support CSV and JSON export for signed-in users.
 - Customer API keys support setup status plus collection, watchlist, and digest exports for account-owned data.
 - Write-enabled customer API keys support approved account actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.

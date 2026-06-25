@@ -169,8 +169,8 @@ export default function ShareRoute() {
           </article>
         ) : data.resourceType === "collection" ? (
           <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared board</p>
-            <h1>{data.collection?.name ?? "Board unavailable"}</h1>
+            <p className="f9-app-kicker">Shared collection</p>
+            <h1>{data.collection?.name ?? "Collection unavailable"}</h1>
             <div className="f9-work-list">
               {data.items.map((item) => (
                 <div className="f9-work-row" key={item.id}>
