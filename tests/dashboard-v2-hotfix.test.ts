@@ -17,6 +17,7 @@ const watchlistsSource = readFileSync("app/routes/app.watchlists.tsx", "utf8");
 const accountSource = readFileSync("app/routes/app.account.tsx", "utf8");
 const billingSource = readFileSync("app/routes/app.billing.tsx", "utf8");
 const statusSource = readFileSync("app/routes/status.tsx", "utf8");
+const helpCatalog = readFileSync("app/lib/agent-action-catalog.ts", "utf8");
 
 describe("dashboard v2 production hotfix", () => {
   it("uses fixed bottom mobile navigation instead of reordering main above rail", () => {
@@ -50,6 +51,7 @@ describe("dashboard v2 production hotfix", () => {
     expect(statusSource).not.toContain("internal workspace");
     expect(agencyCheckoutHeldCustomerCopy()).not.toContain("internal workspace");
     expect(watchlistsSource).not.toContain("Web mentions");
+    expect(helpCatalog).not.toContain("Better Auth");
   });
 
   it("restores scoped public brand styling without legacy shell", () => {
