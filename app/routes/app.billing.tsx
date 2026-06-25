@@ -5,6 +5,7 @@ import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page"
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
+import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
 import { EVIDENCE_USAGE_CUSTOMER_COPY, TOP_UP_INACTIVE_PLAN_COPY } from "~/lib/pricing";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
@@ -102,8 +103,7 @@ export default function BillingRoute() {
       {data.agencyCheckoutHeld ? (
         <div className="f9-message is-error">
           <p>
-            Agency checkout is held until nightly monitoring fan-out is proven on our internal
-            workspace. Scout and Starter are available now. Email{" "}
+            {agencyCheckoutHeldCustomerCopy()} Scout and Starter are available now. Email{" "}
             <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need Agency capacity before then.
           </p>
         </div>

@@ -38,7 +38,7 @@ export default function HelpRoute() {
         <p>
           Email delivery is required for GA launch proof and is available for all paid plans. Run a watchlist refresh or
           wait for the first digest after a monitored change to confirm delivery. Connect a delivery target from your
-          watchlist settings or <Link to="/app/sources">Integrations</Link> when you want digests and high-priority alerts
+          watchlist settings or <Link to="/app/sources">Notifications</Link> when you want digests and high-priority alerts
           in the inbox.
         </p>
       </PublicDocBlock>

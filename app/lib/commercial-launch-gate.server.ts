@@ -93,9 +93,9 @@ export function summarizeCommercialLaunch(env: AppEnv): CommercialLaunchSummary 
   };
 }
 
-export function agencyCheckoutHeldCustomerCopy() {
-  return "Agency checkout opens after nightly monitoring fan-out is proven on our internal workspace. Email support if you need Agency capacity before then.";
-}
+import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
+
+export { agencyCheckoutHeldCustomerCopy };
 
 export function planCheckoutHeldCustomerCopy(plan: PricingPlanSlug) {
   if (plan === "agency") {

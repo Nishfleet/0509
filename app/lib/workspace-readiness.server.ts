@@ -233,25 +233,13 @@ export async function getWorkspaceReadiness(
     },
     {
       id: "api",
-      label: "Customer API",
+      label: "Developer access",
       status: activeApiKeys > 0 ? "ready" : "needs_setup",
       detail:
         activeApiKeys > 0
-          ? `${activeApiKeys} active API key${activeApiKeys === 1 ? "" : "s"}.`
-          : "Create an API key for account-owned exports.",
-      action: activeApiKeys > 0 ? null : { label: "Open sources", href: "/app/sources" },
-    },
-    {
-      id: "mcp",
-      label: "MCP agent context",
-      status: actionEnabledApiKeys > 0 ? "ready" : activeApiKeys > 0 ? "attention" : "needs_setup",
-      detail:
-        actionEnabledApiKeys > 0
-          ? "MCP can use a write-enabled API key for readiness, exports, and audited actions."
-          : activeApiKeys > 0
-            ? "MCP can use read-only API keys for readiness and exports. Create a write-enabled key for audited actions."
-          : "Create an API key before connecting MCP clients.",
-      action: actionEnabledApiKeys > 0 ? null : { label: "Open sources", href: "/app/sources" },
+          ? `${activeApiKeys} active API key${activeApiKeys === 1 ? "" : "s"} for exports and automation.`
+          : "Create an API key when you need exports, webhooks, or developer connections.",
+      action: activeApiKeys > 0 ? null : { label: "Set up developer access", href: "/app/sources" },
     },
   ];
 

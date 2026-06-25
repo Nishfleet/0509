@@ -11,6 +11,7 @@ import { LocalTime } from "~/components/local-time";
 import { PartialDataNotice } from "~/components/partial-data-notice";
 import { SubmitButton } from "~/components/submit-button";
 import { formatCoverageLabel, formatRolloutState } from "~/lib/presence-display";
+import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
 
 export const meta = () => [{ title: "Presence | Five to Nine" }];
@@ -138,7 +139,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
   } catch (error) {
     if (error instanceof PresenceServiceError) {
-      return { ok: false, message: error.message, code: error.code };
+      return { ok: false, message: sanitizeCustomerFacingMessage(error.message) };
     }
     throw error;
   }

@@ -6,6 +6,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
@@ -100,10 +101,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
       rejectSecretishMemoryValue(notes, "Client room notes cannot contain secrets or credentials.");
     } catch (error) {
       if (error instanceof AgentMemoryInputError) {
-        return { ok: false, message: error.message };
+        return { ok: false, message: sanitizeCustomerFacingMessage(error.message) };
       }
       if (error instanceof Error) {
-        return { ok: false, message: error.message };
+        return { ok: false, message: sanitizeCustomerFacingMessage(error.message) };
       }
       return { ok: false, message: "Client room could not be saved." };
     }
@@ -157,7 +158,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         : { ok: false, message: "Context could not be saved." };
     } catch (error) {
       if (error instanceof AgentMemoryInputError) {
-        return { ok: false, message: error.message };
+        return { ok: false, message: sanitizeCustomerFacingMessage(error.message) };
       }
       throw error;
     }
@@ -209,7 +210,7 @@ export default function ClientsRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          action={{ label: "Integrations", to: "/app/sources" }}
+          action={{ label: "Notifications", to: "/app/sources" }}
           lead="Package proof around each client."
           title="Client rooms"
         />
