@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -15,6 +16,15 @@ const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
 const sourcesRoute = readFileSync("app/routes/app.sources.tsx", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
 const shellSource = readFileSync("app/components/dashboard-shell.tsx", "utf8");
+const appCss = readFileSync("app/app.css", "utf8");
+
+const PRIMARY_APP_ROUTE_FILES = readdirSync("app/routes").filter(
+  (name) =>
+    name.startsWith("app.") &&
+    name.endsWith(".tsx") &&
+    name !== "app-layout.tsx" &&
+    name !== "app.onboard.tsx",
+);
 
 describe("dashboard v2 navigation", () => {
   it("exposes the unified customer IA", () => {
@@ -49,6 +59,22 @@ describe("dashboard v2 shell", () => {
     expect(appLayout).not.toContain("f9-app-shell");
     expect(shellSource).toContain("f9-cursor-shell");
     expect(shellSource).toContain("f9-dash-page");
+  });
+
+  it("drops legacy application layout styles from app.css", () => {
+    expect(appCss).not.toContain(".f9-app-shell");
+    expect(appCss).not.toContain(".f9-app-sidebar");
+    expect(appCss).not.toContain(".f9-app-topbar");
+  });
+
+  it("wraps primary app routes in DashboardPage except staff ops", () => {
+    const missing = PRIMARY_APP_ROUTE_FILES.filter((file) => {
+      if (file === "app.ops.tsx") return false;
+      const source = readFileSync(join("app/routes", file), "utf8");
+      return !source.includes("DashboardPage");
+    });
+
+    expect(missing).toEqual([]);
   });
 
   it("does not duplicate legacy sidebar markup in layout", () => {

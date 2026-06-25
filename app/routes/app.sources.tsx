@@ -2,7 +2,8 @@ import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
-import { DashboardPage } from "~/components/dashboard-page";
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
 import { CUSTOMER_SUPPORT_PATHS } from "~/lib/agent-action-catalog";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -363,6 +364,14 @@ const ownerOnlySourceIntents = new Set([
   "resume-slack-webhook",
 ]);
 
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Notifications" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
+
 export default function AppSourcesRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -378,18 +387,14 @@ export default function AppSourcesRoute() {
 
   return (
     <DashboardPage>
+      <DashboardPageHeader
+        action={{ label: "Open watchlists", to: "/app/watchlists" }}
+        lead="Email delivery, backup Meta access, and developer keys."
+        title="Notifications"
+      />
     <section className="f9-app-stack">
       <section className="f9-app-panel f9-source-setup">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">Notifications</span>
-            <h2>Delivery channels and backup access</h2>
-          </div>
-          <Link className="f9-secondary-button" to="/app/watchlists">
-            Open watchlists
-          </Link>
-        </div>
-
+        <h3>Delivery channels and backup access</h3>
         <p className="f9-muted-copy">
           Five to Nine checks public ad and landing-page signals for you. If Meta limits access, add your own Meta Ad
           Library token so this account has a backup.

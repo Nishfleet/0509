@@ -9,8 +9,9 @@ import {
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
-import { DashboardPage } from "~/components/dashboard-page";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
@@ -20,7 +21,15 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppEnv } from "~/lib/env.server";
 import type { AgentActionAuditRecord } from "~/lib/types";
 
-export const meta = () => [{ title: "Dashboard | Five to Nine" }];
+export const meta = () => [{ title: "Overview | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Overview" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 const COUNTER_MOVE_AUDIT_PAGE_LIMIT = 30;
 const COUNTER_MOVE_AUDIT_MAX_PAGES = 10;
@@ -367,6 +376,11 @@ export default function AppDashboardRoute() {
   return (
     <DashboardPage>
     <section className="f9-app-stack f9-dashboard-clean">
+      <DashboardPageHeader
+        lead="Your competitors, recent changes, and what needs attention next."
+        title="Overview"
+      />
+
       {checkoutReturn ? <CheckoutReturnBanner plan={plan} /> : null}
       {hasPaymentIssue ? (
         <article className="f9-checkout-banner is-pending" aria-live="polite">
@@ -444,8 +458,8 @@ export default function AppDashboardRoute() {
       <article className="f9-app-panel f9-dashboard-hero">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">{hasSavedCompetitor ? "Overview" : "Start here"}</span>
-            <h1>{briefTitle}</h1>
+            <span className="f9-app-kicker">{hasSavedCompetitor ? "Today" : "Start here"}</span>
+            <h2>{briefTitle}</h2>
             <p className="f9-muted-copy">{briefSummary}</p>
           </div>
           <Link className="f9-primary-button" to={nextDashboardAction.href}>

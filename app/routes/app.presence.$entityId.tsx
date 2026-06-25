@@ -1,7 +1,8 @@
 import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import { DashboardPage } from "~/components/dashboard-page";
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { formatCoverageLabel } from "~/lib/presence-display";
@@ -10,6 +11,14 @@ import type { PresenceConnectorId } from "~/lib/presence-types";
 export const meta = ({ data }: { data: Awaited<ReturnType<typeof loader>> | undefined }) => [
   { title: data?.entity ? `${data.entity.label} | Presence` : "Presence | Five to Nine" },
 ];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Presence" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -91,19 +100,17 @@ export default function PresenceEntityRoute() {
   return (
     <DashboardPage>
       <section className="f9-app-stack">
-        <article className="f9-app-panel">
-          <span className="f9-app-kicker">
-            <Link to="/app/presence">Presence</Link> / {entity.trackingMode}
-          </span>
-          <h1>{entity.label}</h1>
-          {entity.canonicalUrl ? (
-            <p className="f9-muted-copy">
-              <a href={entity.canonicalUrl} rel="noreferrer" target="_blank">
-                {entity.canonicalUrl}
-              </a>
-            </p>
-          ) : null}
-        </article>
+        <DashboardPageHeader
+          kicker={`Presence · ${entity.trackingMode}`}
+          title={entity.label}
+        />
+        {entity.canonicalUrl ? (
+          <p className="f9-muted-copy">
+            <a href={entity.canonicalUrl} rel="noreferrer" target="_blank">
+              {entity.canonicalUrl}
+            </a>
+          </p>
+        ) : null}
 
         {actionData?.message ? (
           <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`} role="status">

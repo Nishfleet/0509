@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
 import {
   hasInvalidCompetitorWebsite,
@@ -20,6 +22,14 @@ export const meta: MetaFunction = () => [
     content: "Choose a competitor to track so your Five to Nine account starts with a concrete next step.",
   },
 ];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Get started" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -179,15 +189,15 @@ export default function AppOnboardRoute() {
   const canCreateWatchlist = data.watchlistLimit.allowed && data.watchlistLimit.limit > 0;
 
   return (
-    <main className="f9-onboard-page">
+    <DashboardPage>
+      <main className="f9-onboard-page">
       <div className="f9-auth-gradient" aria-hidden="true" />
       <section className="f9-container f9-onboard-layout">
         <article className="f9-onboard-card">
-          <span className="f9-app-kicker">First-run setup</span>
-          <h1>Add your first competitor website.</h1>
-          <p className="f9-muted-copy">
-            Start with one competitor site. Five to Nine finds the ads behind it and keeps checking for changes.
-          </p>
+          <DashboardPageHeader
+            lead="Start with one competitor site. Five to Nine finds the ads behind it and keeps checking for changes."
+            title="Get started"
+          />
 
           {actionData?.message ? (
             <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
@@ -273,6 +283,7 @@ export default function AppOnboardRoute() {
           </div>
         </article>
       </section>
-    </main>
+      </main>
+    </DashboardPage>
   );
 }

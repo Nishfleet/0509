@@ -906,7 +906,8 @@ describe("sources route component", () => {
     const { default: AppSourcesRoute } = await import("~/routes/app.sources");
     const markup = renderToStaticMarkup(createElement(AppSourcesRoute));
 
-    expect(markup).toContain("Delivery channels and backup access");
+    expect(markup).toContain("Notifications");
+    expect(markup).toContain("Email delivery, backup Meta access");
     expect(markup).toContain("Tracking status");
     expect(markup).not.toContain("Meta coverage is beta");
     expect(markup).not.toContain("f9-beta-pill");

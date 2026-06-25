@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { Outlet, redirect, useLoaderData } from "react-router";
 
 import { DashboardShell } from "~/components/dashboard-shell";
+import { DashboardRouteError } from "~/components/dashboard-route-loading";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -53,4 +54,8 @@ export default function AppLayoutRoute() {
       <Outlet />
     </DashboardShell>
   );
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
 }
