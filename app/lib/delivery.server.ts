@@ -1550,7 +1550,7 @@ export async function sendTeamInviteEmail(
     html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
         <p style="margin: 0 0 12px;">Hi,</p>
-        <p style="margin: 0 0 16px;">${inviter} invited you to their Five to Nine workspace — shared watchlists, boards, and the morning brief on competitor changes.</p>
+        <p style="margin: 0 0 16px;">${inviter} invited you to their Five to Nine workspace — shared watchlists, collections, and the morning digest on competitor changes.</p>
         <p style="margin: 0 0 20px;">
           <a href="${escapeHtml(input.acceptUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
             Join the workspace

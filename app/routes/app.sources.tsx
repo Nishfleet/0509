@@ -133,7 +133,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (isMember && ownerOnlySourceIntents.has(intent)) {
     return {
       ok: false,
-      message: "Only the account owner can manage integrations, delivery targets, and API keys.",
+      message: "Only the account owner can manage notifications, delivery targets, and API keys.",
     };
   }
 

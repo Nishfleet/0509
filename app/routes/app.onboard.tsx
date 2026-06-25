@@ -258,7 +258,7 @@ export default function AppOnboardRoute() {
               <span className="f9-app-kicker">Plan required</span>
               <h2>Choose a plan to start monitoring</h2>
               <p className="f9-muted-copy">
-                Starter is the recommended plan for retained competitor tracking and weekly change briefs.
+                Starter is the recommended plan for retained competitor tracking and weekly digests.
               </p>
               <div className="f9-action-row">
                 <Link className="f9-primary-button" to="/#pricing">
