@@ -86,3 +86,70 @@
 
 - Marketing/compare pages still use “boards” in competitor positioning copy (out of hotfix scope).
 - `agent-action-catalog.ts` retains internal MCP labels for API/MCP server routes only.
+
+---
+
+## Final polish — 2026-06-25 (PR #249)
+
+### Baseline
+
+- **Starting main commit:** `4bccc5e7181fc037ca08d834e844d656c25d7d05` (PR #248 docs merge)
+- **Starting runtime commit:** `6cd62d58db85463b2bc5375f0c52519922ee3821`
+- **Starting Worker version:** `61e32596-383e-4c73-8ec3-cc4012b55c0a`
+- **Branch:** `cursor/dashboard-v2-final-polish-20260625`
+
+### Fixes shipped
+
+- **Mobile discoverability:** Team and Client rooms added to the fixed mobile utility strip (not bottom nav); utility strip hidden on desktop; bottom shell padding increased to `148px + safe-area` with utility offset `96px`.
+- **Terminology:** Collections / Digests / Notifications aligned across app routes, onboarding, marketing, compare, docs, pricing preview features, public markdown, team invite copy, and search save flows. Counter-move follow-ups use “follow-up” (distinct from Digests).
+- **Readiness CTAs:** “Open notifications” replaces “Open sources”.
+
+### Team / Client Rooms decision
+
+- **Client rooms:** Active for all signed-in owners (not plan-gated); discoverable via mobile utility strip.
+- **Team:** Agency-gated (`team_workspace`); discoverable via mobile utility strip; server-side 403 for ineligible owners unchanged.
+
+### Reviewer verdict
+
+- **Reviewer D (post-fix):** APPROVE FINAL DASHBOARD V2
+
+### Validation
+
+- `npm test` — 1277/1277 (136 files)
+- `npm run typecheck` — pass
+- `npm run build` — pass
+- `node scripts/validate-d1-backup.mjs` — pass (dry-run)
+- Remote D1 — no migrations to apply
+- `npm run canary:prod` — pass (post-deploy)
+
+### Deployment
+
+- **PR:** https://github.com/nish3451/0509/pull/249
+- **Merge commit:** `321d7c9bbca16ff9da3c7c2d2ec620453a01338b`
+- **Runtime commit:** `321d7c9bbca16ff9da3c7c2d2ec620453a01338b`
+- **Worker version:** `2ff3c030-39c1-4977-87a2-dd6347f05081`
+- **Rollback version:** `61e32596-383e-4c73-8ec3-cc4012b55c0a` (Dashboard V2 hotfix)
+
+### Production smokes (final polish)
+
+- Public: `/api/health`, `/`, `/search`, `/help`, `/status`, `/auth/login` — OK
+- Marketing pricing: “Weekly digests”, “saved collections” live on `0509.io`
+- Login proof list: “Collections” (not Boards)
+- Authenticated mobile journey — requires signed-in internal session (not exercised in automation; owner sign-in at `/auth/login`)
+
+### Provenance note (Git vs runtime)
+
+| Artifact | Commit / version |
+|---|---|
+| Dashboard V2 hotfix runtime | `6cd62d58` / Worker `61e32596` |
+| Hotfix provenance docs (PR #248) | `ae32da7` merged as `4bccc5e` — documentation only, no redeploy |
+| Final polish runtime (PR #249) | `321d7c9` / Worker `2ff3c030` |
+| This provenance update | documentation only — no redeploy |
+
+### Remaining minor issues
+
+- Mobile utility strip is dense on narrow phones (6 links + sign out); device spot-check recommended.
+- Reports (`/app/shares`) still desktop-rail only.
+- Client rooms scope enum labels (`customer`, `workspace`) still expose backend values in UI.
+- `agent-action-catalog.ts` retains MCP/developer labels for API routes only.
+- Marketing hero still says “morning brief” in stats belt (distinct from weekly Digests product noun).
