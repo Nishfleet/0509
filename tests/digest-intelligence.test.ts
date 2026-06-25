@@ -38,7 +38,7 @@ describe("DigestProofPacket", () => {
 
     expect(markup).toContain("Proof packet");
     expect(markup).toContain("2 changes packaged for handoff");
-    expect(markup).toContain("Offer changed: ready to send as a client or teammate brief");
+    expect(markup).toContain("Offer changed: ready to send as a client or teammate digest");
     expect(markup).toContain("Today: brief one counter-test.");
     expect(markup).toContain("1 verified snapshot");
     expect(markup).toContain("1 scan-backed change");

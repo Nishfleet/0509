@@ -54,6 +54,24 @@ describe("dashboard v2 production hotfix", () => {
     expect(helpCatalog).not.toContain("Better Auth");
   });
 
+  it("exposes Team and Client rooms in the mobile utility strip", () => {
+    expect(shellSource).toContain('to="/app/team"');
+    expect(shellSource).toContain('to="/app/clients"');
+    expect(shellSource).toContain("f9-dash-mobile-utility");
+    expect(appCss).toMatch(/\.f9-dash-mobile-utility\s*\{[^}]*display:\s*none/s);
+  });
+
+  it("keeps customer terminology out of primary app surfaces", () => {
+    const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
+    const onboardRoute = readFileSync("app/routes/app.onboard.tsx", "utf8");
+    const pricingSource = readFileSync("app/lib/pricing.ts", "utf8");
+
+    expect(searchRoute).not.toMatch(/\bboard(s)?\b/i);
+    expect(onboardRoute).not.toContain("weekly change briefs");
+    expect(pricingSource).not.toContain("saved boards");
+    expect(pricingSource).not.toContain("boards, and briefs");
+  });
+
   it("restores scoped public brand styling without legacy shell", () => {
     expect(appCss).toContain(".f9-app-brand");
     expect(appCss).not.toContain(".f9-app-shell");

@@ -529,7 +529,7 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("1 brief to decide");
+    expect(markup).toContain("1 follow-up to decide");
     expect(markup).toContain("Responses waiting on you");
     expect(markup).toContain("Review changes");
     expect(markup).toContain("Review Nykaa move");
