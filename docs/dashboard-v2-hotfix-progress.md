@@ -68,10 +68,19 @@
 
 ## Deployment
 
-- **PR:** (filled after push)
-- **Merge commit:** (filled after merge)
-- **Worker version:** (filled after deploy)
-- **Rollback version:** (filled after deploy)
+- **PR:** https://github.com/nish3451/0509/pull/246 (follow-up https://github.com/nish3451/0509/pull/247)
+- **Merge commits:** `5edb1bf` (hotfix), `6cd62d5` (help copy)
+- **Runtime commit:** `6cd62d58db85463b2bc5375f0c52519922ee3821`
+- **Worker version:** `61e32596-383e-4c73-8ec3-cc4012b55c0a`
+- **Rollback version:** `1f9ba087-50db-42a5-8c16-6c8556fbbd0c`
+- **Domains:** `0509.io`, `www.0509.io`, `api.0509.io`, `0509.in`, `www.0509.in`, `api.0509.in`
+
+## Production smokes (2026-06-25)
+
+- Public: `/api/health`, `/`, `/search`, `/help`, `/status`, `/bots/presence`, `/auth/login` — OK
+- `/help` — no Better Auth / internal workspace / MCP / Web mentions leakage (post #247)
+- `/bots/presence` — Five to Nine brand header restored
+- Authenticated mobile nav — requires signed-in session (not exercised with customer data)
 
 ## Remaining minor issues
 
