@@ -157,7 +157,7 @@ export const CUSTOMER_SUPPORT_PATHS = [
   },
   {
     label: "Account access and team changes",
-    detail: "Use Better Auth sign-in and Team for normal access; support handles owner recovery and sensitive changes.",
+    detail: "Use email sign-in and Team for normal access; support handles owner recovery and sensitive changes.",
   },
   {
     label: "Migration and setup help",
