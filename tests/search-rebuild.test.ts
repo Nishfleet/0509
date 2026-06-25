@@ -10,7 +10,7 @@ const searchClasses = Array.from(searchRoute.matchAll(/className=(?:"([^"]+)"|{`
 
 describe("search rebuild", () => {
   it("uses the fresh search surface instead of the legacy app/search system", () => {
-    expect(searchRoute).toContain('className="f9-search-page"');
+    expect(searchRoute).toContain('pageClassName="f9-search-page"');
     expect(searchClasses).not.toEqual(
       expect.arrayContaining([
         "app-shell",
@@ -41,9 +41,9 @@ describe("search rebuild", () => {
     expect(searchRoute).not.toContain("Sign in to search competitor Meta ads");
   });
 
-  it("uses a Cursor-style app shell instead of the old marketing header", () => {
-    expect(searchRoute).toContain('className="f9-cursor-shell"');
-    expect(searchRoute).toContain('aria-label="Search navigation"');
+  it("uses DashboardShell instead of the old marketing header", () => {
+    expect(searchRoute).toContain("DashboardShell");
+    expect(searchRoute).not.toContain('className="f9-cursor-shell"');
     expect(searchRoute).not.toContain("<BrandWordmark />");
   });
 

@@ -2,6 +2,8 @@ import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useState } from "react";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
 import {
   hasInvalidCompetitorWebsite,
@@ -10,6 +12,14 @@ import {
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const meta = () => [{ title: "Account | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Account & security" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -115,11 +125,16 @@ export default function AccountRoute() {
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          lead="Signed-in profile, brand setup, passkeys, and sensitive account requests."
+          title="Account & security"
+        />
+
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Account</span>
             <h2>{data.name || data.email}</h2>
           </div>
         </div>
@@ -298,7 +313,8 @@ export default function AccountRoute() {
           Request account deletion
         </a>
       </article>
-    </section>
+      </section>
+    </DashboardPage>
   );
 }
 

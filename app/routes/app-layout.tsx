@@ -1,15 +1,9 @@
-import {
-  Link,
-  NavLink,
-  Outlet,
-  redirect,
-  useLoaderData,
-} from "react-router";
+import { Link } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import { Outlet, redirect, useLoaderData } from "react-router";
 
-import { BrandWordmark } from "~/components/brand-wordmark";
-import { SignOutButton } from "~/components/sign-out-button";
-import { SUPPORT_EMAIL } from "~/lib/support";
+import { DashboardShell } from "~/components/dashboard-shell";
+import { DashboardRouteError } from "~/components/dashboard-route-loading";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -38,62 +32,30 @@ export default function AppLayoutRoute() {
   const { session, showOpsNav, showPresenceNav } = useLoaderData<typeof loader>();
 
   return (
-    <main className="f9-app-shell">
-      <aside className="f9-app-sidebar">
-        <Link className="f9-app-brand" to="/app">
-          <BrandWordmark meta="Account" />
-        </Link>
-
-        <div className="f9-app-user">
-          <p>{session.user.name}</p>
-          <small>{session.user.email}</small>
-        </div>
-
-        <nav className="f9-app-nav" aria-label="Account">
-          <NavLink end to="/app">
-            Overview
-          </NavLink>
-          <NavLink to="/app/collections">Boards</NavLink>
-          <NavLink to="/app/watchlists">Watchlists</NavLink>
-          {showPresenceNav ? <NavLink to="/app/presence">Presence</NavLink> : null}
-          <NavLink to="/app/clients">Client rooms</NavLink>
-          <NavLink to="/app/team">Team</NavLink>
-          <NavLink to="/app/digests">Briefs</NavLink>
-          <NavLink to="/app/shares">Shared links</NavLink>
-          <NavLink to="/app/billing">Plan &amp; billing</NavLink>
-          <NavLink to="/app/support">Support</NavLink>
-          <NavLink to="/app/account">Account</NavLink>
-          <NavLink to="/app/sources">Integrations</NavLink>
-          {showOpsNav ? <NavLink to="/app/ops">Ops</NavLink> : null}
-          <NavLink to="/search">Search</NavLink>
-        </nav>
-
-        <div className="f9-app-sidebar-footer">
-          <Link className="f9-app-support-link" to="/help">
-            Help
-          </Link>
-          <Link className="f9-app-support-link" to="/docs">
-            Docs
-          </Link>
-          <Link className="f9-app-support-link" to="/app/support">
-            {SUPPORT_EMAIL}
-          </Link>
-          <SignOutButton />
-        </div>
-      </aside>
-
-      <div className="f9-app-main">
-        <header className="f9-app-topbar">
-          <Link className="f9-app-search-entry" to="/search">
+    <DashboardShell
+      accountDetail="Competitor intelligence workspace"
+      accountLabel="Workspace"
+      accountTitle="Five to Nine"
+      headerActions={
+        <>
+          <Link className="f9-secondary-button" to="/search">
             Search ads
           </Link>
-          <Link className="f9-primary-button f9-app-new-search" to="/search">
+          <Link className="f9-primary-button" to="/search">
             Add competitor
           </Link>
-        </header>
-
-        <Outlet />
-      </div>
-    </main>
+        </>
+      }
+      showOpsNav={showOpsNav}
+      showPresenceNav={showPresenceNav}
+      userEmail={session.user.email}
+      userName={session.user.name}
+    >
+      <Outlet />
+    </DashboardShell>
   );
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
 }

@@ -7,15 +7,26 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import { CopyButton } from "~/components/copy-button";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { LocalTime } from "~/components/local-time";
+import { PlanLimitState } from "~/components/plan-limit-state";
 import { SubmitButton } from "~/components/submit-button";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
 import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
 export const meta = () => [{ title: "Digests | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Digests" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -149,7 +160,13 @@ export default function DigestsRoute() {
     : null;
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          lead="Review generated change briefs with proof attached before they reach your inbox."
+          title="Digests"
+        />
+
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>
@@ -168,23 +185,15 @@ export default function DigestsRoute() {
       ) : null}
 
       {!data.canAccessDigests ? (
-        <article className="f9-app-panel f9-empty-panel">
-          <span className="f9-app-kicker">Digest history</span>
-          <h2>Digests are included in paid plans.</h2>
-          <p>
-            Upgrade to get daily or weekly competitor change reports — with proof attached — in your
-            inbox. Until then, watchlists and boards keep your research organized.
-          </p>
-          <Link className="f9-primary-button" to="/#pricing">
-            View plans
-          </Link>
-        </article>
+        <PlanLimitState
+          message="Digests are included in paid plans. Upgrade to get daily or weekly competitor change reports — with proof attached — in your inbox. Until then, watchlists and boards keep your research organized."
+          title="Digests are included in paid plans"
+        />
       ) : (
         <div className="f9-dashboard-grid">
           <article className="f9-app-panel f9-side-panel">
             <div className="f9-panel-toolbar">
               <div>
-                <span className="f9-app-kicker">Digests</span>
                 <h2>Digest history</h2>
               </div>
             </div>
@@ -326,7 +335,8 @@ export default function DigestsRoute() {
           </article>
         </div>
       )}
-    </section>
+      </section>
+    </DashboardPage>
   );
 }
 

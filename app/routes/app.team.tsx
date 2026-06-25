@@ -1,10 +1,20 @@
 import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 
 export const meta = () => [{ title: "Team | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Team" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
@@ -104,27 +114,35 @@ export default function TeamRoute() {
 
   if (data.isMember) {
     return (
-      <section className="f9-app-stack">
+      <DashboardPage>
+        <section className="f9-app-stack">
+          <DashboardPageHeader
+            lead="Watchlists, boards, and morning briefs here are shared with the whole team. Your sign-in stays your own."
+            title="Team"
+          />
+
         <article className="f9-app-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Team</span>
               <h2>Your seat in {data.ownerName ? `${data.ownerName}'s` : "a shared"} account</h2>
             </div>
           </div>
-          <p>
-            Watchlists, boards, and morning briefs here are shared with the whole team. Your
-            sign-in, password, and sessions stay your own.
-          </p>
         </article>
-      </section>
+        </section>
+      </DashboardPage>
     );
   }
 
   const seatsUsed = data.members.length + 1;
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          lead="Invite teammates to share watchlists, collections, and digests on Agency."
+          title="Team"
+        />
+
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>{actionData.message}</p>
@@ -134,7 +152,6 @@ export default function TeamRoute() {
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Team</span>
             <h2>
               {data.plan === "agency"
                 ? `${seatsUsed} of ${data.seatLimit} Agency seats in use`
@@ -191,6 +208,7 @@ export default function TeamRoute() {
           </div>
         ) : null}
       </article>
-    </section>
+      </section>
+    </DashboardPage>
   );
 }

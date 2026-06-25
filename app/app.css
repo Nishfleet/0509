@@ -1864,162 +1864,7 @@ button[aria-busy="true"] {
   font-weight: 900;
 }
 
-/* Five to Nine app rebuild */
-.f9-app-shell {
-  --f9-search-ink: #061629;
-  --f9-search-muted: #40546a;
-  --f9-search-soft: #64788d;
-  --f9-search-line: rgba(6, 22, 41, 0.1);
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 18% 0%, rgba(255, 95, 80, 0.12), transparent 30%),
-    radial-gradient(circle at 70% 0%, rgba(137, 92, 246, 0.14), transparent 32%),
-    #f6f9fc;
-  color: var(--f9-search-ink);
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-.f9-app-shell *,
-.f9-app-shell *::before,
-.f9-app-shell *::after {
-  box-sizing: border-box;
-}
-
-.f9-app-shell a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.f9-app-shell .f9-primary-button {
-  color: #fff;
-}
-
-.f9-app-shell .f9-secondary-button {
-  color: var(--f9-search-ink);
-}
-
-.f9-app-shell .f9-sign-out-button {
-  color: var(--f9-search-ink);
-}
-
-.f9-app-sidebar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 74px;
-  padding: 10px clamp(18px, 3vw, 42px);
-  overflow: visible;
-  border-bottom: 1px solid rgba(6, 22, 41, 0.08);
-  background:
-    radial-gradient(circle at 14% 0%, rgba(255, 95, 80, 0.12), transparent 28%),
-    radial-gradient(circle at 74% 0%, rgba(137, 92, 246, 0.18), transparent 30%),
-    rgba(255, 255, 255, 0.88);
-  color: var(--f9-search-ink);
-  backdrop-filter: blur(18px);
-}
-
-.f9-app-brand,
-.f9-app-user,
-.f9-app-nav,
-.f9-app-sidebar-footer,
-.f9-panel-toolbar {
-  display: flex;
-}
-
-.f9-app-brand {
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0;
-  padding: 0;
-  font-weight: 950;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.f9-app-brand small {
-  display: none;
-}
-
-.f9-app-brand small {
-  color: var(--f9-search-muted);
-  font-size: 0.78rem;
-  font-weight: 850;
-}
-
-.f9-app-user {
-  order: 4;
-  flex-direction: column;
-  gap: 3px;
-  max-width: 198px;
-  margin-left: auto;
-  padding: 8px 11px;
-  border: 1px solid rgba(6, 22, 41, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.68);
-}
-
-.f9-app-user p {
-  overflow: hidden;
-  color: var(--f9-search-ink);
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.f9-app-user small {
-  overflow: hidden;
-  color: var(--f9-search-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.f9-app-nav {
-  flex: 1 1 auto;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
-}
-
-.f9-app-nav a {
-  min-height: 36px;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  color: var(--f9-search-muted);
-  font-size: 0.9rem;
-  font-weight: 900;
-}
-
-.f9-app-nav a:hover,
-.f9-app-nav a.active {
-  border-color: rgba(6, 22, 41, 0.1);
-  background: #fff;
-  color: var(--f9-search-ink);
-}
-
-.f9-app-sidebar-footer {
-  order: 5;
-  margin-top: 0;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-}
-
-.f9-app-support-link {
-  font-size: 13px;
-  color: #5b6577;
-  text-decoration: none;
-}
-
-.f9-app-support-link:hover {
-  color: var(--f9-search-ink);
-  text-decoration: underline;
-}
-
+/* Five to Nine app rebuild — content tokens (layout in DashboardShell / .f9-cursor-shell) */
 .f9-sign-out-button {
   min-height: 38px;
   width: auto;
@@ -2028,63 +1873,12 @@ button[aria-busy="true"] {
   color: var(--f9-search-ink);
 }
 
-.f9-app-main {
-  min-width: 0;
-  width: min(100% - clamp(28px, 5vw, 72px), 1480px);
-  margin: 0 auto;
-  padding: 16px 0 48px;
-}
-
-.f9-app-topbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  justify-content: stretch;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 18px;
-}
-
-.f9-app-topbar h1 {
-  margin: 4px 0 0;
-  color: var(--f9-search-ink);
-  font-size: clamp(1.7rem, 2.4vw, 2.35rem);
-  font-weight: 950;
-  line-height: 1.05;
-  letter-spacing: 0;
-}
-
-.f9-app-topbar p {
-  max-width: 54ch;
-  margin-top: 6px;
-  color: var(--f9-search-muted);
-  font-size: 0.96rem;
-}
-
 .f9-app-kicker {
   color: #0a8f78;
   font-size: 0.78rem;
   font-weight: 950;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.f9-app-new-search {
-  margin-top: 0;
-}
-
-.f9-app-search-entry {
-  display: inline-flex;
-  align-items: center;
-  min-height: 56px;
-  width: 100%;
-  padding: 0 22px;
-  border: 1px solid rgba(6, 22, 41, 0.1);
-  border-radius: 14px;
-  background: #fff;
-  color: #758194;
-  font-size: clamp(1rem, 1.5vw, 1.28rem);
-  font-weight: 950;
-  box-shadow: 0 16px 42px rgba(6, 22, 41, 0.06);
 }
 
 .f9-app-stack,
@@ -2732,6 +2526,7 @@ button[aria-busy="true"] {
 }
 
 .f9-panel-toolbar {
+  display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
@@ -3191,10 +2986,6 @@ button[aria-busy="true"] {
   background: rgba(6, 22, 41, 0.06);
 }
 
-.f9-share-header .f9-app-brand small {
-  color: var(--f9-search-muted);
-}
-
 .f9-share-prepared-by {
   margin: 0 0 18px;
   color: var(--f9-search-muted, #40546a);
@@ -3304,48 +3095,10 @@ button[aria-busy="true"] {
 }
 
 @media (max-width: 980px) {
-  .f9-app-sidebar {
-    position: relative;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    height: auto;
-    padding: 12px 18px;
-  }
-
-  .f9-app-nav {
-    order: 6;
-    display: flex;
-    flex: 1 0 100%;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .f9-app-nav a {
-    flex: 0 0 auto;
-  }
-
-  .f9-app-user {
-    max-width: min(42vw, 240px);
-    margin-left: 0;
-  }
-
-  .f9-app-sidebar-footer {
-    margin-left: auto;
-  }
-
-  .f9-app-topbar,
-.f9-panel-toolbar,
-.f9-work-row {
+  .f9-panel-toolbar,
+  .f9-work-row {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .f9-app-topbar {
-    grid-template-columns: 1fr;
   }
 
   .f9-dashboard-setup-row,
@@ -3388,11 +3141,6 @@ button[aria-busy="true"] {
 }
 
 @media (max-width: 640px) {
-  .f9-app-main {
-    width: min(100% - 28px, 1480px);
-    padding-bottom: 34px;
-  }
-
   .f9-auth-layout {
     padding: 22px 0;
   }
@@ -3404,20 +3152,6 @@ button[aria-busy="true"] {
 
   .f9-auth-form {
     gap: 12px;
-  }
-
-  .f9-app-sidebar {
-    padding: 12px 14px;
-  }
-
-  .f9-app-user {
-    order: 3;
-    max-width: calc(100% - 128px);
-    margin-left: auto;
-  }
-
-  .f9-app-sidebar-footer {
-    order: 4;
   }
 
   .f9-market-desk,
@@ -3503,28 +3237,28 @@ button[aria-busy="true"] {
     background: #fff;
   }
 
-  .f9-app-sidebar,
-.f9-app-topbar,
-.f9-share-header,
-.f9-report-toolbar {
+  .f9-cursor-rail,
+  .f9-dash-topbar,
+  .f9-share-header,
+  .f9-report-toolbar {
     display: none !important;
   }
 
-  .f9-app-main,
-.f9-app-panel,
-.report-card,
-.report-stat-card,
-.report-signal-card {
+  .f9-cursor-shell,
+  .f9-dash-content,
+  .f9-app-panel,
+  .report-card,
+  .report-stat-card,
+  .report-signal-card {
     padding: 0;
     border: 0;
     box-shadow: none;
     background: #fff;
   }
 
-  .f9-app-shell,
-.f9-share-page,
-.report-layout,
-.report-list {
+  .f9-share-page,
+  .report-layout,
+  .report-list {
     padding: 0;
     gap: 16px;
   }
@@ -5646,9 +5380,183 @@ one signal-green accent.
 }
 
 .f9-cursor-rail nav a:hover,
-.f9-cursor-rail nav a.is-active {
+.f9-cursor-rail nav a.is-active,
+.f9-cursor-rail nav a.active {
   background: #efede6;
   color: #11100d;
+}
+
+.f9-dash-page {
+  min-height: 100vh;
+  background: #f4f1e8;
+}
+
+.f9-dash-nav-section {
+  margin: 8px 0 0;
+  padding: 0 10px;
+  color: #8a857a;
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.f9-dash-rail-footer {
+  display: grid;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #e7e2d7;
+}
+
+.f9-dash-rail-footer a,
+.f9-dash-rail-footer button {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: #5f5a52;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.f9-dash-rail-footer a:hover,
+.f9-dash-rail-footer button:hover {
+  background: #efede6;
+  color: #11100d;
+}
+
+.f9-dash-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.f9-dash-user-name {
+  margin-top: 6px;
+}
+
+.f9-dash-content {
+  display: grid;
+  gap: 16px;
+  max-width: 1120px;
+}
+
+.f9-dash-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 4px;
+}
+
+.f9-dash-page-header h1 {
+  margin: 6px 0 0;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.f9-dash-state {
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px;
+  border: 1px solid #e0ddd4;
+  border-radius: 14px;
+  background: #fffdf8;
+}
+
+.f9-dash-state h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.f9-dash-state p {
+  margin: 0;
+  color: #5f5a52;
+  line-height: 1.45;
+}
+
+.f9-dash-state-empty {
+  border-style: dashed;
+  text-align: center;
+  justify-items: center;
+  padding: 28px 24px;
+}
+
+.f9-dash-state-error {
+  border-color: #e8c4c0;
+  background: #fff8f7;
+}
+
+.f9-dash-state-limit {
+  border-color: #e8dcc0;
+  background: #fffaf2;
+}
+
+.f9-dash-state-permission {
+  border-color: #d8d4cb;
+  background: #f8f6f1;
+}
+
+.f9-dash-state-partial {
+  padding: 12px 14px;
+  border-style: dashed;
+  font-size: 0.88rem;
+  color: #6a655c;
+}
+
+.f9-dash-state-skeleton {
+  min-height: 120px;
+}
+
+.f9-dash-skeleton-pulse {
+  margin: 0;
+  color: #6a655c;
+  font-weight: 700;
+}
+
+.f9-dash-skeleton-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.f9-dash-skeleton-bars span {
+  display: block;
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #ece8df 0%, #f5f2eb 50%, #ece8df 100%);
+  background-size: 200% 100%;
+  animation: f9-dash-shimmer 1.2s ease-in-out infinite;
+}
+
+.f9-dash-skeleton-bars span:nth-child(1) {
+  width: 72%;
+}
+
+.f9-dash-skeleton-bars span:nth-child(2) {
+  width: 94%;
+}
+
+.f9-dash-skeleton-bars span:nth-child(3) {
+  width: 58%;
+}
+
+@keyframes f9-dash-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .f9-search-page .f9-search-hero {
