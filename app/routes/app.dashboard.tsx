@@ -301,10 +301,10 @@ export default function AppDashboardRoute() {
   const overnightCheckScope = overnightWatchlists > 0
     ? `${overnightWatchlists} competitor${overnightWatchlists === 1 ? "" : "s"}`
     : `${overnightRuns} scan${overnightRuns === 1 ? "" : "s"}`;
-  const counterMoveBriefLabel = `${counterMoveFollowUpCount} brief${counterMoveFollowUpCount === 1 ? "" : "s"}`;
+  const counterMoveFollowUpLabel = `${counterMoveFollowUpCount} follow-up${counterMoveFollowUpCount === 1 ? "" : "s"}`;
   const todaysAnswer = counterMoveFollowUpCount > 0
     ? {
-      title: `${counterMoveBriefLabel} ${counterMoveFollowUpCount === 1 ? "needs" : "need"} a decision`,
+      title: `${counterMoveFollowUpLabel} ${counterMoveFollowUpCount === 1 ? "needs" : "need"} a decision`,
       detail: "Open the proof-backed follow-ups and choose the next response before the review window closes.",
       href: "/app/watchlists",
       cta: "Review digests",
@@ -344,7 +344,7 @@ export default function AppDashboardRoute() {
           cta: "Add competitor",
         };
   const briefTitle = counterMoveFollowUpCount > 0
-    ? `${counterMoveBriefLabel} to decide`
+    ? `${counterMoveFollowUpLabel} to decide`
     : confirmedChanges > 0
     ? `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} to review`
     : hasOnlyPausedWatchlists

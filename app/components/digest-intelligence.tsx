@@ -141,7 +141,7 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
     title: `${changeLabel} packaged for handoff`,
     summary: `${top.item.title}: ${
       topIsProofBacked
-        ? "ready to send as a client or teammate brief without rereading every event."
+        ? "ready to send as a client or teammate digest without rereading every event."
         : "ready to review; add page proof before sharing."
     }`,
     decision: top.intelligence.recommendedAction,

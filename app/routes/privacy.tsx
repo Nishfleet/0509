@@ -30,7 +30,7 @@ export default function PrivacyRoute() {
 
           <LegalBlock title="What we collect">
             <p>
-              We collect account details, saved searches, watchlists, boards, notes, reports, share links, delivery
+              We collect account details, saved searches, watchlists, collections, notes, reports, share links, delivery
               targets, customer-provided Meta access settings, and operational logs needed to run the account.
             </p>
           </LegalBlock>

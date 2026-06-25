@@ -91,7 +91,7 @@ export default function StatusRoute() {
       <PublicDocBlock title="Safety controls">
         <ul className="f9-doc-list">
           <li>Sign-in, saved account data, search, and public pages are rate limited.</li>
-          <li>Plans have watchlist, board, digest, proof-capture, and team-seat caps.</li>
+          <li>Plans have watchlist, collection, digest, proof-capture, and team-seat caps.</li>
           <li>Proof usage warns after 80% and hard-stops when paid capacity is exhausted.</li>
           <li>Support can review delivery failures, stale tracking, and capacity risk when something needs attention.</li>
         </ul>

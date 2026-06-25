@@ -28,15 +28,15 @@ export default function DocsRoute() {
           <li>Paste a competitor website into Search.</li>
           <li>Save the competitor when the results are useful.</li>
           <li>Open the watchlist to review ads, page evidence, and changes over time.</li>
-          <li>Save useful examples to a board or share a report with the team.</li>
-          <li>Turn on email delivery when the team wants briefs in the inbox.</li>
+          <li>Save useful examples to a collection or share a report with the team.</li>
+          <li>Turn on email delivery when the team wants digests in the inbox.</li>
         </ol>
       </PublicDocBlock>
 
       <PublicDocBlock title="Available today">
         <ul className="f9-doc-list">
           <li>Public competitor ad search from a website.</li>
-          <li>Saved watchlists, boards, briefs, reports, share links, and exports.</li>
+          <li>Saved watchlists, collections, digests, reports, share links, and exports.</li>
           <li>Checkout, receipts, proof-credit packs, and billing support.</li>
           <li>Email delivery for digests and high-priority change alerts.</li>
           <li>Rate limits, plan caps, evidence-usage warnings, and service status.</li>
