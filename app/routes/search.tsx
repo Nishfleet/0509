@@ -10,6 +10,7 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunctio
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { DashboardShell } from "~/components/dashboard-shell";
 import { SubmitButton } from "~/components/submit-button";
 import {
@@ -1035,4 +1036,12 @@ function withTrackingContext(
   const next = withCompetitorWebsite(params, website);
   next.set("trackingRole", trackingRole);
   return next;
+}
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="search" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
 }

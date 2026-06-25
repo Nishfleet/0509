@@ -7,6 +7,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
@@ -29,6 +31,14 @@ const externalProofChannels = [
 ];
 
 export const meta = () => [{ title: "Collections | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Collections" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -215,7 +225,13 @@ export default function CollectionsRoute() {
   const insightDepth = data.selectedCollection ? buildCollectionInsightDepth(data.items) : null;
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          lead="Save the best competitor examples, external proof, and notes for your team."
+          title="Collections"
+        />
+
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>
@@ -501,6 +517,7 @@ export default function CollectionsRoute() {
           )}
         </article>
       </div>
-    </section>
+      </section>
+    </DashboardPage>
   );
 }

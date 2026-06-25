@@ -4,6 +4,19 @@ export interface CustomerRouteError {
   retryable: boolean;
 }
 
+const INTERNAL_INFRA_PATTERN = /\b(d1|workflow|binding)\b/i;
+
+function sanitizeCustomerMessage(message: string): string {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return "An unexpected error occurred. Try again or contact support.";
+  }
+  if (INTERNAL_INFRA_PATTERN.test(trimmed)) {
+    return "This feature is temporarily unavailable. Try again later.";
+  }
+  return trimmed;
+}
+
 export function mapCustomerRouteError(error: unknown): CustomerRouteError {
   if (error instanceof Response) {
     if (error.status === 404) {
@@ -36,7 +49,12 @@ export function mapCustomerRouteError(error: unknown): CustomerRouteError {
 
   if (error instanceof Error) {
     const normalized = error.message.toLowerCase();
-    if (normalized.includes("not configured") || normalized.includes("d1 binding")) {
+    if (
+      normalized.includes("not configured") ||
+      normalized.includes("d1") ||
+      normalized.includes("binding") ||
+      normalized.includes("workflow")
+    ) {
       return {
         title: "Service unavailable",
         message: "This feature is temporarily unavailable. Try again later.",
@@ -52,7 +70,7 @@ export function mapCustomerRouteError(error: unknown): CustomerRouteError {
     }
     return {
       title: "Something went wrong",
-      message: error.message || "An unexpected error occurred.",
+      message: sanitizeCustomerMessage(error.message),
       retryable: true,
     };
   }

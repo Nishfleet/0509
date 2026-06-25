@@ -2,8 +2,13 @@ import { Form, Link, redirect, useActionData, useLoaderData } from "react-router
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import {
+  DashboardRouteError,
+  DashboardRouteLoading,
+} from "~/components/dashboard-route-loading";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
+import { PartialDataNotice } from "~/components/partial-data-notice";
 import { SubmitButton } from "~/components/submit-button";
 import { formatCoverageLabel, formatRolloutState } from "~/lib/presence-display";
 import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
@@ -31,6 +36,34 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const snapshot = await getPresenceWorkspaceSnapshot(env, workspaceUserId);
   const limits = getPresenceLimits(plan);
   const connectors = listPresenceConnectors();
+  const connectorResults = await Promise.allSettled(
+    connectors.map(async (connector) => ({
+      id: connector.id,
+      supportedModes: connector.supportedModes,
+      rolloutSelf: await connectorRolloutState(env, connector.id, "self", workspaceUserId),
+      rolloutCompetitor: await connectorRolloutState(env, connector.id, "competitor", workspaceUserId),
+    })),
+  );
+  const resolvedConnectors = connectorResults.flatMap((result, index) => {
+    if (result.status === "fulfilled") {
+      return [result.value];
+    }
+    const connector = connectors[index];
+    return connector
+      ? [
+          {
+            id: connector.id,
+            supportedModes: connector.supportedModes,
+            rolloutSelf: "disabled" as const,
+            rolloutCompetitor: "disabled" as const,
+          },
+        ]
+      : [];
+  });
+  const partialDataNotice =
+    connectorResults.some((result) => result.status === "rejected")
+      ? "Some connector availability details could not be loaded. Refresh to try again."
+      : null;
 
   return {
     snapshot,
@@ -39,14 +72,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     access,
     selfAllowed: presenceModeAllowed(plan, "self"),
     competitorAllowed: presenceModeAllowed(plan, "competitor"),
-    connectors: await Promise.all(
-      connectors.map(async (connector) => ({
-        id: connector.id,
-        supportedModes: connector.supportedModes,
-        rolloutSelf: await connectorRolloutState(env, connector.id, "self", workspaceUserId),
-        rolloutCompetitor: await connectorRolloutState(env, connector.id, "competitor", workspaceUserId),
-      })),
-    ),
+    connectors: resolvedConnectors,
+    partialDataNotice,
     userEmail: session.user.email,
   };
 }
@@ -139,11 +166,10 @@ export default function PresenceIndexRoute() {
         ) : null}
 
         {data.access.rolloutState === "ga" ? (
-          <p className="f9-dash-state f9-dash-state-partial" role="status">
-            Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on each
-            source.
-          </p>
+          <PartialDataNotice message="Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on each source." />
         ) : null}
+
+        {data.partialDataNotice ? <PartialDataNotice message={data.partialDataNotice} /> : null}
 
         <div className="f9-dashboard-grid">
           <article className="f9-app-panel">
@@ -270,4 +296,12 @@ export default function PresenceIndexRoute() {
       </section>
     </DashboardPage>
   );
+}
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="presence" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
 }

@@ -1,6 +1,8 @@
 import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
@@ -13,6 +15,14 @@ const RESOURCE_LABELS: Record<string, string> = {
 };
 
 export const meta = () => [{ title: "Reports & shared links | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Reports" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -62,7 +72,13 @@ export default function SharesRoute() {
   const actionData = useActionData<typeof action>();
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          lead="Revoke snapshot and live-view links you've shared with clients or teammates."
+          title="Reports"
+        />
+
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>{actionData.message}</p>
@@ -70,13 +86,6 @@ export default function SharesRoute() {
       ) : null}
 
       <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">Reports</span>
-            <h2>Shared links and report access</h2>
-          </div>
-        </div>
-
         {data.shares.length === 0 ? (
           <p>
             No active share links. Share a watchlist, collection, digest, or report and it will
@@ -129,7 +138,8 @@ export default function SharesRoute() {
           expire automatically after 90 days.
         </p>
       </article>
-    </section>
+      </section>
+    </DashboardPage>
   );
 }
 

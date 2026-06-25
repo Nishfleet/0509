@@ -6,6 +6,8 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import type { AppEnv } from "~/lib/env.server";
@@ -13,6 +15,14 @@ import { createReportId } from "~/lib/report";
 import type { AgentMemoryRecord, ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 export const meta = () => [{ title: "Clients | Five to Nine" }];
+
+export function HydrateFallback() {
+  return <DashboardRouteLoading title="Client rooms" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -196,22 +206,19 @@ export default function ClientsRoute() {
   }
 
   return (
-    <section className="f9-app-stack">
+    <DashboardPage>
+      <section className="f9-app-stack">
+        <DashboardPageHeader
+          action={{ label: "Integrations", to: "/app/sources" }}
+          lead="Package proof around each client."
+          title="Client rooms"
+        />
+
       {actionData?.message ? (
         <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
           <p>{actionData.message}</p>
         </div>
       ) : null}
-
-      <div className="f9-panel-toolbar">
-        <div>
-          <span className="f9-app-kicker">Client rooms</span>
-          <h1>Package proof around each client.</h1>
-        </div>
-        <Link className="f9-secondary-button" to="/app/sources">
-          Integrations
-        </Link>
-      </div>
 
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel f9-side-panel">
@@ -404,6 +411,7 @@ export default function ClientsRoute() {
         </article>
       </div>
     </section>
+    </DashboardPage>
   );
 }
 
