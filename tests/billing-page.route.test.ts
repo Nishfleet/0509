@@ -660,6 +660,66 @@ describe("Dodo customer portal route", () => {
     }
   });
 
+  it("does not open the workspace owner's portal for a teammate without their own billing link", async () => {
+    const memberSession = {
+      ...session,
+      user: {
+        ...session.user,
+        email: "teammate@example.com",
+        id: "member-1",
+        name: "Teammate",
+      },
+      session: {
+        ...session.session,
+        id: "member-session-1",
+        userId: "member-1",
+      },
+    };
+    const getUserPlanBillingInfo = vi.fn().mockImplementation(async (_env, userId: string) => {
+      if (userId === "owner-1") {
+        return { plan: "starter", dodoCustomerId: "cus_owner" };
+      }
+      return { plan: "free", dodoCustomerId: null };
+    });
+    const createDodoCustomerPortalSession = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(memberSession),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session: memberSession,
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getUserPlanBillingInfo,
+    }));
+    vi.doMock("~/lib/dodo-billing.server", () => ({ createDodoCustomerPortalSession }));
+
+    const { action } = await import("~/routes/api.billing.dodo.portal");
+
+    try {
+      await action({
+        context: {},
+        request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
+        params: {},
+      } as never);
+      throw new Error("expected redirect");
+    } catch (response) {
+      expect((response as Response).status).toBe(303);
+      expect((response as Response).headers.get("Location")).toBe(
+        "/app/billing?portal=unavailable",
+      );
+    }
+
+    expect(getUserPlanBillingInfo).toHaveBeenCalledWith(expect.anything(), "member-1");
+    expect(getUserPlanBillingInfo).not.toHaveBeenCalledWith(expect.anything(), "owner-1");
+    expect(createDodoCustomerPortalSession).not.toHaveBeenCalled();
+  });
+
   it("falls back to the billing page when a linked Dodo customer cannot open a portal session", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
