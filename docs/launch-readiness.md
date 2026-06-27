@@ -1,6 +1,6 @@
 # Five to Nine Launch Readiness
 
-Last checked: 2026-06-27
+Last checked: 2026-06-28
 
 ## Current Verdict
 
@@ -12,10 +12,10 @@ Remaining owner gates outside this repo: Dodo Product Collection membership plus
 
 The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, dormant-channel advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
-## Evidence From 2026-06-27
+## Evidence From 2026-06-27 Release
 
 - `npm run typecheck` passes.
-- `npm test` passes.
+- `npm test` passes: 143 files / 1336 tests.
 - `npm run build` passes.
 - `npm audit --omit=dev --audit-level=moderate` passes with 0 vulnerabilities.
 - `npm run canary:pricing` passes for localized Dodo preview.
@@ -24,7 +24,8 @@ The public `/status` page summarizes coarse launch posture without rendering acc
 - `npm run canary:prod` checks health on `0509.io`, `www.0509.io`, and `api.0509.io`, fresh-live search, and read-only ops readiness (email required; Slack surfaced as advisories).
 - `npm run provider:bakeoff:launch` passes for the current live provider; optional alternate providers skip when credentials are absent.
 - `node scripts/validate-d1-backup.mjs` passes through the latest repo migration.
-- Remote D1 migration inspection shows `0060_remove_legacy_billing_provider.sql` pending as a post-deploy cleanup migration.
+- PR #251 merged to `main`, the compatible Worker deployed, and remote D1 migration inspection shows no migrations to apply after `0060_remove_legacy_billing_provider.sql`.
+- Fresh D1 backup/export was uploaded to R2 before `0060`; post-cleanup evidence shows retained row counts and Dodo linkage, 0 legacy billing columns, and no retired-provider webhook table.
 
 ## Hard Launch Gates
 

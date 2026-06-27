@@ -7,21 +7,25 @@ function readDoc(path: string) {
 }
 
 describe("final launch documentation", () => {
-  it("keeps the authoritative scorecard at PR-ready until live closeout finishes", () => {
+  it("keeps the authoritative scorecard on the released posture after live closeout", () => {
     const scorecard = readDoc("docs/final-self-serve-ga-scorecard.md");
     const progress = readDoc("docs/launch-hardening-progress.md");
-    const prBody = readDoc("docs/final-self-serve-ga-pr-body.md");
+    const ownerActions = readDoc("docs/ga-owner-actions.md");
 
-    expect(scorecard).toContain("BRANCH READY FOR PROTECTED PR");
-    expect(scorecard).toContain("This is not a live GA verdict");
-    expect(scorecard).toContain("PR body draft");
-    expect(progress).toContain("PR is still not opened");
-    expect(prBody).toContain("post-deploy `0060` migration gate");
-    expect(prBody).toContain("Presence website canary remains owner-blocked");
+    expect(scorecard).toContain("SCOUT AND STARTER SELF-SERVE RELEASED");
+    expect(scorecard).toContain("OWNER ACTIONS REMAIN");
+    expect(scorecard).toContain("Compatible Worker deployed");
+    expect(scorecard).toContain("No migrations to apply");
+    expect(scorecard).toContain("D1 cleanup evidence");
+    expect(progress).toContain("PR #251 merged");
+    expect(progress).toContain("Post-cleanup canaries passed again");
+    expect(ownerActions).toContain("Completed release actions");
+    expect(ownerActions).toContain("Dodo customer portal subscription updates");
 
-    const authoritativeDocs = `${scorecard}\n${progress}\n${prBody}`;
-    expect(authoritativeDocs).not.toContain("RELEASE READY");
-    expect(authoritativeDocs).not.toContain("GA LIVE");
+    const authoritativeDocs = `${scorecard}\n${progress}\n${ownerActions}`;
+    expect(authoritativeDocs).not.toContain("PR is still not opened");
+    expect(authoritativeDocs).not.toContain("BRANCH READY FOR PROTECTED PR");
+    expect(authoritativeDocs).not.toContain("PENDING POST-DEPLOY");
   });
 
   it("marks older launch scorecards as historical instead of current truth", () => {

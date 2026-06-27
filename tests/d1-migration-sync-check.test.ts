@@ -7,7 +7,7 @@ import {
 } from "../scripts/d1-migration-sync-check.lib.mjs";
 
 describe("D1 migration sync check", () => {
-  it("allows the retired-provider cleanup migration to run after deploy", () => {
+  it("blocks the retired-provider cleanup migration after release closeout", () => {
     const output = `
 Migrations to be applied:
 ┌─────────────────────────────────────────┐
@@ -18,8 +18,8 @@ Migrations to be applied:
 `;
 
     expect(pendingMigrationNames(output)).toEqual(["0060_remove_legacy_billing_provider.sql"]);
-    expect(blockingPendingMigrationNames(output)).toEqual([]);
-    expect(hasOnlyPostDeployCleanupMigrations(output)).toBe(true);
+    expect(blockingPendingMigrationNames(output)).toEqual(["0060_remove_legacy_billing_provider.sql"]);
+    expect(hasOnlyPostDeployCleanupMigrations(output)).toBe(false);
   });
 
   it("continues to block ordinary unapplied migrations", () => {

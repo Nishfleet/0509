@@ -1,14 +1,15 @@
 # Launch Hardening Progress
 
-## Final self-serve GA hardening pass (2026-06-27)
+## Final self-serve GA release pass (2026-06-27)
 
 Branch: `codex/final-self-serve-ga-hardening-20260625`
 Base: `ed109a9`
 
-Current staged branch status:
+Release status:
 
-- This branch now includes the retired-provider history removal plus the final scorecard/copy refresh; re-check exact HEAD before PR/deploy.
-- Legacy secondary billing provider removed from active runtime and fresh-start schema: routes, helpers, env typing, tests, active docs, historical setup migrations, lookup index, and legacy plan columns are gone. The only remaining database action is the post-deploy remote cleanup.
+- PR #251 merged to `main` as `629fb14`; local `main` and `origin/main` were synced after merge.
+- Compatible Worker was deployed to the primary `.io` domains and `.in` redirect compatibility domains; exact provider deployment id omitted.
+- Legacy secondary billing provider removed from active runtime, fresh-start schema, and remote schema: routes, helpers, env typing, tests, active docs, historical setup migrations, lookup index, legacy plan columns, and retired-provider webhook table are gone.
 - Slack and WhatsApp are dormant for GA across customer UI, API v1, MCP, delivery sends, readiness stats, and launch blockers. Email is the verified automated delivery channel.
 - Dodo checkout, portal, pricing, and webhook paths have explicit timeout/bounded-response handling where touched. Billing canary passed with plan and top-up grant cleanup.
 - Provider/network timeout hardening added for Dodo, Browser Run/Browserless fallback, Meta/customer token checks, landing page/proof fetches, public URL/DNS, robots/domain verification, Slack, WhatsApp, LinkedIn OAuth token exchange, and related hot paths.
@@ -19,9 +20,9 @@ Current staged branch status:
 - Branch/stash cleanup report added; no deletion performed.
 - Owner actions captured in `docs/ga-owner-actions.md`.
 - Final scorecard captured in `docs/final-self-serve-ga-scorecard.md`.
-- Protected PR body draft captured in `docs/final-self-serve-ga-pr-body.md`; PR is still not opened.
+- Release owner actions remain captured in `docs/ga-owner-actions.md`.
 
-Verification completed on 2026-06-27:
+Verification completed before and after release on 2026-06-27:
 
 | Check | Result |
 | --- | --- |
@@ -30,7 +31,7 @@ Verification completed on 2026-06-27:
 | `npm run build` | PASS |
 | `npm audit --omit=dev --audit-level=moderate` | PASS, 0 vulnerabilities |
 | `node scripts/validate-d1-backup.mjs` | PASS, dry-run through latest migration |
-| `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --remote` | PENDING POST-DEPLOY, `0060_remove_legacy_billing_provider.sql` must wait until the compatible Worker is live |
+| `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --remote` | PASS after cleanup, no migrations to apply |
 | `npm run canary:pricing` | PASS |
 | `npm run canary:billing` | PASS |
 | `npm run canary:proof` | PASS, email channel |
@@ -40,9 +41,9 @@ Verification completed on 2026-06-27:
 | `npm run canary:presence` | BLOCKED, missing local internal Presence workspace id |
 | Final `autoreview --mode local` | PASS, no accepted/actionable findings |
 
-Latest rerun after the retired-provider cleanup and scorecard/copy refresh: `npm run launch:readiness` passed again. Remote D1 still reports only `0060_remove_legacy_billing_provider.sql` pending post-deploy; local D1 still has simulator-only pending migrations from prior local state.
+Fresh D1 backup/export before cleanup: `backups/d1/0509-2026-06-27T16-28-30-869Z.sql` uploaded to R2. Pre/post cleanup evidence preserved 5 `user_plan` rows and 5 Dodo linkage rows; post evidence shows 0 legacy billing columns and no retired-provider webhook table.
 
-This pass is verified on `codex/final-self-serve-ga-hardening-20260625`, but it is not merged or deployed yet.
+Post-cleanup canaries passed again: pricing, billing, proof/email, prod, and provider bakeoff launch gate.
 
 ## Earlier launch hardening branch
 
@@ -84,7 +85,7 @@ Backup: `../pre-cursor-launch-hardening.patch` (pre-run) · `../pre-final-harden
 | 2D | Dodo lookup indexes | fixed | f859d77 | `migrations/0045_dodo_plan_lookup_indexes.sql` |
 | 2E | MCP workspace plan resolution | fixed | f859d77 | `resolveWorkspaceDataUserId` in MCP + agent actions |
 | 2F | Scheduled cancellation enforcement | fixed | f859d77 | `getUserPlan` + `cancellationEffectiveAt` persistence |
-| 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, tests, active docs, historical setup migrations, and fresh-start schema references removed; post-deploy remote cleanup still pending with aggregate evidence helper |
+| 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, tests, active docs, historical setup migrations, fresh-start schema references, and remote schema artifacts removed; aggregate pre/post evidence preserved Dodo linkage |
 | 3A | Monitoring workflow capacity | deferred | | Agency **75** watchlist allowance vs ~12 min inline budget — **unresolved** |
 | 3B | Customer-visible scan status | fixed | cb1cf44 + final pass | capacity skip label “Delayed — capacity limit” |
 | 3B′ | Capacity-skip idempotency | fixed | final pass | `watchlist_run.idempotency_key` + `INSERT OR IGNORE` (`0046`) |

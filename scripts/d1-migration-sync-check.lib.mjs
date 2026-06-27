@@ -1,6 +1,7 @@
-export const POST_DEPLOY_CLEANUP_MIGRATIONS = new Set([
-  "0060_remove_legacy_billing_provider.sql",
-]);
+// Empty unless a future destructive cleanup must intentionally run after a
+// schema-compatible Worker deploy. Completed cleanups should not remain here.
+/** @type {Set<string>} */
+export const POST_DEPLOY_CLEANUP_MIGRATIONS = new Set();
 
 /**
  * @param {string} output
