@@ -629,12 +629,6 @@ export default function AppSourcesRoute() {
                 <dt>JSON</dt>
                 <dd>/api/v1/watchlists/&lbrace;id&rbrace;?format=json</dd>
               </div>
-              {showSlackDelivery ? (
-              <div>
-                <dt>Slack copy</dt>
-                <dd>/api/v1/digests/&lbrace;id&rbrace;?format=slack</dd>
-              </div>
-              ) : null}
               <div>
                 <dt>Header</dt>
                 <dd>Authorization: Bearer your Five to Nine API key</dd>
