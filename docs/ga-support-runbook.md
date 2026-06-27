@@ -12,11 +12,11 @@
 | Health | `https://0509.io/api/health` | Yes — 200 + `"status":"ok"` |
 | Email proof | `npm run canary:proof` (no `--require-slack`) | Yes |
 | Prod canary | `npm run canary:prod` | Yes |
-| Slack proof | `npm run canary:proof -- --require-slack` | No — Starter/Agency verification only |
+| Slack proof | Not a GA gate | No — Slack is dormant and not part of the customer offer |
 | UptimeRobot | Dashboard check on `/api/health` | Yes — owner-verified (no API token) |
 | D1 backup validate | `node scripts/validate-d1-backup.mjs` | Yes — CI dry-run |
 
-Slack advisories on `/api/launch-readiness` (`no_slack_delivery_target`, `no_recent_slack_sent`) do not block Scout GA.
+Dormant-channel advisories on `/api/launch-readiness` do not block Scout or Starter GA while those channels are outside the customer offer.
 
 ## Common requests
 
@@ -27,7 +27,7 @@ Slack advisories on `/api/launch-readiness` (`no_slack_delivery_target`, `no_rec
 | Evidence checks exhausted | Explain monthly reset + top-up packs | — |
 | Portal won't open | Dodo portal setting may be disabled | Owner enables subscription updates |
 | Email not delivering | Cloudflare Email Service Activity log; `delivery_attempt` for `channel = email` | `docs/ga-incident-runbook.md` § Email |
-| Slack not delivering | Verify target in `/app/sources`; plan must include Slack | Optional — `docs/launch-owner-actions.md` |
+| Slack requested | Explain Slack is not part of the GA customer offer and route to owner for a future product decision | Owner only |
 | Downgrade over limit | Watchlists auto-pause; newest kept | — |
 
 ## Billing support case flow

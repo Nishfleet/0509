@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
+import {
+  fetchWithTimeout,
+  promiseWithTimeout,
+  PromiseTimeoutError,
+} from "~/lib/fetch-timeout.server";
 
 describe("fetchWithTimeout", () => {
   it("adds an abort signal and cancels slow requests", async () => {
@@ -50,6 +54,49 @@ describe("fetchWithTimeout", () => {
 
     await vi.advanceTimersByTimeAsync(25);
     await bodyRead;
+    vi.useRealTimers();
+  });
+
+  it("rejects never-settling generic provider promises", async () => {
+    vi.useFakeTimers();
+    const request = promiseWithTimeout(
+      new Promise(() => undefined),
+      25,
+      "Provider timed out.",
+    );
+
+    const rejection = expect(request).rejects.toBeInstanceOf(PromiseTimeoutError);
+    await vi.advanceTimersByTimeAsync(25);
+    await rejection;
+    vi.useRealTimers();
+  });
+
+  it("cleans up a late-resolving provider resource after timeout", async () => {
+    vi.useFakeTimers();
+    const resource = {
+      close: vi.fn(async () => undefined),
+    };
+    let resolveOperation: (value: typeof resource) => void = () => undefined;
+    const operation = new Promise<typeof resource>((resolve) => {
+      resolveOperation = resolve;
+    });
+
+    const request = promiseWithTimeout(
+      operation,
+      25,
+      "Provider timed out.",
+      (lateResource) => lateResource.close(),
+    );
+
+    const rejection = expect(request).rejects.toBeInstanceOf(PromiseTimeoutError);
+    await vi.advanceTimersByTimeAsync(25);
+    await rejection;
+
+    resolveOperation(resource);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(resource.close).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
 });

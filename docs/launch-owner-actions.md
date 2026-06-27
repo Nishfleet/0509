@@ -22,26 +22,15 @@ Items below were **not completed by the launch-hardening code run**. They requir
 4. **Verify without API token** — full checklist in `docs/ops-backup-uptime.md` § Owner verification.
 5. Record verification date in `docs/ga-launch-scorecard.md`.
 
-## Optional verification (not GA-blocking)
+## Dormant delivery channels
 
-### Configure production Slack delivery
+### Slack
 
-**Status:** OPTIONAL — Starter/Agency marketing verification only
+**Status:** NOT PUBLIC GA
 
-1. Open the Five to Nine delivery targets UI (`/app/sources`) as an Agency workspace owner.
-2. Add a validated Slack webhook target and send a test message.
-3. Confirm a `delivery_attempt` row shows `provider = slack` with a successful status.
-4. Run `npm run canary:proof -- --require-slack` once the target exists.
+Slack setup is hidden from normal customer surfaces and should not be configured as a launch proof item. Existing stored Slack configuration is preserved behind product gates. Reintroduce Slack only through a separate verified product decision that updates UI, API/MCP discovery, canaries, support copy, and owner actions together.
 
-Slack advisories (`no_slack_delivery_target`, `no_recent_slack_sent`) may appear on `/api/launch-readiness` without failing GA.
-
-### Run production proof canary with Slack delivery
-
-**Status:** OPTIONAL
-
-1. Ensure the Slack target item above is complete.
-2. From a machine with production credentials: `npm run canary:proof -- --require-slack`.
-3. Verify Slack receives the digest/alert proof and the canary exits 0.
+Slack advisories may appear on private readiness views, but they are not GA blockers while Slack is outside the customer offer.
 
 ## Billing and portal
 

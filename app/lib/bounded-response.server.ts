@@ -76,6 +76,58 @@ export async function readResponseBytesWithinLimit(
   return bytes;
 }
 
+export async function readRequestTextWithinLimit(
+  request: Request,
+  maxBytes: number,
+): Promise<string | null> {
+  const bytes = await readRequestBytesWithinLimit(request, maxBytes);
+  return bytes ? new TextDecoder().decode(bytes) : null;
+}
+
+export async function readRequestBytesWithinLimit(
+  request: Request,
+  maxBytes: number,
+): Promise<Uint8Array | null> {
+  if (contentLengthExceeds(request.headers, maxBytes)) {
+    await request.body?.cancel().catch(() => undefined);
+    return null;
+  }
+
+  if (!request.body) {
+    const text = await request.text();
+    return utf8ByteLength(text) <= maxBytes ? new TextEncoder().encode(text) : null;
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return bytes;
+}
+
 export function utf8ByteLength(value: string) {
   return new TextEncoder().encode(value).byteLength;
 }

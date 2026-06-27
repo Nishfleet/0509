@@ -43,11 +43,11 @@
 4. Read-only `/api/launch-readiness` blocks on `no_recent_email_sent` when email proof is stale (>36h).
 5. No in-app bounce webhooks — manual list hygiene if needed.
 
-## S2 — Slack delivery (optional)
+## S2 — Dormant delivery channels
 
-1. Slack failures do not block Scout GA.
-2. Check `delivery_target` where `channel = slack` and recent `delivery_attempt` rows.
-3. For marketing verification on Starter/Agency: `npm run canary:proof -- --require-slack`.
+1. Slack and WhatsApp failures do not block Scout or Starter GA while those channels are outside the customer offer.
+2. Preserve stored targets unless the owner explicitly approves cleanup.
+3. Do not add smoke targets or run dormant-channel canaries as GA proof without a separate product decision.
 
 ## Rollback
 

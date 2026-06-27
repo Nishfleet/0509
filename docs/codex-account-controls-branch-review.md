@@ -8,7 +8,7 @@ Reviewed against: `main` at `ed109a9`
 
 Do not merge or cherry-pick this branch wholesale.
 
-It has seven unique commits and a broad stale diff. It also adds migrations numbered `0042` through `0044`, which conflict with the current migration chain where those numbers already belong to newer auth and billing migrations. Useful product ideas should be reimplemented selectively on top of current `main`, with new additive migrations only.
+It has seven unique commits and a broad stale diff. It also adds migrations numbered `0042` through `0044`, which conflict with the current migration chain where those numbers already belong to newer auth, website, and magic-link migrations. Useful product ideas should be reimplemented selectively on top of current `main`, with new additive migrations only.
 
 ## Commit Classification
 

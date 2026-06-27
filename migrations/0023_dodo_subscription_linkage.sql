@@ -15,10 +15,6 @@ CREATE TABLE user_plan_next (
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
   plan_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  razorpay_customer_id TEXT,
-  razorpay_subscription_id TEXT,
-  razorpay_plan_id TEXT,
-  razorpay_status TEXT,
   dodo_payment_id TEXT,
   dodo_product_id TEXT,
   dodo_status TEXT,
@@ -34,10 +30,6 @@ INSERT INTO user_plan_next (
   stripe_customer_id,
   stripe_subscription_id,
   plan_updated_at,
-  razorpay_customer_id,
-  razorpay_subscription_id,
-  razorpay_plan_id,
-  razorpay_status,
   dodo_payment_id,
   dodo_product_id,
   dodo_status
@@ -48,10 +40,6 @@ SELECT
   stripe_customer_id,
   stripe_subscription_id,
   plan_updated_at,
-  razorpay_customer_id,
-  razorpay_subscription_id,
-  razorpay_plan_id,
-  razorpay_status,
   dodo_payment_id,
   dodo_product_id,
   dodo_status
@@ -60,6 +48,3 @@ FROM user_plan;
 DROP TABLE user_plan;
 
 ALTER TABLE user_plan_next RENAME TO user_plan;
-
-CREATE INDEX IF NOT EXISTS idx_user_plan_razorpay_subscription_id
-  ON user_plan(razorpay_subscription_id);

@@ -16,6 +16,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  vi.doUnmock("~/lib/delivery.server");
+  vi.doUnmock("~/lib/whatsapp.server");
 });
 
 describe("delivery webhooks", () => {
@@ -103,6 +105,46 @@ describe("delivery webhooks", () => {
       }),
     );
     await expect(response.text()).resolves.toContain("\"processed\":1");
+  });
+
+  it("rejects oversized WhatsApp webhook bodies before signature verification", async () => {
+    const reconcileDeliveryStatus = vi.fn();
+    const verifyWhatsAppWebhookSignature = vi.fn();
+
+    vi.doMock("~/lib/delivery.server", () => ({
+      reconcileDeliveryStatus,
+    }));
+    vi.doMock("~/lib/whatsapp.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/whatsapp.server")>("~/lib/whatsapp.server");
+      return {
+        ...actual,
+        verifyWhatsAppWebhookSignature,
+      };
+    });
+
+    const { action } = await import("~/routes/api.delivery-status.$provider");
+
+    await expect(
+      action({
+        context: createContext({
+          WHATSAPP_APP_SECRET: "whatsapp-app-secret",
+        }),
+        params: {
+          provider: "whatsapp",
+        },
+        request: new Request("http://localhost/api/delivery-status/whatsapp", {
+          method: "POST",
+          headers: {
+            "content-length": "128001",
+            "x-hub-signature-256": "sha256=not-valid",
+          },
+          body: "{}",
+        }),
+      } as never),
+    ).rejects.toMatchObject({ status: 413 });
+
+    expect(verifyWhatsAppWebhookSignature).not.toHaveBeenCalled();
+    expect(reconcileDeliveryStatus).not.toHaveBeenCalled();
   });
 
   it("rejects WhatsApp status updates with an invalid signature", async () => {

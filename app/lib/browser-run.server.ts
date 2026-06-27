@@ -15,6 +15,7 @@ import {
 import { normalizeHeadline } from "~/lib/normalize";
 import { normalizePublicHttpUrl, resolvePublicHttpUrl } from "~/lib/public-url.server";
 import type { LandingPageSnapshotData, ProofDeviceProfile, ProofRenderMode } from "~/lib/types";
+import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 
 const TITLE_REGEX = /<title[^>]*>([^<]+)<\/title>/i;
 const OG_TITLE_REGEX =
@@ -23,6 +24,7 @@ const H1_REGEX = /<h1[^>]*>(.*?)<\/h1>/i;
 
 const MOBILE_RENDER_MODE: ProofRenderMode = "mobile";
 const MOBILE_DEVICE_PROFILE: ProofDeviceProfile = "mobile_default";
+const BROWSER_RUN_LAUNCH_TIMEOUT_MS = 10_000;
 const MOBILE_VIEWPORT = {
   width: 390,
   height: 844,
@@ -182,7 +184,12 @@ export async function captureBrowserRunSnapshot(
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
 
   try {
-    browser = await puppeteer.launch(env.BROWSER);
+    browser = await promiseWithTimeout(
+      puppeteer.launch(env.BROWSER),
+      BROWSER_RUN_LAUNCH_TIMEOUT_MS,
+      "Browser Run launch timed out.",
+      (lateBrowser) => lateBrowser.close(),
+    );
     const page = await browser.newPage();
     await installPublicBrowserRequestGuard(page);
     await page.setUserAgent(MOBILE_USER_AGENT);

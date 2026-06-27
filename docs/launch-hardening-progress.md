@@ -7,7 +7,7 @@ Base: `ed109a9`
 
 Current staged branch status:
 
-- Legacy secondary billing provider removed from active runtime and current schema: routes, helpers, env typing, tests, active docs, event table, lookup index, and legacy plan columns are gone. Historical migration files are retained.
+- Legacy secondary billing provider removed from active runtime and fresh-start schema: routes, helpers, env typing, tests, active docs, historical setup migrations, lookup index, and legacy plan columns are gone. The only remaining database action is the post-deploy remote cleanup.
 - Slack and WhatsApp are dormant for GA across customer UI, API v1, MCP, delivery sends, readiness stats, and launch blockers. Email is the verified automated delivery channel.
 - Dodo checkout, portal, pricing, and webhook paths have explicit timeout/bounded-response handling where touched. Billing canary passed with plan and top-up grant cleanup.
 - Provider/network timeout hardening added for Dodo, Browser Run/Browserless fallback, Meta/customer token checks, landing page/proof fetches, public URL/DNS, robots/domain verification, Slack, WhatsApp, LinkedIn OAuth token exchange, and related hot paths.
@@ -23,7 +23,7 @@ Verification completed on 2026-06-27:
 
 | Check | Result |
 | --- | --- |
-| `npm test` | PASS, 139 files / 1311 tests |
+| `npm test` | PASS, 139 files / 1320 tests |
 | `npm run typecheck` | PASS |
 | `npm run build` | PASS |
 | `npm audit --omit=dev --audit-level=moderate` | PASS, 0 vulnerabilities |
@@ -38,7 +38,7 @@ Verification completed on 2026-06-27:
 | `npm run canary:presence` | BLOCKED, missing local internal Presence workspace id |
 | Final `autoreview --mode local` | PASS, no accepted/actionable findings |
 
-This pass is not committed, pushed, merged, or deployed yet.
+This pass is verified on `codex/final-self-serve-ga-hardening-20260625`, but it is not merged or deployed yet.
 
 ## Earlier launch hardening branch
 
@@ -80,7 +80,7 @@ Backup: `../pre-cursor-launch-hardening.patch` (pre-run) · `../pre-final-harden
 | 2D | Dodo lookup indexes | fixed | f859d77 | `migrations/0045_dodo_plan_lookup_indexes.sql` |
 | 2E | MCP workspace plan resolution | fixed | f859d77 | `resolveWorkspaceDataUserId` in MCP + agent actions |
 | 2F | Scheduled cancellation enforcement | fixed | f859d77 | `getUserPlan` + `cancellationEffectiveAt` persistence |
-| 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, and tests removed; historical migrations retained |
+| 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, tests, and historical setup migrations removed; post-deploy remote cleanup still pending |
 | 3A | Monitoring workflow capacity | deferred | | Agency **75** watchlist allowance vs ~12 min inline budget — **unresolved** |
 | 3B | Customer-visible scan status | fixed | cb1cf44 + final pass | capacity skip label “Delayed — capacity limit” |
 | 3B′ | Capacity-skip idempotency | fixed | final pass | `watchlist_run.idempotency_key` + `INSERT OR IGNORE` (`0046`) |

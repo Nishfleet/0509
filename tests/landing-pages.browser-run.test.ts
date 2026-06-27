@@ -244,6 +244,30 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(browser.close).toHaveBeenCalled();
   });
 
+  it("returns null when Browser Run launch does not settle", async () => {
+    vi.useFakeTimers();
+    mockFetchWithDns(vi.fn(async () => {
+      throw new Error("fetch failed");
+    }) as never);
+    const launch = vi.fn(() => new Promise(() => undefined));
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch },
+    }));
+
+    const { captureBrowserRunSnapshot } = await import("~/lib/browser-run.server");
+
+    const snapshot = captureBrowserRunSnapshot(
+      { BROWSER: {} as Fetcher },
+      "https://example.com/glow",
+    );
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await expect(snapshot).resolves.toBeNull();
+    expect(launch).toHaveBeenCalledWith({} as Fetcher);
+    vi.useRealTimers();
+  });
+
   it("uses Browserless as rendered proof fallback when fetch and Browser Run are unavailable", async () => {
     const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
     const put = vi.fn().mockResolvedValue(undefined);

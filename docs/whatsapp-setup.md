@@ -49,10 +49,9 @@ npx wrangler secret put WHATSAPP_DELIVERY_ENABLED   # value: true
 - `npm run canary:prod` — once WhatsApp is deliberately configured, the
   `whatsapp_*` ops-readiness flags clear after the first delivered sends.
 
-## Slack (no platform setup needed)
+## Slack
 
-Slack delivery is customer-self-serve: each workspace pastes an incoming
-webhook URL on `/app/sources`, which is live-tested on save. The canary's
-`no_slack_delivery_target` flag clears as soon as the first target exists
-— to clear it pre-launch, add a Slack webhook for Nish's own workspace as
-a smoke target.
+Slack is not part of the public GA offer. Do not add a Slack smoke target or
+use Slack proof as a launch gate unless Slack is deliberately reintroduced
+through a separate product decision with updated customer UI, API/MCP discovery,
+canaries, and support copy.

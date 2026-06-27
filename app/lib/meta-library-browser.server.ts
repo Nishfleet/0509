@@ -11,7 +11,7 @@ import {
 } from "~/lib/browser-run.server";
 import { isoFromCountryName } from "~/lib/countries";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
-import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
+import { fetchWithTimeout, promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import type {
   AdRecord,
   DiscoveryFailureClass,
@@ -41,6 +41,7 @@ const BROWSERLESS_RENDER_WAIT_MS = 5_000;
 const BROWSERLESS_EMPTY_RESULT_MAX_ATTEMPTS = 2;
 const BROWSERLESS_META_FETCH_TIMEOUT_MS = 30_000;
 const BROWSERLESS_META_JSON_MAX_BYTES = 6_000_000;
+const BROWSER_RUN_ACQUIRE_TIMEOUT_MS = 10_000;
 const BROWSERLESS_BQL_MUTATION = `
 mutation MetaLibraryLiveFallback($url: String!, $userAgent: String!) {
   userAgent(userAgent: $userAgent) {
@@ -453,9 +454,14 @@ async function acquireBrowser(browserBinding: BrowserBinding) {
     );
   }
 
-  return puppeteer.launch(browserBinding, {
-    keep_alive: BROWSER_SESSION_KEEP_ALIVE_MS,
-  });
+  return promiseWithTimeout(
+    puppeteer.launch(browserBinding, {
+      keep_alive: BROWSER_SESSION_KEEP_ALIVE_MS,
+    }),
+    BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
+    "Browser Run launch timed out.",
+    (lateBrowser) => lateBrowser.close(),
+  );
 }
 
 async function connectToReusableBrowser(browserBinding: BrowserBinding) {
@@ -463,7 +469,12 @@ async function connectToReusableBrowser(browserBinding: BrowserBinding) {
 
   for (const session of sessions) {
     try {
-      return await puppeteer.connect(browserBinding, session.sessionId);
+      return await promiseWithTimeout(
+        puppeteer.connect(browserBinding, session.sessionId),
+        BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
+        "Browser Run connect timed out.",
+        (lateBrowser) => lateBrowser.disconnect(),
+      );
     } catch {
       continue;
     }
@@ -474,7 +485,11 @@ async function connectToReusableBrowser(browserBinding: BrowserBinding) {
 
 async function listReusableSessions(browserBinding: BrowserBinding) {
   try {
-    const sessions = await puppeteer.sessions(browserBinding);
+    const sessions = await promiseWithTimeout(
+      puppeteer.sessions(browserBinding),
+      BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
+      "Browser Run sessions lookup timed out.",
+    );
     return [...(sessions as BrowserRunSession[])]
       .filter((session) => !session.connectionId)
       .sort((left, right) => right.startTime - left.startTime);
@@ -485,7 +500,11 @@ async function listReusableSessions(browserBinding: BrowserBinding) {
 
 async function readBrowserLimits(browserBinding: BrowserBinding) {
   try {
-    return (await puppeteer.limits(browserBinding)) as BrowserRunLimits;
+    return (await promiseWithTimeout(
+      puppeteer.limits(browserBinding),
+      BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
+      "Browser Run limits lookup timed out.",
+    )) as BrowserRunLimits;
   } catch {
     return null;
   }
@@ -584,7 +603,7 @@ function normalizeCommercialDiscoveryError(error: unknown) {
   const failureClass: DiscoveryFailureClass = normalizedMessage.includes("rate limit") ||
     normalizedMessage.includes("429")
     ? "rate_limited"
-    : normalizedMessage.includes("timeout")
+    : normalizedMessage.includes("timeout") || normalizedMessage.includes("timed out")
       ? "timeout"
       : "browser_launch_failed";
   return new CommercialDiscoveryError(message, failureClass);
