@@ -29,14 +29,14 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Full unit/integration tests | PASS | `npm test`: 139 files, 1322 tests |
+| Full unit/integration tests | PASS | `npm test`: 143 files, 1334 tests |
 | Typecheck | PASS | `npm run typecheck` |
 | Production build | PASS | `npm run build` |
 | Dependency audit | PASS | `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilities |
 | Backup validator | PASS local dry-run | `node scripts/validate-d1-backup.mjs`; latest repo migration `0060_remove_legacy_billing_provider.sql` |
 | Diff whitespace | PASS | `git diff --check HEAD` |
 | Autoreview | PASS | Final staged autoreview clean; no accepted/actionable findings |
-| Retired billing provider surface | PASS | Routes, helpers, env typing, tests, and active docs removed; historical setup migrations remain append-only, and `0060` converges the final schema to Dodo-only billing fields after deploy |
+| Retired billing provider surface | PASS | Routes, helpers, env typing, tests, active docs, historical setup migrations, and fresh-start schema references removed; `0060` converges already-created remote schema artifacts to Dodo-only billing fields after deploy |
 | Local D1 migration list | LOCAL ONLY | Local simulator reports pending `0053`-`0060` from prior local state |
 | Remote D1 migration list | PENDING POST-DEPLOY | Remote reports only `0060_remove_legacy_billing_provider.sql` pending; deploy compatible Worker first, then apply cleanup with backup/count evidence |
 | Pricing canary | PASS | Dodo pricing canary passed for IN, US, and GB previews |
@@ -62,13 +62,13 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 | Billing portal | Partial self-serve | Hosted portal route works in code; plan changes/cancellation remain support-backed until Dodo dashboard setting is verified |
 | Trust/backup wording | Truthful in branch | Public trust copy limited to dry-run validation and owner-operated backup posture |
 | Provider/network timeouts | Improved | Shared timeout/bounded-response helpers and regression tests added across touched hot paths; stalled Cloudflare Email sends now move to pending/provider-unknown rather than retryable failure |
-| Retired billing provider | Removed from runtime; pending post-deploy schema cleanup | Routes, helpers, env typing, tests, active docs, lookup index, and live code references removed; historical setup migrations remain append-only, and `0060` removes legacy plan columns/table after deploy |
+| Retired billing provider | Removed from runtime; pending post-deploy schema cleanup | Routes, helpers, env typing, tests, active docs, lookup index, live code references, and fresh-start setup migrations removed; `0060` removes already-created remote plan columns/table after deploy |
 
 ## Follow-up Hardening Notes
 
 - Cloudflare Email delivery now has an explicit application timeout with regression coverage for a never-resolving provider send; stalled sends are recorded as pending/provider unknown, not retryable failures.
 - Older top-up billing docs now point to the current final-GA truth: configured Dodo checkout and signed-webhook canary coverage are verified, while checkout still fails closed if required product mappings are absent.
-- Historical setup migrations for the retired billing provider remain in the repo because D1 migration history is append-only; the remaining `0060` cleanup removes already-created remote schema artifacts after the compatible Worker is deployed.
+- Fresh-start migration replay no longer creates retired-provider setup artifacts. The remaining `0060` cleanup removes already-created remote schema artifacts after the compatible Worker is deployed.
 
 ## Remaining Owner Actions
 
@@ -82,8 +82,8 @@ The branch is not a full live GA closeout until these are resolved or accepted:
 6. Clean up retired provider dashboard artifacts: old webhooks, subscriptions, payment links, and live products.
 7. Open a protected PR, wait for GitHub checks/review, merge through protection, then run merged-main validation.
 8. Deploy the schema-compatible Worker with `0060_remove_legacy_billing_provider.sql` still pending.
-9. Before applying `0060`, create a fresh remote D1 backup/export and record counts for `user_plan`, plan distribution, non-null retired-provider plan fields, and retired-provider webhook rows.
-10. Apply `0060` only after the new Worker is live, then verify `user_plan` row counts match, retired-provider columns/table are gone, and Dodo linkage remains.
+9. Before applying `0060`, create a fresh remote D1 backup/export and run `SAFE_DEPLOY_APPROVED=d1 npm run d1:cleanup-0060:evidence -- --remote --stage pre`.
+10. Apply `0060` only after the new Worker is live, then run `SAFE_DEPLOY_APPROVED=d1 npm run d1:cleanup-0060:evidence -- --remote --stage post` and verify `user_plan` row counts match, legacy billing columns/table are gone, and Dodo linkage remains.
 11. Rerun billing/prod smokes and canaries after the migration.
 
 ## Non-Exposure Confirmation

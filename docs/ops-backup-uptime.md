@@ -7,6 +7,18 @@
 - Automated R2 scheduling is **not verified active from this repository**. Keep public trust copy limited to dry-run validation, migration-chain coverage, and owner-operated backup/restore procedures until a schedule and restore drill are proven.
 - Manual run any time: `npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available).
 
+### Post-deploy D1 cleanup evidence
+
+For the `0060_remove_legacy_billing_provider.sql` cleanup, collect aggregate-only evidence before and after applying the migration. These commands do not print user IDs, customer IDs, payment IDs, or webhook payloads:
+
+```bash
+SAFE_DEPLOY_APPROVED=d1 npm run d1:cleanup-0060:evidence -- --remote --stage pre
+SAFE_DEPLOY_APPROVED=d1 npm run d1:cleanup-0060:evidence -- --remote --stage post
+```
+
+Use the pre output before applying `0060`; use the post output after `0060` to confirm `user_plan` row counts match, legacy billing columns/table are gone, and Dodo linkage rows remain.
+The post command exits non-zero if legacy billing columns or the retired-provider webhook table are still present.
+
 ### Restore drill
 
 ```bash

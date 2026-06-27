@@ -45,7 +45,7 @@ This PR closes the remaining in-repo Five to Nine launch-hardening gaps for the 
 Latest branch proof recorded in the scorecard:
 
 - `npm run typecheck` passed.
-- `npm test` passed: 139 files / 1322 tests.
+- `npm test` passed: 143 files / 1334 tests.
 - `npm run build` passed.
 - `npm audit --omit=dev --audit-level=moderate` passed with 0 vulnerabilities.
 - `node scripts/validate-d1-backup.mjs` passed through `0060_remove_legacy_billing_provider.sql`.
@@ -87,9 +87,9 @@ These are not proven by repo code alone:
 3. Deploy the schema-compatible Worker while `0060_remove_legacy_billing_provider.sql` is still pending.
 4. Rerun pricing, billing, proof/email, production, and provider bakeoff canaries.
 5. Create a fresh remote D1 backup/export.
-6. Record pre-`0060` aggregate evidence for plan row counts, plan distribution, retired-provider fields, retired-provider webhook rows, and Dodo linkage.
+6. Record pre-`0060` aggregate evidence with `SAFE_DEPLOY_APPROVED=d1 npm run d1:cleanup-0060:evidence -- --remote --stage pre`.
 7. Apply only `0060_remove_legacy_billing_provider.sql` after the compatible Worker is live.
-8. Verify row counts, Dodo linkage, and retired-provider schema removal after `0060`.
+8. Verify row counts, Dodo linkage, and legacy billing schema removal after `0060` with `SAFE_DEPLOY_APPROVED=d1 npm run d1:cleanup-0060:evidence -- --remote --stage post`.
 9. Rerun billing/prod smokes and canaries after the cleanup migration.
 
 ## Rollback
