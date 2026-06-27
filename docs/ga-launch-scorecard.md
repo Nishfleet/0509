@@ -9,7 +9,7 @@ Last updated: 2026-06-24 (branch `cursor/ga-final-integration-20260624`, GA fina
 
 **SUPERSEDED — SCOUT AND STARTER WERE OPEN ON THIS HISTORICAL PASS, AGENCY HELD**
 
-Billing + email canaries passed on production during the 2026-06-24 integration pass. Scout/Starter checkout and top-ups were open, while Agency stayed held until live fan-out ladder proof. The final 2026-06-27 branch still requires protected PR review, merge, deploy, post-deploy D1 cleanup, and owner-action closeout before a live GA verdict.
+Billing + email canaries passed on production during the 2026-06-24 integration pass. Scout/Starter checkout and top-ups were open, while Agency stayed held until live fan-out ladder proof. The final 2026-06-27 branch was later merged and released via PR #251; use `docs/final-self-serve-ga-scorecard.md` for current truth.
 
 ## Phase tracker
 
@@ -90,11 +90,9 @@ Billing + email canaries passed on production during the 2026-06-24 integration 
 
 ## Owner actions (remaining)
 
-1. **Merge integration PR** and deploy once.
-2. **Re-run canaries** after deploy: `canary:billing`, `canary:pricing`, `canary:proof`.
-3. **Fan-out activation ladder** (`docs/monitoring-fanout-rollout.md`): shadow → allowlist (`MAX_INFLIGHT=1`, notifications off) → 75-job → one nightly window. Validate with `node scripts/monitoring-fanout-canary.mjs --step <step> --remote`.
-4. **UptimeRobot** — owner verification on `0509.io/api/health`.
-5. **Agency sale** — only after live fan-out ladder passes.
+1. **Fan-out activation ladder** (`docs/monitoring-fanout-rollout.md`): shadow → allowlist (`MAX_INFLIGHT=1`, notifications off) → 75-job → one nightly window. Validate with `node scripts/monitoring-fanout-canary.mjs --step <step> --remote`.
+2. **UptimeRobot** — owner verification on `0509.io/api/health`.
+3. **Agency sale** — only after live fan-out ladder passes.
 
 ## Fan-out mode
 
@@ -113,4 +111,4 @@ Billing + email canaries passed on production during the 2026-06-24 integration 
 
 ## Next update
 
-After integration PR merge + deploy + canary pass, run fan-out shadow on internal workspace.
+After PR #251 release, the next product unlock is live fan-out shadow on an internal workspace.
