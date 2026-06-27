@@ -1,21 +1,21 @@
 # GA Owner Actions
 
-Last updated: 2026-06-27
+Last updated: 2026-06-28
 
-These are the remaining launch actions that cannot be honestly proven from the repo alone.
+These are the remaining launch actions that cannot be honestly proven from the repo/provider release checks alone.
+
+Completed release actions: PR #251 merged to `main` as `629fb14`; the compatible Worker was deployed; fresh D1 export uploaded to R2 at `backups/d1/0509-2026-06-27T16-28-30-869Z.sql`; migration `0060_remove_legacy_billing_provider.sql` applied; post-cleanup evidence confirmed 5 `user_plan` rows, 5 Dodo linkage rows, 0 legacy billing columns, and no retired-provider webhook table; pricing, billing, proof/email, prod, and provider bakeoff canaries passed after cleanup.
 
 | Action | Status | Owner | Risk | Launch impact | Next step |
 | --- | --- | --- | --- | --- | --- |
 | Dodo customer portal subscription updates | OWNER | Nish | Customers may need support for plan changes/cancellation | Scout/Starter can sell, but billing is not fully self-serve | In Dodo, put the Scout/Starter subscription products in the same Product Collection, enable **Allow Subscription Updates** in **Settings -> Subscriptions**, then confirm `/app/billing` portal shows plan changes; separately confirm cancellation remains available in subscription details |
 | External uptime monitor | OWNER | Nish | No independent outage alert proof | Launch trust gate remains owner-verified only | UptimeRobot or equivalent monitor for `https://0509.io/api/health`, about 5 minute interval, outage and recovery alerts, no token in URL |
-| D1-to-R2 scheduled backup | OWNER | Nish | Public trust cannot claim automated cloud backups | Trust page must stay conservative | Configure a scheduled run of `npm run backup:d1:r2`, confirm a new object appears in the backup prefix, then record retention |
+| D1-to-R2 scheduled backup | OWNER | Nish | Public trust cannot claim automated cloud backups | Trust page must stay conservative | A manual release backup now exists in R2; configure a scheduled run of `npm run backup:d1:r2`, confirm a new scheduled object appears in the backup prefix, then record retention |
 | Restore drill | OWNER | Nish/operator | Backup integrity remains unproven beyond dry-run validation | Launchable only with conservative backup wording | Restore a recent backup into an isolated local/test database and record the result |
 | Presence internal workspace smoke | OWNER | Nish/operator | Presence website GA cannot be canary-smoked locally | Presence remains GA by code/config, but smoke is incomplete | Set local internal Presence workspace id and rerun `npm run canary:presence` |
 | Agency fan-out proof | OWNER | Nish/operator | Agency capacity could overpromise nightly monitoring | Agency checkout must stay held | Run fan-out ladder from shadow to 75-job proof on internal workspace before opening Agency |
 | Cloudflare Email activity/log visibility | OWNER | Nish/operator | Email send proof exists, but dashboard activity/alert visibility not captured here | No blocker for email delivery, but ops visibility incomplete | Confirm Email Service activity/log view and failure investigation path in Cloudflare |
 | WhatsApp orphaned targets | OWNER | Nish/operator | Old opt-in targets may remain stored but unsupported | No public blocker; UI/API hides WhatsApp while non-GA | Review stored targets, preserve data unless owner approves cleanup, do not advertise WhatsApp |
 | Retired billing-provider dashboard cleanup | OWNER | Nish/operator | Old provider dashboard could still send webhooks or expose obsolete payment links | Repo runtime/schema is clean, provider-side cleanup still needed | Disable/remove old webhooks, subscriptions, payment links, and live products in the retired provider dashboard |
-| D1 retired-provider schema migration | PENDING POST-DEPLOY | Codex/Nish | Remote DB still has legacy billing table/columns until the approved cleanup runs | Required before live DB can honestly call the old provider wiped | Deploy the compatible Worker first; create a fresh remote D1 backup/export; run `SAFE_DEPLOY_APPROVED=d1 npm run d1:cleanup-0060:evidence -- --remote --stage pre`; apply only `0060`; then run `SAFE_DEPLOY_APPROVED=d1 npm run d1:cleanup-0060:evidence -- --remote --stage post` and verify row counts, removed legacy columns/table, and Dodo linkage |
-| Protected PR and deploy | PENDING | Codex/Nish | Pushed branch is not reviewed, merged, or live | Required before any final GA verdict | Open the protected PR from `codex/final-self-serve-ga-hardening-20260625`, wait for checks/review, merge normally, validate main, deploy compatible code, then apply post-deploy cleanup migration and rerun canaries |
 
 Do not include secrets, provider ids, customer ids, webhook URLs, or payment identifiers in this file.
