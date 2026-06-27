@@ -15,7 +15,7 @@ Scout and Starter are deployed and verified on the live Worker with Dodo checkou
 | Release branch | `codex/final-self-serve-ga-hardening-20260625` |
 | Starting main commit | `ed109a9` |
 | Merged main commit | `629fb14` (`Merge pull request #251`) |
-| Local `main` vs `origin/main` | Match at `629fb14` after release sync |
+| Current `main` vs `origin/main` | Matched after latest docs closeout verification; release code merge was `629fb14` |
 | Pull request | #251 merged on 2026-06-27 |
 | Worker deploy | Compatible Worker deployed after PR #251; exact provider deployment id omitted |
 | Fresh release backup | R2 object `backups/d1/0509-2026-06-27T16-28-30-869Z.sql` |
