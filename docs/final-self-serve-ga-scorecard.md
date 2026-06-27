@@ -17,6 +17,7 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 | Local `main` vs `origin/main` | Match at `ed109a9` after `git fetch origin` |
 | Current branch status | Verified on the current checkout; re-run `git status --short --branch` and `git log -1 --oneline` before PR/deploy |
 | Pull request | Not opened yet; protected `gh pr create` is awaiting explicit owner approval |
+| PR body draft | `docs/final-self-serve-ga-pr-body.md` |
 | Safety patch | Saved at `../pre-final-self-serve-ga-hardening.patch` |
 | Worker version | Not verified in this pass; Cloudflare deployment API was not used |
 | Production domains from repo config | `.io` primary domains plus `.in` redirect compatibility routes |

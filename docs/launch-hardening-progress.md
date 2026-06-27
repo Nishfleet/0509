@@ -19,6 +19,7 @@ Current staged branch status:
 - Branch/stash cleanup report added; no deletion performed.
 - Owner actions captured in `docs/ga-owner-actions.md`.
 - Final scorecard captured in `docs/final-self-serve-ga-scorecard.md`.
+- Protected PR body draft captured in `docs/final-self-serve-ga-pr-body.md`; PR is still not opened.
 
 Verification completed on 2026-06-27:
 
