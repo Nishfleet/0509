@@ -29,7 +29,7 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Full unit/integration tests | PASS | `npm test`: 143 files, 1334 tests |
+| Full unit/integration tests | PASS | `npm test`: 143 files, 1336 tests |
 | Typecheck | PASS | `npm run typecheck` |
 | Production build | PASS | `npm run build` |
 | Dependency audit | PASS | `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilities |

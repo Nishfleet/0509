@@ -45,7 +45,7 @@ This PR closes the remaining in-repo Five to Nine launch-hardening gaps for the 
 Latest branch proof recorded in the scorecard:
 
 - `npm run typecheck` passed.
-- `npm test` passed: 143 files / 1334 tests.
+- `npm test` passed: 143 files / 1336 tests.
 - `npm run build` passed.
 - `npm audit --omit=dev --audit-level=moderate` passed with 0 vulnerabilities.
 - `node scripts/validate-d1-backup.mjs` passed through `0060_remove_legacy_billing_provider.sql`.
