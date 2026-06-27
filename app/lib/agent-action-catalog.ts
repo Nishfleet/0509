@@ -46,7 +46,7 @@ export const AGENT_ACTION_GROUPS = [
   {
     id: "proof",
     label: "Proof and reports",
-    detail: "Create boards, save visible external proof, build reports, share links, and counter-move briefs.",
+    detail: "Create collections, save visible external proof, build reports, share links, and counter-move briefs.",
     actions: [
       "collection.create",
       "proof.add_external",
@@ -96,8 +96,8 @@ export const AGENT_ACTION_GROUPS = [
   },
   {
     id: "mentions",
-    label: "Web mentions beta",
-    detail: "Read existing proof-backed web, blog, Substack, and Reddit observations.",
+    label: "Presence observations",
+    detail: "Read existing proof-backed website, blog, and Substack observations.",
     actions: ["web_mentions.list"],
     requiresWriteEnabled: true,
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,

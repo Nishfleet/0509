@@ -18,7 +18,6 @@ import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
 import { proofLinkForAd } from "~/lib/proof-link";
 import { createReportId } from "~/lib/report";
-import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
 const externalProofChannels = [
   "TikTok",
@@ -220,7 +219,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function CollectionsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const [searchParams] = useSearchParams();
   const insightDepth = data.selectedCollection ? buildCollectionInsightDepth(data.items) : null;
 
@@ -328,14 +326,6 @@ export default function CollectionsRoute() {
                     >
                       JSON export
                     </a>
-                  {showSlackDelivery ? (
-                  <a
-                    className="f9-secondary-button"
-                    href={`/export/collection/${data.selectedCollection.id}?format=slack`}
-                  >
-                    Slack copy
-                  </a>
-                  ) : null}
                   <Form method="post">
                     <input name="intent" type="hidden" value="share-collection" />
                     <input name="collectionId" type="hidden" value={data.selectedCollection.id} />

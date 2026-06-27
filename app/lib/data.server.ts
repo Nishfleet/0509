@@ -13,6 +13,10 @@ import {
   type AppEnv,
 } from "~/lib/env.server";
 import { buildExternalProofAd } from "~/lib/external-proof.server";
+import {
+  isSlackDeliveryCustomerFacing,
+  isWhatsAppDeliveryCustomerFacing,
+} from "~/lib/ga-customer-surface";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import { normalizeSupportCaseInput } from "~/lib/support";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
@@ -543,8 +547,6 @@ interface CustomerApiKeyRow {
   created_at: string;
   updated_at: string;
 }
-
-type RazorpayWebhookOutcome = "received" | "processed" | "ignored" | "failed";
 
 export function nowIso() {
   return new Date().toISOString();
@@ -1864,183 +1866,6 @@ function toDeliveryAttemptRecord(row: DeliveryAttemptRow): DeliveryAttemptRecord
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-export async function recordPendingRazorpaySubscription(
-  env: AppEnv,
-  input: {
-    userId: string;
-    subscriptionId: string;
-    customerId: string | null;
-    providerPlanId: string | null;
-    status: string;
-  },
-) {
-  await run(
-    env,
-    `
-      INSERT INTO user_plan (
-        user_id,
-        plan,
-        razorpay_customer_id,
-        razorpay_subscription_id,
-        razorpay_plan_id,
-        razorpay_status,
-        plan_updated_at
-      )
-      VALUES (?, 'free', ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(user_id)
-      DO UPDATE SET
-        razorpay_customer_id = excluded.razorpay_customer_id,
-        razorpay_subscription_id = excluded.razorpay_subscription_id,
-        razorpay_plan_id = excluded.razorpay_plan_id,
-        razorpay_status = excluded.razorpay_status,
-        plan_updated_at = excluded.plan_updated_at
-    `,
-    input.userId,
-    input.customerId,
-    input.subscriptionId,
-    input.providerPlanId,
-    input.status,
-  );
-}
-
-export async function syncRazorpaySubscriptionStatus(
-  env: AppEnv,
-  input: {
-    userId: string;
-    plan: "starter" | "agency";
-    status: string;
-    subscriptionId: string;
-    customerId: string | null;
-    providerPlanId: string | null;
-    shouldGrant: boolean;
-    shouldRevoke: boolean;
-  },
-) {
-  if (input.shouldRevoke) {
-    const current = await one<{ razorpay_subscription_id: string | null }>(
-      env,
-      "SELECT razorpay_subscription_id FROM user_plan WHERE user_id = ?",
-      input.userId,
-    );
-    if (current?.razorpay_subscription_id !== input.subscriptionId) {
-      return;
-    }
-  }
-
-  const nextPlan = input.shouldGrant ? input.plan : input.shouldRevoke ? "free" : null;
-
-  if (nextPlan) {
-    await run(
-      env,
-      `
-        INSERT INTO user_plan (
-          user_id,
-          plan,
-          razorpay_customer_id,
-          razorpay_subscription_id,
-          razorpay_plan_id,
-          razorpay_status,
-          plan_updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(user_id)
-        DO UPDATE SET
-          plan = excluded.plan,
-          razorpay_customer_id = excluded.razorpay_customer_id,
-          razorpay_subscription_id = excluded.razorpay_subscription_id,
-          razorpay_plan_id = excluded.razorpay_plan_id,
-          razorpay_status = excluded.razorpay_status,
-          plan_updated_at = excluded.plan_updated_at
-      `,
-      input.userId,
-      nextPlan,
-      input.customerId,
-      input.subscriptionId,
-      input.providerPlanId,
-      input.status,
-    );
-    return;
-  }
-
-  await recordPendingRazorpaySubscription(env, {
-    userId: input.userId,
-    subscriptionId: input.subscriptionId,
-    customerId: input.customerId,
-    providerPlanId: input.providerPlanId,
-    status: input.status,
-  });
-}
-
-export async function claimRazorpayWebhookEvent(
-  env: AppEnv,
-  input: {
-    eventId: string;
-    eventType: string;
-    subscriptionId: string | null;
-    userId: string | null;
-    payloadCreatedAt: string | null;
-  },
-) {
-  const db = ensureDb(env);
-  const result = await db.prepare(`
-      INSERT INTO razorpay_webhook_event (
-        event_id,
-        event_type,
-        subscription_id,
-        user_id,
-        received_at,
-        payload_created_at,
-        outcome,
-        metadata_json
-      )
-      VALUES (?, ?, ?, ?, ?, ?, 'received', '{}')
-      ON CONFLICT(event_id)
-      DO UPDATE SET
-        event_type = excluded.event_type,
-        subscription_id = excluded.subscription_id,
-        user_id = excluded.user_id,
-        received_at = excluded.received_at,
-        payload_created_at = excluded.payload_created_at,
-        processed_at = NULL,
-        outcome = 'received',
-        metadata_json = '{}'
-      WHERE razorpay_webhook_event.outcome = 'failed'
-    `).bind(
-      input.eventId,
-      input.eventType,
-      input.subscriptionId,
-      input.userId,
-      nowIso(),
-      input.payloadCreatedAt,
-    ).run();
-
-  return Number(result.meta?.changes ?? 0) > 0;
-}
-
-export async function markRazorpayWebhookEventFinished(
-  env: AppEnv,
-  eventId: string,
-  input: {
-    outcome: Exclude<RazorpayWebhookOutcome, "received">;
-    metadata?: JsonRecord;
-  },
-) {
-  await run(
-    env,
-    `
-      UPDATE razorpay_webhook_event
-      SET outcome = ?,
-          processed_at = ?,
-          metadata_json = ?
-      WHERE event_id = ?
-    `,
-    input.outcome,
-    nowIso(),
-    jsonValue(input.metadata ?? {}),
-    eventId,
-  );
 }
 
 export async function grantProofUsageCredit(
@@ -3773,7 +3598,7 @@ async function ensureWebMentionTargetForWatchlist(
     role,
     label,
     label,
-    JSON.stringify(["reddit", "x", "blog", "youtube", "substack", "web"]),
+    JSON.stringify(["blog", "substack", "web"]),
     isActive ? 1 : 0,
     timestamp,
     timestamp,
@@ -3869,7 +3694,7 @@ export async function listWebMentionObservations(
     limit?: number | null;
   } = {},
 ) {
-  const sources = (options.sources?.length ? options.sources : ["reddit", "blog", "substack", "web"])
+  const sources = (options.sources?.length ? options.sources : ["blog", "substack", "web"])
     .filter((source, index, all): source is WebMentionSource => all.indexOf(source) === index);
   const clauses = ["web_mention_observation.user_id = ?", "web_mention_target.user_id = ?"];
   const bindings: unknown[] = [userId, userId];
@@ -5494,6 +5319,44 @@ export async function listDeliveryTargets(
 }
 
 export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: string) {
+  const channelPredicates = [
+    `
+      (
+        channel = 'email'
+        AND is_opted_in = 1
+        AND is_paused = 0
+        AND opted_out_at IS NULL
+        AND is_validated = 1
+        AND validation_status = 'validated'
+      )
+    `,
+  ];
+  if (isSlackDeliveryCustomerFacing()) {
+    channelPredicates.push(`
+      (
+        channel = 'slack'
+        AND is_opted_in = 1
+        AND is_paused = 0
+        AND opted_out_at IS NULL
+        AND is_validated = 1
+        AND validation_status = 'validated'
+      )
+    `);
+  }
+  if (isWhatsAppDeliveryCustomerFacing()) {
+    channelPredicates.push(`
+      (
+        channel = 'whatsapp'
+        AND is_opted_in = 1
+        AND is_paused = 0
+        AND opted_out_at IS NULL
+        AND is_validated = 1
+        AND validation_status = 'validated'
+        AND template_eligible = 1
+      )
+    `);
+  }
+
   const row = await one<{
     active_count: number | null;
     proven_count: number | null;
@@ -5504,33 +5367,7 @@ export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: strin
         SELECT last_successful_delivery_at
         FROM delivery_target
         WHERE user_id = ?
-          AND (
-            (
-              channel = 'email'
-              AND is_opted_in = 1
-              AND is_paused = 0
-              AND opted_out_at IS NULL
-              AND is_validated = 1
-              AND validation_status = 'validated'
-            )
-            OR (
-              channel = 'slack'
-              AND is_opted_in = 1
-              AND is_paused = 0
-              AND opted_out_at IS NULL
-              AND is_validated = 1
-              AND validation_status = 'validated'
-            )
-            OR (
-              channel = 'whatsapp'
-              AND is_opted_in = 1
-              AND is_paused = 0
-              AND opted_out_at IS NULL
-              AND is_validated = 1
-              AND validation_status = 'validated'
-              AND template_eligible = 1
-            )
-          )
+          AND (${channelPredicates.join(" OR ")})
       )
       SELECT
         COUNT(*) AS active_count,

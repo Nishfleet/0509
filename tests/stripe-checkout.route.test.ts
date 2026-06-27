@@ -52,14 +52,20 @@ describe("billing route exposure", () => {
 
     expect(paths).not.toContain("api/checkout");
     expect(paths).not.toContain("api/webhooks/stripe");
-    expect(paths).not.toContain("api/billing/razorpay/subscription");
-    expect(paths).not.toContain("api/webhooks/razorpay");
     expect(paths).not.toContain("pricing-region");
   });
 
   it("exposes Dodo-backed billing, price preview, and legal pages", () => {
     const paths = flattenRoutePaths(routes as RouteEntry[]);
 
+    expect(paths.filter((path) => path.startsWith("api/billing/")).sort()).toEqual([
+      "api/billing/dodo/canary",
+      "api/billing/dodo/checkout",
+      "api/billing/dodo/portal",
+    ]);
+    expect(paths.filter((path) => path.startsWith("api/webhooks/"))).toEqual([
+      "api/webhooks/dodo",
+    ]);
     expect(paths).toContain("api/billing/dodo/checkout");
     expect(paths).toContain("api/billing/dodo/canary");
     expect(paths).toContain("api/pricing-preview");
@@ -158,7 +164,6 @@ describe("marketing route", () => {
     expect(markup).toContain("/api/billing/dodo/checkout");
     expect(markup).not.toContain("/pricing-region");
     expect(markup).not.toContain("Rest of world");
-    expect(markup).not.toContain("/api/billing/razorpay/subscription");
     expect(markup).not.toContain("/api/checkout");
   });
 });

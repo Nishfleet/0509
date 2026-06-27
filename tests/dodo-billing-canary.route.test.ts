@@ -81,13 +81,7 @@ function createCanaryDb() {
                     {
                       user_id: "user-1",
                       plan: "starter",
-                      stripe_customer_id: null,
-                      stripe_subscription_id: null,
                       plan_updated_at: "2026-06-01T00:00:00.000Z",
-                      razorpay_customer_id: null,
-                      razorpay_subscription_id: null,
-                      razorpay_plan_id: null,
-                      razorpay_status: null,
                       dodo_payment_id: "real-payment-1",
                       dodo_product_id: "real-product-1",
                       dodo_status: "payment.succeeded",

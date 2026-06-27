@@ -2,12 +2,17 @@ import { redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 import { credentialFingerprint, encryptCredential } from "~/lib/credential-crypto.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import { upsertSourceConnection } from "~/lib/presence-data.server";
 import {
   consumePresenceOAuthTransaction,
   verifyPresenceOAuthState,
 } from "~/lib/presence-oauth-transaction.server";
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
+
+const LINKEDIN_TOKEN_TIMEOUT_MS = 10_000;
+const LINKEDIN_TOKEN_JSON_MAX_BYTES = 64_000;
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -50,24 +55,38 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     return redirect("/app/presence?oauth=linkedin_unconfigured");
   }
 
-  const tokenResponse = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: callbackUri,
-      client_id: clientId,
-      client_secret: clientSecret,
-      code_verifier: consumed.transaction.pkceVerifier,
-    }),
-  });
-
-  if (!tokenResponse.ok) {
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await fetchWithTimeout(
+      "https://www.linkedin.com/oauth/v2/accessToken",
+      {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: callbackUri,
+          client_id: clientId,
+          client_secret: clientSecret,
+          code_verifier: consumed.transaction.pkceVerifier,
+        }),
+      },
+      { timeoutMs: LINKEDIN_TOKEN_TIMEOUT_MS },
+    );
+  } catch {
     return redirect("/app/presence?oauth=linkedin_token_failed");
   }
 
-  const tokenPayload = (await tokenResponse.json()) as { access_token?: string };
+  if (!tokenResponse.ok) {
+    releaseFetchTimeout(tokenResponse);
+    return redirect("/app/presence?oauth=linkedin_token_failed");
+  }
+
+  const tokenPayload =
+    (await readResponseJsonWithinLimit<{ access_token?: string }>(
+      tokenResponse,
+      LINKEDIN_TOKEN_JSON_MAX_BYTES,
+    )) ?? {};
   const accessToken = tokenPayload.access_token?.trim();
   if (!accessToken) {
     return redirect("/app/presence?oauth=linkedin_token_missing");

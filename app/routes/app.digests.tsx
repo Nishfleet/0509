@@ -16,7 +16,6 @@ import { LocalTime } from "~/components/local-time";
 import { PlanLimitState } from "~/components/plan-limit-state";
 import { SubmitButton } from "~/components/submit-button";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
-import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
 export const meta = () => [{ title: "Digests | Five to Nine" }];
 
@@ -136,7 +135,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function DigestsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const [searchParams] = useSearchParams();
   const digestAttemptsByDigestId: Record<
     string,
@@ -252,14 +250,6 @@ export default function DigestsRoute() {
                     >
                       JSON export
                     </a>
-                    {showSlackDelivery ? (
-                    <a
-                      className="f9-secondary-button"
-                      href={`/export/digest/${data.selectedDigest.id}?format=slack`}
-                    >
-                      Slack copy
-                    </a>
-                    ) : null}
                     <Form method="post">
                       <input name="intent" type="hidden" value="share-digest" />
                       <input name="digestId" type="hidden" value={data.selectedDigest.id} />

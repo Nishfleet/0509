@@ -2608,7 +2608,7 @@ function startOfRollingProofWindowIso() {
 
 // Daily proof ceilings sized so each plan's marketed monthly number is
 // actually reachable (cap*30 > monthly), with purchased credit packs adding
-// a pro-rated daily allowance so they are spendable within their 30-day life.
+// a smoothed daily allowance without expiring the underlying top-up balance.
 const DAILY_PROOF_CAP_BY_PLAN: Record<string, number> = {
   free: 0,
   scout: 20,

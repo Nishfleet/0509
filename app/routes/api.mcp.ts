@@ -9,6 +9,10 @@ import {
   WRITE_ENABLED_API_KEY_REQUIREMENT,
 } from "~/lib/agent-action-catalog";
 import { mcpActionGroups } from "~/lib/mcp-agent-action-groups";
+import {
+  isSlackDeliveryCustomerFacing,
+  slackDeliveryUnavailableMessage,
+} from "~/lib/ga-customer-surface";
 import type { AppEnv } from "~/lib/env.server";
 import type { CustomerAgentActionName } from "~/lib/customer-agent-actions.server";
 import type { CustomerApiKeyRecord } from "~/lib/types";
@@ -62,9 +66,9 @@ const MCP_TOOLS = [
       properties: {
         format: {
           type: "string",
-          enum: ["json", "slack"],
+          enum: customerAgentFormatValues(),
           default: "json",
-          description: "Use json for structured agent context or slack for a Slack-ready summary.",
+          description: customerAgentFormatDescription(),
         },
       },
       additionalProperties: false,
@@ -212,9 +216,9 @@ const MCP_TOOLS = [
   },
   {
     name: "create_collection",
-    title: "Create Board",
+    title: "Create Collection",
     description:
-      "Create an account-owned board for saved proof links after checking the workspace board limit.",
+      "Create an account-owned collection for saved proof links after checking the workspace collection limit.",
     inputSchema: {
       type: "object",
       properties: {
@@ -235,13 +239,13 @@ const MCP_TOOLS = [
     name: "add_external_proof",
     title: "Add External Proof",
     description:
-      "Save a manual cross-channel proof URL into an account-owned board with audit logging.",
+      "Save a manual cross-channel proof URL into an account-owned collection with audit logging.",
     inputSchema: {
       type: "object",
       properties: {
         collectionId: {
           type: "string",
-          description: "Five to Nine board owned by the API-key account.",
+          description: "Five to Nine collection owned by the API-key account.",
         },
         advertiser: {
           type: "string",
@@ -304,7 +308,7 @@ const MCP_TOOLS = [
         },
         channel: {
           type: "string",
-          enum: ["email", "whatsapp", "slack"],
+          enum: ["email"],
         },
         limit: {
           type: "number",
@@ -340,12 +344,6 @@ const MCP_TOOLS = [
           type: "boolean",
         },
         emailEnabled: {
-          type: "boolean",
-        },
-        whatsappEnabled: {
-          type: "boolean",
-        },
-        slackEnabled: {
           type: "boolean",
         },
         quietHours: {
@@ -400,7 +398,7 @@ const MCP_TOOLS = [
     name: "create_share_link",
     title: "Create Share Link",
     description:
-      "Create a live share link for an account-owned board, watchlist, or digest.",
+      "Create a live share link for an account-owned collection, watchlist, or digest.",
     inputSchema: {
       type: "object",
       properties: {
@@ -422,7 +420,7 @@ const MCP_TOOLS = [
     name: "create_report",
     title: "Create Report",
     description:
-      "Build a client-ready report payload for an account-owned board or watchlist.",
+      "Build a client-ready report payload for an account-owned collection or watchlist.",
     inputSchema: reportInputSchema(),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
@@ -430,7 +428,7 @@ const MCP_TOOLS = [
     name: "share_report",
     title: "Share Report",
     description:
-      "Build and share a snapshot report for an account-owned board or watchlist.",
+      "Build and share a snapshot report for an account-owned collection or watchlist.",
     inputSchema: reportInputSchema({ requiresIdempotency: true }),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
@@ -460,7 +458,7 @@ const MCP_TOOLS = [
         },
         followUpChannel: {
           type: "string",
-          enum: ["app", "email", "slack", "client_room"],
+          enum: ["app", "email", "client_room"],
           default: "app",
         },
         expiryDays: {
@@ -515,7 +513,7 @@ const MCP_TOOLS = [
     name: "upsert_client_room",
     title: "Upsert Client Room",
     description:
-      "Save an account-owned client room that groups owned boards, watchlists, digests, reports, and memory context.",
+      "Save an account-owned client room that groups owned collections, watchlists, digests, reports, and memory context.",
     inputSchema: clientRoomMutationInputSchema(),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
@@ -597,9 +595,9 @@ const MCP_TOOLS = [
   },
   {
     name: "list_web_mentions",
-    title: "List Web Mentions Beta",
+    title: "List Presence Observations",
     description:
-      "Read existing proof-backed web, blog, Substack, and Reddit mention observations tied to account-owned watchlists. X, YouTube, and broad social listening are not live.",
+      "Read existing proof-backed website, blog, and Substack mention observations tied to account-owned watchlists. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
     inputSchema: {
       type: "object",
       properties: {
@@ -610,7 +608,7 @@ const MCP_TOOLS = [
           type: "array",
           items: {
             type: "string",
-            enum: ["reddit", "blog", "substack", "web"],
+            enum: ["blog", "substack", "web"],
           },
         },
         includeInactive: {
@@ -673,7 +671,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Client rooms and scoped account memory saved by this account",
       "Account support case summaries created by this account",
       "Redacted delivery settings and delivery target state owned by this account",
-      "Existing proof-backed web, blog, Substack, and Reddit mention observations tied to watchlists",
+      "Existing proof-backed website, blog, and Substack mention observations tied to watchlists",
     ],
     agentActivation: {
       firstWorkflow: AGENT_FIRST_WORKFLOW,
@@ -684,7 +682,7 @@ export function loader({ request }: LoaderFunctionArgs) {
     notLiveYet: [
       "TikTok ingestion",
       "Google or YouTube ingestion",
-      "LinkedIn or Pinterest ingestion",
+      "Reddit, LinkedIn, or Pinterest ingestion",
       BROAD_WRITE_API_NON_GOAL,
     ],
   });
@@ -782,7 +780,10 @@ async function callTool(
 
   const format = normalizeAgentFormat(stringField(args, "format"));
   if (!format) {
-    return { ok: false, message: "format must be json or slack." };
+    return { ok: false, message: "format must be json." };
+  }
+  if (format === "slack" && !isSlackDeliveryCustomerFacing()) {
+    return { ok: false, message: slackDeliveryUnavailableMessage() };
   }
 
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
@@ -1230,14 +1231,22 @@ function resourceInputSchema(idName: string) {
       },
       format: {
         type: "string",
-        enum: ["json", "slack"],
+        enum: customerAgentFormatValues(),
         default: "json",
-        description: "Use json for structured agent context or slack for Slack-ready markdown.",
+        description: customerAgentFormatDescription(),
       },
     },
     required: [idName],
     additionalProperties: false,
   };
+}
+
+function customerAgentFormatValues(): AgentFormat[] {
+  return ["json"];
+}
+
+function customerAgentFormatDescription() {
+  return "Use json for structured agent context.";
 }
 
 function watchlistMutationInputSchema() {

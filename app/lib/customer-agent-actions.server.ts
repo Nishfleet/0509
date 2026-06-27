@@ -30,6 +30,12 @@ import {
   isCustomerAgentActionName,
   type CustomerAgentActionName,
 } from "~/lib/agent-action-catalog";
+import {
+  isSlackDeliveryCustomerFacing,
+  isWhatsAppDeliveryCustomerFacing,
+  slackDeliveryUnavailableMessage,
+  whatsappDeliveryUnavailableMessage,
+} from "~/lib/ga-customer-surface";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { parseReportId } from "~/lib/report";
 import { SupportCaseInputError } from "~/lib/support";
@@ -50,6 +56,7 @@ import type {
   ShareResourceType,
   SupportCaseRecord,
   SupportCaseStatus,
+  WatchlistDeliveryConfigRecord,
   WatchEventRecord,
   WebMentionSource,
   WebMentionTargetRecord,
@@ -810,7 +817,7 @@ async function createCollectionFromAgent(
   const name = requireString(input, "name");
   const limit = await checkPlanLimit(env, workspaceUserId, "collections");
   if (!limit.allowed) {
-    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your workspace board limit.", {
+    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your workspace collection limit.", {
       status: 402,
       details: {
         limit: limit.limit,
@@ -824,7 +831,7 @@ async function createCollectionFromAgent(
     description: readString(input, "description"),
   });
   if (!collection) {
-    throw new CustomerAgentActionError("collection_create_failed", "Could not create this board.", {
+    throw new CustomerAgentActionError("collection_create_failed", "Could not create this collection.", {
       status: 500,
     });
   }
@@ -1327,17 +1334,30 @@ async function listDeliveryTargetsFromAgent(
     }
   }
 
-  const targets = await listDeliveryTargets(env, userId, {
-    ...(watchlistId ? { watchlistId } : {}),
-    ...(readDeliveryChannel(input) ? { channel: readDeliveryChannel(input) ?? undefined } : {}),
-    limit: clampListLimit(readInteger(input, "limit", 50)),
-  });
+  const channel = readDeliveryChannel(input);
+  const limit = clampListLimit(readInteger(input, "limit", 50));
+  const targets = channel
+    ? await listDeliveryTargets(env, userId, {
+        ...(watchlistId ? { watchlistId } : {}),
+        channel,
+        limit,
+      })
+    : sortDeliveryTargetsByUpdatedAtDesc((await Promise.all(
+        customerFacingDeliveryChannels().map((visibleChannel) =>
+          listDeliveryTargets(env, userId, {
+            ...(watchlistId ? { watchlistId } : {}),
+            channel: visibleChannel,
+            limit,
+          }),
+        ),
+      )).flat()).slice(0, limit);
+  const visibleTargets = targets.filter((target) => isCustomerFacingDeliveryChannel(target.channel));
 
   return {
     ok: true,
     action: "delivery_targets.list",
     watchlistId,
-    targets: targets.map(safeDeliveryTargetRecord),
+    targets: visibleTargets.map(safeDeliveryTargetRecord),
   };
 }
 
@@ -1347,6 +1367,7 @@ async function updateDeliverySettingsFromAgent(
   input: Record<string, unknown>,
 ) {
   requireExplicitApproval(input);
+  rejectDormantDeliveryActionInput(input);
   const {
     getWatchlist,
     getWatchlistDeliveryConfig,
@@ -1379,8 +1400,12 @@ async function updateDeliverySettingsFromAgent(
     instantEnabled: readOptionalBoolean(input, "instantEnabled") ?? base.instantEnabled,
     digestEnabled: readOptionalBoolean(input, "digestEnabled") ?? base.digestEnabled,
     emailEnabled: readOptionalBoolean(input, "emailEnabled") ?? base.emailEnabled,
-    whatsappEnabled: readOptionalBoolean(input, "whatsappEnabled") ?? base.whatsappEnabled,
-    slackEnabled: readOptionalBoolean(input, "slackEnabled") ?? base.slackEnabled,
+    whatsappEnabled: isWhatsAppDeliveryCustomerFacing()
+      ? readOptionalBoolean(input, "whatsappEnabled") ?? base.whatsappEnabled
+      : base.whatsappEnabled,
+    slackEnabled: isSlackDeliveryCustomerFacing()
+      ? readOptionalBoolean(input, "slackEnabled") ?? base.slackEnabled
+      : base.slackEnabled,
     quietHours: readQuietHours(input, "quietHours", base.quietHours),
     timezone: readNullableString(input, "timezone", base.timezone),
   });
@@ -1393,24 +1418,30 @@ async function updateDeliverySettingsFromAgent(
     );
   }
 
+  const reversalInput: Record<string, unknown> = {
+    watchlistId: watchlist.id,
+    explicitApproval: true,
+    sensitivityMode: base.sensitivityMode,
+    instantEnabled: base.instantEnabled,
+    digestEnabled: base.digestEnabled,
+    emailEnabled: base.emailEnabled,
+    quietHours: base.quietHours,
+    timezone: base.timezone,
+  };
+  if (isWhatsAppDeliveryCustomerFacing()) {
+    reversalInput.whatsappEnabled = base.whatsappEnabled;
+  }
+  if (isSlackDeliveryCustomerFacing()) {
+    reversalInput.slackEnabled = base.slackEnabled;
+  }
+
   return {
     ok: true,
     action: "delivery_settings.update",
-    config,
+    config: safeWatchlistDeliveryConfigRecord(config),
     reversal: actionReversal(
       "delivery_settings.update",
-      {
-        watchlistId: watchlist.id,
-        explicitApproval: true,
-        sensitivityMode: base.sensitivityMode,
-        instantEnabled: base.instantEnabled,
-        digestEnabled: base.digestEnabled,
-        emailEnabled: base.emailEnabled,
-        whatsappEnabled: base.whatsappEnabled,
-        slackEnabled: base.slackEnabled,
-        quietHours: base.quietHours,
-        timezone: base.timezone,
-      },
+      reversalInput,
       "Restore the previous delivery policy with explicit approval and a fresh idempotency key.",
       { requiresExplicitApproval: true },
     ),
@@ -1432,6 +1463,16 @@ async function updateDeliveryTargetFromAgent(
   });
   if (!existing) {
     throw new CustomerAgentActionError("delivery_target_not_found", "Delivery target not found.", { status: 404 });
+  }
+  if (!isSlackDeliveryCustomerFacing() && existing.channel === "slack") {
+    throw new CustomerAgentActionError("slack_delivery_unavailable", slackDeliveryUnavailableMessage(), {
+      status: 403,
+    });
+  }
+  if (!isWhatsAppDeliveryCustomerFacing() && existing.channel === "whatsapp") {
+    throw new CustomerAgentActionError("whatsapp_delivery_unavailable", whatsappDeliveryUnavailableMessage(), {
+      status: 403,
+    });
   }
 
   const isPaused = readOptionalBoolean(input, "isPaused");
@@ -1494,6 +1535,21 @@ async function updateDeliveryTargetFromAgent(
   };
 }
 
+function rejectDormantDeliveryActionInput(input: Record<string, unknown>) {
+  if (!isSlackDeliveryCustomerFacing() &&
+    (readOptionalBoolean(input, "slackEnabled") === true || readString(input, "channel") === "slack")) {
+    throw new CustomerAgentActionError("slack_delivery_unavailable", slackDeliveryUnavailableMessage(), {
+      status: 403,
+    });
+  }
+  if (!isWhatsAppDeliveryCustomerFacing() &&
+    (readOptionalBoolean(input, "whatsappEnabled") === true || readString(input, "channel") === "whatsapp")) {
+    throw new CustomerAgentActionError("whatsapp_delivery_unavailable", whatsappDeliveryUnavailableMessage(), {
+      status: 403,
+    });
+  }
+}
+
 async function listWebMentionsFromAgent(
   env: AppEnv,
   userId: string,
@@ -1531,9 +1587,9 @@ async function listWebMentionsFromAgent(
   return {
     ok: true,
     action: "web_mentions.list",
-    status: "schema_beta",
+    status: "available",
     boundary:
-      "Returns existing proof-backed web, blog, Substack, and Reddit observations only. X, YouTube, and broad social listening are not live.",
+      "Returns existing proof-backed website, blog, and Substack observations only. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
     watchlistId,
     supportedSources: supportedWebMentionSources,
     targets: targets.map(safeWebMentionTargetRecord),
@@ -1806,10 +1862,49 @@ function readDeliveryChannel(input: Record<string, unknown>): DeliveryChannel | 
   if (!value) {
     return null;
   }
-  if (value === "email" || value === "whatsapp" || value === "slack") {
+  if (value === "email") {
     return value;
   }
-  throw new CustomerAgentActionError("invalid_delivery_channel", "channel must be email, whatsapp, or slack.");
+  if (value === "whatsapp") {
+    if (!isWhatsAppDeliveryCustomerFacing()) {
+      throw new CustomerAgentActionError("whatsapp_delivery_unavailable", whatsappDeliveryUnavailableMessage(), {
+        status: 403,
+      });
+    }
+    return value;
+  }
+  if (value === "slack") {
+    if (!isSlackDeliveryCustomerFacing()) {
+      throw new CustomerAgentActionError("slack_delivery_unavailable", slackDeliveryUnavailableMessage(), {
+        status: 403,
+      });
+    }
+    return value;
+  }
+  throw new CustomerAgentActionError("invalid_delivery_channel", "channel must be email.");
+}
+
+function isCustomerFacingDeliveryChannel(channel: DeliveryChannel) {
+  return (
+    channel === "email" ||
+    (channel === "whatsapp" && isWhatsAppDeliveryCustomerFacing()) ||
+    (channel === "slack" && isSlackDeliveryCustomerFacing())
+  );
+}
+
+function customerFacingDeliveryChannels(): DeliveryChannel[] {
+  const channels: DeliveryChannel[] = ["email"];
+  if (isWhatsAppDeliveryCustomerFacing()) {
+    channels.push("whatsapp");
+  }
+  if (isSlackDeliveryCustomerFacing()) {
+    channels.push("slack");
+  }
+  return channels;
+}
+
+function sortDeliveryTargetsByUpdatedAtDesc(targets: DeliveryTargetRecord[]) {
+  return [...targets].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 function readNullableString(input: Record<string, unknown>, field: string, fallback: string | null) {
@@ -1936,12 +2031,17 @@ function readCounterMoveFollowUpChannel(input: Record<string, unknown>): Counter
   if (!value) {
     return null;
   }
+  if (value === "slack" && !isSlackDeliveryCustomerFacing()) {
+    throw new CustomerAgentActionError("slack_delivery_unavailable", slackDeliveryUnavailableMessage(), {
+      status: 403,
+    });
+  }
   if (value === "app" || value === "email" || value === "slack" || value === "client_room") {
     return value;
   }
   throw new CustomerAgentActionError(
     "invalid_follow_up_channel",
-    "followUpChannel must be app, email, slack, or client_room.",
+    "followUpChannel must be app, email, or client_room.",
   );
 }
 
@@ -2036,6 +2136,24 @@ function safeSupportCaseSummary(supportCase: SupportCaseRecord) {
   };
 }
 
+function safeWatchlistDeliveryConfigRecord(config: WatchlistDeliveryConfigRecord) {
+  return {
+    id: config.id,
+    watchlistId: config.watchlistId,
+    userId: config.userId,
+    sensitivityMode: config.sensitivityMode,
+    instantEnabled: config.instantEnabled,
+    digestEnabled: config.digestEnabled,
+    emailEnabled: config.emailEnabled,
+    ...(isWhatsAppDeliveryCustomerFacing() ? { whatsappEnabled: config.whatsappEnabled } : {}),
+    ...(isSlackDeliveryCustomerFacing() ? { slackEnabled: config.slackEnabled } : {}),
+    quietHours: config.quietHours,
+    timezone: config.timezone,
+    createdAt: config.createdAt,
+    updatedAt: config.updatedAt,
+  };
+}
+
 function readOptionalSupportCaseStatus(input: Record<string, unknown>): SupportCaseStatus | "all" | null {
   const value = readString(input, "status");
   if (!value) {
@@ -2118,7 +2236,7 @@ function maskPhone(value: string) {
   return digits ? `***${digits.slice(-4)}` : "[redacted-phone]";
 }
 
-const supportedWebMentionSources: WebMentionSource[] = ["reddit", "blog", "substack", "web"];
+const supportedWebMentionSources: WebMentionSource[] = ["blog", "substack", "web"];
 
 function readWebMentionSources(input: Record<string, unknown>) {
   const requested = readStringList(input, "sources");
@@ -2132,7 +2250,7 @@ function readWebMentionSources(input: Record<string, unknown>) {
     }
     throw new CustomerAgentActionError(
       "unsupported_web_mention_source",
-      "web_mentions.list currently supports reddit, blog, substack, and web only.",
+      "web_mentions.list currently supports blog, substack, and web only.",
     );
   })));
 }

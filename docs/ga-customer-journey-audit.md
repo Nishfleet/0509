@@ -2,6 +2,9 @@
 
 Recorded 2026-06-24. **No behavior changes in Phase 1** — findings only.
 
+> Historical audit. The current launch truth for the final hardening branch lives in
+> `docs/final-self-serve-ga-scorecard.md`; use that file for current PR/deploy status.
+
 ## Journey map
 
 ```mermaid
@@ -40,13 +43,13 @@ flowchart LR
 
 | Location | Copy | Recommendation |
 |----------|------|----------------|
-| `app/routes/marketing.tsx` | "Early access" announcement | Phase 10: graduate to GA copy when gates pass |
+| `app/routes/marketing.tsx` | "Early access" announcement | Superseded: the served homepage no longer shows this announcement |
 | `app/routes/marketing.tsx` | Meta ads "marked beta" in honest note | Keep until Meta ads canary graduates |
 | `app/lib/plan-entitlements.ts` | `metaSourceStatus: beta_*` | Product truth for Meta source lane |
 | `app/routes/app.sources.tsx` | Meta ads beta readiness | Internal; not public marketing |
 | `legacy/` | "Get early access" | Ignored — not in live build |
 | `docs/launch-readiness.md` | "pilot-ready" verdict | Update after ops gates clear |
-| `README.md` | Meta ads beta + pilot framing | Update in Phase 10 |
+| `README.md` | Meta ads beta + old launch framing | Superseded: README now keeps Meta ads beta honesty without broader pilot wording |
 
 ## Pricing honesty
 
@@ -67,5 +70,5 @@ flowchart LR
 ## Gaps for GA (addressed in later phases)
 
 - Agency public sale held until fan-out proof (Phase 8/9).
-- Beta announcement on homepage deferred to Phase 10.
+- The old homepage beta announcement was removed in the final hardening branch; Meta ads beta honesty remains intentional until live discovery proof supports graduation.
 - Slack / uptime / portal remain owner-action (Phase 12).

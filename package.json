@@ -5,6 +5,7 @@
   "scripts": {
     "backup:d1": "node scripts/d1-backup.mjs",
     "backup:d1:r2": "node scripts/d1-backup-to-r2.mjs",
+    "d1:cleanup-0060:evidence": "node scripts/d1-cleanup-0060-evidence.mjs",
     "build": "node scripts/build-production.mjs",
     "cf-typegen": "wrangler types",
     "canary:proof": "node scripts/launch-readiness-canary.mjs",
@@ -19,7 +20,7 @@
     "check:google-oauth-branding": "node scripts/check-google-oauth-branding.mjs",
     "deploy": "node scripts/deploy-production.mjs",
     "dev": "react-router dev",
-    "launch:readiness": "npm run typecheck && npm test && npm run build && npm audit --omit=dev --audit-level=moderate && npm run canary:billing && npm run canary:prod && npm run provider:bakeoff:launch",
+    "launch:readiness": "npm run typecheck && npm test && npm run build && npm audit --omit=dev --audit-level=moderate && npm run canary:pricing && npm run canary:billing && npm run canary:proof && npm run canary:prod && npm run provider:bakeoff:launch",
     "preview": "npm run build && vite preview",
     "provider:bakeoff": "node scripts/provider-bakeoff.mjs",
     "provider:bakeoff:launch": "node scripts/provider-bakeoff.mjs --launch-gate",

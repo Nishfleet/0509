@@ -10,6 +10,11 @@ import {
   apiActionNames,
   auditedAgentActionGroups,
 } from "~/lib/agent-action-catalog";
+import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
+
+function customerExportFormats() {
+  return isSlackDeliveryCustomerFacing() ? ["json", "csv", "slack"] : ["json", "csv"];
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const origin = new URL(request.url).origin;
@@ -57,21 +62,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
         {
           method: "GET",
           path: "/api/v1/collections/{collectionId}",
-          formats: ["json", "csv", "slack"],
+          formats: customerExportFormats(),
           requiresWriteEnabled: false,
           credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
         },
         {
           method: "GET",
           path: "/api/v1/watchlists/{watchlistId}",
-          formats: ["json", "csv", "slack"],
+          formats: customerExportFormats(),
           requiresWriteEnabled: false,
           credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
         },
         {
           method: "GET",
           path: "/api/v1/digests/{digestId}",
-          formats: ["json", "csv", "slack"],
+          formats: customerExportFormats(),
           requiresWriteEnabled: false,
           credentialRequirement: READ_ONLY_API_KEY_REQUIREMENT,
         },

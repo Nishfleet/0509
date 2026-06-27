@@ -7,15 +7,15 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Public read-only competitor Meta ad search.
 - Account-gated retained monitoring, watchlists, collections, reports, digests, and share links.
 - Proof-backed change tracking for visible competitor website and landing-page changes.
-- Account-owned exports through CSV, API JSON, Slack-ready markdown, and the read-only MCP endpoint.
+- Account-owned exports through CSV, API JSON, and the read-only MCP endpoint.
 
 ## Current Product Truth
 
 - Public search and `/api/demo-proof` are buyer previews.
-- Saved monitoring, retained evidence, Slack delivery, API keys, and MCP exports require an account.
+- Saved monitoring, retained evidence, email delivery, API keys, and MCP exports require an account.
 - Pricing is Dodo-backed and should be read from the live pricing/checkout preview, not hardcoded.
 - Billing webhooks are verified by signed Dodo canaries.
-- Broad self-serve launch still requires a configured Slack target with recent successful Slack delivery proof.
+- Email is the verified automated delivery channel for launch.
 - WhatsApp delivery is not launch-scoped or ready to claim until provider setup, opt-in, templates, webhook readiness, and delivered proof are all verified.
 
 ## Not Live

@@ -303,6 +303,12 @@ afterEach(() => {
 
 describe("watchlists route loader", () => {
   it("returns bounded proof, delivery, and candidate state for the selected watchlist", async () => {
+    const listDeliveryAttempts = vi.fn().mockResolvedValue(recentDeliveryAttempts);
+    const listDeliveryTargets = vi
+      .fn()
+      .mockResolvedValueOnce(deliveryTargets)
+      .mockResolvedValueOnce([]);
+
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
     requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
@@ -322,11 +328,8 @@ describe("watchlists route loader", () => {
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
       getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(watchlistDeliveryConfig),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
-      listDeliveryAttempts: vi.fn().mockResolvedValue(recentDeliveryAttempts),
-      listDeliveryTargets: vi
-        .fn()
-        .mockResolvedValueOnce(deliveryTargets)
-        .mockResolvedValueOnce([]),
+      listDeliveryAttempts,
+      listDeliveryTargets,
       listEventCandidates: vi.fn().mockResolvedValue(recentCandidates),
       listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue(recentProofCaptures),
       listWatchEvents: vi.fn().mockResolvedValue(recentEvents),
@@ -352,7 +355,7 @@ describe("watchlists route loader", () => {
         instantEnabled: true,
         digestEnabled: true,
         emailEnabled: true,
-        whatsappEnabled: true,
+        whatsappEnabled: false,
         slackEnabled: false,
       },
       discoveryStatus,
@@ -362,6 +365,22 @@ describe("watchlists route loader", () => {
         failedAttempts: 0,
         lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
       },
+    });
+    expect(listDeliveryTargets).toHaveBeenNthCalledWith(1, expect.anything(), "user-1", {
+      watchlistId: "watch-1",
+      channel: "email",
+      limit: 12,
+    });
+    expect(listDeliveryTargets).toHaveBeenNthCalledWith(2, expect.anything(), "user-1", {
+      watchlistId: null,
+      channel: "email",
+      limit: 8,
+    });
+    expect(listDeliveryAttempts).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      watchlistId: "watch-1",
+      channel: "email",
+      limit: 16,
     });
   });
 });
@@ -581,6 +600,7 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
       upsertWatchlistDeliveryConfig,
     }));
@@ -628,6 +648,64 @@ describe("watchlists route actions", () => {
           startHour: 22,
           endHour: 8,
         },
+      }),
+    );
+  });
+
+  it("preserves hidden delivery channel settings on visible delivery saves", async () => {
+    const upsertWatchlistDeliveryConfig = vi.fn().mockResolvedValue(watchlistDeliveryConfig);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue({
+        ...watchlistDeliveryConfig,
+        whatsappEnabled: true,
+        slackEnabled: true,
+      }),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
+      upsertWatchlistDeliveryConfig,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "save-delivery-config");
+    formData.set("watchlistId", "watch-1");
+    formData.set("sensitivityMode", "balanced");
+    formData.set("emailEnabled", "on");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Delivery settings updated.",
+      ok: true,
+    });
+    expect(upsertWatchlistDeliveryConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        watchlistId: "watch-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        emailEnabled: true,
+        whatsappEnabled: true,
+        slackEnabled: true,
       }),
     );
   });
@@ -1058,7 +1136,7 @@ describe("watchlists route actions", () => {
     });
   });
 
-  it("adds a new watchlist delivery target with explicit opt-in state", async () => {
+  it("blocks WhatsApp delivery targets while WhatsApp is not customer-facing", async () => {
     const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -1092,20 +1170,50 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "Delivery target saved.",
-      ok: true,
+      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      ok: false,
     });
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        watchlistId: "watch-1",
-        userId: "user-1",
-        channel: "whatsapp",
-        targetValue: "+919999999999",
-        isOptedIn: true,
-        templateEligible: false,
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
+  it("blocks Slack delivery targets while Slack is not customer-facing", async () => {
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      upsertDeliveryTarget,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "add-delivery-target");
+    formData.set("watchlistId", "watch-1");
+    formData.set("channel", "slack");
+    formData.set("targetValue", "https://hooks.slack.test/services/fake");
+    formData.set("explicitOptIn", "on");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
       }),
-    );
+    } as never);
+
+    expect(result).toEqual({
+      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+      ok: false,
+    });
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 
   it("pauses an existing watchlist delivery target", async () => {
@@ -1155,6 +1263,86 @@ describe("watchlists route actions", () => {
         isPaused: true,
       }),
     );
+  });
+
+  it("blocks toggling WhatsApp delivery targets while WhatsApp is not customer-facing", async () => {
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      upsertDeliveryTarget,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "toggle-delivery-target");
+    formData.set("watchlistId", "watch-1");
+    formData.set("channel", "whatsapp");
+    formData.set("targetValue", "+919999999999");
+    formData.set("isPaused", "true");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      ok: false,
+    });
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
+  it("blocks toggling Slack delivery targets while Slack is not customer-facing", async () => {
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      upsertDeliveryTarget,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "toggle-delivery-target");
+    formData.set("watchlistId", "watch-1");
+    formData.set("channel", "slack");
+    formData.set("targetValue", "https://hooks.slack.test/services/fake");
+    formData.set("isPaused", "true");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+      ok: false,
+    });
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 });
 
@@ -1214,6 +1402,8 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Recent evidence checks");
     expect(markup).toContain("Delivery settings");
     expect(markup).not.toContain("Slack enabled");
+    expect(markup).not.toContain("WhatsApp — not yet available");
+    expect(markup).not.toContain("WhatsApp enabled");
   });
 
   it("renders cache-only discovery status", async () => {

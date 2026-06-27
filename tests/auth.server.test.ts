@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import {
+  BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS,
   BetterAuthUnknownUserError,
   appendBetterAuthSetCookieHeaders,
   betterAuthMagicLinkConfirmationUrl,
@@ -446,6 +447,71 @@ describe("Better Auth magic links", () => {
     expect(send.mock.calls[0]?.[0]?.html).not.toContain("owner@example.com");
     expect(send.mock.calls[0]?.[0]?.html).not.toContain("secret-token");
     expect(send.mock.calls[0]?.[0]?.html).not.toContain("/api/auth/magic-link/verify");
+  });
+
+  it("wraps magic-link email sends in the shared timeout", async () => {
+    let capturedMagicLinkOptions:
+      | {
+          sendMagicLink: (input: {
+            email: string;
+            metadata?: Record<string, unknown>;
+            token: string;
+            url: string;
+          }) => Promise<void>;
+        }
+      | null = null;
+    const signInMagicLink = vi.fn(async ({ body }) => {
+      await capturedMagicLinkOptions?.sendMagicLink({
+        email: body.email,
+        metadata: body.metadata,
+        token: "secret-token",
+        url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
+      });
+      return { status: true };
+    });
+    vi.doMock("better-auth", () => ({
+      betterAuth: vi.fn().mockReturnValue({
+        api: { signInMagicLink },
+        handler: vi.fn(),
+      }),
+    }));
+    vi.doMock("better-auth/plugins", () => ({
+      magicLink: vi.fn((options) => {
+        capturedMagicLinkOptions = options;
+        return { id: "magic-link" };
+      }),
+      passkey: vi.fn(() => ({ id: "passkey" })),
+    }));
+    const promiseWithTimeout = vi.fn(
+      async (_operation: Promise<unknown>, _timeoutMs: number, message?: string) => {
+        throw new Error(message);
+      },
+    );
+    vi.doMock("~/lib/fetch-timeout.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/fetch-timeout.server")>(
+        "~/lib/fetch-timeout.server",
+      );
+      return {
+        ...actual,
+        promiseWithTimeout,
+      };
+    });
+
+    const ticketDb = dbWithMagicLinkTickets("user-1");
+    const testEnv = env({ DB: ticketDb.db });
+    const { sendBetterAuthMagicLink: sendMagicLink } = await import("~/lib/better-auth.server");
+    await expect(
+      sendMagicLink(testEnv, new Request("https://0509.io/auth/login"), {
+        email: "owner@example.com",
+        mode: "login",
+        redirectTo: "/app",
+      }),
+    ).rejects.toThrow("Better Auth magic-link email timed out.");
+    expect(promiseWithTimeout).toHaveBeenCalledWith(
+      expect.any(Promise),
+      BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS,
+      "Better Auth magic-link email timed out.",
+    );
   });
 
   it("builds a one-time app ticket URL without exposing the Better Auth token", async () => {
@@ -1179,6 +1245,94 @@ describe("Better Auth routes", () => {
     } as never);
     expect(page.message).toContain("If an account exists");
     expect(page.message).not.toContain("Check your email");
+  });
+
+  it("redacts raw provider errors when login email sending fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.doMock("~/lib/better-auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
+        "~/lib/better-auth.server",
+      );
+      return {
+        ...actual,
+        sendBetterAuthMagicLink: vi
+          .fn()
+          .mockRejectedValue(new Error("provider leaked owner@example.com")),
+      };
+    });
+
+    const { action } = await import("~/routes/auth.login");
+    let redirectResponse: Response | null = null;
+    try {
+      await action({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/login",
+        request: new Request("https://0509.io/auth/login", {
+          body: new URLSearchParams({ email: "owner@example.com", redirectTo: "/app" }),
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            origin: "https://0509.io",
+          },
+          method: "POST",
+        }),
+        url: "https://0509.io/auth/login",
+      } as never);
+    } catch (error) {
+      redirectResponse = error as Response;
+    }
+
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe("/auth/login?error=send_failed");
+    expect(warn).toHaveBeenCalledWith("failed to send Better Auth login email", {
+      errorName: "Error",
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("owner@example.com");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("provider leaked");
+  });
+
+  it("redacts raw provider errors when signup email sending fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.doMock("~/lib/better-auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
+        "~/lib/better-auth.server",
+      );
+      return {
+        ...actual,
+        sendBetterAuthMagicLink: vi
+          .fn()
+          .mockRejectedValue(new Error("provider leaked owner@example.com")),
+      };
+    });
+
+    const { action } = await import("~/routes/auth.signup");
+    let redirectResponse: Response | null = null;
+    try {
+      await action({
+        context: context(env()),
+        params: {},
+        pattern: "/auth/signup",
+        request: new Request("https://0509.io/auth/signup", {
+          body: new URLSearchParams({ email: "owner@example.com", redirectTo: "/app/onboard" }),
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            origin: "https://0509.io",
+          },
+          method: "POST",
+        }),
+        url: "https://0509.io/auth/signup",
+      } as never);
+    } catch (error) {
+      redirectResponse = error as Response;
+    }
+
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe("/auth/signup?error=send_failed");
+    expect(warn).toHaveBeenCalledWith("failed to send Better Auth signup email", {
+      errorName: "Error",
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("owner@example.com");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("provider leaked");
   });
 
   it("clears Better Auth session cookies when provider sign-out fails", async () => {

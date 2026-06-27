@@ -615,6 +615,40 @@ describe("pricing CTA rendering", () => {
     expect(markup).toContain("1 left this month");
   });
 
+  it("describes evidence usage against the current billing period", async () => {
+    await mockRouter({
+      loaderData: {
+        savedQueries: [],
+        collections: [],
+        watchlists: [],
+        digests: [],
+        recentEvents: [],
+        recentProofCaptures: [],
+        deliveryTargets: [],
+        metaStatus: {
+          status: "healthy",
+          summary: "Healthy",
+          lastCheckedAt: null,
+        },
+        proofUsage: {
+          warningLevel: "warning",
+          used: 220,
+          limit: 250,
+          remaining: 30,
+          plan: "starter",
+          upgradeTarget: "Agency",
+        },
+        workspaceReadiness: emptyWorkspaceReadiness,
+      },
+    });
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("220 of 250 evidence checks used in the current billing period.");
+    expect(markup).not.toContain("evidence checks used in the last 30 days");
+  });
+
   it("does not mark delivery complete just because email is configured", async () => {
     await mockRouter({
       loaderData: {
