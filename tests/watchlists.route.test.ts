@@ -1176,6 +1176,46 @@ describe("watchlists route actions", () => {
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 
+  it("blocks Slack delivery targets while Slack is not customer-facing", async () => {
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      upsertDeliveryTarget,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "add-delivery-target");
+    formData.set("watchlistId", "watch-1");
+    formData.set("channel", "slack");
+    formData.set("targetValue", "https://hooks.slack.test/services/fake");
+    formData.set("explicitOptIn", "on");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+      ok: false,
+    });
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
   it("pauses an existing watchlist delivery target", async () => {
     const upsertDeliveryTarget = vi.fn();
 
@@ -1260,6 +1300,46 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      ok: false,
+    });
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
+  it("blocks toggling Slack delivery targets while Slack is not customer-facing", async () => {
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      upsertDeliveryTarget,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "toggle-delivery-target");
+    formData.set("watchlistId", "watch-1");
+    formData.set("channel", "slack");
+    formData.set("targetValue", "https://hooks.slack.test/services/fake");
+    formData.set("isPaused", "true");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Slack delivery is not available at general availability yet. Use email delivery.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();

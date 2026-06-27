@@ -479,6 +479,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Watchlist not found." };
     }
 
+    const requestedChannel = String(formData.get("channel") ?? "");
+    if (requestedChannel === "slack" && !isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
+
     const channel = readDeliveryChannel(formData.get("channel"));
     const targetValue = readOptionalString(formData.get("targetValue"));
 
@@ -491,7 +496,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (channel === "whatsapp" && !isWhatsAppDeliveryCustomerFacing()) {
       return { ok: false, message: whatsappDeliveryUnavailableMessage() };
     }
-
     const deliveryGate = await requireDeliveryConfigSave(env, workspaceUserId, { channel });
     if (!deliveryGate.ok) {
       return planFeatureDeniedActionResult(deliveryGate.feature, deliveryGate.plan);
@@ -607,6 +611,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Watchlist not found." };
     }
 
+    const requestedChannel = String(formData.get("channel") ?? "");
+    if (requestedChannel === "slack" && !isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
+
     const channel = readDeliveryChannel(formData.get("channel"));
     const targetValue = readOptionalString(formData.get("targetValue"));
     const isPaused = String(formData.get("isPaused") ?? "") === "true";
@@ -620,7 +629,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (channel === "whatsapp" && !isWhatsAppDeliveryCustomerFacing()) {
       return { ok: false, message: whatsappDeliveryUnavailableMessage() };
     }
-
     await upsertDeliveryTarget(env, {
       userId: workspaceUserId,
       watchlistId: watchlist.id,
