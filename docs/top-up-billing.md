@@ -8,7 +8,8 @@
 | `campaign_2000_v1` | 2,000 |
 | `scale_7500_v1` | 7,500 |
 
-Prices remain unconfigured in Dodo until owner activates checkout.
+Prices are loaded from Dodo checkout preview at runtime; do not hardcode visible
+currency or fixed local prices in this doc.
 
 ## Grant semantics
 
@@ -32,6 +33,10 @@ Prices remain unconfigured in Dodo until owner activates checkout.
 
 - `applyDodoProofCreditGrantWithLedger()` in `data.server.ts` inserts grants idempotently by `provider_payment_id`.
 
-## Production status (2026-06-24)
+## Production status
 
-Top-up grants and ledger consumption are deployed with migrations `0050`/`0053`. Purchases stay disabled until Dodo products/prices are wired for `burst_500_v1`, `campaign_2000_v1`, and `scale_7500_v1`.
+Top-up grants and ledger consumption are deployed with migrations `0050`/`0053`.
+The final GA branch has verified Dodo checkout and signed-webhook canary coverage
+for configured top-up products. Checkout remains fail-closed if a required Dodo
+product mapping is absent, and the public app must never print provider product
+IDs.

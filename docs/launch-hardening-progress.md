@@ -179,7 +179,12 @@ Branch: `cursor/plan-entitlements-topups-no-prices-20260623`
 | Server feature gates | implemented | `plan-feature-gate.server.ts` on API/MCP/exports/shares/reports |
 | Pricing/checkout | gated | Checkout disabled when SKU/provider price config missing |
 | Remote D1 / Dodo / deploy | **released 2026-06-24** | PR #234 merge `cd3e58f`; remote migrations `0049`–`0053` applied; Worker `50328480-ba13-4acf-8b1e-65ffa2185bf5`; `MONITORING_FANOUT_MODE=inline` |
-| New SKU Dodo product/price wiring | **pending** | Catalog + fail-closed checkout live; owner must map env product IDs before top-up / v1 plan SKUs accept checkout |
+| New SKU Dodo product/price wiring | superseded | Catalog + fail-closed checkout live; final GA branch later verified configured plan and top-up checkout/webhook canaries |
+
+Superseded launch truth: the final GA branch has since verified configured Scout,
+Starter, and top-up Dodo checkout/webhook canaries. The fail-closed behavior
+above still applies when a required product mapping is absent, but this 2026-06-23
+status is no longer the current launch-readiness source of truth.
 
 Docs: `docs/plan-catalog.md`, `docs/billing-sku-catalog.md`, `docs/evidence-usage-accounting.md`, `docs/top-up-billing.md`, `docs/plan-entitlement-audit.md`.
 

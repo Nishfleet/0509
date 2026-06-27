@@ -25,8 +25,6 @@ interface CreditGrantRow {
 interface UserPlanSnapshot {
   user_id: string;
   plan: string;
-  stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
   plan_updated_at: string;
   dodo_payment_id: string | null;
   dodo_product_id: string | null;
@@ -317,8 +315,6 @@ async function getUserPlanSnapshot(env: AppEnv, userId: string) {
       SELECT
         user_id,
         plan,
-        stripe_customer_id,
-        stripe_subscription_id,
         plan_updated_at,
         dodo_payment_id,
         dodo_product_id,
@@ -356,8 +352,6 @@ async function cleanupCanaryPlanGrant(
       await env.DB?.prepare(`
           UPDATE user_plan
           SET plan = ?,
-              stripe_customer_id = ?,
-              stripe_subscription_id = ?,
               plan_updated_at = ?,
               dodo_payment_id = ?,
               dodo_product_id = ?,
@@ -369,8 +363,6 @@ async function cleanupCanaryPlanGrant(
             AND dodo_payment_id = ?
         `).bind(
           snapshot.plan,
-          snapshot.stripe_customer_id,
-          snapshot.stripe_subscription_id,
           snapshot.plan_updated_at,
           snapshot.dodo_payment_id,
           snapshot.dodo_product_id,
