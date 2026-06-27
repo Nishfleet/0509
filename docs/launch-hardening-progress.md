@@ -25,7 +25,7 @@ Verification completed on 2026-06-27:
 
 | Check | Result |
 | --- | --- |
-| `npm test` | PASS, 143 files / 1334 tests |
+| `npm test` | PASS, 143 files / 1336 tests |
 | `npm run typecheck` | PASS |
 | `npm run build` | PASS |
 | `npm audit --omit=dev --audit-level=moderate` | PASS, 0 vulnerabilities |
