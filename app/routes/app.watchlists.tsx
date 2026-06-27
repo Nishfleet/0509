@@ -791,14 +791,6 @@ export default function WatchlistsRoute() {
                     >
                       JSON export
                     </a>
-                  {showSlackDelivery ? (
-                  <a
-                    className="f9-secondary-button"
-                    href={`/export/watchlist/${data.selectedWatchlist.id}?format=slack`}
-                  >
-                    Slack copy
-                  </a>
-                  ) : null}
                   <Form method="post">
                     <input name="intent" type="hidden" value="share-watchlist" />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
