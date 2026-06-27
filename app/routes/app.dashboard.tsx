@@ -559,7 +559,7 @@ export default function AppDashboardRoute() {
             </h2>
           </div>
           <p>
-            {proofUsage.used} of {proofUsage.limit} evidence checks used in the last 30 days.
+            {proofUsage.used} of {proofUsage.limit} evidence checks used in the current billing period.
             {proofUsage.upgradeTarget
               ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
               : " Add an overflow pack before the next busy campaign."}

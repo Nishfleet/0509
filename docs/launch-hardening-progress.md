@@ -7,6 +7,7 @@ Base: `ed109a9`
 
 Current staged branch status:
 
+- This branch now includes the retired-provider history removal plus the final scorecard/copy refresh; re-check exact HEAD before PR/deploy.
 - Legacy secondary billing provider removed from active runtime and fresh-start schema: routes, helpers, env typing, tests, active docs, historical setup migrations, lookup index, and legacy plan columns are gone. The only remaining database action is the post-deploy remote cleanup.
 - Slack and WhatsApp are dormant for GA across customer UI, API v1, MCP, delivery sends, readiness stats, and launch blockers. Email is the verified automated delivery channel.
 - Dodo checkout, portal, pricing, and webhook paths have explicit timeout/bounded-response handling where touched. Billing canary passed with plan and top-up grant cleanup.
@@ -23,7 +24,7 @@ Verification completed on 2026-06-27:
 
 | Check | Result |
 | --- | --- |
-| `npm test` | PASS, 139 files / 1321 tests |
+| `npm test` | PASS, 139 files / 1322 tests |
 | `npm run typecheck` | PASS |
 | `npm run build` | PASS |
 | `npm audit --omit=dev --audit-level=moderate` | PASS, 0 vulnerabilities |
@@ -37,6 +38,8 @@ Verification completed on 2026-06-27:
 | `npm run launch:readiness` | PASS with local canary env exported |
 | `npm run canary:presence` | BLOCKED, missing local internal Presence workspace id |
 | Final `autoreview --mode local` | PASS, no accepted/actionable findings |
+
+Latest rerun after the retired-provider cleanup and scorecard/copy refresh: `npm run launch:readiness` passed again. Remote D1 still reports only `0060_remove_legacy_billing_provider.sql` pending post-deploy; local D1 still has simulator-only pending migrations from prior local state.
 
 This pass is verified on `codex/final-self-serve-ga-hardening-20260625`, but it is not merged or deployed yet.
 
@@ -205,7 +208,7 @@ Top-up spend after cancel: retained but not spendable without active paid plan. 
 - Migrations: `0055_presence_tracking.sql` (schema), `0056_presence_oauth_transaction.sql` (OAuth transactions)
 - OAuth: HMAC one-time transactions + PKCE; fail closed without `PRESENCE_OAUTH_STATE_SECRET`
 - Robots: `FiveToNinePresenceBot`, RFC 9309 parser, SSRF-safe fetch, fail-closed on robots errors
-- Rollout: `PRESENCE_WEBSITE_ROLLOUT=disabled` in wrangler vars; internal workspace via `PRESENCE_INTERNAL_WORKSPACE_ID` secret
+- Historical rollout at PR #239: `PRESENCE_WEBSITE_ROLLOUT=disabled` in wrangler vars; this was superseded by the final GA branch where website/blog Presence is GA and social connectors remain disabled.
 - Canary: `npm run canary:presence`
 - Owner actions: set `PRESENCE_OAUTH_STATE_SECRET`, `PRESENCE_INTERNAL_WORKSPACE_ID`, apply remote migrations, redeploy with `internal` rollout after canary
 
@@ -214,6 +217,6 @@ Top-up spend after cancel: retained but not spendable without active paid plan. 
 - Merged PR #239 to `main` (`0cc1bc2`)
 - Pre-deploy Worker: prior main → post-deploy `d2a45e72-1f38-48c2-b757-79484f59de9a`
 - Remote D1: migrations `0055`–`0056` applied; ledger shows no pending migrations
-- Deploy vars: `PRESENCE_WEBSITE_ROLLOUT=disabled`, all social connectors `disabled`
-- Smoke: `/api/health` OK; `/search` 200; presence nav hidden (rollout disabled)
+- Historical deploy vars: `PRESENCE_WEBSITE_ROLLOUT=disabled`, all social connectors `disabled`; current final GA branch supersedes this with website/blog Presence GA and social connectors still disabled.
+- Historical smoke: `/api/health` OK; `/search` 200; presence nav hidden (rollout disabled)
 - Internal canary blocked pending owner secrets (`PRESENCE_OAUTH_STATE_SECRET`, `PRESENCE_INTERNAL_WORKSPACE_ID`)
