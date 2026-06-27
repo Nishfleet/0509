@@ -101,6 +101,38 @@ describe("Dodo billing", () => {
     });
   });
 
+  it("does not expose Dodo provider error messages from checkout failures", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          message: "provider says product prod_secret_123 is not enabled",
+        },
+        { status: 400 },
+      ),
+    );
+
+    try {
+      await createDodo0509CheckoutSession({
+        env: {
+          DODO_0509_API_KEY: "secret",
+          DODO_0509_PRODUCT_PROOF_PACK_500_ID: "prod_pack_500",
+        },
+        request: new Request("https://0509.io/app"),
+        session,
+        target: { kind: "top_up", sku: "burst_500_v1", quantity: 500 },
+        fetcher: fetcher as never,
+      });
+      throw new Error("expected checkout failure");
+    } catch (error) {
+      const response = error as Response;
+      expect(response).toBeInstanceOf(Response);
+      expect(response.status).toBe(502);
+      await expect(response.text()).resolves.toBe(
+        "Dodo checkout is temporarily unavailable. Please try again.",
+      );
+    }
+  });
+
   it("creates a bounded Dodo portal session with a safe return URL", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       jsonResponse({

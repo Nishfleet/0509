@@ -1,6 +1,6 @@
 # Five to Nine Launch Readiness
 
-Last checked: 2026-06-24
+Last checked: 2026-06-27
 
 ## Current Verdict
 
@@ -8,20 +8,23 @@ Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green,
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
-Remaining owner gates outside this repo: Dodo customer portal **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), and optional disposable Slack target for Starter/Agency marketing verification.
+Remaining owner gates outside this repo: Dodo customer portal **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), backup/restore proof, Presence internal workspace smoke, and Agency fan-out proof.
 
-The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, Slack advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
+The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, dormant-channel advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
-## Evidence From 2026-06-24
+## Evidence From 2026-06-27
 
 - `npm run typecheck` passes.
-- `npm test` passes (focused ops suites: health, launch-readiness, prod-canary).
+- `npm test` passes.
 - `npm run build` passes.
+- `npm audit --omit=dev --audit-level=moderate` passes with 0 vulnerabilities.
+- `npm run canary:pricing` passes for localized Dodo preview.
+- `npm run canary:billing` passes for Dodo signed-webhook plan and top-up grants.
 - `npm run canary:proof` (no `--require-slack`) creates a real proof capture and sends email — **GA gate**.
-- `npm run canary:proof -- --require-slack` is **optional** — fails when no Slack target is configured; does not block Scout GA.
 - `npm run canary:prod` checks health on `0509.io`, `www.0509.io`, and `api.0509.io`, fresh-live search, and read-only ops readiness (email required; Slack surfaced as advisories).
-- Production health passes: `https://0509.io/api/health` → 200, `{"status":"ok"}`.
-- `node scripts/validate-d1-backup.mjs` passes (dry-run).
+- `npm run provider:bakeoff:launch` passes for the current live provider; optional alternate providers skip when credentials are absent.
+- `node scripts/validate-d1-backup.mjs` passes through the latest repo migration.
+- Remote D1 migration inspection shows `0060_remove_legacy_billing_provider.sql` pending as a post-deploy cleanup migration.
 
 ## Hard Launch Gates
 
@@ -62,12 +65,7 @@ Slack delivery is not part of the GA customer offer. Production may still report
 
 These appear in the `advisories` array on `/api/launch-readiness` and do **not** fail `npm run canary:prod` or Scout GA.
 
-To verify Slack end-to-end before re-enabling it on paid tiers:
-
-```bash
-# After adding a Slack webhook in /app/sources for the canary workspace:
-npm run canary:proof -- --require-slack
-```
+Do not add Slack smoke targets for GA. Re-enable Slack only through a separate verified product decision that updates UI, API/MCP discovery, support copy, and launch canaries together.
 
 ## WhatsApp Posture
 
@@ -93,11 +91,11 @@ Use this framing for the first customer:
 
 ## Not Ready To Claim
 
-- Verified Slack delivery on Starter/Agency until `--require-slack` canary passes (optional ops proof).
+- Slack delivery on Starter/Agency; Slack is dormant and not part of the GA customer offer.
 - Customer WhatsApp delivery unless opt-in, template readiness, provider sends, and webhook reconciliation are verified.
 - SOC 2, HIPAA, GDPR compliance, zero retention, no training, or similar trust guarantees.
 - Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion, automated spend/reach/impression benchmarks, or broad public write APIs beyond the narrow audited workspace actions.
 
 ## Next Slice
 
-Confirm UptimeRobot on `/api/health`, confirm the Dodo customer portal setting, optionally add a disposable Slack webhook for Starter/Agency verification, then rerun `npm run canary:proof` and `npm run canary:prod`.
+Confirm UptimeRobot on `/api/health`, confirm the Dodo customer portal setting, complete backup/restore proof and the Presence internal smoke, keep Agency held until fan-out proof passes, then rerun `npm run canary:proof` and `npm run canary:prod`.

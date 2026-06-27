@@ -1,11 +1,8 @@
 -- Remove the retired secondary billing provider from the live schema.
 --
--- D1 migrations are append-only in production, so keep the historical migration
--- files intact and converge the current schema here.
-
-DROP INDEX IF EXISTS idx_user_plan_razorpay_subscription_id;
-DROP INDEX IF EXISTS idx_razorpay_webhook_event_subscription;
-DROP INDEX IF EXISTS idx_razorpay_webhook_event_user;
+-- D1 migrations are append-only in production, so converge the current remote
+-- schema here while the fresh-start migration chain no longer creates these
+-- retired-provider objects.
 
 DROP TABLE IF EXISTS razorpay_webhook_event;
 

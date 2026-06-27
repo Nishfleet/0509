@@ -123,6 +123,10 @@ describe("billing page", () => {
       proofUsage: { used: 40, limit: 250 },
       blockedCheckout: false,
     });
+    expect(JSON.stringify(result)).not.toContain("prod_starter_monthly");
+    expect(result.billing).not.toHaveProperty("dodoProductId");
+    expect(result.billing).not.toHaveProperty("dodoSubscriptionId");
+    expect(result.billing).not.toHaveProperty("dodoCustomerId");
   });
 
   it("flags a blocked duplicate checkout from the query string", async () => {
@@ -308,7 +312,8 @@ describe("billing page", () => {
 
     expect(markup).toContain("200 of 250 included used");
     expect(markup).toContain("500 purchased checks remaining");
-    expect(markup).toContain("burst_500_v1");
+    expect(markup).toContain("Burst Pack");
+    expect(markup).not.toContain("burst_500_v1");
     expect(markup).toContain("never expire");
   });
 

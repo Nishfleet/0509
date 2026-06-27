@@ -5,6 +5,7 @@ import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page"
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
+import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
 import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
 import { EVIDENCE_USAGE_CUSTOMER_COPY, TOP_UP_INACTIVE_PLAN_COPY } from "~/lib/pricing";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -41,15 +42,21 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     checkPlanLimit(env, session.user.id, "collections"),
     listActiveProofCreditGrants(env, session.user.id),
   ]);
+  const customerBilling = {
+    plan: billing.plan,
+    dodoStatus: billing.dodoStatus,
+    dodoNextBillingAt: billing.dodoNextBillingAt,
+    planUpdatedAt: billing.planUpdatedAt,
+  };
 
   return {
     email: session.user.email,
-    billing,
+    billing: customerBilling,
     proofUsage,
     watchlistUsage,
     collectionUsage,
-    planLimits: PLAN_LIMITS[billing.plan],
-    dailyProofCap: dailyProofCapForPlan(billing.plan, proofUsage.extraCredits),
+    planLimits: PLAN_LIMITS[customerBilling.plan],
+    dailyProofCap: dailyProofCapForPlan(customerBilling.plan, proofUsage.extraCredits),
     creditGrants,
     blockedCheckout: checkoutNotice === "already-subscribed",
     pendingCheckout: checkoutNotice === "already-started",
@@ -236,7 +243,7 @@ export default function BillingRoute() {
             <div className="f9-work-row" key={`${grant.skuSlug ?? "grant"}-${grant.grantedAt}`}>
               <strong>Purchased pack</strong>
               <span>
-                {grant.credits} evidence checks from {grant.skuSlug ?? "top-up"} — never expire
+                {grant.credits} evidence checks from {topUpPackName(grant.skuSlug, grant.credits)} — never expire
               </span>
             </div>
           ))}
@@ -324,4 +331,15 @@ function formatBillingStatus(plan: string, dodoStatus: string | null) {
 
 function formatDate(value: string) {
   return <LocalTime fallback={value} iso={value} mode="date" />;
+}
+
+function topUpPackName(skuSlug: string | null | undefined, credits: number) {
+  if (skuSlug && isTopUpDisplayKey(skuSlug)) {
+    return TOP_UP_PACK_DISPLAY[skuSlug].name;
+  }
+  return `${credits.toLocaleString("en-IN")} check pack`;
+}
+
+function isTopUpDisplayKey(value: string): value is keyof typeof TOP_UP_PACK_DISPLAY {
+  return value in TOP_UP_PACK_DISPLAY;
 }

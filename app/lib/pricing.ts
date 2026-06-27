@@ -82,7 +82,7 @@ const PLANS: PricingPlan[] = PLAN_FAMILIES.filter((plan) => plan !== "free").map
       slug === "scout"
         ? "For founders and sellers who want proof first, then a focused competitor set."
         : slug === "starter"
-          ? "For teams that need a weekly rhythm of competitor evidence."
+          ? "For teams that need daily competitor checks plus daily and weekly evidence digests."
           : "For agencies and growth teams watching crowded categories.",
     features: planMarketingFeatures(slug),
     monthlySku: `${slug}_monthly_v1`,

@@ -261,6 +261,34 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("classifies Browser Run launch timeouts instead of waiting indefinitely", async () => {
+    vi.useFakeTimers();
+    const launch = vi.fn(() => new Promise(() => undefined));
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = expect(
+      searchMetaLibraryByBrowser({ BROWSER: {} as Fetcher }, buildQuery()),
+    ).rejects.toMatchObject({
+      failureClass: "timeout",
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await result;
+    vi.useRealTimers();
+  });
+
   it("uses Browserless BQL as a live commercial fallback when Browser Run is unavailable", async () => {
     const fetchSpy = mockFetchWithDns(
       vi.fn(async () =>

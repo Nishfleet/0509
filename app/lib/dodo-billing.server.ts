@@ -97,7 +97,7 @@ export async function createDodo0509CheckoutSession({
     });
   }
   if (!response.ok) {
-    throw new Response(readPayloadMessage(payload, "Dodo checkout failed."), { status: 502 });
+    throw new Response("Dodo checkout is temporarily unavailable. Please try again.", { status: 502 });
   }
 
   const checkoutUrl = readString(payload, "checkout_url");
@@ -589,11 +589,6 @@ function bytesToBase64(bytes: Uint8Array) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
-}
-
-function readPayloadMessage(payload: unknown, fallback: string) {
-  const message = readString(objectOrEmpty(payload), "message");
-  return message || fallback;
 }
 
 function readString(value: Record<string, unknown>, key: string) {

@@ -1,6 +1,6 @@
--- Ledger of received Dodo webhook events, mirroring razorpay_webhook_event
--- (0013). Gives billing disputes an audit trail, dedupes redelivered events,
--- and lets failed processing be retried safely.
+-- Ledger of received Dodo webhook events. Gives billing disputes an audit
+-- trail, dedupes redelivered events, and lets failed processing be retried
+-- safely.
 CREATE TABLE IF NOT EXISTS dodo_webhook_event (
   event_id TEXT PRIMARY KEY,
   event_type TEXT NOT NULL,

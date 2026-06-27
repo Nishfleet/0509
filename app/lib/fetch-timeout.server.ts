@@ -9,6 +9,13 @@ type TimeoutResponse = Response & {
   [FETCH_TIMEOUT_CLEANUP]?: () => void;
 };
 
+export class PromiseTimeoutError extends Error {
+  constructor(message = "Operation timed out.") {
+    super(message);
+    this.name = "PromiseTimeoutError";
+  }
+}
+
 export async function fetchWithTimeout(
   input: Parameters<typeof fetch>[0],
   init: Parameters<typeof fetch>[1] = {},
@@ -23,6 +30,34 @@ export async function fetchWithTimeout(
   } catch (error) {
     cleanup();
     throw error;
+  }
+}
+
+export async function promiseWithTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  message = "Operation timed out.",
+  onLateResolve?: (value: T) => void | Promise<void>,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let didTimeout = false;
+  const watchedOperation = operation.then((value) => {
+    if (didTimeout && onLateResolve) {
+      void Promise.resolve(onLateResolve(value)).catch(() => undefined);
+    }
+    return value;
+  });
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      didTimeout = true;
+      reject(new PromiseTimeoutError(message));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([watchedOperation, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

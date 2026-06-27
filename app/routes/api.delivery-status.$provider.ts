@@ -1,5 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+const DELIVERY_STATUS_MAX_BODY_BYTES = 128_000;
+
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { verifyWhatsAppWebhookChallenge } = await import("~/lib/whatsapp.server");
@@ -24,6 +26,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, params, request }: ActionFunctionArgs) {
+  const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
   const { getEnv } = await import("~/lib/context.server");
   const { reconcileDeliveryStatus } = await import("~/lib/delivery.server");
   const {
@@ -36,7 +39,10 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
-  const rawBody = await request.text();
+  const rawBody = await readRequestTextWithinLimit(request, DELIVERY_STATUS_MAX_BODY_BYTES);
+  if (rawBody === null) {
+    throw new Response("Delivery status payload is too large.", { status: 413 });
+  }
   await verifyWhatsAppWebhookSignature(env, request, rawBody);
   const payload = rawBody ? JSON.parse(rawBody) : null;
   const updates = extractWhatsAppWebhookStatusUpdates(payload);
