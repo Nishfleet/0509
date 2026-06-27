@@ -273,6 +273,122 @@ describe("deliverWeeklyDigest", () => {
     );
   });
 
+  it("records a pending email attempt when the email send stalls", async () => {
+    vi.useFakeTimers();
+    emailSend = vi.fn().mockImplementation(() => new Promise(() => undefined));
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const upsertDigestDelivery = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([
+        {
+          id: "email-target-1",
+          userId: "user-1",
+          watchlistId: null,
+          channel: "email",
+          targetValue: "owner@example.com",
+          validationStatus: "validated",
+          isValidated: true,
+          isOptedIn: true,
+          optInSource: "account_email",
+          optedInAt: "2026-04-19T00:00:00.000Z",
+          isPaused: false,
+          pausedAt: null,
+          optedOutAt: null,
+          templateEligible: false,
+          lastSuccessfulDeliveryAt: null,
+          lastSuccessfulAttemptId: null,
+          providerIdentifier: null,
+          metadata: {},
+          createdAt: "2026-04-19T00:00:00.000Z",
+          updatedAt: "2026-04-19T00:00:00.000Z",
+        },
+      ]),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+
+    const resultPromise = deliverWeeklyDigest(emailEnv as never, {
+      userId: "user-1",
+      userName: "Owner",
+      accountEmail: "owner@example.com",
+      digestRunId: "digest-1",
+      periodStart: "2026-04-12T00:00:00.000Z",
+      periodEnd: "2026-04-19T00:00:00.000Z",
+      items: [
+        {
+          eventId: "event-1",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Landing page offer changed",
+          summary: "Offer changed on the landing page.",
+        },
+      ],
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const result = await resultPromise;
+
+    expect(result).toMatchObject({
+      attempts: 1,
+      channels: ["email"],
+      details: [
+        {
+          channel: "email",
+          status: "pending",
+          targetValue: "owner@example.com",
+          errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+        },
+      ],
+    });
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        channel: "email",
+        status: "pending",
+        webhookStatus: "provider_unknown",
+        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+        failedAt: null,
+      }),
+    );
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        status: "pending",
+        recipientEmail: "owner@example.com",
+        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+      }),
+    );
+  });
+
   it("keeps email as the baseline when customer WhatsApp fails readiness checks", async () => {
     const sendMock = mockEmailSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");

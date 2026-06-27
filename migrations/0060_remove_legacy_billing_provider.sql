@@ -1,16 +1,14 @@
 -- Remove the retired secondary billing provider from the live schema.
 --
--- D1 migrations are append-only in production, so converge the current remote
--- schema here while the fresh-start migration chain no longer creates these
--- retired-provider objects.
+-- D1 migrations are append-only in production, so historical provider setup
+-- migrations remain in the ledger and this final cleanup converges the current
+-- remote and fresh-start schemas after the compatible Worker is deployed.
 
 DROP TABLE IF EXISTS razorpay_webhook_event;
 
 CREATE TABLE user_plan_next (
   user_id TEXT PRIMARY KEY,
   plan TEXT NOT NULL DEFAULT 'free',
-  stripe_customer_id TEXT,
-  stripe_subscription_id TEXT,
   plan_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   dodo_payment_id TEXT,
   dodo_product_id TEXT,
@@ -26,8 +24,6 @@ CREATE TABLE user_plan_next (
 INSERT INTO user_plan_next (
   user_id,
   plan,
-  stripe_customer_id,
-  stripe_subscription_id,
   plan_updated_at,
   dodo_payment_id,
   dodo_product_id,
@@ -41,8 +37,6 @@ INSERT INTO user_plan_next (
 SELECT
   user_id,
   plan,
-  stripe_customer_id,
-  stripe_subscription_id,
   plan_updated_at,
   dodo_payment_id,
   dodo_product_id,

@@ -46,13 +46,15 @@ import {
   SLACK_PROVIDER,
 } from "~/lib/slack-webhook.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { PromiseTimeoutError, promiseWithTimeout } from "~/lib/fetch-timeout.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
 const EMAIL_PROVIDER = "cloudflare_email" as const;
+const CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS = 10_000;
 
 interface DigestAttemptSummary {
   channel: DeliveryChannel;
-  status: "sent" | "failed";
+  status: "sent" | "failed" | "pending";
   targetValue: string;
   providerMessageId: string | null;
   errorMessage: string | null;
@@ -61,7 +63,7 @@ interface DigestAttemptSummary {
 
 type EmailProviderResult = {
   provider: typeof EMAIL_PROVIDER;
-  status: "sent" | "failed";
+  status: "sent" | "failed" | "pending";
   webhookStatus: "pending" | "failed" | "provider_unknown";
   providerMessageId: string | null;
   providerStatusLastSeenAt: string | null;
@@ -489,7 +491,7 @@ async function deliverDigestToEmailTarget(
   if (duplicate && duplicate.status !== "failed") {
     return {
       channel: "email" as const,
-      status: duplicate.status === "sent" ? "sent" : "failed",
+      status: deliveryAttemptSummaryStatus(duplicate.status),
       targetValue: duplicate.targetValue,
       providerMessageId: duplicate.providerMessageId,
       errorMessage: duplicate.errorMessage,
@@ -1753,14 +1755,18 @@ async function sendCloudflareEmail(
   }
 
   try {
-    const result = await env.EMAIL!.send({
-      from: emailFromAddress(env),
-      to: input.to,
-      subject: input.subject,
-      html,
-      text: stripHtml(html),
-      headers,
-    });
+    const result = await promiseWithTimeout(
+      env.EMAIL!.send({
+        from: emailFromAddress(env),
+        to: input.to,
+        subject: input.subject,
+        html,
+        text: stripHtml(html),
+        headers,
+      }),
+      CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS,
+      "Cloudflare Email send timed out",
+    );
 
     return {
       provider: EMAIL_PROVIDER,
@@ -1772,6 +1778,18 @@ async function sendCloudflareEmail(
       deliveredAt: statusSeenAt,
     };
   } catch (error) {
+    if (error instanceof PromiseTimeoutError) {
+      return {
+        provider: EMAIL_PROVIDER,
+        status: "pending" as const,
+        webhookStatus: "provider_unknown" as const,
+        providerMessageId: null,
+        providerStatusLastSeenAt: statusSeenAt,
+        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+        deliveredAt: null,
+      };
+    }
+
     return {
       provider: EMAIL_PROVIDER,
       status: "failed" as const,
@@ -1955,12 +1973,18 @@ async function resolveInstantAttemptDedupe(
 function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttemptSummary {
   return {
     channel: attempt.channel,
-    status: attempt.status === "sent" ? "sent" : "failed",
+    status: deliveryAttemptSummaryStatus(attempt.status),
     targetValue: attempt.targetValue,
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
     deliveredAt: attempt.sentAt,
   };
+}
+
+function deliveryAttemptSummaryStatus(status: DeliveryAttemptRecord["status"]) {
+  if (status === "sent") return "sent";
+  if (status === "pending") return "pending";
+  return "failed";
 }
 
 function watchlistUrlFor(item: DigestDeliveryItem | undefined) {
