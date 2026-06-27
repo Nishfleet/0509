@@ -25,6 +25,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   const url = new URL(request.url);
   const entityId = url.searchParams.get("entity") ?? "";
+  if (entityId) {
+    const { getTrackedEntity } = await import("~/lib/presence-data.server");
+    const entity = await getTrackedEntity(env, workspaceUserId, entityId);
+    if (!entity) {
+      return redirect("/app/presence?oauth=linkedin_failed");
+    }
+  }
   const returnPath = entityId ? `/app/presence/${entityId}` : "/app/presence";
   const callbackUri = `${env.BETTER_AUTH_URL?.replace(/\/$/, "") ?? "https://0509.io"}/api/presence/oauth/linkedin/callback`;
 

@@ -46,4 +46,35 @@ describe("presence safe fetch", () => {
     expect(result?.body).toBe("hello");
     expect(result?.etag).toBe('"1"');
   });
+
+  it("returns null when the fetch times out or rejects", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new DOMException("aborted", "AbortError");
+    });
+
+    const result = await presenceSafeFetch("https://example.com/page", fetchImpl as typeof fetch, {
+      maxBytes: 10_000,
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the response body aborts while reading", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.error(new DOMException("aborted", "AbortError"));
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await presenceSafeFetch("https://example.com/page", fetchImpl as typeof fetch, {
+      maxBytes: 10_000,
+    });
+
+    expect(result).toBeNull();
+  });
 });

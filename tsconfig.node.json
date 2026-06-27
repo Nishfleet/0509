@@ -6,6 +6,7 @@
     "scripts/prod-canary*.mjs",
     "scripts/monitoring-fanout-canary*.mjs",
     "scripts/provider-bakeoff*.mjs",
+    "scripts/d1-migration-sync-check*.mjs",
     "tests/**/*",
     "app/**/*",
     "workers/**/*",

@@ -1,6 +1,7 @@
 import { captureRenderedLandingPageSnapshot } from "~/lib/browser-run.server";
 import { readResponseTextWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { extractLandingPageSignals } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
 import {
@@ -16,6 +17,7 @@ const OG_TITLE_REGEX =
 const H1_REGEX = /<h1[^>]*>(.*?)<\/h1>/i;
 const MAX_LANDING_PAGE_REDIRECTS = 5;
 const MAX_LANDING_PAGE_HTML_BYTES = 1_000_000;
+const LANDING_PAGE_FETCH_TIMEOUT_MS = 12_000;
 
 interface CaptureLandingPageSnapshotOptions {
   allowRenderedFallback?: boolean;
@@ -51,15 +53,20 @@ async function captureLandingPageSnapshotAt(
       return null;
     }
 
-    const response = await fetch(resolvedUrl.toString(), {
-      redirect: "manual",
-      headers: {
-        "user-agent": "0509-bot/1.0 (+https://0509.io)",
+    const response = await fetchWithTimeout(
+      resolvedUrl.toString(),
+      {
+        redirect: "manual",
+        headers: {
+          "user-agent": "0509-bot/1.0 (+https://0509.io)",
+        },
       },
-    });
+      { timeoutMs: LANDING_PAGE_FETCH_TIMEOUT_MS },
+    );
 
     if (isRedirectStatus(response.status)) {
       const redirectedUrl = resolvePublicRedirectUrl(response.headers.get("location"), resolvedUrl);
+      releaseFetchTimeout(response);
       return redirectedUrl
         ? captureLandingPageSnapshotAt(env, redirectedUrl, options, redirectCount + 1)
         : null;
@@ -67,10 +74,12 @@ async function captureLandingPageSnapshotAt(
 
     const finalUrl = await resolvePublicHttpUrl(response.url || resolvedUrl.toString());
     if (!finalUrl) {
+      releaseFetchTimeout(response);
       return null;
     }
 
     if (!response.ok) {
+      releaseFetchTimeout(response);
       return options.allowRenderedFallback === false
         ? null
         : captureRenderedLandingPageSnapshot(env, finalUrl.toString());

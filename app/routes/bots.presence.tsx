@@ -1,4 +1,5 @@
 import { PublicDocHeader } from "~/components/public-doc-shell";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const meta = () => [
   { title: "Five to Nine Presence Bot" },
@@ -39,7 +40,7 @@ export default function PresenceBotInfoRoute() {
             <h2>Contact and opt-out</h2>
             <p>
               To request changes, report issues, or ask us to stop crawling a public site, email{" "}
-              <a href="mailto:support@0509.in">support@0509.in</a>.
+              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
             </p>
           </section>
         </article>

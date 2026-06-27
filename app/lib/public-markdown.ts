@@ -64,9 +64,10 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - There is no free retained-monitoring plan. Public live search is read-only; saved monitoring requires an account.
 - Starter is the recommended plan for retained competitor monitoring.
 - Scout is the entry plan after the public read-only search and sample proof loop: 3 watchlists, 10 collections, account-gated research, weekly digest delivery, and 50 evidence checks/month.
-- Starter includes 10 watchlists, 25 collections, weekly digest delivery, and 250 evidence checks/month.
+- Starter includes 10 watchlists, 25 collections, daily and weekly digest delivery, and 250 evidence checks/month.
 - Agency includes 75 watchlists, 250 collections, daily and weekly digests, and 2,500 evidence checks/month.
-- Usage bundles add extra evidence checks for 30-day spikes. They do not make monitoring unlimited.
+- Usage bundles add purchased evidence checks that never expire. They do not change monthly included limits or make monitoring unlimited.
+- Included evidence checks reset monthly and do not roll over. Scheduled monitoring does not spend evidence checks unless Five to Nine creates a new landing-page proof capture.
 - Accounts warn after 80% evidence-check usage and hard-stop when paid capacity is exhausted.
 - Tracking reliability stays visible in the account.
 
@@ -89,7 +90,7 @@ Current product truth:
 - Account access uses verified access paths.
 - Checkout, plan access, and evidence-check limits follow the configured billing provider and visible plan caps.
 - Email delivery is available for eligible accounts.
-- Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly digests plus 2,500 evidence checks/month; usage bundles add 30-day evidence-check capacity for spikes.
+- Starter is the recommended plan. Paid plans have explicit caps: Scout includes weekly digest delivery and 50 evidence checks/month, Starter includes daily and weekly digest delivery and 250 evidence checks/month, and Agency includes daily and weekly digests plus 2,500 evidence checks/month. Purchased top-up checks never expire, included checks reset monthly without rollover, and scheduled monitoring only spends evidence checks when Five to Nine creates a new landing-page proof capture.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.

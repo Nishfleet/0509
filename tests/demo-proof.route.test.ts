@@ -21,8 +21,10 @@ describe("demo proof API", () => {
     expect(body.proofTrail.length).toBeGreaterThanOrEqual(3);
     expect(body.digestPreview.recommendedMove).toContain("counter-test");
     expect(body.exports.apiPath).toBe("/api/demo-proof");
-    expect(body.exports.slackMarkdown).toContain("\nPriority:");
-    expect(body.exports.slackMarkdown).not.toContain("\\n");
+    expect(body.trackedPreview.deliveryPreview).not.toContain("Slack-ready");
+    expect(body.exports.digestMarkdown).toContain("\nPriority:");
+    expect(body.exports.digestMarkdown).not.toContain("\\n");
+    expect(JSON.stringify(body.exports)).not.toContain("slackMarkdown");
   });
 
   it("returns markdown for agent and buyer review", async () => {
@@ -39,7 +41,8 @@ describe("demo proof API", () => {
     expect(body).toContain("Tracked preview: Nykaa weekly competitor watch");
     expect(body).toContain("Cadence: Weekly digest");
     expect(body).toContain("## Proof Trail");
-    expect(body).toContain("## Slack Export");
+    expect(body).toContain("## Digest Markdown");
+    expect(body).not.toContain("Slack Export");
     expect(body).toContain("\nPriority: Review before next campaign refresh");
     expect(body).not.toContain("\\nPriority");
   });

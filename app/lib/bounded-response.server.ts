@@ -1,3 +1,5 @@
+import { releaseFetchTimeout } from "~/lib/fetch-timeout.server";
+
 export async function readResponseTextWithinLimit(
   response: Response,
   maxBytes: number,
@@ -6,17 +8,41 @@ export async function readResponseTextWithinLimit(
   return bytes ? new TextDecoder().decode(bytes) : null;
 }
 
+export async function readResponseJsonWithinLimit<T = unknown>(
+  response: Response,
+  maxBytes: number,
+): Promise<T | null> {
+  let text: string | null;
+  try {
+    text = await readResponseTextWithinLimit(response, maxBytes);
+  } catch {
+    return null;
+  }
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function readResponseBytesWithinLimit(
   response: Response,
   maxBytes: number,
 ): Promise<Uint8Array | null> {
   if (contentLengthExceeds(response.headers, maxBytes)) {
+    releaseFetchTimeout(response);
     return null;
   }
 
   if (!response.body) {
-    const buffer = await response.arrayBuffer();
-    return buffer.byteLength <= maxBytes ? new Uint8Array(buffer) : null;
+    try {
+      const buffer = await response.arrayBuffer();
+      return buffer.byteLength <= maxBytes ? new Uint8Array(buffer) : null;
+    } finally {
+      releaseFetchTimeout(response);
+    }
   }
 
   const reader = response.body.getReader();
@@ -37,6 +63,7 @@ export async function readResponseBytesWithinLimit(
     }
   } finally {
     reader.releaseLock();
+    releaseFetchTimeout(response);
   }
 
   const bytes = new Uint8Array(totalBytes);

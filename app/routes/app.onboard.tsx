@@ -129,7 +129,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
         message: isZeroLimit
-          ? "Competitor monitoring is available on paid plans. Starter is the recommended plan for this competitor."
+          ? "Competitor monitoring is available on paid plans. Starter is the recommended plan for daily tracking and daily/weekly digests."
           : "You have reached your competitor monitoring limit.",
         upgradePath: "/#pricing",
       };
@@ -258,7 +258,7 @@ export default function AppOnboardRoute() {
               <span className="f9-app-kicker">Plan required</span>
               <h2>Choose a plan to start monitoring</h2>
               <p className="f9-muted-copy">
-                Starter is the recommended plan for retained competitor tracking and weekly digests.
+                Starter is the recommended plan for retained competitor tracking with daily scans and daily/weekly digests.
               </p>
               <div className="f9-action-row">
                 <Link className="f9-primary-button" to="/#pricing">

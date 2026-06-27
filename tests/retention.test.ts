@@ -68,7 +68,6 @@ describe("runRetentionSweep", () => {
     expect(allSql).not.toContain("DELETE FROM digest_item");
     expect(allSql).not.toContain("DELETE FROM proof_usage_credit");
     expect(allSql).not.toContain("DELETE FROM dodo_webhook_event");
-    expect(allSql).not.toContain("DELETE FROM razorpay_webhook_event");
   });
 
   it("protects change-detection baselines and the newest runs per watchlist", async () => {

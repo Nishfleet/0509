@@ -364,12 +364,33 @@ describe("MCP route", () => {
     expect(updateWatchlistSchema).toMatchObject({
       required: ["watchlistId", "idempotencyKey"],
     });
+    const readinessSchema = body.result.tools.find((tool) => tool.name === "get_workspace_readiness")?.inputSchema;
+    expect(readinessSchema).toMatchObject({
+      properties: {
+        format: {
+          enum: ["json"],
+          description: "Use json for structured agent context.",
+        },
+      },
+    });
+    for (const exportToolName of ["get_collection_export", "get_watchlist_export", "get_digest_export"]) {
+      const exportSchema = body.result.tools.find((tool) => tool.name === exportToolName)?.inputSchema;
+      expect(exportSchema).toMatchObject({
+        properties: {
+          format: {
+            enum: ["json"],
+            description: "Use json for structured agent context.",
+          },
+        },
+      });
+      expect(JSON.stringify(exportSchema)).not.toContain("Slack-ready");
+    }
     const counterMoveSchema = body.result.tools.find((tool) => tool.name === "create_counter_move_brief")?.inputSchema;
     expect(counterMoveSchema).toMatchObject({
       required: ["watchlistId", "idempotencyKey"],
       properties: {
         ownerLabel: { type: "string" },
-        followUpChannel: { type: "string", enum: ["app", "email", "slack", "client_room"] },
+        followUpChannel: { type: "string", enum: ["app", "email", "client_room"] },
         expiryDays: { type: "number", minimum: 1, maximum: 30 },
       },
     });
@@ -387,6 +408,15 @@ describe("MCP route", () => {
       required: ["category", "subject", "detail", "idempotencyKey"],
     });
     expect(body.result.tools.find((tool) => tool.name === "list_support_cases")?.inputSchema.properties).not.toHaveProperty("idempotencyKey");
+    body.result.tools.forEach((tool) => {
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"slack"');
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"whatsapp"');
+      expect(JSON.stringify(tool.inputSchema)).not.toContain("Slack-ready");
+    });
+    body.result.tools.forEach((tool) => {
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"slack"');
+      expect(JSON.stringify(tool.inputSchema)).not.toContain("Slack-ready");
+    });
   });
 
   it("hides write tools for read-only API keys", async () => {
@@ -561,7 +591,7 @@ describe("MCP route", () => {
       .toBe("Today: brief one counter-test.");
   });
 
-  it("returns Slack-ready watchlist markdown through tools/call", async () => {
+  it("rejects forged Slack output requests through tools/call", async () => {
     setupMocks();
     const response = await postMcp({
       jsonrpc: "2.0",
@@ -576,19 +606,15 @@ describe("MCP route", () => {
       },
     });
     const body = await response.json() as {
-      result: {
-        isError: boolean;
-        content: Array<{ text: string }>;
-        structuredContent: { resourceType: string; format: string };
+      error: {
+        code: number;
+        message: string;
       };
     };
 
-    expect(body.result.isError).toBe(false);
-    expect(body.result.content[0]?.text).toContain("*Five to Nine watchlist: Nykaa watch*");
-    expect(body.result.content[0]?.text).toContain("Next move:");
-    expect(body.result.structuredContent).toMatchObject({
-      resourceType: "watchlist",
-      format: "slack",
+    expect(body.error).toMatchObject({
+      code: -32602,
+      message: "Slack delivery is not available at general availability yet. Use email delivery.",
     });
   });
 
@@ -739,7 +765,7 @@ describe("MCP route", () => {
       {
         toolName: "list_delivery_targets",
         actionName: "delivery_targets.list",
-        args: { watchlistId: "watchlist-1", channel: "slack" },
+        args: { watchlistId: "watchlist-1", channel: "email" },
       },
       {
         toolName: "update_delivery_settings",
@@ -747,7 +773,7 @@ describe("MCP route", () => {
         args: {
           watchlistId: "watchlist-1",
           explicitApproval: true,
-          slackEnabled: true,
+          emailEnabled: true,
           idempotencyKey: "delivery-settings-1",
         },
         idempotencyKey: "delivery-settings-1",
@@ -883,6 +909,37 @@ describe("MCP route", () => {
     const body = await response.json() as { error: { message: string } };
 
     expect(body.error.message).toContain("read-only");
+  });
+
+  it("rejects forged WhatsApp delivery settings through MCP", async () => {
+    vi.doUnmock("~/lib/customer-agent-actions.server");
+    setupMocks();
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "whatsapp-settings-blocked",
+      method: "tools/call",
+      params: {
+        name: "update_delivery_settings",
+        arguments: {
+          watchlistId: "watchlist-1",
+          explicitApproval: true,
+          whatsappEnabled: true,
+          idempotencyKey: "delivery-settings-whatsapp",
+        },
+      },
+    });
+    const body = await response.json() as {
+      result: {
+        isError: boolean;
+        structuredContent: { error: string; message: string };
+      };
+    };
+
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent).toMatchObject({
+      error: "whatsapp_delivery_unavailable",
+      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+    });
   });
 
   it("returns MCP tool errors without exposing internal exceptions", async () => {

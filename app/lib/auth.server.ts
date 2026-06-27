@@ -73,7 +73,7 @@ export function assertAccountDeletable(billing: {
 }) {
   if (billing.plan !== "free") {
     throw new Error(
-      "Your subscription is still active. Cancel it first from Plan & billing (Open billing portal) - you keep access until the end of the period you've paid for, and can delete the account after that.",
+      "Your subscription is still active. Start cancellation from Plan & billing or open a billing support case first - you keep access until the end of the period you've paid for, and can delete the account after that.",
     );
   }
 }

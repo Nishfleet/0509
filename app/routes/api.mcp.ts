@@ -9,6 +9,10 @@ import {
   WRITE_ENABLED_API_KEY_REQUIREMENT,
 } from "~/lib/agent-action-catalog";
 import { mcpActionGroups } from "~/lib/mcp-agent-action-groups";
+import {
+  isSlackDeliveryCustomerFacing,
+  slackDeliveryUnavailableMessage,
+} from "~/lib/ga-customer-surface";
 import type { AppEnv } from "~/lib/env.server";
 import type { CustomerAgentActionName } from "~/lib/customer-agent-actions.server";
 import type { CustomerApiKeyRecord } from "~/lib/types";
@@ -62,9 +66,9 @@ const MCP_TOOLS = [
       properties: {
         format: {
           type: "string",
-          enum: ["json", "slack"],
+          enum: customerAgentFormatValues(),
           default: "json",
-          description: "Use json for structured agent context or slack for a Slack-ready summary.",
+          description: customerAgentFormatDescription(),
         },
       },
       additionalProperties: false,
@@ -212,9 +216,9 @@ const MCP_TOOLS = [
   },
   {
     name: "create_collection",
-    title: "Create Board",
+    title: "Create Collection",
     description:
-      "Create an account-owned board for saved proof links after checking the workspace board limit.",
+      "Create an account-owned collection for saved proof links after checking the workspace collection limit.",
     inputSchema: {
       type: "object",
       properties: {
@@ -304,7 +308,7 @@ const MCP_TOOLS = [
         },
         channel: {
           type: "string",
-          enum: ["email", "whatsapp", "slack"],
+          enum: ["email"],
         },
         limit: {
           type: "number",
@@ -340,12 +344,6 @@ const MCP_TOOLS = [
           type: "boolean",
         },
         emailEnabled: {
-          type: "boolean",
-        },
-        whatsappEnabled: {
-          type: "boolean",
-        },
-        slackEnabled: {
           type: "boolean",
         },
         quietHours: {
@@ -460,7 +458,7 @@ const MCP_TOOLS = [
         },
         followUpChannel: {
           type: "string",
-          enum: ["app", "email", "slack", "client_room"],
+          enum: ["app", "email", "client_room"],
           default: "app",
         },
         expiryDays: {
@@ -515,7 +513,7 @@ const MCP_TOOLS = [
     name: "upsert_client_room",
     title: "Upsert Client Room",
     description:
-      "Save an account-owned client room that groups owned boards, watchlists, digests, reports, and memory context.",
+      "Save an account-owned client room that groups owned collections, watchlists, digests, reports, and memory context.",
     inputSchema: clientRoomMutationInputSchema(),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
@@ -782,7 +780,10 @@ async function callTool(
 
   const format = normalizeAgentFormat(stringField(args, "format"));
   if (!format) {
-    return { ok: false, message: "format must be json or slack." };
+    return { ok: false, message: "format must be json." };
+  }
+  if (format === "slack" && !isSlackDeliveryCustomerFacing()) {
+    return { ok: false, message: slackDeliveryUnavailableMessage() };
   }
 
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
@@ -1230,14 +1231,22 @@ function resourceInputSchema(idName: string) {
       },
       format: {
         type: "string",
-        enum: ["json", "slack"],
+        enum: customerAgentFormatValues(),
         default: "json",
-        description: "Use json for structured agent context or slack for Slack-ready markdown.",
+        description: customerAgentFormatDescription(),
       },
     },
     required: [idName],
     additionalProperties: false,
   };
+}
+
+function customerAgentFormatValues(): AgentFormat[] {
+  return ["json"];
+}
+
+function customerAgentFormatDescription() {
+  return "Use json for structured agent context.";
 }
 
 function watchlistMutationInputSchema() {

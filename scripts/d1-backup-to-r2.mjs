@@ -1,7 +1,8 @@
 // Weekly off-site backup: export remote D1 to a local SQL file, upload it to
 // the existing R2 bucket under backups/, and prune local copies (keep 8).
-// Run via `npm run backup:d1:r2` — scheduled by launchd on Nish's Mac
-// (com.nish.0509-d1-backup). R2 copies are never pruned by this script.
+// Run via `npm run backup:d1:r2`. It can be scheduled by launchd outside the
+// repo, but this script does not prove that scheduling is currently active.
+// R2 copies are never pruned by this script.
 import { mkdir, readdir, unlink, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { resolve, join } from "node:path";

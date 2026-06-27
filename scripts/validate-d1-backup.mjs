@@ -1,19 +1,23 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 
-const requiredFiles = [
+const requiredSupportFiles = [
   "scripts/d1-backup-to-r2.mjs",
   "scripts/d1-backup.mjs",
   "wrangler.jsonc",
-  "migrations/0045_dodo_plan_lookup_indexes.sql",
-  "migrations/0046_dodo_ledger_lease_and_capacity_skip_idempotency.sql",
-  "migrations/0047_monitoring_fanout_orchestration.sql",
-  "migrations/0048_monitoring_concurrency_slots.sql",
-  "migrations/0049_evidence_usage_periods.sql",
-  "migrations/0050_evidence_top_up_grants.sql",
-  "migrations/0051_evidence_usage_reservations.sql",
-  "migrations/0052_monitoring_queue_priority.sql",
-  "migrations/0053_evidence_entitlement_anchor_and_ledger.sql",
+];
+const migrationsDir = resolve("migrations");
+const migrationFiles = readdirSync(migrationsDir)
+  .filter((fileName) => /^\d{4}_.+\.sql$/.test(fileName))
+  .sort();
+
+if (migrationFiles.length === 0) {
+  throw new Error("No D1 migration files found.");
+}
+
+const requiredFiles = [
+  ...requiredSupportFiles,
+  ...migrationFiles.map((fileName) => join("migrations", fileName)),
 ];
 
 for (const relativePath of requiredFiles) {
@@ -31,6 +35,7 @@ console.log(
     ok: true,
     mode: "dry-run",
     checkedFiles: requiredFiles,
+    latestMigration: migrationFiles.at(-1),
     message: "Backup scripts and D1 binding are present. Remote export/upload was not executed.",
   }),
 );

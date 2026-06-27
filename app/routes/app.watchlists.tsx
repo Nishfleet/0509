@@ -36,7 +36,12 @@ import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
+import {
+  isSlackDeliveryCustomerFacing,
+  isWhatsAppDeliveryCustomerFacing,
+  slackDeliveryUnavailableMessage,
+  whatsappDeliveryUnavailableMessage,
+} from "~/lib/ga-customer-surface";
 import { createReportId } from "~/lib/report";
 import {
   formatWatchlistTargetNoun,
@@ -53,9 +58,13 @@ import type {
   WatchlistProofSummary,
   WatchlistRunSummaryCounts,
   WorkspaceDeliveryConfigRecord,
+  DeliveryChannel,
 } from "~/lib/types";
 
 export const meta = () => [{ title: "Watchlists | Five to Nine" }];
+const WATCHLIST_DELIVERY_TARGET_DISPLAY_LIMIT = 12;
+const WORKSPACE_DELIVERY_TARGET_DISPLAY_LIMIT = 8;
+const RECENT_DELIVERY_ATTEMPT_DISPLAY_LIMIT = 16;
 
 export function HydrateFallback() {
   return <DashboardRouteLoading title="Watchlists" />;
@@ -87,7 +96,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getUserPlan } = await import("~/lib/plan.server");
   const { isWhatsAppProviderConfigured } = await import("~/lib/env.server");
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
-  const whatsappAvailable = isWhatsAppProviderConfigured(env);
+  const showSlackDelivery = isSlackDeliveryCustomerFacing();
+  const whatsappAvailable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
   const showPresenceNav = await presenceNavVisible(env, workspaceUserId);
   const [watchlists, discoveryStatus, plan] = await Promise.all([
     listWatchlists(env, workspaceUserId, { includeInactive: true }),
@@ -122,15 +132,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
+  const visibleDelivery = { showSlackDelivery, whatsappAvailable };
+  const deliveryChannels = visibleDeliveryChannels(visibleDelivery);
   const [
     eventCandidates,
     events,
     runs,
     workspaceDeliveryConfigRecord,
     watchlistDeliveryConfig,
-    watchlistDeliveryTargets,
-    workspaceDeliveryTargets,
-    recentDeliveryAttempts,
+    watchlistDeliveryTargetsByChannel,
+    workspaceDeliveryTargetsByChannel,
+    recentDeliveryAttemptsByChannel,
     recentProofCaptures,
   ] = await Promise.all([
     listEventCandidates(env, selectedWatchlist.id, 12),
@@ -138,25 +150,44 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchlistRuns(env, selectedWatchlist.id, 12),
     getWorkspaceDeliveryConfig(env, workspaceUserId),
     getWatchlistDeliveryConfig(env, selectedWatchlist.id),
-    listDeliveryTargets(env, workspaceUserId, {
-      watchlistId: selectedWatchlist.id,
-      limit: 12,
-    }),
-    listDeliveryTargets(env, workspaceUserId, {
-      watchlistId: null,
-      limit: 8,
-    }),
-    listDeliveryAttempts(env, {
-      userId: workspaceUserId,
-      watchlistId: selectedWatchlist.id,
-      limit: 16,
-    }),
+    Promise.all(deliveryChannels.map((channel) =>
+      listDeliveryTargets(env, workspaceUserId, {
+        watchlistId: selectedWatchlist.id,
+        channel,
+        limit: WATCHLIST_DELIVERY_TARGET_DISPLAY_LIMIT,
+      }),
+    )),
+    Promise.all(deliveryChannels.map((channel) =>
+      listDeliveryTargets(env, workspaceUserId, {
+        watchlistId: null,
+        channel,
+        limit: WORKSPACE_DELIVERY_TARGET_DISPLAY_LIMIT,
+      }),
+    )),
+    Promise.all(deliveryChannels.map((channel) =>
+      listDeliveryAttempts(env, {
+        userId: workspaceUserId,
+        watchlistId: selectedWatchlist.id,
+        channel,
+        limit: RECENT_DELIVERY_ATTEMPT_DISPLAY_LIMIT,
+      }),
+    )),
     listRecentProofCapturesForWatchlist(env, selectedWatchlist.id, 12),
   ]);
 
   const workspaceDeliveryConfig =
     workspaceDeliveryConfigRecord ??
     buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
+  const effectiveDeliveryConfig = resolveDeliveryConfig({
+    workspaceConfig: workspaceDeliveryConfig,
+    watchlistConfig: watchlistDeliveryConfig,
+  });
+  const watchlistDeliveryTargets = sortByUpdatedAtDesc(watchlistDeliveryTargetsByChannel.flat())
+    .slice(0, WATCHLIST_DELIVERY_TARGET_DISPLAY_LIMIT);
+  const workspaceDeliveryTargets = sortByUpdatedAtDesc(workspaceDeliveryTargetsByChannel.flat())
+    .slice(0, WORKSPACE_DELIVERY_TARGET_DISPLAY_LIMIT);
+  const recentDeliveryAttempts = sortByCreatedAtDesc(recentDeliveryAttemptsByChannel.flat())
+    .slice(0, RECENT_DELIVERY_ATTEMPT_DISPLAY_LIMIT);
 
   return {
     watchlists,
@@ -164,15 +195,20 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     eventCandidates,
     events,
     runs,
-    workspaceDeliveryConfig,
-    watchlistDeliveryConfig,
-    effectiveDeliveryConfig: resolveDeliveryConfig({
-      workspaceConfig: workspaceDeliveryConfig,
-      watchlistConfig: watchlistDeliveryConfig,
-    }),
-    deliveryTargets: watchlistDeliveryTargets.map(toPublicDeliveryTarget),
-    workspaceDeliveryTargets: workspaceDeliveryTargets.map(toPublicDeliveryTarget),
-    recentDeliveryAttempts,
+    workspaceDeliveryConfig: maskDormantDeliveryConfig(workspaceDeliveryConfig, visibleDelivery),
+    watchlistDeliveryConfig: watchlistDeliveryConfig
+      ? maskDormantDeliveryConfig(watchlistDeliveryConfig, visibleDelivery)
+      : null,
+    effectiveDeliveryConfig: maskDormantDeliveryConfig(effectiveDeliveryConfig, visibleDelivery),
+    deliveryTargets: watchlistDeliveryTargets
+      .filter((target) => isVisibleDeliveryChannel(target.channel, visibleDelivery))
+      .map(toPublicDeliveryTarget),
+    workspaceDeliveryTargets: workspaceDeliveryTargets
+      .filter((target) => isVisibleDeliveryChannel(target.channel, visibleDelivery))
+      .map(toPublicDeliveryTarget),
+    recentDeliveryAttempts: recentDeliveryAttempts.filter((attempt) =>
+      isVisibleDeliveryChannel(attempt.channel, visibleDelivery),
+    ),
     recentProofCaptures,
     proofSummary: buildProofSummary(recentProofCaptures),
     discoveryStatus,
@@ -371,10 +407,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "save-delivery-config") {
     const {
+      getWatchlistDeliveryConfig,
       getWatchlist,
       getWorkspaceDeliveryConfig,
       upsertWatchlistDeliveryConfig,
     } = await import("~/lib/data.server");
+    const { isWhatsAppProviderConfigured } = await import("~/lib/env.server");
     const {
       planFeatureDeniedActionResult,
       requireDeliveryConfigSave,
@@ -385,18 +423,29 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Watchlist not found." };
     }
 
+    const whatsappDeliveryEditable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
+    const slackDeliveryEditable = isSlackDeliveryCustomerFacing();
     const deliveryGate = await requireDeliveryConfigSave(env, workspaceUserId, {
       instantEnabled: formData.has("instantEnabled"),
-      slackEnabled: formData.has("slackEnabled"),
+      slackEnabled: slackDeliveryEditable && formData.has("slackEnabled"),
       emailEnabled: formData.has("emailEnabled"),
     });
     if (!deliveryGate.ok) {
       return planFeatureDeniedActionResult(deliveryGate.feature, deliveryGate.plan);
     }
 
+    if (!slackDeliveryEditable && formData.has("slackEnabled")) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
+    if (!whatsappDeliveryEditable && formData.has("whatsappEnabled")) {
+      return { ok: false, message: whatsappDeliveryUnavailableMessage() };
+    }
+
     const workspaceConfig =
       (await getWorkspaceDeliveryConfig(env, workspaceUserId)) ??
       buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
+    const existingWatchlistConfig = await getWatchlistDeliveryConfig(env, watchlist.id);
+    const baseConfig = existingWatchlistConfig ?? workspaceConfig;
     const sensitivityMode = normalizeSensitivityMode(String(formData.get("sensitivityMode") ?? ""));
 
     await upsertWatchlistDeliveryConfig(env, {
@@ -406,8 +455,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
       instantEnabled: formData.has("instantEnabled"),
       digestEnabled: formData.has("digestEnabled"),
       emailEnabled: formData.has("emailEnabled"),
-      whatsappEnabled: formData.has("whatsappEnabled"),
-      slackEnabled: formData.has("slackEnabled"),
+      whatsappEnabled: whatsappDeliveryEditable ? formData.has("whatsappEnabled") : baseConfig.whatsappEnabled,
+      slackEnabled: slackDeliveryEditable ? formData.has("slackEnabled") : baseConfig.slackEnabled,
       quietHours: parseQuietHours(formData),
       timezone: readOptionalString(formData.get("timezone")) ?? workspaceConfig.timezone ?? null,
     });
@@ -438,6 +487,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
         ok: false,
         message: "Choose a channel and a target first.",
       };
+    }
+    if (channel === "whatsapp" && !isWhatsAppDeliveryCustomerFacing()) {
+      return { ok: false, message: whatsappDeliveryUnavailableMessage() };
     }
 
     const deliveryGate = await requireDeliveryConfigSave(env, workspaceUserId, { channel });
@@ -564,6 +616,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
         ok: false,
         message: "Delivery target not found.",
       };
+    }
+    if (channel === "whatsapp" && !isWhatsAppDeliveryCustomerFacing()) {
+      return { ok: false, message: whatsappDeliveryUnavailableMessage() };
     }
 
     await upsertDeliveryTarget(env, {
@@ -1086,10 +1141,12 @@ export default function WatchlistsRoute() {
                           <input defaultChecked={data.effectiveDeliveryConfig.emailEnabled} name="emailEnabled" type="checkbox" />
                           <span>Email enabled</span>
                         </label>
-                        <label className="f9-field f9-field-inline">
-                          <input defaultChecked={data.effectiveDeliveryConfig.whatsappEnabled} name="whatsappEnabled" type="checkbox" />
-                          <span>WhatsApp enabled</span>
-                        </label>
+                        {data.whatsappAvailable ? (
+                          <label className="f9-field f9-field-inline">
+                            <input defaultChecked={data.effectiveDeliveryConfig.whatsappEnabled} name="whatsappEnabled" type="checkbox" />
+                            <span>WhatsApp enabled</span>
+                          </label>
+                        ) : null}
                         {showSlackDelivery ? (
                         <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.slackEnabled} name="slackEnabled" type="checkbox" />
@@ -1178,16 +1235,16 @@ export default function WatchlistsRoute() {
                         <option value="email">Email</option>
                         {data.whatsappAvailable ? (
                           <option value="whatsapp">WhatsApp</option>
-                        ) : (
-                          <option disabled value="whatsapp">
-                            WhatsApp — not yet available
-                          </option>
-                        )}
+                        ) : null}
                       </select>
                     </label>
                     <label className="f9-field">
                       <span>Target</span>
-                      <input name="targetValue" placeholder="owner@example.com or +919999999999" type="text" />
+                      <input
+                        name="targetValue"
+                        placeholder={data.whatsappAvailable ? "owner@example.com or +919999999999" : "owner@example.com"}
+                        type="text"
+                      />
                     </label>
                     <label className="f9-field f9-field-inline">
                       <input defaultChecked name="explicitOptIn" type="checkbox" />
@@ -1413,6 +1470,49 @@ function readDeliveryChannel(value: FormDataEntryValue | null) {
   }
 
   return null;
+}
+
+function isVisibleDeliveryChannel(
+  channel: string,
+  visibility: { showSlackDelivery: boolean; whatsappAvailable: boolean },
+) {
+  return (
+    channel === "email" ||
+    (channel === "whatsapp" && visibility.whatsappAvailable) ||
+    (channel === "slack" && visibility.showSlackDelivery)
+  );
+}
+
+function visibleDeliveryChannels(
+  visibility: { showSlackDelivery: boolean; whatsappAvailable: boolean },
+): DeliveryChannel[] {
+  const channels: DeliveryChannel[] = ["email"];
+  if (visibility.whatsappAvailable) {
+    channels.push("whatsapp");
+  }
+  if (visibility.showSlackDelivery) {
+    channels.push("slack");
+  }
+  return channels;
+}
+
+function sortByUpdatedAtDesc<T extends { updatedAt: string }>(records: T[]) {
+  return [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+function sortByCreatedAtDesc<T extends { createdAt: string }>(records: T[]) {
+  return [...records].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+function maskDormantDeliveryConfig<T extends { whatsappEnabled: boolean; slackEnabled: boolean }>(
+  config: T,
+  visibility: { showSlackDelivery: boolean; whatsappAvailable: boolean },
+): T {
+  return {
+    ...config,
+    whatsappEnabled: visibility.whatsappAvailable && config.whatsappEnabled,
+    slackEnabled: visibility.showSlackDelivery && config.slackEnabled,
+  };
 }
 
 function normalizeSensitivityMode(value: string) {

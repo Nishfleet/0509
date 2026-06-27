@@ -44,9 +44,9 @@ export default function TrustRoute() {
       <PublicDocBlock title="Retention and backups">
         <p>
           Product data lives in Cloudflare D1 and optional R2 artifact storage. Retention cleanup
-          runs on bounded scheduled sweeps. Weekly D1 exports upload to R2 via{" "}
-          <code>npm run backup:d1:r2</code>; restore drills and uptime monitoring steps live in{" "}
-          <code>docs/ops-backup-uptime.md</code> (private ops notes). The public health probe is{" "}
+          runs on bounded scheduled sweeps. The repository validates the D1 backup scripts, D1 binding,
+          and current migration chain in dry-run checks; automated R2 backup scheduling and restore drills
+          remain owner-operated until recorded as verified. The public health probe is{" "}
           <code>https://0509.io/api/health</code> — it returns <code>{`{"status":"ok"}`}</code> without
           touching D1. Account deletion, correction, and export help are handled through support.
         </p>

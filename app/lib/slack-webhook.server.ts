@@ -1,8 +1,12 @@
 import { decryptCredential } from "~/lib/credential-crypto.server";
+import { readResponseTextWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
+import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import type { DeliveryTargetRecord, WebhookReconciliationStatus } from "~/lib/types";
 
 export const SLACK_PROVIDER = "slack_incoming_webhook";
+const SLACK_WEBHOOK_TIMEOUT_MS = 10_000;
+const SLACK_WEBHOOK_RESPONSE_MAX_BYTES = 8_000;
 
 type FetchImpl = typeof fetch;
 
@@ -51,13 +55,17 @@ export async function sendSlackWebhookUrl(
 ): Promise<SlackWebhookSendResult> {
   let response: Response;
   try {
-    response = await (options.fetchImpl ?? fetch)(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    response = await fetchWithTimeout(
+      webhookUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+      { fetcher: options.fetchImpl, timeoutMs: SLACK_WEBHOOK_TIMEOUT_MS },
+    );
   } catch (error) {
     return slackFailure(
       statusSeenAt,
@@ -65,9 +73,10 @@ export async function sendSlackWebhookUrl(
     );
   }
 
-  const responseText = await response.text().catch(() => "");
+  const responseText = await readResponseTextWithinLimit(response, SLACK_WEBHOOK_RESPONSE_MAX_BYTES)
+    .catch(() => null) ?? "";
   if (!response.ok || responseText.trim().toLowerCase() !== "ok") {
-    const error = responseText.trim() || `Slack returned HTTP ${response.status}.`;
+    const error = (responseText.trim() || `Slack returned HTTP ${response.status}`).replace(/\.+$/, "");
     return slackFailure(statusSeenAt, `Slack send failed: ${error}.`);
   }
 

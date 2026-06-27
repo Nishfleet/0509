@@ -161,4 +161,36 @@ describe("captureLandingPageSnapshot", () => {
     expect(snapshot).toBeNull();
     expect(put).not.toHaveBeenCalled();
   });
+
+  it("releases fetch timeout timers on redirect responses without a usable location", async () => {
+    vi.useFakeTimers();
+    mockFetchWithDns(
+      vi.fn(async () => new Response(null, { status: 302 })) as never,
+    );
+
+    const snapshot = await captureLandingPageSnapshot(
+      {},
+      "https://example.com/glow",
+      { allowRenderedFallback: false },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("releases fetch timeout timers on non-OK fetch responses without rendered fallback", async () => {
+    vi.useFakeTimers();
+    mockFetchWithDns(
+      vi.fn(async () => new Response("blocked", { status: 500 })) as never,
+    );
+
+    const snapshot = await captureLandingPageSnapshot(
+      {},
+      "https://example.com/glow",
+      { allowRenderedFallback: false },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

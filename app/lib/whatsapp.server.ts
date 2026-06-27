@@ -11,6 +11,8 @@ import {
   listDeliveryTargets,
   upsertDeliveryTarget,
 } from "~/lib/data.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
+import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import type {
   DeliveryAttemptStatus,
   DeliveryLane,
@@ -18,6 +20,8 @@ import type {
   WebhookReconciliationStatus,
 } from "~/lib/types";
 
+const WHATSAPP_SEND_TIMEOUT_MS = 10_000;
+const WHATSAPP_SEND_JSON_MAX_BYTES = 64_000;
 const WHATSAPP_DIGEST_TEMPLATE_NAMES: Record<DeliveryLane, string> = {
   customer: "proof_digest_customer_v1",
   internal: "proof_digest_internal_v1",
@@ -458,44 +462,56 @@ async function sendWhatsAppTemplate(
     bodyParameters: string[];
   },
 ): Promise<WhatsAppSendResult> {
-  const response = await fetch(
-    `https://graph.facebook.com/${whatsappGraphApiVersion(env)}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: input.targetValue,
-        type: "template",
-        template: {
-          ...(env.WHATSAPP_TEMPLATE_NAMESPACE
-            ? { namespace: env.WHATSAPP_TEMPLATE_NAMESPACE }
-            : {}),
-          name: input.templateName,
-          language: {
-            policy: "deterministic",
-            code: "en_US",
-          },
-          components: [
-            {
-              type: "body",
-              parameters: input.bodyParameters.map((text) => ({
-                type: "text",
-                text,
-              })),
-            },
-          ],
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `https://graph.facebook.com/${whatsappGraphApiVersion(env)}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+          "Content-Type": "application/json",
         },
-      }),
-    },
-  );
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: input.targetValue,
+          type: "template",
+          template: {
+            ...(env.WHATSAPP_TEMPLATE_NAMESPACE
+              ? { namespace: env.WHATSAPP_TEMPLATE_NAMESPACE }
+              : {}),
+            name: input.templateName,
+            language: {
+              policy: "deterministic",
+              code: "en_US",
+            },
+            components: [
+              {
+                type: "body",
+                parameters: input.bodyParameters.map((text) => ({
+                  type: "text",
+                  text,
+                })),
+              },
+            ],
+          },
+        }),
+      },
+      { timeoutMs: WHATSAPP_SEND_TIMEOUT_MS },
+    );
+  } catch (error) {
+    return {
+      provider: "whatsapp_cloud_api",
+      status: "failed",
+      webhookStatus: "failed",
+      providerMessageId: null,
+      providerStatusLastSeenAt: new Date().toISOString(),
+      templateName: input.templateName,
+      errorMessage: error instanceof Error ? error.message : "WhatsApp send failed.",
+    };
+  }
 
-  const payload = await response
-    .json()
-    .catch(() => null) as
+  const payload = await readResponseJsonWithinLimit<
     | {
         error?: {
           message?: string;
@@ -503,7 +519,8 @@ async function sendWhatsAppTemplate(
         };
         messages?: Array<{ id?: string }>;
       }
-    | null;
+    | null
+  >(response, WHATSAPP_SEND_JSON_MAX_BYTES);
 
   if (!response.ok) {
     return {

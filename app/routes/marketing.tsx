@@ -461,7 +461,7 @@ export default function MarketingRoute() {
             </article>
             <article>
               <span className="ld-kicker">Brief export</span>
-              <p className="ld-export">{demoProof.exports.slackMarkdown}</p>
+              <p className="ld-export">{demoProof.exports.digestMarkdown}</p>
             </article>
           </div>
         </div>
@@ -506,7 +506,7 @@ export default function MarketingRoute() {
           <div className="ld-plan-summary" aria-label="Pricing summary">
             <span>Recommended launch plan</span>
             <strong>Start with Starter</strong>
-            <p>Weekly digests, 10 watchlists, and enough checks for a real sales team.</p>
+            <p>Daily and weekly digests, 10 watchlists, and enough checks for a real sales team.</p>
           </div>
           <p className="ld-pricing-note">
             Review live search and the sample proof loop first. Paid plans add account-gated

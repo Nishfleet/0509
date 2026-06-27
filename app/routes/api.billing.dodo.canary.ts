@@ -28,10 +28,6 @@ interface UserPlanSnapshot {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   plan_updated_at: string;
-  razorpay_customer_id: string | null;
-  razorpay_subscription_id: string | null;
-  razorpay_plan_id: string | null;
-  razorpay_status: string | null;
   dodo_payment_id: string | null;
   dodo_product_id: string | null;
   dodo_status: string | null;
@@ -324,10 +320,6 @@ async function getUserPlanSnapshot(env: AppEnv, userId: string) {
         stripe_customer_id,
         stripe_subscription_id,
         plan_updated_at,
-        razorpay_customer_id,
-        razorpay_subscription_id,
-        razorpay_plan_id,
-        razorpay_status,
         dodo_payment_id,
         dodo_product_id,
         dodo_status,
@@ -367,10 +359,6 @@ async function cleanupCanaryPlanGrant(
               stripe_customer_id = ?,
               stripe_subscription_id = ?,
               plan_updated_at = ?,
-              razorpay_customer_id = ?,
-              razorpay_subscription_id = ?,
-              razorpay_plan_id = ?,
-              razorpay_status = ?,
               dodo_payment_id = ?,
               dodo_product_id = ?,
               dodo_status = ?,
@@ -384,10 +372,6 @@ async function cleanupCanaryPlanGrant(
           snapshot.stripe_customer_id,
           snapshot.stripe_subscription_id,
           snapshot.plan_updated_at,
-          snapshot.razorpay_customer_id,
-          snapshot.razorpay_subscription_id,
-          snapshot.razorpay_plan_id,
-          snapshot.razorpay_status,
           snapshot.dodo_payment_id,
           snapshot.dodo_product_id,
           snapshot.dodo_status,

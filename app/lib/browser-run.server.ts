@@ -2,10 +2,12 @@ import puppeteer from "@cloudflare/puppeteer";
 
 import {
   base64DecodedLengthExceeds,
+  readResponseJsonWithinLimit,
   readResponseTextWithinLimit,
   utf8ByteLength,
 } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
+import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import {
   extractLandingPageSignals,
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
@@ -34,6 +36,9 @@ const BROWSERLESS_PROOF_RENDER_WAIT_MS = 5_000;
 const MAX_RENDERED_HTML_BYTES = 1_000_000;
 const MAX_RENDERED_SCREENSHOT_BYTES = 3_000_000;
 const MAX_BROWSERLESS_RESPONSE_BYTES = 6_000_000;
+const BROWSERLESS_PROOF_TIMEOUT_MS = 30_000;
+const BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS = 30_000;
+const BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES = 6_000_000;
 const DEFAULT_BROWSERLESS_PROOF_ALLOWED_ORIGINS = new Set([
   "https://0509.io",
   "https://www.0509.io",
@@ -280,19 +285,23 @@ export async function captureBrowserlessProofSnapshot(
 
   const targetUrl = publicUrl.toString();
   try {
-    const response = await fetch(buildBrowserlessBqlEndpoint(env), {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        query: BROWSERLESS_PROOF_SNAPSHOT_MUTATION,
-        variables: {
-          url: targetUrl,
-          userAgent: MOBILE_USER_AGENT,
+    const response = await fetchWithTimeout(
+      buildBrowserlessBqlEndpoint(env),
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          query: BROWSERLESS_PROOF_SNAPSHOT_MUTATION,
+          variables: {
+            url: targetUrl,
+            userAgent: MOBILE_USER_AGENT,
+          },
+        }),
+      },
+      { timeoutMs: BROWSERLESS_PROOF_TIMEOUT_MS },
+    );
     const responseText = await readResponseTextWithinLimit(response, MAX_BROWSERLESS_RESPONSE_BYTES);
     if (!responseText) {
       return null;
@@ -361,19 +370,34 @@ export async function captureBrowserRunQuickActionContent(
     return null;
   }
 
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/content?cacheTTL=0`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
-        "content-type": "application/json",
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/content?cacheTTL=0`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ...options, url: publicUrl.toString() }),
       },
-      body: JSON.stringify({ ...options, url: publicUrl.toString() }),
-    },
+      { timeoutMs: BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS },
+    );
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw buildBrowserRunQuickActionTimeoutError();
+    }
+    throw error;
+  }
+  const payload = await readResponseJsonWithinLimit<BrowserRunQuickActionEnvelope<string>>(
+    response,
+    BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES,
   );
-  const payload = (await response.json().catch(() => null)) as BrowserRunQuickActionEnvelope<string> | null;
 
+  if (response.ok && !payload) {
+    throw buildBrowserRunQuickActionTimeoutError();
+  }
   if (!response.ok || !payload?.success || typeof payload.result !== "string") {
     throw buildBrowserRunQuickActionError(response, payload);
   }
@@ -396,21 +420,33 @@ export async function captureBrowserRunQuickActionScrape(
     return null;
   }
 
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/scrape?cacheTTL=0`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
-        "content-type": "application/json",
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `https://api.cloudflare.com/client/v4/accounts/${env.BROWSER_RUN_ACCOUNT_ID.trim()}/browser-rendering/scrape?cacheTTL=0`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.BROWSER_RUN_API_TOKEN.trim()}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ...options, url: publicUrl.toString() }),
       },
-      body: JSON.stringify({ ...options, url: publicUrl.toString() }),
-    },
-  );
-  const payload = (await response.json().catch(() => null)) as
-    | BrowserRunQuickActionEnvelope<BrowserRunQuickActionScrapeResult[]>
-    | null;
+      { timeoutMs: BROWSER_RUN_QUICK_ACTION_TIMEOUT_MS },
+    );
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw buildBrowserRunQuickActionTimeoutError();
+    }
+    throw error;
+  }
+  const payload = await readResponseJsonWithinLimit<
+    BrowserRunQuickActionEnvelope<BrowserRunQuickActionScrapeResult[]>
+  >(response, BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES);
 
+  if (response.ok && !payload) {
+    throw buildBrowserRunQuickActionTimeoutError();
+  }
   if (!response.ok || !payload?.success || !Array.isArray(payload.result)) {
     throw buildBrowserRunQuickActionError(response, payload);
   }
@@ -621,6 +657,17 @@ function buildBrowserRunQuickActionError(
     response.status,
     retryAfterSeconds,
   );
+}
+
+function buildBrowserRunQuickActionTimeoutError() {
+  return new BrowserRunQuickActionError(
+    "Browser Run Quick Actions timeout before returning a readable response.",
+    408,
+  );
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function parseBrowserMsUsedHeader(value: string | null) {

@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import {
   listSkusMissingProviderConfiguration,
   readProviderProductId,
@@ -6,11 +7,14 @@ import {
   resolveBillingSkuFromProviderProductId,
   type BillingSkuSlug,
 } from "~/lib/billing-sku-catalog";
+import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 
 const DODO_LIVE_URL = "https://live.dodopayments.com";
 const DODO_TEST_URL = "https://test.dodopayments.com";
 const PRICE_PREVIEW_CACHE_MS = 5 * 60 * 1000;
+const DODO_PRICING_PREVIEW_TIMEOUT_MS = 10_000;
+const DODO_PRICING_PREVIEW_JSON_MAX_BYTES = 64_000;
 const USAGE_BUNDLE_CREDITS: Record<UsageBundleSlug, number> = {
   proof_500: 500,
   proof_2000: 2000,
@@ -258,15 +262,22 @@ async function requestDodo0509CheckoutPreview(
   };
   if (country) body.billing_address = { country };
 
-  const response = await fetcher(`${dodo0509BaseUrl(env)}/checkouts/preview`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+  const response = await fetchWithTimeout(
+    `${dodo0509BaseUrl(env)}/checkouts/preview`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json().catch(() => ({}));
+    { fetcher, timeoutMs: DODO_PRICING_PREVIEW_TIMEOUT_MS },
+  );
+  const payload = (await readResponseJsonWithinLimit<Record<string, unknown>>(
+    response,
+    DODO_PRICING_PREVIEW_JSON_MAX_BYTES,
+  )) ?? {};
   if (!response.ok) {
     throw new Error(String((payload as { message?: unknown })?.message || "Dodo pricing preview failed."));
   }

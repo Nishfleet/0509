@@ -11,8 +11,12 @@ vi.mock("~/lib/plan.server", () => ({
 
 vi.mock("~/lib/ga-customer-surface", () => ({
   isSlackDeliveryCustomerFacing: vi.fn(() => false),
+  isWhatsAppDeliveryCustomerFacing: vi.fn(() => false),
   slackDeliveryUnavailableMessage: vi.fn(
     () => "Slack delivery is not available at general availability yet. Use email delivery.",
+  ),
+  whatsappDeliveryUnavailableMessage: vi.fn(
+    () => "WhatsApp delivery is not available at general availability yet. Use email delivery.",
   ),
 }));
 
@@ -90,8 +94,9 @@ async function mockRouter(loaderData: unknown, actionData?: unknown) {
 }
 
 beforeEach(async () => {
-  const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+  const { isSlackDeliveryCustomerFacing, isWhatsAppDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
   vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(false);
+  vi.mocked(isWhatsAppDeliveryCustomerFacing).mockReturnValue(false);
   vi.resetModules();
 });
 
@@ -242,39 +247,19 @@ describe("sources route loader", () => {
           createdAt: "2026-06-06T00:00:00.000Z",
         },
       ],
-      slackTargets: [
-        {
-          id: "slack-target-1",
-          displayName: "Growth alerts",
-          isPaused: false,
-          lastSuccessfulDeliveryAt: null,
-          createdAt: "2026-06-06T00:00:00.000Z",
-        },
-      ],
-      whatsappTargets: [
-        {
-          id: "whatsapp-target-1",
-          displayName: "Founder phone",
-          validationStatus: "pending",
-          templateEligible: false,
-          lastSuccessfulDeliveryAt: null,
-          createdAt: "2026-06-06T00:00:00.000Z",
-        },
-      ],
+      slackTargets: [],
+      whatsappTargets: [],
       whatsappDelivery: {
         providerConfigured: false,
         customerReady: false,
         webhookConfigured: false,
-        configuredTargets: 1,
+        configuredTargets: 0,
         usableTargets: 0,
         lastSuccessfulDeliveryAt: null,
       },
     });
     expect(JSON.stringify(result)).not.toContain("+919999999999");
-    expect(listDeliveryTargets).toHaveBeenCalledWith(expect.anything(), "user-1", {
-      channel: "whatsapp",
-      limit: 100,
-    });
+    expect(listDeliveryTargets).not.toHaveBeenCalled();
   });
 });
 
@@ -647,7 +632,7 @@ describe("sources route action", () => {
     });
   });
 
-  it("saves a WhatsApp delivery target and enables WhatsApp digests", async () => {
+  it("blocks WhatsApp delivery setup while WhatsApp is not customer-facing", async () => {
     const saveWhatsAppDeliveryTarget = vi.fn().mockResolvedValue({
       id: "whatsapp-target-1",
     });
@@ -714,30 +699,15 @@ describe("sources route action", () => {
       }),
     } as never);
 
-    expect(saveWhatsAppDeliveryTarget).toHaveBeenCalledWith(expect.anything(), {
-      userId: "user-1",
-      targetValue: "+919876543210",
-      name: "Founder phone",
-      explicitOptIn: true,
-    });
-    expect(upsertWorkspaceDeliveryConfig).toHaveBeenCalledWith(expect.anything(), {
-      userId: "user-1",
-      sensitivityMode: "balanced",
-      instantEnabled: false,
-      digestEnabled: true,
-      emailEnabled: true,
-      whatsappEnabled: true,
-      slackEnabled: true,
-      quietHours: null,
-      timezone: "Asia/Kolkata",
-    });
+    expect(saveWhatsAppDeliveryTarget).not.toHaveBeenCalled();
+    expect(upsertWorkspaceDeliveryConfig).not.toHaveBeenCalled();
     expect(result).toEqual({
-      ok: true,
-      message: "WhatsApp setup sent. Delivery turns on after Meta confirms the setup template was delivered.",
+      ok: false,
+      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
     });
   });
 
-  it("returns a form error when WhatsApp validation is rejected", async () => {
+  it("does not reach WhatsApp validation while WhatsApp is not customer-facing", async () => {
     const saveWhatsAppDeliveryTarget = vi.fn().mockRejectedValue(
       new Response("WhatsApp provider is not configured for this environment.", { status: 400 }),
     );
@@ -779,8 +749,9 @@ describe("sources route action", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "WhatsApp provider is not configured for this environment.",
+      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
     });
+    expect(saveWhatsAppDeliveryTarget).not.toHaveBeenCalled();
   });
 
   it("pauses a Slack webhook target", async () => {

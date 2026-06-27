@@ -1,21 +1,14 @@
 import { demoAds } from "~/lib/demo-data";
 import { deriveHook, deriveOffer, inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
 import { countryNameFromIso, isoFromCountryName } from "~/lib/countries";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
+import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import type { AdRecord, NormalizedSavedQuery, SearchMode, SearchResponse } from "~/lib/types";
 
 const DEFAULT_PAGE_LIMIT = 24;
 const META_FETCH_TIMEOUT_MS = 15_000;
-
-async function fetchWithTimeout(url: string, timeoutMs: number) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
+const META_FETCH_JSON_MAX_BYTES = 1_000_000;
 
 interface MetaRawAd {
   id: string;
@@ -144,7 +137,8 @@ async function liveSearch(
   try {
     response = await fetchWithTimeout(
       `https://graph.facebook.com/${version}/ads_archive?${params.toString()}`,
-      META_FETCH_TIMEOUT_MS,
+      {},
+      { timeoutMs: META_FETCH_TIMEOUT_MS },
     );
   } catch (error) {
     // AbortError comes through as a DOMException in Workers and as a
@@ -161,7 +155,18 @@ async function liveSearch(
     }
     throw error;
   }
-  const payload = (await response.json()) as MetaApiResponse;
+  const payload = await readResponseJsonWithinLimit<MetaApiResponse>(
+    response,
+    META_FETCH_JSON_MAX_BYTES,
+  );
+  if (!payload) {
+    throw new MetaApiError(
+      `Meta Ad Library returned an unreadable response with status ${response.status}.`,
+      response.status || 502,
+      false,
+      false,
+    );
+  }
 
   if (!response.ok || payload.error) {
     const code = payload.error?.code ?? response.status;
