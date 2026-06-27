@@ -9,6 +9,8 @@
     "scripts/dodo-pricing-canary.mjs",
     "scripts/d1-cleanup-0060-evidence.mjs",
     "scripts/d1-migration-sync-check*.mjs",
+    "scripts/d1-backup-command-args.mjs",
+    "scripts/safe-command-output.mjs",
     "tests/**/*",
     "app/**/*",
     "workers/**/*",

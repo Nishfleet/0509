@@ -41,7 +41,7 @@ Verification completed before and after release on 2026-06-27:
 | `npm run canary:presence` | BLOCKED, missing local internal Presence workspace id |
 | Final `autoreview --mode local` | PASS, no accepted/actionable findings |
 
-Fresh D1 backup/export before cleanup: `backups/d1/0509-2026-06-27T16-28-30-869Z.sql` uploaded to R2. Pre/post cleanup evidence preserved 5 `user_plan` rows and 5 Dodo linkage rows; post evidence shows 0 legacy billing columns and no retired-provider webhook table.
+Fresh D1 backup/export before cleanup: timestamped object under the private R2 backup prefix confirmed. Aggregate pre/post cleanup evidence preserved plan rows and Dodo linkage; post evidence shows no legacy billing columns and no retired-provider webhook table.
 
 Post-cleanup canaries passed again: pricing, billing, proof/email, prod, and provider bakeoff launch gate.
 

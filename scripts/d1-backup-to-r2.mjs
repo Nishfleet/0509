@@ -4,8 +4,14 @@
 // repo, but this script does not prove that scheduling is currently active.
 // R2 copies are never pruned by this script.
 import { mkdir, readdir, unlink, stat } from "node:fs/promises";
-import { spawn } from "node:child_process";
 import { resolve, join } from "node:path";
+import {
+  assertBackupAutomationApproval,
+  assertManualBackupApproval,
+  buildD1ExportArgs,
+  buildR2PutArgs,
+} from "./d1-backup-command-args.mjs";
+import { runCommandRedacted } from "./safe-command-output.mjs";
 
 const databaseName = process.env.D1_DATABASE_NAME || "0509";
 const bucketName = process.env.R2_BACKUP_BUCKET || "0509-landing-page-artifacts";
@@ -16,22 +22,14 @@ const localPath = join(localDir, fileName);
 const remoteKey = `backups/d1/${fileName}`;
 const KEEP_LOCAL = 8;
 
-function runCommand(command, args) {
-  return new Promise((resolveExit, reject) => {
-    const child = spawn(command, args, { stdio: "inherit", env: process.env });
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      if (signal) reject(new Error(`${command} stopped by signal ${signal}`));
-      else if (code !== 0) reject(new Error(`${command} exited with code ${code}`));
-      else resolveExit();
-    });
-  });
-}
+const automationApproved = assertBackupAutomationApproval({ databaseName, bucketName });
+const manualApproved = assertManualBackupApproval({ databaseName, bucketName, automationApproved });
+const skipD1ExportConfirmation = automationApproved || manualApproved;
 
 await mkdir(localDir, { recursive: true });
 
 console.log(`Exporting D1 '${databaseName}' to ${localPath}`);
-await runCommand("npx", ["wrangler", "d1", "export", databaseName, "--remote", "--output", localPath]);
+await runCommandRedacted("npx", buildD1ExportArgs(databaseName, localPath, { skipConfirmation: skipD1ExportConfirmation }));
 
 const exported = await stat(localPath);
 if (exported.size === 0) {
@@ -39,16 +37,7 @@ if (exported.size === 0) {
 }
 
 console.log(`Uploading to r2://${bucketName}/${remoteKey} (${Math.round(exported.size / 1024)} KiB)`);
-await runCommand("npx", [
-  "wrangler",
-  "r2",
-  "object",
-  "put",
-  `${bucketName}/${remoteKey}`,
-  "--file",
-  localPath,
-  "--remote",
-]);
+await runCommandRedacted("npx", buildR2PutArgs(bucketName, remoteKey, localPath));
 
 const entries = (await readdir(localDir))
   .filter((name) => name.startsWith(`${databaseName}-`) && name.endsWith(".sql"))

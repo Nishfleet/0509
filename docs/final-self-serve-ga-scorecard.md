@@ -6,7 +6,7 @@ Last updated: 2026-06-28
 
 Current live verdict: SCOUT AND STARTER SELF-SERVE RELEASED - OWNER ACTIONS REMAIN.
 
-Scout and Starter are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, and API/MCP Slack removal covered by tests and live canaries. Agency remains held because production fan-out proof has not passed. The remaining gaps are owner/dashboard/operator actions: Dodo portal subscription-update confirmation, external uptime monitor, scheduled backup plus restore drill, Presence internal workspace smoke, Agency fan-out ladder, Cloudflare Email activity/log visibility, WhatsApp stored-target review, and retired-provider dashboard cleanup.
+Scout and Starter are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, and API/MCP Slack removal covered by tests and live canaries. Agency remains held because production fan-out proof has not passed. Backup scheduling is now repo-configured and restore proof exists locally, but GitHub backup secrets and the first scheduled backup run remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo portal subscription-update confirmation, external uptime monitor, Presence local smoke value, Agency fan-out ladder, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
 
 ## Baseline
 
@@ -18,7 +18,8 @@ Scout and Starter are deployed and verified on the live Worker with Dodo checkou
 | Current `main` vs `origin/main` | Matched after latest docs closeout verification; release code merge was `629fb14` |
 | Pull request | #251 merged on 2026-06-27 |
 | Worker deploy | Compatible Worker deployed after PR #251; exact provider deployment id omitted |
-| Fresh release backup | R2 object `backups/d1/0509-2026-06-27T16-28-30-869Z.sql` |
+| Fresh release backup | Timestamped object under the private R2 backup prefix confirmed |
+| Fresh post-cleanup backup | Timestamped object under the private R2 backup prefix confirmed |
 | Production domains from repo config | `.io` primary domains plus `.in` redirect compatibility routes |
 | Monitoring mode from repo config | `inline`; fan-out not globally enabled |
 | Presence rollout from repo config | Website GA; digest, X, Reddit, and LinkedIn disabled |
@@ -33,19 +34,24 @@ Scout and Starter are deployed and verified on the live Worker with Dodo checkou
 | Production build | PASS | `npm run build` |
 | Dependency audit | PASS | `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilities |
 | Backup validator | PASS local dry-run | `node scripts/validate-d1-backup.mjs`; latest repo migration `0060_remove_legacy_billing_provider.sql` |
+| D1-to-R2 scheduled workflow | REPO CONFIGURED / OWNER SECRET | `.github/workflows/d1-backup-r2.yml` runs weekly/manual backup through `npm run backup:d1:r2`; required GitHub Cloudflare secrets were not listed locally, so first scheduled run is unproven; D1 export blocking risk documented |
+| Restore drill | PASS local | Post-cleanup backup imported into isolated SQLite; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed |
 | Diff whitespace | PASS | `git diff --check HEAD` |
 | Autoreview | PASS | Final staged autoreview clean; no accepted/actionable findings |
 | Retired billing provider surface | PASS | Routes, helpers, env typing, tests, active docs, historical setup migrations, and fresh-start schema references removed; `0060` converges already-created remote schema artifacts to Dodo-only billing fields after deploy |
 | Local D1 migration list | LOCAL ONLY | Local simulator reports pending `0053`-`0060` from prior local state |
 | Remote D1 migration list | PASS | No migrations to apply after `0060_remove_legacy_billing_provider.sql` |
-| D1 cleanup evidence | PASS | Pre/post evidence preserved 5 `user_plan` rows and 5 Dodo linkage rows; post evidence shows 0 legacy billing columns and no retired-provider webhook table |
+| D1 cleanup evidence | PASS | Aggregate pre/post evidence preserved plan rows and Dodo linkage; post evidence shows no legacy billing columns and no retired-provider webhook table |
 | Pricing canary | PASS | Dodo pricing canary passed for IN, US, and GB previews |
 | Billing canary | PASS | Dodo signed-webhook plan/top-up canary passed and cleanup passed |
 | Proof/email canary | PASS | Launch proof canary passed with email delivery |
 | Production canary | PASS | Health on primary domains, fresh-live search, ops readiness, and Meta ads beta passed |
 | Provider bakeoff launch gate | PASS/PARTIAL | Current live provider passed all launch queries; optional alternate providers skipped because their credentials are absent |
 | Full launch readiness script | PASS | Rerun after the retired-provider history removal and scorecard/copy refresh: typecheck, tests, build, audit, pricing, billing, proof/email, prod, and provider bakeoff passed with local canary env exported |
-| Presence website canary | BLOCKED | `npm run canary:presence` still stops at missing local internal Presence workspace id |
+| Presence website canary | PROVIDER CONFIGURED / LOCAL BLOCKED | Worker secret exists; `npm run canary:presence` still stops locally because the internal workspace id is not in local env |
+| Agency fan-out proof | BLOCKED | Local fan-out tests passed and read-only nightly check passed; live `fleet75` has zero fan-out jobs while production remains `inline` |
+| Cloudflare Email visibility | PARTIAL | Fresh proof canary sent email and aggregate D1 shows recent Cloudflare Email sends; dashboard Email Service Logs/Activity still needs owner/browser confirmation |
+| WhatsApp stored target review | REVIEWED / PRESERVE | Aggregate-only review found stale unsupported WhatsApp target/config rows and no send-attempt evidence; no deletion performed |
 
 ## Product Contract
 
@@ -66,9 +72,10 @@ Scout and Starter are deployed and verified on the live Worker with Dodo checkou
 
 ## Follow-up Hardening Notes
 
-- Cloudflare Email delivery now has an explicit application timeout with regression coverage for a never-resolving provider send; stalled sends are recorded as pending/provider unknown, not retryable failures.
+- Cloudflare Email delivery now has an explicit application timeout with regression coverage for a never-resolving provider send; stalled sends are recorded as pending/provider unknown, not retryable failures. Fresh app-side proof exists, but Cloudflare dashboard log visibility is still owner-confirmed.
 - Older top-up billing docs now point to the current final-GA truth: configured Dodo checkout and signed-webhook canary coverage are verified, while checkout still fails closed if required product mappings are absent.
 - Fresh-start migration replay no longer creates retired-provider setup artifacts. Migration `0060` removed already-created remote schema artifacts after the compatible Worker was deployed.
+- Backup output now redacts temporary signed export URLs, a weekly GitHub Actions workflow exists, and a post-cleanup local SQLite import smoke passed.
 
 ## Remaining Owner Actions
 
@@ -76,11 +83,11 @@ The live release still has these owner/operator actions:
 
 1. Confirm Dodo Product Collection membership for Scout/Starter, the Dodo subscription-update setting, and cancellation availability in the customer portal.
 2. Confirm external uptime monitoring on `https://0509.io/api/health`.
-3. Activate or explicitly defer automated D1-to-R2 backup schedule and restore drill.
-4. Provide internal Presence workspace config, then rerun `npm run canary:presence`.
+3. Add GitHub Cloudflare secrets for the scheduled D1-to-R2 backup workflow, run it once, confirm a new R2 object, and decide R2 retention.
+4. Provide local internal Presence workspace config, then rerun `npm run canary:presence`.
 5. Run live fan-out ladder before opening Agency checkout.
-6. Confirm Cloudflare Email activity/log visibility.
-7. Review unsupported WhatsApp stored targets without destructive cleanup.
+6. Confirm Cloudflare Email activity/log visibility in the Cloudflare dashboard.
+7. Preserve unsupported WhatsApp stored targets unless owner approves a backup-backed anonymization/cleanup.
 8. Clean up retired provider dashboard artifacts: old webhooks, subscriptions, payment links, and live products.
 
 ## Non-Exposure Confirmation

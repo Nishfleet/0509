@@ -4,8 +4,17 @@
 
 - `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available.
 - The repository validation gate is `node scripts/validate-d1-backup.mjs`. It dry-runs backup-script prerequisites, the D1 binding, and the current migration chain through the latest migration; it does not prove that a fresh production R2 object exists.
-- Automated R2 scheduling is **not verified active from this repository**. Keep public trust copy limited to dry-run validation, migration-chain coverage, and owner-operated backup/restore procedures until a schedule and restore drill are proven.
-- Manual run any time: `npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available).
+- `.github/workflows/d1-backup-r2.yml` schedules the same D1-to-R2 backup weekly at 22:17 UTC Sunday (03:47 IST Monday) and can be run manually from GitHub Actions. It requires repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`; those secret names were not listed by `gh secret list` on 2026-06-28, so the first scheduled Actions run is still unproven.
+- Cloudflare documents that D1 export blocks other database requests while it runs. Keep this schedule in a low-traffic window and move it if real customer traffic shows a better quiet period.
+- Manual run any time: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available). This marker is the script's explicit confirmation for a production-blocking remote D1 export; unapproved manual runs fail before Wrangler starts.
+- Backup command output redacts temporary signed export URL query strings before logging.
+
+### Backup evidence
+
+- 2026-06-27 release backup before `0060`: timestamped object under the private R2 backup prefix confirmed.
+- 2026-06-28 post-cleanup backup after `0060`: timestamped object under the private R2 backup prefix confirmed.
+- The post-cleanup backup passed an isolated local SQLite import smoke; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed.
+- A remote scratch D1 restore attempt was intentionally isolated from production but hit `SQLITE_TOOBIG` on large exported insert statements. Production-like D1 rebuild is not proven until the export is split/transformed into D1-importable statements and restored into a scratch D1 database.
 
 ### Post-deploy D1 cleanup evidence
 
@@ -22,10 +31,17 @@ The post command exits non-zero if legacy billing columns or the retired-provide
 ### Restore drill
 
 ```bash
-npx wrangler r2 object get 0509-landing-page-artifacts/backups/d1/<file>.sql --file restore.sql --remote
-# Inspect restore.sql, then apply to a NEW scratch database first:
+RESTORE_DIR="$(mktemp -d -t 0509-restore.XXXXXX)"
+trap 'rm -rf "$RESTORE_DIR"' EXIT
+npx wrangler r2 object get 0509-landing-page-artifacts/backups/d1/<file>.sql --file "$RESTORE_DIR/restore.sql" --remote
+# Inspect restore.sql, then apply to an isolated local SQLite database:
+sqlite3 "$RESTORE_DIR/restore.sqlite" < "$RESTORE_DIR/restore.sql"
+sqlite3 "$RESTORE_DIR/restore.sqlite" "PRAGMA integrity_check;"
+sqlite3 "$RESTORE_DIR/restore.sqlite" "PRAGMA foreign_key_check;"
+
+# Optional remote D1 scratch drill, only after splitting too-large statements:
 npx wrangler d1 create 0509-restore-test
-npx wrangler d1 execute 0509-restore-test --remote --file restore.sql
+npx wrangler d1 execute 0509-restore-test --remote --file "$RESTORE_DIR/restore.sql"
 ```
 
 Never execute a restore file against the production `0509` database without
