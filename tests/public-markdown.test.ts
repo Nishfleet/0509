@@ -61,6 +61,13 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample proof loop");
     expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 evidence checks/month");
+    expect(PUBLIC_MARKDOWN).toContain("daily and weekly digest delivery, and 250 evidence checks/month");
+    expect(PUBLIC_MARKDOWN).toContain("Usage bundles add purchased evidence checks that never expire");
+    expect(PUBLIC_MARKDOWN).toContain("Included evidence checks reset monthly and do not roll over");
+    expect(PUBLIC_MARKDOWN).toContain("Scheduled monitoring does not spend evidence checks");
+    expect(PUBLIC_MARKDOWN).not.toContain("30-day");
+    expect(PUBLIC_MARKDOWN).not.toContain("30 day");
+    expect(PUBLIC_MARKDOWN).not.toContain("Starter includes 10 watchlists, 25 collections, weekly digest delivery");
     expect(PUBLIC_MARKDOWN).not.toContain("any configured WhatsApp delivery proof");
     expect(PUBLIC_MARKDOWN).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
@@ -72,6 +79,10 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("user-supplied metric proof");
     expect(LLMS_TEXT).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(LLMS_TEXT).toContain("setup status plus collection, watchlist, and digest exports");
+    expect(LLMS_TEXT).toContain("Purchased top-up checks never expire");
+    expect(LLMS_TEXT).toContain("included checks reset monthly without rollover");
+    expect(LLMS_TEXT).not.toContain("usage bundles add 30-day");
+    expect(LLMS_TEXT).not.toContain("Starter includes weekly digest delivery");
     expect(LLMS_TEXT).toContain("approved account actions");
     auditedAgentActionGroups().forEach((group) => {
       expect(PUBLIC_MARKDOWN).toContain(group.label);
@@ -87,6 +98,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).not.toContain("send_email");
     expect(LLMS_TEXT).not.toContain("MCP are not live yet");
     expect(LLMS_TEXT).not.toContain("Slack incoming-webhook delivery is live");
+    expect(LLMS_TEXT).toContain("Automated TikTok, Google, YouTube, Reddit, X, LinkedIn, and Pinterest ingestion");
+    expect(LLMS_TEXT).not.toContain("web/blog/Substack/Reddit observations");
     expect(LLMS_TEXT).not.toContain("Public analysis.");
     expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve/i);
   });

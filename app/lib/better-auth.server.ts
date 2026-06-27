@@ -9,10 +9,12 @@ import {
   isEmailSendingConfigured,
   type AppEnv,
 } from "~/lib/env.server";
+import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import type { AppSession } from "~/lib/types";
 
 export const BETTER_AUTH_BASE_PATH = "/api/auth";
 export const BETTER_AUTH_OAUTH_PROVIDERS = ["google", "microsoft"] as const;
+export const BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS = 10_000;
 const BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE = "f9_better_magic";
 const BETTER_AUTH_MAGIC_LINK_STATE_COOKIE = "f9_better_magic_state";
 const BETTER_AUTH_MAGIC_LINK_CONTEXT_TTL_MS = 15 * 60 * 1000;
@@ -653,16 +655,22 @@ async function sendMagicLinkEmail(
       url: input.url,
     }),
   });
-  await env.EMAIL!.send({
-    from: {
-      email: emailFromAddress(env),
-      name: input.mode === "signup" ? "0509 Account Activation" : "0509 Sign In",
-    },
-    html: email.html,
-    subject: email.subject,
-    text: email.text,
-    to: input.email,
-  });
+  await promiseWithTimeout(
+    Promise.resolve().then(() =>
+      env.EMAIL!.send({
+        from: {
+          email: emailFromAddress(env),
+          name: input.mode === "signup" ? "0509 Account Activation" : "0509 Sign In",
+        },
+        html: email.html,
+        subject: email.subject,
+        text: email.text,
+        to: input.email,
+      }),
+    ),
+    BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS,
+    "Better Auth magic-link email timed out.",
+  );
 }
 
 async function betterAuthUserExists(env: AppEnv, email: string) {

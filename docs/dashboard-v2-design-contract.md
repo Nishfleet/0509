@@ -13,7 +13,7 @@ Locked IA, navigation, tokens, and state policy for the Five to Nine workspace.
 | Monitor | Watchlists | `/app/watchlists` | Nightly change tracking |
 | Monitor | Presence | `/app/presence` | Website/blog presence (entitled) |
 | Library | Collections | `/app/collections` | Saved ads + proof |
-| Review | Digests | `/app/digests` | Email/Slack brief history |
+| Review | Digests | `/app/digests` | Email digest history |
 | Review | Reports | `/app/shares` | Shared links + exports |
 
 ### Settings (workspace rail)

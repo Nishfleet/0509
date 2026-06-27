@@ -5,6 +5,7 @@ import {
   readResponseBytesWithinLimit,
   readResponseTextWithinLimit,
 } from "~/lib/bounded-response.server";
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -57,6 +58,7 @@ export interface CreativeTextCaptureResult {
 }
 
 const MAX_CREATIVE_FETCH_REDIRECTS = 5;
+const CREATIVE_RESOURCE_FETCH_TIMEOUT_MS = 12_000;
 
 // Ad snapshot pages — and the og:image / <img> URLs mined out of them — are
 // attacker-influenced content. Every fetch, including each redirect hop, must
@@ -73,13 +75,18 @@ async function fetchPublicCreativeResource(
     currentUrl && redirects <= MAX_CREATIVE_FETCH_REDIRECTS;
     redirects += 1
   ) {
-    const response = await fetch(currentUrl.toString(), {
-      redirect: "manual",
-      headers,
-    });
+    const response = await fetchWithTimeout(
+      currentUrl.toString(),
+      {
+        redirect: "manual",
+        headers,
+      },
+      { timeoutMs: CREATIVE_RESOURCE_FETCH_TIMEOUT_MS },
+    );
 
     if (response.status >= 300 && response.status < 400) {
       const redirected = resolvePublicRedirectUrl(response.headers.get("location"), currentUrl);
+      releaseFetchTimeout(response);
       currentUrl = redirected ? await resolvePublicHttpUrl(redirected) : null;
       continue;
     }
@@ -105,6 +112,7 @@ export async function captureCreativeText(
     });
 
     if (!response?.ok) {
+      if (response) releaseFetchTimeout(response);
       return null;
     }
 
@@ -302,15 +310,18 @@ async function fetchCreativeImagePayload(
     referer: snapshotUrl,
   });
   if (!response?.ok) {
+    if (response) releaseFetchTimeout(response);
     return null;
   }
 
   const contentType = response.headers.get("content-type") ?? "application/octet-stream";
   if (!contentType.toLowerCase().startsWith("image/")) {
+    releaseFetchTimeout(response);
     return null;
   }
 
   if (contentLengthExceeds(response.headers, MAX_CREATIVE_IMAGE_BYTES)) {
+    releaseFetchTimeout(response);
     return null;
   }
 

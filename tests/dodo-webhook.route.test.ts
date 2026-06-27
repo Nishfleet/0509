@@ -61,6 +61,29 @@ function webhookRequest(eventId: string, body: Record<string, unknown>) {
 }
 
 describe("Dodo webhook route", () => {
+  it("rejects oversized webhook bodies before signature verification", async () => {
+    const { billing } = mockWebhookDependencies();
+    const { action } = await import("~/routes/api.webhooks.dodo");
+
+    await expect(
+      action({
+        context: {},
+        request: new Request("https://0509.io/api/webhooks/dodo", {
+          method: "POST",
+          headers: {
+            "content-length": "256001",
+            "webhook-id": "evt-large",
+            "webhook-signature": "v1=signed",
+          },
+          body: "{}",
+        }),
+        params: {},
+      } as never),
+    ).rejects.toMatchObject({ status: 413 });
+
+    expect(billing.verifyDodoWebhookRequest).not.toHaveBeenCalled();
+  });
+
   it("passes the immutable payment grant timestamp instead of the delivery timestamp", async () => {
     const { data } = mockWebhookDependencies({
       billing: {

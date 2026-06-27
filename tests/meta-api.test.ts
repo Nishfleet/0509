@@ -98,4 +98,21 @@ describe("searchAds", () => {
     expect(requestUrl.searchParams.get("ad_reached_countries")).toBe("IN");
     expect(requestUrl.searchParams.get("country")).toBeNull();
   });
+
+  it("treats malformed successful Meta JSON as a provider error", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{not-json", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    await expect(
+      searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null, {
+        allowDemoFallback: false,
+      }),
+    ).rejects.toBeInstanceOf(MetaApiError);
+  });
 });

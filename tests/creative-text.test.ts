@@ -30,6 +30,7 @@ function mockFetchWithDns(handler: (url: string) => Response | Promise<Response>
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("extractCreativeTextFromSnapshotHtml", () => {
@@ -230,6 +231,7 @@ describe("captureCreativeText", () => {
   });
 
   it("refuses oversized OCR image payloads", async () => {
+    vi.useFakeTimers();
     const aiRun = vi.fn();
     mockFetchWithDns((url) => {
       if (url.includes("cdn.example.com")) {
@@ -274,5 +276,81 @@ describe("captureCreativeText", () => {
 
     expect(result).toBeNull();
     expect(aiRun).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("releases fetch timeout timers on redirected creative resources without a usable location", async () => {
+    vi.useFakeTimers();
+    const aiRun = vi.fn();
+    mockFetchWithDns(
+      () =>
+        new Response(null, {
+          status: 302,
+        }),
+    );
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "Glow Days are live.",
+        previewHeadline: "Festive glow",
+        previewSubhead: "Upto 50% off.",
+        cta: "Shop now",
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(aiRun).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("releases fetch timeout timers on non-image OCR candidates", async () => {
+    vi.useFakeTimers();
+    const aiRun = vi.fn();
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response("<html></html>", {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+          },
+        });
+      }
+
+      return new Response(
+        `
+          <html>
+            <head>
+              <meta property="og:image" content="https://cdn.example.com/creative.jpg" />
+            </head>
+            <body><div>Nykaa</div><button>Shop now</button></body>
+          </html>
+        `,
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+          },
+        },
+      );
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "Glow Days are live.",
+        previewHeadline: "Festive glow",
+        previewSubhead: "Upto 50% off.",
+        cta: "Shop now",
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(aiRun).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -261,6 +261,34 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("classifies Browser Run launch timeouts instead of waiting indefinitely", async () => {
+    vi.useFakeTimers();
+    const launch = vi.fn(() => new Promise(() => undefined));
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = expect(
+      searchMetaLibraryByBrowser({ BROWSER: {} as Fetcher }, buildQuery()),
+    ).rejects.toMatchObject({
+      failureClass: "timeout",
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await result;
+    vi.useRealTimers();
+  });
+
   it("uses Browserless BQL as a live commercial fallback when Browser Run is unavailable", async () => {
     const fetchSpy = mockFetchWithDns(
       vi.fn(async () =>
@@ -324,6 +352,64 @@ describe("searchMetaLibraryByBrowser", () => {
       ],
     });
     expect(result.discoveryEmptyReason).toBeUndefined();
+  });
+
+  it("classifies Browserless fetch aborts as timeouts", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => {
+        throw new DOMException("aborted", "AbortError");
+      }) as never,
+    );
+    const { searchMetaLibraryByBrowser, CommercialDiscoveryError } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    await expect(
+      searchMetaLibraryByBrowser(
+        {
+          BROWSERLESS_TOKEN: "browserless-token",
+        },
+        buildQuery(),
+      ),
+    ).rejects.toMatchObject({
+      name: CommercialDiscoveryError.name,
+      failureClass: "timeout",
+    });
+  });
+
+  it("classifies unreadable Browserless response bodies as timeouts", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new DOMException("deadline", "AbortError"));
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      ) as never,
+    );
+    const { searchMetaLibraryByBrowser, CommercialDiscoveryError } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    await expect(
+      searchMetaLibraryByBrowser(
+        {
+          BROWSERLESS_TOKEN: "browserless-token",
+        },
+        buildQuery(),
+      ),
+    ).rejects.toMatchObject({
+      name: CommercialDiscoveryError.name,
+      failureClass: "timeout",
+    });
   });
 
   it("treats an explicit Browserless no-results page as a healthy empty Meta result", async () => {
@@ -760,6 +846,80 @@ describe("searchMetaLibraryByBrowser", () => {
         }),
       ],
     });
+  });
+
+  it("uses Browserless when Quick Actions time out after Browser Run session fallback", async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValue(new Error("Unable to create new browser: code: 429: message: Rate limit exceeded"));
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+    const fetch = mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (String(input).includes("/browser-rendering/content")) {
+          throw new DOMException("aborted", "AbortError");
+        }
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: `
+                  <html>
+                    <body>
+                      <article>
+                        <strong>Nykaa</strong>
+                        <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
+                        <a href="/ads/library/?id=1234567890">View ad details</a>
+                        <a href="https://www.nykaa.com/glow-sale">Shop now</a>
+                      </article>
+                    </body>
+                  </html>
+                `,
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      }) as never,
+    );
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+        BROWSER_RUN_ACCOUNT_ID: "acct-123",
+        BROWSER_RUN_API_TOKEN: "token-123",
+        BROWSERLESS_TOKEN: "browserless-token",
+      },
+      buildQuery(),
+    );
+    const liveFetches = nonDnsFetchCalls(fetch);
+
+    expect(String(liveFetches[0]?.[0])).toContain("/browser-rendering/content");
+    expect(String(liveFetches[1]?.[0])).toContain("/stealth/bql?token=browserless-token");
+    expect(result.ads).toEqual([
+      expect.objectContaining({
+        metaAdId: "1234567890",
+        source: "meta_library_browser",
+      }),
+    ]);
   });
 
   it("falls back to Quick Actions when Browser Run session extraction is empty", async () => {

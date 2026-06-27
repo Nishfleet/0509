@@ -1,5 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+const DODO_WEBHOOK_MAX_BODY_BYTES = 256_000;
+
 export function loader(_args: LoaderFunctionArgs) {
   return Response.json(
     { error: "Method not allowed. Use POST." },
@@ -8,6 +10,7 @@ export function loader(_args: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
+  const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
   const { getEnv } = await import("~/lib/context.server");
   const {
     extractDodoPlanGrant,
@@ -31,7 +34,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   } = await import("~/lib/data.server");
   const { getPlanLimit } = await import("~/lib/plan.server");
   const env = getEnv(context);
-  const rawBody = await request.text();
+  const rawBody = await readRequestTextWithinLimit(request, DODO_WEBHOOK_MAX_BODY_BYTES);
+  if (rawBody === null) {
+    throw new Response("Dodo webhook payload is too large.", { status: 413 });
+  }
 
   await verifyDodoWebhookRequest(env, request, rawBody);
 

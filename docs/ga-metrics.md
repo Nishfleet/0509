@@ -10,7 +10,7 @@ Uses the **approved in-repo mechanism only**: structured JSON logs via `app/lib/
 | `monitoring_fanout_workflow_binding_missing` | Workflow binding absent |
 | `monitoring_fanout_dispatch_failed` | Workflow create failed |
 | `dodo_webhook_*` | Billing event processing |
-| `delivery_*` | Email/Slack send attempts |
+| `delivery_*` | Email send attempts; dormant Slack/WhatsApp attempts only if an operator deliberately tests non-GA channels |
 
 ## Business metrics (operator queries — D1)
 

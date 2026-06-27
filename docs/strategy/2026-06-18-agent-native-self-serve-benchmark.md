@@ -4,6 +4,12 @@ Date: 2026-06-18
 
 Updated: 2026-06-19 after the first audited agent-action tranche shipped.
 
+> Historical strategy note. This memo predates the final self-serve GA hardening
+> branch. Do not use it as current launch truth for Slack, Collections naming,
+> Presence/social connector status, auth provider details, PR/deploy state, or
+> final owner gates. Use `docs/final-self-serve-ga-scorecard.md` and
+> `docs/launch-hardening-progress.md` for the current branch posture.
+
 ## Verdict
 
 0509 should not try to win by becoming a larger ad database. Foreplay already claims a live MCP, API, broad ad search, boards, and competitor tracking at large scale. The sharper opportunity is to own a narrower but more valuable job:

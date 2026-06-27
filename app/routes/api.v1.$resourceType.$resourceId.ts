@@ -6,6 +6,10 @@ import {
   exportFormatForRequest,
   watchlistExportResponse,
 } from "~/lib/resource-export";
+import {
+  isSlackDeliveryCustomerFacing,
+  slackDeliveryUnavailableMessage,
+} from "~/lib/ga-customer-surface";
 
 type ApiResourceType = "collection" | "watchlist" | "digest";
 
@@ -35,6 +39,20 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const resourceType = normalizeResourceType(params.resourceType);
   const resourceId = params.resourceId;
   const format = exportFormatForRequest(request, "json");
+  if (format === "slack" && !isSlackDeliveryCustomerFacing()) {
+    return Response.json(
+      {
+        error: "slack_export_unavailable",
+        message: slackDeliveryUnavailableMessage(),
+      },
+      {
+        status: 403,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
   const exportGate = await requireExportFeature(env, workspaceUserId, format);
   if (!exportGate.ok) {
     return exportGate.response;

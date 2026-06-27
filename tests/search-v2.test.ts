@@ -64,4 +64,24 @@ describe("website identity SSRF guard", () => {
     const identity = await resolveWebsiteIdentity("http://169.254.169.254");
     expect(identity).toBeNull();
   });
+
+  it("returns null when website identity fetches time out", async () => {
+    const dnsA = new Response(JSON.stringify({
+      Answer: [{ type: 1, data: "93.184.216.34" }],
+    }));
+    const dnsAaaa = new Response(JSON.stringify({ Answer: [] }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(dnsA.clone())
+      .mockResolvedValueOnce(dnsAaaa.clone())
+      .mockResolvedValueOnce(dnsA.clone())
+      .mockResolvedValueOnce(dnsAaaa.clone())
+      .mockRejectedValueOnce(new DOMException("aborted", "AbortError"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { resolveWebsiteIdentity } = await import("~/lib/website-identity.server");
+    const identity = await resolveWebsiteIdentity("https://example.com");
+
+    expect(identity).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
 });

@@ -194,6 +194,27 @@ const digest: DigestRecord = {
 function setupMocks(authOk = true, actionsWriteEnabled = true) {
   mockAgencyWorkspacePlan();
   const mocks = {
+    findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
+    claimAgentActionAudit: vi.fn().mockResolvedValue({
+      claimed: true,
+      audit: {
+        id: "audit-1",
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        actionName: "delivery_settings.update",
+        resourceType: null,
+        resourceId: null,
+        idempotencyKey: "delivery-settings-whatsapp",
+        status: "claimed",
+        metadata: {},
+        result: null,
+        errorCode: null,
+        errorMessage: null,
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+      },
+    }),
+    finishAgentActionAudit: vi.fn().mockResolvedValue(null),
     getCollection: vi.fn().mockResolvedValue(collection),
     getDigest: vi.fn().mockResolvedValue(digest),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -303,6 +324,7 @@ describe("customer API v1", () => {
     const body = await response.json() as {
       endpoints: Array<{
         path: string;
+        formats: string[];
         actions?: string[];
         requiresWriteEnabled: boolean;
         credentialRequirement: string;
@@ -357,6 +379,12 @@ describe("customer API v1", () => {
       requiresWriteEnabled: false,
       credentialRequirement: expect.stringContaining(WRITE_ENABLED_API_KEY_REQUIREMENT),
     });
+    body.endpoints
+      .filter((endpoint) => endpoint.path.includes("{"))
+      .forEach((endpoint) => {
+        expect(endpoint.formats).toEqual(["json", "csv"]);
+        expect(endpoint.formats).not.toContain("slack");
+      });
     expect(body.agentActivation).toEqual(body.toolActivation);
     expect(body.toolActivation.readinessEndpoint).toBe("/api/v1/workspace-readiness");
     expect(body.toolActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
@@ -410,15 +438,19 @@ describe("customer API v1", () => {
     expect(mocks.getCollection).toHaveBeenCalledWith(expect.anything(), "collection-1", "user-1");
   });
 
-  it("returns Slack-ready markdown by API key", async () => {
+  it("rejects forged Slack export requests by API key", async () => {
     setupMocks();
     const response = await loadApi("https://0509.io/api/v1/watchlists/watchlist-1?format=slack");
-    const body = await response.text();
+    const body = await response.json() as {
+      error: string;
+      message: string;
+    };
 
-    expect(response.headers.get("content-type")).toContain("text/markdown");
-    expect(body).toContain("*Five to Nine watchlist: Nykaa watch*");
-    expect(body).toContain("*Insight depth*");
-    expect(body).toContain("Next move:");
+    expect(response.status).toBe(403);
+    expect(body).toEqual({
+      error: "slack_export_unavailable",
+      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+    });
   });
 
   it("runs audited watchlist actions by API key", async () => {
@@ -477,6 +509,50 @@ describe("customer API v1", () => {
         watchlistId: "watchlist-1",
       },
     );
+  });
+
+  it("rejects forged WhatsApp delivery settings by API key", async () => {
+    vi.doUnmock("~/lib/customer-agent-actions.server");
+    const mocks = setupMocks();
+    const { action } = await import("~/routes/api.v1.actions");
+    const response = await action({
+      context: {
+        cloudflare: {
+          env: { DB: {} },
+          ctx: {
+            waitUntil: vi.fn(),
+          },
+        },
+      },
+      request: new Request("https://0509.io/api/v1/actions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${fakeApiKey("test")}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": "delivery-settings-whatsapp",
+        },
+        body: JSON.stringify({
+          action: "delivery_settings.update",
+          input: {
+            watchlistId: "watchlist-1",
+            explicitApproval: true,
+            whatsappEnabled: true,
+            idempotencyKey: "delivery-settings-whatsapp",
+          },
+        }),
+      }),
+    } as never);
+
+    const body = await response.json();
+    expect(response.status, JSON.stringify({
+      body,
+      finishCalls: mocks.finishAgentActionAudit.mock.calls,
+    })).toBe(403);
+    expect(body).toMatchObject({
+      ok: false,
+      error: "whatsapp_delivery_unavailable",
+      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+    });
   });
 
   it("rejects audited actions from read-only API keys", async () => {

@@ -8,7 +8,11 @@ import { SubmitButton } from "~/components/submit-button";
 import { CUSTOMER_SUPPORT_PATHS } from "~/lib/agent-action-catalog";
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
+import {
+  isSlackDeliveryCustomerFacing,
+  isWhatsAppDeliveryCustomerFacing,
+  whatsappDeliveryUnavailableMessage,
+} from "~/lib/ga-customer-surface";
 
 export const meta: MetaFunction = () => [
   { title: "Notifications | Five to Nine" },
@@ -37,20 +41,26 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { whatsappTargetDisplayName } = await import("~/lib/whatsapp.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const showSlackDelivery = isSlackDeliveryCustomerFacing();
+  const showWhatsAppDelivery = isWhatsAppDeliveryCustomerFacing();
   const [connection, discoveryStatus, betaReadiness, apiKeys, slackTargets, whatsappTargets] = await Promise.all([
     getCustomerMetaConnection(env, workspaceUserId),
     resolveCommercialAdSourceStatus(env),
     getMetaAdsBetaReadiness(env),
     listCustomerApiKeys(env, workspaceUserId),
-    listDeliveryTargets(env, workspaceUserId, {
-      watchlistId: null,
-      channel: "slack",
-      limit: 10,
-    }),
-    listDeliveryTargets(env, workspaceUserId, {
-      channel: "whatsapp",
-      limit: 100,
-    }),
+    showSlackDelivery
+      ? listDeliveryTargets(env, workspaceUserId, {
+          watchlistId: null,
+          channel: "slack",
+          limit: 10,
+        })
+      : Promise.resolve([]),
+    showWhatsAppDelivery
+      ? listDeliveryTargets(env, workspaceUserId, {
+          channel: "whatsapp",
+          limit: 100,
+        })
+      : Promise.resolve([]),
   ]);
   const usableWhatsAppTargets = whatsappTargets.filter(
     (target) =>
@@ -107,9 +117,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       createdAt: target.createdAt,
     })),
     whatsappDelivery: {
-      providerConfigured: isWhatsAppProviderConfigured(env),
-      customerReady: isCustomerWhatsAppReady(env),
-      webhookConfigured: isWhatsAppWebhookConfigured(env),
+      providerConfigured: showWhatsAppDelivery && isWhatsAppProviderConfigured(env),
+      customerReady: showWhatsAppDelivery && isCustomerWhatsAppReady(env),
+      webhookConfigured: showWhatsAppDelivery && isWhatsAppWebhookConfigured(env),
       configuredTargets: whatsappTargets.length,
       usableTargets: usableWhatsAppTargets.length,
       lastSuccessfulDeliveryAt: lastWhatsAppSuccessAt,
@@ -258,6 +268,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "save-whatsapp-target") {
+    if (!isWhatsAppDeliveryCustomerFacing()) {
+      return { ok: false, message: whatsappDeliveryUnavailableMessage() };
+    }
     const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
     const {
       getWorkspaceDeliveryConfig,
@@ -381,6 +394,7 @@ export default function AppSourcesRoute() {
   const writeEnabledApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt && apiKey.actionsWriteEnabled).length;
   const hasNewApiKeySecret = Boolean(actionData && "apiKeySecret" in actionData && actionData.apiKeySecret);
   const canManageWhatsAppDelivery =
+    isWhatsAppDeliveryCustomerFacing() &&
     data.whatsappDelivery.providerConfigured &&
     data.whatsappDelivery.customerReady &&
     data.whatsappDelivery.webhookConfigured;
@@ -615,12 +629,6 @@ export default function AppSourcesRoute() {
                 <dt>JSON</dt>
                 <dd>/api/v1/watchlists/&lbrace;id&rbrace;?format=json</dd>
               </div>
-              {showSlackDelivery ? (
-              <div>
-                <dt>Slack copy</dt>
-                <dd>/api/v1/digests/&lbrace;id&rbrace;?format=slack</dd>
-              </div>
-              ) : null}
               <div>
                 <dt>Header</dt>
                 <dd>Authorization: Bearer your Five to Nine API key</dd>

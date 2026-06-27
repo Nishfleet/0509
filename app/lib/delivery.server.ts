@@ -24,6 +24,10 @@ import {
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import type { AppEnv } from "~/lib/env.server";
 import { emailFromAddress, isEmailSendingConfigured } from "~/lib/env.server";
+import {
+  isSlackDeliveryCustomerFacing,
+  isWhatsAppDeliveryCustomerFacing,
+} from "~/lib/ga-customer-surface";
 import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
   AdRecord,
@@ -42,13 +46,15 @@ import {
   SLACK_PROVIDER,
 } from "~/lib/slack-webhook.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { PromiseTimeoutError, promiseWithTimeout } from "~/lib/fetch-timeout.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
 const EMAIL_PROVIDER = "cloudflare_email" as const;
+const CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS = 10_000;
 
 interface DigestAttemptSummary {
   channel: DeliveryChannel;
-  status: "sent" | "failed";
+  status: "sent" | "failed" | "pending";
   targetValue: string;
   providerMessageId: string | null;
   errorMessage: string | null;
@@ -57,7 +63,7 @@ interface DigestAttemptSummary {
 
 type EmailProviderResult = {
   provider: typeof EMAIL_PROVIDER;
-  status: "sent" | "failed";
+  status: "sent" | "failed" | "pending";
   webhookStatus: "pending" | "failed" | "provider_unknown";
   providerMessageId: string | null;
   providerStatusLastSeenAt: string | null;
@@ -135,10 +141,10 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
     : [];
   // "All quiet" heartbeats stay email-only: a WhatsApp template or Slack
   // ping saying nothing happened reads as noise on those channels.
-  const whatsappTargets = !isHeartbeat && config.whatsappEnabled
+  const whatsappTargets = !isHeartbeat && config.whatsappEnabled && isWhatsAppDeliveryCustomerFacing()
     ? await resolveDigestWhatsAppTargets(env, input.userId)
     : [];
-  const slackTargets = !isHeartbeat && config.slackEnabled
+  const slackTargets = !isHeartbeat && config.slackEnabled && isSlackDeliveryCustomerFacing()
     ? await resolveDigestSlackTargets(env, input.userId)
     : [];
 
@@ -213,7 +219,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   const emailTargets = batches.some((batch) => batch.allowedChannels.includes("email"))
     ? await resolveAlertEmailTargets(env, input.userId, input.watchlist.id, input.accountEmail)
     : [];
-  const whatsappTargets = batches.some((batch) => batch.allowedChannels.includes("whatsapp"))
+  const whatsappTargets = isWhatsAppDeliveryCustomerFacing() && batches.some((batch) => batch.allowedChannels.includes("whatsapp"))
     ? await resolveAlertWhatsAppTargets(env, input.userId, input.watchlist.id)
     : [];
   const slackTargets = batches.some((batch) => batch.allowedChannels.includes("slack"))
@@ -485,7 +491,7 @@ async function deliverDigestToEmailTarget(
   if (duplicate && duplicate.status !== "failed") {
     return {
       channel: "email" as const,
-      status: duplicate.status === "sent" ? "sent" : "failed",
+      status: deliveryAttemptSummaryStatus(duplicate.status),
       targetValue: duplicate.targetValue,
       providerMessageId: duplicate.providerMessageId,
       errorMessage: duplicate.errorMessage,
@@ -1230,6 +1236,7 @@ async function resolveAlertEmailTargets(
 }
 
 async function resolveDigestWhatsAppTargets(env: AppEnv, userId: string) {
+  if (!isWhatsAppDeliveryCustomerFacing()) return [];
   return (await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "whatsapp",
@@ -1238,6 +1245,7 @@ async function resolveDigestWhatsAppTargets(env: AppEnv, userId: string) {
 }
 
 async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlistId: string) {
+  if (!isWhatsAppDeliveryCustomerFacing()) return [];
   return dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
       watchlistId,
@@ -1253,6 +1261,7 @@ async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlis
 }
 
 async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
+  if (!isSlackDeliveryCustomerFacing()) return [];
   return (await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "slack",
@@ -1261,6 +1270,7 @@ async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
 }
 
 async function resolveAlertSlackTargets(env: AppEnv, userId: string, watchlistId: string) {
+  if (!isSlackDeliveryCustomerFacing()) return [];
   return dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
       watchlistId,
@@ -1745,14 +1755,18 @@ async function sendCloudflareEmail(
   }
 
   try {
-    const result = await env.EMAIL!.send({
-      from: emailFromAddress(env),
-      to: input.to,
-      subject: input.subject,
-      html,
-      text: stripHtml(html),
-      headers,
-    });
+    const result = await promiseWithTimeout(
+      env.EMAIL!.send({
+        from: emailFromAddress(env),
+        to: input.to,
+        subject: input.subject,
+        html,
+        text: stripHtml(html),
+        headers,
+      }),
+      CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS,
+      "Cloudflare Email send timed out",
+    );
 
     return {
       provider: EMAIL_PROVIDER,
@@ -1764,6 +1778,18 @@ async function sendCloudflareEmail(
       deliveredAt: statusSeenAt,
     };
   } catch (error) {
+    if (error instanceof PromiseTimeoutError) {
+      return {
+        provider: EMAIL_PROVIDER,
+        status: "pending" as const,
+        webhookStatus: "provider_unknown" as const,
+        providerMessageId: null,
+        providerStatusLastSeenAt: statusSeenAt,
+        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+        deliveredAt: null,
+      };
+    }
+
     return {
       provider: EMAIL_PROVIDER,
       status: "failed" as const,
@@ -1947,12 +1973,18 @@ async function resolveInstantAttemptDedupe(
 function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttemptSummary {
   return {
     channel: attempt.channel,
-    status: attempt.status === "sent" ? "sent" : "failed",
+    status: deliveryAttemptSummaryStatus(attempt.status),
     targetValue: attempt.targetValue,
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
     deliveredAt: attempt.sentAt,
   };
+}
+
+function deliveryAttemptSummaryStatus(status: DeliveryAttemptRecord["status"]) {
+  if (status === "sent") return "sent";
+  if (status === "pending") return "pending";
+  return "failed";
 }
 
 function watchlistUrlFor(item: DigestDeliveryItem | undefined) {

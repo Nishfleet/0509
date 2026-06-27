@@ -1,5 +1,51 @@
 # Launch Hardening Progress
 
+## Final self-serve GA hardening pass (2026-06-27)
+
+Branch: `codex/final-self-serve-ga-hardening-20260625`
+Base: `ed109a9`
+
+Current staged branch status:
+
+- This branch now includes the retired-provider history removal plus the final scorecard/copy refresh; re-check exact HEAD before PR/deploy.
+- Legacy secondary billing provider removed from active runtime and fresh-start schema: routes, helpers, env typing, tests, active docs, historical setup migrations, lookup index, and legacy plan columns are gone. The only remaining database action is the post-deploy remote cleanup.
+- Slack and WhatsApp are dormant for GA across customer UI, API v1, MCP, delivery sends, readiness stats, and launch blockers. Email is the verified automated delivery channel.
+- Dodo checkout, portal, pricing, and webhook paths have explicit timeout/bounded-response handling where touched. Billing canary passed with plan and top-up grant cleanup.
+- Provider/network timeout hardening added for Dodo, Browser Run/Browserless fallback, Meta/customer token checks, landing page/proof fetches, public URL/DNS, robots/domain verification, Slack, WhatsApp, LinkedIn OAuth token exchange, and related hot paths.
+- Trust/backup copy now avoids claiming automated R2 backup proof. Backup validator walks the current repo migration chain through `0060_remove_legacy_billing_provider.sql`.
+- Presence website/blog remains GA in config/copy; X, Reddit, and LinkedIn remain disabled.
+- Agency remains held until live fan-out proof passes.
+- Account-controls branch reviewed but not merged; see `docs/codex-account-controls-branch-review.md`.
+- Branch/stash cleanup report added; no deletion performed.
+- Owner actions captured in `docs/ga-owner-actions.md`.
+- Final scorecard captured in `docs/final-self-serve-ga-scorecard.md`.
+- Protected PR body draft captured in `docs/final-self-serve-ga-pr-body.md`; PR is still not opened.
+
+Verification completed on 2026-06-27:
+
+| Check | Result |
+| --- | --- |
+| `npm test` | PASS, 143 files / 1336 tests |
+| `npm run typecheck` | PASS |
+| `npm run build` | PASS |
+| `npm audit --omit=dev --audit-level=moderate` | PASS, 0 vulnerabilities |
+| `node scripts/validate-d1-backup.mjs` | PASS, dry-run through latest migration |
+| `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --remote` | PENDING POST-DEPLOY, `0060_remove_legacy_billing_provider.sql` must wait until the compatible Worker is live |
+| `npm run canary:pricing` | PASS |
+| `npm run canary:billing` | PASS |
+| `npm run canary:proof` | PASS, email channel |
+| `npm run canary:prod` | PASS |
+| `npm run provider:bakeoff:launch` | PASS for current live provider path; optional alternate providers skipped when credentials absent |
+| `npm run launch:readiness` | PASS with local canary env exported |
+| `npm run canary:presence` | BLOCKED, missing local internal Presence workspace id |
+| Final `autoreview --mode local` | PASS, no accepted/actionable findings |
+
+Latest rerun after the retired-provider cleanup and scorecard/copy refresh: `npm run launch:readiness` passed again. Remote D1 still reports only `0060_remove_legacy_billing_provider.sql` pending post-deploy; local D1 still has simulator-only pending migrations from prior local state.
+
+This pass is verified on `codex/final-self-serve-ga-hardening-20260625`, but it is not merged or deployed yet.
+
+## Earlier launch hardening branch
+
 Branch: `cursor/launch-hardening-20260623-1825`
 Started: 2026-06-23
 
@@ -38,7 +84,7 @@ Backup: `../pre-cursor-launch-hardening.patch` (pre-run) · `../pre-final-harden
 | 2D | Dodo lookup indexes | fixed | f859d77 | `migrations/0045_dodo_plan_lookup_indexes.sql` |
 | 2E | MCP workspace plan resolution | fixed | f859d77 | `resolveWorkspaceDataUserId` in MCP + agent actions |
 | 2F | Scheduled cancellation enforcement | fixed | f859d77 | `getUserPlan` + `cancellationEffectiveAt` persistence |
-| 2G | Razorpay hard-disable | fixed | f859d77 | route returns 410, no plan mutations |
+| 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, tests, active docs, historical setup migrations, and fresh-start schema references removed; post-deploy remote cleanup still pending with aggregate evidence helper |
 | 3A | Monitoring workflow capacity | deferred | | Agency **75** watchlist allowance vs ~12 min inline budget — **unresolved** |
 | 3B | Customer-visible scan status | fixed | cb1cf44 + final pass | capacity skip label “Delayed — capacity limit” |
 | 3B′ | Capacity-skip idempotency | fixed | final pass | `watchlist_run.idempotency_key` + `INSERT OR IGNORE` (`0046`) |
@@ -137,7 +183,12 @@ Branch: `cursor/plan-entitlements-topups-no-prices-20260623`
 | Server feature gates | implemented | `plan-feature-gate.server.ts` on API/MCP/exports/shares/reports |
 | Pricing/checkout | gated | Checkout disabled when SKU/provider price config missing |
 | Remote D1 / Dodo / deploy | **released 2026-06-24** | PR #234 merge `cd3e58f`; remote migrations `0049`–`0053` applied; Worker `50328480-ba13-4acf-8b1e-65ffa2185bf5`; `MONITORING_FANOUT_MODE=inline` |
-| New SKU Dodo product/price wiring | **pending** | Catalog + fail-closed checkout live; owner must map env product IDs before top-up / v1 plan SKUs accept checkout |
+| New SKU Dodo product/price wiring | superseded | Catalog + fail-closed checkout live; final GA branch later verified configured plan and top-up checkout/webhook canaries |
+
+Superseded launch truth: the final GA branch has since verified configured Scout,
+Starter, and top-up Dodo checkout/webhook canaries. The fail-closed behavior
+above still applies when a required product mapping is absent, but this 2026-06-23
+status is no longer the current launch-readiness source of truth.
 
 Docs: `docs/plan-catalog.md`, `docs/billing-sku-catalog.md`, `docs/evidence-usage-accounting.md`, `docs/top-up-billing.md`, `docs/plan-entitlement-audit.md`.
 
@@ -158,7 +209,7 @@ Top-up spend after cancel: retained but not spendable without active paid plan. 
 - Migrations: `0055_presence_tracking.sql` (schema), `0056_presence_oauth_transaction.sql` (OAuth transactions)
 - OAuth: HMAC one-time transactions + PKCE; fail closed without `PRESENCE_OAUTH_STATE_SECRET`
 - Robots: `FiveToNinePresenceBot`, RFC 9309 parser, SSRF-safe fetch, fail-closed on robots errors
-- Rollout: `PRESENCE_WEBSITE_ROLLOUT=disabled` in wrangler vars; internal workspace via `PRESENCE_INTERNAL_WORKSPACE_ID` secret
+- Historical rollout at PR #239: `PRESENCE_WEBSITE_ROLLOUT=disabled` in wrangler vars; this was superseded by the final GA branch where website/blog Presence is GA and social connectors remain disabled.
 - Canary: `npm run canary:presence`
 - Owner actions: set `PRESENCE_OAUTH_STATE_SECRET`, `PRESENCE_INTERNAL_WORKSPACE_ID`, apply remote migrations, redeploy with `internal` rollout after canary
 
@@ -167,6 +218,6 @@ Top-up spend after cancel: retained but not spendable without active paid plan. 
 - Merged PR #239 to `main` (`0cc1bc2`)
 - Pre-deploy Worker: prior main → post-deploy `d2a45e72-1f38-48c2-b757-79484f59de9a`
 - Remote D1: migrations `0055`–`0056` applied; ledger shows no pending migrations
-- Deploy vars: `PRESENCE_WEBSITE_ROLLOUT=disabled`, all social connectors `disabled`
-- Smoke: `/api/health` OK; `/search` 200; presence nav hidden (rollout disabled)
+- Historical deploy vars: `PRESENCE_WEBSITE_ROLLOUT=disabled`, all social connectors `disabled`; current final GA branch supersedes this with website/blog Presence GA and social connectors still disabled.
+- Historical smoke: `/api/health` OK; `/search` 200; presence nav hidden (rollout disabled)
 - Internal canary blocked pending owner secrets (`PRESENCE_OAUTH_STATE_SECRET`, `PRESENCE_INTERNAL_WORKSPACE_ID`)

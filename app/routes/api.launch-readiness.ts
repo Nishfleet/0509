@@ -30,6 +30,7 @@ function isWhatsAppLaunchScoped(input: {
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { getLaunchReadinessSignals } = await import("~/lib/data.server");
+  const { isWhatsAppDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
   const { getMetaAdsBetaReadiness } = await import("~/lib/meta-ads-readiness.server");
   const env = getEnv(context);
 
@@ -55,7 +56,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getLaunchReadinessSignals(env),
     getMetaAdsBetaReadiness(env),
   ]);
-  const whatsappLaunchScoped = isWhatsAppLaunchScoped(signals.whatsappDelivery);
+  const whatsappLaunchScoped =
+    isWhatsAppDeliveryCustomerFacing() && isWhatsAppLaunchScoped(signals.whatsappDelivery);
   const blockers = [
     signals.monitoring.recentSuccessfulRuns > 0 ? null : "no_recent_monitoring_run",
     signals.proof.recentSuccessfulCaptures > 0 ? null : "no_recent_proof_capture",

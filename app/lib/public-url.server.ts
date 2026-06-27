@@ -1,3 +1,6 @@
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
+
 const INTERNAL_HOST_SUFFIXES = [
   ".home",
   ".internal",
@@ -7,6 +10,8 @@ const INTERNAL_HOST_SUFFIXES = [
   ".localhost",
 ];
 const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
+const DNS_LOOKUP_TIMEOUT_MS = 5_000;
+const DNS_JSON_MAX_BYTES = 64_000;
 
 export function normalizePublicHttpUrl(value: string | URL) {
   let url: URL;
@@ -116,16 +121,21 @@ async function resolveDnsJson(hostname: string, type: "A" | "AAAA") {
   endpoint.searchParams.set("type", type);
 
   try {
-    const response = await fetch(endpoint.toString(), {
-      headers: {
-        accept: "application/dns-json",
+    const response = await fetchWithTimeout(
+      endpoint.toString(),
+      {
+        headers: {
+          accept: "application/dns-json",
+        },
       },
-    });
+      { timeoutMs: DNS_LOOKUP_TIMEOUT_MS },
+    );
     if (!response.ok) {
+      releaseFetchTimeout(response);
       return [];
     }
 
-    const payload = (await response.json().catch(() => null)) as
+    const payload = (await readResponseJsonWithinLimit(response, DNS_JSON_MAX_BYTES)) as
       | {
           Answer?: Array<{
             data?: string;

@@ -2,6 +2,7 @@ import {
   contentLengthExceeds,
   readResponseTextWithinLimit,
 } from "~/lib/bounded-response.server";
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
 
@@ -17,6 +18,7 @@ export interface WebsiteIdentity {
 const MAX_IDENTITY_FETCH_REDIRECTS = 5;
 const MAX_IDENTITY_RESPONSE_BYTES = 250_000;
 const IDENTITY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const IDENTITY_FETCH_TIMEOUT_MS = 10_000;
 
 const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
 
@@ -58,34 +60,47 @@ async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Pr
       return null;
     }
 
-    const response = await fetch(resolved.toString(), {
-      redirect: "manual",
-      headers: {
-        accept: "text/html,application/xhtml+xml",
-        "user-agent": "0509-search-identity/1.0",
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(
+        resolved.toString(),
+        {
+          redirect: "manual",
+          headers: {
+            accept: "text/html,application/xhtml+xml",
+            "user-agent": "0509-search-identity/1.0",
+          },
+        },
+        { timeoutMs: IDENTITY_FETCH_TIMEOUT_MS },
+      );
+    } catch {
+      return null;
+    }
 
     if (response.status >= 300 && response.status < 400) {
       const redirected = resolvePublicRedirectUrl(response.headers.get("location"), resolved);
+      releaseFetchTimeout(response);
       currentUrl = redirected ? new URL(redirected) : null;
       continue;
     }
 
     if (!response.ok) {
+      releaseFetchTimeout(response);
       return null;
     }
 
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
+      releaseFetchTimeout(response);
       return null;
     }
 
     if (contentLengthExceeds(response.headers, MAX_IDENTITY_RESPONSE_BYTES)) {
+      releaseFetchTimeout(response);
       return null;
     }
 
-    const html = await readResponseTextWithinLimit(response, MAX_IDENTITY_RESPONSE_BYTES);
+    const html = await readResponseTextWithinLimit(response, MAX_IDENTITY_RESPONSE_BYTES).catch(() => null);
     if (!html) {
       return null;
     }

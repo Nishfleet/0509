@@ -59,11 +59,6 @@ describe("primary domain redirects", () => {
         new Request("https://api.0509.in/api/webhooks/dodo?event=evt_123", { method: "POST" }),
       ),
     ).toBeNull();
-    expect(
-      primaryDomainRedirect(
-        new Request("https://0509.in/api/webhooks/razorpay", { method: "POST" }),
-      ),
-    ).toBeNull();
   });
 
   it("lets legacy provider GET challenges reach their verification routes", () => {

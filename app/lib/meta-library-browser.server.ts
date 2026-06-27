@@ -1,6 +1,7 @@
 import puppeteer from "@cloudflare/puppeteer";
 
 import { inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import {
   type BrowserRunQuickActionScrapeElement,
   BrowserRunQuickActionError,
@@ -10,6 +11,7 @@ import {
 } from "~/lib/browser-run.server";
 import { isoFromCountryName } from "~/lib/countries";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
+import { fetchWithTimeout, promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import type {
   AdRecord,
   DiscoveryFailureClass,
@@ -37,6 +39,9 @@ const QUICK_ACTION_WAIT_FOR_TIMEOUT_MS = 1_000;
 const QUICK_ACTION_SCRAPE_WAIT_FOR_TIMEOUT_MS = 2_000;
 const BROWSERLESS_RENDER_WAIT_MS = 5_000;
 const BROWSERLESS_EMPTY_RESULT_MAX_ATTEMPTS = 2;
+const BROWSERLESS_META_FETCH_TIMEOUT_MS = 30_000;
+const BROWSERLESS_META_JSON_MAX_BYTES = 6_000_000;
+const BROWSER_RUN_ACQUIRE_TIMEOUT_MS = 10_000;
 const BROWSERLESS_BQL_MUTATION = `
 mutation MetaLibraryLiveFallback($url: String!, $userAgent: String!) {
   userAgent(userAgent: $userAgent) {
@@ -449,9 +454,14 @@ async function acquireBrowser(browserBinding: BrowserBinding) {
     );
   }
 
-  return puppeteer.launch(browserBinding, {
-    keep_alive: BROWSER_SESSION_KEEP_ALIVE_MS,
-  });
+  return promiseWithTimeout(
+    puppeteer.launch(browserBinding, {
+      keep_alive: BROWSER_SESSION_KEEP_ALIVE_MS,
+    }),
+    BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
+    "Browser Run launch timed out.",
+    (lateBrowser) => lateBrowser.close(),
+  );
 }
 
 async function connectToReusableBrowser(browserBinding: BrowserBinding) {
@@ -459,7 +469,12 @@ async function connectToReusableBrowser(browserBinding: BrowserBinding) {
 
   for (const session of sessions) {
     try {
-      return await puppeteer.connect(browserBinding, session.sessionId);
+      return await promiseWithTimeout(
+        puppeteer.connect(browserBinding, session.sessionId),
+        BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
+        "Browser Run connect timed out.",
+        (lateBrowser) => lateBrowser.disconnect(),
+      );
     } catch {
       continue;
     }
@@ -470,7 +485,11 @@ async function connectToReusableBrowser(browserBinding: BrowserBinding) {
 
 async function listReusableSessions(browserBinding: BrowserBinding) {
   try {
-    const sessions = await puppeteer.sessions(browserBinding);
+    const sessions = await promiseWithTimeout(
+      puppeteer.sessions(browserBinding),
+      BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
+      "Browser Run sessions lookup timed out.",
+    );
     return [...(sessions as BrowserRunSession[])]
       .filter((session) => !session.connectionId)
       .sort((left, right) => right.startTime - left.startTime);
@@ -481,7 +500,11 @@ async function listReusableSessions(browserBinding: BrowserBinding) {
 
 async function readBrowserLimits(browserBinding: BrowserBinding) {
   try {
-    return (await puppeteer.limits(browserBinding)) as BrowserRunLimits;
+    return (await promiseWithTimeout(
+      puppeteer.limits(browserBinding),
+      BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
+      "Browser Run limits lookup timed out.",
+    )) as BrowserRunLimits;
   } catch {
     return null;
   }
@@ -564,6 +587,9 @@ function normalizeCommercialDiscoveryError(error: unknown) {
         retryAfterSeconds: error.retryAfterSeconds,
       });
     }
+    if (error.status === 408) {
+      return new CommercialDiscoveryError(error.message, "timeout");
+    }
     if (error.status === 401 || error.status === 403) {
       return new CommercialDiscoveryError(
         "Browser Run Quick Actions are not authorized for commercial discovery.",
@@ -577,7 +603,7 @@ function normalizeCommercialDiscoveryError(error: unknown) {
   const failureClass: DiscoveryFailureClass = normalizedMessage.includes("rate limit") ||
     normalizedMessage.includes("429")
     ? "rate_limited"
-    : normalizedMessage.includes("timeout")
+    : normalizedMessage.includes("timeout") || normalizedMessage.includes("timed out")
       ? "timeout"
       : "browser_launch_failed";
   return new CommercialDiscoveryError(message, failureClass);
@@ -617,20 +643,35 @@ async function searchMetaLibraryByBrowserlessOnce(
   query: NormalizedSavedQuery,
 ): Promise<SearchResponse> {
   const endpoint = buildBrowserlessBqlEndpoint(env);
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      query: BROWSERLESS_BQL_MUTATION,
-      variables: {
-        url: buildSearchUrl(query),
-        userAgent: MOBILE_USER_AGENT,
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      endpoint,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          query: BROWSERLESS_BQL_MUTATION,
+          variables: {
+            url: buildSearchUrl(query),
+            userAgent: MOBILE_USER_AGENT,
+          },
+        }),
       },
-    }),
-  });
-  const payload = (await response.json().catch(() => null)) as
+      { timeoutMs: BROWSERLESS_META_FETCH_TIMEOUT_MS },
+    );
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw normalizeBrowserlessError(408, "Browserless timed out.");
+    }
+    throw error;
+  }
+  const payload = (await readResponseJsonWithinLimit(
+    response,
+    BROWSERLESS_META_JSON_MAX_BYTES,
+  )) as
     | {
         data?: {
           html?: {
@@ -646,6 +687,10 @@ async function searchMetaLibraryByBrowserlessOnce(
 
   if (!response.ok) {
     throw normalizeBrowserlessError(response.status, payload?.message ?? null);
+  }
+
+  if (!payload) {
+    throw normalizeBrowserlessError(408, "Browserless timed out before returning a readable response.");
   }
 
   if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
@@ -695,6 +740,10 @@ function buildBrowserlessBqlEndpoint(env: AppEnv) {
   return url.toString();
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 function normalizeBrowserlessError(status: number, message: string | null) {
   const lower = (message ?? "").toLowerCase();
   if (status === 429 || lower.includes("rate limit") || lower.includes("too many requests")) {
@@ -704,7 +753,7 @@ function normalizeBrowserlessError(status: number, message: string | null) {
     );
   }
 
-  if (lower.includes("timeout")) {
+  if (lower.includes("timeout") || lower.includes("timed out")) {
     return new CommercialDiscoveryError(message || "Browserless timed out.", "timeout");
   }
 

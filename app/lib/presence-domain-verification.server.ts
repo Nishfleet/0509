@@ -1,10 +1,14 @@
 import type { AppEnv } from "~/lib/env.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { presenceSafeFetch } from "~/lib/presence-robots.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const WELL_KNOWN_PATH = "/.well-known/five-to-nine-verification.txt";
 const DNS_TXT_PREFIX = "_five-to-nine.";
+const DNS_TXT_LOOKUP_TIMEOUT_MS = 5_000;
+const DNS_TXT_JSON_MAX_BYTES = 64_000;
 
 function requireDb(env: AppEnv) {
   if (!env.DB) {
@@ -103,16 +107,26 @@ async function verifyWellKnown(domain: string, token: string) {
 
 async function verifyDnsTxt(domain: string, token: string) {
   const name = `${DNS_TXT_PREFIX}${domain}`;
-  const response = await fetch(
-    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=TXT`,
-    { headers: { Accept: "application/dns-json" } },
-  );
-  if (!response.ok) {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=TXT`,
+      { headers: { Accept: "application/dns-json" } },
+      { timeoutMs: DNS_TXT_LOOKUP_TIMEOUT_MS },
+    );
+  } catch {
     return false;
   }
-  const payload = (await response.json()) as {
+  if (!response.ok) {
+    releaseFetchTimeout(response);
+    return false;
+  }
+
+  const payload = await readResponseJsonWithinLimit<{
     Answer?: Array<{ data?: string }>;
-  };
+  }>(response, DNS_TXT_JSON_MAX_BYTES);
+  if (!payload) return false;
+
   const expected = `five-to-nine=${token}`;
   return (payload.Answer ?? []).some((record) => {
     const data = record.data?.replace(/^"|"$/g, "") ?? "";

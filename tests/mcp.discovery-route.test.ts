@@ -48,7 +48,7 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     actions: ["list_delivery_targets", "update_delivery_settings", "update_delivery_target"],
   },
   {
-    label: "Web mentions beta",
+    label: "Presence observations",
     requiresWriteEnabled: true,
     actions: ["list_web_mentions"],
   },
@@ -90,6 +90,7 @@ describe("MCP route discovery", () => {
         name: string;
         requiresWriteEnabled: boolean;
         credentialRequirement: string;
+        inputSchema: unknown;
       }>;
       agentActivation: {
         firstWorkflow: Array<{ label: string }>;
@@ -136,6 +137,26 @@ describe("MCP route discovery", () => {
     expect(toolNames.filter((name) => !READ_EXPORT_TOOL_NAME_SET.has(name)).sort()).toEqual(
       [...expectedGroupedActionNames].sort(),
     );
+    body.tools
+      .filter((tool) => tool.name === "get_workspace_readiness" || READ_EXPORT_TOOL_NAME_SET.has(tool.name))
+      .forEach((tool) => {
+        expect(JSON.stringify(tool.inputSchema)).toContain('"json"');
+      });
+    body.tools.forEach((tool) => {
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"slack"');
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"whatsapp"');
+      expect(JSON.stringify(tool.inputSchema)).not.toContain("Slack-ready");
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"reddit"');
+    });
+    expect(body.tools.find((tool) => tool.name === "list_web_mentions")?.inputSchema).toMatchObject({
+      properties: {
+        sources: {
+          items: {
+            enum: ["blog", "substack", "web"],
+          },
+        },
+      },
+    });
     body.tools.forEach((tool) => {
       const requiresWriteEnabled = expectedWriteToolNameSet.has(tool.name);
       expect(tool).toMatchObject({
@@ -149,8 +170,11 @@ describe("MCP route discovery", () => {
     expect(body.agentActivation.blockedCapabilities).toContain("secret-bearing integration setup");
     expect(body.agentActivation.blockedCapabilities).toContain("customer API key creation, rotation, and revocation");
     expect(body.notLiveYet).toContain("TikTok ingestion");
+    expect(body.notLiveYet).toContain("Reddit, LinkedIn, or Pinterest ingestion");
     expect(body.notLiveYet).toContain(BROAD_WRITE_API_NON_GOAL);
     expect(body.notLiveYet).not.toContain("secret-bearing integration setup");
     expect(body.notLiveYet).not.toContain("MCP server");
+    expect(JSON.stringify(body)).not.toContain("account-owned boards");
+    expect(JSON.stringify(body)).not.toContain("Reddit observations");
   });
 });

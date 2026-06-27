@@ -90,9 +90,9 @@ describe("app rebuild", () => {
     expect(dashboardRoute).not.toContain("source state visible");
     expect(dashboardRoute).not.toContain("data.workspaceReadiness.items");
     expect(appSurface).toContain("?format=json");
-    expect(appSurface).toContain("?format=slack");
     expect(appSurface).toContain("JSON export");
-    expect(appSurface).toContain("Slack copy");
+    expect(appSurface).not.toContain("?format=slack");
+    expect(appSurface).not.toContain("Slack copy");
     expect(appSurface).toContain("Insight depth");
     expect(appSurface).toContain("Top hooks");
     expect(appSurface).toContain("Media mix");

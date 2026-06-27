@@ -8,6 +8,13 @@ import {
   previewDodo0509PlanPrices,
 } from "~/lib/dodo-pricing.server";
 
+function jsonResponse(payload: unknown, init: ResponseInit = {}) {
+  return new Response(JSON.stringify(payload), {
+    headers: { "Content-Type": "application/json", ...init.headers },
+    ...init,
+  });
+}
+
 describe("Dodo 0509 pricing", () => {
   it("requires a Dodo account key, 0509 brand, and 0509 product ids", () => {
     expect(hasDodo0509Pricing({})).toBe(false);
@@ -77,9 +84,8 @@ describe("Dodo 0509 pricing", () => {
   });
 
   it("previews configured products through Dodo checkout preview", async () => {
-    const fetcher = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetcher = vi.fn().mockImplementation(() =>
+      jsonResponse({
         currency: "INR",
         current_breakup: {
           total_amount: 499900,
@@ -87,7 +93,7 @@ describe("Dodo 0509 pricing", () => {
         product_cart: [{ tax_inclusive: true }],
         total_tax: 0,
       }),
-    });
+    );
 
     const preview = await previewDodo0509PlanPrices({
       env: {
@@ -109,6 +115,7 @@ describe("Dodo 0509 pricing", () => {
       "https://test.dodopayments.com/checkouts/preview",
       expect.objectContaining({
         method: "POST",
+        signal: expect.any(AbortSignal),
         headers: expect.objectContaining({
           Authorization: "Bearer secret",
         }),
@@ -168,22 +175,20 @@ describe("Dodo 0509 pricing", () => {
   it("bypasses the preview cache for private pricing canary requests", async () => {
     const fetcher = vi
       .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+      .mockResolvedValueOnce(
+        jsonResponse({
           currency: "INR",
           current_breakup: { total_amount: 99900 },
           product_cart: [{ tax_inclusive: true }],
         }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
           currency: "USD",
           current_breakup: { total_amount: 1100 },
           product_cart: [{ tax_inclusive: true }],
         }),
-      });
+      );
     const env = {
       CANARY_BYPASS_TOKEN: "canary-token",
       DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE: "true",
@@ -217,9 +222,8 @@ describe("Dodo 0509 pricing", () => {
   });
 
   it("ignores pricing country overrides without the private canary token", async () => {
-    const fetcher = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetcher = vi.fn().mockResolvedValue(
+      jsonResponse({
         currency: "INR",
         current_breakup: {
           total_amount: 499900,
@@ -227,7 +231,7 @@ describe("Dodo 0509 pricing", () => {
         product_cart: [{ tax_inclusive: true }],
         total_tax: 0,
       }),
-    });
+    );
     const request = new Request("https://0509.io/api/pricing-preview?country=US", {
       headers: {
         "cf-ipcountry": "IN",
@@ -254,9 +258,8 @@ describe("Dodo 0509 pricing", () => {
   });
 
   it("allows tokened canary pricing probes to override Cloudflare country", async () => {
-    const fetcher = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetcher = vi.fn().mockResolvedValue(
+      jsonResponse({
         currency: "USD",
         current_breakup: {
           total_amount: 5900,
@@ -265,7 +268,7 @@ describe("Dodo 0509 pricing", () => {
         product_cart: [{ tax_inclusive: false }],
         total_tax: 0,
       }),
-    });
+    );
     const request = new Request("https://0509.io/api/pricing-preview?country=US", {
       headers: {
         "cf-ipcountry": "IN",
