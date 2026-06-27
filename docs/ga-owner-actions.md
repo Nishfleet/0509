@@ -6,7 +6,7 @@ These are the remaining launch actions that cannot be honestly proven from the r
 
 | Action | Status | Owner | Risk | Launch impact | Next step |
 | --- | --- | --- | --- | --- | --- |
-| Dodo customer portal subscription updates | OWNER | Nish | Customers may need support for plan changes/cancellation | Scout/Starter can sell, but billing is not fully self-serve | Dodo dashboard -> Settings -> Customer Portal -> enable subscription updates/cancellation, then confirm `/app/billing` portal exposes the action |
+| Dodo customer portal subscription updates | OWNER | Nish | Customers may need support for plan changes/cancellation | Scout/Starter can sell, but billing is not fully self-serve | In Dodo, put the Scout/Starter subscription products in the same Product Collection, enable **Allow Subscription Updates** in **Settings -> Subscriptions**, then confirm `/app/billing` portal shows plan changes; separately confirm cancellation remains available in subscription details |
 | External uptime monitor | OWNER | Nish | No independent outage alert proof | Launch trust gate remains owner-verified only | UptimeRobot or equivalent monitor for `https://0509.io/api/health`, about 5 minute interval, outage and recovery alerts, no token in URL |
 | D1-to-R2 scheduled backup | OWNER | Nish | Public trust cannot claim automated cloud backups | Trust page must stay conservative | Configure a scheduled run of `npm run backup:d1:r2`, confirm a new object appears in the backup prefix, then record retention |
 | Restore drill | OWNER | Nish/operator | Backup integrity remains unproven beyond dry-run validation | Launchable only with conservative backup wording | Restore a recent backup into an isolated local/test database and record the result |

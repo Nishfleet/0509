@@ -98,6 +98,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).not.toContain("send_email");
     expect(LLMS_TEXT).not.toContain("MCP are not live yet");
     expect(LLMS_TEXT).not.toContain("Slack incoming-webhook delivery is live");
+    expect(LLMS_TEXT).toContain("Automated TikTok, Google, YouTube, Reddit, X, LinkedIn, and Pinterest ingestion");
+    expect(LLMS_TEXT).not.toContain("web/blog/Substack/Reddit observations");
     expect(LLMS_TEXT).not.toContain("Public analysis.");
     expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve/i);
   });

@@ -86,7 +86,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     if (!(error instanceof BetterAuthUnknownUserError)) {
-      console.warn("failed to send Better Auth login email", error);
+      console.warn("failed to send Better Auth login email", {
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
       throw redirect("/auth/login?error=send_failed");
     }
   }

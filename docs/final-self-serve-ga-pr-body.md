@@ -64,7 +64,7 @@ Presence website canary remains owner-blocked because the local internal Presenc
 
 These are not proven by repo code alone:
 
-- Confirm the Dodo customer portal subscription-update/cancellation setting.
+- Confirm Dodo Product Collection membership for Scout/Starter, the subscription-update setting, and cancellation availability in the customer portal.
 - Confirm an external uptime monitor for `https://0509.io/api/health`.
 - Activate or explicitly defer D1-to-R2 scheduled backup and restore drill.
 - Provide internal Presence workspace config and rerun `npm run canary:presence`.

@@ -239,9 +239,9 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
         id: "web-obs-1",
         targetId: "web-target-1",
         userId: "user-1",
-        source: "reddit",
+        source: "blog",
         sourceId: "post-1",
-        url: "https://reddit.com/r/beauty/comments/1",
+        url: "https://glossier.com/blog/launch",
         title: "Glossier launch",
         author: "user",
         excerpt: "Proof-backed mention",
@@ -960,7 +960,7 @@ describe("runCustomerAgentAction", () => {
     );
   });
 
-  it("creates audited boards after checking collection limits", async () => {
+  it("creates audited collections after checking collection limits", async () => {
     const mocks = setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
@@ -1011,7 +1011,7 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.runWatchlistManual).not.toHaveBeenCalled();
   });
 
-  it("adds audited external proof to an owned board", async () => {
+  it("adds audited external proof to an owned collection", async () => {
     const mocks = setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
@@ -1813,7 +1813,7 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 
-  it("lists only narrow proof-backed web mention beta sources", async () => {
+  it("lists only website blog and Substack presence observation sources", async () => {
     const mocks = setupMocks();
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
@@ -1828,7 +1828,7 @@ describe("runCustomerAgentAction", () => {
       "web_mentions.list",
       {
         watchlistId: "watchlist-1",
-        sources: ["reddit", "blog"],
+        sources: ["blog"],
       },
     );
 
@@ -1837,12 +1837,16 @@ describe("runCustomerAgentAction", () => {
       targets: Array<{ sources: string[] }>;
       observations: Array<{ source: string }>;
     };
-    expect(result.supportedSources).toEqual(["reddit", "blog", "substack", "web"]);
-    expect(result.targets[0]?.sources).toEqual(["reddit", "blog", "substack", "web"]);
-    expect(result.observations[0]?.source).toBe("reddit");
+    expect(result).toMatchObject({
+      status: "available",
+      boundary: "Returns existing proof-backed website, blog, and Substack observations only. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
+    });
+    expect(result.supportedSources).toEqual(["blog", "substack", "web"]);
+    expect(result.targets[0]?.sources).toEqual(["blog", "substack", "web"]);
+    expect(result.observations[0]?.source).toBe("blog");
     expect(mocks.listWebMentionObservations).toHaveBeenCalledWith(expect.anything(), "user-1", {
       watchlistId: "watchlist-1",
-      sources: ["reddit", "blog"],
+      sources: ["blog"],
       includeInactive: false,
       limit: 50,
     });

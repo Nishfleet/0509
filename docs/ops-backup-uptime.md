@@ -50,14 +50,16 @@ If sign-up is undesirable, the fallback is a health-ping cron inside the
 uncommitted local changes on 2026-06-12, so the cron was deliberately not
 added; revisit once that working tree is clean.
 
-## Dodo customer portal — "Allow Subscription Updates" (needs Nish)
+## Dodo customer portal — product collection and subscription updates (needs Nish)
 
 The customer portal button on `/app/billing` opens Dodo's hosted portal.
-Whether customers can change/cancel subscriptions there is controlled by a
-dashboard setting, not the API:
+Whether customers can change subscriptions there is controlled by Dodo product
+collection setup and a dashboard setting, not the API:
 
-Dodo dashboard → **Settings → Customer Portal** → enable
-**Allow Subscription Updates** (and confirm cancellation is allowed).
+1. Add the live Scout and Starter subscription products to the same Dodo Product Collection.
+2. Dodo dashboard → **Settings → Subscriptions** → enable **Allow Subscription Updates**.
+3. Open a test/internal customer portal session and confirm plan changes appear only between products in that collection.
+4. Separately confirm cancellation remains available from subscription details.
 
-Until that's enabled, customers can view but not self-serve cancel — they'd
-have to email support, which is friction we don't want.
+Until those are verified, customers can use the hosted portal for card/invoice
+tasks, while plan changes and cancellation stay support-assisted in product copy.

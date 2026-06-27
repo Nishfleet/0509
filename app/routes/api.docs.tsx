@@ -95,7 +95,7 @@ Authorization: Bearer f9_live_...
       <PublicDocBlock title="Recipes">
         <ul className="f9-doc-list">
           <li>Export a watchlist as CSV before a weekly sales meeting.</li>
-          <li>Pull a board as JSON into a team research note.</li>
+          <li>Pull a collection as JSON into a team research note.</li>
           <li>Create a counter-move brief and save account context for future reports.</li>
         </ul>
       </PublicDocBlock>
@@ -106,7 +106,7 @@ Authorization: Bearer f9_live_...
           <li>Approved account actions are limited to safe operations and store an action log.</li>
           <li>Keys are shown once, stored hashed, and can be revoked from Notifications.</li>
           <li>Restricted actions still require signed-in owner review: {AGENT_BLOCKED_CAPABILITIES.join(", ")}.</li>
-          <li>Not live yet: X/YouTube listening or broad social listening beyond existing proof-backed observations.</li>
+          <li>Not live yet: automated X, Reddit, LinkedIn, YouTube, TikTok, Google, or Pinterest ingestion.</li>
         </ul>
       </PublicDocBlock>
     </PublicDocShell>

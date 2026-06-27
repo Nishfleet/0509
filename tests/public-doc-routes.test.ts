@@ -36,12 +36,15 @@ describe("public documentation routes", () => {
     expect(markup).toContain("Requires a write-enabled customer API key");
     expect(markup).toContain("Restricted actions still require signed-in owner review");
     expect(markup).toContain("customer API key creation, rotation, and revocation");
-    expect(markup).toContain("Not live yet: X/YouTube listening or broad social listening");
+    expect(markup).toContain("Not live yet: automated X, Reddit, LinkedIn, YouTube, TikTok, Google, or Pinterest ingestion.");
+    expect(markup).toContain("Pull a collection as JSON into a team research note.");
+    expect(markup).not.toContain("Pull a board as JSON");
     expect(markup).not.toContain("fully general write API");
     expect(markup).not.toContain("First agent workflow");
     expect(markup).not.toContain("hooks.slack.com/services/");
     expect(markup).not.toContain("format=slack");
     expect(markup).not.toContain("Slack-ready");
+    expect(markup).not.toContain("Reddit observations");
     expect(markup).not.toContain("BETTER_AUTH_SECRET");
   });
 

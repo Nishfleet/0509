@@ -412,11 +412,23 @@ describe("MCP route", () => {
       expect(JSON.stringify(tool.inputSchema)).not.toContain('"slack"');
       expect(JSON.stringify(tool.inputSchema)).not.toContain('"whatsapp"');
       expect(JSON.stringify(tool.inputSchema)).not.toContain("Slack-ready");
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"reddit"');
     });
     body.result.tools.forEach((tool) => {
       expect(JSON.stringify(tool.inputSchema)).not.toContain('"slack"');
       expect(JSON.stringify(tool.inputSchema)).not.toContain("Slack-ready");
     });
+    const webMentionSchema = body.result.tools.find((tool) => tool.name === "list_web_mentions")?.inputSchema;
+    expect(webMentionSchema).toMatchObject({
+      properties: {
+        sources: {
+          items: {
+            enum: ["blog", "substack", "web"],
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(body.result.tools)).not.toContain("account-owned board");
   });
 
   it("hides write tools for read-only API keys", async () => {
@@ -859,7 +871,7 @@ describe("MCP route", () => {
       {
         toolName: "list_web_mentions",
         actionName: "web_mentions.list",
-        args: { watchlistId: "watchlist-1", sources: ["reddit"] },
+        args: { watchlistId: "watchlist-1", sources: ["blog"] },
       },
     ];
 

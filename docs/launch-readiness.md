@@ -8,7 +8,7 @@ Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green,
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
-Remaining owner gates outside this repo: Dodo customer portal **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), backup/restore proof, Presence internal workspace smoke, and Agency fan-out proof.
+Remaining owner gates outside this repo: Dodo Product Collection membership plus **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), backup/restore proof, Presence internal workspace smoke, and Agency fan-out proof.
 
 The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, dormant-channel advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
@@ -73,9 +73,9 @@ WhatsApp is not launch-scoped until the provider/customer/webhook lane is delibe
 
 ## Dodo Portal Manual Blocker
 
-Dodo customer portal sessions are wired in `/app/billing`, but the Dodo dashboard must have Customer Portal subscription updates enabled before customers can change or cancel subscriptions without emailing support.
+Dodo customer portal sessions are wired in `/app/billing`, but Dodo must have the relevant subscription products grouped into a Product Collection and **Allow Subscription Updates** enabled before customers can change plans without emailing support. Cancellation also needs a separate portal check from subscription details.
 
-Required manual step: Dodo dashboard → Settings → Customer Portal → enable **Allow Subscription Updates** and confirm cancellation is available.
+Required manual step: Dodo dashboard → Product Collections → group the live Scout/Starter subscription products; then Settings → Subscriptions → enable **Allow Subscription Updates**; then confirm plan changes and cancellation in an internal customer portal session.
 
 ## External Uptime Manual Blocker
 

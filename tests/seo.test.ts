@@ -37,5 +37,9 @@ describe("public SEO files", () => {
     expect(skill).toContain("https://0509.io/api/docs");
     expect(skill).toContain("support@0509.io");
     expect(skill).not.toContain("0509.in");
+    expect(skill).not.toContain("Slack-ready");
+    expect(skill).not.toContain("Slack delivery");
+    expect(skill).not.toContain("configured Slack target");
+    expect(skill).toContain("Email is the verified automated delivery channel for launch.");
   });
 });

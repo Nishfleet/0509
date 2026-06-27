@@ -146,6 +146,16 @@ describe("MCP route discovery", () => {
       expect(JSON.stringify(tool.inputSchema)).not.toContain('"slack"');
       expect(JSON.stringify(tool.inputSchema)).not.toContain('"whatsapp"');
       expect(JSON.stringify(tool.inputSchema)).not.toContain("Slack-ready");
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"reddit"');
+    });
+    expect(body.tools.find((tool) => tool.name === "list_web_mentions")?.inputSchema).toMatchObject({
+      properties: {
+        sources: {
+          items: {
+            enum: ["blog", "substack", "web"],
+          },
+        },
+      },
     });
     body.tools.forEach((tool) => {
       const requiresWriteEnabled = expectedWriteToolNameSet.has(tool.name);
@@ -160,8 +170,11 @@ describe("MCP route discovery", () => {
     expect(body.agentActivation.blockedCapabilities).toContain("secret-bearing integration setup");
     expect(body.agentActivation.blockedCapabilities).toContain("customer API key creation, rotation, and revocation");
     expect(body.notLiveYet).toContain("TikTok ingestion");
+    expect(body.notLiveYet).toContain("Reddit, LinkedIn, or Pinterest ingestion");
     expect(body.notLiveYet).toContain(BROAD_WRITE_API_NON_GOAL);
     expect(body.notLiveYet).not.toContain("secret-bearing integration setup");
     expect(body.notLiveYet).not.toContain("MCP server");
+    expect(JSON.stringify(body)).not.toContain("account-owned boards");
+    expect(JSON.stringify(body)).not.toContain("Reddit observations");
   });
 });

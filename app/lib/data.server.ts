@@ -3598,7 +3598,7 @@ async function ensureWebMentionTargetForWatchlist(
     role,
     label,
     label,
-    JSON.stringify(["reddit", "x", "blog", "youtube", "substack", "web"]),
+    JSON.stringify(["blog", "substack", "web"]),
     isActive ? 1 : 0,
     timestamp,
     timestamp,
@@ -3694,7 +3694,7 @@ export async function listWebMentionObservations(
     limit?: number | null;
   } = {},
 ) {
-  const sources = (options.sources?.length ? options.sources : ["reddit", "blog", "substack", "web"])
+  const sources = (options.sources?.length ? options.sources : ["blog", "substack", "web"])
     .filter((source, index, all): source is WebMentionSource => all.indexOf(source) === index);
   const clauses = ["web_mention_observation.user_id = ?", "web_mention_target.user_id = ?"];
   const bindings: unknown[] = [userId, userId];

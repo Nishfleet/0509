@@ -2,7 +2,39 @@
 
 const DEFAULT_BASE_URL = "https://0509.io";
 const REQUIRED_COUNTRIES = ["IN", "US", "GB"];
+const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
 
+/**
+ * @typedef {{
+ *   display?: string,
+ *   currency?: string,
+ *   billingCountry?: string
+ * }} PricingDisplay
+ *
+ * @typedef {{
+ *   available?: boolean,
+ *   country?: string,
+ *   reason?: string,
+ *   prices?: Record<string, Record<string, PricingDisplay | null | undefined> | null | undefined>,
+ *   usageBundles?: Record<string, PricingDisplay | null | undefined>
+ * }} PricingPreview
+ *
+ * @typedef {{
+ *   requestedCountry: string,
+ *   ok: boolean,
+ *   status: number,
+ *   previewCountry: string,
+ *   currency: string,
+ *   display: string,
+ *   billingCountry: string,
+ *   reason: string
+ * }} PricingCanaryResult
+ */
+
+/**
+ * @param {string[]} args
+ * @returns {{ baseUrl: string, countries: string[], json: boolean }}
+ */
 function parseArgs(args) {
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
@@ -30,9 +62,13 @@ function parseArgs(args) {
   return parsed;
 }
 
+/**
+ * @param {PricingPreview} preview
+ */
 function readFirstDisplay(preview) {
-  for (const plan of Object.values(preview.prices || {})) {
-    for (const price of Object.values(plan || {})) {
+  for (const plan of Object.values(preview.prices ?? {})) {
+    if (!plan) continue;
+    for (const price of Object.values(plan)) {
       if (price?.display) {
         return price;
       }
@@ -48,6 +84,10 @@ function readFirstDisplay(preview) {
   return null;
 }
 
+/**
+ * @param {{ baseUrl: string, country: string, token: string }} input
+ * @returns {Promise<PricingCanaryResult>}
+ */
 async function fetchPreview({ baseUrl, country, token }) {
   const url = new URL("/api/pricing-preview", baseUrl);
   url.searchParams.set("country", country);
@@ -57,8 +97,9 @@ async function fetchPreview({ baseUrl, country, token }) {
       "user-agent": "0509-dodo-pricing-canary/1.0",
       "x-0509-canary-token": token,
     },
+    signal: AbortSignal.timeout(DODO_PRICING_CANARY_TIMEOUT_MS),
   });
-  const body = await response.json().catch(() => ({}));
+  const body = /** @type {PricingPreview} */ (await response.json().catch(() => ({})));
   const firstPrice = readFirstDisplay(body);
   const billingCountry = firstPrice?.billingCountry || "";
   const billingCountryMatches = !billingCountry || billingCountry === country;
@@ -79,6 +120,9 @@ async function fetchPreview({ baseUrl, country, token }) {
   };
 }
 
+/**
+ * @param {PricingCanaryResult[]} results
+ */
 function formatReport(results) {
   const lines = [`Dodo pricing canary: ${results.every((result) => result.ok) ? "ok" : "failed"}`];
   for (const result of results) {
