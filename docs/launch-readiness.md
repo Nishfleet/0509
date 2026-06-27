@@ -8,7 +8,7 @@ Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green,
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
-Remaining owner gates outside this repo: Dodo Product Collection membership plus **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), backup/restore proof, Presence internal workspace smoke, and Agency fan-out proof.
+Remaining owner gates outside this repo: Dodo Product Collection membership plus **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, Agency fan-out proof, and Cloudflare Email dashboard visibility.
 
 The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, dormant-channel advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
@@ -26,6 +26,7 @@ The public `/status` page summarizes coarse launch posture without rendering acc
 - `node scripts/validate-d1-backup.mjs` passes through the latest repo migration.
 - PR #251 merged to `main`, the compatible Worker deployed, and remote D1 migration inspection shows no migrations to apply after `0060_remove_legacy_billing_provider.sql`.
 - Fresh D1 backup/export was uploaded to R2 before `0060`; post-cleanup evidence shows retained row counts and Dodo linkage, 0 legacy billing columns, and no retired-provider webhook table.
+- Follow-up ops proof created a post-cleanup backup in the private R2 backup prefix and imported it into isolated local SQLite; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed.
 
 ## Hard Launch Gates
 
@@ -70,7 +71,7 @@ Do not add Slack smoke targets for GA. Re-enable Slack only through a separate v
 
 ## WhatsApp Posture
 
-WhatsApp is not launch-scoped until the provider/customer/webhook lane is deliberately configured. Existing unready WhatsApp recipients should stay non-claimable.
+WhatsApp is not launch-scoped until the provider/customer/webhook lane is deliberately configured. Aggregate review found stored but not validated WhatsApp target/config rows; preserve them unless owner approves a backup-backed anonymization or cleanup, and keep them non-claimable.
 
 ## Dodo Portal Manual Blocker
 
@@ -83,6 +84,10 @@ Required manual step: Dodo dashboard → Product Collections → group the live 
 The public health endpoint is `https://0509.io/api/health`. Create an external uptime monitor that checks this endpoint every 5 minutes and alerts Nish if it stops returning `ok`.
 
 Owner verification steps (no API token): see `docs/ops-backup-uptime.md` § Uptime monitoring.
+
+## Backup Schedule Status
+
+`.github/workflows/d1-backup-r2.yml` now schedules `npm run backup:d1:r2` weekly at 22:17 UTC Sunday and supports manual runs. It is not proven active until GitHub repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` exist, a run completes, and a new R2 object appears under `backups/d1/`. D1 export blocks database requests while it runs, so keep the schedule in a low-traffic window.
 
 ## Pilot-Safe Offer
 
@@ -99,4 +104,4 @@ Use this framing for the first customer:
 
 ## Next Slice
 
-Confirm UptimeRobot on `/api/health`, confirm the Dodo customer portal setting, complete backup/restore proof and the Presence internal smoke, keep Agency held until fan-out proof passes, then rerun `npm run canary:proof` and `npm run canary:prod`.
+Confirm UptimeRobot on `/api/health`, confirm the Dodo customer portal setting, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, keep Agency held until fan-out proof passes, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.

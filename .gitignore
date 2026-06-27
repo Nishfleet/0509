@@ -5,6 +5,8 @@
 /.next/
 /build
 /backups/
+/restore.sql
+/restore.sqlite
 /.react-router/
 /.wrangler/
 /.playwright-mcp/
