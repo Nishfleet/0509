@@ -78,7 +78,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
       redirectTo,
     });
   } catch (error) {
-    console.warn("failed to send Better Auth signup email", error);
+    console.warn("failed to send Better Auth signup email", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
     throw redirect("/auth/signup?error=send_failed");
   }
 

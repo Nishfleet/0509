@@ -17,10 +17,32 @@ describe("D1 backup validator", () => {
       ok: boolean;
       latestMigration: string;
       checkedFiles: string[];
+      migrationReplay: {
+        migrationsApplied: number;
+        userPlanColumns: string[];
+        dodoLinkagePreserved: boolean;
+      };
     };
 
     expect(payload.ok).toBe(true);
     expect(payload.latestMigration).toBe(latestMigration);
     expect(payload.checkedFiles).toContain(`migrations/${latestMigration}`);
+    expect(payload.migrationReplay).toMatchObject({
+      migrationsApplied: migrationFiles.length,
+      dodoLinkagePreserved: true,
+    });
+    expect(payload.migrationReplay.userPlanColumns).toEqual([
+      "user_id",
+      "plan",
+      "plan_updated_at",
+      "dodo_payment_id",
+      "dodo_product_id",
+      "dodo_status",
+      "dodo_subscription_id",
+      "dodo_customer_id",
+      "dodo_next_billing_at",
+      "evidence_entitlement_anchor",
+      "evidence_entitlement_anchor_source",
+    ]);
   });
 });

@@ -39,8 +39,9 @@ Slack advisories may appear on private readiness views, but they are not GA bloc
 **Status:** NOT COMPLETED BY THIS CODE RUN
 
 1. Open the Dodo Payments dashboard for the live 0509 brand.
-2. Enable **Allow Subscription Updates** on the customer portal settings.
-3. Confirm `/app/billing` → **Open billing portal** loads and plan changes are allowed.
+2. Add the live Scout and Starter subscription products to the same Product Collection.
+3. Enable **Allow Subscription Updates** under subscription settings.
+4. Confirm `/app/billing` → **Open billing portal** loads, plan changes are allowed between that Product Collection, and cancellation is available from subscription details.
 
 ## Data and observability
 

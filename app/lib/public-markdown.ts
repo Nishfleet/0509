@@ -102,7 +102,7 @@ Current product truth:
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
 - Signed-in support cases cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests, with email fallback when a user cannot sign in.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
-- Automated TikTok, Google, YouTube, LinkedIn, Pinterest ingestion and broad public write APIs beyond approved account actions are not live yet.
+- Automated TikTok, Google, YouTube, Reddit, X, LinkedIn, and Pinterest ingestion and broad public write APIs beyond approved account actions are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.
 
 Core layers:

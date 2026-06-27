@@ -239,13 +239,13 @@ const MCP_TOOLS = [
     name: "add_external_proof",
     title: "Add External Proof",
     description:
-      "Save a manual cross-channel proof URL into an account-owned board with audit logging.",
+      "Save a manual cross-channel proof URL into an account-owned collection with audit logging.",
     inputSchema: {
       type: "object",
       properties: {
         collectionId: {
           type: "string",
-          description: "Five to Nine board owned by the API-key account.",
+          description: "Five to Nine collection owned by the API-key account.",
         },
         advertiser: {
           type: "string",
@@ -398,7 +398,7 @@ const MCP_TOOLS = [
     name: "create_share_link",
     title: "Create Share Link",
     description:
-      "Create a live share link for an account-owned board, watchlist, or digest.",
+      "Create a live share link for an account-owned collection, watchlist, or digest.",
     inputSchema: {
       type: "object",
       properties: {
@@ -420,7 +420,7 @@ const MCP_TOOLS = [
     name: "create_report",
     title: "Create Report",
     description:
-      "Build a client-ready report payload for an account-owned board or watchlist.",
+      "Build a client-ready report payload for an account-owned collection or watchlist.",
     inputSchema: reportInputSchema(),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
@@ -428,7 +428,7 @@ const MCP_TOOLS = [
     name: "share_report",
     title: "Share Report",
     description:
-      "Build and share a snapshot report for an account-owned board or watchlist.",
+      "Build and share a snapshot report for an account-owned collection or watchlist.",
     inputSchema: reportInputSchema({ requiresIdempotency: true }),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
@@ -595,9 +595,9 @@ const MCP_TOOLS = [
   },
   {
     name: "list_web_mentions",
-    title: "List Web Mentions Beta",
+    title: "List Presence Observations",
     description:
-      "Read existing proof-backed web, blog, Substack, and Reddit mention observations tied to account-owned watchlists. X, YouTube, and broad social listening are not live.",
+      "Read existing proof-backed website, blog, and Substack mention observations tied to account-owned watchlists. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
     inputSchema: {
       type: "object",
       properties: {
@@ -608,7 +608,7 @@ const MCP_TOOLS = [
           type: "array",
           items: {
             type: "string",
-            enum: ["reddit", "blog", "substack", "web"],
+            enum: ["blog", "substack", "web"],
           },
         },
         includeInactive: {
@@ -671,7 +671,7 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Client rooms and scoped account memory saved by this account",
       "Account support case summaries created by this account",
       "Redacted delivery settings and delivery target state owned by this account",
-      "Existing proof-backed web, blog, Substack, and Reddit mention observations tied to watchlists",
+      "Existing proof-backed website, blog, and Substack mention observations tied to watchlists",
     ],
     agentActivation: {
       firstWorkflow: AGENT_FIRST_WORKFLOW,
@@ -682,7 +682,7 @@ export function loader({ request }: LoaderFunctionArgs) {
     notLiveYet: [
       "TikTok ingestion",
       "Google or YouTube ingestion",
-      "LinkedIn or Pinterest ingestion",
+      "Reddit, LinkedIn, or Pinterest ingestion",
       BROAD_WRITE_API_NON_GOAL,
     ],
   });

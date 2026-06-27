@@ -84,7 +84,7 @@ Backup: `../pre-cursor-launch-hardening.patch` (pre-run) · `../pre-final-harden
 | 2D | Dodo lookup indexes | fixed | f859d77 | `migrations/0045_dodo_plan_lookup_indexes.sql` |
 | 2E | MCP workspace plan resolution | fixed | f859d77 | `resolveWorkspaceDataUserId` in MCP + agent actions |
 | 2F | Scheduled cancellation enforcement | fixed | f859d77 | `getUserPlan` + `cancellationEffectiveAt` persistence |
-| 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, tests, and historical setup migrations removed; post-deploy remote cleanup still pending |
+| 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, tests, and active docs removed; historical setup migrations remain append-only; post-deploy remote cleanup still pending |
 | 3A | Monitoring workflow capacity | deferred | | Agency **75** watchlist allowance vs ~12 min inline budget — **unresolved** |
 | 3B | Customer-visible scan status | fixed | cb1cf44 + final pass | capacity skip label “Delayed — capacity limit” |
 | 3B′ | Capacity-skip idempotency | fixed | final pass | `watchlist_run.idempotency_key` + `INSERT OR IGNORE` (`0046`) |

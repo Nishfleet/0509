@@ -817,7 +817,7 @@ async function createCollectionFromAgent(
   const name = requireString(input, "name");
   const limit = await checkPlanLimit(env, workspaceUserId, "collections");
   if (!limit.allowed) {
-    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your workspace board limit.", {
+    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your workspace collection limit.", {
       status: 402,
       details: {
         limit: limit.limit,
@@ -831,7 +831,7 @@ async function createCollectionFromAgent(
     description: readString(input, "description"),
   });
   if (!collection) {
-    throw new CustomerAgentActionError("collection_create_failed", "Could not create this board.", {
+    throw new CustomerAgentActionError("collection_create_failed", "Could not create this collection.", {
       status: 500,
     });
   }
@@ -1587,9 +1587,9 @@ async function listWebMentionsFromAgent(
   return {
     ok: true,
     action: "web_mentions.list",
-    status: "schema_beta",
+    status: "available",
     boundary:
-      "Returns existing proof-backed web, blog, Substack, and Reddit observations only. X, YouTube, and broad social listening are not live.",
+      "Returns existing proof-backed website, blog, and Substack observations only. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
     watchlistId,
     supportedSources: supportedWebMentionSources,
     targets: targets.map(safeWebMentionTargetRecord),
@@ -2236,7 +2236,7 @@ function maskPhone(value: string) {
   return digits ? `***${digits.slice(-4)}` : "[redacted-phone]";
 }
 
-const supportedWebMentionSources: WebMentionSource[] = ["reddit", "blog", "substack", "web"];
+const supportedWebMentionSources: WebMentionSource[] = ["blog", "substack", "web"];
 
 function readWebMentionSources(input: Record<string, unknown>) {
   const requested = readStringList(input, "sources");
@@ -2250,7 +2250,7 @@ function readWebMentionSources(input: Record<string, unknown>) {
     }
     throw new CustomerAgentActionError(
       "unsupported_web_mention_source",
-      "web_mentions.list currently supports reddit, blog, substack, and web only.",
+      "web_mentions.list currently supports blog, substack, and web only.",
     );
   })));
 }

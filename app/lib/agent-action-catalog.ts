@@ -97,7 +97,7 @@ export const AGENT_ACTION_GROUPS = [
   {
     id: "mentions",
     label: "Presence observations",
-    detail: "Read existing proof-backed web, blog, Substack, and Reddit observations.",
+    detail: "Read existing proof-backed website, blog, and Substack observations.",
     actions: ["web_mentions.list"],
     requiresWriteEnabled: true,
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,

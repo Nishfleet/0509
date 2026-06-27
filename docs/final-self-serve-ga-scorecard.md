@@ -36,7 +36,7 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 | Backup validator | PASS local dry-run | `node scripts/validate-d1-backup.mjs`; latest repo migration `0060_remove_legacy_billing_provider.sql` |
 | Diff whitespace | PASS | `git diff --check HEAD` |
 | Autoreview | PASS | Final staged autoreview clean; no accepted/actionable findings |
-| Retired billing provider surface | PASS | Routes, helpers, env typing, tests, active docs, and historical setup migrations removed; `0060` converges the final schema to Dodo-only billing fields after deploy |
+| Retired billing provider surface | PASS | Routes, helpers, env typing, tests, and active docs removed; historical setup migrations remain append-only, and `0060` converges the final schema to Dodo-only billing fields after deploy |
 | Local D1 migration list | LOCAL ONLY | Local simulator reports pending `0053`-`0060` from prior local state |
 | Remote D1 migration list | PENDING POST-DEPLOY | Remote reports only `0060_remove_legacy_billing_provider.sql` pending; deploy compatible Worker first, then apply cleanup with backup/count evidence |
 | Pricing canary | PASS | Dodo pricing canary passed for IN, US, and GB previews |
@@ -62,19 +62,19 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 | Billing portal | Partial self-serve | Hosted portal route works in code; plan changes/cancellation remain support-backed until Dodo dashboard setting is verified |
 | Trust/backup wording | Truthful in branch | Public trust copy limited to dry-run validation and owner-operated backup posture |
 | Provider/network timeouts | Improved | Shared timeout/bounded-response helpers and regression tests added across touched hot paths; stalled Cloudflare Email sends now move to pending/provider-unknown rather than retryable failure |
-| Retired billing provider | Removed from runtime/schema | Routes, helpers, env typing, tests, active docs, historical setup migrations, lookup index, and legacy plan columns removed; post-deploy remote cleanup remains |
+| Retired billing provider | Removed from runtime; pending post-deploy schema cleanup | Routes, helpers, env typing, tests, active docs, lookup index, and live code references removed; historical setup migrations remain append-only, and `0060` removes legacy plan columns/table after deploy |
 
 ## Follow-up Hardening Notes
 
 - Cloudflare Email delivery now has an explicit application timeout with regression coverage for a never-resolving provider send; stalled sends are recorded as pending/provider unknown, not retryable failures.
 - Older top-up billing docs now point to the current final-GA truth: configured Dodo checkout and signed-webhook canary coverage are verified, while checkout still fails closed if required product mappings are absent.
-- Historical setup migrations for the retired billing provider are removed from the repo; the remaining append-only `0060` cleanup removes any already-created remote schema artifacts after the compatible Worker is deployed.
+- Historical setup migrations for the retired billing provider remain in the repo because D1 migration history is append-only; the remaining `0060` cleanup removes already-created remote schema artifacts after the compatible Worker is deployed.
 
 ## Remaining Owner Actions
 
 The branch is not a full live GA closeout until these are resolved or accepted:
 
-1. Confirm Dodo customer portal subscription-update/cancellation setting in the Dodo dashboard.
+1. Confirm Dodo Product Collection membership for Scout/Starter, the Dodo subscription-update setting, and cancellation availability in the customer portal.
 2. Confirm external uptime monitoring on `https://0509.io/api/health`.
 3. Activate or explicitly defer automated D1-to-R2 backup schedule and restore drill.
 4. Provide internal Presence workspace config, then rerun `npm run canary:presence`.
