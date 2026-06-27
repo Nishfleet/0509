@@ -48,8 +48,10 @@ describe("public documentation routes", () => {
   it("renders help and trust support paths without unsupported claims", async () => {
     const { default: HelpRoute } = await import("~/routes/help");
     const { default: TrustRoute } = await import("~/routes/trust");
+    const { default: PresenceBotInfoRoute } = await import("~/routes/bots.presence");
     const helpMarkup = renderToStaticMarkup(createElement(HelpRoute));
     const trustMarkup = renderToStaticMarkup(createElement(TrustRoute));
+    const presenceBotMarkup = renderToStaticMarkup(createElement(PresenceBotInfoRoute));
 
     expect(helpMarkup).toContain("Paid customer support paths");
     expect(helpMarkup).toContain("Billing changes and cancellation");
@@ -58,9 +60,15 @@ describe("public documentation routes", () => {
     expect(trustMarkup).toContain("secret-bearing integration setup");
     expect(trustMarkup).toContain("customer API key creation, rotation, and revocation");
     expect(trustMarkup).toContain("broad public write APIs");
+    expect(trustMarkup).toContain("validates the D1 backup scripts");
+    expect(trustMarkup).toContain("automated R2 backup scheduling and restore drills");
+    expect(trustMarkup).toContain("remain owner-operated until recorded as verified");
     expect(trustMarkup).toContain("does not currently claim");
     expect(trustMarkup).not.toContain("SOC 2 compliant");
+    expect(trustMarkup).not.toContain("Weekly D1 exports upload to R2");
     expect(helpMarkup).not.toContain("hooks.slack.com/services/");
     expect(trustMarkup).not.toContain("DODO_API_KEY");
+    expect(presenceBotMarkup).toContain("support@0509.io");
+    expect(presenceBotMarkup).not.toContain("support@0509.in");
   });
 });

@@ -1,5 +1,47 @@
 # Launch Hardening Progress
 
+## Final self-serve GA hardening pass (2026-06-27)
+
+Branch: `codex/final-self-serve-ga-hardening-20260625`
+Base: `ed109a9`
+
+Current staged branch status:
+
+- Legacy secondary billing provider removed from active runtime and current schema: routes, helpers, env typing, tests, active docs, event table, lookup index, and legacy plan columns are gone. Historical migration files are retained.
+- Slack and WhatsApp are dormant for GA across customer UI, API v1, MCP, delivery sends, readiness stats, and launch blockers. Email is the verified automated delivery channel.
+- Dodo checkout, portal, pricing, and webhook paths have explicit timeout/bounded-response handling where touched. Billing canary passed with plan and top-up grant cleanup.
+- Provider/network timeout hardening added for Dodo, Browser Run/Browserless fallback, Meta/customer token checks, landing page/proof fetches, public URL/DNS, robots/domain verification, Slack, WhatsApp, LinkedIn OAuth token exchange, and related hot paths.
+- Trust/backup copy now avoids claiming automated R2 backup proof. Backup validator walks the current repo migration chain through `0060_remove_legacy_billing_provider.sql`.
+- Presence website/blog remains GA in config/copy; X, Reddit, and LinkedIn remain disabled.
+- Agency remains held until live fan-out proof passes.
+- Account-controls branch reviewed but not merged; see `docs/codex-account-controls-branch-review.md`.
+- Branch/stash cleanup report added; no deletion performed.
+- Owner actions captured in `docs/ga-owner-actions.md`.
+- Final scorecard captured in `docs/final-self-serve-ga-scorecard.md`.
+
+Verification completed on 2026-06-27:
+
+| Check | Result |
+| --- | --- |
+| `npm test` | PASS, 139 files / 1311 tests |
+| `npm run typecheck` | PASS |
+| `npm run build` | PASS |
+| `npm audit --omit=dev --audit-level=moderate` | PASS, 0 vulnerabilities |
+| `node scripts/validate-d1-backup.mjs` | PASS, dry-run through latest migration |
+| `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --remote` | PENDING POST-DEPLOY, `0060_remove_legacy_billing_provider.sql` must wait until the compatible Worker is live |
+| `npm run canary:pricing` | PASS |
+| `npm run canary:billing` | PASS |
+| `npm run canary:proof` | PASS, email channel |
+| `npm run canary:prod` | PASS |
+| `npm run provider:bakeoff:launch` | PASS for current live provider path; optional alternate providers skipped when credentials absent |
+| `npm run launch:readiness` | PASS with local canary env exported |
+| `npm run canary:presence` | BLOCKED, missing local internal Presence workspace id |
+| Final `autoreview --mode local` | PASS, no accepted/actionable findings |
+
+This pass is not committed, pushed, merged, or deployed yet.
+
+## Earlier launch hardening branch
+
 Branch: `cursor/launch-hardening-20260623-1825`
 Started: 2026-06-23
 
@@ -38,7 +80,7 @@ Backup: `../pre-cursor-launch-hardening.patch` (pre-run) · `../pre-final-harden
 | 2D | Dodo lookup indexes | fixed | f859d77 | `migrations/0045_dodo_plan_lookup_indexes.sql` |
 | 2E | MCP workspace plan resolution | fixed | f859d77 | `resolveWorkspaceDataUserId` in MCP + agent actions |
 | 2F | Scheduled cancellation enforcement | fixed | f859d77 | `getUserPlan` + `cancellationEffectiveAt` persistence |
-| 2G | Razorpay hard-disable | fixed | f859d77 | route returns 410, no plan mutations |
+| 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, and tests removed; historical migrations retained |
 | 3A | Monitoring workflow capacity | deferred | | Agency **75** watchlist allowance vs ~12 min inline budget — **unresolved** |
 | 3B | Customer-visible scan status | fixed | cb1cf44 + final pass | capacity skip label “Delayed — capacity limit” |
 | 3B′ | Capacity-skip idempotency | fixed | final pass | `watchlist_run.idempotency_key` + `INSERT OR IGNORE` (`0046`) |

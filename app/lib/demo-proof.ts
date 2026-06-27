@@ -12,7 +12,7 @@ export const demoProof = {
     cadence: "Weekly digest",
     savedCompetitor: "nykaa.com",
     proofCount: 3,
-    deliveryPreview: "Email digest with Slack-ready export copy",
+    deliveryPreview: "Email digest with a markdown export preview",
     loop: [
       "Run a public live search",
       "Create an account to save the competitor",
@@ -64,7 +64,7 @@ export const demoProof = {
     ],
   },
   exports: {
-    slackMarkdown:
+    digestMarkdown:
       "*Nykaa changed the routine bundle angle*\nPriority: Review before next campaign refresh\nProof: Landing-page snapshot, page text capture, Meta Ad Library capture",
     apiPath: "/api/demo-proof",
   },

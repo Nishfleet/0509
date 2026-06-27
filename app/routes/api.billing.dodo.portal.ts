@@ -26,7 +26,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     throw redirect("/app/billing?portal=unavailable", { status: 303 });
   }
 
-  const portalUrl = await createDodoCustomerPortalSession(env, billing.dodoCustomerId);
+  const portalUrl = await createDodoCustomerPortalSession(env, billing.dodoCustomerId, {
+    request,
+  });
   if (!portalUrl) {
     throw redirect("/app/billing?portal=unavailable", { status: 303 });
   }

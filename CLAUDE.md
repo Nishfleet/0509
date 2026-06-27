@@ -1,4 +1,4 @@
-# 0509.in — Meta Competitor Analysis Workspace
+# 0509.io — Five to Nine
 
 ## Build
 ```bash
@@ -18,8 +18,8 @@ npm run dev
 - D1 (Cloudflare SQLite)
 - Optional R2 (artifact storage retention)
 - Cloudflare Email Service (email delivery via the `EMAIL` send_email binding) — replaced Postmark on 2026-06-11; see `app/lib/delivery.server.ts`
-- WhatsApp Cloud API (template-based delivery) + Slack webhooks as additional digest/alert channels
-- Dodo Payments (live checkout + signed webhooks); legacy Razorpay routes still present but Dodo is the active processor
+- Dormant WhatsApp Cloud API and Slack webhook code retained behind product gates; email is the verified GA delivery channel
+- Dodo Payments (live checkout + signed webhooks); legacy secondary payment routes have been removed
 - Cloudflare Browser Rendering (primary ad discovery scrapes the Meta Ad Library; the Meta API token is a gated fallback)
 - Cloudflare Workers AI (creative-text OCR) and Cloudflare Workflows (monitoring fan-out — currently bypassed in prod, see below)
 - Pure CSS via `app/app.css` (no Tailwind, no CSS-in-JS)
@@ -33,7 +33,7 @@ npm run dev
 - `workers/app.ts` — Cloudflare Worker entry with scheduled event handler
 - `workers/monitoring-workflow.ts` — Cloudflare Workflow for watchlist scans (currently dead code in prod: `shouldRunScheduledMonitoringInline` always selects the inline loop when `BROWSER` is bound)
 - `workers/schedule.ts` — cron string → scheduled task mapping
-- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0022`)
+- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0060`)
 - `tests/` — Vitest coverage for search, monitoring, analysis, onboarding, plan limits, reporting, billing webhooks, and route exposure
 - `scripts/` — deploy, prod canaries, launch-readiness canary, D1 backup
 - `docs/launch-readiness.md` — launch gate definition (accurate, maintained)
@@ -65,8 +65,8 @@ The checked-in Cloudflare app is the active production runtime and billing is wi
 - onboarding, collections, watchlists, digests, reports, share/export flows, customer API keys, and MCP endpoint exist in `app/`
 - **billing IS live via Dodo Payments**: `api.billing.dodo.checkout.ts` (303 to hosted checkout) + `api.webhooks.dodo.ts` (signed, idempotent). `payment.succeeded` grants plans/credits; `subscription.cancelled/expired/failed/on_hold` revoke to free with the same monotonic-timestamp ordering (2026-06-11). The Dodo dashboard webhook must have subscription events enabled (including refund events). As of 2026-06-12: `subscription.failed/on_hold` are a dunning grace state (plan kept, `dodo_status` flagged, banner shown) — only `cancelled/expired` revoke; `refund.succeeded` revokes plan + expires credits; a `dodo_webhook_event` ledger dedupes redeliveries; a ±5min replay window is enforced; `/app/billing` shows plan/usage/cancel guidance; checkout blocks double-subscriptions. Do not describe billing as "not live."
 - `/app?checkout=dodo` shows a checkout-return banner that polls plan activation (`CheckoutReturnBanner` in `app.dashboard.tsx`)
-- support contact is `support@0509.in` (`app/lib/support.ts`), surfaced on marketing footer, app sidebar, /terms, /privacy, /unsubscribe, and email footers; inbound routing is Cloudflare Email Routing (dashboard-configured)
-- legacy Razorpay routes (`api.billing.razorpay.subscription.ts`, `api.webhooks.razorpay.ts`) still exist; Dodo is the active processor. Stripe was never wired; tests assert no Stripe route exposure.
+- support contact is `support@0509.io` (`app/lib/support.ts`), surfaced on marketing footer, app sidebar, /terms, /privacy, /unsubscribe, and email footers; inbound routing is Cloudflare Email Routing (dashboard-configured)
+- Dodo is the only active billing processor. Stripe was never wired; tests assert no Stripe route exposure.
 - region-aware pricing was REMOVED in `migrations/0016_drop_region_pricing.sql`; pricing is live-loaded from Dodo (`app/lib/dodo-pricing.server.ts`, `/api/pricing-preview`)
 - plan gating is enforced at creation time (`checkPlanLimit`), on manual refresh (free plan blocked), on watchlist resume, and on downgrade/revocation/refund (over-limit watchlists auto-pause, newest kept); authenticated live search is rate-limited per account (60/10min)
 - a retention audit (first-week experience, signal quality, promise-vs-delivery, churn lifecycle) followed on 2026-06-12 and a 12-PR program (#160-#172) landed the same day: Dodo subscription grants fixed for real payloads (subscription payments carry NO product_cart — grants come from checkout metadata; subscription.active/renewed handled; migration 0023 rebuilt user_plan absorbing remote drift and added subscription/customer/next-billing linkage), first scan on watchlist creation, all-quiet heartbeat digests, baseline event instead of first-scan ad_new flood, canonical-URL diffing + 48h per-field suppression + stale-cache-honest scans, paused-watchlist visibility + auto-resume on grant, per-plan daily proof caps (agency math now reachable), Dodo customer portal + cancel-at-period-end guard, scan-failure notices + nightly customer-at-risk operator email, before/now diffs + links in alert emails, /app/account (password/email/sessions/delete), honest cadence copy, hidden-value pricing bullets + agency scan priority. A live-mode Dodo API key lives at ~/.config/dodo/claude-api-key. RESOLVED 2026-06-12 (verified via Dodo API): the production webhook ep_3DyWwxkqJjUoAInxV07esfVvUDb subscribes to all 8 handled events (payment.succeeded, refund.succeeded, subscription.active/renewed/cancelled/expired/failed/on_hold) — filter_types match the handler exactly.
@@ -81,24 +81,16 @@ Last local verification on 2026-06-11:
 
 ## Production Reality
 
-- `https://0509.in` currently serves the current Cloudflare app under `app/` and `workers/`
-- `https://www.0509.in` also serves the same app through a Cloudflare Worker custom domain
-- `https://api.0509.in` also serves the same app through a Cloudflare Worker custom domain
-- `0509.io` has been purchased and is the intended primary domain, but it currently delegates to Porkbun nameservers; do not activate `.io` auth, SEO, Worker routes, or `.in` redirects until the registrar delegates it to Cloudflare
-- Cloudflare deploy state as of 2026-06-11:
-  - D1 database `0509` created and bound in `wrangler.jsonc`
-  - remote migrations fully applied through `0022_hot_path_indexes.sql` (verified 2026-06-12) — `wrangler d1 migrations list 0509 --remote` reports "No migrations to apply" (verified 2026-06-11). Note: 0019's schema had been applied out-of-band without a ledger row; it was verified column-by-column and reconciled into `d1_migrations` on 2026-06-11.
-  - `BETTER_AUTH_SECRET` uploaded to the Cloudflare Worker
-  - R2 bucket `0509-landing-page-artifacts` created and bound as `LANDING_PAGE_ARTIFACTS`
-  - `BROWSER` (Browser Rendering), `AI` (Workers AI), and a `MonitoringWorkflow` workflow binding exist in `wrangler.jsonc`
-  - crons: `17 */6 * * *` (warmup), `0 4 * * *` (daily monitoring), `0 5 * * MON` (weekly — digest-only since 2026-06-12; scout watchlists get their weekly scan inside the Monday 04:00 daily run). The warmup cron also hosts the instant-alert flush and the D1 retention sweep.
-  - Cloudflare preview is live at `https://0509.nishant345.workers.dev`
-  - `0509.in`, `www.0509.in`, and `api.0509.in` are attached as Worker custom domains
-- scheduled monitoring runs INLINE in the main Worker (sequential loop in `ctx.waitUntil`), not via the Workflow — capacity ceiling is roughly 15–40 watchlists per nightly run
+- `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains for the current Cloudflare app under `app/` and `workers/`.
+- `0509.in`, `www.0509.in`, and `api.0509.in` are redirect compatibility routes only. Do not introduce new `.in` product copy, auth origins, SEO links, or support addresses.
+- Cloudflare deploy state is represented by `wrangler.jsonc`: D1 database `0509`, R2 bucket binding `LANDING_PAGE_ARTIFACTS`, Browser Rendering, Workers AI, Cloudflare Email Service, and `MonitoringWorkflow` bindings are configured there.
+- Remote D1 migrations were verified on 2026-06-27 with `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --remote`; `0060_remove_legacy_billing_provider.sql` is pending as a post-deploy cleanup migration and must be applied only after the retired-provider-free Worker is live.
+- Crons: `17 */6 * * *` (warmup), `0 4 * * *` (daily monitoring), and `0 5 * * MON` (weekly cadence).
+- scheduled monitoring runs INLINE in the main Worker; Agency checkout stays held until live fan-out proof passes.
 - auth/origin logic should stay proxy-aware for Cloudflare and any future front-door changes:
   - `app/lib/env.server.ts` must respect `Forwarded` and `x-forwarded-*` headers
   - `tests/env.server.test.ts` covers that behavior
-  - `BETTER_AUTH_URL` is set to `https://0509.in` in `wrangler.jsonc` vars so auth origin trust and unsubscribe-link generation never derive from client-supplied forwarded headers; note this pins auth to the custom domain, so auth flows on the `workers.dev` preview host are not expected to work
+  - `BETTER_AUTH_URL` is set to `https://0509.io` in `wrangler.jsonc` vars so auth origin trust and unsubscribe-link generation never derive from client-supplied forwarded headers.
 
 ## Paperclip
 
@@ -109,7 +101,7 @@ This project is managed by Paperclip under company Swish.
 
 ## Brand
 
-The product is **Five to Nine**; **0509.in** is its current production domain and **0509.io** is the intended primary domain after Cloudflare delegation (05:09 = five-to-nine — "we work while you sleep", which the nightly scanning genuinely does). Use "Five to Nine" in customer-facing prose and the wordmark; 0509/0509.in is the current short handle and domain until the cutover is complete. Refunds: Nish's global no-refunds policy applies (digital product, purchases final, paired with the 100%-satisfaction support promise) — see global CLAUDE.md; keep refund-webhook revocation code in place for goodwill/dispute cases.
+The product is **Five to Nine**; **0509.io** is its current production domain (05:09 = five-to-nine). Use "Five to Nine" in customer-facing prose and the wordmark. Refunds: Nish's global no-refunds policy applies (digital product, purchases final, paired with the 100%-satisfaction support promise) — see global CLAUDE.md; keep refund-webhook revocation code in place for goodwill/dispute cases.
 
 ## Product Shape
 
@@ -132,7 +124,7 @@ The product is **Five to Nine**; **0509.in** is its current production domain an
 - Immutability: create new objects, never mutate existing ones.
 - File organization: 200-400 lines typical, 800 max.
 - D1 queries: always use parameterized `.bind()` — never string interpolation.
-- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. `npm run deploy` enforces this via `scripts/check-d1-migrations-synced.mjs`, which fails the deploy while remote D1 is behind `migrations/`. (Lesson from the 0019_slack_delivery drift incident, 2026-06-11: schema was changed out-of-band, the migration ledger lied, and the next apply crashed on it.)
+- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. `npm run deploy` enforces this via `scripts/check-d1-migrations-synced.mjs`, which fails the deploy while remote D1 is behind `migrations/` except for an explicitly allowlisted post-deploy cleanup migration. Cleanup migration `0060_remove_legacy_billing_provider.sql` is destructive and must run only after the compatible Worker is live, with a fresh backup plus pre/post SQL evidence. (Lesson from the 0019_slack_delivery drift incident, 2026-06-11: schema was changed out-of-band, the migration ledger lied, and the next apply crashed on it.)
 
 ## Design System
 

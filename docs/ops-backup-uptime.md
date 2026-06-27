@@ -1,18 +1,11 @@
 # Ops: Backups, Uptime, Billing Portal
 
-## D1 off-site backups (automated)
+## D1 backup posture
 
-- `npm run backup:d1:r2` exports the remote D1 database (`0509`) to
-  `backups/d1/<timestamp>.sql` and uploads it to the R2 bucket
-  `0509-landing-page-artifacts` under `backups/d1/`. Local copies are pruned
-  to the newest 8; R2 copies are kept forever (they're small SQL files).
-- Scheduled weekly (Sunday ~09:30 local) as the Claude Code scheduled task
-  `0509-weekly-d1-backup` on Nish's Mac. It runs while the desktop app is
-  open and catches up on next launch if the Mac was asleep — fine for a
-  weekly cadence. Logs land in the task run history.
-- Manual run any time: `npm run backup:d1:r2` from the repo root (wrangler
-  OAuth session must be logged in).
-- CI validates backup script shape: `node scripts/validate-d1-backup.mjs` (dry-run, no remote export).
+- `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available.
+- The repository validation gate is `node scripts/validate-d1-backup.mjs`. It dry-runs backup-script prerequisites, the D1 binding, and the current migration chain through the latest migration; it does not prove that a fresh production R2 object exists.
+- Automated R2 scheduling is **not verified active from this repository**. Keep public trust copy limited to dry-run validation, migration-chain coverage, and owner-operated backup/restore procedures until a schedule and restore drill are proven.
+- Manual run any time: `npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available).
 
 ### Restore drill
 

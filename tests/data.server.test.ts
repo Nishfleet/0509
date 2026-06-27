@@ -9,7 +9,6 @@ import {
   beginDodoWebhookEventProcessing,
   claimDodoWebhookEvent,
   claimAgentActionAudit,
-  claimRazorpayWebhookEvent,
   createDeliveryAttempt,
   createDiscoveryFetchLog,
   createAgentActionAudit,
@@ -49,8 +48,6 @@ import {
   legacyWatchEventImportanceScore,
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
-  recordPendingRazorpaySubscription,
-  syncRazorpaySubscriptionStatus,
   upsertAd,
   upsertCustomerMetaConnection,
   upsertClientRoom,
@@ -1041,168 +1038,6 @@ describe("client room persistence", () => {
     } finally {
       sqlite.close();
     }
-  });
-});
-
-describe("Razorpay billing persistence", () => {
-  it("records pending subscriptions without granting a paid plan", async () => {
-    const mock = createMockDb();
-
-    await recordPendingRazorpaySubscription(
-      { DB: mock.db } as never,
-      {
-        userId: "user-1",
-        subscriptionId: "sub_123",
-        customerId: "cust_123",
-        providerPlanId: "plan_starter_monthly",
-        status: "created",
-      },
-    );
-
-    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "razorpay_status");
-
-    expect(statement?.sql).toContain("VALUES (?, 'free'");
-    expect(statement?.sql).not.toContain("plan = excluded.plan");
-    expect(statement?.bindings).toEqual([
-      "user-1",
-      "cust_123",
-      "sub_123",
-      "plan_starter_monthly",
-      "created",
-    ]);
-  });
-
-  it("grants the paid plan only after Razorpay reports an active subscription", async () => {
-    const mock = createMockDb();
-
-    await syncRazorpaySubscriptionStatus(
-      { DB: mock.db } as never,
-      {
-        userId: "user-1",
-        plan: "starter",
-        status: "active",
-        subscriptionId: "sub_123",
-        customerId: "cust_123",
-        providerPlanId: "plan_starter_monthly",
-        shouldGrant: true,
-        shouldRevoke: false,
-      },
-    );
-
-    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "plan = excluded.plan");
-
-    expect(statement?.bindings).toEqual([
-      "user-1",
-      "starter",
-      "cust_123",
-      "sub_123",
-      "plan_starter_monthly",
-      "active",
-    ]);
-  });
-
-  it("does not let an old Razorpay cancellation downgrade a newer subscription", async () => {
-    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
-    const mock = {
-      db: {
-        prepare(sql: string) {
-          return {
-            bind(...bindings: unknown[]) {
-              statements.push({ sql, bindings });
-              return {
-                async run() {
-                  return { success: true };
-                },
-                async all<T>() {
-                  if (sql.includes("SELECT razorpay_subscription_id FROM user_plan")) {
-                    return { results: [{ razorpay_subscription_id: "sub_new" }] as T[] };
-                  }
-                  return { results: [] as T[] };
-                },
-              };
-            },
-          };
-        },
-      },
-    };
-
-    await syncRazorpaySubscriptionStatus(
-      { DB: mock.db } as never,
-      {
-        userId: "user-1",
-        plan: "starter",
-        status: "cancelled",
-        subscriptionId: "sub_old",
-        customerId: "cust_123",
-        providerPlanId: "plan_starter_monthly",
-        shouldGrant: false,
-        shouldRevoke: true,
-      },
-    );
-
-    expect(findStatement(statements, "SELECT razorpay_subscription_id FROM user_plan")).toBeTruthy();
-    expect(findStatement(statements, "INSERT INTO user_plan")).toBeUndefined();
-  });
-
-  it("dedupes Razorpay webhook events and allows failed events to be retried", async () => {
-    const statements: Array<{ sql: string; bindings: unknown[] }> = [];
-    const changes = [1, 0, 1];
-    const mock = {
-      db: {
-        prepare(sql: string) {
-          return {
-            bind(...bindings: unknown[]) {
-              statements.push({ sql, bindings });
-              return {
-                async run() {
-                  return { success: true, meta: { changes: changes.shift() ?? 0 } };
-                },
-              };
-            },
-          };
-        },
-      },
-    };
-
-    await expect(
-      claimRazorpayWebhookEvent(
-        { DB: mock.db } as never,
-        {
-          eventId: "evt_123",
-          eventType: "subscription.activated",
-          subscriptionId: "sub_123",
-          userId: "user-1",
-          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
-        },
-      ),
-    ).resolves.toBe(true);
-    await expect(
-      claimRazorpayWebhookEvent(
-        { DB: mock.db } as never,
-        {
-          eventId: "evt_123",
-          eventType: "subscription.activated",
-          subscriptionId: "sub_123",
-          userId: "user-1",
-          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
-        },
-      ),
-    ).resolves.toBe(false);
-    await expect(
-      claimRazorpayWebhookEvent(
-        { DB: mock.db } as never,
-        {
-          eventId: "evt_failed",
-          eventType: "subscription.activated",
-          subscriptionId: "sub_failed",
-          userId: "user-1",
-          payloadCreatedAt: "2026-05-15T00:00:00.000Z",
-        },
-      ),
-    ).resolves.toBe(true);
-
-    expect(statements[0]?.sql).toContain("ON CONFLICT(event_id)");
-    expect(statements[0]?.sql).toContain("razorpay_webhook_event.outcome = 'failed'");
   });
 });
 
@@ -2592,14 +2427,15 @@ describe("upsertDeliveryTarget", () => {
     expect(statement?.bindings).toEqual(["user-1"]);
     expect(statement?.sql).toContain("last_successful_delivery_at IS NOT NULL");
     expect(statement?.sql).toContain("opted_out_at IS NULL");
-    expect(statement?.sql).toContain("channel = 'slack'");
+    expect(statement?.sql).toContain("channel = 'email'");
+    expect(statement?.sql).not.toContain("channel = 'slack'");
+    expect(statement?.sql).not.toContain("channel = 'whatsapp'");
     expect(statement?.sql).toContain("is_validated = 1");
     expect(statement?.sql).toContain("validation_status = 'validated'");
-    expect(statement?.sql).toContain("template_eligible = 1");
     expect(statement?.sql).not.toContain("LIMIT");
   });
 
-  it("counts only opted-in validated email targets as readiness usable", async () => {
+  it("counts only opted-in validated customer-facing targets as readiness usable", async () => {
     const sqlite = createSqliteD1();
     try {
       sqlite.sqlite.exec(`
@@ -2629,6 +2465,19 @@ describe("upsertDeliveryTarget", () => {
           ('target-valid', 'user-1', 'email', 1, 0, NULL, 1, 'validated', '2026-06-19T00:00:00.000Z'),
           ('target-pending', 'user-1', 'email', 0, 0, NULL, 0, 'pending', '2026-06-19T00:00:00.000Z'),
           ('target-rejected', 'user-1', 'email', 1, 0, NULL, 0, 'provider_rejected', '2026-06-19T00:00:00.000Z');
+        INSERT INTO delivery_target (
+          id,
+          user_id,
+          channel,
+          is_opted_in,
+          is_paused,
+          opted_out_at,
+          is_validated,
+          validation_status,
+          template_eligible,
+          last_successful_delivery_at
+        ) VALUES
+          ('target-whatsapp-dormant', 'user-1', 'whatsapp', 1, 0, NULL, 1, 'validated', 1, '2026-06-19T00:00:00.000Z');
       `);
 
       await expect(getDeliveryTargetReadinessStats({ DB: sqlite.db } as never, "user-1"))

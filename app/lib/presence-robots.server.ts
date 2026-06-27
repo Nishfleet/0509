@@ -6,6 +6,7 @@ import {
   resolvePublicHttpUrl,
   resolvePublicRedirectUrl,
 } from "~/lib/public-url.server";
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 
 export const PRESENCE_BOT_NAME = "FiveToNinePresenceBot";
 export const PRESENCE_BOT_INFO_URL = "https://0509.io/bots/presence";
@@ -14,6 +15,7 @@ export const PRESENCE_USER_AGENT = `${PRESENCE_BOT_NAME}/1.0 (+${PRESENCE_BOT_IN
 const MAX_ROBOTS_BYTES = 500 * 1024;
 const MAX_REDIRECTS = 5;
 const ROBOTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const PRESENCE_FETCH_TIMEOUT_MS = 10_000;
 
 export type RobotsFetchStatus = "ok" | "unavailable" | "failed";
 
@@ -246,13 +248,23 @@ export async function presenceSafeFetch(
     if (options.etag) headers["if-none-match"] = options.etag;
     if (options.lastModified) headers["if-modified-since"] = options.lastModified;
 
-    const response = await fetchImpl(currentUrl.toString(), {
-      method: options.method ?? "GET",
-      redirect: "manual",
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(
+        currentUrl.toString(),
+        {
+          method: options.method ?? "GET",
+          redirect: "manual",
+          headers,
+        },
+        { fetcher: fetchImpl, timeoutMs: PRESENCE_FETCH_TIMEOUT_MS },
+      );
+    } catch {
+      return null;
+    }
 
     if (response.status === 304) {
+      releaseFetchTimeout(response);
       return {
         ok: true,
         status: 304,
@@ -266,11 +278,13 @@ export async function presenceSafeFetch(
 
     if (response.status >= 300 && response.status < 400) {
       const redirected = resolvePublicRedirectUrl(response.headers.get("location"), currentUrl);
+      releaseFetchTimeout(response);
       currentUrl = redirected ? await resolvePublicHttpUrl(redirected) : null;
       continue;
     }
 
     if (options.method === "HEAD") {
+      releaseFetchTimeout(response);
       return {
         ok: response.ok,
         status: response.status,
@@ -282,6 +296,7 @@ export async function presenceSafeFetch(
     }
 
     if (!response.ok) {
+      releaseFetchTimeout(response);
       return {
         ok: false,
         status: response.status,
@@ -293,10 +308,14 @@ export async function presenceSafeFetch(
     }
 
     if (contentLengthExceeds(response.headers, options.maxBytes)) {
+      releaseFetchTimeout(response);
       return null;
     }
 
-    const body = await readResponseTextWithinLimit(response, options.maxBytes);
+    const body = await readResponseTextWithinLimit(response, options.maxBytes).catch(() => null);
+    if (body === null) {
+      return null;
+    }
     return {
       ok: true,
       status: response.status,

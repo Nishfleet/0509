@@ -591,7 +591,7 @@ describe("Dodo customer portal route", () => {
     }));
     const createDodoCustomerPortalSession = vi
       .fn()
-      .mockResolvedValue("https://portal.dodo.example/session");
+      .mockResolvedValue("https://customer.dodopayments.com/session");
     vi.doMock("~/lib/dodo-billing.server", () => ({ createDodoCustomerPortalSession }));
 
     const { action } = await import("~/routes/api.billing.dodo.portal");
@@ -606,10 +606,14 @@ describe("Dodo customer portal route", () => {
     } catch (response) {
       expect((response as Response).status).toBe(303);
       expect((response as Response).headers.get("Location")).toBe(
-        "https://portal.dodo.example/session",
+        "https://customer.dodopayments.com/session",
       );
     }
-    expect(createDodoCustomerPortalSession).toHaveBeenCalledWith(expect.anything(), "cus_123");
+    expect(createDodoCustomerPortalSession).toHaveBeenCalledWith(
+      expect.anything(),
+      "cus_123",
+      expect.objectContaining({ request: expect.any(Request) }),
+    );
   });
 
   it("falls back to the billing page when no Dodo customer is linked", async () => {
@@ -649,5 +653,45 @@ describe("Dodo customer portal route", () => {
         "/app/billing?portal=unavailable",
       );
     }
+  });
+
+  it("falls back to the billing page when a linked Dodo customer cannot open a portal session", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        plan: "starter",
+        dodoCustomerId: "cus_123",
+      }),
+    }));
+    const createDodoCustomerPortalSession = vi.fn().mockResolvedValue(null);
+    vi.doMock("~/lib/dodo-billing.server", () => ({ createDodoCustomerPortalSession }));
+
+    const { action } = await import("~/routes/api.billing.dodo.portal");
+
+    try {
+      await action({
+        context: {},
+        request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
+        params: {},
+      } as never);
+      throw new Error("expected redirect");
+    } catch (response) {
+      expect((response as Response).status).toBe(303);
+      expect((response as Response).headers.get("Location")).toBe(
+        "/app/billing?portal=unavailable",
+      );
+    }
+    expect(createDodoCustomerPortalSession).toHaveBeenCalledTimes(1);
   });
 });

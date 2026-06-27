@@ -1,6 +1,6 @@
 # Presence Tracking Architecture (v1)
 
-Last updated: 2026-06-24
+Last updated: 2026-06-27
 
 ## Goal
 
@@ -113,20 +113,28 @@ Presence digests use `sendPresenceDigestEmail` in `delivery.server.ts` with idem
 - Delivery: `delivery.server.ts`
 - Plan gating: `plan-entitlements.ts`, `plan.server.ts`
 
-## Rollout (v1 → pilot)
+## Current production rollout
+
+`wrangler.jsonc` currently sets `PRESENCE_WEBSITE_ROLLOUT=generally_available` and keeps
+`PRESENCE_DIGEST_ROLLOUT`, `PRESENCE_X_ROLLOUT`, `PRESENCE_REDDIT_ROLLOUT`, and
+`PRESENCE_LINKEDIN_ROLLOUT` disabled. Website/blog Presence is the GA connector for
+entitled workspaces. Social connectors remain unavailable until credentials, policy
+approval, and a separate rollout decision are verified.
+
+## Historical rollout path
 
 | Connector | Production default | Next step |
 |-----------|-------------------|-----------|
-| Website/blog | `internal` (2026-06-24) | `pilot` after hashed allowlist enrollment + 3 sync cycles |
-| X | `disabled` | credentials + rollout |
-| Reddit | `disabled` | commercial access + credentials |
-| LinkedIn | `disabled` | OAuth secret + credentials; self only |
+| Website/blog | `generally_available` (2026-06-24) | Keep GA only for entitled workspaces |
+| X | `disabled` | credentials + rollout decision |
+| Reddit | `disabled` | commercial access, credentials, and rollout decision |
+| LinkedIn | `disabled` | OAuth secret, credentials, and rollout decision; self only |
 
 ### Pilot allowlist
 
 - Migration `0057_presence_pilot_workspace.sql` — stores `workspace_id_hash` (SHA-256), never raw ids
 - Module: `app/lib/presence-pilot-access.server.ts`
-- Rollout `pilot`: D1 allowlist required; fail closed when not enrolled
+- Rollout `pilot`: D1 allowlist required; fail closed when not enrolled. Production has since moved the website/blog connector to GA for entitled workspaces.
 - Digest delivery: `PRESENCE_DIGEST_ROLLOUT=disabled` by default
 
 Internal canary: `npm run canary:presence`

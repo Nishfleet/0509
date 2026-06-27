@@ -73,6 +73,26 @@ describe("customer Meta token setup", () => {
       summary: "This token is expired or invalid. Generate a fresh token in Meta and paste it here.",
     });
   });
+
+  it("does not mark tokens healthy when Meta returns unreadable JSON", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response("{not-json", {
+        status: 200,
+      }),
+    );
+
+    const result = await testCustomerMetaToken(
+      {},
+      "EAABabcdefghijklmnopqrstuvwxyz",
+      { fetchImpl: fetchImpl as never },
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: "degraded",
+      errorCode: "invalid_provider_response",
+    });
+  });
 });
 
 describe("credential encryption", () => {

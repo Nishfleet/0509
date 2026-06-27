@@ -57,8 +57,8 @@ ${proofItems}
 
 ${hooks}
 
-## Slack Export
+## Digest Markdown
 
-${demoProof.exports.slackMarkdown}
+${demoProof.exports.digestMarkdown}
 `;
 }

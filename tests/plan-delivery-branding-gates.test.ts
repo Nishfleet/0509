@@ -120,6 +120,7 @@ describe("watchlists save-delivery-config gates", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
       upsertWatchlistDeliveryConfig: vi.fn(),
     }));
@@ -140,9 +141,7 @@ describe("watchlists save-delivery-config gates", () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: "plan_gated",
-      feature: "slack_delivery",
-      plan: "scout",
+      message: "Slack delivery is not available at general availability yet. Use email delivery.",
     });
   });
 
@@ -161,6 +160,7 @@ describe("watchlists save-delivery-config gates", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
       upsertWatchlistDeliveryConfig: vi.fn(),
     }));

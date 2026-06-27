@@ -24,6 +24,10 @@ import {
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import type { AppEnv } from "~/lib/env.server";
 import { emailFromAddress, isEmailSendingConfigured } from "~/lib/env.server";
+import {
+  isSlackDeliveryCustomerFacing,
+  isWhatsAppDeliveryCustomerFacing,
+} from "~/lib/ga-customer-surface";
 import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
   AdRecord,
@@ -135,10 +139,10 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
     : [];
   // "All quiet" heartbeats stay email-only: a WhatsApp template or Slack
   // ping saying nothing happened reads as noise on those channels.
-  const whatsappTargets = !isHeartbeat && config.whatsappEnabled
+  const whatsappTargets = !isHeartbeat && config.whatsappEnabled && isWhatsAppDeliveryCustomerFacing()
     ? await resolveDigestWhatsAppTargets(env, input.userId)
     : [];
-  const slackTargets = !isHeartbeat && config.slackEnabled
+  const slackTargets = !isHeartbeat && config.slackEnabled && isSlackDeliveryCustomerFacing()
     ? await resolveDigestSlackTargets(env, input.userId)
     : [];
 
@@ -213,7 +217,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   const emailTargets = batches.some((batch) => batch.allowedChannels.includes("email"))
     ? await resolveAlertEmailTargets(env, input.userId, input.watchlist.id, input.accountEmail)
     : [];
-  const whatsappTargets = batches.some((batch) => batch.allowedChannels.includes("whatsapp"))
+  const whatsappTargets = isWhatsAppDeliveryCustomerFacing() && batches.some((batch) => batch.allowedChannels.includes("whatsapp"))
     ? await resolveAlertWhatsAppTargets(env, input.userId, input.watchlist.id)
     : [];
   const slackTargets = batches.some((batch) => batch.allowedChannels.includes("slack"))
@@ -1230,6 +1234,7 @@ async function resolveAlertEmailTargets(
 }
 
 async function resolveDigestWhatsAppTargets(env: AppEnv, userId: string) {
+  if (!isWhatsAppDeliveryCustomerFacing()) return [];
   return (await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "whatsapp",
@@ -1238,6 +1243,7 @@ async function resolveDigestWhatsAppTargets(env: AppEnv, userId: string) {
 }
 
 async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlistId: string) {
+  if (!isWhatsAppDeliveryCustomerFacing()) return [];
   return dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
       watchlistId,
@@ -1253,6 +1259,7 @@ async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlis
 }
 
 async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
+  if (!isSlackDeliveryCustomerFacing()) return [];
   return (await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "slack",
@@ -1261,6 +1268,7 @@ async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
 }
 
 async function resolveAlertSlackTargets(env: AppEnv, userId: string, watchlistId: string) {
+  if (!isSlackDeliveryCustomerFacing()) return [];
   return dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
       watchlistId,

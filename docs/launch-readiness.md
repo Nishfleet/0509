@@ -29,12 +29,13 @@ The public `/status` page summarizes coarse launch posture without rendering acc
 - `npm test` must pass.
 - `npm run build` must pass.
 - `npm audit --omit=dev --audit-level=moderate` must pass.
+- `npm run canary:pricing` must pass.
 - `npm run canary:billing` must pass.
+- `npm run canary:proof` without `--require-slack` must exit 0 (active email delivery proof).
 - `npm run canary:prod` must pass.
 - `npm run provider:bakeoff:launch` must stay green for `current_0509`.
 - `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret.
 - The private launch-readiness endpoint must show recent successful monitoring, proof capture, and **email** digest delivery (`no_recent_email_sent` is blocking).
-- `npm run canary:proof` without `--require-slack` must exit 0 (active email delivery proof).
 - WhatsApp must stay out of launch claims while provider/customer/webhook readiness is disabled.
 - Public pricing display must come from Dodo local-price preview.
 - Dodo checkout creation and signed webhook grant canaries must remain green.

@@ -1,6 +1,10 @@
-# Presence Website Pilot Runbook
+# Presence Website Rollout Runbook
 
-Last updated: 2026-06-24
+Last updated: 2026-06-27
+
+Website/blog Presence is now GA for entitled workspaces. This runbook preserves
+the historical pilot procedure for rollback or controlled re-entry; it is not the
+current production launch posture.
 
 ## Prerequisites
 
@@ -9,7 +13,8 @@ Last updated: 2026-06-24
   - `PRESENCE_OAUTH_STATE_SECRET`
   - `PRESENCE_INTERNAL_WORKSPACE_ID` (internal canary)
 - Wrangler vars:
-  - `PRESENCE_WEBSITE_ROLLOUT=internal` (initial deploy)
+  - Current production: `PRESENCE_WEBSITE_ROLLOUT=generally_available`
+  - Historical pilot entry: `PRESENCE_WEBSITE_ROLLOUT=internal` (initial deploy)
   - `PRESENCE_DIGEST_ROLLOUT=disabled`
   - All `PRESENCE_*_ROLLOUT` social connectors `disabled`
 

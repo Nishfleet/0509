@@ -1,5 +1,6 @@
 import type { AppEnv } from "~/lib/env.server";
 import { appOrigin } from "~/lib/env.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import {
   checkoutTargetFromSku,
   legacyBundleSlugForSku,
@@ -16,10 +17,15 @@ import {
   dodo0509BaseUrl,
   dodo0509BrandId,
 } from "~/lib/dodo-pricing.server";
+import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import type { PricingBillingCycle, PricingPlanSlug } from "~/lib/pricing";
 import type { AppSession } from "~/lib/types";
 
 export type DodoCheckoutTarget = CheckoutTarget;
+const DODO_CHECKOUT_TIMEOUT_MS = 15_000;
+const DODO_PORTAL_TIMEOUT_MS = 10_000;
+const DODO_CHECKOUT_JSON_MAX_BYTES = 64_000;
+const DODO_PORTAL_JSON_MAX_BYTES = 32_000;
 
 export interface DodoCheckoutSession {
   checkoutUrl: string;
@@ -45,31 +51,51 @@ export async function createDodo0509CheckoutSession({
   const productId = productIdForTarget(env, target);
   if (!productId) throw new Response("Dodo product is not configured.", { status: 503 });
 
-  const response = await fetcher(`${dodo0509BaseUrl(env)}/checkouts`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      product_cart: [{ product_id: productId, quantity: 1 }],
-      customer: {
-        email: session.user.email,
-        name: session.user.name,
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `${dodo0509BaseUrl(env)}/checkouts`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          product_cart: [{ product_id: productId, quantity: 1 }],
+          customer: {
+            email: session.user.email,
+            name: session.user.name,
+          },
+          return_url: `${appOrigin(env, request)}/app?checkout=dodo`,
+          metadata: {
+            app: "0509",
+            user_id: session.user.id,
+            target_kind: target.kind,
+            sku: target.sku,
+            ...(target.kind === "plan"
+              ? { plan: target.planFamily, cycle: target.cycle }
+              : { bundle: legacyBundleSlugForSku(target.sku) }),
+          },
+        }),
       },
-      return_url: `${appOrigin(env, request)}/app?checkout=dodo`,
-      metadata: {
-        app: "0509",
-        user_id: session.user.id,
-        target_kind: target.kind,
-        sku: target.sku,
-        ...(target.kind === "plan"
-          ? { plan: target.planFamily, cycle: target.cycle }
-          : { bundle: legacyBundleSlugForSku(target.sku) }),
-      },
-    }),
-  });
-  const payload = objectOrEmpty(await response.json().catch(() => ({})));
+      { fetcher, timeoutMs: DODO_CHECKOUT_TIMEOUT_MS },
+    );
+  } catch {
+    throw new Response("Dodo checkout is temporarily unavailable. Please try again.", {
+      status: 502,
+    });
+  }
+  let payload: Record<string, unknown>;
+  try {
+    payload = objectOrEmpty(
+      (await readResponseJsonWithinLimit(response, DODO_CHECKOUT_JSON_MAX_BYTES)) ?? {},
+    );
+  } catch {
+    throw new Response("Dodo checkout is temporarily unavailable. Please try again.", {
+      status: 502,
+    });
+  }
   if (!response.ok) {
     throw new Response(readPayloadMessage(payload, "Dodo checkout failed."), { status: 502 });
   }
@@ -86,14 +112,20 @@ export async function createDodo0509CheckoutSession({
 export async function createDodoCustomerPortalSession(
   env: AppEnv,
   customerId: string,
-  fetcher: typeof fetch = fetch,
+  options: { request?: Request; fetcher?: typeof fetch } = {},
 ): Promise<string | null> {
   const apiKey = dodo0509ApiKey(env);
   if (!apiKey) return null;
+  const endpoint = new URL(
+    `${dodo0509BaseUrl(env)}/customers/${encodeURIComponent(customerId)}/customer-portal/session`,
+  );
+  if (options.request) {
+    endpoint.searchParams.set("return_url", `${appOrigin(env, options.request)}/app/billing`);
+  }
 
   try {
-    const response = await fetcher(
-      `${dodo0509BaseUrl(env)}/customers/${encodeURIComponent(customerId)}/customer-portal/session`,
+    const response = await fetchWithTimeout(
+      endpoint.toString(),
       {
         method: "POST",
         headers: {
@@ -101,13 +133,34 @@ export async function createDodoCustomerPortalSession(
           Authorization: `Bearer ${apiKey}`,
         },
       },
+      { fetcher: options.fetcher, timeoutMs: DODO_PORTAL_TIMEOUT_MS },
     );
-    if (!response.ok) return null;
+    if (!response.ok) {
+      releaseFetchTimeout(response);
+      return null;
+    }
 
-    const payload = objectOrEmpty(await response.json().catch(() => ({})));
-    return readString(payload, "link") || readString(payload, "url") || null;
+    const payload = objectOrEmpty(
+      (await readResponseJsonWithinLimit(response, DODO_PORTAL_JSON_MAX_BYTES)) ?? {},
+    );
+    const portalUrl = readString(payload, "link") || readString(payload, "url") || "";
+    return isDodoHostedCustomerPortalUrl(portalUrl) ? portalUrl : null;
   } catch {
     return null;
+  }
+}
+
+export function isDodoHostedCustomerPortalUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "customer.dodopayments.com" ||
+        url.hostname === "test.customer.dodopayments.com" ||
+        url.hostname.endsWith(".customer.dodopayments.com"))
+    );
+  } catch {
+    return false;
   }
 }
 

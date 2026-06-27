@@ -9,11 +9,14 @@ import {
   decryptCredential,
   encryptCredential,
 } from "~/lib/credential-crypto.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
+import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import type { CustomerMetaConnectionRecord } from "~/lib/types";
 
 const TOKEN_MIN_LENGTH = 20;
 const TOKEN_TEST_TIMEOUT_MS = 15_000;
+const TOKEN_TEST_JSON_MAX_BYTES = 32_000;
 
 interface MetaTokenTestResult {
   ok: boolean;
@@ -72,16 +75,6 @@ function friendlyTokenFailure(payload: MetaApiErrorPayload, fallbackMessage: str
   };
 }
 
-async function fetchWithTimeout(url: string, fetchImpl: FetchImpl, timeoutMs: number) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetchImpl(url, { signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export async function testCustomerMetaToken(
   env: AppEnv,
   tokenInput: string,
@@ -111,10 +104,22 @@ export async function testCustomerMetaToken(
   try {
     const response = await fetchWithTimeout(
       `https://graph.facebook.com/${version}/ads_archive?${params.toString()}`,
-      options.fetchImpl ?? fetch,
-      TOKEN_TEST_TIMEOUT_MS,
+      {},
+      { fetcher: options.fetchImpl ?? fetch, timeoutMs: TOKEN_TEST_TIMEOUT_MS },
     );
-    const payload = (await response.json().catch(() => ({}))) as MetaApiErrorPayload;
+    const payload = await readResponseJsonWithinLimit<MetaApiErrorPayload>(
+      response,
+      TOKEN_TEST_JSON_MAX_BYTES,
+    );
+    if (!payload) {
+      return {
+        ok: false,
+        status: "degraded",
+        summary: "Meta returned an unreadable token-check response. Try again before saving this token.",
+        errorCode: "invalid_provider_response",
+        errorMessage: `Meta returned status ${response.status} with an unreadable response body.`,
+      };
+    }
 
     if (!response.ok || payload.error) {
       const failure = friendlyTokenFailure(

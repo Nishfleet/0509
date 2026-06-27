@@ -389,29 +389,25 @@ describe("deliverWeeklyDigest", () => {
     );
 
     expect(result).toMatchObject({
-      attempts: 2,
-      channels: ["email", "whatsapp"],
+      attempts: 1,
+      channels: ["email"],
       details: [
         {
           channel: "email",
           status: "sent",
           targetValue: "owner@example.com",
         },
-        {
-          channel: "whatsapp",
-          status: "failed",
-          targetValue: "+919999999999",
-        },
       ],
     });
+    expect(sendDigestWhatsApp).not.toHaveBeenCalled();
     expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(sendDigestWhatsApp).toHaveBeenCalledTimes(1);
+    expect(createDeliveryAttempt).toHaveBeenCalledTimes(1);
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        channel: "whatsapp",
-        status: "failed",
-        errorMessage: "Customer WhatsApp delivery is not ready yet.",
+        channel: "email",
+        status: "sent",
+        errorMessage: null,
       }),
     );
   });
@@ -620,50 +616,13 @@ describe("deliverWeeklyDigest", () => {
     );
 
     expect(result).toMatchObject({
-      attempts: 1,
-      channels: ["slack"],
-      details: [
-        {
-          channel: "slack",
-          status: "sent",
-          targetValue: "slack:abc123",
-        },
-      ],
+      attempts: 0,
+      channels: [],
+      details: [],
     });
-    expect(sendSlackWebhookMessage).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        channel: "slack",
-        targetValue: "slack:abc123",
-      }),
-      {
-        text: expect.stringContaining("Five to Nine weekly digest"),
-      },
-    );
-    expect(createDeliveryAttempt).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        channel: "slack",
-        provider: "slack_incoming_webhook",
-        status: "sent",
-        webhookStatus: "delivered",
-        digestRunId: "digest-1",
-        targetValue: "slack:abc123",
-        eventIds: ["event-1"],
-      }),
-    );
-    expect(upsertDigestDelivery).toHaveBeenCalledWith(
-      expect.anything(),
-      "digest-1",
-      expect.objectContaining({
-        provider: "slack_incoming_webhook",
-        status: "sent",
-        recipientEmail: "slack:abc123",
-        externalMessageId: null,
-        errorMessage: null,
-        deliveredAt: "2026-04-19T00:00:00.000Z",
-      }),
-    );
+    expect(sendSlackWebhookMessage).not.toHaveBeenCalled();
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(upsertDigestDelivery).not.toHaveBeenCalled();
   });
 
   it("reuses an existing idempotent email attempt instead of sending twice", async () => {
@@ -1122,6 +1081,141 @@ describe("deliverWatchlistAlerts", () => {
     );
     // The referenced ad had no captured creative, so no image is embedded.
     expect(String(emailSendPayload(sendMock).html)).not.toContain("<img");
+  });
+
+  it("does not send instant alerts to dormant Slack or WhatsApp targets", async () => {
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-hidden-channel");
+    const sendInstantWhatsApp = vi.fn();
+    const sendSlackWebhookMessage = vi.fn();
+    const listDeliveryTargets = vi.fn().mockImplementation(async (_env, _userId, options) => {
+      if (options?.channel === "whatsapp") {
+        return [whatsappTarget()];
+      }
+      if (options?.channel === "slack") {
+        return [
+          {
+            id: "slack-target-1",
+            userId: "user-1",
+            watchlistId: null,
+            channel: "slack",
+            targetValue: "slack:[redacted]",
+            validationStatus: "validated",
+            isValidated: true,
+            isOptedIn: true,
+            optInSource: "slack_webhook",
+            optedInAt: "2026-04-19T00:00:00.000Z",
+            isPaused: false,
+            pausedAt: null,
+            optedOutAt: null,
+            templateEligible: true,
+            lastSuccessfulDeliveryAt: null,
+            lastSuccessfulAttemptId: null,
+            providerIdentifier: "slack-webhook:secret",
+            metadata: {
+              encryptedWebhookUrl: "https://hooks.slack.com/services/T/B/C",
+            },
+            createdAt: "2026-04-19T00:00:00.000Z",
+            updatedAt: "2026-04-19T00:00:00.000Z",
+          },
+        ];
+      }
+      return [];
+    });
+
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: true,
+        digestEnabled: true,
+        emailEnabled: false,
+        whatsappEnabled: true,
+        slackEnabled: true,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets,
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+      sendInstantWhatsApp,
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      sendSlackWebhookMessage,
+    }));
+
+    const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+    const result = await deliverWatchlistAlerts(
+      {
+        ...emailEnv,
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.io",
+      } as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        watchlist: {
+          id: "watch-1",
+          userId: "user-1",
+          name: "Nykaa watch",
+        },
+        events: [
+          {
+            id: "event-1",
+            watchlistId: "watch-1",
+            runId: "run-1",
+            eventType: "landing_page_url_changed",
+            status: "confirmed",
+            importanceScore: 90,
+            adId: "meta-1",
+            baselineFromRunId: null,
+            candidateId: "candidate-1",
+            proofCaptureId: "proof-1",
+            title: "Landing page URL changed",
+            summary: "The landing page URL changed.",
+            metadata: {
+              advertiser: "Nykaa",
+            },
+            confirmedAt: "2026-04-19T00:00:00.000Z",
+            suppressedAt: null,
+            invalidatedAt: null,
+            lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+            createdAt: "2026-04-19T00:00:00.000Z",
+          },
+        ],
+      },
+    );
+
+    expect(result).toEqual({
+      attempts: 0,
+      channels: [],
+    });
+    expect(listDeliveryTargets).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ channel: "whatsapp" }),
+    );
+    expect(listDeliveryTargets).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ channel: "slack" }),
+    );
+    expect(sendInstantWhatsApp).not.toHaveBeenCalled();
+    expect(sendSlackWebhookMessage).not.toHaveBeenCalled();
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
   });
 
   it("embeds the primary event's creative image when the referenced ad has one captured", async () => {

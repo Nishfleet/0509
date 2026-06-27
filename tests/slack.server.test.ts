@@ -54,6 +54,7 @@ describe("Slack delivery helpers", () => {
       webhookUrl,
       expect.objectContaining({
         method: "POST",
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(upsertDeliveryTarget).toHaveBeenCalledWith(
@@ -294,6 +295,51 @@ describe("sendSlackWebhookMessage", () => {
       status: "failed",
       webhookStatus: "failed",
       errorMessage: "Slack send failed: invalid_payload.",
+    });
+  });
+
+  it("bounds oversized Slack webhook error bodies", async () => {
+    const { encryptCredential } = await import("~/lib/credential-crypto.server");
+    const { sendSlackWebhookMessage } = await import("~/lib/slack-webhook.server");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response("x".repeat(20_000), { status: 500 }),
+    ));
+
+    const result = await sendSlackWebhookMessage(
+      env as never,
+      {
+        id: "slack-target-1",
+        userId: "user-1",
+        watchlistId: null,
+        channel: "slack",
+        targetValue: "slack:abc",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "manual_slack_webhook",
+        optedInAt: "2026-06-06T00:00:00.000Z",
+        isPaused: false,
+        pausedAt: null,
+        optedOutAt: null,
+        templateEligible: true,
+        lastSuccessfulDeliveryAt: null,
+        lastSuccessfulAttemptId: null,
+        providerIdentifier: "abc",
+        metadata: {
+          encryptedWebhookUrl: await encryptCredential(env as never, fakeSlackWebhookUrl()),
+        },
+        createdAt: "2026-06-06T00:00:00.000Z",
+        updatedAt: "2026-06-06T00:00:00.000Z",
+      },
+      {
+        text: "Five to Nine digest",
+      },
+    );
+
+    expect(result).toMatchObject({
+      status: "failed",
+      webhookStatus: "failed",
+      errorMessage: "Slack send failed: Slack returned HTTP 500.",
     });
   });
 });

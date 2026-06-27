@@ -48,7 +48,7 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     actions: ["list_delivery_targets", "update_delivery_settings", "update_delivery_target"],
   },
   {
-    label: "Web mentions beta",
+    label: "Presence observations",
     requiresWriteEnabled: true,
     actions: ["list_web_mentions"],
   },
@@ -90,6 +90,7 @@ describe("MCP route discovery", () => {
         name: string;
         requiresWriteEnabled: boolean;
         credentialRequirement: string;
+        inputSchema: unknown;
       }>;
       agentActivation: {
         firstWorkflow: Array<{ label: string }>;
@@ -136,6 +137,16 @@ describe("MCP route discovery", () => {
     expect(toolNames.filter((name) => !READ_EXPORT_TOOL_NAME_SET.has(name)).sort()).toEqual(
       [...expectedGroupedActionNames].sort(),
     );
+    body.tools
+      .filter((tool) => tool.name === "get_workspace_readiness" || READ_EXPORT_TOOL_NAME_SET.has(tool.name))
+      .forEach((tool) => {
+        expect(JSON.stringify(tool.inputSchema)).toContain('"json"');
+      });
+    body.tools.forEach((tool) => {
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"slack"');
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"whatsapp"');
+      expect(JSON.stringify(tool.inputSchema)).not.toContain("Slack-ready");
+    });
     body.tools.forEach((tool) => {
       const requiresWriteEnabled = expectedWriteToolNameSet.has(tool.name);
       expect(tool).toMatchObject({

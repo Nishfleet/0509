@@ -2,7 +2,7 @@
 
 ## Customer contact
 
-- Email: `support@0509.io` (`support@0509.in` redirects — use `.io` in replies)
+- Email: `support@0509.io`
 - In-app: `/app/support?category=billing|delivery|account`
 
 ## Ops gates (operator)
