@@ -15,7 +15,7 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 | Starting branch | `codex/final-self-serve-ga-hardening-20260625` |
 | Starting main commit | `ed109a9` |
 | Local `main` vs `origin/main` | Match at `ed109a9` after `git fetch origin` |
-| Current branch status | Verified on the current checkout; use `git log -1 --oneline` for the exact HEAD before PR/deploy |
+| Current branch status | Verified on the current checkout; re-run `git status --short --branch` and `git log -1 --oneline` before PR/deploy |
 | Pull request | Not opened yet; protected `gh pr create` is awaiting explicit owner approval |
 | Safety patch | Saved at `../pre-final-self-serve-ga-hardening.patch` |
 | Worker version | Not verified in this pass; Cloudflare deployment API was not used |
@@ -28,7 +28,7 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Full unit/integration tests | PASS | `npm test`: 139 files, 1321 tests |
+| Full unit/integration tests | PASS | `npm test`: 139 files, 1322 tests |
 | Typecheck | PASS | `npm run typecheck` |
 | Production build | PASS | `npm run build` |
 | Dependency audit | PASS | `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilities |
@@ -36,15 +36,15 @@ Scout and Starter are locally verified as self-serve in the reviewed branch, wit
 | Diff whitespace | PASS | `git diff --check HEAD` |
 | Autoreview | PASS | Final staged autoreview clean; no accepted/actionable findings |
 | Retired billing provider surface | PASS | Routes, helpers, env typing, tests, active docs, and historical setup migrations removed; `0060` converges the final schema to Dodo-only billing fields after deploy |
-| Local D1 migration list | LOCAL ONLY | Local simulator reports pending migrations from prior local state |
-| Remote D1 migration list | PENDING POST-DEPLOY | Remote reports `0060_remove_legacy_billing_provider.sql` pending; deploy compatible Worker first, then apply cleanup with backup/count evidence |
+| Local D1 migration list | LOCAL ONLY | Local simulator reports pending `0053`-`0060` from prior local state |
+| Remote D1 migration list | PENDING POST-DEPLOY | Remote reports only `0060_remove_legacy_billing_provider.sql` pending; deploy compatible Worker first, then apply cleanup with backup/count evidence |
 | Pricing canary | PASS | Dodo pricing canary passed for IN, US, and GB previews |
 | Billing canary | PASS | Dodo signed-webhook plan/top-up canary passed and cleanup passed |
 | Proof/email canary | PASS | Launch proof canary passed with email delivery |
 | Production canary | PASS | Health on primary domains, fresh-live search, ops readiness, and Meta ads beta passed |
 | Provider bakeoff launch gate | PASS/PARTIAL | Current live provider passed all launch queries; optional alternate providers skipped because their credentials are absent |
-| Full launch readiness script | PASS | `npm run launch:readiness` passed with local canary env exported |
-| Presence website canary | BLOCKED | Missing local internal Presence workspace id |
+| Full launch readiness script | PASS | Rerun after the retired-provider history removal and scorecard/copy refresh: typecheck, tests, build, audit, pricing, billing, proof/email, prod, and provider bakeoff passed with local canary env exported |
+| Presence website canary | BLOCKED | `npm run canary:presence` still stops at missing local internal Presence workspace id |
 
 ## Product Contract
 
