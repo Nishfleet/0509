@@ -2,11 +2,14 @@
 
 Last updated: 2026-06-24 (branch `cursor/ga-final-integration-20260624`, GA final integration)
 
+> Historical scorecard. The current launch truth for the final hardening branch lives in
+> `docs/final-self-serve-ga-scorecard.md`; do not use this file as the live GA verdict.
+
 ## Verdict
 
-**GA LIVE — SCOUT AND STARTER FOR SALE, AGENCY HELD**
+**SUPERSEDED — SCOUT AND STARTER WERE OPEN ON THIS HISTORICAL PASS, AGENCY HELD**
 
-Billing + email canaries pass on production. Scout/Starter checkout and top-ups open. Agency held until live fan-out ladder proof. Slack removed from public GA offer; backend dormant. Read-only ops gates on email (Slack → advisories). Fan-out stays `inline`; simulated proof PASS; live ladder NOT RUN.
+Billing + email canaries passed on production during the 2026-06-24 integration pass. Scout/Starter checkout and top-ups were open, while Agency stayed held until live fan-out ladder proof. The final 2026-06-27 branch still requires protected PR review, merge, deploy, post-deploy D1 cleanup, and owner-action closeout before a live GA verdict.
 
 ## Phase tracker
 

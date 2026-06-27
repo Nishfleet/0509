@@ -4,9 +4,9 @@ Last updated: 2026-06-27
 
 ## Verdict
 
-Current repo verdict: RELEASE READY - OWNER ACTION REQUIRED.
+Current repo verdict: BRANCH READY FOR PROTECTED PR - OWNER ACTION REQUIRED.
 
-Scout and Starter are locally verified as self-serve in the reviewed branch, with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, and API/MCP Slack removal covered by tests and live canaries. Agency remains held because production fan-out proof has not passed. The branch still needs protected PR review, merge, and deploy.
+Scout and Starter are locally verified as self-serve in the reviewed branch, with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, and API/MCP Slack removal covered by tests and live canaries. Agency remains held because production fan-out proof has not passed. This is not a live GA verdict until the protected PR is reviewed, merged, deployed, and the post-deploy D1 cleanup is verified.
 
 ## Baseline
 

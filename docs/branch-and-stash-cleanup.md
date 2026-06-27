@@ -4,7 +4,7 @@ Last updated: 2026-06-27
 
 No branches or stashes were deleted.
 
-Reviewed against current hardening branch `codex/final-self-serve-ga-hardening-20260625` at `24aa91e` and `main` at `ed109a9`.
+Reviewed against current hardening branch `codex/final-self-serve-ga-hardening-20260625` at `c2bd462` and `main` at `ed109a9`.
 
 ## Branches Reviewed
 
