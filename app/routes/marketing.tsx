@@ -569,8 +569,8 @@ export default function MarketingRoute() {
                     </div>
                   ) : plan.slug === "agency" && !planSaleOpen ? (
                     <p className="f9-price-sync">
-                      Agency opens after nightly monitoring fan-out is proven. Email{" "}
-                      <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> for early access.
+                      Agency checkout is temporarily unavailable. Email{" "}
+                      <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will help.
                     </p>
                   ) : (
                     <span className="f9-price-sync">Prices loading</span>
@@ -642,11 +642,11 @@ export default function MarketingRoute() {
               </dd>
             </div>
             <div>
-              <dt>Why is Agency held?</dt>
+              <dt>What changes on Agency?</dt>
               <dd>
-                Agency includes 75 watchlists with daily scans and highest queue priority. Checkout
-                opens after nightly monitoring fan-out is proven — Scout and Starter are available
-                now.
+                Agency includes 75 watchlists with daily scans and highest queue priority. It now
+                runs on the fan-out workflow path; we keep monitoring nightly dispatch and scan
+                health as volume grows.
               </dd>
             </div>
             <div>

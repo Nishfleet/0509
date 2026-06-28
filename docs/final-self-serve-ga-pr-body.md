@@ -8,11 +8,11 @@ Title:
 
 ## Summary
 
-This PR closes the remaining in-repo Five to Nine launch-hardening gaps for the currently supportable Scout and Starter self-serve SaaS path.
+This PR closes the remaining in-repo Five to Nine launch-hardening gaps for the currently supportable Scout, Starter, and Agency self-serve SaaS path. This file was the original PR body; the 2026-06-28 closeout updated Agency from held to open after live fan-out dispatch proof.
 
 - Scout and Starter stay publicly sellable and self-serve.
 - Top-up packs stay self-serve through the existing Dodo products and signed webhook grant path.
-- Agency stays held until live production fan-out proof passes.
+- Agency is open after live production fan-out dispatch proof; monitor nightly scan health.
 - Slack and WhatsApp stay dormant and hidden from GA customer UI/API/MCP surfaces.
 - Email remains the verified automated delivery channel.
 - Public, README, `/llms.txt`, API-readable docs, onboarding, and in-app copy are aligned to current plan/top-up semantics.
@@ -28,7 +28,7 @@ This PR closes the remaining in-repo Five to Nine launch-hardening gaps for the 
 - Backup validator coverage: resolved. Validation walks the current migration chain through the latest repo migration.
 - Billing portal: honest partial self-serve. Portal route exists, but plan changes/cancellation remain support-backed until the Dodo dashboard portal setting is owner-verified.
 - Provider reliability: improved. Dodo, email, Browser Run/Browserless, Meta/customer token checks, landing/proof fetches, Presence checks, Slack, WhatsApp, and LinkedIn OAuth token exchange now use timeout/bounded handling where touched.
-- Agency state: held. Checkout stays blocked until production fan-out proof passes.
+- Agency state: open. Live production fan-out dispatch proof passed; scan health remains monitored.
 - Account-controls branch: reviewed and not merged. Useful ideas were classified for later rebuild; stale migrations/code were not imported.
 - Branch/stash cleanup: documented only. No branch, stash, or worktree deletion was performed.
 
@@ -68,7 +68,7 @@ These are not proven by repo code alone:
 - Confirm an external uptime monitor for `https://0509.io/api/health`.
 - Activate or explicitly defer D1-to-R2 scheduled backup and restore drill.
 - Provide internal Presence workspace config and rerun `npm run canary:presence`.
-- Run the live fan-out ladder before opening Agency checkout.
+- Monitor the next live Agency fan-out window for dispatch failures and real scan completion.
 - Confirm Cloudflare Email activity/log visibility.
 - Review unsupported WhatsApp stored targets without destructive cleanup.
 - Clean up retired provider dashboard artifacts.
@@ -96,7 +96,7 @@ These are not proven by repo code alone:
 
 - Before `0060`: rollback by redeploying the previous Worker version if auth, billing, checkout, Search V2, Presence, dashboard, API/MCP, Agency gating, public copy, or provider timeout behavior regresses.
 - After `0060`: do not redeploy older code that expects retired-provider tables or columns. Roll forward or restore from the fresh D1 backup/export if the cleanup migration causes a data/schema issue.
-- Keep Agency checkout held unless the live fan-out ladder passes.
+- Keep Agency checkout open while nightly dispatch failures stay at zero and real scan failures remain explainable.
 - Keep Slack and WhatsApp dormant unless a future verified product decision reintroduces them.
 
 ## PR Command

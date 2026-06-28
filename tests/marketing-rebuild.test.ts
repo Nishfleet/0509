@@ -129,7 +129,8 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("summarizeCommercialLaunch");
     expect(marketingRoute).toContain("Held for capacity proof");
     expect(marketingRoute).toContain("Common billing questions");
-    expect(marketingRoute).toContain("Why is Agency held?");
+    expect(marketingRoute).toContain("What changes on Agency?");
+    expect(marketingRoute).not.toContain("Why is Agency held?");
   });
 
   it("has incinerated the stale lower-page system", () => {

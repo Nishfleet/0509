@@ -4,9 +4,9 @@ Last updated: 2026-06-28
 
 ## Verdict
 
-Current live verdict: SCOUT AND STARTER SELF-SERVE RELEASED - OWNER ACTIONS REMAIN.
+Current live verdict: SCOUT, STARTER, AND AGENCY SELF-SERVE RELEASED - OWNER ACTIONS REMAIN.
 
-Scout and Starter are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, and API/MCP Slack removal covered by tests and live canaries. Agency remains held because production fan-out proof has not passed. Backup scheduling is now repo-configured and restore proof exists locally, but GitHub backup secrets and the first scheduled backup run remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo portal subscription-update confirmation, external uptime monitor, Presence local smoke value, Agency fan-out ladder, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
+Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Backup scheduling is now repo-configured and restore proof exists locally, but GitHub backup secrets and the first scheduled backup run remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo portal subscription-update confirmation, external uptime monitor, Presence local smoke value, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
 
 ## Baseline
 
@@ -21,9 +21,9 @@ Scout and Starter are deployed and verified on the live Worker with Dodo checkou
 | Fresh release backup | Timestamped object under the private R2 backup prefix confirmed |
 | Fresh post-cleanup backup | Timestamped object under the private R2 backup prefix confirmed |
 | Production domains from repo config | `.io` primary domains plus `.in` redirect compatibility routes |
-| Monitoring mode from repo config | `inline`; fan-out not globally enabled |
+| Monitoring mode from repo config | `fanout`; global fan-out enabled |
 | Presence rollout from repo config | Website GA; digest, X, Reddit, and LinkedIn disabled |
-| Agency state | Held unless fan-out proof passes |
+| Agency state | Available for checkout after live dispatch proof |
 
 ## Verification Matrix
 
@@ -49,7 +49,7 @@ Scout and Starter are deployed and verified on the live Worker with Dodo checkou
 | Provider bakeoff launch gate | PASS/PARTIAL | Current live provider passed all launch queries; optional alternate providers skipped because their credentials are absent |
 | Full launch readiness script | PASS | Rerun after the retired-provider history removal and scorecard/copy refresh: typecheck, tests, build, audit, pricing, billing, proof/email, prod, and provider bakeoff passed with local canary env exported |
 | Presence website canary | PROVIDER CONFIGURED / LOCAL BLOCKED | Worker secret exists; `npm run canary:presence` still stops locally because the internal workspace id is not in local env |
-| Agency fan-out proof | BLOCKED | Local fan-out tests passed and read-only nightly check passed; live `fleet75` has zero fan-out jobs while production remains `inline` |
+| Agency fan-out proof | PASS dispatch / WATCH scan health | Local fan-out tests passed; production cron queued 78 fan-out jobs for the internal Agency-scale proof workspace with 0 dispatch failures and 8 max concurrency slots; synthetic proof watchlists were deactivated after proof |
 | Cloudflare Email visibility | PARTIAL | Fresh proof canary sent email and aggregate D1 shows recent Cloudflare Email sends; dashboard Email Service Logs/Activity still needs owner/browser confirmation |
 | WhatsApp stored target review | REVIEWED / PRESERVE | Aggregate-only review found stale unsupported WhatsApp target/config rows and no send-attempt evidence; no deletion performed |
 
@@ -60,7 +60,7 @@ Scout and Starter are deployed and verified on the live Worker with Dodo checkou
 | Scout sellable self-serve | Verified in branch | Dodo checkout, plan copy, pricing preview, webhook grant, and canary covered |
 | Starter sellable self-serve | Verified in branch | Daily monitoring/daily+weekly digest copy and checkout path covered |
 | Top-ups self-serve | Verified in branch | Existing Dodo products, grants, cleanup, and non-expiring copy covered |
-| Agency sellable | Held | Do not open until live production fan-out ladder passes |
+| Agency sellable | Open | Live dispatch proof passed; keep monitoring nightly scan health and dispatch failures |
 | Email delivery | Verified | Email proof canary passed |
 | Slack public/API/MCP surface | Removed from GA surfaces | Dormant implementation preserved behind product gates |
 | WhatsApp public surface | Hidden | Dormant implementation preserved; readiness and launch blockers gated off while non-GA |
@@ -85,7 +85,7 @@ The live release still has these owner/operator actions:
 2. Confirm external uptime monitoring on `https://0509.io/api/health`.
 3. Add GitHub Cloudflare secrets for the scheduled D1-to-R2 backup workflow, run it once, confirm a new R2 object, and decide R2 retention.
 4. Provide local internal Presence workspace config, then rerun `npm run canary:presence`.
-5. Run live fan-out ladder before opening Agency checkout.
+5. Monitor the next nightly fan-out window for dispatch failures and real-customer scan completion.
 6. Confirm Cloudflare Email activity/log visibility in the Cloudflare dashboard.
 7. Preserve unsupported WhatsApp stored targets unless owner approves a backup-backed anonymization/cleanup.
 8. Clean up retired provider dashboard artifacts: old webhooks, subscriptions, payment links, and live products.

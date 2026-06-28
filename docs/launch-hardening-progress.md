@@ -15,7 +15,7 @@ Release status:
 - Provider/network timeout hardening added for Dodo, Browser Run/Browserless fallback, Meta/customer token checks, landing page/proof fetches, public URL/DNS, robots/domain verification, Slack, WhatsApp, LinkedIn OAuth token exchange, and related hot paths.
 - Trust/backup copy now avoids claiming automated R2 backup proof. Backup validator walks the current repo migration chain through `0060_remove_legacy_billing_provider.sql`.
 - Presence website/blog remains GA in config/copy; X, Reddit, and LinkedIn remain disabled.
-- Agency remains held until live fan-out proof passes.
+- Agency checkout opened after live fan-out dispatch proof on 2026-06-28; continue watching nightly scan health and dispatch failures.
 - Account-controls branch reviewed but not merged; see `docs/codex-account-controls-branch-review.md`.
 - Branch/stash cleanup report added; no deletion performed.
 - Owner actions captured in `docs/ga-owner-actions.md`.
@@ -86,7 +86,7 @@ Backup: `../pre-cursor-launch-hardening.patch` (pre-run) · `../pre-final-harden
 | 2E | MCP workspace plan resolution | fixed | f859d77 | `resolveWorkspaceDataUserId` in MCP + agent actions |
 | 2F | Scheduled cancellation enforcement | fixed | f859d77 | `getUserPlan` + `cancellationEffectiveAt` persistence |
 | 2G | Legacy secondary billing provider removed | fixed | current pass | live routes, helpers, tests, active docs, historical setup migrations, fresh-start schema references, and remote schema artifacts removed; aggregate pre/post evidence preserved Dodo linkage |
-| 3A | Monitoring workflow capacity | deferred | | Agency **75** watchlist allowance vs ~12 min inline budget — **unresolved** |
+| 3A | Monitoring workflow capacity | fixed | current pass | Agency fan-out dispatch proof passed at 78 queued jobs, 0 dispatch failures, and 8 max concurrency slots; scan-health monitoring remains a watch item |
 | 3B | Customer-visible scan status | fixed | cb1cf44 + final pass | capacity skip label “Delayed — capacity limit” |
 | 3B′ | Capacity-skip idempotency | fixed | final pass | `watchlist_run.idempotency_key` + `INSERT OR IGNORE` (`0046`) |
 | 3C | Honest monitoring | protected | | No demo fallback introduced |
@@ -149,7 +149,7 @@ This section and later `docs(hardening): record pilot release provenance` commit
 
 ## Remaining limitations
 
-- **Agency nightly capacity:** inline cron still caps at roughly 15–40 watchlists per run; Agency allows 75. Workflow fan-out not revived. **Broad Agency rollout should wait for monitoring fan-out/capacity work**; this release provides honest skip visibility (“Delayed — capacity limit”) rather than guaranteed 75-watchlist nightly throughput.
+- **Agency nightly capacity:** resolved for dispatch by the 2026-06-28 live fan-out proof. Keep watching nightly scan completion because synthetic proof targets can fail scanning even when dispatch is healthy.
 - **CSP / globalThis / data.server split:** deferred.
 - **Cloud D1 backup:** CI validates scripts only; production schedule not activated.
 - **Claim vs application:** not a single D1 transaction end-to-end; lease-based claim is recoverable and tested.
@@ -180,10 +180,10 @@ Branch: `cursor/plan-entitlements-topups-no-prices-20260623`
 | Monthly usage periods | implemented | Subscription-anchored months (`0049`, `0053`); annual subs get monthly buckets |
 | Non-expiring top-ups | implemented | Immutable grants + ledger (`0050`/`0053`); included-first consumption |
 | Usage reservations | implemented | `0051` — idempotent logical keys |
-| Plan-aware monitoring priority | implemented | Queue-ranked slot claims + `queue_priority` (`0052`); fan-out still inline |
+| Plan-aware monitoring priority | implemented | Queue-ranked slot claims + `queue_priority` (`0052`); global fan-out is now live after the 2026-06-28 dispatch proof |
 | Server feature gates | implemented | `plan-feature-gate.server.ts` on API/MCP/exports/shares/reports |
 | Pricing/checkout | gated | Checkout disabled when SKU/provider price config missing |
-| Remote D1 / Dodo / deploy | **released 2026-06-24** | PR #234 merge `cd3e58f`; remote migrations `0049`–`0053` applied; Worker `50328480-ba13-4acf-8b1e-65ffa2185bf5`; `MONITORING_FANOUT_MODE=inline` |
+| Remote D1 / Dodo / deploy | **released 2026-06-24** | PR #234 merge `cd3e58f`; remote migrations `0049`–`0053` applied; Worker `50328480-ba13-4acf-8b1e-65ffa2185bf5`; fan-out was inline for that historical release, then promoted after the 2026-06-28 proof |
 | New SKU Dodo product/price wiring | superseded | Catalog + fail-closed checkout live; final GA branch later verified configured plan and top-up checkout/webhook canaries |
 
 Superseded launch truth: the final GA branch has since verified configured Scout,

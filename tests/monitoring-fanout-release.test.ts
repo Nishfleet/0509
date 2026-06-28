@@ -88,6 +88,10 @@ async function seedSlotSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"
 }
 
 describe("monitoring fan-out release safeguards", () => {
+  it("keeps workflow step timeout within Cloudflare's documented cap", () => {
+    expect(MONITORING_WORKFLOW_SCAN_TIMEOUT_MS).toBeLessThanOrEqual(30 * 60 * 1000);
+  });
+
   it("clamps configured concurrency to seeded slot capacity", () => {
     expect(resolveEffectiveMonitoringFanoutMaxInflight({} as never)).toBe(8);
     expect(
