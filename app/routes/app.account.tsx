@@ -10,6 +10,7 @@ import {
   normalizeCompetitorWebsiteInput,
 } from "~/lib/competitor-website";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import type { AppEnv } from "~/lib/env.server";
 
 export const meta = () => [{ title: "Account | Five to Nine" }];
 
@@ -23,7 +24,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
-  const { isBetterAuthPasskeyEnabled, listBetterAuthPasskeys } = await import(
+  const { isBetterAuthPasskeyEnabled, listBetterAuthPasskeys, listBetterAuthSessions } = await import(
     "~/lib/better-auth.server"
   );
   const { getEnv } = await import("~/lib/context.server");
@@ -38,6 +39,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const branding = await getWorkspaceBranding(env, session.user.id);
   const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
   const passkeys = passkeysEnabled ? await listBetterAuthPasskeys(env, request) : [];
+  let activeSessions: Awaited<ReturnType<typeof listBetterAuthSessions>> = [];
+  let sessionControlsMessage: string | null = null;
+  try {
+    activeSessions = await listBetterAuthSessions(env, request, session.session.id);
+  } catch (error) {
+    console.warn("[account] session controls unavailable", error);
+    sessionControlsMessage = "Sign in again to manage active sessions.";
+  }
 
   return {
     email: session.user.email,
@@ -48,6 +57,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     brandWebsite: branding.brandWebsite,
     passkeys,
     passkeysEnabled,
+    activeSessions,
+    sessionControlsMessage,
   };
 }
 
@@ -110,6 +121,106 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
+  if (intent === "revoke-session") {
+    const { revokeBetterAuthSessionById } = await import("~/lib/better-auth.server");
+    try {
+      const result = await revokeBetterAuthSessionById(env, request, {
+        currentSessionId: session.session.id,
+        sessionId: String(formData.get("sessionId") ?? ""),
+      });
+      if (!result.ok) {
+        return { ok: false, intent, message: result.reason };
+      }
+      return { ok: true, intent, message: "That session was revoked." };
+    } catch (error) {
+      console.error("[account] session revoke failed", error);
+      return { ok: false, intent, message: "Sign in again, then retry session revocation." };
+    }
+  }
+
+  if (intent === "revoke-other-sessions") {
+    const { revokeOtherBetterAuthSessions } = await import("~/lib/better-auth.server");
+    try {
+      await revokeOtherBetterAuthSessions(env, request);
+      return { ok: true, intent, message: "Other active sessions were revoked." };
+    } catch (error) {
+      console.error("[account] revoke other sessions failed", error);
+      return { ok: false, intent, message: "Sign in again, then retry session revocation." };
+    }
+  }
+
+  if (intent === "request-account-deletion") {
+    if (String(formData.get("confirmDeletion") ?? "") !== "yes") {
+      return {
+        ok: false,
+        intent,
+        message: "Confirm that you understand deletion is permanent before sending the request.",
+      };
+    }
+
+    const { assertAccountDeletable } = await import("~/lib/auth.server");
+    const { createSupportCase, getUserPlanBillingInfo } = await import("~/lib/data.server");
+    const billing = await getUserPlanBillingInfo(env, session.user.id);
+    try {
+      assertAccountDeletable(billing);
+    } catch (error) {
+      return {
+        ok: false,
+        intent,
+        message: error instanceof Error
+          ? error.message
+          : "Cancel your subscription before requesting account deletion.",
+      };
+    }
+
+    const supportCase = await createSupportCase(env, {
+      userId: session.user.id,
+      category: "security",
+      priority: "urgent",
+      subject: "Delete my Five to Nine account",
+      detail: [
+        "Signed-in account deletion request.",
+        `Account email: ${session.user.email}`,
+        `Account user ID: ${session.user.id}`,
+        "Support must verify by email before deleting account data.",
+      ].join("\n"),
+      context: {
+        createdFrom: "signed_in_account_deletion_request",
+        source: "app.account",
+      },
+      reopenClosed: true,
+      requestKey: `account-deletion:${session.user.id}`,
+    });
+
+    if (!supportCase) {
+      return { ok: false, intent, message: "Could not open the deletion request. Email support and we will handle it." };
+    }
+
+    const notificationResult = await notifyAccountDeletionOperator(env, {
+      caseId: supportCase.id,
+      dedupeKey: isReopenedSupportCase(supportCase)
+        ? `support-case-reopen:${supportCase.id}:${supportCase.updatedAt}`
+        : `support-case:${supportCase.id}`,
+      requesterEmail: session.user.email,
+      userId: session.user.id,
+    });
+    if (notificationResult === "failed") {
+      return {
+        ok: true,
+        intent,
+        message: `Deletion request opened as case ${supportCase.id}. Support notification failed, so email ${SUPPORT_EMAIL} if you need it handled urgently.`,
+      };
+    }
+
+    return {
+      ok: true,
+      intent,
+      message: supportCase.alreadyExists
+        ? `Deletion request is already open as case ${supportCase.id}.`
+        : `Deletion request opened as case ${supportCase.id}. We will verify by email before anything is deleted.`,
+    };
+  }
+
   return { ok: false, intent, message: "Unknown account action." };
 }
 
@@ -120,9 +231,16 @@ export default function AccountRoute() {
     actionData?.intent === "save-brand-profile" ? actionData : null;
   const reportBrandingAction =
     actionData?.intent === "save-report-branding" ? actionData : null;
+  const sessionAction =
+    actionData?.intent === "revoke-session" || actionData?.intent === "revoke-other-sessions"
+      ? actionData
+      : null;
+  const deletionAction =
+    actionData?.intent === "request-account-deletion" ? actionData : null;
   const [passkeyPending, setPasskeyPending] = useState(false);
   const [passkeyMessage, setPasskeyMessage] = useState<string | null>(null);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const otherSessionCount = data.activeSessions.filter((session) => !session.isCurrent).length;
 
   return (
     <DashboardPage>
@@ -142,6 +260,21 @@ export default function AccountRoute() {
         <p className="f9-muted-copy">
           Signed in as {data.email}. Sign-in security is managed on this page — use it for brand setup,
           sign-in options, and sensitive account requests.
+        </p>
+      </article>
+
+      <article className="f9-app-panel">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Setup</span>
+            <h2>Resume account setup</h2>
+          </div>
+          <a className="f9-secondary-button" href="/app/onboard?resume=1">
+            Resume setup
+          </a>
+        </div>
+        <p className="f9-muted-copy">
+          Add another competitor watch or update your own brand website without resetting the account.
         </p>
       </article>
 
@@ -283,15 +416,59 @@ export default function AccountRoute() {
             <h2>Session and account controls</h2>
           </div>
         </div>
+        {sessionAction?.message ? (
+          <div className={`f9-message ${sessionAction.ok ? "is-success" : "is-error"}`}>
+            <p>{sessionAction.message}</p>
+          </div>
+        ) : null}
         <p className="f9-muted-copy">
-          This device is signed in until {data.sessionExpiresAt}. Sign out from the navigation menu to remove access on this
-          device.
+          This device is signed in until {formatAccountDateTime(data.sessionExpiresAt)}. Sign out from the navigation
+          menu to remove access on this device.
         </p>
-        <p className="f9-muted-copy">
-          To change your email, remove a teammate, or close the account, email{" "}
-          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>. Support handles sensitive account changes
-          until self-service controls are ready.
-        </p>
+        {data.sessionControlsMessage ? (
+          <p className="f9-message is-error">{data.sessionControlsMessage}</p>
+        ) : null}
+        {data.activeSessions.length > 0 ? (
+          <div className="f9-passkey-list">
+            {data.activeSessions.map((session) => (
+              <div className="f9-passkey-row" key={session.id}>
+                <div>
+                  <strong>{session.isCurrent ? "This device" : formatSessionDevice(session.userAgent)}</strong>
+                  <span>
+                    Last active {formatAccountDateTime(session.updatedAt)} · Expires{" "}
+                    {formatAccountDateTime(session.expiresAt)}
+                  </span>
+                  <span>{formatSessionLocation(session.ipAddress, session.userAgent)}</span>
+                </div>
+                {session.isCurrent ? (
+                  <span className="f9-status-pill is-healthy">Current</span>
+                ) : (
+                  <Form method="post">
+                    <input name="intent" type="hidden" value="revoke-session" />
+                    <input name="sessionId" type="hidden" value={session.id} />
+                    <SubmitButton pendingLabel="Revoking…">Revoke</SubmitButton>
+                  </Form>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="f9-account-security-actions">
+          <Form method="post">
+            <input name="intent" type="hidden" value="revoke-other-sessions" />
+            <SubmitButton
+              className="f9-secondary-button"
+              disabled={otherSessionCount === 0}
+              intent="revoke-other-sessions"
+              pendingLabel="Revoking…"
+            >
+              Revoke other sessions
+            </SubmitButton>
+          </Form>
+          <a className="f9-secondary-button" href={SUPPORT_MAILTO}>
+            Change email
+          </a>
+        </div>
       </article>
 
       <article className="f9-app-panel">
@@ -301,6 +478,11 @@ export default function AccountRoute() {
             <h2>Delete this account</h2>
           </div>
         </div>
+        {deletionAction?.message ? (
+          <div className={`f9-message ${deletionAction.ok ? "is-success" : "is-error"}`}>
+            <p>{deletionAction.message}</p>
+          </div>
+        ) : null}
         <p>
           Permanently removes your account, watchlists, history, and evidence. We email a
           confirmation first; nothing is deleted until the request is verified. Deletion is blocked
@@ -309,9 +491,20 @@ export default function AccountRoute() {
           period you've paid for), or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
           we'll handle both.
         </p>
-        <a className="f9-secondary-button" href={SUPPORT_MAILTO}>
-          Request account deletion
-        </a>
+        <Form className="f9-auth-form" method="post">
+          <input name="intent" type="hidden" value="request-account-deletion" />
+          <label className="f9-checkbox-row">
+            <input name="confirmDeletion" required type="checkbox" value="yes" />
+            <span>I understand deletion is permanent and support will verify by email first.</span>
+          </label>
+          <SubmitButton
+            className="f9-secondary-button"
+            intent="request-account-deletion"
+            pendingLabel="Opening request…"
+          >
+            Request account deletion
+          </SubmitButton>
+        </Form>
       </article>
       </section>
     </DashboardPage>
@@ -358,5 +551,137 @@ function formatAccountDate(value: string) {
     }).format(new Date(value));
   } catch {
     return value;
+  }
+}
+
+function formatAccountDateTime(value: string) {
+  try {
+    return new Intl.DateTimeFormat("en", {
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function formatSessionDevice(userAgent: string | null) {
+  if (!userAgent) {
+    return "Active session";
+  }
+  if (userAgent.includes("Firefox")) {
+    return "Firefox session";
+  }
+  if (userAgent.includes("Edg/")) {
+    return "Edge session";
+  }
+  if (userAgent.includes("Chrome")) {
+    return "Chrome session";
+  }
+  if (userAgent.includes("Safari")) {
+    return "Safari session";
+  }
+  return "Active session";
+}
+
+function formatSessionLocation(ipAddress: string | null, userAgent: string | null) {
+  const parts = [
+    ipAddress ? `IP ${ipAddress}` : null,
+    userAgent ? summarizeUserAgent(userAgent) : null,
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" · ") : "Session details unavailable";
+}
+
+function summarizeUserAgent(userAgent: string) {
+  if (userAgent.includes("Mac OS X")) {
+    return "macOS browser";
+  }
+  if (userAgent.includes("Windows")) {
+    return "Windows browser";
+  }
+  if (userAgent.includes("iPhone") || userAgent.includes("iPad")) {
+    return "iOS browser";
+  }
+  if (userAgent.includes("Android")) {
+    return "Android browser";
+  }
+  return "Browser session";
+}
+
+type AccountDeletionOperatorNotificationResult = "sent" | "already_sent" | "failed";
+
+function isReopenedSupportCase(value: unknown) {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "reopened" in value &&
+      (value as { reopened?: unknown }).reopened === true,
+  );
+}
+
+async function notifyAccountDeletionOperator(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    dedupeKey: string;
+    requesterEmail: string;
+    userId: string;
+  },
+): Promise<AccountDeletionOperatorNotificationResult> {
+  const idempotencyKey = input.dedupeKey;
+  const { createSupportCaseEvent, getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
+  try {
+    const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    if (existingAttempt?.status === "sent") {
+      return "already_sent";
+    }
+
+    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+    const notified = await sendOperatorAlertEmail(env, {
+      subject: "0509 account deletion request",
+      lines: [
+        `Case: ${input.caseId}`,
+        `Requester: ${input.requesterEmail}`,
+        `User ID: ${input.userId}`,
+        "Category: Security, privacy, or deletion",
+        "Priority: Urgent",
+        "Action: verify by email before deleting account data",
+      ],
+      idempotencyKey,
+    });
+
+    await createSupportCaseEvent(env, {
+      caseId: input.caseId,
+      userId: input.userId,
+      eventType: notified ? "support_notified" : "support_notification_failed",
+      message: notified
+        ? "Support was notified about the account deletion request."
+        : "Support notification failed for the account deletion request.",
+      visibleToCustomer: true,
+      metadata: {
+        delivery: notified ? "sent" : "failed",
+      },
+    });
+    return notified ? "sent" : "failed";
+  } catch (error) {
+    console.error("[account] deletion operator notification failed", error);
+    try {
+      await createSupportCaseEvent(env, {
+        caseId: input.caseId,
+        userId: input.userId,
+        eventType: "support_notification_failed",
+        message: "Support notification failed for the account deletion request.",
+        visibleToCustomer: true,
+        metadata: {
+          delivery: "failed",
+        },
+      });
+    } catch (eventError) {
+      console.error("[account] deletion notification event failed", eventError);
+    }
+    return "failed";
   }
 }

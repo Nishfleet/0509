@@ -4,6 +4,7 @@ import {
   AGENCY_SEAT_LIMIT,
   acceptWorkspaceInvite,
   createWorkspaceInvite,
+  resendWorkspaceInvite,
   resolveWorkspace,
 } from "~/lib/workspace.server";
 
@@ -90,6 +91,52 @@ describe("workspace seats", () => {
       inviteeEmail: "new@x.com",
     });
     expect(result).toEqual({ ok: false, reason: "Team seats are part of the Agency plan." });
+  });
+
+  it("resends pending invites with a fresh token expiry", async () => {
+    const { db, calls } = fakeDb({
+      firstResults: [
+        {
+          id: "member-1",
+          invitedEmail: "member@x.com",
+          status: "invited",
+        },
+      ],
+    });
+
+    const result = await resendWorkspaceInvite(envWith(db), {
+      ownerUserId: "agency-owner",
+      memberRowId: "member-1",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.inviteeEmail).toBe("member@x.com");
+      expect(result.token.length).toBeGreaterThan(40);
+    }
+    const update = calls.find((call) => call.sql.includes("UPDATE workspace_member"));
+    expect(update?.sql).toContain("token_expires_at");
+    expect(update?.bindings[2]).toBe("member-1");
+    expect(update?.bindings[3]).toBe("agency-owner");
+  });
+
+  it("does not resend active member rows", async () => {
+    const { db } = fakeDb({
+      firstResults: [
+        {
+          id: "member-1",
+          invitedEmail: "member@x.com",
+          status: "active",
+        },
+      ],
+    });
+
+    const result = await resendWorkspaceInvite(envWith(db), {
+      ownerUserId: "agency-owner",
+      memberRowId: "member-1",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "Only pending invites can be resent." });
   });
 
   it("rejects accepting when already in another workspace", async () => {

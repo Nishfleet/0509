@@ -38,6 +38,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { checkPlanLimit, getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
+  const url = new URL(request.url);
+  const resumeSetup = url.searchParams.get("resume") === "1";
 
   if (isMember) {
     const { completeUserOnboarding } = await import("~/lib/data.server");
@@ -45,7 +47,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect("/app");
   }
 
-  if (session.user.onboardedAt) {
+  if (session.user.onboardedAt && !resumeSetup) {
     throw redirect("/app");
   }
 
@@ -60,6 +62,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     plan,
     watchlistLimit,
     brandWebsite: branding.brandWebsite,
+    resumeSetup,
     visitorCountry: defaultCountryForVisitor(
       (context.cloudflare as { country?: string | null } | undefined)?.country ??
         request.headers.get("cf-ipcountry"),
@@ -195,8 +198,10 @@ export default function AppOnboardRoute() {
       <section className="f9-container f9-onboard-layout">
         <article className="f9-onboard-card">
           <DashboardPageHeader
-            lead="Start with one competitor site. Five to Nine finds the ads behind it and keeps checking for changes."
-            title="Get started"
+            lead={data.resumeSetup
+              ? "Add another competitor site. Five to Nine finds the ads behind it and keeps checking for changes."
+              : "Start with one competitor site. Five to Nine finds the ads behind it and keeps checking for changes."}
+            title={data.resumeSetup ? "Resume setup" : "Get started"}
           />
 
           {actionData?.message ? (
@@ -274,7 +279,7 @@ export default function AppOnboardRoute() {
               <input name="intent" type="hidden" value="finish" />
               <input name="brandWebsite" type="hidden" value={trimmedBrandWebsite} />
               <SubmitButton className="f9-secondary-button" intent="finish" pendingLabel="Working…">
-                Skip for now
+                {data.resumeSetup ? "Back to dashboard" : "Skip for now"}
               </SubmitButton>
             </Form>
             <Link className="f9-text-link" to="/search">

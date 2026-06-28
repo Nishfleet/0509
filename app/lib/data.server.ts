@@ -18,7 +18,8 @@ import {
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
-import { normalizeSupportCaseInput } from "~/lib/support";
+import { normalizeSupportCaseInput, SupportCaseInputError } from "~/lib/support";
+import { SUPPORT_CASE_EVENT_TYPES } from "~/lib/types";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type {
   AdRecord,
@@ -61,6 +62,8 @@ import type {
   ShareLinkRecord,
   ShareResourceType,
   SupportCaseCategory,
+  SupportCaseEventRecord,
+  SupportCaseEventType,
   SupportCasePriority,
   SupportCaseRecord,
   SupportCaseStatus,
@@ -295,6 +298,17 @@ interface SupportCaseRow {
   context_json: string;
   created_at: string;
   updated_at: string;
+}
+
+interface SupportCaseEventRow {
+  id: string;
+  case_id: string;
+  user_id: string;
+  event_type: SupportCaseEventType;
+  message: string;
+  visible_to_customer: number;
+  metadata_json: string;
+  created_at: string;
 }
 
 interface WorkspaceDeliveryConfigRow {
@@ -1224,6 +1238,7 @@ export async function createSupportCase(
     priority?: unknown;
     context?: JsonRecord | null;
     requestKey?: string | null;
+    reopenClosed?: boolean;
   },
 ) {
   const normalized = normalizeSupportCaseInput({
@@ -1250,6 +1265,26 @@ export async function createSupportCase(
       requestKey,
     );
     if (existing) {
+      if (existing.status === "closed" && input.reopenClosed) {
+        const reopened = await reopenSupportCaseForRequest(env, {
+          caseId: existing.id,
+          userId: input.userId,
+          category: normalized.category,
+          priority: normalized.priority,
+          subject: normalized.subject,
+          detail: normalized.detail,
+          context: input.context ?? {},
+          timestamp,
+        });
+        if (reopened) {
+          return {
+            ...reopened,
+            alreadyExists: false,
+            reopened: true,
+          };
+        }
+      }
+
       return {
         ...toSupportCaseRecord(existing),
         alreadyExists: true,
@@ -1301,12 +1336,25 @@ export async function createSupportCase(
       requestKey,
     );
 
-    return row
-      ? {
-        ...toSupportCaseRecord(row),
-        alreadyExists: row.id !== id,
-      }
-      : null;
+    if (!row) {
+      return null;
+    }
+
+    const createdNewCase = row.id === id;
+    if (createdNewCase) {
+      await recordSupportCaseOpenedEvent(env, {
+        caseId: row.id,
+        userId: input.userId,
+        category: normalized.category,
+        priority: normalized.priority,
+        context: input.context ?? {},
+      });
+    }
+
+    return {
+      ...toSupportCaseRecord(row),
+      alreadyExists: !createdNewCase,
+    };
   }
 
   const row = await one<SupportCaseRow>(
@@ -1322,12 +1370,22 @@ export async function createSupportCase(
     input.userId,
   );
 
-  return row
-    ? {
-      ...toSupportCaseRecord(row),
-      alreadyExists: false,
-    }
-    : null;
+  if (!row) {
+    return null;
+  }
+
+  await recordSupportCaseOpenedEvent(env, {
+    caseId: row.id,
+    userId: input.userId,
+    category: normalized.category,
+    priority: normalized.priority,
+    context: input.context ?? {},
+  });
+
+  return {
+    ...toSupportCaseRecord(row),
+    alreadyExists: false,
+  };
 }
 
 function normalizeOptionalIdempotencyKey(value: unknown) {
@@ -1377,6 +1435,281 @@ export async function listSupportCases(
     );
 
   return rows.map(toSupportCaseRecord);
+}
+
+export async function getSupportCase(env: AppEnv, userId: string, caseId: string) {
+  const row = await one<SupportCaseRow>(
+    env,
+    `
+      SELECT *
+      FROM support_case
+      WHERE id = ?
+        AND user_id = ?
+      LIMIT 1
+    `,
+    caseId,
+    userId,
+  );
+
+  return row ? toSupportCaseRecord(row) : null;
+}
+
+export async function createSupportCaseEvent(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    userId: string;
+    eventType: unknown;
+    message: unknown;
+    visibleToCustomer?: boolean;
+    metadata?: JsonRecord | null;
+  },
+) {
+  const eventType = readSupportCaseEventType(input.eventType);
+  if (!eventType) {
+    throw new SupportCaseInputError("invalid_support_case_event", "Choose a valid support case event.");
+  }
+
+  const message = normalizeSupportCaseEventMessage(input.message);
+  const id = createId();
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT INTO support_case_event (
+        id,
+        case_id,
+        user_id,
+        event_type,
+        message,
+        visible_to_customer,
+        metadata_json,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    id,
+    input.caseId,
+    input.userId,
+    eventType,
+    message,
+    input.visibleToCustomer === false ? 0 : 1,
+    jsonValue(input.metadata ?? {}),
+    timestamp,
+  );
+
+  const row = await one<SupportCaseEventRow>(
+    env,
+    `
+      SELECT *
+      FROM support_case_event
+      WHERE id = ?
+      LIMIT 1
+    `,
+    id,
+  );
+
+  return row ? toSupportCaseEventRecord(row) : null;
+}
+
+export async function listSupportCaseEvents(
+  env: AppEnv,
+  userId: string,
+  caseId: string,
+  options: {
+    limit?: number | null;
+  } = {},
+) {
+  const limit = Math.max(1, Math.min(50, Math.floor(options.limit ?? 30)));
+  const rows = await many<SupportCaseEventRow>(
+    env,
+    `
+      SELECT *
+      FROM (
+        SELECT *
+        FROM support_case_event
+        WHERE case_id = ?
+          AND user_id = ?
+          AND visible_to_customer = 1
+        ORDER BY created_at DESC
+        LIMIT ?
+      )
+      ORDER BY created_at ASC
+    `,
+    caseId,
+    userId,
+    limit,
+  );
+
+  return rows.map(toSupportCaseEventRecord);
+}
+
+function readSupportCaseEventType(value: unknown): SupportCaseEventType | null {
+  return SUPPORT_CASE_EVENT_TYPES.includes(value as SupportCaseEventType)
+    ? (value as SupportCaseEventType)
+    : null;
+}
+
+function normalizeSupportCaseEventMessage(value: unknown) {
+  if (typeof value !== "string") {
+    throw new SupportCaseInputError("invalid_support_case_event_message", "Add a support case event message.");
+  }
+
+  const message = value.trim();
+  if (!message || message.length > 1000) {
+    throw new SupportCaseInputError(
+      "invalid_support_case_event_message",
+      "Keep support case event messages between 1 and 1,000 characters.",
+    );
+  }
+
+  return message;
+}
+
+async function recordSupportCaseOpenedEvent(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    userId: string;
+    category: SupportCaseCategory;
+    priority: SupportCasePriority;
+    context: JsonRecord;
+  },
+) {
+  try {
+    await createSupportCaseEvent(env, {
+      caseId: input.caseId,
+      userId: input.userId,
+      eventType: "case_opened",
+      message: supportCaseOpenedEventMessage(input.context),
+      visibleToCustomer: true,
+      metadata: {
+        category: input.category,
+        priority: input.priority,
+        ...supportCaseOpenedEventMetadata(input.context),
+      },
+    });
+  } catch (error) {
+    console.error("[support] opened case event persistence failed", error);
+  }
+}
+
+async function reopenSupportCaseForRequest(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    userId: string;
+    category: SupportCaseCategory;
+    priority: SupportCasePriority;
+    subject: string;
+    detail: string;
+    context: JsonRecord;
+    timestamp: string;
+  },
+) {
+  await run(
+    env,
+    `
+      UPDATE support_case
+      SET category = ?,
+          priority = ?,
+          status = 'open',
+          subject = ?,
+          detail = ?,
+          context_json = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND user_id = ?
+        AND status = 'closed'
+    `,
+    input.category,
+    input.priority,
+    input.subject,
+    input.detail,
+    jsonValue(input.context),
+    input.timestamp,
+    input.caseId,
+    input.userId,
+  );
+
+  const row = await one<SupportCaseRow>(
+    env,
+    `
+      SELECT *
+      FROM support_case
+      WHERE id = ?
+        AND user_id = ?
+      LIMIT 1
+    `,
+    input.caseId,
+    input.userId,
+  );
+  if (!row) {
+    return null;
+  }
+
+  await recordSupportCaseReopenedEvent(env, {
+    caseId: row.id,
+    userId: input.userId,
+    category: input.category,
+    priority: input.priority,
+    context: input.context,
+  });
+
+  return toSupportCaseRecord(row);
+}
+
+async function recordSupportCaseReopenedEvent(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    userId: string;
+    category: SupportCaseCategory;
+    priority: SupportCasePriority;
+    context: JsonRecord;
+  },
+) {
+  try {
+    await createSupportCaseEvent(env, {
+      caseId: input.caseId,
+      userId: input.userId,
+      eventType: "status_changed",
+      message: "Support case reopened from a new signed-in request.",
+      visibleToCustomer: true,
+      metadata: {
+        category: input.category,
+        priority: input.priority,
+        fromStatus: "closed",
+        toStatus: "open",
+        ...supportCaseOpenedEventMetadata(input.context),
+      },
+    });
+  } catch (error) {
+    console.error("[support] reopened case event persistence failed", error);
+  }
+}
+
+function supportCaseOpenedEventMessage(context: JsonRecord) {
+  const createdFrom = typeof context.createdFrom === "string" ? context.createdFrom : null;
+  if (createdFrom === "signed_in_support") {
+    return "Support case opened from the signed-in support form.";
+  }
+  if (createdFrom === "agent_action") {
+    return "Support case opened by an account agent action.";
+  }
+
+  return "Support case opened.";
+}
+
+function supportCaseOpenedEventMetadata(context: JsonRecord): JsonRecord {
+  const metadata: JsonRecord = {};
+  if (typeof context.createdFrom === "string") {
+    metadata.createdFrom = context.createdFrom;
+  }
+  if (typeof context.source === "string") {
+    metadata.source = context.source;
+  }
+  return metadata;
 }
 
 async function replaceClientRoomResourceRefs(
@@ -6908,6 +7241,19 @@ function toSupportCaseRecord(row: SupportCaseRow): SupportCaseRecord {
     context: parseJson<Record<string, unknown>>(row.context_json, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function toSupportCaseEventRecord(row: SupportCaseEventRow): SupportCaseEventRecord {
+  return {
+    id: row.id,
+    caseId: row.case_id,
+    userId: row.user_id,
+    eventType: row.event_type,
+    message: row.message,
+    visibleToCustomer: row.visible_to_customer === 1,
+    metadata: parseJson<Record<string, unknown>>(row.metadata_json, {}),
+    createdAt: row.created_at,
   };
 }
 
