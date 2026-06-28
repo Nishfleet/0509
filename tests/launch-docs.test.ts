@@ -14,7 +14,7 @@ describe("final launch documentation", () => {
     const launchReadiness = readDoc("docs/launch-readiness.md");
     const backupUptime = readDoc("docs/ops-backup-uptime.md");
 
-    expect(scorecard).toContain("SCOUT AND STARTER SELF-SERVE RELEASED");
+    expect(scorecard).toContain("SCOUT, STARTER, AND AGENCY SELF-SERVE RELEASED");
     expect(scorecard).toContain("OWNER ACTIONS REMAIN");
     expect(scorecard).toContain("Compatible Worker deployed");
     expect(scorecard).toContain("No migrations to apply");
@@ -28,6 +28,8 @@ describe("final launch documentation", () => {
     expect(scorecard).toContain("Restore drill");
     expect(scorecard).toContain("PASS local");
     expect(scorecard).toContain("WhatsApp stored target review");
+    expect(scorecard).toContain("Agency fan-out proof");
+    expect(scorecard).toContain("PASS dispatch / WATCH scan health");
     expect(scorecard).toContain("aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed");
     expect(launchReadiness).toContain("not proven active until GitHub repository secrets");
     expect(launchReadiness).toContain("a run completes, and a new R2 object appears");
@@ -46,6 +48,9 @@ describe("final launch documentation", () => {
     expect(authoritativeDocs).not.toMatch(/scheduled backup (is )?(complete|verified|active)/i);
     expect(authoritativeDocs).not.toMatch(/automated backup (is )?(complete|verified|active)/i);
     expect(authoritativeDocs).not.toMatch(/Backup integrity proven/i);
+    expect(authoritativeDocs).not.toContain("Agency remains held until live fan-out proof passes");
+    expect(authoritativeDocs).not.toContain("keep Agency held until fan-out proof passes");
+    expect(authoritativeDocs).not.toContain("Agency fan-out proof, and Cloudflare Email dashboard visibility");
     expect(authoritativeDocs).not.toMatch(/0509-\d{4}-\d{2}-\d{2}T/i);
     expect(authoritativeDocs).not.toMatch(/\b1 user\b/i);
     expect(authoritativeDocs).not.toMatch(/\b3 not-validated/i);

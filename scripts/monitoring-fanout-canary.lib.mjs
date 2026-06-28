@@ -64,7 +64,7 @@ export function evaluateFanoutConfigStep(config) {
   let blocker = null;
 
   if (mode === "inline") {
-    notes.push("Production default: inline scheduling stays active until ladder step 1.");
+    notes.push("Inline scheduling is the rollback-safe posture and does not dispatch workflows.");
   } else if (mode === "shadow") {
     notes.push("Shadow counts eligible watchlists only; no D1 runs or workflows.");
   } else if (mode === "fanout") {
@@ -91,7 +91,7 @@ export function evaluateFanoutConfigStep(config) {
   }
 
   if (config.globalEnabled) {
-    notes.push("MONITORING_FANOUT_GLOBAL=1 is post-pilot only; do not set during shadow/allowlist steps.");
+    notes.push("MONITORING_FANOUT_GLOBAL=1 is allowed only after owner-approved dispatch proof.");
     if (mode !== "fanout") {
       blocker = blocker ?? "global_without_fanout_mode";
     }

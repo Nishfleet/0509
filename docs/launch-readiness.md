@@ -4,11 +4,11 @@ Last checked: 2026-06-28
 
 ## Current Verdict
 
-Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green, health is 200, D1 backups validate, and external uptime monitoring is owner-verified. Slack is **not offered at GA** — backend code stays dormant and launch readiness surfaces Slack only as optional advisories. Scout and Starter are email-only at GA.
+Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green, health is 200, D1 backups validate, and external uptime monitoring is owner-verified. Slack is **not offered at GA** — backend code stays dormant and launch readiness surfaces Slack only as optional advisories. Scout, Starter, and Agency self-serve checkout are released; Agency remains on nightly fan-out monitoring watch after dispatch proof.
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
-Remaining owner gates outside this repo: Dodo Product Collection membership plus **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, Agency fan-out proof, and Cloudflare Email dashboard visibility.
+Remaining owner gates outside this repo: Dodo Product Collection membership plus **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, next-window Agency scan-health monitoring, and Cloudflare Email dashboard visibility.
 
 The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, dormant-channel advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
@@ -27,6 +27,7 @@ The public `/status` page summarizes coarse launch posture without rendering acc
 - PR #251 merged to `main`, the compatible Worker deployed, and remote D1 migration inspection shows no migrations to apply after `0060_remove_legacy_billing_provider.sql`.
 - Fresh D1 backup/export was uploaded to R2 before `0060`; post-cleanup evidence shows retained row counts and Dodo linkage, 0 legacy billing columns, and no retired-provider webhook table.
 - Follow-up ops proof created a post-cleanup backup in the private R2 backup prefix and imported it into isolated local SQLite; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed.
+- Agency fan-out dispatch proof passed on the live 04:00 UTC cron: 78 jobs queued, 0 dispatch failures, and 8 max concurrency slots. Synthetic proof watchlists were deactivated after proof; continue watching real scan completion.
 
 ## Hard Launch Gates
 
@@ -89,6 +90,10 @@ Owner verification steps (no API token): see `docs/ops-backup-uptime.md` § Upti
 
 `.github/workflows/d1-backup-r2.yml` now schedules `npm run backup:d1:r2` weekly at 22:17 UTC Sunday and supports manual runs. It is not proven active until GitHub repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` exist, a run completes, and a new R2 object appears under `backups/d1/`. D1 export blocks database requests while it runs, so keep the schedule in a low-traffic window.
 
+## Agency Fan-Out Status
+
+Agency checkout is open after live dispatch proof. The proof established Workflow fan-out dispatch and concurrency control; it did not prove fake proof targets produce successful customer-quality scans. Keep monitoring nightly dispatch failures and real customer scan completion.
+
 ## Pilot-Safe Offer
 
 Use this framing for the first customer:
@@ -104,4 +109,4 @@ Use this framing for the first customer:
 
 ## Next Slice
 
-Confirm UptimeRobot on `/api/health`, confirm the Dodo customer portal setting, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, keep Agency held until fan-out proof passes, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.
+Confirm UptimeRobot on `/api/health`, confirm the Dodo customer portal setting, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.
