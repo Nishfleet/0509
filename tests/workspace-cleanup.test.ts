@@ -421,6 +421,38 @@ describe("operator alert FK attribution", () => {
     expect(attempt.userId).not.toBe("operator");
   });
 
+  it("stores only the case id for support-case operator alert snapshots", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_support_1" });
+    const createDeliveryAttempt = deliveryDataMock(null, "founder-user-id");
+
+    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+    const sent = await sendOperatorAlertEmail(
+      {
+        EMAIL: { send: emailSend },
+        EMAIL_FROM_EMAIL: "alerts@0509.io",
+        LAUNCH_CANARY_EMAIL: "me@inish.in",
+      } as never,
+      {
+        subject: "0509 support case: Digest did not arrive",
+        lines: [
+          "Case: case-1",
+          "Requester: owner@example.com",
+          "Details: Private support detail should not persist.",
+        ],
+        idempotencyKey: "support-case:case-1",
+      },
+    );
+
+    expect(sent).toBe(true);
+    const attempt = createDeliveryAttempt.mock.calls[0]?.[1];
+    expect(attempt.payloadSnapshot).toEqual({
+      kind: "support_case_operator_alert",
+      caseId: "case-1",
+    });
+    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain("Private support detail");
+    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain("owner@example.com");
+  });
+
   it("still sends (without a ledger row) when no user exists, and honors a custom idempotency key", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_op_2" });
     const createDeliveryAttempt = deliveryDataMock(null, null);

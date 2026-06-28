@@ -34,3 +34,9 @@ It has seven unique commits and a broad stale diff. It also adds migrations numb
 4. Do not reuse the old migration numbers.
 
 No code from this branch was merged in this pass.
+
+## Resolution
+
+The support case event timeline was rebuilt fresh on the current migration chain with `0061_support_case_events.sql`. Case rows now link to a selected-case view, selected cases show customer-visible events, support notification attempts are recorded, and the migration scrubs support alert delivery snapshots down to case IDs.
+
+The old `codex/0509-saas-account-controls-20260622` branch should stay deleted. Session revocation, account deletion, broader team lifecycle controls, and onboarding resume remain deliberate fresh-work items because they need current Better Auth, retention, billing, ownership, and legal/privacy review rather than stale cherry-picks.

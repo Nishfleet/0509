@@ -51,6 +51,7 @@ import { PromiseTimeoutError, promiseWithTimeout } from "~/lib/fetch-timeout.ser
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
 const EMAIL_PROVIDER = "cloudflare_email" as const;
 const CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS = 10_000;
+const SUPPORT_CASE_IDEMPOTENCY_PREFIX = "support-case:";
 
 interface DigestAttemptSummary {
   channel: DeliveryChannel;
@@ -1398,7 +1399,7 @@ export async function sendOperatorAlertEmail(
     providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
     templateName: "operator_alert",
     eventIds: [],
-    payloadSnapshot: { kind: "operator_alert", lines: input.lines },
+    payloadSnapshot: operatorAlertPayloadSnapshot(idempotencyKey, input.lines),
     idempotencyKey,
     errorMessage: providerResult.errorMessage,
     sentAt: providerResult.deliveredAt,
@@ -1406,6 +1407,17 @@ export async function sendOperatorAlertEmail(
   });
 
   return providerResult.status === "sent";
+}
+
+function operatorAlertPayloadSnapshot(idempotencyKey: string, lines: string[]) {
+  if (idempotencyKey.startsWith(SUPPORT_CASE_IDEMPOTENCY_PREFIX)) {
+    return {
+      kind: "support_case_operator_alert",
+      caseId: idempotencyKey.slice(SUPPORT_CASE_IDEMPOTENCY_PREFIX.length),
+    };
+  }
+
+  return { kind: "operator_alert", lines };
 }
 
 export async function sendDeliveryTestEmail(

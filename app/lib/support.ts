@@ -1,8 +1,10 @@
 import {
   SUPPORT_CASE_CATEGORIES,
+  SUPPORT_CASE_EVENT_TYPES,
   SUPPORT_CASE_PRIORITIES,
   SUPPORT_CASE_STATUSES,
   type SupportCaseCategory,
+  type SupportCaseEventType,
   type SupportCasePriority,
   type SupportCaseStatus,
 } from "~/lib/types";
@@ -15,6 +17,7 @@ export const SUPPORT_CASE_DETAIL_MAX_LENGTH = 4000;
 
 export {
   SUPPORT_CASE_CATEGORIES,
+  SUPPORT_CASE_EVENT_TYPES,
   SUPPORT_CASE_PRIORITIES,
   SUPPORT_CASE_STATUSES,
 };
@@ -38,6 +41,14 @@ export const SUPPORT_CASE_PRIORITY_LABELS: Record<SupportCasePriority, string> =
 export const SUPPORT_CASE_STATUS_LABELS: Record<SupportCaseStatus, string> = {
   open: "Open",
   closed: "Closed",
+};
+
+export const SUPPORT_CASE_EVENT_LABELS: Record<SupportCaseEventType, string> = {
+  case_opened: "Case opened",
+  support_notified: "Support notified",
+  support_notification_failed: "Notification issue",
+  support_note: "Support note",
+  status_changed: "Status changed",
 };
 
 export class SupportCaseInputError extends Error {
