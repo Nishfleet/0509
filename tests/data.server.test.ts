@@ -813,6 +813,89 @@ describe("support case persistence", () => {
     }
   });
 
+  it("reopens a closed request-key case when explicitly requested", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      sqlite.sqlite.exec("CREATE TABLE delivery_attempt (idempotency_key TEXT, payload_snapshot_json TEXT NOT NULL DEFAULT '{}');");
+      applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
+      applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
+      applyMigration(sqlite.sqlite, "migrations/0061_support_case_events.sql");
+      sqlite.sqlite.exec(`
+        INSERT INTO user (id) VALUES ('user-1');
+        INSERT INTO support_case (
+          id,
+          user_id,
+          request_key,
+          category,
+          priority,
+          status,
+          subject,
+          detail,
+          context_json,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          'case-existing',
+          'user-1',
+          'account-deletion:user-1',
+          'security',
+          'urgent',
+          'closed',
+          'Delete my account',
+          'Old deletion request.',
+          '{}',
+          '2026-06-20T00:00:00.000Z',
+          '2026-06-20T00:00:00.000Z'
+        );
+      `);
+
+      const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        category: "security",
+        priority: "urgent",
+        subject: "Delete my Five to Nine account",
+        detail: "Fresh deletion request.",
+        context: {
+          createdFrom: "signed_in_account_deletion_request",
+          source: "app.account",
+        },
+        reopenClosed: true,
+        requestKey: "account-deletion:user-1",
+      });
+
+      const rows = sqlite.sqlite.prepare("SELECT id, status, detail FROM support_case WHERE user_id = ?").all("user-1");
+      const events = await listSupportCaseEvents({ DB: sqlite.db } as never, "user-1", "case-existing");
+      expect(rows).toEqual([
+        {
+          detail: "Fresh deletion request.",
+          id: "case-existing",
+          status: "open",
+        },
+      ]);
+      expect(supportCase).toMatchObject({
+        alreadyExists: false,
+        id: "case-existing",
+        requestKey: "account-deletion:user-1",
+        status: "open",
+      });
+      expect((supportCase as { reopened?: boolean } | null)?.reopened).toBe(true);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        eventType: "status_changed",
+        message: "Support case reopened from a new signed-in request.",
+        metadata: {
+          createdFrom: "signed_in_account_deletion_request",
+          fromStatus: "closed",
+          toStatus: "open",
+        },
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("lists only customer-visible support case events for the owning user", async () => {
     const sqlite = createSqliteD1();
     try {

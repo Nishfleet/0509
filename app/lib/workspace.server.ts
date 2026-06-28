@@ -21,6 +21,8 @@ export interface WorkspaceMemberRow {
   status: "invited" | "active" | "revoked";
   createdAt: string;
   acceptedAt: string | null;
+  tokenExpiresAt: string | null;
+  revokedAt: string | null;
 }
 
 export interface WorkspaceContext {
@@ -79,7 +81,8 @@ export async function listWorkspaceMembers(env: AppEnv, ownerUserId: string) {
   const rows = await ensureDb(env).prepare(
     `SELECT id, owner_user_id AS ownerUserId, member_user_id AS memberUserId,
             invited_email AS invitedEmail, status, created_at AS createdAt,
-            accepted_at AS acceptedAt
+            accepted_at AS acceptedAt, token_expires_at AS tokenExpiresAt,
+            revoked_at AS revokedAt
        FROM workspace_member
       WHERE owner_user_id = ?1 AND status IN ('invited', 'active')
       ORDER BY created_at ASC`,
@@ -144,6 +147,43 @@ export async function createWorkspaceInvite(
     .run();
 
   return { ok: true, token };
+}
+
+export async function resendWorkspaceInvite(
+  env: AppEnv,
+  input: { ownerUserId: string; memberRowId: string },
+): Promise<{ ok: true; token: string; inviteeEmail: string } | { ok: false; reason: string }> {
+  const ownerPlan = await getUserPlan(env, input.ownerUserId);
+  if (ownerPlan !== "agency") {
+    return { ok: false, reason: "Team seats are part of the Agency plan." };
+  }
+
+  const member = await ensureDb(env).prepare(
+    `SELECT id, invited_email AS invitedEmail, status
+       FROM workspace_member
+      WHERE id = ?1 AND owner_user_id = ?2
+      LIMIT 1`,
+  )
+    .bind(input.memberRowId, input.ownerUserId)
+    .first<{ id: string; invitedEmail: string; status: string }>();
+
+  if (!member || member.status !== "invited") {
+    return { ok: false, reason: "Only pending invites can be resent." };
+  }
+
+  const token = crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
+  const tokenHash = await sha256Hex(token);
+  const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  await ensureDb(env).prepare(
+    `UPDATE workspace_member
+        SET token_hash = ?1, token_expires_at = ?2
+      WHERE id = ?3 AND owner_user_id = ?4 AND status = 'invited'`,
+  )
+    .bind(tokenHash, expiresAt, input.memberRowId, input.ownerUserId)
+    .run();
+
+  return { ok: true, token, inviteeEmail: member.invitedEmail };
 }
 
 export async function peekWorkspaceInvite(env: AppEnv, token: string) {

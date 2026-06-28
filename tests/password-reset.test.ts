@@ -140,6 +140,8 @@ describe("account page", () => {
           brandWebsite: null,
           passkeys: [],
           passkeysEnabled: true,
+          activeSessions: [],
+          sessionControlsMessage: null,
         }),
       };
     });

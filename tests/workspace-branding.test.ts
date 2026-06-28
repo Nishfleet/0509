@@ -96,6 +96,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/data.server");
+  vi.doUnmock("~/lib/delivery.server");
 });
 
 describe("workspace branding persistence", () => {
@@ -416,5 +417,200 @@ describe("account report-branding action", () => {
       message: "That website looks incomplete. Add the full domain, like brand.com.",
     });
     expect(upsertWorkspaceBrandingMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks account deletion requests while billing is active", async () => {
+    const createSupportCase = vi.fn();
+    vi.doMock("~/lib/auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/auth.server")>("~/lib/auth.server");
+      return {
+        ...actual,
+        requireSession: vi.fn().mockResolvedValue(session),
+        requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+          session,
+          workspaceUserId: session.user.id,
+          isMember: false,
+          ownerName: null,
+        })),
+      };
+    });
+    vi.doMock("~/lib/data.server", () => ({
+      createSupportCase,
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        dodoCustomerId: "cus_123",
+        dodoNextBillingAt: null,
+        dodoProductId: "prod_123",
+        dodoStatus: "active",
+        dodoSubscriptionId: "sub_123",
+        plan: "agency",
+        planUpdatedAt: null,
+      }),
+      getWorkspaceBranding: vi.fn(),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+
+    const { action } = await import("~/routes/app.account");
+    const formData = new FormData();
+    formData.set("intent", "request-account-deletion");
+    formData.set("confirmDeletion", "yes");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/account", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      intent: "request-account-deletion",
+      message:
+        "Your subscription is still active. Start cancellation from Plan & billing or open a billing support case first - you keep access until the end of the period you've paid for, and can delete the account after that.",
+    });
+    expect(createSupportCase).not.toHaveBeenCalled();
+  });
+
+  it("opens and notifies a support case for free-plan account deletion requests", async () => {
+    const createSupportCase = vi.fn().mockResolvedValue({
+      alreadyExists: false,
+      id: "case-delete-1",
+      updatedAt: "2026-06-28T17:30:00.000Z",
+    });
+    const createSupportCaseEvent = vi.fn().mockResolvedValue(null);
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/auth.server")>("~/lib/auth.server");
+      return {
+        ...actual,
+        requireSession: vi.fn().mockResolvedValue(session),
+        requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+          session,
+          workspaceUserId: session.user.id,
+          isMember: false,
+          ownerName: null,
+        })),
+      };
+    });
+    vi.doMock("~/lib/data.server", () => ({
+      createSupportCase,
+      createSupportCaseEvent,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        dodoCustomerId: null,
+        dodoNextBillingAt: null,
+        dodoProductId: null,
+        dodoStatus: null,
+        dodoSubscriptionId: null,
+        plan: "free",
+        planUpdatedAt: null,
+      }),
+      getWorkspaceBranding: vi.fn(),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      sendOperatorAlertEmail,
+    }));
+
+    const { action } = await import("~/routes/app.account");
+    const formData = new FormData();
+    formData.set("intent", "request-account-deletion");
+    formData.set("confirmDeletion", "yes");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/account", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(createSupportCase).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      category: "security",
+      priority: "urgent",
+      subject: "Delete my Five to Nine account",
+      detail: expect.stringContaining("owner@example.com"),
+      context: {
+        createdFrom: "signed_in_account_deletion_request",
+        source: "app.account",
+      },
+      reopenClosed: true,
+      requestKey: "account-deletion:user-1",
+    });
+    expect(sendOperatorAlertEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      idempotencyKey: "support-case:case-delete-1",
+      subject: "0509 account deletion request",
+    }));
+    expect(createSupportCaseEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      caseId: "case-delete-1",
+      eventType: "support_notified",
+      userId: "user-1",
+    }));
+    expect(result).toEqual({
+      ok: true,
+      intent: "request-account-deletion",
+      message:
+        "Deletion request opened as case case-delete-1. We will verify by email before anything is deleted.",
+    });
+  });
+
+  it("uses a fresh notification key for reopened account deletion cases", async () => {
+    const createSupportCase = vi.fn().mockResolvedValue({
+      alreadyExists: false,
+      id: "case-delete-1",
+      reopened: true,
+      updatedAt: "2026-06-28T17:30:00.000Z",
+    });
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/auth.server")>("~/lib/auth.server");
+      return {
+        ...actual,
+        requireSession: vi.fn().mockResolvedValue(session),
+        requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+          session,
+          workspaceUserId: session.user.id,
+          isMember: false,
+          ownerName: null,
+        })),
+      };
+    });
+    vi.doMock("~/lib/data.server", () => ({
+      createSupportCase,
+      createSupportCaseEvent: vi.fn().mockResolvedValue(null),
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        dodoCustomerId: null,
+        dodoNextBillingAt: null,
+        dodoProductId: null,
+        dodoStatus: null,
+        dodoSubscriptionId: null,
+        plan: "free",
+        planUpdatedAt: null,
+      }),
+      getWorkspaceBranding: vi.fn(),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      sendOperatorAlertEmail,
+    }));
+
+    const { action } = await import("~/routes/app.account");
+    const formData = new FormData();
+    formData.set("intent", "request-account-deletion");
+    formData.set("confirmDeletion", "yes");
+
+    await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/account", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(sendOperatorAlertEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      idempotencyKey: "support-case-reopen:case-delete-1:2026-06-28T17:30:00.000Z",
+    }));
   });
 });
