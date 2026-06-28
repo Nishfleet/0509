@@ -68,7 +68,7 @@ export async function buildMonitoringWorkflowInstanceId(executionKey: string) {
 export type MonitoringFanoutMode = "inline" | "fanout" | "shadow";
 
 export const MONITORING_CONCURRENCY_SLOT_CAPACITY = 64;
-export const MONITORING_WORKFLOW_SCAN_TIMEOUT_MS = 45 * 60 * 1000;
+export const MONITORING_WORKFLOW_SCAN_TIMEOUT_MS = 30 * 60 * 1000;
 export const MONITORING_LEASE_SAFETY_MARGIN_MS = 15 * 60 * 1000;
 export const DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT = 8;
 export const DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS =
