@@ -52,6 +52,7 @@ const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
 const EMAIL_PROVIDER = "cloudflare_email" as const;
 const CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS = 10_000;
 const SUPPORT_CASE_IDEMPOTENCY_PREFIX = "support-case:";
+const SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX = "support-case-reopen:";
 
 interface DigestAttemptSummary {
   channel: DeliveryChannel;
@@ -1414,6 +1415,13 @@ function operatorAlertPayloadSnapshot(idempotencyKey: string, lines: string[]) {
     return {
       kind: "support_case_operator_alert",
       caseId: idempotencyKey.slice(SUPPORT_CASE_IDEMPOTENCY_PREFIX.length),
+    };
+  }
+  if (idempotencyKey.startsWith(SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX)) {
+    const caseId = idempotencyKey.slice(SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX.length).split(":")[0];
+    return {
+      kind: "support_case_operator_alert",
+      caseId,
     };
   }
 

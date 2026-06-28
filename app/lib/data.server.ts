@@ -1238,6 +1238,7 @@ export async function createSupportCase(
     priority?: unknown;
     context?: JsonRecord | null;
     requestKey?: string | null;
+    reopenClosed?: boolean;
   },
 ) {
   const normalized = normalizeSupportCaseInput({
@@ -1264,6 +1265,26 @@ export async function createSupportCase(
       requestKey,
     );
     if (existing) {
+      if (existing.status === "closed" && input.reopenClosed) {
+        const reopened = await reopenSupportCaseForRequest(env, {
+          caseId: existing.id,
+          userId: input.userId,
+          category: normalized.category,
+          priority: normalized.priority,
+          subject: normalized.subject,
+          detail: normalized.detail,
+          context: input.context ?? {},
+          timestamp,
+        });
+        if (reopened) {
+          return {
+            ...reopened,
+            alreadyExists: false,
+            reopened: true,
+          };
+        }
+      }
+
       return {
         ...toSupportCaseRecord(existing),
         alreadyExists: true,
@@ -1570,6 +1591,101 @@ async function recordSupportCaseOpenedEvent(
     });
   } catch (error) {
     console.error("[support] opened case event persistence failed", error);
+  }
+}
+
+async function reopenSupportCaseForRequest(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    userId: string;
+    category: SupportCaseCategory;
+    priority: SupportCasePriority;
+    subject: string;
+    detail: string;
+    context: JsonRecord;
+    timestamp: string;
+  },
+) {
+  await run(
+    env,
+    `
+      UPDATE support_case
+      SET category = ?,
+          priority = ?,
+          status = 'open',
+          subject = ?,
+          detail = ?,
+          context_json = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND user_id = ?
+        AND status = 'closed'
+    `,
+    input.category,
+    input.priority,
+    input.subject,
+    input.detail,
+    jsonValue(input.context),
+    input.timestamp,
+    input.caseId,
+    input.userId,
+  );
+
+  const row = await one<SupportCaseRow>(
+    env,
+    `
+      SELECT *
+      FROM support_case
+      WHERE id = ?
+        AND user_id = ?
+      LIMIT 1
+    `,
+    input.caseId,
+    input.userId,
+  );
+  if (!row) {
+    return null;
+  }
+
+  await recordSupportCaseReopenedEvent(env, {
+    caseId: row.id,
+    userId: input.userId,
+    category: input.category,
+    priority: input.priority,
+    context: input.context,
+  });
+
+  return toSupportCaseRecord(row);
+}
+
+async function recordSupportCaseReopenedEvent(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    userId: string;
+    category: SupportCaseCategory;
+    priority: SupportCasePriority;
+    context: JsonRecord;
+  },
+) {
+  try {
+    await createSupportCaseEvent(env, {
+      caseId: input.caseId,
+      userId: input.userId,
+      eventType: "status_changed",
+      message: "Support case reopened from a new signed-in request.",
+      visibleToCustomer: true,
+      metadata: {
+        category: input.category,
+        priority: input.priority,
+        fromStatus: "closed",
+        toStatus: "open",
+        ...supportCaseOpenedEventMetadata(input.context),
+      },
+    });
+  } catch (error) {
+    console.error("[support] reopened case event persistence failed", error);
   }
 }
 

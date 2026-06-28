@@ -132,6 +132,48 @@ describe("onboarding route", () => {
     );
   });
 
+  it("lets completed users resume setup from the explicit account link", async () => {
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: "2026-04-02 18:30:00",
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWorkspaceBranding: vi.fn().mockResolvedValue({
+        brandName: null,
+        brandWebsite: "https://mybrand.example",
+      }),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 1,
+        limit: 3,
+      }),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+    }));
+
+    const { loader } = await import("~/routes/app.onboard");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard?resume=1"),
+    } as never);
+
+    expect(result).toMatchObject({
+      brandWebsite: "https://mybrand.example",
+      plan: "starter",
+      resumeSetup: true,
+    });
+  });
+
   it("redirects unfinished users from the workspace to onboarding", async () => {
     vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {

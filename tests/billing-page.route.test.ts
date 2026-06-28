@@ -262,8 +262,11 @@ describe("billing page", () => {
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
-    expect(markup).toContain("Agency checkout is available from the pricing page");
-    expect(markup).toContain("old checkout link");
+    expect(markup).toContain("Agency checkout is not available from that checkout link");
+    expect(markup).toContain("current plan availability");
+    expect(markup).not.toContain("Agency checkout is available from the pricing page");
+    expect(markup).not.toContain("Scout and Starter are available now");
+    expect(markup).not.toContain("need Agency capacity before then");
   });
 
   it("renders evidence usage with purchased top-up balance and grant rows", async () => {
