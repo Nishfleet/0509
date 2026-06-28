@@ -1,4 +1,11 @@
 import { readDigestIntelligence } from "~/lib/change-intelligence";
+import {
+  classifyDigestItemSource,
+  priorityMixLabel,
+  proofMixLabel,
+  summarizeDigestProofMix,
+  summarizePriorityMix,
+} from "~/lib/proof-classification";
 
 export interface DigestMovementItem {
   watchlistName: string;
@@ -15,7 +22,7 @@ export function DigestProofPacket({ items }: { items: DigestProofPacketItem[] })
   return (
     <section className="f9-proof-packet" aria-label="Digest proof packet">
       <div>
-        <span className="f9-app-kicker">Proof packet</span>
+        <span className="f9-app-kicker">Evidence packet</span>
         <h3>{packet.title}</h3>
         <p className="f9-muted-copy">{packet.summary}</p>
       </div>
@@ -67,13 +74,11 @@ export function DigestMovementSummary({ items }: { items: DigestMovementItem[] }
       </div>
       <div>
         <dt>Priority mix</dt>
-        <dd>
-          {priorityCounts.high} high · {priorityCounts.medium} medium · {priorityCounts.low} low
-        </dd>
+        <dd>{priorityMixLabel(priorityCounts)}</dd>
       </div>
       <div>
         <dt>Report status</dt>
-        <dd>Client-ready snapshot with evidence, timestamp, and confidence trail.</dd>
+        <dd>Digest detail with proof and scan labels. Client reports include verified proof by default.</dd>
       </div>
     </dl>
   );
@@ -81,6 +86,14 @@ export function DigestMovementSummary({ items }: { items: DigestMovementItem[] }
 
 export function DigestIntelligence({ metadata }: { metadata?: Record<string, unknown> }) {
   const intelligence = readDigestIntelligence(metadata ?? {});
+  const classification = classifyDigestItemSource({
+    watchlistName: "",
+    eventType: "ad_new",
+    title: "",
+    summary: "",
+    metadata: metadata ?? {},
+    createdAt: "",
+  });
 
   return (
     <dl className="proof-trail-list">
@@ -94,6 +107,12 @@ export function DigestIntelligence({ metadata }: { metadata?: Record<string, unk
       <div>
         <dt>Next move</dt>
         <dd>{intelligence.recommendedAction}</dd>
+      </div>
+      <div>
+        <dt>Proof status</dt>
+        <dd>
+          {classification.label} · {classification.sourceTypeLabel}
+        </dd>
       </div>
       <div>
         <dt>Evidence trail</dt>
@@ -117,21 +136,18 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
       return scoreB - scoreA || a.index - b.index;
     });
   const top = rankedItems[0] ?? null;
-  const highPriorityCount = rankedItems.filter(
-    (entry) => entry.intelligence.priorityScore !== null && entry.intelligence.priorityScore >= 85,
-  ).length;
-  const proofBackedCount = items.filter(isProofBackedDigestItem).length;
-  const scanBackedCount = Math.max(items.length - proofBackedCount, 0);
+  const priorityMix = summarizePriorityMix(items);
+  const proofMix = summarizeDigestProofMix(items);
   const changeLabel = `${items.length} change${items.length === 1 ? "" : "s"}`;
   const competitorLabel = `${watchlists.size} competitor${watchlists.size === 1 ? "" : "s"}`;
-  const topIsProofBacked = top ? isProofBackedDigestItem(top.item) : false;
+  const topClassification = top ? classifyDigestItemSource(top.item) : null;
 
   if (!top) {
     return {
-      title: "No proof-backed changes yet",
-      summary: "The packet will fill in once a digest has evidence-backed movement.",
+      title: "No action-worthy changes yet",
+      summary: "The packet will fill in once a digest has verified proof or scan-spotted movement.",
       decision: "No decision queued.",
-      evidence: "No evidence attached yet.",
+      evidence: "No evidence signals attached yet.",
       coverage: "No competitors in this packet.",
       confidenceTrail: "Proof trail pending.",
     };
@@ -140,23 +156,13 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
   return {
     title: `${changeLabel} packaged for handoff`,
     summary: `${top.item.title}: ${
-      topIsProofBacked
+      topClassification?.status === "verified_proof"
         ? "ready to send as a client or teammate digest without rereading every event."
         : "ready to review; add page proof before sharing."
     }`,
     decision: top.intelligence.recommendedAction,
-    evidence: [
-      proofBackedCount > 0
-        ? `${proofBackedCount} verified snapshot${proofBackedCount === 1 ? "" : "s"}`
-        : null,
-      scanBackedCount > 0 ? `${scanBackedCount} scan-backed change${scanBackedCount === 1 ? "" : "s"}` : null,
-    ].filter(Boolean).join(" · "),
-    coverage: `${competitorLabel} · ${highPriorityCount} high-priority change${highPriorityCount === 1 ? "" : "s"}`,
+    evidence: proofMixLabel(proofMix),
+    coverage: `${competitorLabel} · ${priorityMixLabel(priorityMix)}`,
     confidenceTrail: top.intelligence.proofTrail,
   };
-}
-
-function isProofBackedDigestItem(item: DigestProofPacketItem) {
-  const metadata = item.metadata ?? {};
-  return metadata.sourceStatus === "proof_backed" || Boolean(metadata.proofCaptureId);
 }

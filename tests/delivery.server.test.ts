@@ -37,6 +37,7 @@ describe("deliverWeeklyDigest", () => {
   it("auto-provisions the account email target and records the email attempt", async () => {
     const sendMock = mockEmailSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
     const upsertDigestDelivery = vi.fn();
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
       id: "email-target-1",
@@ -64,6 +65,7 @@ describe("deliverWeeklyDigest", () => {
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
+      updateDeliveryAttemptResult,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
         id: "workspace-1",
@@ -93,6 +95,7 @@ describe("deliverWeeklyDigest", () => {
     const result = await deliverWeeklyDigest(
       {
         ...emailEnv,
+        APP_ORIGIN: "https://app.0509.test/",
         BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
         BETTER_AUTH_URL: "https://0509.io",
       } as never,
@@ -111,6 +114,15 @@ describe("deliverWeeklyDigest", () => {
             eventType: "landing_page_offer_changed",
             title: "Landing page offer changed",
             summary: "Offer changed on the landing page.",
+            metadata: {
+              priorityScore: 90,
+              priorityBand: "High priority",
+              recommendedAction: "Today: review the offer shift.",
+              proofTrail: "Verified from a page snapshot",
+              sourceStatus: "proof_backed",
+              proofCaptureId: "proof-1",
+              confirmedAt: "2026-04-19T00:00:00.000Z",
+            },
           },
         ],
       },
@@ -131,18 +143,24 @@ describe("deliverWeeklyDigest", () => {
     expect(emailSendPayload(sendMock)).toMatchObject({
       from: "alerts@0509.io",
       to: "owner@example.com",
-      subject: "Five to Nine weekly digest: 1 competitor changes",
+      subject: "1 competitor move worth seeing: boAt watch",
       html: expect.stringContaining("Five to Nine weekly digest"),
-      text: expect.stringContaining("Five to Nine weekly digest"),
+      text: expect.stringContaining("Top moves:"),
       headers: expect.objectContaining({
         "X-0509-Tag": "weekly-digest",
         "List-Unsubscribe": expect.stringContaining(
-          "https://0509.io/unsubscribe?u=user-1&t=email-target-1&sig=",
+          "https://app.0509.test/unsubscribe?u=user-1&t=email-target-1&sig=",
         ),
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
       }),
     });
     expect(emailSendPayload(sendMock).html).toContain("Unsubscribe");
+    expect(emailSendPayload(sendMock).html).toContain("Verified proof");
+    expect(emailSendPayload(sendMock).text).toContain(
+      "View full digest: https://app.0509.test/app/digests?digest=digest-1",
+    );
+    expect(emailSendPayload(sendMock).text).toContain("Manage frequency: https://app.0509.test/app/sources");
+    expect(emailSendPayload(sendMock).text).toContain("Unsubscribe: https://app.0509.test/unsubscribe");
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -151,6 +169,21 @@ describe("deliverWeeklyDigest", () => {
         digestRunId: "digest-1",
         targetValue: "owner@example.com",
         eventIds: ["event-1"],
+        status: "pending",
+        sentAt: null,
+        payloadSnapshot: expect.objectContaining({
+          subject: "1 competitor move worth seeing: boAt watch",
+        }),
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-1",
+      expect.objectContaining({
+        status: "sent",
+        providerMessageId: "msg_1",
+        sentAt: expect.any(String),
+        errorMessage: null,
       }),
     );
     expect(upsertDigestDelivery).toHaveBeenCalledWith(
@@ -159,6 +192,18 @@ describe("deliverWeeklyDigest", () => {
       expect.objectContaining({
         status: "sent",
         recipientEmail: "owner@example.com",
+        deliveredAt: null,
+      }),
+    );
+    expect(upsertDeliveryTarget).toHaveBeenCalledTimes(2);
+    expect(upsertDeliveryTarget).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({
+        channel: "email",
+        targetValue: "owner@example.com",
+        lastSuccessfulAttemptId: "attempt-1",
+        lastSuccessfulDeliveryAt: expect.any(String),
       }),
     );
   });
@@ -166,11 +211,13 @@ describe("deliverWeeklyDigest", () => {
   it("records a failed email attempt when the email send rejects", async () => {
     emailSend = vi.fn().mockRejectedValue(new Error("network timeout"));
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
     const upsertDigestDelivery = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
+      updateDeliveryAttemptResult,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
         id: "workspace-1",
@@ -258,6 +305,14 @@ describe("deliverWeeklyDigest", () => {
       expect.anything(),
       expect.objectContaining({
         channel: "email",
+        status: "pending",
+        errorMessage: null,
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-1",
+      expect.objectContaining({
         status: "failed",
         errorMessage: "Cloudflare Email send failed: network timeout.",
       }),
@@ -277,11 +332,13 @@ describe("deliverWeeklyDigest", () => {
     vi.useFakeTimers();
     emailSend = vi.fn().mockImplementation(() => new Promise(() => undefined));
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
     const upsertDigestDelivery = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
+      updateDeliveryAttemptResult,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
         id: "workspace-1",
@@ -374,6 +431,15 @@ describe("deliverWeeklyDigest", () => {
         channel: "email",
         status: "pending",
         webhookStatus: "provider_unknown",
+        errorMessage: null,
+        failedAt: null,
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-1",
+      expect.objectContaining({
+        status: "pending",
         errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
         failedAt: null,
       }),
@@ -392,6 +458,7 @@ describe("deliverWeeklyDigest", () => {
   it("keeps email as the baseline when customer WhatsApp fails readiness checks", async () => {
     const sendMock = mockEmailSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
       id: "email-target-1",
       userId: "user-1",
@@ -427,6 +494,7 @@ describe("deliverWeeklyDigest", () => {
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
+      updateDeliveryAttemptResult,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
         id: "workspace-1",
@@ -522,7 +590,16 @@ describe("deliverWeeklyDigest", () => {
       expect.anything(),
       expect.objectContaining({
         channel: "email",
+        status: "pending",
+        errorMessage: null,
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-1",
+      expect.objectContaining({
         status: "sent",
+        providerMessageId: "msg_1",
         errorMessage: null,
       }),
     );
@@ -531,11 +608,13 @@ describe("deliverWeeklyDigest", () => {
   it("does not send digests to pending WhatsApp setup targets", async () => {
     const sendMock = mockEmailSend("msg_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
     const sendDigestWhatsApp = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt,
+      updateDeliveryAttemptResult,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
         id: "workspace-1",
@@ -986,6 +1065,142 @@ describe("deliverWeeklyDigest", () => {
     );
   });
 
+  it("retries stale pending digest email attempts in place", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-10T05:00:00.000Z"));
+    const sendMock = mockEmailSend("msg_retry_pending_1");
+    const createDeliveryAttempt = vi.fn();
+    const updateDeliveryAttemptResult = vi.fn();
+    const upsertDigestDelivery = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        id: "attempt-pending-1",
+        userId: "user-1",
+        watchlistId: null,
+        digestRunId: "digest-1",
+        deliveryTargetId: "email-target-1",
+        lane: "customer",
+        channel: "email",
+        provider: "cloudflare_email",
+        status: "pending",
+        webhookStatus: "provider_unknown",
+        targetValue: "owner@example.com",
+        providerMessageId: null,
+        providerStatusLastSeenAt: "2026-06-10T04:00:00.000Z",
+        templateName: null,
+        eventIds: ["event-1"],
+        payloadSnapshot: {},
+        idempotencyKey: "digest:digest-1:customer:email:owner@example.com",
+        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+        sentAt: null,
+        failedAt: null,
+        createdAt: "2026-06-10T04:00:00.000Z",
+        updatedAt: "2026-06-10T04:00:00.000Z",
+      }),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([
+        {
+          id: "email-target-1",
+          userId: "user-1",
+          watchlistId: null,
+          channel: "email",
+          targetValue: "owner@example.com",
+          validationStatus: "validated",
+          isValidated: true,
+          isOptedIn: true,
+          optInSource: "account_email",
+          optedInAt: "2026-04-19T00:00:00.000Z",
+          isPaused: false,
+          pausedAt: null,
+          optedOutAt: null,
+          templateEligible: false,
+          lastSuccessfulDeliveryAt: null,
+          lastSuccessfulAttemptId: null,
+          providerIdentifier: null,
+          metadata: {},
+          createdAt: "2026-04-19T00:00:00.000Z",
+          updatedAt: "2026-04-19T00:00:00.000Z",
+        },
+      ]),
+      upsertDeliveryTarget: vi.fn().mockResolvedValue(null),
+      upsertDigestDelivery,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const result = await deliverWeeklyDigest(emailEnv as never, {
+      userId: "user-1",
+      userName: "Owner",
+      accountEmail: "owner@example.com",
+      digestRunId: "digest-1",
+      periodStart: "2026-04-12T00:00:00.000Z",
+      periodEnd: "2026-04-19T00:00:00.000Z",
+      items: [
+        {
+          eventId: "event-1",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Landing page offer changed",
+          summary: "Offer changed on the landing page.",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      attempts: 1,
+      channels: ["email"],
+      details: [{ channel: "email", status: "sent", targetValue: "owner@example.com" }],
+    });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "attempt-pending-1",
+      expect.objectContaining({
+        status: "pending",
+        providerMessageId: null,
+        errorMessage: null,
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "attempt-pending-1",
+      expect.objectContaining({
+        status: "sent",
+        providerMessageId: "msg_retry_pending_1",
+        errorMessage: null,
+      }),
+    );
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({ status: "sent" }),
+    );
+  });
+
   it("skips opted-out email targets and never re-provisions the account email", async () => {
     const sendMock = mockEmailSend("msg_1");
     const upsertDeliveryTarget = vi.fn();
@@ -1193,6 +1408,8 @@ describe("deliverWatchlistAlerts", () => {
         watchlistId: "watch-1",
         targetValue: "owner@example.com",
         eventIds: ["event-1"],
+        providerStatusLastSeenAt: expect.any(String),
+        sentAt: expect.any(String),
       }),
     );
     // The referenced ad had no captured creative, so no image is embedded.

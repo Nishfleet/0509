@@ -3,6 +3,7 @@ import {
   digestCadenceLabel,
   readDigestIntelligence,
 } from "~/lib/change-intelligence";
+import { buildDigestEmail } from "~/lib/digest-email.server";
 import { safeTimeZone } from "~/lib/safe-timezone";
 import {
   createDeliveryAttempt,
@@ -51,6 +52,7 @@ import { PromiseTimeoutError, promiseWithTimeout } from "~/lib/fetch-timeout.ser
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
 const EMAIL_PROVIDER = "cloudflare_email" as const;
 const CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS = 10_000;
+const DIGEST_PENDING_RETRY_AFTER_MS = 30 * 60 * 1000;
 const SUPPORT_CASE_IDEMPOTENCY_PREFIX = "support-case:";
 const SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX = "support-case-reopen:";
 
@@ -489,50 +491,44 @@ async function deliverDigestToEmailTarget(
     targetValue: target.targetValue,
   });
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-  // A failed prior attempt is retryable; anything else is a true duplicate.
-  if (duplicate && duplicate.status !== "failed") {
+  // Failed and stale provider-timeout attempts are retryable; anything else is a true duplicate.
+  if (duplicate && !isRetryableDigestEmailAttempt(duplicate)) {
     return {
       channel: "email" as const,
       status: deliveryAttemptSummaryStatus(duplicate.status),
       targetValue: duplicate.targetValue,
       providerMessageId: duplicate.providerMessageId,
       errorMessage: duplicate.errorMessage,
-      deliveredAt: duplicate.sentAt,
+      deliveredAt: null,
     };
   }
 
-  const cadenceLabel = digestCadenceLabel(input.cadence);
-  const isHeartbeat = input.items.length === 0 && Boolean(input.heartbeat);
-  const subject = isHeartbeat
-    ? `Five to Nine ${cadenceLabel}: all quiet — ${input.heartbeat!.adsSeen} ads checked`
-    : `Five to Nine ${cadenceLabel}: ${input.items.length} competitor changes`;
-  const providerResult = await sendDigestEmail(env, {
-    email: target.targetValue,
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, {
+    userId: target.userId,
+    targetId: target.id,
+  });
+  const email = renderDigestEmail(env, {
+    digestRunId: input.digestRunId,
     name: input.userName,
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
     items: input.items,
     heartbeat: input.heartbeat ?? null,
-    subject,
     cadence: input.cadence,
     timeZone,
-    unsubscribeUrl: await buildUnsubscribeUrl(env, {
-      userId: target.userId,
-      targetId: target.id,
-    }),
+    unsubscribeUrl,
   });
-
   let attemptId: string;
   if (duplicate) {
     await updateDeliveryAttemptResult(env, duplicate.id, {
-      provider: providerResult.provider,
-      status: providerResult.status,
-      webhookStatus: providerResult.webhookStatus,
-      providerMessageId: providerResult.providerMessageId,
-      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-      errorMessage: providerResult.errorMessage,
-      sentAt: providerResult.deliveredAt,
-      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+      provider: EMAIL_PROVIDER,
+      status: "pending",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
     });
     attemptId = duplicate.id;
   } else {
@@ -543,32 +539,47 @@ async function deliverDigestToEmailTarget(
       deliveryTargetId: target.id,
       lane,
       channel: "email",
-      provider: providerResult.provider,
-      status: providerResult.status,
-      webhookStatus: providerResult.webhookStatus,
+      provider: EMAIL_PROVIDER,
+      status: "pending",
+      webhookStatus: "provider_unknown",
       targetValue: target.targetValue,
-      providerMessageId: providerResult.providerMessageId,
-      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
       templateName: null,
       eventIds: input.items.map((item) => item.eventId),
       payloadSnapshot: {
         kind: "weekly_digest",
         channel: "email",
-        subject,
+        subject: email.subject,
         cadence: input.cadence ?? "weekly",
         periodStart: input.periodStart,
         periodEnd: input.periodEnd,
         itemCount: input.items.length,
       },
       idempotencyKey,
-      errorMessage: providerResult.errorMessage,
-      sentAt: providerResult.deliveredAt,
-      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
     });
   }
 
+  const providerResult = await sendRenderedDigestEmail(env, {
+    to: target.targetValue,
+    email,
+    unsubscribeUrl,
+  });
+  await updateDeliveryAttemptResult(env, attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerResult.status === "sent" ? providerResult.providerStatusLastSeenAt : null,
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
   if (providerResult.status === "sent") {
-    await persistDeliveryTargetSuccess(env, target, attemptId, providerResult.deliveredAt);
+    await persistDeliveryTargetSuccess(env, target, attemptId, providerAcceptedAt(providerResult));
   }
 
   return {
@@ -577,7 +588,7 @@ async function deliverDigestToEmailTarget(
     targetValue: target.targetValue,
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
-    deliveredAt: providerResult.deliveredAt,
+    deliveredAt: null,
   };
 }
 
@@ -662,7 +673,7 @@ async function deliverInstantEmailBatch(
       providerMessageId: providerResult.providerMessageId,
       providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
       errorMessage: providerResult.errorMessage,
-      sentAt: providerResult.deliveredAt,
+      sentAt: providerAcceptedAt(providerResult),
       failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     });
     attemptId = attemptDedupe.retryAttempt.id;
@@ -692,13 +703,17 @@ async function deliverInstantEmailBatch(
       },
       idempotencyKey: attemptDedupe.idempotencyKey,
       errorMessage: providerResult.errorMessage,
-      sentAt: providerResult.deliveredAt,
+      sentAt: providerAcceptedAt(providerResult),
       failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     });
   }
-
   if (providerResult.status === "sent") {
-    await persistDeliveryTargetSuccess(env, input.deliveryTarget, attemptId, providerResult.deliveredAt);
+    await persistDeliveryTargetSuccess(
+      env,
+      input.deliveryTarget,
+      attemptId,
+      providerAcceptedAt(providerResult),
+    );
   }
 
   return {
@@ -1366,7 +1381,7 @@ export async function sendOperatorAlertEmail(
       providerMessageId: providerResult.providerMessageId,
       providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
       errorMessage: providerResult.errorMessage,
-      sentAt: providerResult.deliveredAt,
+      sentAt: providerAcceptedAt(providerResult),
       failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     });
     return providerResult.status === "sent";
@@ -1403,7 +1418,7 @@ export async function sendOperatorAlertEmail(
     payloadSnapshot: operatorAlertPayloadSnapshot(idempotencyKey, input.lines),
     idempotencyKey,
     errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
+    sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
   });
 
@@ -1483,7 +1498,7 @@ export async function sendDeliveryTestEmail(
     payloadSnapshot: { kind: "delivery_test" },
     idempotencyKey: `delivery-test:${input.userId}:${crypto.randomUUID()}`,
     errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
+    sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
   });
 
@@ -1556,7 +1571,7 @@ export async function sendAccountActionEmail(
     payloadSnapshot: { kind: `account_${input.kind}` },
     idempotencyKey: `account-${input.kind}:${input.userId}:${crypto.randomUUID()}`,
     errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
+    sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
   });
 
@@ -1613,7 +1628,7 @@ export async function sendTeamInviteEmail(
     payloadSnapshot: { kind: "team_invite" },
     idempotencyKey: `team-invite:${input.ownerUserId}:${crypto.randomUUID()}`,
     errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
+    sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
   });
 
@@ -1660,7 +1675,7 @@ export async function sendPasswordResetEmail(
     payloadSnapshot: { kind: "password_reset" },
     idempotencyKey: `password-reset:${input.userId}:${crypto.randomUUID()}`,
     errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
+    sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
   });
 
@@ -1691,22 +1706,22 @@ function renderPasswordResetHtml(input: { name: string | null; resetUrl: string 
   `;
 }
 
-async function sendDigestEmail(
+function renderDigestEmail(
   env: AppEnv,
   input: {
-    email: string;
+    digestRunId: string;
     name: string;
     periodStart: string;
     periodEnd: string;
     items: DigestDeliveryItem[];
     heartbeat?: DigestHeartbeat | null;
-    subject: string;
     cadence?: DigestCadence;
     timeZone?: string | null;
     unsubscribeUrl: string | null;
   },
-): Promise<EmailProviderResult> {
-  const html = renderDigestHtml({
+): ReturnType<typeof buildDigestEmail> {
+  const baseUrl = appBaseUrl(env);
+  return buildDigestEmail({
     name: input.name,
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
@@ -1714,14 +1729,31 @@ async function sendDigestEmail(
     heartbeat: input.heartbeat ?? null,
     cadence: input.cadence,
     timeZone: input.timeZone ?? null,
+    fullDigestUrl: `${baseUrl}/app/digests?digest=${encodeURIComponent(input.digestRunId)}`,
+    manageFrequencyUrl: `${baseUrl}/app/sources`,
+    supportEmail: SUPPORT_EMAIL,
+    supportMailto: SUPPORT_MAILTO,
+    unsubscribeUrl: input.unsubscribeUrl,
   });
-  return sendCloudflareEmail(env, {
-    to: input.email,
-    subject: input.subject,
-    html,
+}
+
+async function sendRenderedDigestEmail(
+  env: AppEnv,
+  input: {
+    to: string;
+    email: ReturnType<typeof buildDigestEmail>;
+    unsubscribeUrl: string | null;
+  },
+): Promise<EmailProviderResult> {
+  const result = await sendCloudflareEmail(env, {
+    to: input.to,
+    subject: input.email.subject,
+    html: input.email.html,
+    text: input.email.text,
     tag: "weekly-digest",
     unsubscribeUrl: input.unsubscribeUrl,
   });
+  return result;
 }
 
 async function sendInstantEmail(
@@ -1748,6 +1780,7 @@ async function sendCloudflareEmail(
     to: string;
     subject: string;
     html: string;
+    text?: string;
     tag: string;
     unsubscribeUrl: string | null;
   },
@@ -1781,7 +1814,7 @@ async function sendCloudflareEmail(
         to: input.to,
         subject: input.subject,
         html,
-        text: stripHtml(html),
+        text: input.text ?? stripHtml(html),
         headers,
       }),
       CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS,
@@ -1795,7 +1828,7 @@ async function sendCloudflareEmail(
       providerMessageId: result?.messageId ?? null,
       providerStatusLastSeenAt: statusSeenAt,
       errorMessage: null,
-      deliveredAt: statusSeenAt,
+      deliveredAt: null,
     };
   } catch (error) {
     if (error instanceof PromiseTimeoutError) {
@@ -1820,6 +1853,15 @@ async function sendCloudflareEmail(
       deliveredAt: null,
     };
   }
+}
+
+function appBaseUrl(env: AppEnv) {
+  const value = env.APP_ORIGIN?.trim() || env.BETTER_AUTH_URL?.trim() || "";
+  return value ? value.replace(/\/+$/, "") : "https://0509.io";
+}
+
+function providerAcceptedAt(result: EmailProviderResult) {
+  return result.status === "sent" ? result.providerStatusLastSeenAt : null;
 }
 
 function appendEmailFooter(html: string, unsubscribeUrl: string | null) {
@@ -1939,6 +1981,18 @@ function buildInstantDeliveryAttemptIdempotencyKey(input: {
   attemptKind: "send" | "quiet-hours";
 }) {
   return `${buildLegacyInstantDeliveryAttemptIdempotencyKey(input)}:${input.attemptKind}`;
+}
+
+function isRetryableDigestEmailAttempt(attempt: DeliveryAttemptRecord) {
+  if (attempt.status === "failed") {
+    return true;
+  }
+  if (attempt.status !== "pending" || attempt.providerMessageId) {
+    return false;
+  }
+
+  const updatedAtMs = new Date(attempt.updatedAt).getTime();
+  return Number.isFinite(updatedAtMs) && Date.now() - updatedAtMs >= DIGEST_PENDING_RETRY_AFTER_MS;
 }
 
 async function resolveInstantAttemptDedupe(
@@ -2463,7 +2517,7 @@ export async function sendPresenceDigestEmail(
     payloadSnapshot: { kind: "presence_digest", lineCount: input.lines.length },
     idempotencyKey: input.idempotencyKey,
     errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
+    sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
   });
 

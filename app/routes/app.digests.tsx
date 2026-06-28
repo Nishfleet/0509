@@ -15,7 +15,15 @@ import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { LocalTime } from "~/components/local-time";
 import { PlanLimitState } from "~/components/plan-limit-state";
 import { SubmitButton } from "~/components/submit-button";
+import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
+import {
+  classifyDigestItemSource,
+  priorityMixLabel,
+  proofMixLabel,
+  summarizeDigestProofMix,
+  summarizePriorityMix,
+} from "~/lib/proof-classification";
 
 export const meta = () => [{ title: "Digests | Five to Nine" }];
 
@@ -110,6 +118,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
+    const { buildDigestShareSnapshot } = await import("~/lib/digest-share");
     const share = await createShareLink(
       env,
       { ...session, user: { ...session.user, id: workspaceUserId } },
@@ -117,7 +126,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       resourceType: "digest",
       resourceId: digest.id,
       isSnapshot: true,
-      snapshotPayload: digest as unknown as Record<string, unknown>,
+      snapshotPayload: buildDigestShareSnapshot(digest) as unknown as Record<string, unknown>,
     });
 
     return {
@@ -143,6 +152,9 @@ export default function DigestsRoute() {
       targetValue: string;
       status: string;
       errorMessage: string | null;
+      webhookStatus?: string | null;
+      providerStatusLastSeenAt?: string | null;
+      sentAt?: string | null;
       createdAt: string;
     }>
   > = data.canAccessDigests ? (data.digestAttemptsByDigestId ?? {}) : {};
@@ -151,17 +163,31 @@ export default function DigestsRoute() {
     targetValue: string;
     status: string;
     errorMessage: string | null;
+    webhookStatus?: string | null;
+    providerStatusLastSeenAt?: string | null;
+    sentAt?: string | null;
     createdAt: string;
   }> = data.canAccessDigests ? (data.selectedDigestAttempts ?? []) : [];
   const insightDepth = data.canAccessDigests && data.selectedDigest
     ? buildDigestInsightDepth(data.selectedDigest.items)
     : null;
+  const allItems = data.canAccessDigests && data.selectedDigest ? data.selectedDigest.items : [];
+  const selectedFilters = {
+    competitor: searchParams.get("competitor") ?? "all",
+    urgency: searchParams.get("urgency") ?? "all",
+    proofStatus: searchParams.get("proofStatus") ?? "all",
+    eventType: searchParams.get("eventType") ?? "all",
+  };
+  const filterOptions = buildDigestFilterOptions(allItems);
+  const visibleItems = applyDigestFilters(allItems, selectedFilters);
+  const proofMix = summarizeDigestProofMix(allItems);
+  const priorityMix = summarizePriorityMix(allItems);
 
   return (
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          lead="Review generated change digests with proof attached before they reach your inbox."
+          lead="Review competitor changes with proof, scan labels, history, and delivery health."
           title="Digests"
         />
 
@@ -184,7 +210,7 @@ export default function DigestsRoute() {
 
       {!data.canAccessDigests ? (
         <PlanLimitState
-          message="Digests are included in paid plans. Upgrade to get daily or weekly competitor change reports — with proof attached — in your inbox. Until then, watchlists and collections keep your research organized."
+          message="Digests are included in paid plans. Upgrade to get daily or weekly competitor change briefs with proof and scan labels in your inbox. Until then, watchlists and collections keep your research organized."
           title="Digests are included in paid plans"
         />
       ) : (
@@ -206,7 +232,7 @@ export default function DigestsRoute() {
                   <div>
                     <h3><LocalTime iso={digest.periodEnd} mode="date" /></h3>
                     <p className="f9-muted-copy">
-                      {digest.items.length} proof-backed changes ready for review
+                      {formatDigestSidebarMovement(digest.items)}
                     </p>
                     <p className="f9-muted-copy">
                       {formatDigestSidebarStatus(
@@ -219,8 +245,8 @@ export default function DigestsRoute() {
               ))}
               {data.digests.length === 0 ? (
                 <div className="f9-empty-panel">
-                  <h3>Your first digest appears after a confirmed change</h3>
-                  <p>Start a competitor watchlist and proof-backed changes will roll into digest history.</p>
+                  <h3>Your first digest appears after monitoring runs</h3>
+                  <p>Start a competitor watchlist and digest history will show both movement and all-quiet periods.</p>
                 </div>
               ) : null}
             </div>
@@ -260,9 +286,118 @@ export default function DigestsRoute() {
                   </div>
                 </div>
 
+                {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
+
+                <DigestProofPacket items={data.selectedDigest.items} />
+
+                <DigestMovementSummary items={data.selectedDigest.items} />
+
                 <section className="f9-work-list is-compact" style={{ marginBottom: "1rem" }}>
                   <div>
-                    <span className="f9-app-kicker">Delivery status</span>
+                    <span className="f9-app-kicker">Filters</span>
+                    <h3 style={{ marginTop: 0 }}>Full digest detail</h3>
+                    <p className="f9-muted-copy">
+                      {priorityMixLabel(priorityMix)} · {proofMixLabel(proofMix)}
+                    </p>
+                  </div>
+                  <Form method="get" className="f9-filter-row">
+                    <input name="digest" type="hidden" value={data.selectedDigest.id} />
+                    <label>
+                      Competitor
+                      <select name="competitor" defaultValue={selectedFilters.competitor}>
+                        <option value="all">All competitors</option>
+                        {filterOptions.competitors.map((name) => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Urgency
+                      <select name="urgency" defaultValue={selectedFilters.urgency}>
+                        <option value="all">All urgency</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </label>
+                    <label>
+                      Proof
+                      <select name="proofStatus" defaultValue={selectedFilters.proofStatus}>
+                        <option value="all">All proof states</option>
+                        {filterOptions.proofStatuses.map((status) => (
+                          <option key={status.value} value={status.value}>{status.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Type
+                      <select name="eventType" defaultValue={selectedFilters.eventType}>
+                        <option value="all">All event types</option>
+                        {filterOptions.eventTypes.map((type) => (
+                          <option key={type} value={type}>{type.replaceAll("_", " ")}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <SubmitButton className="f9-secondary-button" getAction="/app/digests" pendingLabel="Filtering…">
+                      Apply
+                    </SubmitButton>
+                  </Form>
+                </section>
+
+                <ul className="event-list">
+                  {visibleItems.map((item) => {
+                    const classification = classifyDigestItemSource(item);
+                    const sourceUrl = readDigestSourceUrl(item.metadata);
+                    return (
+                    <li className="f9-event-card" key={item.id}>
+                      <div className="f9-panel-toolbar">
+                        <div>
+                          <span className="f9-app-kicker">{item.watchlistName}</span>
+                          <h3>{item.title}</h3>
+                        </div>
+                        <div className="f9-action-row">
+                          <span className="f9-status-pill">{classification.label}</span>
+                          <span className="f9-status-pill">{item.eventType.replaceAll("_", " ")}</span>
+                        </div>
+                      </div>
+                      <p>{item.summary}</p>
+                      <dl className="proof-trail-list">
+                        <div>
+                          <dt>Source type</dt>
+                          <dd>{classification.sourceTypeLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Captured</dt>
+                          <dd>{readDigestTimestamp(item.metadata) ? <LocalTime iso={readDigestTimestamp(item.metadata)!} /> : "Timestamp unavailable"}</dd>
+                        </div>
+                        {sourceUrl ? (
+                          <div>
+                            <dt>Source link</dt>
+                            <dd>
+                              <a href={sourceUrl} rel="noreferrer" target="_blank">Open source</a>
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                      <DigestIntelligence metadata={item.metadata} />
+                    </li>
+                    );
+                  })}
+                </ul>
+                {visibleItems.length === 0 ? (
+                  <div className="f9-empty-panel">
+                    <h3>{allItems.length === 0 ? "All quiet for this period" : "No changes match these filters"}</h3>
+                    <p>
+                      {allItems.length === 0
+                        ? "This digest was generated after monitoring completed without action-worthy competitor movement."
+                        : "Adjust the filters to see more digest items."}
+                    </p>
+                  </div>
+                ) : null}
+
+                <section className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
+                  <div>
+                    <span className="f9-app-kicker">Delivery health</span>
                     <h3 style={{ marginTop: 0 }}>Recent channel outcomes</h3>
                   </div>
                   {selectedDigestAttempts.length > 0 ? (
@@ -273,9 +408,14 @@ export default function DigestsRoute() {
                             {formatDeliveryChannelLabel(attempt.channel)}
                           </h4>
                           <p className="f9-muted-copy" style={{ marginBottom: "0.25rem" }}>
-                            {describeAttemptStatus(attempt.status)}
+                            {describeAttemptStatus(attempt.status, attempt.channel, attempt.webhookStatus ?? null)}
                           </p>
                           <p className="f9-muted-copy">{attempt.targetValue}</p>
+                          {attempt.providerStatusLastSeenAt ? (
+                            <p className="f9-muted-copy">
+                              Provider status checked <LocalTime iso={attempt.providerStatusLastSeenAt} />
+                            </p>
+                          ) : null}
                           {attempt.errorMessage ? (
                             <p className="f9-muted-copy">{attempt.errorMessage}</p>
                           ) : null}
@@ -285,38 +425,16 @@ export default function DigestsRoute() {
                   ) : (
                     <p className="f9-muted-copy">
                       {data.selectedDigest.delivery?.status === "sent"
-                        ? "Legacy email delivery recorded."
+                        ? "Legacy provider send recorded. Recipient delivery is unknown."
                         : "No channel-level delivery attempts recorded yet."}
                     </p>
                   )}
                 </section>
-
-                {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
-
-                <DigestProofPacket items={data.selectedDigest.items} />
-
-                <DigestMovementSummary items={data.selectedDigest.items} />
-
-                <ul className="event-list">
-                  {data.selectedDigest.items.map((item) => (
-                    <li className="f9-event-card" key={item.id}>
-                      <div className="f9-panel-toolbar">
-                        <div>
-                          <span className="f9-app-kicker">{item.watchlistName}</span>
-                          <h3>{item.title}</h3>
-                        </div>
-                        <span className="f9-status-pill">{item.eventType.replaceAll("_", " ")}</span>
-                      </div>
-                      <p>{item.summary}</p>
-                      <DigestIntelligence metadata={item.metadata} />
-                    </li>
-                  ))}
-                </ul>
               </>
             ) : (
               <div className="f9-empty-panel">
-                <h2>Your first digest appears after a confirmed change</h2>
-                <p>Once a watchlist finds proof-backed movement, the generated snapshot shows up here.</p>
+                <h2>Your first digest appears after monitoring runs</h2>
+                <p>Digest history will show both competitor movement and all-quiet periods.</p>
                 <Link className="f9-primary-button" to="/app/watchlists">
                   Open watchlists
                 </Link>
@@ -336,6 +454,9 @@ function summarizeDigestAttempts(
     targetValue: string;
     status: string;
     errorMessage: string | null;
+    webhookStatus?: string | null;
+    providerStatusLastSeenAt?: string | null;
+    sentAt?: string | null;
     createdAt: string;
   }>,
 ) {
@@ -352,12 +473,12 @@ function summarizeDigestAttempts(
 }
 
 function formatDigestSidebarStatus(
-  attempts: Array<{ channel: string; status: string }>,
+  attempts: Array<{ channel: string; status: string; webhookStatus?: string | null }>,
   legacyStatus: string | null,
 ) {
   if (attempts.length === 0) {
     if (legacyStatus === "sent") {
-      return "Delivered";
+      return "Legacy provider send recorded";
     }
     if (legacyStatus === "failed") {
       return "Delivery failed";
@@ -366,8 +487,25 @@ function formatDigestSidebarStatus(
   }
 
   return attempts
-    .map((attempt) => `${formatDeliveryChannelLabel(attempt.channel)} ${describeAttemptStatus(attempt.status).toLowerCase()}`)
+    .map((attempt) => `${formatDeliveryChannelLabel(attempt.channel)} ${describeAttemptStatus(attempt.status, attempt.channel, attempt.webhookStatus ?? null).toLowerCase()}`)
     .join(" · ");
+}
+
+function formatDigestSidebarMovement(items: Array<{ metadata?: Record<string, unknown> }>) {
+  if (items.length === 0) {
+    return "All quiet period";
+  }
+  const proofMix = summarizeDigestProofMix(
+    items.map((item) => ({
+      watchlistName: "",
+      eventType: "ad_new",
+      title: "",
+      summary: "",
+      metadata: item.metadata ?? {},
+      createdAt: "",
+    })),
+  );
+  return `${items.length} change${items.length === 1 ? "" : "s"} · ${proofMixLabel(proofMix)}`;
 }
 
 function formatDeliveryChannelLabel(channel: string) {
@@ -383,10 +521,16 @@ function formatDeliveryChannelLabel(channel: string) {
   return channel.replaceAll("_", " ");
 }
 
-function describeAttemptStatus(status: string) {
+function describeAttemptStatus(status: string, channel: string, webhookStatus: string | null) {
   switch (status) {
     case "sent":
-      return "Sent";
+      if (webhookStatus === "delivered") {
+        return "Delivered";
+      }
+      if (channel === "email") {
+        return "Provider accepted";
+      }
+      return "Sent to provider";
     case "failed":
       return "Failed";
     case "skipped_due_to_quiet_hours":
@@ -396,4 +540,83 @@ function describeAttemptStatus(status: string) {
     default:
       return "Pending";
   }
+}
+
+function buildDigestFilterOptions(
+  items: Array<{ watchlistName: string; eventType: string; metadata?: Record<string, unknown> }>,
+) {
+  const proofStatuses = new Map<string, string>();
+  for (const item of items) {
+    const classification = classifyDigestItemSource({
+      watchlistName: item.watchlistName,
+      eventType: item.eventType,
+      title: "",
+      summary: "",
+      metadata: item.metadata ?? {},
+      createdAt: "",
+    });
+    proofStatuses.set(classification.status, classification.label);
+  }
+
+  return {
+    competitors: [...new Set(items.map((item) => item.watchlistName).filter(Boolean))].sort(),
+    eventTypes: [...new Set(items.map((item) => item.eventType).filter(Boolean))].sort(),
+    proofStatuses: [...proofStatuses.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  };
+}
+
+function applyDigestFilters<
+  T extends {
+    watchlistName: string;
+    eventType: string;
+    metadata?: Record<string, unknown>;
+  },
+>(
+  items: T[],
+  filters: {
+    competitor: string;
+    urgency: string;
+    proofStatus: string;
+    eventType: string;
+  },
+) {
+  return items.filter((item) => {
+    const classification = classifyDigestItemSource({
+      watchlistName: item.watchlistName,
+      eventType: item.eventType,
+      title: "",
+      summary: "",
+      metadata: item.metadata ?? {},
+      createdAt: "",
+    });
+    return (
+      (filters.competitor === "all" || item.watchlistName === filters.competitor) &&
+      (filters.urgency === "all" || digestUrgency(item.metadata) === filters.urgency) &&
+      (filters.proofStatus === "all" || classification.status === filters.proofStatus) &&
+      (filters.eventType === "all" || item.eventType === filters.eventType)
+    );
+  });
+}
+
+function digestUrgency(metadata: Record<string, unknown> | undefined) {
+  const intelligence = readDigestIntelligence(metadata ?? {});
+  const score = intelligence.priorityScore;
+  if (score !== null && score >= 85) return "high";
+  if (score !== null && score >= 65) return "medium";
+  const band = intelligence.priorityBand.toLowerCase();
+  if (band.includes("high")) return "high";
+  if (band.includes("medium")) return "medium";
+  return "low";
+}
+
+function readDigestTimestamp(metadata: Record<string, unknown> | undefined) {
+  const value = metadata?.confirmedAt ?? metadata?.capturedAt ?? metadata?.createdAt;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readDigestSourceUrl(metadata: Record<string, unknown> | undefined) {
+  const value = metadata?.sourceUrl ?? metadata?.proofUrl ?? metadata?.landingPageUrl;
+  return typeof value === "string" && /^https?:\/\//i.test(value) ? value : null;
 }

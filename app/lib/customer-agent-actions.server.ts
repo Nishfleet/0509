@@ -37,6 +37,7 @@ import {
   whatsappDeliveryUnavailableMessage,
 } from "~/lib/ga-customer-surface";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import { isClientReportEligibleWatchEvent } from "~/lib/proof-classification";
 import { parseReportId } from "~/lib/report";
 import { SupportCaseInputError } from "~/lib/support";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
@@ -938,7 +939,7 @@ async function shareReportFromAgent(
     resourceType: "report",
     resourceId: report.reportId,
     isSnapshot: true,
-    snapshotPayload: report as unknown as Record<string, unknown>,
+    snapshotPayload: sanitizeAgentReportShareSnapshot(report) as unknown as Record<string, unknown>,
   });
 
   return {
@@ -948,6 +949,14 @@ async function shareReportFromAgent(
     memoryContext,
     share,
     shareUrl: shareUrl(context, share.token),
+  };
+}
+
+function sanitizeAgentReportShareSnapshot<T extends { reportId: string; resourceId: string }>(report: T) {
+  return {
+    ...report,
+    reportId: "shared-report",
+    resourceId: "shared",
   };
 }
 
@@ -2327,7 +2336,7 @@ function readOptionalClientRoomStatus(input: Record<string, unknown>): ClientRoo
 }
 
 function isProofBackedWatchEvent(event: WatchEventRecord) {
-  return event.status === "confirmed" && !event.suppressedAt && !event.invalidatedAt;
+  return isClientReportEligibleWatchEvent(event);
 }
 
 function readClientRoomStatus(input: Record<string, unknown>): ClientRoomRecord["status"] {

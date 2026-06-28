@@ -7,8 +7,17 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
 import { ReportView } from "~/components/report-view";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
+import type { DigestShareSnapshot } from "~/lib/digest-share";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
-import { isReportDocument } from "~/lib/report";
+import { emptyInsightDepthSummary } from "~/lib/insight-depth";
+import {
+  classifyDigestItemSource,
+  filterClientReportWatchEvents,
+  summarizeDigestProofMix,
+  summarizePriorityMix,
+} from "~/lib/proof-classification";
+import { isReportDocument, type ReportDocument } from "~/lib/report";
+import type { ShareResourceType } from "~/lib/types";
 
 export const meta = () => [{ title: "Shared report | Five to Nine" }];
 
@@ -41,7 +50,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     return {
       mode: "snapshot" as const,
       resourceType: share.resourceType,
-      payload: share.snapshotPayload,
+      payload: sanitizeSnapshotPayload(share.resourceType, share.snapshotPayload),
       preparedBy,
     };
   }
@@ -61,13 +70,15 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
 
   if (share.resourceType === "watchlist") {
     const watchlist = await getWatchlist(env, share.resourceId);
-    const events = watchlist ? await listWatchEvents(env, watchlist.id, 60) : [];
+    const rawEvents = watchlist ? await listWatchEvents(env, watchlist.id, 60) : [];
+    const { eligibleEvents, sourceCoverage } = filterClientReportWatchEvents(rawEvents);
 
     return {
       mode: "live" as const,
       resourceType: "watchlist" as const,
       watchlist,
-      events,
+      events: eligibleEvents,
+      sourceCoverage,
       preparedBy,
     };
   }
@@ -165,7 +176,11 @@ export default function ShareRoute() {
         ) : "payload" in data ? (
           <article className="f9-app-panel">
             <p className="f9-app-kicker">Shared snapshot</p>
-            <pre className="snapshot-pre">{JSON.stringify(data.payload, null, 2)}</pre>
+            <h1>Snapshot unavailable</h1>
+            <p className="f9-muted-copy">
+              This shared snapshot uses an older format that cannot be shown safely. Ask the sender
+              to create a fresh share link.
+            </p>
           </article>
         ) : data.resourceType === "collection" ? (
           <article className="f9-app-panel">
@@ -191,6 +206,9 @@ export default function ShareRoute() {
           <article className="f9-app-panel">
             <p className="f9-app-kicker">Shared watchlist</p>
             <h1>{data.watchlist?.name ?? "Watchlist unavailable"}</h1>
+            {"sourceCoverage" in data && data.sourceCoverage ? (
+              <p className="f9-muted-copy">{data.sourceCoverage.note}</p>
+            ) : null}
             <ul className="event-list">
               {data.events.map((event) => (
                 <li className="f9-event-card" key={event.id}>
@@ -226,6 +244,7 @@ export default function ShareRoute() {
 }
 
 function isDigestSnapshotPayload(value: unknown): value is {
+  kind: "digest_share_snapshot";
   periodStart: string;
   periodEnd: string;
   items: Array<{
@@ -243,8 +262,379 @@ function isDigestSnapshotPayload(value: unknown): value is {
 
   const candidate = value as Record<string, unknown>;
   return (
+    candidate.kind === "digest_share_snapshot" &&
     typeof candidate.periodStart === "string" &&
     typeof candidate.periodEnd === "string" &&
     Array.isArray(candidate.items)
   );
+}
+
+function sanitizeSnapshotPayload(
+  resourceType: ShareResourceType,
+  payload: Record<string, unknown> | null,
+): DigestShareSnapshot | ReportDocument | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  if (resourceType === "digest") {
+    return sanitizeDigestSnapshotPayload(payload);
+  }
+
+  if (resourceType === "report") {
+    return sanitizeReportSnapshotPayload(payload);
+  }
+
+  return null;
+}
+
+function sanitizeReportSnapshotPayload(payload: Record<string, unknown>): ReportDocument | null {
+  if (!isReportDocument(payload)) {
+    return null;
+  }
+
+  const rawPayload = payload as Record<string, unknown>;
+  const resourceType = payload.resourceType === "watchlist" ? "watchlist" : "collection";
+  const stats = Array.isArray(rawPayload.stats) ? rawPayload.stats : [];
+  const rows = Array.isArray(rawPayload.rows) ? rawPayload.rows : [];
+  const safeRows = rows.filter(isPlainRecord);
+  const sourceCoverage = sanitizeReportSourceCoverage(rawPayload.sourceCoverage);
+
+  if (resourceType === "watchlist" && (!sourceCoverage || !safeRows.every(hasVerifiedReportRowProof))) {
+    return null;
+  }
+
+  return {
+    kind: "report",
+    reportId: "shared-report",
+    resourceType,
+    resourceId: "shared",
+    title: readString(payload.title) ?? "Shared report",
+    subtitle: readString(payload.subtitle) ?? "",
+    summary: readString(payload.summary) ?? "",
+    generatedAt: readString(payload.generatedAt) ?? "",
+    stats: stats.filter(isPlainRecord).map(sanitizeReportStat),
+    insightDepth: sanitizeReportInsightDepth(payload.insightDepth),
+    sourceCoverage,
+    rows: safeRows.map(sanitizeReportRow),
+  };
+}
+
+function hasVerifiedReportRowProof(row: Record<string, unknown>) {
+  if (!isPlainRecord(row.event)) {
+    return false;
+  }
+
+  return (
+    readString(row.event.proofStatusLabel)?.toLowerCase() === "verified proof" &&
+    readString(row.event.sourceTypeLabel)?.toLowerCase() === "proof snapshot"
+  );
+}
+
+function sanitizeReportStat(stat: Record<string, unknown>): ReportDocument["stats"][number] {
+  return {
+    label: readString(stat.label) ?? "Metric",
+    value: readString(stat.value) ?? "0",
+  };
+}
+
+function sanitizeReportRow(row: Record<string, unknown>, index: number): ReportDocument["rows"][number] {
+  return {
+    id: `row-${index + 1}`,
+    advertiser: readString(row.advertiser) ?? "Advertiser",
+    previewHeadline: readString(row.previewHeadline) ?? "",
+    offer: readString(row.offer) ?? "",
+    cta: readString(row.cta) ?? "",
+    formatLabel: readString(row.formatLabel) ?? "",
+    languageLabel: readString(row.languageLabel) ?? "",
+    previewImageUrl: readString(row.previewImageUrl),
+    creativeText: readString(row.creativeText) ?? "",
+    translatedText: readString(row.translatedText) ?? "",
+    landingPage: sanitizeReportLandingPage(row.landingPage),
+    analysisFields: sanitizeReportFields(row.analysisFields),
+    tags: sanitizeReportTags(row.tags),
+    note: readString(row.note),
+    event: sanitizeReportEvent(row.event),
+  };
+}
+
+function sanitizeReportLandingPage(value: unknown): ReportDocument["rows"][number]["landingPage"] {
+  const landingPage = isPlainRecord(value) ? value : {};
+
+  return {
+    url: readString(landingPage.url) ?? "",
+    headline: readString(landingPage.headline) ?? "",
+    captureLabel: readString(landingPage.captureLabel) ?? "",
+    capturedAt: readString(landingPage.capturedAt),
+    signals: sanitizeReportFields(landingPage.signals),
+  };
+}
+
+function sanitizeReportFields(value: unknown): ReportDocument["rows"][number]["analysisFields"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(isPlainRecord).map((field) => {
+    const sourceLabel = readString(field.sourceLabel);
+    const sanitized = {
+      label: readString(field.label) ?? "Signal",
+      value: readString(field.value) ?? "",
+    };
+
+    return sourceLabel ? { ...sanitized, sourceLabel } : sanitized;
+  });
+}
+
+function sanitizeReportTags(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((tag): tag is string => typeof tag === "string" && Boolean(tag.trim())).map((tag) => tag.trim())
+    : [];
+}
+
+function sanitizeReportEvent(value: unknown): ReportDocument["rows"][number]["event"] {
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    typeLabel: readString(value.typeLabel) ?? "Update",
+    title: readString(value.title) ?? "Report event",
+    summary: readString(value.summary) ?? "",
+    createdAt: readString(value.createdAt) ?? "",
+    priorityScore: readNumber(value.priorityScore),
+    priorityBand: readString(value.priorityBand) ?? "low",
+    recommendedAction: readString(value.recommendedAction) ?? "",
+    proofTrail: readString(value.proofTrail) ?? "",
+    proofStatusLabel: readString(value.proofStatusLabel) ?? "Needs review",
+    sourceTypeLabel: readString(value.sourceTypeLabel) ?? "Unknown source",
+    sourceUrl: readHttpUrl(value.sourceUrl),
+    metaAdId: readString(value.metaAdId),
+  };
+}
+
+function sanitizeReportInsightDepth(value: unknown): ReportDocument["insightDepth"] {
+  const fallback = emptyInsightDepthSummary();
+  const insightDepth = isPlainRecord(value) ? value : {};
+
+  return {
+    topHooks: sanitizeInsightCounts(insightDepth.topHooks, fallback.topHooks),
+    mediaMix: sanitizeInsightCounts(insightDepth.mediaMix, fallback.mediaMix),
+    campaignDurations: sanitizeInsightCounts(insightDepth.campaignDurations, fallback.campaignDurations),
+    metricProof: sanitizeInsightCounts(insightDepth.metricProof, fallback.metricProof),
+    creativeTimeline: sanitizeInsightTimeline(insightDepth.creativeTimeline),
+    landingPageHistory: sanitizeInsightTimeline(insightDepth.landingPageHistory),
+  };
+}
+
+function sanitizeInsightCounts(value: unknown, fallback: ReportDocument["insightDepth"]["topHooks"]) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  return value.filter(isPlainRecord).map((item) => ({
+    label: readString(item.label) ?? "Pending",
+    count: readNumberValue(item.count),
+    detail: readString(item.detail) ?? "",
+  }));
+}
+
+function sanitizeInsightTimeline(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(isPlainRecord).map((item) => ({
+    label: readString(item.label) ?? "Signal",
+    detail: readString(item.detail) ?? "",
+    timestamp: readString(item.timestamp) ?? "",
+  }));
+}
+
+function sanitizeReportSourceCoverage(value: unknown): ReportDocument["sourceCoverage"] {
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+
+  const proofMix = isPlainRecord(value.proofMix) ? value.proofMix : {};
+
+  return {
+    totalInput: readNumberValue(value.totalInput),
+    included: readNumberValue(value.included),
+    excluded: readNumberValue(value.excluded),
+    note: readString(value.note) ?? "Source coverage was unavailable for this shared report.",
+    proofMix: {
+      verifiedProof: readNumberValue(proofMix.verifiedProof),
+      scanSpotted: readNumberValue(proofMix.scanSpotted),
+      needsReview: readNumberValue(proofMix.needsReview),
+      proofPending: readNumberValue(proofMix.proofPending),
+      proofFailed: readNumberValue(proofMix.proofFailed),
+      excluded: readNumberValue(proofMix.excluded),
+      unknown: readNumberValue(proofMix.unknown),
+    },
+    excludedCounts: sanitizeSourceCoverageExcludedCounts(value.excludedCounts),
+  };
+}
+
+function sanitizeSourceCoverageExcludedCounts(value: unknown) {
+  if (!isPlainRecord(value)) {
+    return {};
+  }
+
+  const safeKeys = new Set([
+    "suppressed",
+    "invalidated",
+    "internal_only",
+    "canary_or_test",
+    "proof_failed",
+    "proof_pending",
+    "needs_review",
+    "scan_only",
+    "unknown_source",
+  ]);
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => safeKeys.has(key))
+      .map(([key, count]) => [key, readNumberValue(count)]),
+  );
+}
+
+function sanitizeDigestSnapshotPayload(payload: Record<string, unknown>): DigestShareSnapshot | null {
+  const periodStart = readString(payload.periodStart);
+  const periodEnd = readString(payload.periodEnd);
+  const rawItems = Array.isArray(payload.items) ? payload.items : null;
+
+  if (!periodStart || !periodEnd || !rawItems) {
+    return null;
+  }
+
+  const items = rawItems
+    .filter(isPlainRecord)
+    .map((item, index) => sanitizeDigestSnapshotItem(item, index, periodEnd));
+
+  return {
+    kind: "digest_share_snapshot",
+    periodStart,
+    periodEnd,
+    createdAt: readString(payload.createdAt) ?? periodEnd,
+    proofMix: summarizeDigestProofMix(items),
+    priorityMix: summarizePriorityMix(items),
+    items,
+  };
+}
+
+function sanitizeDigestSnapshotItem(
+  item: Record<string, unknown>,
+  index: number,
+  fallbackCreatedAt: string,
+): DigestShareSnapshot["items"][number] {
+  const metadata = normalizeDigestSnapshotMetadata(item);
+  const classification = classifyDigestItemSource({
+    eventType: readString(item.eventType) ?? undefined,
+    metadata,
+    title: readString(item.title) ?? undefined,
+    summary: readString(item.summary) ?? undefined,
+    watchlistName: readString(item.watchlistName) ?? undefined,
+    createdAt: readString(item.createdAt) ?? undefined,
+  });
+
+  return {
+    id: `item-${index + 1}`,
+    watchlistName: readString(item.watchlistName) ?? "Watchlist",
+    eventType: readString(item.eventType) ?? "update",
+    proofStatus: classification.status,
+    proofStatusLabel: classification.label,
+    sourceTypeLabel: classification.sourceTypeLabel,
+    title: readString(item.title) ?? "Digest update",
+    summary: readString(item.summary) ?? "No summary was included with this update.",
+    metadata: filterDigestSnapshotMetadata(metadata),
+    createdAt: readString(item.createdAt) ?? fallbackCreatedAt,
+  };
+}
+
+function normalizeDigestSnapshotMetadata(item: Record<string, unknown>) {
+  const metadata = isPlainRecord(item.metadata) ? { ...item.metadata } : {};
+  const legacyProofStatus = readString(item.proofStatus);
+
+  if (!readString(metadata.eventStatus)) {
+    const eventStatus = readString(item.eventStatus);
+    if (eventStatus) {
+      metadata.eventStatus = eventStatus;
+    }
+  }
+
+  if (!readString(metadata.sourceStatus)) {
+    if (legacyProofStatus === "verified_proof") {
+      metadata.sourceStatus = "proof_backed";
+    } else if (legacyProofStatus === "scan_spotted") {
+      metadata.sourceStatus = "scan_backed";
+    }
+  }
+
+  if (!readString(metadata.proofStatus)) {
+    if (legacyProofStatus === "proof_pending") {
+      metadata.proofStatus = "pending";
+    } else if (legacyProofStatus === "proof_failed") {
+      metadata.proofStatus = "failed";
+    }
+  }
+
+  if (!readString(metadata.status)) {
+    if (legacyProofStatus === "needs_review") {
+      metadata.status = "detected";
+    } else if (legacyProofStatus === "suppressed" || legacyProofStatus === "invalidated") {
+      metadata.status = legacyProofStatus;
+    }
+  }
+
+  return metadata;
+}
+
+function filterDigestSnapshotMetadata(metadata: Record<string, unknown>) {
+  const safeKeys = [
+    "priorityScore",
+    "priorityBand",
+    "recommendedAction",
+    "proofTrail",
+    "sourceStatus",
+    "eventStatus",
+    "confirmedAt",
+  ];
+  return Object.fromEntries(
+    safeKeys
+      .filter((key) => typeof metadata[key] !== "undefined")
+      .map((key) => [key, metadata[key]]),
+  );
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readHttpUrl(value: unknown) {
+  const url = readString(value);
+
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function readNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readNumberValue(value: unknown) {
+  return readNumber(value) ?? 0;
 }

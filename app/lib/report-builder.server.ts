@@ -9,6 +9,12 @@ import {
   buildCollectionInsightDepth,
   buildWatchlistInsightDepth,
 } from "~/lib/insight-depth";
+import { proofLinkForAd } from "~/lib/proof-link";
+import { stablePublicId } from "~/lib/public-stable-id";
+import {
+  classifyWatchEventSource,
+  filterClientReportWatchEvents,
+} from "~/lib/proof-classification";
 import {
   createReportId,
   type ReportDocument,
@@ -55,7 +61,11 @@ export function buildCollectionReport(input: {
 }): ReportDocument {
   const generatedAt = input.generatedAt ?? new Date().toISOString();
   const rows = input.items.map((item) =>
-    buildReportRow("collection", item.id, item.ad, {
+    buildReportRow("collection", stablePublicId("row", [
+      item.ad.metaAdId,
+      item.createdAt,
+      item.note,
+    ]), item.ad, {
       note: item.note,
       tags: item.tags,
     }),
@@ -89,11 +99,18 @@ export function buildWatchlistReport(input: {
   generatedAt?: string;
 }): ReportDocument {
   const generatedAt = input.generatedAt ?? new Date().toISOString();
-  const rows = input.events.map((event) => {
+  const { eligibleEvents, sourceCoverage } = filterClientReportWatchEvents(input.events);
+  const rows = eligibleEvents.map((event) => {
     const ad = event.adId ? input.adsById.get(event.adId) ?? null : null;
     const intelligence = buildChangeIntelligenceSummary(event);
+    const classification = classifyWatchEventSource(event);
 
-    return buildReportRow("watchlist", event.id, ad, {
+    return buildReportRow("watchlist", stablePublicId("row", [
+      event.eventType,
+      event.title,
+      event.createdAt,
+      event.adId,
+    ]), ad, {
       event: {
         typeLabel: event.eventType.replaceAll("_", " "),
         title: event.title,
@@ -103,6 +120,10 @@ export function buildWatchlistReport(input: {
         priorityBand: intelligence.priorityBand,
         recommendedAction: intelligence.recommendedAction,
         proofTrail: intelligence.proofTrail,
+        proofStatusLabel: classification.label,
+        sourceTypeLabel: classification.sourceTypeLabel,
+        sourceUrl: sourceUrlForAd(ad),
+        metaAdId: ad?.metaAdId ?? null,
       },
       advertiserFallback: readEventAdvertiser(event),
     });
@@ -110,7 +131,7 @@ export function buildWatchlistReport(input: {
 
   const linkedAds = rows.filter((row) => row._meta.hasLinkedAd).length;
   const eventTypes = summarizeDistinct(
-    input.events.map((event) => event.eventType.replaceAll("_", " ")),
+    eligibleEvents.map((event) => event.eventType.replaceAll("_", " ")),
   );
 
   return {
@@ -120,14 +141,16 @@ export function buildWatchlistReport(input: {
     resourceId: input.watchlist.id,
     title: input.watchlist.name,
     subtitle: `${input.watchlist.targetType.replaceAll("_", " ")} · ${input.watchlist.targetLabel}`,
-    summary: `${rows.length} recent watch events with linked ad context where available.`,
+    summary: `${rows.length} verified-proof watch event${rows.length === 1 ? "" : "s"} with linked ad context where available.`,
     generatedAt,
     stats: [
       { label: "Events", value: String(rows.length) },
       { label: "Linked ads", value: String(linkedAds) },
       { label: "Event types", value: eventTypes },
+      { label: "Excluded", value: String(sourceCoverage.excluded) },
     ],
-    insightDepth: buildWatchlistInsightDepth(input.events),
+    insightDepth: buildWatchlistInsightDepth(eligibleEvents),
+    sourceCoverage,
     rows: rows.map(stripInternalMeta),
   };
 }
@@ -163,6 +186,7 @@ function buildReportRow(
       url: ad?.landingPage?.canonicalUrl ?? ad?.landingPageUrl ?? "Landing page unavailable",
       headline: landingPageHeadline || "Landing page headline unavailable",
       captureLabel: formatCaptureMethodLabel(ad?.landingPage?.captureMethod),
+      capturedAt: ad?.landingPage?.capturedAt ?? null,
       signals: [
         {
           label: "CTA",
@@ -259,6 +283,10 @@ function summarizeDistinct(values: string[]) {
 
 function readEventAdvertiser(event: WatchEventRecord) {
   return typeof event.metadata.advertiser === "string" ? event.metadata.advertiser : null;
+}
+
+function sourceUrlForAd(ad: AdRecord | null) {
+  return ad ? proofLinkForAd(ad) ?? ad.landingPage?.canonicalUrl ?? ad.landingPageUrl : null;
 }
 
 function stripInternalMeta(

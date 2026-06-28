@@ -36,14 +36,14 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Proof packet");
+    expect(markup).toContain("Evidence packet");
     expect(markup).toContain("2 changes packaged for handoff");
     expect(markup).toContain("Offer changed: ready to send as a client or teammate digest");
     expect(markup).toContain("Today: brief one counter-test.");
-    expect(markup).toContain("1 verified snapshot");
-    expect(markup).toContain("1 scan-backed change");
+    expect(markup).toContain("1 verified proof");
+    expect(markup).toContain("1 scan-spotted");
     expect(markup).toContain("2 competitors");
-    expect(markup).toContain("1 high-priority change");
+    expect(markup).toContain("1 high");
     expect(markup).toContain("Verified from a page snapshot");
   });
 
@@ -68,8 +68,8 @@ describe("DigestProofPacket", () => {
 
     expect(markup).toContain("Headline changed: ready to review");
     expect(markup).toContain("add page proof before sharing");
-    expect(markup).toContain("1 scan-backed change");
-    expect(markup).not.toContain("verified snapshot");
+    expect(markup).toContain("1 scan-spotted");
+    expect(markup).not.toContain("verified proof");
   });
 
   it("keeps a scan-backed top change internal even when another item has proof", () => {
@@ -105,8 +105,8 @@ describe("DigestProofPacket", () => {
 
     expect(markup).toContain("Breaking offer changed: ready to review");
     expect(markup).toContain("add page proof before sharing");
-    expect(markup).toContain("1 verified snapshot");
-    expect(markup).toContain("1 scan-backed change");
+    expect(markup).toContain("1 verified proof");
+    expect(markup).toContain("1 scan-spotted");
     expect(markup).toContain("Today: review the offer before briefing the client.");
     expect(markup).toContain("Spotted in the scheduled scan");
     expect(markup).not.toContain("Breaking offer changed: ready to send");
@@ -119,7 +119,7 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("No proof-backed changes yet");
+    expect(markup).toContain("No action-worthy changes yet");
     expect(markup).toContain("No decision queued.");
     expect(markup).toContain("Proof trail pending.");
   });
