@@ -91,6 +91,13 @@ export const SUPPORT_CASE_CATEGORIES = [
 ] as const;
 export const SUPPORT_CASE_PRIORITIES = ["normal", "urgent"] as const;
 export const SUPPORT_CASE_STATUSES = ["open", "closed"] as const;
+export const SUPPORT_CASE_EVENT_TYPES = [
+  "case_opened",
+  "support_notified",
+  "support_notification_failed",
+  "support_note",
+  "status_changed",
+] as const;
 
 export type AnalysisSource = (typeof ANALYSIS_SOURCES)[number];
 export type WatchEventType = (typeof WATCH_EVENT_TYPES)[number];
@@ -119,6 +126,7 @@ export type ProofDeviceProfile = (typeof PROOF_DEVICE_PROFILES)[number];
 export type SupportCaseCategory = (typeof SUPPORT_CASE_CATEGORIES)[number];
 export type SupportCasePriority = (typeof SUPPORT_CASE_PRIORITIES)[number];
 export type SupportCaseStatus = (typeof SUPPORT_CASE_STATUSES)[number];
+export type SupportCaseEventType = (typeof SUPPORT_CASE_EVENT_TYPES)[number];
 export type NormalizedSensitivityMode = Exclude<SensitivityMode, "auto">;
 export type CaptureMethod = "landing_page_fetch" | "browser_render" | "manual";
 export type CreativeTextCaptureMethod = "ad_snapshot_fetch" | "browser_render" | "manual";
@@ -604,6 +612,17 @@ export interface SupportCaseRecord {
   context: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SupportCaseEventRecord {
+  id: string;
+  caseId: string;
+  userId: string;
+  eventType: SupportCaseEventType;
+  message: string;
+  visibleToCustomer: boolean;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface DigestRecord {

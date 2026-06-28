@@ -57,6 +57,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       status: member.status,
       createdAt: member.createdAt,
       acceptedAt: member.acceptedAt,
+      tokenExpiresAt: member.tokenExpiresAt,
     })),
   };
 }
@@ -65,7 +66,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { appOrigin } = await import("~/lib/env.server");
-  const { createWorkspaceInvite, revokeWorkspaceMember } = await import("~/lib/workspace.server");
+  const { createWorkspaceInvite, resendWorkspaceInvite, revokeWorkspaceMember } = await import("~/lib/workspace.server");
   const { sendTeamInviteEmail } = await import("~/lib/delivery.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
@@ -103,6 +104,28 @@ export async function action({ context, request }: ActionFunctionArgs) {
       memberRowId: String(formData.get("memberId") ?? ""),
     });
     return { ok: true, message: "Seat revoked. Their access ends immediately." };
+  }
+
+  if (intent === "resend-invite") {
+    const invite = await resendWorkspaceInvite(env, {
+      ownerUserId: session.user.id,
+      memberRowId: String(formData.get("memberId") ?? ""),
+    });
+    if (!invite.ok) {
+      return { ok: false, message: invite.reason };
+    }
+
+    const origin = appOrigin(env, request);
+    const sent = await sendTeamInviteEmail(env, {
+      ownerUserId: session.user.id,
+      ownerName: session.user.name ?? null,
+      inviteeEmail: invite.inviteeEmail,
+      acceptUrl: `${origin}/team/accept?token=${invite.token}`,
+    });
+
+    return sent
+      ? { ok: true, message: `Invite resent to ${invite.inviteeEmail}. It expires in 7 days.` }
+      : { ok: false, message: "Invite refreshed, but the email failed to send — retry from this page." };
   }
 
   return { ok: false, message: "Unknown action." };
@@ -182,33 +205,68 @@ export default function TeamRoute() {
 
         {data.members.length > 0 ? (
           <div className="f9-work-list is-compact">
-            {data.members.map((member) => (
-              <div className="f9-work-row" key={member.id}>
-                <div>
-                  <strong>{member.email}</strong>
-                  <p>
-                    {member.status === "active" ? (
-                      <>
-                        Joined <LocalTime iso={member.acceptedAt ?? member.createdAt} />
-                      </>
-                    ) : (
-                      <>
-                        Invited <LocalTime iso={member.createdAt} /> — pending
-                      </>
-                    )}
-                  </p>
+            {data.members.map((member) => {
+              const inviteExpired = member.status === "invited" && isInviteExpired(member.tokenExpiresAt);
+              return (
+                <div className="f9-work-row" key={member.id}>
+                  <div>
+                    <strong>{member.email}</strong>
+                    <p>
+                      {member.status === "active" ? (
+                        <>
+                          Joined <LocalTime iso={member.acceptedAt ?? member.createdAt} />
+                        </>
+                      ) : inviteExpired ? (
+                        <>
+                          Invite expired{" "}
+                          {member.tokenExpiresAt ? <LocalTime iso={member.tokenExpiresAt} /> : null}
+                        </>
+                      ) : (
+                        <>
+                          Invited <LocalTime iso={member.createdAt} /> — expires{" "}
+                          {member.tokenExpiresAt ? <LocalTime iso={member.tokenExpiresAt} /> : "soon"}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <div className="f9-action-row">
+                    {member.status === "invited" ? (
+                      <Form method="post">
+                        <input type="hidden" name="intent" value="resend-invite" />
+                        <input type="hidden" name="memberId" value={member.id} />
+                        <SubmitButton
+                          match={{ memberId: member.id }}
+                          pendingLabel="Sending…"
+                        >
+                          Resend
+                        </SubmitButton>
+                      </Form>
+                    ) : null}
+                    <Form method="post">
+                      <input type="hidden" name="intent" value="revoke" />
+                      <input type="hidden" name="memberId" value={member.id} />
+                      <SubmitButton
+                        match={{ memberId: member.id }}
+                        pendingLabel="Revoking…"
+                      >
+                        Revoke
+                      </SubmitButton>
+                    </Form>
+                  </div>
                 </div>
-                <Form method="post">
-                  <input type="hidden" name="intent" value="revoke" />
-                  <input type="hidden" name="memberId" value={member.id} />
-                  <SubmitButton pendingLabel="Revoking…">Revoke</SubmitButton>
-                </Form>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
       </article>
       </section>
     </DashboardPage>
   );
+}
+
+function isInviteExpired(tokenExpiresAt: string | null) {
+  if (!tokenExpiresAt) {
+    return false;
+  }
+  return new Date(tokenExpiresAt).getTime() < Date.now();
 }

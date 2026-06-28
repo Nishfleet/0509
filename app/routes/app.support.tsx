@@ -18,6 +18,7 @@ import {
   SUPPORT_CASE_PRIORITIES,
   SUPPORT_CASE_PRIORITY_LABELS,
   SUPPORT_CASE_STATUS_LABELS,
+  SUPPORT_CASE_EVENT_LABELS,
   SUPPORT_CASE_DETAIL_MAX_LENGTH,
   SUPPORT_CASE_SUBJECT_MAX_LENGTH,
   SupportCaseInputError,
@@ -28,6 +29,7 @@ import {
 } from "~/lib/support";
 import type {
   SupportCaseCategory,
+  SupportCaseEventType,
   SupportCasePriority,
   SupportCaseStatus,
 } from "~/lib/types";
@@ -54,16 +56,26 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { listSupportCases } = await import("~/lib/data.server");
+  const { getSupportCase, listSupportCaseEvents, listSupportCases } = await import("~/lib/data.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const url = new URL(request.url);
   const selectedCategory = readSupportCaseCategory(url.searchParams.get("category")) ?? "other";
+  const selectedCaseId = readSelectedCaseId(url.searchParams.get("case"));
   const cases = await listSupportCases(env, session.user.id, { status: "all", limit: 20 });
+  const selectedCase = selectedCaseId
+    ? await getSupportCase(env, session.user.id, selectedCaseId)
+    : null;
+  const caseEvents = selectedCase
+    ? await listSupportCaseEvents(env, session.user.id, selectedCase.id, { limit: 30 })
+    : [];
 
   return {
     email: session.user.email,
     cases: cases.map(toSupportCaseSummary),
+    selectedCase: selectedCase ? toSupportCaseDetail(selectedCase) : null,
+    caseEvents: caseEvents.map(toSupportCaseEventSummary),
+    requestedCaseMissing: Boolean(selectedCaseId && !selectedCase),
     selectedCategory,
     supportEmail: SUPPORT_EMAIL,
     supportRequestKey: crypto.randomUUID(),
@@ -74,7 +86,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { createSupportCase } = await import("~/lib/data.server");
+  const { createSupportCase, createSupportCaseEvent } = await import("~/lib/data.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
@@ -142,14 +154,34 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return { ok: false, message: "Support case could not be opened." };
   }
 
-  const operatorNotified = await notifySupportCaseOperator(env, {
+  const operatorNotification = await notifySupportCaseOperator(env, {
     caseId: supportCase.id,
     requesterEmail: session.user.email,
     input,
     isWorkspaceMember,
   });
 
-  if (!operatorNotified) {
+  if (operatorNotification !== "already_sent") {
+    try {
+      await createSupportCaseEvent(env, {
+        caseId: supportCase.id,
+        userId: session.user.id,
+        eventType: operatorNotification === "sent" ? "support_notified" : "support_notification_failed",
+        message: operatorNotification === "sent"
+          ? "Support was notified by email."
+          : `Automatic support notification failed. Email ${SUPPORT_EMAIL} now so we can reply.`,
+        visibleToCustomer: true,
+        metadata: {
+          channel: "email",
+          createdFrom: "signed_in_support",
+        },
+      });
+    } catch (error) {
+      console.error("[support] case event persistence failed", error);
+    }
+  }
+
+  if (operatorNotification === "failed") {
     return {
       ok: false,
       message: `Support case saved, but we could not notify support. Email ${SUPPORT_EMAIL} now so we can reply.`,
@@ -260,7 +292,11 @@ export default function SupportRoute() {
           {data.cases.length ? (
             <div className="f9-work-list">
               {data.cases.map((supportCase) => (
-                <SupportCaseRow key={supportCase.id} supportCase={supportCase} />
+                <SupportCaseRow
+                  isSelected={data.selectedCase?.id === supportCase.id}
+                  key={supportCase.id}
+                  supportCase={supportCase}
+                />
               ))}
             </div>
           ) : (
@@ -268,6 +304,16 @@ export default function SupportRoute() {
               <p>No support cases yet. Billing, cancellation, setup, deletion, and security requests can start here.</p>
             </div>
           )}
+
+          {data.requestedCaseMissing ? (
+            <div className="f9-message is-error">
+              <p>That support case is not available for this login.</p>
+            </div>
+          ) : null}
+
+          {data.selectedCase ? (
+            <SupportCaseDetail events={data.caseEvents} supportCase={data.selectedCase} />
+          ) : null}
 
           {data.isWorkspaceMember ? (
             <div className="f9-message">
@@ -315,9 +361,26 @@ interface SupportCaseSummary {
   updatedAt: string;
 }
 
-function SupportCaseRow({ supportCase }: { supportCase: SupportCaseSummary }) {
+interface SupportCaseDetailSummary extends SupportCaseSummary {
+  detail: string;
+}
+
+interface SupportCaseEventSummary {
+  id: string;
+  eventType: SupportCaseEventType;
+  message: string;
+  createdAt: string;
+}
+
+function SupportCaseRow({
+  isSelected,
+  supportCase,
+}: {
+  isSelected: boolean;
+  supportCase: SupportCaseSummary;
+}) {
   return (
-    <article className="f9-work-row">
+    <Link className={`f9-work-row ${isSelected ? "is-active" : ""}`} to={`/app/support?case=${supportCase.id}`}>
       <div>
         <h3>{supportCase.subject}</h3>
         <small>
@@ -326,7 +389,51 @@ function SupportCaseRow({ supportCase }: { supportCase: SupportCaseSummary }) {
         </small>
       </div>
       <span>{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
-    </article>
+    </Link>
+  );
+}
+
+function SupportCaseDetail({
+  events,
+  supportCase,
+}: {
+  events: SupportCaseEventSummary[];
+  supportCase: SupportCaseDetailSummary;
+}) {
+  return (
+    <section className="f9-work-list is-compact" aria-label="Selected support case">
+      <div className="f9-work-row">
+        <div>
+          <span className="f9-app-kicker">Selected case</span>
+          <h3>{supportCase.subject}</h3>
+          <small>
+            {SUPPORT_CASE_CATEGORY_LABELS[supportCase.category]} · {SUPPORT_CASE_PRIORITY_LABELS[supportCase.priority]} ·{" "}
+            opened <LocalTime iso={supportCase.createdAt} />
+          </small>
+          <p className="f9-muted-copy">{supportCase.detail}</p>
+        </div>
+        <span>{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
+      </div>
+
+      <div>
+        <span className="f9-app-kicker">Case trail</span>
+        {events.length ? (
+          <div className="f9-work-list is-compact">
+            {events.map((event) => (
+              <div className="f9-work-row" key={event.id}>
+                <div>
+                  <h3>{SUPPORT_CASE_EVENT_LABELS[event.eventType]}</h3>
+                  <p className="f9-muted-copy">{event.message}</p>
+                </div>
+                <small><LocalTime iso={event.createdAt} /></small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="f9-muted-copy">No customer-visible events recorded yet.</p>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -366,6 +473,46 @@ function toSupportCaseSummary(supportCase: {
   };
 }
 
+function toSupportCaseDetail(supportCase: {
+  id: string;
+  category: SupportCaseCategory;
+  priority: SupportCasePriority;
+  status: SupportCaseStatus;
+  subject: string;
+  detail: string;
+  createdAt: string;
+  updatedAt: string;
+}): SupportCaseDetailSummary {
+  return {
+    ...toSupportCaseSummary(supportCase),
+    detail: supportCase.detail,
+  };
+}
+
+function toSupportCaseEventSummary(event: {
+  id: string;
+  eventType: SupportCaseEventType;
+  message: string;
+  createdAt: string;
+}): SupportCaseEventSummary {
+  return {
+    id: event.id,
+    eventType: event.eventType,
+    message: event.message,
+    createdAt: event.createdAt,
+  };
+}
+
+function readSelectedCaseId(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= 120 ? trimmed : null;
+}
+
+type SupportOperatorNotificationResult = "sent" | "already_sent" | "failed";
+
 async function notifySupportCaseOperator(
   env: AppEnv,
   input: {
@@ -379,17 +526,17 @@ async function notifySupportCaseOperator(
     };
     isWorkspaceMember: boolean;
   },
-) {
+): Promise<SupportOperatorNotificationResult> {
   const idempotencyKey = `support-case:${input.caseId}`;
   try {
     const { getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
     const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
     if (existingAttempt?.status === "sent") {
-      return true;
+      return "already_sent";
     }
 
     const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
-    return await sendOperatorAlertEmail(env, {
+    const notified = await sendOperatorAlertEmail(env, {
       subject: `0509 support case: ${input.input.subject}`,
       lines: [
         `Case: ${input.caseId}`,
@@ -402,8 +549,9 @@ async function notifySupportCaseOperator(
       ],
       idempotencyKey,
     });
+    return notified ? "sent" : "failed";
   } catch (error) {
     console.error("[support] operator alert failed", error);
-    return false;
+    return "failed";
   }
 }

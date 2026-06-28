@@ -109,10 +109,7 @@ export default function BillingRoute() {
 
       {data.agencyCheckoutHeld ? (
         <div className="f9-message is-error">
-          <p>
-            {agencyCheckoutHeldCustomerCopy()} Scout and Starter are available now. Email{" "}
-            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need Agency capacity before then.
-          </p>
+          <p>{agencyCheckoutHeldCustomerCopy()}</p>
         </div>
       ) : null}
 

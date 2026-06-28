@@ -50,13 +50,26 @@ function mockAuth(options: { workspaceUserId?: string; operatorNotified?: boolea
 function mockDataServer(overrides: Record<string, unknown>) {
   const getDeliveryAttemptByIdempotencyKey =
     overrides.getDeliveryAttemptByIdempotencyKey ?? vi.fn().mockResolvedValue(null);
+  const getSupportCase = overrides.getSupportCase ?? vi.fn().mockResolvedValue(null);
+  const listSupportCaseEvents = overrides.listSupportCaseEvents ?? vi.fn().mockResolvedValue([]);
+  const createSupportCaseEvent = overrides.createSupportCaseEvent ?? vi.fn().mockResolvedValue({
+    id: "support-case-event-1",
+  });
 
   vi.doMock("~/lib/data.server", () => ({
+    createSupportCaseEvent,
     getDeliveryAttemptByIdempotencyKey,
+    getSupportCase,
+    listSupportCaseEvents,
     ...overrides,
   }));
 
-  return { getDeliveryAttemptByIdempotencyKey };
+  return {
+    createSupportCaseEvent,
+    getDeliveryAttemptByIdempotencyKey,
+    getSupportCase,
+    listSupportCaseEvents,
+  };
 }
 
 async function mockRouter(loaderData: unknown, actionData?: unknown) {
@@ -133,10 +146,78 @@ describe("support route", () => {
     expect(JSON.stringify(result)).not.toContain("accountEmail");
   });
 
+  it("loads a selected case with its customer-visible event trail", async () => {
+    mockAuth();
+    const listSupportCases = vi.fn().mockResolvedValue([
+      {
+        id: "case-1",
+        userId: "user-1",
+        category: "billing",
+        priority: "urgent",
+        status: "open",
+        subject: "Need invoice",
+        detail: "Private invoice detail stays out of the summary list.",
+        context: { accountEmail: "owner@example.com" },
+        createdAt: "2026-06-20T10:00:00.000Z",
+        updatedAt: "2026-06-20T10:00:00.000Z",
+      },
+    ]);
+    const getSupportCase = vi.fn().mockResolvedValue({
+      id: "case-1",
+      userId: "user-1",
+      category: "billing",
+      priority: "urgent",
+      status: "open",
+      subject: "Need invoice",
+      detail: "Please send the invoice to finance.",
+      context: { accountEmail: "owner@example.com" },
+      createdAt: "2026-06-20T10:00:00.000Z",
+      updatedAt: "2026-06-20T10:00:00.000Z",
+    });
+    const listSupportCaseEvents = vi.fn().mockResolvedValue([
+      {
+        id: "event-1",
+        caseId: "case-1",
+        userId: "user-1",
+        eventType: "case_opened",
+        message: "Support case opened from the signed-in support form.",
+        visibleToCustomer: true,
+        metadata: {},
+        createdAt: "2026-06-20T10:00:00.000Z",
+      },
+    ]);
+    mockDataServer({ getSupportCase, listSupportCaseEvents, listSupportCases });
+
+    const { loader } = await import("~/routes/app.support");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support?case=case-1"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      selectedCase: {
+        id: "case-1",
+        detail: "Please send the invoice to finance.",
+      },
+      caseEvents: [
+        {
+          id: "event-1",
+          eventType: "case_opened",
+          message: "Support case opened from the signed-in support form.",
+        },
+      ],
+      requestedCaseMissing: false,
+    });
+    expect(getSupportCase).toHaveBeenCalledWith({}, "user-1", "case-1");
+    expect(listSupportCaseEvents).toHaveBeenCalledWith({}, "user-1", "case-1", { limit: 30 });
+  });
+
   it("creates a support case for the workspace owner", async () => {
     const { sendOperatorAlertEmail } = mockAuth({ operatorNotified: true });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1" });
-    mockDataServer({ createSupportCase });
+    const createSupportCaseEvent = vi.fn().mockResolvedValue({ id: "event-1" });
+    mockDataServer({ createSupportCase, createSupportCaseEvent });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -183,13 +264,21 @@ describe("support route", () => {
         "Priority: Urgent",
       ]),
     }));
+    expect(createSupportCaseEvent).toHaveBeenCalledWith({}, expect.objectContaining({
+      caseId: "case-1",
+      userId: "user-1",
+      eventType: "support_notified",
+      message: "Support was notified by email.",
+      visibleToCustomer: true,
+    }));
   });
 
   it("does not resend operator alerts for duplicate support submissions after a sent attempt", async () => {
     const { sendOperatorAlertEmail } = mockAuth();
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1", alreadyExists: true });
     const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue({ status: "sent" });
-    mockDataServer({ createSupportCase, getDeliveryAttemptByIdempotencyKey });
+    const createSupportCaseEvent = vi.fn();
+    mockDataServer({ createSupportCase, createSupportCaseEvent, getDeliveryAttemptByIdempotencyKey });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -217,6 +306,7 @@ describe("support route", () => {
     }));
     expect(getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith({}, "support-case:case-1");
     expect(sendOperatorAlertEmail).not.toHaveBeenCalled();
+    expect(createSupportCaseEvent).not.toHaveBeenCalled();
   });
 
   it("retries operator alerts for duplicate support submissions after a failed attempt", async () => {
@@ -250,7 +340,8 @@ describe("support route", () => {
   it("does not claim a support case is opened when operator notification fails", async () => {
     mockAuth({ operatorNotified: false });
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1" });
-    mockDataServer({ createSupportCase });
+    const createSupportCaseEvent = vi.fn().mockResolvedValue({ id: "event-1" });
+    mockDataServer({ createSupportCase, createSupportCaseEvent });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -272,13 +363,19 @@ describe("support route", () => {
       message: "Support case saved, but we could not notify support. Email support@0509.io now so we can reply.",
       caseId: "case-1",
     });
+    expect(createSupportCaseEvent).toHaveBeenCalledWith({}, expect.objectContaining({
+      caseId: "case-1",
+      eventType: "support_notification_failed",
+      message: "Automatic support notification failed. Email support@0509.io now so we can reply.",
+    }));
   });
 
   it("does not claim a support case is opened when operator notification rejects", async () => {
     const { sendOperatorAlertEmail } = mockAuth();
     sendOperatorAlertEmail.mockRejectedValue(new Error("email unavailable"));
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1" });
-    mockDataServer({ createSupportCase });
+    const createSupportCaseEvent = vi.fn().mockResolvedValue({ id: "event-1" });
+    mockDataServer({ createSupportCase, createSupportCaseEvent });
 
     const { action } = await import("~/routes/app.support");
     const formData = new FormData();
@@ -300,6 +397,10 @@ describe("support route", () => {
       message: "Support case saved, but we could not notify support. Email support@0509.io now so we can reply.",
       caseId: "case-1",
     });
+    expect(createSupportCaseEvent).toHaveBeenCalledWith({}, expect.objectContaining({
+      caseId: "case-1",
+      eventType: "support_notification_failed",
+    }));
   });
 
   it("returns an email fallback when support case persistence fails", async () => {

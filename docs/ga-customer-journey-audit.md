@@ -33,9 +33,9 @@ flowchart LR
 | First value | `/app` dashboard + readiness | Live | Workspace readiness checklist |
 | Monitoring | Watchlists | Live | Scout Monday-only; Starter/Agency daily |
 | Billing | `/app/billing` | Live | Evidence usage, top-ups, portal link |
-| Checkout | `POST /api/billing/dodo/checkout` | Live | SKU slug fail-closed; Agency held post-GA branch |
+| Checkout | `POST /api/billing/dodo/checkout` | Live | SKU slug fail-closed; this historical branch still had Agency held pending fan-out proof |
 | Return | `/app?checkout=dodo` | Live | `CheckoutReturnBanner` polls plan activation |
-| Pricing | `/#pricing` | Live | Dodo preview prices; Agency held badge when fan-out unproven |
+| Pricing | `/#pricing` | Live | Dodo preview prices; this historical branch still showed an Agency hold badge before fan-out proof |
 | Status | `/status` | Live | Coarse blockers; no private canary data |
 | Support | `/app/support`, `support@0509.io` | Live | Billing cases routed |
 
@@ -64,11 +64,11 @@ flowchart LR
 | Free user → watchlist over limit | Plan limit message + upgrade link |
 | Paid downgrade over limit | Watchlists auto-pause |
 | Checkout without SKU config | 503 from Dodo layer |
-| Agency checkout before fan-out | Redirect `?checkout=agency-held` |
+| Agency checkout before fan-out | Redirected `?checkout=agency-held` in this historical branch |
 | Portal without Dodo customer id | `?portal=unavailable` banner |
 
 ## Gaps for GA (addressed in later phases)
 
-- Agency public sale held until fan-out proof (Phase 8/9).
+- Agency public sale was held until fan-out proof in this historical branch; current truth lives in `docs/final-self-serve-ga-scorecard.md`.
 - The old homepage beta announcement was removed in the final hardening branch; Meta ads beta honesty remains intentional until live discovery proof supports graduation.
 - Slack / uptime / portal remain owner-action (Phase 12).

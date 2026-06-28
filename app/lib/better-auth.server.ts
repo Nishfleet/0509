@@ -410,6 +410,27 @@ export interface BetterAuthPasskeyRecord {
   lastUsedAt: string | null;
 }
 
+export interface BetterAuthSessionSummary {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  isCurrent: boolean;
+}
+
+interface BetterAuthSessionApiRecord {
+  id: string;
+  token: string;
+  userId: string;
+  expiresAt: Date | string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
 export async function listBetterAuthPasskeys(
   env: AppEnv,
   request: Request,
@@ -429,6 +450,75 @@ export async function listBetterAuthPasskeys(
     label: record.name?.trim() || "Passkey",
     lastUsedAt: null,
   }));
+}
+
+export async function listBetterAuthSessions(
+  env: AppEnv,
+  request: Request,
+  currentSessionId: string | null,
+): Promise<BetterAuthSessionSummary[]> {
+  const sessions = await listBetterAuthSessionsWithTokens(env, request);
+  return sessions
+    .map((session) => ({
+      createdAt: toIsoString(session.createdAt),
+      expiresAt: toIsoString(session.expiresAt),
+      id: session.id,
+      ipAddress: session.ipAddress ?? null,
+      isCurrent: session.id === currentSessionId,
+      updatedAt: toIsoString(session.updatedAt),
+      userAgent: session.userAgent ?? null,
+    }))
+    .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function revokeBetterAuthSessionById(
+  env: AppEnv,
+  request: Request,
+  input: {
+    sessionId: string;
+    currentSessionId: string | null;
+  },
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const sessionId = input.sessionId.trim();
+  if (!sessionId) {
+    return { ok: false, reason: "Choose a session to revoke." };
+  }
+
+  const sessions = await listBetterAuthSessionsWithTokens(env, request);
+  const selected = sessions.find((session) => session.id === sessionId);
+  if (!selected) {
+    return { ok: false, reason: "That session is no longer active." };
+  }
+  if (selected.id === input.currentSessionId) {
+    return { ok: false, reason: "Use Sign out to end the session on this device." };
+  }
+
+  const auth = getBetterAuth(env, request);
+  await auth.api.revokeSession({
+    body: {
+      token: selected.token,
+    },
+    headers: request.headers,
+  });
+
+  return { ok: true };
+}
+
+export async function revokeOtherBetterAuthSessions(env: AppEnv, request: Request) {
+  const auth = getBetterAuth(env, request);
+  await auth.api.revokeOtherSessions({
+    headers: request.headers,
+  });
+}
+
+async function listBetterAuthSessionsWithTokens(
+  env: AppEnv,
+  request: Request,
+): Promise<BetterAuthSessionApiRecord[]> {
+  const auth = getBetterAuth(env, request);
+  return (await auth.api.listSessions({
+    headers: request.headers,
+  })) as BetterAuthSessionApiRecord[];
 }
 
 export function isSameOriginAuthFormPost(env: AppEnv, request: Request) {
