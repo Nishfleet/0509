@@ -12,9 +12,21 @@ import {
 } from "../scripts/monitoring-fanout-canary.lib.mjs";
 
 describe("monitoring fan-out canary ladder", () => {
-  it("passes dormant inline production config", () => {
+  it("passes inline rollback config", () => {
     const result = evaluateFanoutConfigStep({
       mode: "inline",
+      workflowBindingConfigured: true,
+      internalWorkspaceConfigured: true,
+      maxInflight: 8,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.blocker).toBeNull();
+  });
+
+  it("passes proven global fan-out production config", () => {
+    const result = evaluateFanoutConfigStep({
+      mode: "fanout",
+      globalEnabled: true,
       workflowBindingConfigured: true,
       internalWorkspaceConfigured: true,
       maxInflight: 8,
