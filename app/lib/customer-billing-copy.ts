@@ -1,3 +1,3 @@
 export function agencyCheckoutHeldCustomerCopy() {
-  return "Agency checkout opens after we finish proving nightly monitoring capacity at scale. Email support if you need Agency capacity before then.";
+  return "Agency checkout is available from the pricing page. If this message appeared from an old checkout link, refresh pricing or open a billing support case.";
 }

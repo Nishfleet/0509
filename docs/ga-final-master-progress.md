@@ -4,6 +4,9 @@ Coordinator: lead GA launch orchestration
 Started: 2026-06-24
 Integration branch: `cursor/ga-final-integration-20260624`
 
+> Historical coordination log. The current launch truth lives in
+> `docs/final-self-serve-ga-scorecard.md`; do not use this file as the live GA verdict.
+
 ## Phase 0 — Baseline (2026-06-24)
 
 | Item | Value |

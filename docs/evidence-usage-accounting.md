@@ -21,6 +21,8 @@ Scheduled monitoring scans are not evidence checks unless a billable proof captu
 - `quantity_remaining` is a **cache** maintained transactionally with `evidence_top_up_ledger_entry`
 - Authoritative balance = `quantity_granted + SUM(ledger.quantity_delta)` per grant
 - Legacy `proof_usage_credit` rows migrate once via `proof_usage_credit_migration` (no double count)
+- Full and partial top-up refunds claw back only unspent purchased checks; unknown provider refund shapes stay in operator review.
+- Top-up grants remain attached to the original workspace owner. Ownership transfers and workspace merges do not move purchased checks.
 
 ## Consumption order
 
