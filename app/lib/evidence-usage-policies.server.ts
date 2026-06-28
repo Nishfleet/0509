@@ -1,6 +1,6 @@
 /**
- * Named policy hooks for evidence usage and unresolved business rules.
- * Do not scatter assumptions across routes — extend these functions.
+ * Named policy hooks for evidence usage business rules.
+ * Do not scatter assumptions across routes; extend these functions.
  */
 
 import type { PlanFamily } from "~/lib/plan-entitlements";
@@ -24,8 +24,8 @@ export function topUpSpendRequiresActivePaidPlan(planFamily: PlanFamily): boolea
 }
 
 /**
- * OWNER DECISION PENDING: partial refund/chargeback treatment.
- * Returns quantity to claw back when refund is unambiguous; null → operator review.
+ * Full and partial top-up refunds claw back only the unspent purchased checks.
+ * Unknown provider refund shapes stay manual-review only.
  */
 export function topUpRefundQuantityAdjustment(input: {
   grantedQuantity: number;
@@ -41,18 +41,12 @@ export function topUpRefundQuantityAdjustment(input: {
   return -input.remainingQuantity;
 }
 
-/**
- * OWNER DECISION PENDING: workspace ownership transfer.
- * Current behavior: grants remain on the original workspace user_id.
- */
+/** Top-up grants remain on the original workspace owner after ownership changes. */
 export function topUpCreditsTransferOnOwnershipChange(): false {
   return false;
 }
 
-/**
- * OWNER DECISION PENDING: workspace merge.
- * Current behavior: not supported — credits stay on source workspace.
- */
+/** Workspace merges are not supported; top-up grants do not transfer. */
 export function topUpCreditsTransferOnWorkspaceMerge(): false {
   return false;
 }
