@@ -15,6 +15,7 @@ import {
   createLandingPageSnapshot,
   createProofCapture,
   createSupportCase,
+  createSupportCaseEvent,
   createWatchEvent,
   DODO_PLAN_CHECKOUT_LOCK_MINUTES,
   grantDodoPlanAccess,
@@ -37,7 +38,9 @@ import {
   listClientRooms,
   listAgentMemory,
   listAgentMemoryForClientRooms,
+  getSupportCase,
   listSupportCases,
+  listSupportCaseEvents,
   listActiveWatchlists,
   listCollectionItems,
   listDigests,
@@ -663,8 +666,10 @@ describe("support case persistence", () => {
     const sqlite = createSqliteD1();
     try {
       sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      sqlite.sqlite.exec("CREATE TABLE delivery_attempt (idempotency_key TEXT, payload_snapshot_json TEXT NOT NULL DEFAULT '{}');");
       applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
       applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
+      applyMigration(sqlite.sqlite, "migrations/0061_support_case_events.sql");
       sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1'), ('user-2');");
 
       const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
@@ -701,6 +706,13 @@ describe("support case persistence", () => {
         status: "open",
         limit: 1,
       });
+      const selectedCase = await getSupportCase({ DB: sqlite.db } as never, "user-1", supportCase?.id ?? "");
+      const otherUserCase = await getSupportCase({ DB: sqlite.db } as never, "user-2", supportCase?.id ?? "");
+      const caseEvents = await listSupportCaseEvents(
+        { DB: sqlite.db } as never,
+        "user-1",
+        supportCase?.id ?? "",
+      );
 
       expect(supportCase).toMatchObject({
         userId: "user-1",
@@ -719,6 +731,23 @@ describe("support case persistence", () => {
         id: supportCase?.id,
         status: "open",
       });
+      expect(selectedCase).toMatchObject({
+        id: supportCase?.id,
+        detail: "Please send the latest invoice to finance.",
+      });
+      expect(otherUserCase).toBeNull();
+      expect(caseEvents).toHaveLength(1);
+      expect(caseEvents[0]).toMatchObject({
+        caseId: supportCase?.id,
+        userId: "user-1",
+        eventType: "case_opened",
+        message: "Support case opened.",
+        visibleToCustomer: true,
+        metadata: {
+          category: "billing",
+          priority: "urgent",
+        },
+      });
     } finally {
       sqlite.close();
     }
@@ -728,8 +757,10 @@ describe("support case persistence", () => {
     const sqlite = createSqliteD1();
     try {
       sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      sqlite.sqlite.exec("CREATE TABLE delivery_attempt (idempotency_key TEXT, payload_snapshot_json TEXT NOT NULL DEFAULT '{}');");
       applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
       applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
+      applyMigration(sqlite.sqlite, "migrations/0061_support_case_events.sql");
       sqlite.sqlite.exec(`
         INSERT INTO user (id) VALUES ('user-1');
         INSERT INTO support_case (
@@ -769,13 +800,141 @@ describe("support case persistence", () => {
       });
 
       const rows = sqlite.sqlite.prepare("SELECT id FROM support_case WHERE user_id = ?").all("user-1");
+      const events = await listSupportCaseEvents({ DB: sqlite.db } as never, "user-1", "case-existing");
       expect(rows).toHaveLength(1);
+      expect(events).toHaveLength(0);
       expect(supportCase).toMatchObject({
         id: "case-existing",
         requestKey: "support-request-race",
         alreadyExists: true,
       });
     } finally {
+      sqlite.close();
+    }
+  });
+
+  it("lists only customer-visible support case events for the owning user", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      sqlite.sqlite.exec("CREATE TABLE delivery_attempt (idempotency_key TEXT, payload_snapshot_json TEXT NOT NULL DEFAULT '{}');");
+      applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
+      applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
+      applyMigration(sqlite.sqlite, "migrations/0061_support_case_events.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1'), ('user-2');");
+
+      const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        category: "delivery",
+        subject: "Digest missing",
+        detail: "The digest did not arrive.",
+      });
+      await createSupportCaseEvent({ DB: sqlite.db } as never, {
+        caseId: supportCase?.id ?? "",
+        userId: "user-1",
+        eventType: "support_note",
+        message: "Support is checking the delivery provider trail.",
+        visibleToCustomer: true,
+      });
+      await createSupportCaseEvent({ DB: sqlite.db } as never, {
+        caseId: supportCase?.id ?? "",
+        userId: "user-1",
+        eventType: "support_note",
+        message: "Internal operator-only note.",
+        visibleToCustomer: false,
+      });
+
+      const ownerEvents = await listSupportCaseEvents(
+        { DB: sqlite.db } as never,
+        "user-1",
+        supportCase?.id ?? "",
+      );
+      const otherUserEvents = await listSupportCaseEvents(
+        { DB: sqlite.db } as never,
+        "user-2",
+        supportCase?.id ?? "",
+      );
+
+      expect(ownerEvents.map((event) => event.message)).toEqual([
+        "Support case opened.",
+        "Support is checking the delivery provider trail.",
+      ]);
+      expect(otherUserEvents).toHaveLength(0);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("uses the support case source context for the opened event", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      sqlite.sqlite.exec("CREATE TABLE delivery_attempt (idempotency_key TEXT, payload_snapshot_json TEXT NOT NULL DEFAULT '{}');");
+      applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
+      applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
+      applyMigration(sqlite.sqlite, "migrations/0061_support_case_events.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+
+      const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        category: "delivery",
+        subject: "Digest missing",
+        detail: "The digest did not arrive.",
+        context: {
+          createdFrom: "agent_action",
+          source: "api_v1",
+        },
+      });
+
+      const events = await listSupportCaseEvents(
+        { DB: sqlite.db } as never,
+        "user-1",
+        supportCase?.id ?? "",
+      );
+
+      expect(events[0]).toMatchObject({
+        eventType: "case_opened",
+        message: "Support case opened by an account agent action.",
+        metadata: {
+          category: "delivery",
+          priority: "normal",
+          createdFrom: "agent_action",
+          source: "api_v1",
+        },
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("does not fail case creation when the support case event table is unavailable", async () => {
+    const sqlite = createSqliteD1();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
+      applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+
+      const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        category: "delivery",
+        subject: "Digest missing",
+        detail: "The digest did not arrive.",
+      });
+      const cases = await listSupportCases({ DB: sqlite.db } as never, "user-1");
+
+      expect(supportCase).toMatchObject({
+        userId: "user-1",
+        subject: "Digest missing",
+      });
+      expect(cases).toHaveLength(1);
+      expect(consoleError).toHaveBeenCalledWith(
+        "[support] opened case event persistence failed",
+        expect.any(Error),
+      );
+    } finally {
+      consoleError.mockRestore();
       sqlite.close();
     }
   });
