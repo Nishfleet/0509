@@ -14,6 +14,12 @@ export async function getCachedOptionalSession(
   env: AppEnv,
   request: Request,
 ): Promise<AppSession | null> {
+  const { getE2ETestSession } = await import("~/lib/e2e-auth.server");
+  const e2eSession = await getE2ETestSession(env, request);
+  if (e2eSession) {
+    return e2eSession;
+  }
+
   if (!env.DB) {
     return null;
   }

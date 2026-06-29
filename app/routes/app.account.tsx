@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import {
   hasInvalidCompetitorWebsite,
@@ -31,21 +32,34 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getUserPlan } = await import("~/lib/plan.server");
   const { getWorkspaceBranding } = await import("~/lib/data.server");
   const { resolveWorkspacePreparedBy } = await import("~/lib/plan-feature-gate.server");
+  const { isE2ETestSessionId } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
+  const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
 
   const plan = await getUserPlan(env, session.user.id);
   const brandName = await resolveWorkspacePreparedBy(env, session.user.id);
   const branding = await getWorkspaceBranding(env, session.user.id);
-  const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
-  const passkeys = passkeysEnabled ? await listBetterAuthPasskeys(env, request) : [];
+  const passkeysEnabled = !isE2EFixtureSession && isBetterAuthPasskeyEnabled(env);
+  let passkeys: Awaited<ReturnType<typeof listBetterAuthPasskeys>> = [];
+  if (passkeysEnabled) {
+    try {
+      passkeys = await listBetterAuthPasskeys(env, request);
+    } catch (error) {
+      console.warn("[account] passkey controls unavailable", error);
+    }
+  }
   let activeSessions: Awaited<ReturnType<typeof listBetterAuthSessions>> = [];
-  let sessionControlsMessage: string | null = null;
-  try {
-    activeSessions = await listBetterAuthSessions(env, request, session.session.id);
-  } catch (error) {
-    console.warn("[account] session controls unavailable", error);
-    sessionControlsMessage = "Sign in again to manage active sessions.";
+  let sessionControlsMessage: string | null = isE2EFixtureSession
+    ? "Sign in with email to manage active sessions."
+    : null;
+  if (!isE2EFixtureSession) {
+    try {
+      activeSessions = await listBetterAuthSessions(env, request, session.session.id);
+    } catch (error) {
+      console.warn("[account] session controls unavailable", error);
+      sessionControlsMessage = "Sign in again to manage active sessions.";
+    }
   }
 
   return {
@@ -310,10 +324,14 @@ export default function AccountRoute() {
                 <div className="f9-passkey-row" key={passkey.id}>
                   <div>
                     <strong>{passkey.label}</strong>
-                    <span>Created {formatAccountDate(passkey.createdAt)}</span>
+                    <span>Created <LocalTime iso={passkey.createdAt} mode="date" /></span>
                   </div>
                   <span>
-                    {passkey.lastUsedAt ? `Last used ${formatAccountDate(passkey.lastUsedAt)}` : "Not used yet"}
+                    {passkey.lastUsedAt ? (
+                      <>Last used <LocalTime iso={passkey.lastUsedAt} mode="date" /></>
+                    ) : (
+                      "Not used yet"
+                    )}
                   </span>
                 </div>
               ))}
@@ -422,7 +440,7 @@ export default function AccountRoute() {
           </div>
         ) : null}
         <p className="f9-muted-copy">
-          This device is signed in until {formatAccountDateTime(data.sessionExpiresAt)}. Sign out from the navigation
+          This device is signed in until <LocalTime iso={data.sessionExpiresAt} />. Sign out from the navigation
           menu to remove access on this device.
         </p>
         {data.sessionControlsMessage ? (
@@ -435,8 +453,8 @@ export default function AccountRoute() {
                 <div>
                   <strong>{session.isCurrent ? "This device" : formatSessionDevice(session.userAgent)}</strong>
                   <span>
-                    Last active {formatAccountDateTime(session.updatedAt)} · Expires{" "}
-                    {formatAccountDateTime(session.expiresAt)}
+                    Last active <LocalTime iso={session.updatedAt} /> · Expires{" "}
+                    <LocalTime iso={session.expiresAt} />
                   </span>
                   <span>{formatSessionLocation(session.ipAddress, session.userAgent)}</span>
                 </div>
@@ -539,32 +557,6 @@ async function registerPasskey(input: {
       input.setError("That passkey could not be added. Try again or use email sign-in.");
     }
     input.setPending(false);
-  }
-}
-
-function formatAccountDate(value: string) {
-  try {
-    return new Intl.DateTimeFormat("en", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
-
-function formatAccountDateTime(value: string) {
-  try {
-    return new Intl.DateTimeFormat("en", {
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(new Date(value));
-  } catch {
-    return value;
   }
 }
 

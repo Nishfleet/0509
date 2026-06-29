@@ -1,5 +1,15 @@
 # Launch Hardening Progress
 
+## E2E QA harness baseline (2026-06-29)
+
+- Starting main: `8c455595558ece74ad1354d1effd6a8e393270ed`
+- Production Worker version: `d28d112c-fd87-43ce-9597-24d0ca7e3b94`
+- Added the authenticated E2E QA harness, local fixtures, production-safe public smoke, production-auth storage-state workflow, Bugbot rules, and plan/docs in `docs/e2e-qa-harness-progress.md` and `docs/google-sign-in-decision.md`.
+- Baseline checks passed: unit tests, typecheck, build, D1 backup validation, remote migration list, pricing canary, billing canary, production canary, and Search V2 dogfood tests.
+- Baseline blockers before harness work: proof/email canary returned `no_digest_delivery_sent`; local Presence canary needs `PRESENCE_INTERNAL_WORKSPACE_ID`.
+- Final harness verification passed: `npm test`, `npm run typecheck`, `npm run build`, `npm run e2e`, D1 backup validation, local/remote migration lists, pricing/billing/proof/prod canaries, and `git diff --check`.
+- `npm run e2e:prod:auth` fails closed until the owner captures `.auth/0509-internal.json`; local Presence canary remains blocked by missing `PRESENCE_INTERNAL_WORKSPACE_ID`.
+
 ## Final self-serve GA release pass (2026-06-27)
 
 Branch: `codex/final-self-serve-ga-hardening-20260625`
