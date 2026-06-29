@@ -63,9 +63,11 @@ describe("public documentation routes", () => {
     expect(trustMarkup).toContain("secret-bearing integration setup");
     expect(trustMarkup).toContain("customer API key creation, rotation, and revocation");
     expect(trustMarkup).toContain("broad public write APIs");
-    expect(trustMarkup).toContain("validates the D1 backup scripts");
-    expect(trustMarkup).toContain("automated R2 backup scheduling and restore drills");
+    expect(trustMarkup).toContain("Cloudflare-managed storage");
+    expect(trustMarkup).toContain("Backup validation and restore drills");
     expect(trustMarkup).toContain("remain owner-operated until recorded as verified");
+    expect(trustMarkup).not.toContain("validates the D1 backup scripts");
+    expect(trustMarkup).not.toContain("automated R2 backup scheduling");
     expect(trustMarkup).toContain("does not currently claim");
     expect(trustMarkup).not.toContain("SOC 2 compliant");
     expect(trustMarkup).not.toContain("Weekly D1 exports upload to R2");

@@ -220,7 +220,13 @@ const digest: DigestRecord = {
   ],
 };
 
-function setupMocks(input: { collectionItems?: CollectionItemRecord[]; watchEvents?: WatchEventRecord[] } = {}) {
+function setupMocks(
+  input: {
+    collectionItems?: CollectionItemRecord[];
+    watchEvents?: WatchEventRecord[];
+    digest?: DigestRecord;
+  } = {},
+) {
   mockAgencyWorkspacePlan();
   const env = { DB: {} };
   vi.doMock("~/lib/auth.server", () => ({
@@ -237,7 +243,7 @@ function setupMocks(input: { collectionItems?: CollectionItemRecord[]; watchEven
   }));
   vi.doMock("~/lib/data.server", () => ({
     getCollection: vi.fn().mockResolvedValue(collection),
-    getDigest: vi.fn().mockResolvedValue(digest),
+    getDigest: vi.fn().mockResolvedValue(input.digest ?? digest),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
     listCollectionItems: vi.fn().mockResolvedValue(input.collectionItems ?? [collectionItem]),
     listWatchEvents: vi.fn().mockResolvedValue(input.watchEvents ?? [watchEvent]),
@@ -411,6 +417,30 @@ describe("authenticated export route", () => {
     expect(body).toContain("Evidence: Verified from a page snapshot");
   });
 
+  it("returns decision-ready CSV fields for watchlist exports", async () => {
+    setupMocks({
+      watchEvents: [
+        {
+          ...watchEvent,
+          metadata: {
+            sourceUrl: "javascript:alert(1)",
+            proofUrl: "not a url",
+            websiteUrl: "https://example.com/proof",
+          },
+        },
+      ],
+    });
+    const response = await loadExport("https://0509.io/export/watchlist/watchlist-1");
+    const body = await response.text();
+
+    expect(response.headers.get("content-type")).toContain("text/csv");
+    expect(body).toContain('"event_type","proof_status","source_type","title","summary","created_at","what_changed","why_it_matters","urgency","proof_status_label","source","last_seen","next_action","proof_trail","source_url"');
+    expect(body).toContain('"landing_page_offer_changed","Verified proof","Proof snapshot","Landing page offer changed","The routine bundle offer changed.","2026-04-18T10:00:00.000Z","Landing page offer changed","The routine bundle offer changed.","Medium priority (84/100)"');
+    expect(body).toContain('"https://example.com/proof"');
+    expect(body).not.toContain("javascript:alert");
+    expect(body).not.toContain("not a url");
+  });
+
   it("excludes unsafe watch events from account-scoped watchlist JSON exports", async () => {
     setupMocks({
       watchEvents: [
@@ -482,6 +512,42 @@ describe("authenticated export route", () => {
     expect(body).toContain("Nykaa watch: Landing page offer changed");
     expect(body).toContain("Next move: Today: brief one counter-test.");
     expect(body).toContain("Evidence: proof capture - source-backed - 18/4/2026");
+  });
+
+  it("returns decision-ready CSV fields for digest exports", async () => {
+    setupMocks();
+    const response = await loadExport("https://0509.io/export/digest/digest-1");
+    const body = await response.text();
+
+    expect(response.headers.get("content-type")).toContain("text/csv");
+    expect(body).toContain('"watchlist","event_type","title","summary","what_changed","why_it_matters","urgency","proof_status","source","last_seen","next_action","proof_trail","source_url"');
+    expect(body).toContain('"Nykaa watch","landing_page_offer_changed","Landing page offer changed","The routine bundle offer changed.","Landing page offer changed","The routine bundle offer changed.","High priority (90/100)"');
+    expect(body).toContain('"Today: brief one counter-test.","proof capture - source-backed - 18/4/2026"');
+  });
+
+  it("falls back to safe source URLs for digest CSV exports", async () => {
+    setupMocks({
+      digest: {
+        ...digest,
+        items: [
+          {
+            ...digest.items[0],
+            metadata: {
+              ...digest.items[0].metadata,
+              sourceUrl: "javascript:alert(1)",
+              proofUrl: "not a url",
+              websiteUrl: "https://example.com/direct-digest",
+            },
+          },
+        ],
+      },
+    });
+    const response = await loadExport("https://0509.io/export/digest/digest-1");
+    const body = await response.text();
+
+    expect(body).toContain('"https://example.com/direct-digest"');
+    expect(body).not.toContain("javascript:alert");
+    expect(body).not.toContain("not a url");
   });
 
   it("rejects Slack exports when GA surface is off", async () => {

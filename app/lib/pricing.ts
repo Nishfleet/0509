@@ -25,7 +25,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   } else if (entitlements.scheduledScanCadence === "daily") {
     features.push("Daily competitor scans + on-demand fresh checks");
     if (plan === "agency") {
-      features.push("Daily competitor scans, first in the nightly queue");
+      features.push("Priority nightly monitoring capacity");
     }
   }
 
@@ -35,9 +35,6 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
     features.push("Weekly evidence-backed digest");
   } else if (entitlements.digestCadence === "daily_and_weekly") {
     features.push("Daily and weekly evidence-backed digests");
-    if (plan === "agency") {
-      features.push("Daily and weekly evidence-backed digests");
-    }
   }
 
   if (plan !== "scout") {

@@ -3724,6 +3724,8 @@ one signal-green accent.
   display: grid;
   grid-template-columns: 1.1fr 1fr 1fr;
   gap: 14px;
+  width: 100%;
+  min-width: 0;
 }
 
 .ld-case-lead,
@@ -3731,6 +3733,9 @@ one signal-green accent.
 .ld-intel article {
   background: var(--ld-card);
   border: 1.5px solid var(--ld-ink);
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 18px 20px;
   position: relative;
 }
@@ -3759,10 +3764,16 @@ one signal-green accent.
 
 .ld-case-card dl {
   display: flex;
+  flex-wrap: wrap;
   gap: 18px;
   margin: 14px 0 0;
   font-family: var(--ld-mono);
   font-size: 0.74rem;
+}
+
+.ld-case-card dl > div {
+  flex: 1 1 130px;
+  min-width: 0;
 }
 
 .ld-case-card dt {
@@ -3818,6 +3829,7 @@ one signal-green accent.
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 14px;
+  min-width: 0;
 }
 
 .ld-intel ul {
@@ -3832,6 +3844,7 @@ one signal-green accent.
   padding: 5px 0;
   border-bottom: 1px dotted var(--ld-line);
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 10px;
 }
@@ -4216,6 +4229,7 @@ one signal-green accent.
 
 .ld-footer nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 22px;
   font-size: 0.88rem;
 }

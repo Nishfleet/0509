@@ -43,6 +43,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Public read-only search and a sample proof preview");
     expect(PUBLIC_MARKDOWN).toContain("Public proof previews are sample-only");
     expect(PUBLIC_MARKDOWN).toContain("exports support CSV and JSON export");
+    expect(PUBLIC_MARKDOWN).toContain("Customer-facing views lead with what changed");
+    expect(PUBLIC_MARKDOWN).toContain("Watchlist and digest CSV exports include decision fields");
     expect(PUBLIC_MARKDOWN).not.toContain("Slack delivery can be connected from Integrations");
     expect(PUBLIC_MARKDOWN).toContain("Customer API keys can read account-owned setup status");
     expect(PUBLIC_MARKDOWN).toContain("approved account actions");
@@ -72,6 +74,8 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(PUBLIC_MARKDOWN).toContain("Tracking status is labeled honestly");
     expect(LLMS_TEXT).toContain("Recent results must not be described as fresh live proof");
+    expect(LLMS_TEXT).toContain("Customer-facing views lead with what changed");
+    expect(LLMS_TEXT).toContain("Watchlist and digest CSV exports include priority");
     expect(LLMS_TEXT).toContain("Public read-only search is available");
     expect(LLMS_TEXT).toContain("proof previews are sample-only");
     expect(LLMS_TEXT).toContain("Public read-only analysis preview");
