@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { DigestProofPacket } from "~/components/digest-intelligence";
+import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 
 describe("DigestProofPacket", () => {
   it("summarizes the highest-priority move into a client handoff packet", () => {
@@ -36,14 +36,14 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Proof packet");
+    expect(markup).toContain("Evidence packet");
     expect(markup).toContain("2 changes packaged for handoff");
     expect(markup).toContain("Offer changed: ready to send as a client or teammate digest");
     expect(markup).toContain("Today: brief one counter-test.");
-    expect(markup).toContain("1 verified snapshot");
-    expect(markup).toContain("1 scan-backed change");
+    expect(markup).toContain("1 verified proof");
+    expect(markup).toContain("1 scan-spotted");
     expect(markup).toContain("2 competitors");
-    expect(markup).toContain("1 high-priority change");
+    expect(markup).toContain("1 high");
     expect(markup).toContain("Verified from a page snapshot");
   });
 
@@ -68,8 +68,8 @@ describe("DigestProofPacket", () => {
 
     expect(markup).toContain("Headline changed: ready to review");
     expect(markup).toContain("add page proof before sharing");
-    expect(markup).toContain("1 scan-backed change");
-    expect(markup).not.toContain("verified snapshot");
+    expect(markup).toContain("1 scan-spotted");
+    expect(markup).not.toContain("verified proof");
   });
 
   it("keeps a scan-backed top change internal even when another item has proof", () => {
@@ -105,8 +105,8 @@ describe("DigestProofPacket", () => {
 
     expect(markup).toContain("Breaking offer changed: ready to review");
     expect(markup).toContain("add page proof before sharing");
-    expect(markup).toContain("1 verified snapshot");
-    expect(markup).toContain("1 scan-backed change");
+    expect(markup).toContain("1 verified proof");
+    expect(markup).toContain("1 scan-spotted");
     expect(markup).toContain("Today: review the offer before briefing the client.");
     expect(markup).toContain("Spotted in the scheduled scan");
     expect(markup).not.toContain("Breaking offer changed: ready to send");
@@ -119,8 +119,131 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("No proof-backed changes yet");
+    expect(markup).toContain("No action-worthy changes yet");
     expect(markup).toContain("No decision queued.");
     expect(markup).toContain("Proof trail pending.");
+  });
+
+  it("keeps internal or canary rows out of the featured decision", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DigestProofPacket, {
+        items: [
+          {
+            title: "Internal canary changed",
+            watchlistName: "Internal",
+            metadata: {
+              priorityScore: 99,
+              priorityBand: "High priority",
+              recommendedAction: "Do not put this in the customer decision.",
+              proofTrail: "Launch readiness canary.",
+              kind: "launch_readiness_canary",
+            },
+          },
+          {
+            title: "Customer offer changed",
+            watchlistName: "Nykaa",
+            metadata: {
+              priorityScore: 80,
+              priorityBand: "Medium priority",
+              recommendedAction: "Next review: brief the customer offer change.",
+              proofTrail: "Verified from a page snapshot · 20 Jun, 5:09 am UTC",
+              proofCaptureId: "proof-3",
+              sourceStatus: "proof_backed",
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("Customer offer changed: ready to send");
+    expect(markup).toContain("Next review: brief the customer offer change.");
+    expect(markup).not.toContain("Do not put this in the customer decision.");
+  });
+
+  it("keeps sanitized share snapshot canary rows out of the featured decision", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DigestProofPacket, {
+        items: [
+          {
+            title: "Share snapshot canary",
+            watchlistName: "Internal",
+            proofStatus: "canary_or_test",
+            metadata: {
+              eventStatus: "confirmed",
+              priorityScore: 99,
+              priorityBand: "High priority",
+              recommendedAction: "Do not feature this shared snapshot row.",
+              proofTrail: "Sanitized snapshot metadata.",
+              sourceStatus: "proof_backed",
+            },
+          },
+          {
+            title: "Customer page changed",
+            watchlistName: "Nykaa",
+            proofStatus: "verified_proof",
+            metadata: {
+              priorityScore: 75,
+              priorityBand: "Medium priority",
+              recommendedAction: "Next review: use the customer page change.",
+              proofTrail: "Verified from a page snapshot · 20 Jun, 5:09 am UTC",
+              sourceStatus: "proof_backed",
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("Customer page changed: ready to send");
+    expect(markup).toContain("Next review: use the customer page change.");
+    expect(markup).not.toContain("Do not feature this shared snapshot row.");
+  });
+});
+
+describe("DigestMovementSummary", () => {
+  it("uses the shared priority mix so priority bands count when scores are missing", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DigestMovementSummary, {
+        items: [
+          {
+            watchlistName: "Nykaa",
+            metadata: {
+              priorityScore: null,
+              priorityBand: "High priority",
+            },
+          },
+          {
+            watchlistName: "Mamaearth",
+            metadata: {
+              priorityScore: null,
+              priorityBand: "Priority pending",
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("2 changes across 2 competitors");
+    expect(markup).toContain("1 high · 0 medium · 1 low");
+  });
+});
+
+describe("DigestIntelligence", () => {
+  it("uses stored snapshot proof status for item-level proof labels", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DigestIntelligence, {
+        proofStatus: "canary_or_test",
+        metadata: {
+          eventStatus: "confirmed",
+          sourceStatus: "proof_backed",
+          priorityScore: 99,
+          priorityBand: "High priority",
+          recommendedAction: "Review",
+          proofTrail: "Sanitized snapshot metadata.",
+        },
+      }),
+    );
+
+    expect(markup).toContain("Canary/test");
+    expect(markup).not.toContain("Verified proof");
   });
 });

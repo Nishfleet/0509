@@ -28,6 +28,34 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
       <p className="report-summary">{report.summary}</p>
 
+      {report.sourceCoverage ? (
+        <section className="f9-proof-packet" aria-label="Report source coverage">
+          <div>
+            <span className="f9-app-kicker">Source coverage</span>
+            <h3>Client-ready evidence filter</h3>
+            <p className="f9-muted-copy">{report.sourceCoverage.note}</p>
+          </div>
+          <dl className="proof-trail-list">
+            <div>
+              <dt>Verified proof</dt>
+              <dd>{report.sourceCoverage.proofMix.verifiedProof}</dd>
+            </div>
+            <div>
+              <dt>Scan-spotted</dt>
+              <dd>{report.sourceCoverage.proofMix.scanSpotted}</dd>
+            </div>
+            <div>
+              <dt>Needs review</dt>
+              <dd>{report.sourceCoverage.proofMix.needsReview}</dd>
+            </div>
+            <div>
+              <dt>Excluded</dt>
+              <dd>{report.sourceCoverage.excluded}</dd>
+            </div>
+          </dl>
+        </section>
+      ) : null}
+
       <section className="report-stats" aria-label="Report summary">
         {report.stats.map((stat) => (
           <article className="report-stat-card" key={stat.label}>
@@ -69,6 +97,14 @@ export function ReportView({ report }: { report: ReportDocument }) {
                 <p>{row.event.summary}</p>
                 <dl className="proof-trail-list">
                   <div>
+                    <dt>Proof status</dt>
+                    <dd>{row.event.proofStatusLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Source type</dt>
+                    <dd>{row.event.sourceTypeLabel}</dd>
+                  </div>
+                  <div>
                     <dt>Priority</dt>
                     <dd>
                       {row.event.priorityBand}
@@ -83,6 +119,22 @@ export function ReportView({ report }: { report: ReportDocument }) {
                     <dt>Proof trail</dt>
                     <dd>{row.event.proofTrail}</dd>
                   </div>
+	                  {row.event.sourceUrl && isHttpUrl(row.event.sourceUrl) ? (
+	                    <div>
+	                      <dt>Source link</dt>
+	                      <dd>
+                        <a href={row.event.sourceUrl} rel="noreferrer" target="_blank">
+                          Open source
+                        </a>
+                      </dd>
+                    </div>
+                  ) : null}
+                  {row.event.metaAdId ? (
+                    <div>
+                      <dt>Meta ad ID</dt>
+                      <dd>{row.event.metaAdId}</dd>
+                    </div>
+                  ) : null}
                 </dl>
                 <p className="f9-muted-copy">
                   <LocalTime iso={row.event.createdAt} />
@@ -135,7 +187,15 @@ export function ReportView({ report }: { report: ReportDocument }) {
                 <dl className="report-field-list">
                   <div className="report-field">
                     <dt>URL</dt>
-                    <dd>{row.landingPage.url}</dd>
+                    <dd>
+                      {isHttpUrl(row.landingPage.url) ? (
+                        <a href={row.landingPage.url} rel="noreferrer" target="_blank">
+                          {row.landingPage.url}
+                        </a>
+                      ) : (
+                        row.landingPage.url
+                      )}
+                    </dd>
                   </div>
                   <div className="report-field">
                     <dt>Headline</dt>
@@ -143,7 +203,12 @@ export function ReportView({ report }: { report: ReportDocument }) {
                   </div>
                   <div className="report-field">
                     <dt>Capture</dt>
-                    <dd>{row.landingPage.captureLabel}</dd>
+                    <dd>
+                      {row.landingPage.captureLabel}
+                      {row.landingPage.capturedAt ? (
+                        <> · <LocalTime iso={row.landingPage.capturedAt} /></>
+                      ) : null}
+                    </dd>
                   </div>
                 </dl>
 
@@ -177,6 +242,24 @@ export function ReportView({ report }: { report: ReportDocument }) {
           </article>
         ))}
       </section>
+      {report.rows.length === 0 ? (
+        <section className="f9-empty-panel">
+          <h2>No client-ready proof in this report</h2>
+          <p>
+            Suppressed, invalidated, proof-failed, internal, canary, and scan-only events are excluded
+            from proof-backed reports by default.
+          </p>
+        </section>
+      ) : null}
     </div>
   );
+}
+
+function isHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }

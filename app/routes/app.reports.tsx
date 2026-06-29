@@ -75,7 +75,7 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
       resourceType: "report",
       resourceId: report.reportId,
       isSnapshot: true,
-      snapshotPayload: report as unknown as Record<string, unknown>,
+      snapshotPayload: sanitizeReportShareSnapshot(report) as unknown as Record<string, unknown>,
     });
 
     return {
@@ -87,6 +87,14 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
   return {
     ok: false,
     message: "Unknown report action.",
+  };
+}
+
+function sanitizeReportShareSnapshot<T extends { reportId: string; resourceId: string }>(report: T) {
+  return {
+    ...report,
+    reportId: "shared-report",
+    resourceId: "shared",
   };
 }
 

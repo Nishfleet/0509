@@ -183,7 +183,7 @@ describe("launch readiness route", () => {
     });
   });
 
-  it("blocks launch readiness when email delivery has no recent sent proof", async () => {
+  it("blocks launch readiness when digest email has no recent provider acceptance", async () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({
         CANARY_BYPASS_TOKEN: "secret-token",
@@ -251,10 +251,101 @@ describe("launch readiness route", () => {
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
-      blockers: ["no_recent_email_delivery_attempt", "no_recent_email_sent"],
+      blockers: [
+        "no_recent_email_delivery_attempt",
+        "no_recent_email_sent",
+      ],
+      blockerDetails: {
+        no_recent_email_sent: {
+          scope: "digest_email",
+        },
+      },
+      signals: {
+        digestDelivery: {
+          recentAttempts: 0,
+          recentSent: 0,
+        },
+      },
+    });
+  });
+
+  it("does not let unrelated email activity satisfy digest readiness", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: {},
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getLaunchReadinessSignals: vi.fn().mockResolvedValue({
+        monitoring: {
+          recentSuccessfulRuns: 1,
+          latestSucceededAt: "2026-06-06T12:35:06.079Z",
+        },
+        proof: {
+          recentSuccessfulCaptures: 1,
+          latestSucceededAt: "2026-06-06T12:35:05.500Z",
+        },
+        digestDelivery: {
+          recentAttempts: 0,
+          recentSent: 0,
+          latestAttemptAt: null,
+        },
+        emailDelivery: {
+          recentAttempts: 3,
+          recentSent: 3,
+          latestAttemptAt: "2026-06-06T12:35:06.795Z",
+        },
+        slackDelivery: {
+          configuredTargets: 1,
+          usableTargets: 1,
+          latestTargetSuccessAt: "2026-06-06T12:36:00.000Z",
+          recentAttempts: 1,
+          recentSent: 1,
+          latestAttemptAt: "2026-06-06T12:36:00.000Z",
+        },
+        whatsappDelivery: {
+          providerConfigured: false,
+          customerReady: false,
+          webhookConfigured: false,
+          configuredTargets: 0,
+          usableTargets: 0,
+          latestTargetSuccessAt: null,
+          recentAttempts: 0,
+          recentSent: 0,
+          latestAttemptAt: null,
+        },
+      }),
+    }));
+    vi.doMock("~/lib/meta-ads-readiness.server", () => ({
+      getMetaAdsBetaReadiness: vi.fn().mockResolvedValue({
+        ok: true,
+        blockers: [],
+      }),
+    }));
+
+    const { loader } = await import("~/routes/api.launch-readiness");
+    const response = await loader({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness", {
+        headers: {
+          "x-0509-canary-token": "secret-token",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      blockers: [
+        "no_recent_email_delivery_attempt",
+        "no_recent_email_sent",
+      ],
       signals: {
         emailDelivery: {
-          recentAttempts: 0,
+          recentSent: 3,
+        },
+        digestDelivery: {
           recentSent: 0,
         },
       },

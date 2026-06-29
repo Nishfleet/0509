@@ -1338,16 +1338,30 @@ async function retryFailedDigests(
         continue;
       }
 
-      const digest = await getDigest(env, candidate.id);
-      if (!digest || digest.items.length === 0) {
-        continue;
-      }
+	      const digest = await getDigest(env, candidate.id);
+	      if (!digest) {
+	        continue;
+	      }
+	      let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
+	      if (digest.items.length === 0) {
+	        const runStats = await getSuccessfulRunStatsForUserBetween(
+	          env,
+	          candidate.userId,
+	          candidate.periodStart,
+	          candidate.periodEnd,
+	        );
+	        if (runStats.runs === 0) {
+	          continue;
+	        }
+	        heartbeat = runStats;
+	      }
 
-      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-      const delivery = await deliverWeeklyDigest(env, {
-        userId: candidate.userId,
-        userName: candidate.userName,
-        accountEmail: candidate.userEmail,
+	      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+	      const delivery = await deliverWeeklyDigest(env, {
+	        heartbeat,
+	        userId: candidate.userId,
+	        userName: candidate.userName,
+	        accountEmail: candidate.userEmail,
         digestRunId: candidate.id,
         periodStart: candidate.periodStart,
         periodEnd: candidate.periodEnd,

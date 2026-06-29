@@ -448,6 +448,61 @@ describe("digest retry sweep", () => {
     expect(result.digests).toBe(1);
   });
 
+  it("retries all-quiet heartbeat digests with reconstructed scan stats", async () => {
+    const failedDigest = {
+      id: "digest-quiet-1",
+      userId: "user-9",
+      userEmail: "nine@example.com",
+      userName: "Nine",
+      periodStart: "2026-06-09T04:00:00.000Z",
+      periodEnd: "2026-06-10T04:00:00.000Z",
+    };
+    const getDigest = vi.fn().mockResolvedValue({
+      id: "digest-quiet-1",
+      userId: "user-9",
+      periodStart: "2026-06-09T04:00:00.000Z",
+      periodEnd: "2026-06-10T04:00:00.000Z",
+      createdAt: "2026-06-10T04:00:00.000Z",
+      items: [],
+      delivery: {
+        id: "delivery-quiet-1",
+        digestRunId: "digest-quiet-1",
+        provider: "cloudflare_email",
+        status: "failed",
+        recipientEmail: "nine@example.com",
+        externalMessageId: null,
+        errorMessage: "Cloudflare Email send failed: network timeout.",
+        deliveredAt: null,
+      },
+    });
+    const mocks = mockReliabilityDependencies({
+      watchlists: [],
+      digestUsers: [],
+      retryableDigestRuns: [failedDigest],
+      getDigestImpl: getDigest,
+      runStats: { runs: 5, watchlistsChecked: 2, adsSeen: 44 },
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: true,
+      digestCadence: "daily",
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledTimes(1);
+    expect(mocks.deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-9",
+        digestRunId: "digest-quiet-1",
+        items: [],
+        heartbeat: { runs: 5, watchlistsChecked: 2, adsSeen: 44 },
+      }),
+    );
+    expect(result.digests).toBe(1);
+  });
+
   it("skips retrying digests for users whose plan no longer includes digests", async () => {
     const failedDigest = {
       id: "digest-old-2",

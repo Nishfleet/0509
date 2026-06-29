@@ -132,11 +132,12 @@ const watchEvent: WatchEventRecord = {
   adId: "meta-boat-1",
   baselineFromRunId: null,
   candidateId: null,
-  proofCaptureId: null,
+  proofCaptureId: "proof-1",
   title: "New ad detected",
   summary: "A new ad entered Audio competitors.",
   metadata: {
     advertiser: "boAt",
+    sourceStatus: "proof_backed",
   },
   confirmedAt: "2026-03-31T00:00:00.000Z",
   suppressedAt: null,
@@ -228,7 +229,13 @@ describe("buildWatchlistReport", () => {
       { label: "Events", value: "1" },
       { label: "Linked ads", value: "1" },
       { label: "Event types", value: "ad new" },
+      { label: "Excluded", value: "0" },
     ]);
+    expect(report.sourceCoverage).toMatchObject({
+      totalInput: 1,
+      included: 1,
+      excluded: 0,
+    });
     expect(report.insightDepth.creativeTimeline[0]).toMatchObject({
       label: "New ad detected",
       detail: "A new ad entered Audio competitors.",
@@ -239,9 +246,52 @@ describe("buildWatchlistReport", () => {
         typeLabel: "ad new",
         title: "New ad detected",
         summary: "A new ad entered Audio competitors.",
+        proofStatusLabel: "Verified proof",
+        sourceTypeLabel: "Proof snapshot",
+        sourceUrl: "https://cdn.example.com/boat.png",
+        metaAdId: "meta-boat-1",
       },
       creativeText: "60 Hours Playback\nOnly ₹999",
       translatedText: "Translation unavailable",
+    });
+  });
+
+  it("excludes non-client-ready watch events from proof-backed reports", () => {
+    const unsafeEvents: WatchEventRecord[] = [
+      {
+        ...watchEvent,
+        id: "event-scan",
+        proofCaptureId: null,
+        metadata: { advertiser: "boAt", sourceStatus: "scan_backed" },
+      },
+      {
+        ...watchEvent,
+        id: "event-failed",
+        status: "proof_failed",
+        proofCaptureId: null,
+        metadata: { advertiser: "boAt", sourceStatus: "proof_failed" },
+      },
+      {
+        ...watchEvent,
+        id: "event-suppressed",
+        status: "suppressed",
+        suppressedAt: "2026-04-01T00:00:00.000Z",
+      },
+    ];
+
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent, ...unsafeEvents],
+      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0].event?.title).toBe("New ad detected");
+    expect(report.sourceCoverage).toMatchObject({
+      totalInput: 4,
+      included: 1,
+      excluded: 3,
     });
   });
 });

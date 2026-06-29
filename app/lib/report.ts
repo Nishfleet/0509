@@ -19,6 +19,7 @@ export interface ReportLandingPage {
   url: string;
   headline: string;
   captureLabel: string;
+  capturedAt: string | null;
   signals: ReportField[];
 }
 
@@ -31,6 +32,27 @@ export interface ReportEventSummary {
   priorityBand: string;
   recommendedAction: string;
   proofTrail: string;
+  proofStatusLabel: string;
+  sourceTypeLabel: string;
+  sourceUrl: string | null;
+  metaAdId: string | null;
+}
+
+export interface ReportSourceCoverage {
+  totalInput: number;
+  included: number;
+  excluded: number;
+  note: string;
+  proofMix: {
+    verifiedProof: number;
+    scanSpotted: number;
+    needsReview: number;
+    proofPending: number;
+    proofFailed: number;
+    excluded: number;
+    unknown: number;
+  };
+  excludedCounts: Record<string, number>;
 }
 
 export interface ReportRow {
@@ -62,6 +84,7 @@ export interface ReportDocument {
   generatedAt: string;
   stats: ReportStat[];
   insightDepth: InsightDepthSummary;
+  sourceCoverage?: ReportSourceCoverage;
   rows: ReportRow[];
 }
 

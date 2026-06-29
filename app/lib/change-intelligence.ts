@@ -47,6 +47,7 @@ export function digestMetadataForEvent(event: WatchEventRecord, timeZone?: strin
     ...buildChangeIntelligenceSummary(event, timeZone),
     proofCaptureId: event.proofCaptureId,
     confirmedAt: event.confirmedAt,
+    eventStatus: event.status,
     sourceStatus: event.proofCaptureId ? "proof_backed" : "scan_backed",
   };
 }

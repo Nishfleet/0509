@@ -44,6 +44,7 @@ import {
   listActiveWatchlists,
   listCollectionItems,
   listDigests,
+  listRetryableDigestRuns,
   upsertDigestDelivery,
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
@@ -2447,6 +2448,31 @@ describe("getOperatorSnapshot", () => {
   });
 });
 
+describe("listRetryableDigestRuns", () => {
+  it("only retries failed or missing digest delivery rows", async () => {
+    const mock = createMockDb();
+
+    await listRetryableDigestRuns(
+      { DB: mock.db } as never,
+      {
+        since: "2026-06-01T00:00:00.000Z",
+        limit: 25,
+      },
+    );
+
+    const query = findStatement(mock.statements, "FROM digest_run");
+    expect(query?.sql).toContain("digest_delivery.status = 'failed'");
+    expect(query?.sql).toContain("digest_delivery.id IS NULL");
+    expect(query?.sql).not.toContain("delivery_attempt.status = 'pending'");
+    expect(query?.sql).not.toContain("delivery_attempt.provider_message_id IS NULL");
+    expect(query?.sql).not.toContain("delivery_attempt.updated_at <= ?");
+    expect(query?.bindings).toEqual([
+      "2026-06-01T00:00:00.000Z",
+      25,
+    ]);
+  });
+});
+
 describe("upsertProofTarget", () => {
   it("persists canonical page identity separately from proof-target identity", async () => {
     const mock = createMockDb();
@@ -2912,6 +2938,19 @@ describe("getLaunchReadinessSignals", () => {
 
     const proofQuery = findStatement(mock.statements, "FROM proof_capture", "launch_readiness_canary");
     expect(proofQuery?.sql).toContain("json_extract(capture_metadata_json, '$.kind')");
+    const digestEmailQuery = findStatement(
+      mock.statements,
+      "FROM delivery_attempt",
+      "digest_run_id IS NOT NULL",
+      "channel = 'email'",
+      "provider = 'cloudflare_email'",
+      "provider_status_last_seen_at",
+    );
+    expect(digestEmailQuery).toBeTruthy();
+    expect(digestEmailQuery?.sql).toContain(
+      "COALESCE(provider_status_last_seen_at, sent_at, updated_at, created_at) >= ?",
+    );
+    expect(digestEmailQuery?.sql).toContain("lane = 'customer'");
     expect(findStatement(mock.statements, "FROM delivery_target", "channel = 'slack'")).toBeTruthy();
     expect(findStatement(mock.statements, "FROM delivery_attempt", "channel = 'email'")).toBeTruthy();
     expect(findStatement(mock.statements, "FROM delivery_attempt", "channel = 'slack'")).toBeTruthy();

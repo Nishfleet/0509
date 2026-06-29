@@ -1,3 +1,6 @@
+import { createElement } from "react";
+import type { ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -59,6 +62,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/env.server");
+  vi.doUnmock("react-router");
 });
 
 describe("share link persistence", () => {
@@ -172,6 +176,333 @@ describe("share link persistence", () => {
     expect(select?.sql).toContain("WHERE user_id = ?");
     expect(select?.sql).toContain("revoked_at IS NULL");
     expect(select?.bindings[0]).toBe("user-1");
+  });
+});
+
+describe("/share/:token route", () => {
+  it("sanitizes legacy raw digest snapshot payloads before returning loader data", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({
+      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getCollection: vi.fn(),
+      getDigest: vi.fn(),
+      getShareLink: vi.fn().mockResolvedValue({
+        id: "share-1",
+        token: "token-1",
+        userId: "user-1",
+        resourceType: "digest",
+        resourceId: "digest-internal-1",
+        isSnapshot: true,
+        snapshotPayload: {
+          id: "digest-internal-1",
+          userId: "user-1",
+          periodStart: "2026-06-01T00:00:00.000Z",
+          periodEnd: "2026-06-08T00:00:00.000Z",
+          createdAt: "2026-06-08T01:00:00.000Z",
+          delivery: {
+            recipientEmail: "owner@example.com",
+            externalMessageId: "provider-msg-1",
+            errorMessage: "provider payload should not render",
+          },
+          items: [
+            {
+              id: "digest-item-internal-1",
+              digestRunId: "digest-run-1",
+              watchlistId: "watch-1",
+              watchlistName: "Competitor",
+              eventType: "ad_new",
+              title: "New offer spotted",
+              summary: "Competitor launched a new offer.",
+              createdAt: "2026-06-07T12:00:00.000Z",
+              metadata: {
+                priorityScore: 91,
+                recommendedAction: "Review the landing page",
+                sourceStatus: "proof_backed",
+                proofCaptureId: "proof-capture-internal-1",
+                recipientEmail: "owner@example.com",
+                externalMessageId: "provider-msg-1",
+                rawProviderPayload: { secret: true },
+              },
+            },
+          ],
+        },
+        createdAt: "2026-06-08T01:00:00.000Z",
+        expiresAt: null,
+        revokedAt: null,
+      }),
+      getWatchlist: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listWatchEvents: vi.fn(),
+    }));
+
+    const { loader } = await import("~/routes/share.$token");
+    const result = await loader({
+      context: {},
+      params: { token: "token-1" },
+      request: new Request("https://0509.io/share/token-1"),
+    } as never);
+    const payload = (result as unknown as { payload: Record<string, unknown> }).payload;
+    const serialized = JSON.stringify(payload);
+
+    expect(payload).toMatchObject({
+      kind: "digest_share_snapshot",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      items: [
+        expect.objectContaining({
+          id: "item-1",
+          proofStatus: "verified_proof",
+          sourceTypeLabel: "Proof snapshot",
+        }),
+      ],
+    });
+    expect(serialized).toContain("Review the landing page");
+    expect(serialized).not.toContain("owner@example.com");
+    expect(serialized).not.toContain("provider-msg-1");
+    expect(serialized).not.toContain("digest-internal-1");
+    expect(serialized).not.toContain("digest-item-internal-1");
+    expect(serialized).not.toContain("digest-run-1");
+    expect(serialized).not.toContain("watch-1");
+    expect(serialized).not.toContain("proof-capture-internal-1");
+    expect(serialized).not.toContain("rawProviderPayload");
+  });
+
+  it("sanitizes legacy report snapshot identifiers before returning loader data", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({
+      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getCollection: vi.fn(),
+      getDigest: vi.fn(),
+      getShareLink: vi.fn().mockResolvedValue({
+        id: "share-1",
+        token: "token-1",
+        userId: "user-1",
+        resourceType: "report",
+        resourceId: "watch-internal-1",
+        isSnapshot: true,
+        snapshotPayload: {
+          kind: "report",
+          reportId: "watchlist:watch-internal-1",
+          resourceType: "watchlist",
+          resourceId: "watch-internal-1",
+          title: "Proof report",
+          subtitle: "Latest verified moves",
+          summary: "One move included.",
+          generatedAt: "2026-06-08T01:00:00.000Z",
+          ownerId: "owner-secret",
+          recipientEmail: "owner@example.com",
+          externalMessageId: "provider-msg-1",
+          delivery: { recipientEmail: "owner@example.com" },
+          rawProviderPayload: { id: "provider-msg-1" },
+          stats: [{ label: "Moves", value: "1", secret: "stat-secret" }],
+          insightDepth: {
+            topHooks: [{ label: "Offer", count: 1, detail: "Discount", ownerId: "owner-secret" }],
+            mediaMix: [],
+            campaignDurations: [],
+            metricProof: [],
+            creativeTimeline: [{ label: "Launch", detail: "New offer", timestamp: "2026-06-08T01:00:00.000Z", secret: "timeline-secret" }],
+            landingPageHistory: [],
+            rawMetadata: { ownerId: "owner-secret" },
+          },
+          sourceCoverage: {
+            totalInput: 2,
+            included: 1,
+            excluded: 1,
+            note: "1 proof-backed event included.",
+            proofMix: {
+              verifiedProof: 1,
+              scanSpotted: 0,
+              needsReview: 0,
+              proofPending: 0,
+              proofFailed: 0,
+              excluded: 1,
+              unknown: 0,
+              ownerId: "owner-secret",
+            },
+            excludedCounts: {
+              proof_pending: 1,
+              "owner-secret": 99,
+            },
+          },
+          rows: [
+            {
+              id: "watch-event-internal-1",
+              advertiser: "Competitor",
+              previewHeadline: "New offer",
+              offer: "20% off",
+              cta: "Shop now",
+              formatLabel: "Image",
+              languageLabel: "English",
+              previewImageUrl: null,
+              creativeText: "Creative",
+              translatedText: "Creative",
+              landingPage: {
+                url: "",
+                headline: "",
+                captureLabel: "",
+                capturedAt: null,
+                signals: [{ label: "CTA", value: "Shop now", sourceLabel: "Landing page", rawProviderPayload: "provider-msg-1" }],
+                secret: "landing-secret",
+              },
+              analysisFields: [{ label: "Offer", value: "20% off", rawMetadata: "provider-msg-1" }],
+              tags: ["discount"],
+              note: null,
+              ownerId: "owner-secret",
+              rawMetadata: { providerMessageId: "provider-msg-1" },
+              event: {
+                typeLabel: "Offer",
+                title: "New offer",
+                summary: "A new offer launched.",
+                createdAt: "2026-06-08T01:00:00.000Z",
+                priorityScore: 82,
+                priorityBand: "high",
+                recommendedAction: "Review",
+                proofTrail: "Proof capture",
+                proofStatusLabel: "Verified proof",
+                sourceTypeLabel: "Proof snapshot",
+                sourceUrl: "javascript:alert(1)",
+                metaAdId: null,
+                delivery: { recipientEmail: "owner@example.com" },
+              },
+            },
+          ],
+        },
+        createdAt: "2026-06-08T01:00:00.000Z",
+        expiresAt: null,
+        revokedAt: null,
+      }),
+      getWatchlist: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listWatchEvents: vi.fn(),
+    }));
+
+    const { loader } = await import("~/routes/share.$token");
+    const result = await loader({
+      context: {},
+      params: { token: "token-1" },
+      request: new Request("https://0509.io/share/token-1"),
+    } as never);
+    const payload = (result as unknown as { payload: Record<string, unknown> }).payload;
+    const serialized = JSON.stringify(payload);
+
+    expect(payload).toMatchObject({
+      kind: "report",
+      reportId: "shared-report",
+      resourceId: "shared",
+      rows: [expect.objectContaining({ id: "row-1" })],
+    });
+    expect(serialized).not.toContain("watch-internal-1");
+    expect(serialized).not.toContain("watch-event-internal-1");
+    expect(serialized).not.toContain("owner-secret");
+    expect(serialized).not.toContain("owner@example.com");
+    expect(serialized).not.toContain("provider-msg-1");
+    expect(serialized).not.toContain("rawProviderPayload");
+    expect(serialized).not.toContain("rawMetadata");
+    expect(serialized).not.toContain("landing-secret");
+    expect(serialized).not.toContain("stat-secret");
+    expect(serialized).not.toContain("timeline-secret");
+    expect(serialized).not.toContain("javascript:alert");
+  });
+
+  it("rejects legacy watchlist report snapshots that lack proof eligibility metadata", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({
+      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getCollection: vi.fn(),
+      getDigest: vi.fn(),
+      getShareLink: vi.fn().mockResolvedValue({
+        id: "share-1",
+        token: "token-1",
+        userId: "user-1",
+        resourceType: "report",
+        resourceId: "watch-internal-1",
+        isSnapshot: true,
+        snapshotPayload: {
+          kind: "report",
+          reportId: "watchlist:watch-internal-1",
+          resourceType: "watchlist",
+          resourceId: "watch-internal-1",
+          title: "Legacy report",
+          rows: [
+            {
+              id: "watch-event-internal-1",
+              advertiser: "Suppressed competitor",
+              previewHeadline: "Suppressed move",
+              offer: "",
+              cta: "",
+              formatLabel: "",
+              languageLabel: "",
+              previewImageUrl: null,
+              creativeText: "",
+              translatedText: "",
+              landingPage: { url: "", headline: "", captureLabel: "", capturedAt: null, signals: [] },
+              analysisFields: [],
+              tags: [],
+              note: null,
+              rawMetadata: { status: "suppressed" },
+            },
+          ],
+        },
+        createdAt: "2026-06-08T01:00:00.000Z",
+        expiresAt: null,
+        revokedAt: null,
+      }),
+      getWatchlist: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listWatchEvents: vi.fn(),
+    }));
+
+    const { loader } = await import("~/routes/share.$token");
+    const result = await loader({
+      context: {},
+      params: { token: "token-1" },
+      request: new Request("https://0509.io/share/token-1"),
+    } as never);
+
+    expect((result as unknown as { payload: unknown }).payload).toBeNull();
+    expect(JSON.stringify(result)).not.toContain("watch-event-internal-1");
+  });
+
+  it("does not render raw JSON for unsupported snapshot payloads", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      return {
+        ...actual,
+        Link: ({ children, to, ...props }: { children: ReactNode; to: string }) =>
+          createElement("a", { href: to, ...props }, children),
+        useLoaderData: vi.fn().mockReturnValue({
+          mode: "snapshot",
+          resourceType: "digest",
+          preparedBy: null,
+          payload: {
+            recipientEmail: "owner@example.com",
+            externalMessageId: "provider-msg-1",
+            errorMessage: "provider payload should not render",
+          },
+        }),
+      };
+    });
+
+    const { default: ShareRoute } = await import("~/routes/share.$token");
+    const markup = renderToStaticMarkup(createElement(ShareRoute));
+
+    expect(markup).toContain("Snapshot unavailable");
+    expect(markup).toContain("create a fresh share link");
+    expect(markup).not.toContain("owner@example.com");
+    expect(markup).not.toContain("provider-msg-1");
+    expect(markup).not.toContain("externalMessageId");
   });
 });
 

@@ -1085,7 +1085,8 @@ describe("runCustomerAgentAction", () => {
         resourceId: "collection:collection-1",
         isSnapshot: true,
         snapshotPayload: expect.objectContaining({
-          reportId: "collection:collection-1",
+          reportId: "shared-report",
+          resourceId: "shared",
         }),
       }),
     );

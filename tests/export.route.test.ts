@@ -220,7 +220,7 @@ const digest: DigestRecord = {
   ],
 };
 
-function setupMocks(input: { collectionItems?: CollectionItemRecord[] } = {}) {
+function setupMocks(input: { collectionItems?: CollectionItemRecord[]; watchEvents?: WatchEventRecord[] } = {}) {
   mockAgencyWorkspacePlan();
   const env = { DB: {} };
   vi.doMock("~/lib/auth.server", () => ({
@@ -240,7 +240,7 @@ function setupMocks(input: { collectionItems?: CollectionItemRecord[] } = {}) {
     getDigest: vi.fn().mockResolvedValue(digest),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
     listCollectionItems: vi.fn().mockResolvedValue(input.collectionItems ?? [collectionItem]),
-    listWatchEvents: vi.fn().mockResolvedValue([watchEvent]),
+    listWatchEvents: vi.fn().mockResolvedValue(input.watchEvents ?? [watchEvent]),
   }));
   return env;
 }
@@ -406,8 +406,48 @@ describe("authenticated export route", () => {
     expect(body).toContain("*Insight depth*");
     expect(body).toContain("_Landing-page history_");
     expect(body).toContain("Priority: Medium priority (84/100)");
+    expect(body).toContain("Proof status: Verified proof");
     expect(body).toContain("Next move: Next review:");
     expect(body).toContain("Evidence: Verified from a page snapshot");
+  });
+
+  it("excludes unsafe watch events from account-scoped watchlist JSON exports", async () => {
+    setupMocks({
+      watchEvents: [
+        watchEvent,
+        {
+          ...watchEvent,
+          id: "event-scan",
+          proofCaptureId: null,
+          metadata: { sourceStatus: "scan_backed" },
+        },
+        {
+          ...watchEvent,
+          id: "event-failed",
+          status: "proof_failed",
+          proofCaptureId: null,
+          metadata: { sourceStatus: "proof_failed" },
+        },
+      ],
+    });
+    const response = await loadExport("https://0509.io/export/watchlist/watchlist-1?format=json");
+    const body = await response.json() as {
+      watchlist: Record<string, unknown>;
+      sourceCoverage: { included: number; excluded: number };
+      events: Array<Record<string, unknown>>;
+    };
+
+    expect(body.sourceCoverage).toMatchObject({ included: 1, excluded: 2 });
+    expect(body.events).toHaveLength(1);
+    expect(body.events[0]).toMatchObject({
+      id: expect.stringMatching(/^watch_event_/),
+      title: "Landing page offer changed",
+      proofStatusLabel: "Verified proof",
+      sourceTypeLabel: "Proof snapshot",
+    });
+    expect(body.events[0]).not.toHaveProperty("metadata");
+    expect(body.watchlist).not.toHaveProperty("userId");
+    expect(body.watchlist).not.toHaveProperty("targetFingerprint");
   });
 
   it("returns digest JSON with priority and proof trail intelligence", async () => {

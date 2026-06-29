@@ -61,8 +61,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const blockers = [
     signals.monitoring.recentSuccessfulRuns > 0 ? null : "no_recent_monitoring_run",
     signals.proof.recentSuccessfulCaptures > 0 ? null : "no_recent_proof_capture",
-    signals.emailDelivery.recentAttempts > 0 ? null : "no_recent_email_delivery_attempt",
-    signals.emailDelivery.recentSent > 0 ? null : "no_recent_email_sent",
+    signals.digestDelivery.recentAttempts > 0 ? null : "no_recent_email_delivery_attempt",
+    signals.digestDelivery.recentSent > 0 ? null : "no_recent_email_sent",
     whatsappLaunchScoped && !signals.whatsappDelivery.providerConfigured
       ? "whatsapp_provider_not_configured"
       : null,
@@ -81,6 +81,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ...metaAdsBeta.blockers.map((blocker) => `meta_ads_beta:${blocker}`),
   ].filter((value): value is string => Boolean(value));
   const advisories = [
+    signals.emailDelivery.recentSent > 0 ? null : "no_recent_general_email_provider_accepted",
     signals.slackDelivery.usableTargets > 0 ? null : "no_slack_delivery_target",
     signals.slackDelivery.recentSent > 0 ? null : "no_recent_slack_sent",
   ].filter((value): value is string => Boolean(value));
@@ -89,6 +90,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     {
       ok: blockers.length === 0,
       blockers,
+      blockerDetails: {
+        no_recent_email_delivery_attempt: {
+          scope: "digest_email",
+          meaning: "No recent digest email delivery attempt was recorded.",
+        },
+        no_recent_email_sent: {
+          scope: "digest_email",
+          meaning: "No recent digest email provider acceptance was recorded.",
+        },
+      },
       advisories,
       signals,
       launchScope: {
