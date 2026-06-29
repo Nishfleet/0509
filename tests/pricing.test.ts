@@ -40,6 +40,9 @@ describe("pricingPlans", () => {
     expect(agency.features).toContain("75 active watchlists");
     expect(agency.features).not.toContain("Slack");
     expect(agency.features).toContain("2,500 evidence checks per month");
+    expect(agency.features).toContain("Priority nightly monitoring capacity");
+    expect(agency.features.filter((feature) => feature === "Daily and weekly evidence-backed digests")).toHaveLength(1);
+    expect(agency.features.join("\n")).not.toContain("nightly queue");
   });
 
   it("offers paid proof-capture bundles for temporary spikes", () => {

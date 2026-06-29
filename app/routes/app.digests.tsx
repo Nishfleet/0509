@@ -9,11 +9,12 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
-import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
+import { DigestDecisionSummary, DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import { CopyButton } from "~/components/copy-button";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { LocalTime } from "~/components/local-time";
 import { PlanLimitState } from "~/components/plan-limit-state";
+import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
@@ -263,6 +264,19 @@ export default function DigestsRoute() {
                       <LocalTime iso={data.selectedDigest.periodEnd} mode="date" />
                     </h2>
                   </div>
+                </div>
+
+                <DigestDecisionSummary items={data.selectedDigest.items} />
+
+                <DigestProofPacket items={data.selectedDigest.items} />
+
+                <DigestMovementSummary items={data.selectedDigest.items} />
+
+                <section className="f9-work-list is-compact" style={{ marginBottom: "1rem" }}>
+                  <div>
+                    <span className="f9-app-kicker">Digest actions</span>
+                    <h3 style={{ marginTop: 0 }}>Share or export after reviewing the decision summary</h3>
+                  </div>
                   <div className="f9-action-row">
                     <a
                       className="f9-secondary-button"
@@ -284,13 +298,11 @@ export default function DigestsRoute() {
                       </SubmitButton>
                     </Form>
                   </div>
-                </div>
+                </section>
 
                 {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
-                <DigestProofPacket items={data.selectedDigest.items} />
-
-                <DigestMovementSummary items={data.selectedDigest.items} />
+                <ProofGlossary />
 
                 <section className="f9-work-list is-compact" style={{ marginBottom: "1rem" }}>
                   <div>
@@ -425,7 +437,7 @@ export default function DigestsRoute() {
                   ) : (
                     <p className="f9-muted-copy">
                       {data.selectedDigest.delivery?.status === "sent"
-                        ? "Legacy provider send recorded. Recipient delivery is unknown."
+                        ? "Older delivery record found. Recipient delivery is unknown."
                         : "No channel-level delivery attempts recorded yet."}
                     </p>
                   )}
@@ -478,7 +490,7 @@ function formatDigestSidebarStatus(
 ) {
   if (attempts.length === 0) {
     if (legacyStatus === "sent") {
-      return "Legacy provider send recorded";
+      return "Older delivery record found";
     }
     if (legacyStatus === "failed") {
       return "Delivery failed";
@@ -528,9 +540,9 @@ function describeAttemptStatus(status: string, channel: string, webhookStatus: s
         return "Delivered";
       }
       if (channel === "email") {
-        return "Provider accepted";
+        return "Sent";
       }
-      return "Sent to provider";
+      return "Sent";
     case "failed":
       return "Failed";
     case "skipped_due_to_quiet_hours":
@@ -616,7 +628,30 @@ function readDigestTimestamp(metadata: Record<string, unknown> | undefined) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function readDigestSourceUrl(metadata: Record<string, unknown> | undefined) {
-  const value = metadata?.sourceUrl ?? metadata?.proofUrl ?? metadata?.landingPageUrl;
-  return typeof value === "string" && /^https?:\/\//i.test(value) ? value : null;
+export function readDigestSourceUrl(metadata: Record<string, unknown> | undefined) {
+  for (const key of [
+    "sourceUrl",
+    "proofUrl",
+    "landingPageUrl",
+    "websiteUrl",
+    "websiteProofUrl",
+    "canonicalUrl",
+  ]) {
+    const safeUrl = readDigestHttpUrl(metadata?.[key]);
+    if (safeUrl) {
+      return safeUrl;
+    }
+  }
+  return null;
+}
+
+function readDigestHttpUrl(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "http:" || url.protocol === "https:" ? trimmed : null;
+  } catch {
+    return null;
+  }
 }

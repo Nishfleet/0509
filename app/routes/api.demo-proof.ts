@@ -46,6 +46,17 @@ Saved competitor: ${demoProof.trackedPreview.savedCompetitor}
 
 ${proofItems}
 
+## Decision Summary
+
+- Subject: ${demoProof.digestPreview.subject}
+- What changed: ${demoProof.digestPreview.whatChanged}
+- Why it matters: ${demoProof.digestPreview.whyItMatters}
+- Urgency: ${demoProof.digestPreview.priority}
+- Proof status: ${demoProof.digestPreview.proofStatus}
+- Source: ${demoProof.digestPreview.source}
+- Freshness: ${demoProof.digestPreview.freshness}
+- Next action: ${demoProof.digestPreview.recommendedMove}
+
 ## Digest Preview
 
 - Subject: ${demoProof.digestPreview.subject}

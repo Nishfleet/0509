@@ -403,6 +403,42 @@ export default function MarketingRoute() {
           </article>
 
           <article className="ld-case-card">
+            <span className="ld-kicker">Decision summary</span>
+            <h4>{demoProof.digestPreview.subject}</h4>
+            <p>{demoProof.digestPreview.whyItMatters}</p>
+            <dl>
+              <div>
+                <dt>What changed</dt>
+                <dd>{demoProof.digestPreview.whatChanged}</dd>
+              </div>
+              <div>
+                <dt>Why it matters</dt>
+                <dd>{demoProof.digestPreview.whyItMatters}</dd>
+              </div>
+              <div>
+                <dt>Urgency</dt>
+                <dd>{demoProof.digestPreview.priority}</dd>
+              </div>
+              <div>
+                <dt>Proof status</dt>
+                <dd>{demoProof.digestPreview.proofStatus}</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>{demoProof.digestPreview.source}</dd>
+              </div>
+              <div>
+                <dt>Freshness</dt>
+                <dd>{demoProof.digestPreview.freshness}</dd>
+              </div>
+              <div>
+                <dt>Next action</dt>
+                <dd>{demoProof.digestPreview.recommendedMove}</dd>
+              </div>
+            </dl>
+          </article>
+
+          <article className="ld-case-card">
             <span className="ld-kicker">Proof trail</span>
             <ul className="ld-trail">
               {demoProof.proofTrail.map((item) => (
@@ -416,19 +452,13 @@ export default function MarketingRoute() {
           </article>
 
           <article className="ld-case-card">
-            <span className="ld-kicker">Digest preview</span>
-            <h4>{demoProof.digestPreview.subject}</h4>
-            <p>{demoProof.digestPreview.recommendedMove}</p>
-            <dl>
-              <div>
-                <dt>Priority</dt>
-                <dd>{demoProof.digestPreview.priority}</dd>
-              </div>
-              <div>
-                <dt>Confidence</dt>
-                <dd>{demoProof.digestPreview.confidence}</dd>
-              </div>
-            </dl>
+            <span className="ld-kicker">{demoProof.reportPreview.title}</span>
+            <h4>Client-ready view</h4>
+            <ul className="ld-trail">
+              {demoProof.reportPreview.rows.map((row) => (
+                <li key={row}>{row}</li>
+              ))}
+            </ul>
           </article>
 
           <div className="ld-intel" aria-label="Sample insight depth">
@@ -644,9 +674,9 @@ export default function MarketingRoute() {
             <div>
               <dt>What changes on Agency?</dt>
               <dd>
-                Agency includes 75 watchlists with daily scans and highest queue priority. It now
-                runs on the fan-out workflow path; we keep monitoring nightly dispatch and scan
-                health as volume grows.
+                Agency includes 75 watchlists with daily scans, priority monitoring capacity,
+                client-ready reports, shared report branding, developer access, and three team
+                seats. We keep monitoring coverage visible as account volume grows.
               </dd>
             </div>
             <div>

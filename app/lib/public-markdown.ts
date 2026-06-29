@@ -34,7 +34,8 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Public read-only search and a sample proof preview are available before signup.
 - Accounts unlock saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
-- Authenticated collection, watchlist, and digest exports support CSV and JSON export.
+- Customer-facing views lead with what changed, why it matters, urgency, proof status, source freshness, and the next action before raw data or settings.
+- Authenticated collection, watchlist, and digest exports support CSV and JSON export. Watchlist and digest CSV exports include decision fields: priority, recommended next action, proof status, proof trail, source freshness, and source URL when available.
 - Signed-in collections can store manual external proof links from TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing pages, or other visible sources, including visible spend, impression, and reach values when a user supplies them.
 - Customer API keys can read account-owned setup status, collection, watchlist, and digest exports.
 - Write-enabled customer API keys can perform approved account actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
@@ -46,7 +47,7 @@ Five to Nine turns competitor ads and visible landing-page changes into proof-ba
 - Email delivery is available for eligible accounts.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric proof, creative timeline, and landing-page history from saved proof, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
-- Daily and weekly digests should show priority, recommended next move, and proof trail.
+- Daily and weekly digests should show priority, recommended next move, proof status, source freshness, and proof trail.
 
 ## Current product truth
 
@@ -95,8 +96,9 @@ Current product truth:
 - Recent results must not be described as fresh live proof.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
 - Proof-backed digest items include priority, recommendation, timestamp, and confidence trail.
+- Customer-facing views lead with what changed, why it matters, urgency, proof status, source freshness, and the next action before raw data or settings.
 - Insight depth includes observed campaign duration only when first-seen and last-seen proof exists; manual external proof links can add visible non-Meta proof and user-supplied metric proof to saved collections, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
-- Account export links support CSV and JSON export for signed-in users.
+- Account export links support CSV and JSON export for signed-in users. Watchlist and digest CSV exports include priority, recommended next action, proof status, proof trail, source freshness, and source URL when available.
 - Customer API keys support setup status plus collection, watchlist, and digest exports for account-owned data.
 - Write-enabled customer API keys support approved account actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.

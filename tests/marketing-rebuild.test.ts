@@ -102,6 +102,13 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Know when competitors change the offer.");
     expect(marketingRoute).toContain("Stop finding out after the sales call.");
     expect(marketingRoute).toContain("Sample brief");
+    expect(marketingRoute).toContain("Decision summary");
+    expect(marketingRoute).toContain("Client-ready view");
+    expect(marketingRoute).toContain("What changed");
+    expect(marketingRoute).toContain("Why it matters");
+    expect(marketingRoute).toContain("Proof status");
+    expect(marketingRoute).toContain("Freshness");
+    expect(marketingRoute).toContain("Next action");
     expect(marketingRoute).toContain("Visible offer text changed");
     expect(marketingRoute).toContain("CTA changed on the destination page");
     expect(marketingRoute).toContain("Recommended launch plan");
@@ -117,6 +124,9 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("Nykaa changed onboarding bundle");
     expect(marketingRoute).not.toContain("boAt removed COD offer");
     expect(marketingRoute).not.toContain("Meesho added discount hook");
+    expect(marketingRoute.indexOf("Decision summary")).toBeLessThan(
+      marketingRoute.indexOf("Proof trail"),
+    );
   });
 
   it("keeps Slack out of the public GA offer", () => {
@@ -131,6 +141,8 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Common billing questions");
     expect(marketingRoute).toContain("What changes on Agency?");
     expect(marketingRoute).not.toContain("Why is Agency held?");
+    expect(marketingRoute).not.toContain("fan-out workflow path");
+    expect(marketingRoute).not.toContain("highest queue priority");
   });
 
   it("has incinerated the stale lower-page system", () => {
