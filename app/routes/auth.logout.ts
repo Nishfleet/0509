@@ -9,6 +9,7 @@ async function logout({ context, request }: ActionFunctionArgs) {
     isSameOriginAuthFormPost,
     signOutBetterAuth,
   } = await import("~/lib/better-auth.server");
+  const { E2E_TEST_SESSION_COOKIE, shouldClearE2ETestSessionCookie } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   if (!isSameOriginAuthFormPost(env, request)) {
     throw new Response("Invalid logout request.", { status: 403 });
@@ -24,6 +25,9 @@ async function logout({ context, request }: ActionFunctionArgs) {
     for (const cookie of clearBetterAuthSessionCookies(request)) {
       headers.append("Set-Cookie", cookie);
     }
+  }
+  if (await shouldClearE2ETestSessionCookie(env, request)) {
+    headers.append("Set-Cookie", `${E2E_TEST_SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`);
   }
 
   throw redirect("/", { headers });

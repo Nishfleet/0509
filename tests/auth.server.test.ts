@@ -40,6 +40,16 @@ function dbWithUser(userId: string | null) {
   } as unknown as D1Database;
 }
 
+function dbWithE2ETestMode(enabled: boolean) {
+  return {
+    prepare: vi.fn().mockReturnValue({
+      bind: vi.fn().mockReturnValue({
+        first: vi.fn().mockResolvedValue(enabled ? { enabled: 1 } : null),
+      }),
+    }),
+  } as unknown as D1Database;
+}
+
 interface TestMagicLinkTicketRow {
   consumed_at: string | null;
   created_at: string;
@@ -1377,6 +1387,94 @@ describe("Better Auth routes", () => {
     expect(redirectResponse?.headers.get("Location")).toBe("/");
     expect(combinedSetCookie).toContain("better-auth.session_token=;");
     expect(combinedSetCookie).toContain("__Secure-better-auth.session_token=;");
+    expect(combinedSetCookie).toContain("Max-Age=0");
+  });
+
+  it("clears the local E2E fixture session cookie on test-mode logout", async () => {
+    vi.doMock("~/lib/better-auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
+        "~/lib/better-auth.server",
+      );
+      return {
+        ...actual,
+        signOutBetterAuth: vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+      };
+    });
+
+    const { action } = await import("~/routes/auth.logout");
+    const request = new Request("http://127.0.0.1:4179/auth/logout", {
+      headers: {
+        cookie: "f9_e2e_fixture=e2e-starter",
+        origin: "http://127.0.0.1:4179",
+      },
+      method: "POST",
+    });
+
+    let redirectResponse: Response | null = null;
+    try {
+      await action({
+        context: context(env({ E2E_TEST_MODE: "1" })),
+        params: {},
+        pattern: "/auth/logout",
+        request,
+        url: "http://127.0.0.1:4179/auth/logout",
+      } as never);
+    } catch (error) {
+      redirectResponse = error as Response;
+    }
+
+    const setCookies =
+      (redirectResponse?.headers as (Headers & { getSetCookie?: () => string[] }) | undefined)
+        ?.getSetCookie?.() ?? [redirectResponse?.headers.get("Set-Cookie") ?? ""];
+    const combinedSetCookie = setCookies.join("\n");
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe("/");
+    expect(combinedSetCookie).toContain("f9_e2e_fixture=;");
+    expect(combinedSetCookie).toContain("Path=/");
+    expect(combinedSetCookie).toContain("Max-Age=0");
+  });
+
+  it("clears the local E2E fixture session cookie on database-sentinel logout", async () => {
+    vi.doMock("~/lib/better-auth.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/better-auth.server")>(
+        "~/lib/better-auth.server",
+      );
+      return {
+        ...actual,
+        signOutBetterAuth: vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+      };
+    });
+
+    const { action } = await import("~/routes/auth.logout");
+    const request = new Request("http://127.0.0.1:4179/auth/logout", {
+      headers: {
+        cookie: "f9_e2e_fixture=e2e-starter",
+        origin: "http://127.0.0.1:4179",
+      },
+      method: "POST",
+    });
+
+    let redirectResponse: Response | null = null;
+    try {
+      await action({
+        context: context(env({ DB: dbWithE2ETestMode(true), E2E_TEST_MODE: "0" })),
+        params: {},
+        pattern: "/auth/logout",
+        request,
+        url: "http://127.0.0.1:4179/auth/logout",
+      } as never);
+    } catch (error) {
+      redirectResponse = error as Response;
+    }
+
+    const setCookies =
+      (redirectResponse?.headers as (Headers & { getSetCookie?: () => string[] }) | undefined)
+        ?.getSetCookie?.() ?? [redirectResponse?.headers.get("Set-Cookie") ?? ""];
+    const combinedSetCookie = setCookies.join("\n");
+    expect(redirectResponse?.status).toBe(302);
+    expect(redirectResponse?.headers.get("Location")).toBe("/");
+    expect(combinedSetCookie).toContain("f9_e2e_fixture=;");
+    expect(combinedSetCookie).toContain("Path=/");
     expect(combinedSetCookie).toContain("Max-Age=0");
   });
 
