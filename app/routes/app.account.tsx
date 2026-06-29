@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import {
   hasInvalidCompetitorWebsite,
@@ -31,21 +32,36 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getUserPlan } = await import("~/lib/plan.server");
   const { getWorkspaceBranding } = await import("~/lib/data.server");
   const { resolveWorkspacePreparedBy } = await import("~/lib/plan-feature-gate.server");
+  const { isE2ETestSessionId } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
+  const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
 
   const plan = await getUserPlan(env, session.user.id);
   const brandName = await resolveWorkspacePreparedBy(env, session.user.id);
   const branding = await getWorkspaceBranding(env, session.user.id);
-  const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
-  const passkeys = passkeysEnabled ? await listBetterAuthPasskeys(env, request) : [];
+  const passkeysEnabled = !isE2EFixtureSession && isBetterAuthPasskeyEnabled(env);
+  let passkeys: Awaited<ReturnType<typeof listBetterAuthPasskeys>> = [];
+  let passkeyControlsMessage: string | null = null;
+  if (passkeysEnabled) {
+    try {
+      passkeys = await listBetterAuthPasskeys(env, request);
+    } catch (error) {
+      console.warn("[account] passkey controls unavailable", error);
+      passkeyControlsMessage = "Sign in again to manage passkeys.";
+    }
+  }
   let activeSessions: Awaited<ReturnType<typeof listBetterAuthSessions>> = [];
-  let sessionControlsMessage: string | null = null;
-  try {
-    activeSessions = await listBetterAuthSessions(env, request, session.session.id);
-  } catch (error) {
-    console.warn("[account] session controls unavailable", error);
-    sessionControlsMessage = "Sign in again to manage active sessions.";
+  let sessionControlsMessage: string | null = isE2EFixtureSession
+    ? "Sign in with email to manage active sessions."
+    : null;
+  if (!isE2EFixtureSession) {
+    try {
+      activeSessions = await listBetterAuthSessions(env, request, session.session.id);
+    } catch (error) {
+      console.warn("[account] session controls unavailable", error);
+      sessionControlsMessage = "Sign in again to manage active sessions.";
+    }
   }
 
   return {
@@ -57,6 +73,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     brandWebsite: branding.brandWebsite,
     passkeys,
     passkeysEnabled,
+    passkeyControlsMessage,
     activeSessions,
     sessionControlsMessage,
   };
@@ -66,10 +83,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { upsertWorkspaceBranding } = await import("~/lib/data.server");
+  const { isE2ETestSessionId } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+  const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
 
   if (intent === "save-report-branding") {
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
@@ -122,6 +141,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "revoke-session") {
+    if (isE2EFixtureSession) {
+      return { ok: false, intent, message: "Sign in with email to manage active sessions." };
+    }
+
     const { revokeBetterAuthSessionById } = await import("~/lib/better-auth.server");
     try {
       const result = await revokeBetterAuthSessionById(env, request, {
@@ -139,6 +162,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "revoke-other-sessions") {
+    if (isE2EFixtureSession) {
+      return { ok: false, intent, message: "Sign in with email to manage active sessions." };
+    }
+
     const { revokeOtherBetterAuthSessions } = await import("~/lib/better-auth.server");
     try {
       await revokeOtherBetterAuthSessions(env, request);
@@ -150,6 +177,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "request-account-deletion") {
+    if (isE2EFixtureSession) {
+      return { ok: false, intent, message: "Sign in with email to request account deletion." };
+    }
+
     if (String(formData.get("confirmDeletion") ?? "") !== "yes") {
       return {
         ok: false,
@@ -288,40 +319,50 @@ export default function AccountRoute() {
           </div>
           {passkeyMessage ? <p className="f9-message is-success">{passkeyMessage}</p> : null}
           {passkeyError ? <p className="f9-message is-error">{passkeyError}</p> : null}
-          <div className="f9-account-security-actions">
-            <button
-              className="f9-secondary-button"
-              disabled={passkeyPending}
-              onClick={() => {
-                void registerPasskey({
-                  setError: setPasskeyError,
-                  setMessage: setPasskeyMessage,
-                  setPending: setPasskeyPending,
-                });
-              }}
-              type="button"
-            >
-              {passkeyPending ? "Adding..." : "Add passkey"}
-            </button>
-          </div>
-          {data.passkeys.length > 0 ? (
-            <div className="f9-passkey-list">
-              {data.passkeys.map((passkey) => (
-                <div className="f9-passkey-row" key={passkey.id}>
-                  <div>
-                    <strong>{passkey.label}</strong>
-                    <span>Created {formatAccountDate(passkey.createdAt)}</span>
-                  </div>
-                  <span>
-                    {passkey.lastUsedAt ? `Last used ${formatAccountDate(passkey.lastUsedAt)}` : "Not used yet"}
-                  </span>
-                </div>
-              ))}
-            </div>
+          {data.passkeyControlsMessage ? (
+            <p className="f9-muted-copy">{data.passkeyControlsMessage}</p>
           ) : (
-            <p className="f9-muted-copy">
-              No passkeys are attached to this account yet.
-            </p>
+            <>
+              <div className="f9-account-security-actions">
+                <button
+                  className="f9-secondary-button"
+                  disabled={passkeyPending}
+                  onClick={() => {
+                    void registerPasskey({
+                      setError: setPasskeyError,
+                      setMessage: setPasskeyMessage,
+                      setPending: setPasskeyPending,
+                    });
+                  }}
+                  type="button"
+                >
+                  {passkeyPending ? "Adding..." : "Add passkey"}
+                </button>
+              </div>
+              {data.passkeys.length > 0 ? (
+                <div className="f9-passkey-list">
+                  {data.passkeys.map((passkey) => (
+                    <div className="f9-passkey-row" key={passkey.id}>
+                      <div>
+                        <strong>{passkey.label}</strong>
+                        <span>Created <LocalTime iso={passkey.createdAt} mode="date" /></span>
+                      </div>
+                      <span>
+                        {passkey.lastUsedAt ? (
+                          <>Last used <LocalTime iso={passkey.lastUsedAt} mode="date" /></>
+                        ) : (
+                          "Not used yet"
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="f9-muted-copy">
+                  No passkeys are attached to this account yet.
+                </p>
+              )}
+            </>
           )}
         </article>
       ) : null}
@@ -422,7 +463,7 @@ export default function AccountRoute() {
           </div>
         ) : null}
         <p className="f9-muted-copy">
-          This device is signed in until {formatAccountDateTime(data.sessionExpiresAt)}. Sign out from the navigation
+          This device is signed in until <LocalTime iso={data.sessionExpiresAt} />. Sign out from the navigation
           menu to remove access on this device.
         </p>
         {data.sessionControlsMessage ? (
@@ -435,8 +476,8 @@ export default function AccountRoute() {
                 <div>
                   <strong>{session.isCurrent ? "This device" : formatSessionDevice(session.userAgent)}</strong>
                   <span>
-                    Last active {formatAccountDateTime(session.updatedAt)} · Expires{" "}
-                    {formatAccountDateTime(session.expiresAt)}
+                    Last active <LocalTime iso={session.updatedAt} /> · Expires{" "}
+                    <LocalTime iso={session.expiresAt} />
                   </span>
                   <span>{formatSessionLocation(session.ipAddress, session.userAgent)}</span>
                 </div>
@@ -539,32 +580,6 @@ async function registerPasskey(input: {
       input.setError("That passkey could not be added. Try again or use email sign-in.");
     }
     input.setPending(false);
-  }
-}
-
-function formatAccountDate(value: string) {
-  try {
-    return new Intl.DateTimeFormat("en", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
-
-function formatAccountDateTime(value: string) {
-  try {
-    return new Intl.DateTimeFormat("en", {
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(new Date(value));
-  } catch {
-    return value;
   }
 }
 

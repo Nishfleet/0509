@@ -10,6 +10,9 @@
 /.react-router/
 /.wrangler/
 /.playwright-mcp/
+/.auth/
+/test-results/
+/playwright-report/
 
 .DS_Store
 *.pem

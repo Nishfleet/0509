@@ -62,6 +62,7 @@ export interface AppEnv {
   DODO_PAYMENTS_API_KEY?: string;
   EMAIL?: EmailSendingBinding;
   EMAIL_FROM_EMAIL?: string;
+  E2E_TEST_MODE?: string;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   LAUNCH_CANARY_EMAIL?: string;
   ALLOW_PLATFORM_META_API_FALLBACK?: string;
