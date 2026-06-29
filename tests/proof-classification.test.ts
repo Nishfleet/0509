@@ -86,6 +86,22 @@ describe("proof classification", () => {
     });
   });
 
+  it("honors stored snapshot proof status when metadata has been sanitized", () => {
+    expect(
+      classifyDigestItemSource({
+        proofStatus: "canary_or_test",
+        metadata: {
+          eventStatus: "confirmed",
+          sourceStatus: "proof_backed",
+          priorityScore: 99,
+        },
+      }),
+    ).toMatchObject({
+      status: "canary_or_test",
+      label: "Canary/test",
+    });
+  });
+
   it("filters client reports to verified proof by default", () => {
     const scanOnly = {
       ...baseEvent,

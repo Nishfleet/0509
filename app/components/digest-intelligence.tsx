@@ -1,6 +1,7 @@
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import {
   classifyDigestItemSource,
+  isDigestDecisionCandidate,
   priorityMixLabel,
   proofMixLabel,
   summarizeDigestProofMix,
@@ -10,6 +11,7 @@ import {
 export interface DigestMovementItem {
   watchlistName: string;
   metadata?: Record<string, unknown>;
+  proofStatus?: string;
 }
 
 export interface DigestProofPacketItem extends DigestMovementItem {
@@ -51,20 +53,7 @@ export function DigestProofPacket({ items }: { items: DigestProofPacketItem[] })
 
 export function DigestMovementSummary({ items }: { items: DigestMovementItem[] }) {
   const watchlists = new Set(items.map((item) => item.watchlistName).filter(Boolean));
-  const priorityCounts = items.reduce(
-    (counts, item) => {
-      const intelligence = readDigestIntelligence(item.metadata ?? {});
-      if (intelligence.priorityScore !== null && intelligence.priorityScore >= 85) {
-        counts.high += 1;
-      } else if (intelligence.priorityScore !== null && intelligence.priorityScore >= 65) {
-        counts.medium += 1;
-      } else {
-        counts.low += 1;
-      }
-      return counts;
-    },
-    { high: 0, medium: 0, low: 0 },
-  );
+  const priorityCounts = summarizePriorityMix(items);
 
   return (
     <dl className="proof-trail-list digest-movement-summary">
@@ -84,7 +73,13 @@ export function DigestMovementSummary({ items }: { items: DigestMovementItem[] }
   );
 }
 
-export function DigestIntelligence({ metadata }: { metadata?: Record<string, unknown> }) {
+export function DigestIntelligence({
+  metadata,
+  proofStatus,
+}: {
+  metadata?: Record<string, unknown>;
+  proofStatus?: string;
+}) {
   const intelligence = readDigestIntelligence(metadata ?? {});
   const classification = classifyDigestItemSource({
     watchlistName: "",
@@ -92,6 +87,7 @@ export function DigestIntelligence({ metadata }: { metadata?: Record<string, unk
     title: "",
     summary: "",
     metadata: metadata ?? {},
+    proofStatus,
     createdAt: "",
   });
 
@@ -130,6 +126,7 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
       intelligence: readDigestIntelligence(item.metadata ?? {}),
       index,
     }))
+    .filter((entry) => isDigestDecisionCandidate(entry.item))
     .sort((a, b) => {
       const scoreA = a.intelligence.priorityScore ?? -1;
       const scoreB = b.intelligence.priorityScore ?? -1;

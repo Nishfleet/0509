@@ -379,7 +379,7 @@ export default function DigestsRoute() {
                           </div>
                         ) : null}
                       </dl>
-                      <DigestIntelligence metadata={item.metadata} />
+                      <DigestIntelligence metadata={item.metadata} proofStatus={classification.status} />
                     </li>
                     );
                   })}

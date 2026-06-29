@@ -48,6 +48,7 @@ export interface SourceCoverageSummary {
 export interface DigestTrustItem {
   eventType?: string;
   metadata?: Record<string, unknown>;
+  proofStatus?: string;
   title?: string;
   summary?: string;
   watchlistName?: string;
@@ -60,7 +61,7 @@ export interface DigestTrustItem {
 export function classifyDigestItemSource(item: DigestTrustItem): ProofClassification {
   const metadata = normalizedMetadata(item.metadata);
   return classifyFromStatus({
-    status: readString(metadata.status) ?? readString(metadata.eventStatus),
+    status: readString(metadata.status) ?? readString(item.proofStatus) ?? readString(metadata.eventStatus),
     proofCaptureId: readString(metadata.proofCaptureId),
     sourceStatus: readString(metadata.sourceStatus),
     proofStatus: readString(metadata.proofStatus),
@@ -189,6 +190,12 @@ function classifyFromStatus(input: {
   if (isCanaryOrTestMetadata(input.metadata)) {
     return classification("canary_or_test", ["canary_or_test"]);
   }
+  if (input.status === "internal_only") {
+    return classification("internal_only", ["internal_only"]);
+  }
+  if (input.status === "canary_or_test") {
+    return classification("canary_or_test", ["canary_or_test"]);
+  }
   if (
     input.status === "proof_failed" ||
     input.proofStatus === "failed" ||
@@ -201,6 +208,15 @@ function classifyFromStatus(input: {
   }
   if (input.status === "detected" || truthy(input.metadata.provisional) || truthy(input.metadata.needsReview)) {
     return classification("needs_review", ["needs_review"]);
+  }
+  if (input.status === "needs_review") {
+    return classification("needs_review", ["needs_review"]);
+  }
+  if (input.status === "verified_proof") {
+    return classification("verified_proof", []);
+  }
+  if (input.status === "scan_spotted") {
+    return classification("scan_spotted", []);
   }
   if (input.proofCaptureId || input.sourceStatus === "proof_backed") {
     return classification("verified_proof", []);

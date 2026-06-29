@@ -168,7 +168,7 @@ export default function ShareRoute() {
                     <span className="f9-status-pill">{item.eventType.replaceAll("_", " ")}</span>
                   </div>
                   <p>{item.summary}</p>
-                  <DigestIntelligence metadata={item.metadata ?? {}} />
+                  <DigestIntelligence metadata={item.metadata ?? {}} proofStatus={item.proofStatus} />
                 </li>
               ))}
             </ul>
@@ -533,6 +533,7 @@ function sanitizeDigestSnapshotItem(
   const classification = classifyDigestItemSource({
     eventType: readString(item.eventType) ?? undefined,
     metadata,
+    proofStatus: readString(item.proofStatus) ?? undefined,
     title: readString(item.title) ?? undefined,
     summary: readString(item.summary) ?? undefined,
     watchlistName: readString(item.watchlistName) ?? undefined,
