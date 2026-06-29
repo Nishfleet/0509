@@ -83,10 +83,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { upsertWorkspaceBranding } = await import("~/lib/data.server");
+  const { isE2ETestSessionId } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+  const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
 
   if (intent === "save-report-branding") {
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
@@ -139,6 +141,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "revoke-session") {
+    if (isE2EFixtureSession) {
+      return { ok: false, intent, message: "Sign in with email to manage active sessions." };
+    }
+
     const { revokeBetterAuthSessionById } = await import("~/lib/better-auth.server");
     try {
       const result = await revokeBetterAuthSessionById(env, request, {
@@ -156,6 +162,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "revoke-other-sessions") {
+    if (isE2EFixtureSession) {
+      return { ok: false, intent, message: "Sign in with email to manage active sessions." };
+    }
+
     const { revokeOtherBetterAuthSessions } = await import("~/lib/better-auth.server");
     try {
       await revokeOtherBetterAuthSessions(env, request);

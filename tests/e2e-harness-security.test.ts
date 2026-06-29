@@ -1,5 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -7,6 +6,12 @@ import { describe, expect, it } from "vitest";
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function makeIgnoredAuthStateDir(prefix: string) {
+  const authDir = join(process.cwd(), ".auth");
+  mkdirSync(authDir, { recursive: true, mode: 0o700 });
+  return mkdtempSync(join(authDir, prefix));
 }
 
 describe("E2E harness security guardrails", () => {
@@ -51,6 +56,7 @@ describe("E2E harness security guardrails", () => {
     expect(validateScript).toContain("meta?.storageStateSha256 !== sha256(stateRaw)");
     expect(validateScript).toContain("meta?.capturedAt");
     expect(validateScript).toContain("assertPrivateFile(authStatePath");
+    expect(validateScript).toContain("resolveSafeAuthStatePath");
     expect(prodAuthSpec).toContain("scripts/e2e-validate-auth-state.mjs");
     expect(prodAuthSpec).toContain("Production auth-state validation failed before browser launch");
   });
@@ -71,8 +77,88 @@ describe("E2E harness security guardrails", () => {
     expect(unsafeCapture.stderr).toContain("Refusing to write production auth material");
   });
 
+  it("refuses to validate production auth state from a trackable path", () => {
+    const statePath = "0509-internal-auth-trackable.json";
+    const metaPath = "0509-internal-auth-trackable.meta.json";
+    const expectedHash = "a".repeat(64);
+    const stateJson = JSON.stringify({
+      cookies: [{ domain: ".0509.io", name: "better-auth.session_token", value: "redacted" }],
+    });
+    try {
+      writeFileSync(statePath, stateJson);
+      writeFileSync(
+        metaPath,
+        JSON.stringify({
+          accountEmailSha256: expectedHash,
+          capturedAt: new Date().toISOString(),
+          origin: "https://0509.io",
+          storageStateSha256: sha256(stateJson),
+        }),
+      );
+      chmodSync(statePath, 0o600);
+      chmodSync(metaPath, 0o600);
+
+      const unsafeValidate = spawnSync("node", ["scripts/e2e-validate-auth-state.mjs"], {
+        env: {
+          ...process.env,
+          AUTH_STATE: statePath,
+          AUTH_STATE_META: metaPath,
+          E2E_INTERNAL_ACCOUNT_EMAIL_SHA256: expectedHash,
+        },
+        encoding: "utf8",
+      });
+
+      expect(unsafeValidate.status).toBe(1);
+      expect(unsafeValidate.stderr).toContain("AUTH_STATE must point under .auth/");
+      expect(unsafeValidate.stderr).toContain("Refusing to write production auth material");
+    } finally {
+      rmSync(statePath, { force: true });
+      rmSync(metaPath, { force: true });
+    }
+  });
+
+  it("rejects deployable ignored paths for production auth state", () => {
+    const statePath = join("build", "client", "0509-internal-auth.json");
+    const metaPath = join("build", "client", "0509-internal-auth.meta.json");
+    const expectedHash = "a".repeat(64);
+    const stateJson = JSON.stringify({
+      cookies: [{ domain: ".0509.io", name: "better-auth.session_token", value: "redacted" }],
+    });
+    try {
+      mkdirSync(join("build", "client"), { recursive: true });
+      writeFileSync(statePath, stateJson);
+      writeFileSync(
+        metaPath,
+        JSON.stringify({
+          accountEmailSha256: expectedHash,
+          capturedAt: new Date().toISOString(),
+          origin: "https://0509.io",
+          storageStateSha256: sha256(stateJson),
+        }),
+      );
+      chmodSync(statePath, 0o600);
+      chmodSync(metaPath, 0o600);
+
+      const unsafeValidate = spawnSync("node", ["scripts/e2e-validate-auth-state.mjs"], {
+        env: {
+          ...process.env,
+          AUTH_STATE: statePath,
+          AUTH_STATE_META: metaPath,
+          E2E_INTERNAL_ACCOUNT_EMAIL_SHA256: expectedHash,
+        },
+        encoding: "utf8",
+      });
+
+      expect(unsafeValidate.status).toBe(1);
+      expect(unsafeValidate.stderr).toContain("AUTH_STATE must point under .auth/");
+    } finally {
+      rmSync(statePath, { force: true });
+      rmSync(metaPath, { force: true });
+    }
+  });
+
   it("fails production auth-state validation without the expected account hash", () => {
-    const dir = mkdtempSync(join(tmpdir(), "f9-auth-state-"));
+    const dir = makeIgnoredAuthStateDir("f9-auth-state-");
     try {
       const statePath = join(dir, "state.json");
       const metaPath = join(dir, "state.meta.json");
@@ -184,7 +270,7 @@ describe("E2E harness security guardrails", () => {
   });
 
   it("fails production auth-state validation when auth state is absent or malformed", () => {
-    const dir = mkdtempSync(join(tmpdir(), "f9-auth-state-invalid-"));
+    const dir = makeIgnoredAuthStateDir("f9-auth-state-invalid-");
     try {
       const missingState = spawnSync("node", ["scripts/e2e-validate-auth-state.mjs"], {
         env: {
@@ -245,7 +331,7 @@ describe("E2E harness security guardrails", () => {
   });
 
   it("uses a separate metadata path when AUTH_STATE has no json suffix", () => {
-    const dir = mkdtempSync(join(tmpdir(), "f9-auth-state-no-extension-"));
+    const dir = makeIgnoredAuthStateDir("f9-auth-state-no-extension-");
     try {
       const statePath = join(dir, "state-without-extension");
       const metaPath = `${statePath}.meta.json`;
@@ -282,7 +368,7 @@ describe("E2E harness security guardrails", () => {
   });
 
   it("rejects invalid or future auth-state capture timestamps", () => {
-    const dir = mkdtempSync(join(tmpdir(), "f9-auth-state-time-"));
+    const dir = makeIgnoredAuthStateDir("f9-auth-state-time-");
     try {
       const statePath = join(dir, "state.json");
       const metaPath = join(dir, "state.meta.json");
@@ -325,7 +411,7 @@ describe("E2E harness security guardrails", () => {
   });
 
   it("rejects group- or world-readable production auth state", () => {
-    const dir = mkdtempSync(join(tmpdir(), "f9-auth-state-perms-"));
+    const dir = makeIgnoredAuthStateDir("f9-auth-state-perms-");
     try {
       const statePath = join(dir, "state.json");
       const metaPath = join(dir, "state.meta.json");
@@ -364,7 +450,7 @@ describe("E2E harness security guardrails", () => {
   });
 
   it("rejects auth-state metadata captured for a different origin", () => {
-    const dir = mkdtempSync(join(tmpdir(), "f9-auth-state-origin-"));
+    const dir = makeIgnoredAuthStateDir("f9-auth-state-origin-");
     try {
       const statePath = join(dir, "state.json");
       const metaPath = join(dir, "state.meta.json");

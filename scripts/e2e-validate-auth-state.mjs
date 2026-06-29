@@ -3,9 +3,14 @@
 import { readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
+import {
+  defaultAuthStateMetaPath,
+  findRepoRoot,
+  resolveSafeAuthStatePath,
+} from "./e2e-auth-state-paths.mjs";
 
-const authStatePath = process.env.AUTH_STATE || ".auth/0509-internal.json";
-const authStateMetaPath = process.env.AUTH_STATE_META || defaultAuthStateMetaPath(authStatePath);
+const requestedAuthStatePath = process.env.AUTH_STATE || ".auth/0509-internal.json";
+const requestedAuthStateMetaPath = process.env.AUTH_STATE_META || defaultAuthStateMetaPath(requestedAuthStatePath);
 const expectedOrigin = new URL(process.env.E2E_PROD_BASE_URL || "https://0509.io").origin;
 const maxAgeHours = Number(process.env.AUTH_STATE_MAX_AGE_HOURS || 24);
 const expectedEmailHash = process.env.E2E_INTERNAL_ACCOUNT_EMAIL_SHA256?.trim().toLowerCase();
@@ -17,13 +22,6 @@ function fail(message) {
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function defaultAuthStateMetaPath(path) {
-  if (/\.json$/i.test(path)) {
-    return path.replace(/\.json$/i, ".meta.json");
-  }
-  return `${path}.meta.json`;
 }
 
 function assertPrivateFile(path, label) {
@@ -45,6 +43,16 @@ function assertPrivateFile(path, label) {
 const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
 if (!Number.isFinite(maxAgeMs) || maxAgeMs <= 0) {
   fail("AUTH_STATE_MAX_AGE_HOURS must be a positive number.");
+}
+
+const repoRoot = findRepoRoot();
+let authStatePath;
+let authStateMetaPath;
+try {
+  authStatePath = resolveSafeAuthStatePath("AUTH_STATE", requestedAuthStatePath, repoRoot);
+  authStateMetaPath = resolveSafeAuthStatePath("AUTH_STATE_META", requestedAuthStateMetaPath, repoRoot);
+} catch (error) {
+  fail(error instanceof Error ? error.message : "Auth state path is unsafe.");
 }
 
 if (resolve(authStatePath) === resolve(authStateMetaPath)) {

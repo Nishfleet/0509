@@ -94,6 +94,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
   vi.doUnmock("~/lib/auth.server");
+  vi.doUnmock("~/lib/better-auth.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/delivery.server");
@@ -245,6 +246,56 @@ describe("workspace branding persistence", () => {
 });
 
 describe("account report-branding action", () => {
+  it.each([
+    ["revoke-session", { sessionId: "session-other" }],
+    ["revoke-other-sessions", {}],
+  ])("blocks %s for local E2E fixture sessions", async (intent, extraFields) => {
+    const fixtureSession = {
+      ...session,
+      session: {
+        ...session.session,
+        id: "e2e-session-e2e-starter",
+      },
+    };
+    const revokeBetterAuthSessionById = vi.fn();
+    const revokeOtherBetterAuthSessions = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(fixtureSession),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWorkspaceBranding: vi.fn(),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/better-auth.server", () => ({
+      revokeBetterAuthSessionById,
+      revokeOtherBetterAuthSessions,
+    }));
+
+    const { action } = await import("~/routes/app.account");
+    const formData = new FormData();
+    formData.set("intent", intent);
+    for (const [key, value] of Object.entries(extraFields)) {
+      formData.set(key, value);
+    }
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/account", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      intent,
+      message: "Sign in with email to manage active sessions.",
+    });
+    expect(revokeBetterAuthSessionById).not.toHaveBeenCalled();
+    expect(revokeOtherBetterAuthSessions).not.toHaveBeenCalled();
+  });
+
   it("rejects branding saves for non-agency plans", async () => {
     const upsertWorkspaceBrandingMock = vi.fn();
 

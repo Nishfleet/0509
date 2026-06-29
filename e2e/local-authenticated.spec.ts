@@ -67,7 +67,7 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app/digests");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Digests" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
 
     await page.goto("/app/billing");
@@ -106,7 +106,7 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByText("weekly", { exact: false })).toBeVisible();
 
     await page.goto("/app/digests");
-    await expect(page.getByRole("heading", { name: "Digests" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
 
     await page.goto("/app/sources");
     await page.getByText("Advanced: API keys and external tools").click();
@@ -162,9 +162,10 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByText("stack", { exact: false })).toHaveCount(0);
     await expect(page.getByText("D1", { exact: false })).toHaveCount(0);
 
-    await signInAs(context, baseURL!, "e2e-free");
+    await signInAs(context, baseURL!, "e2e-free-onboarded");
     await page.goto("/app/digests");
-    await expect(page.getByRole("heading", { name: "Choose a plan to start monitoring" })).toBeVisible();
-    await expect(page.getByText("Current plan: free")).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/digests/);
+    await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Digests are included in paid plans" })).toBeVisible();
   });
 });

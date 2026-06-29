@@ -45,6 +45,7 @@ PRAGMA foreign_keys = ON;
 
 INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, onboardedAt) VALUES
   ('e2e-free', 'E2E Free', 'e2e-free@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', NULL),
+  ('e2e-free-onboarded', 'E2E Free Onboarded', 'e2e-free-onboarded@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
   ('e2e-scout', 'E2E Scout', 'e2e-scout@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
   ('e2e-starter', 'E2E Starter', 'e2e-starter@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
   ('e2e-agency', 'E2E Agency', 'e2e-agency@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
@@ -53,6 +54,7 @@ INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, o
 
 INSERT INTO user_plan (user_id, plan, plan_updated_at, dodo_status, dodo_customer_id, dodo_next_billing_at, evidence_entitlement_anchor, evidence_entitlement_anchor_source) VALUES
   ('e2e-free', 'free', '2026-06-01T00:00:00.000Z', NULL, NULL, NULL, NULL, NULL),
+  ('e2e-free-onboarded', 'free', '2026-06-01T00:00:00.000Z', NULL, NULL, NULL, NULL, NULL),
   ('e2e-scout', 'scout', '2026-06-01T00:00:00.000Z', 'subscription.active', 'cus_e2e_scout', '2026-07-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', 'e2e'),
   ('e2e-starter', 'starter', '2026-06-01T00:00:00.000Z', 'subscription.active', 'cus_e2e_starter', '2026-07-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', 'e2e'),
   ('e2e-agency', 'agency', '2026-06-01T00:00:00.000Z', 'subscription.active', 'cus_e2e_agency', '2026-07-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', 'e2e'),

@@ -37,10 +37,12 @@ test.describe("production authenticated smoke with owner-captured auth state", (
 
     const expectedEmailHash = process.env.E2E_INTERNAL_ACCOUNT_EMAIL_SHA256?.trim().toLowerCase();
     expect(expectedEmailHash, "E2E_INTERNAL_ACCOUNT_EMAIL_SHA256 is required").toMatch(/^[a-f0-9]{64}$/);
-    const visibleText = await page.locator("body").innerText();
-    const emailMatch = visibleText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-    expect(emailMatch, "account email should be visible for workspace guard").toBeTruthy();
-    expect(sha256(emailMatch![0])).toBe(expectedEmailHash);
+    const accountEmail = await page.locator("body").evaluate((body) => {
+      const text = (body as HTMLElement).innerText;
+      return text.match(/Signed in as\s+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1] ?? null;
+    });
+    expect(accountEmail, "account email should be visible in the signed-in account copy").toBeTruthy();
+    expect(sha256(accountEmail!)).toBe(expectedEmailHash);
 
     for (const route of [
       { path: "/app/billing", heading: "Billing & usage" },
