@@ -8,7 +8,7 @@
 - Baseline checks passed: unit tests, typecheck, build, D1 backup validation, remote migration list, pricing canary, billing canary, production canary, and Search V2 dogfood tests.
 - Baseline blockers before harness work: proof/email canary returned `no_digest_delivery_sent`; local Presence canary needs `PRESENCE_INTERNAL_WORKSPACE_ID`.
 - Final harness verification passed: `npm test`, `npm run typecheck`, `npm run build`, `SAFE_DEPLOY_APPROVED=d1 npm run e2e`, D1 backup validation, local/remote migration lists, pricing/billing/proof/prod canaries, and `git diff --check`.
-- `npm run e2e:prod:auth` fails closed until the owner captures `.auth/0509-internal.json`; local Presence canary remains blocked by missing `PRESENCE_INTERNAL_WORKSPACE_ID`.
+- `npm run e2e:prod:auth` fails closed until the owner captures `.auth/0509-internal.json`; local Presence canary remains blocked by missing `PRESENCE_INTERNAL_WORKSPACE_ID`; Bugbot remains blocked until `nish3451/0509` is enabled in the Cursor Bugbot dashboard (`serverGenReqId_79f9c692-5c66-46e2-9005-455af7884a82`).
 
 ## Final self-serve GA release pass (2026-06-27)
 
