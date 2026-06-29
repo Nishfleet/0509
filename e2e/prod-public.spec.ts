@@ -1,5 +1,15 @@
 import { expect, test } from "@playwright/test";
 
+type PublicControlTarget = {
+  action: string;
+  hashTargetExists: boolean;
+  label: string;
+  method: string;
+  page: string;
+  tag: string;
+  target: string;
+};
+
 async function expectNoHorizontalOverflow(page: import("@playwright/test").Page) {
   const overflow = await page.evaluate(() =>
     Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
@@ -9,6 +19,90 @@ async function expectNoHorizontalOverflow(page: import("@playwright/test").Page)
 
 async function gotoPublicPage(page: import("@playwright/test").Page, path: string) {
   return page.goto(path, { waitUntil: "domcontentloaded" });
+}
+
+function isProductionBaseURL(baseURL: string | undefined) {
+  return new URL(baseURL || "https://0509.io").hostname === "0509.io";
+}
+
+async function collectVisiblePublicControls(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    function isVisible(element: Element) {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    }
+
+    function labelFor(element: Element) {
+      return (
+        element.getAttribute("aria-label") ||
+        element.textContent?.replace(/\s+/g, " ").trim() ||
+        element.getAttribute("value") ||
+        element.getAttribute("placeholder") ||
+        element.tagName.toLowerCase()
+      ).slice(0, 120);
+    }
+
+    function hashTargetExists(url: URL) {
+      if (!url.hash) return true;
+      if (url.origin !== window.location.origin || url.pathname !== window.location.pathname) return true;
+      const id = window.CSS?.escape ? CSS.escape(decodeURIComponent(url.hash.slice(1))) : decodeURIComponent(url.hash.slice(1));
+      return Boolean(document.querySelector(`#${id}, a[name="${id}"]`));
+    }
+
+    const links = Array.from(document.querySelectorAll("a[href]"))
+      .filter(isVisible)
+      .map((element) => {
+        const href = (element as HTMLAnchorElement).href;
+        const url = new URL(href, window.location.href);
+        return {
+          action: "link",
+          hashTargetExists: hashTargetExists(url),
+          label: labelFor(element),
+          method: "get",
+          page: window.location.pathname + window.location.search,
+          tag: element.tagName.toLowerCase(),
+          target: href,
+        };
+      });
+
+    const forms = Array.from(document.querySelectorAll("form"))
+      .filter((form) => isVisible(form) || Boolean(form.querySelector("button,input,select,textarea")))
+      .map((form) => {
+        const submit = form.querySelector("button, input[type='submit']");
+        const action = form.getAttribute("action") || window.location.pathname + window.location.search;
+        return {
+          action: "form",
+          hashTargetExists: true,
+          label: labelFor(submit || form),
+          method: (form.getAttribute("method") || "get").toLowerCase(),
+          page: window.location.pathname + window.location.search,
+          tag: form.tagName.toLowerCase(),
+          target: new URL(action, window.location.href).href,
+        };
+      });
+
+    return [...links, ...forms] satisfies PublicControlTarget[];
+  });
+}
+
+async function expectPublicGetTargetReachable(
+  request: import("@playwright/test").APIRequestContext,
+  baseURL: string | undefined,
+  target: PublicControlTarget,
+) {
+  const url = new URL(target.target);
+  if (!["http:", "https:"].includes(url.protocol)) return;
+  if (url.origin !== new URL(baseURL || "https://0509.io").origin) return;
+
+  const requestUrl = new URL(url);
+  if (requestUrl.pathname === "/search" && requestUrl.searchParams.has("website")) {
+    requestUrl.search = "";
+  }
+
+  const response = await request.get(requestUrl.toString(), { maxRedirects: 0, timeout: 5_000 });
+  expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).not.toBe(404);
+  expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).toBeLessThan(500);
 }
 
 test.describe("public production-safe E2E smoke", () => {
@@ -21,11 +115,19 @@ test.describe("public production-safe E2E smoke", () => {
     await gotoPublicPage(page, "/search");
     await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
 
-    await gotoPublicPage(page, "/auth/login");
-    await expect(page.getByRole("heading", { name: "Return to the changes your team is watching." })).toBeVisible();
+    if (!isProductionBaseURL(baseURL)) {
+      await gotoPublicPage(page, "/auth/login");
+      await expect(page.getByRole("heading", { name: "Return to the changes your team is watching." })).toBeVisible();
 
-    await gotoPublicPage(page, "/auth/signup");
-    await expect(page.getByRole("heading", { name: "Start with the competitor your team keeps checking by hand." })).toBeVisible();
+      await gotoPublicPage(page, "/auth/signup");
+      await expect(page.getByRole("heading", { name: "Start with the competitor your team keeps checking by hand." })).toBeVisible();
+    } else {
+      for (const path of ["/auth/login", "/auth/signup"]) {
+        const response = await request.get(new URL(path, baseURL).toString(), { maxRedirects: 0 });
+        expect(response.status(), `${path} should not be missing`).not.toBe(404);
+        expect(response.status(), `${path} should not hard-fail`).toBeLessThan(500);
+      }
+    }
 
     await gotoPublicPage(page, "/bots/presence");
     await expect(page.getByRole("heading", { name: "FiveToNinePresenceBot" })).toBeVisible();
@@ -61,5 +163,82 @@ test.describe("public production-safe E2E smoke", () => {
       await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
     }
+  });
+
+  test("public buttons and links route to valid actions without sending side effects", async ({ page, baseURL, request }) => {
+    test.setTimeout(60_000);
+    const publicPaths = [
+      "/",
+      "/search",
+      "/compare/magicbrief",
+      "/help",
+      "/docs",
+      "/api/docs",
+      "/status",
+      "/changelog",
+      "/trust",
+      "/privacy",
+      "/terms",
+      "/bots/presence",
+    ];
+    if (!isProductionBaseURL(baseURL)) {
+      publicPaths.push("/auth/login?redirectTo=%2Fapp", "/auth/signup");
+    }
+    const failures: string[] = [];
+    const getTargets = new Map<string, PublicControlTarget>();
+
+    for (const path of publicPaths) {
+      await gotoPublicPage(page, path);
+      const controls = await collectVisiblePublicControls(page);
+
+      for (const control of controls) {
+        const url = new URL(control.target);
+        if (["mailto:", "tel:"].includes(url.protocol)) continue;
+
+        if (!control.hashTargetExists) {
+          failures.push(`${control.page} ${control.action} "${control.label}" points at missing hash ${url.hash}`);
+          continue;
+        }
+
+        if (control.action === "form" && control.method !== "get") {
+          expect(control.target, `${control.page} form "${control.label}" should have an action`).toBeTruthy();
+          continue;
+        }
+
+        getTargets.set(new URL(control.target).toString(), control);
+      }
+    }
+
+    for (const control of getTargets.values()) {
+      await expectPublicGetTargetReachable(request, baseURL, control);
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  test("auth action buttons preserve redirects and block empty required submissions", async ({ page, baseURL }) => {
+    test.skip(isProductionBaseURL(baseURL), "Live auth pages are rate-limited; covered in preview-public.");
+    await gotoPublicPage(page, "/auth/login?redirectTo=%2Fapp");
+    await expect(page.getByRole("heading", { name: "Get a secure sign-in link." })).toBeVisible();
+    await page.getByRole("button", { name: "Send sign-in link" }).click();
+    await expect(page).toHaveURL(/\/auth\/login\?redirectTo=%2Fapp/);
+    await expect(
+      await page.getByLabel("Email").evaluate((element) => (element as HTMLInputElement).validity.valueMissing),
+    ).toBe(true);
+
+    await page.getByRole("link", { name: "Create one" }).click();
+    await expect(page).toHaveURL(/\/auth\/signup\?redirectTo=%2Fapp/);
+    await expect(page.getByRole("heading", { name: "Verify your work email to start." })).toBeVisible();
+    await page.getByRole("button", { name: "Send setup link" }).click();
+    await expect(page).toHaveURL(/\/auth\/signup\?redirectTo=%2Fapp/);
+    await expect(
+      await page.getByLabel("Name").evaluate((element) => (element as HTMLInputElement).validity.valueMissing),
+    ).toBe(true);
+    await expect(
+      await page.getByLabel("Email").evaluate((element) => (element as HTMLInputElement).validity.valueMissing),
+    ).toBe(true);
+
+    await page.getByRole("link", { name: "Sign in" }).click();
+    await expect(page).toHaveURL(/\/auth\/login\?redirectTo=%2Fapp/);
   });
 });

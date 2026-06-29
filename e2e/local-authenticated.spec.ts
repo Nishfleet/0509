@@ -2,6 +2,19 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const fixtureCookie = "f9_e2e_fixture";
 const fixtureModeHeader = "x-0509-e2e-test-mode";
+const clientSideButtonLabels = new Set(["Copy link", "Copied!", "Download PDF", "Try again"]);
+
+type VisibleActionControl = {
+  buttonType: string;
+  disabled: boolean;
+  formAction: string;
+  formMethod: string;
+  hasForm: boolean;
+  href: string;
+  label: string;
+  page: string;
+  tag: string;
+};
 
 async function signInAs(context: BrowserContext, baseURL: string, userId: string) {
   const url = baseURL || "http://127.0.0.1:4179";
@@ -121,6 +134,95 @@ async function expectMobileNavLinksInContainer(page: Page) {
   expect(clippedLinks).toEqual([]);
 }
 
+async function collectVisibleActionControls(page: Page) {
+  return page.evaluate(() => {
+    function isVisible(element: Element) {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    }
+
+    function labelFor(element: Element) {
+      return (
+        element.getAttribute("aria-label") ||
+        element.textContent?.replace(/\s+/g, " ").trim() ||
+        element.getAttribute("value") ||
+        element.getAttribute("placeholder") ||
+        element.tagName.toLowerCase()
+      ).slice(0, 120);
+    }
+
+    return Array.from(document.querySelectorAll("a[href], button"))
+      .filter(isVisible)
+      .map((element) => {
+        const form = element.closest("form");
+        const tag = element.tagName.toLowerCase();
+        return {
+          buttonType: tag === "button" ? ((element as HTMLButtonElement).type || "submit").toLowerCase() : "",
+          disabled: (element as HTMLButtonElement).disabled || element.hasAttribute("aria-disabled"),
+          formAction: form ? new URL(form.getAttribute("action") || window.location.pathname + window.location.search, window.location.href).href : "",
+          formMethod: form?.getAttribute("method")?.toLowerCase() || "get",
+          hasForm: Boolean(form),
+          href: tag === "a" ? (element as HTMLAnchorElement).href : "",
+          label: labelFor(element),
+          page: window.location.pathname + window.location.search,
+          tag,
+        };
+      }) satisfies VisibleActionControl[];
+  });
+}
+
+async function expectAppActionControlsWired(page: Page) {
+  const controls = await collectVisibleActionControls(page);
+  const currentOrigin = new URL(page.url()).origin;
+  const issues: string[] = [];
+
+  for (const control of controls) {
+    if (!control.label) {
+      issues.push(`${control.page} has an unlabeled visible ${control.tag}`);
+      continue;
+    }
+
+    if (control.tag === "a") {
+      const url = new URL(control.href);
+      if (["mailto:", "tel:"].includes(url.protocol)) continue;
+      if (url.origin !== currentOrigin) continue;
+
+      const response = await page.request.get(url.toString());
+      if (response.status() === 404 || response.status() >= 500) {
+        issues.push(`${control.page} link "${control.label}" points to ${url} with ${response.status()}`);
+      }
+      continue;
+    }
+
+    if (control.tag !== "button" || control.disabled) continue;
+
+    if (control.buttonType === "submit") {
+      if (!control.hasForm) {
+        issues.push(`${control.page} submit button "${control.label}" is not inside a form`);
+      }
+      if (!["get", "post"].includes(control.formMethod)) {
+        issues.push(`${control.page} submit button "${control.label}" uses unsupported method ${control.formMethod}`);
+      }
+      if (!control.formAction) {
+        issues.push(`${control.page} submit button "${control.label}" has no form action`);
+      }
+      continue;
+    }
+
+    if (control.buttonType === "button") {
+      if (!clientSideButtonLabels.has(control.label)) {
+        issues.push(`${control.page} client button "${control.label}" needs explicit E2E allowlisting`);
+      }
+      continue;
+    }
+
+    issues.push(`${control.page} button "${control.label}" has unsupported type ${control.buttonType}`);
+  }
+
+  expect(issues).toEqual([]);
+}
+
 test.describe("local authenticated E2E harness", () => {
   test("new customer is routed to onboarding without magic-link login", async ({ page, context, baseURL }) => {
     await signInAs(context, baseURL!, "e2e-free");
@@ -230,6 +332,40 @@ test.describe("local authenticated E2E harness", () => {
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Client-ready report" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
+  });
+
+  test("authenticated buttons and links are wired to real destinations or form actions", async ({ page, context, baseURL }) => {
+    await signInAs(context, baseURL!, "e2e-agency");
+
+    for (const route of [
+      "/app",
+      "/app/watchlists",
+      "/app/sources",
+      "/app/billing",
+      "/app/digests",
+      "/app/reports/watchlist:e2e-watchlist-agency-1",
+      "/app/collections",
+      "/app/clients",
+      "/app/team",
+      "/app/support",
+      "/app/account",
+    ]) {
+      await page.goto(route);
+      await expectAppPage(page);
+      await expectAppActionControlsWired(page);
+    }
+  });
+
+  test("sign out button posts logout and clears authenticated app access", async ({ page, context, baseURL }) => {
+    await signInAs(context, baseURL!, "e2e-starter");
+
+    await page.goto("/app");
+    await expectAppPage(page);
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page).toHaveURL(/\/auth\/login/);
+    await expect(page.getByRole("heading", { name: "Get a secure sign-in link." })).toBeVisible();
+    await page.goto("/app");
+    await expect(page).toHaveURL(/\/auth\/login/);
   });
 
   test("mobile dashboard navigation stays usable across target breakpoints", async ({ page, context, baseURL }) => {
