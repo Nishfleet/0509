@@ -2,14 +2,9 @@
 
 import { spawnSync } from "node:child_process";
 
-const commonEnv = {
-  ...process.env,
-  SAFE_DEPLOY_APPROVED: process.env.SAFE_DEPLOY_APPROVED || "d1",
-};
-
 function run(label, command, args) {
   const result = spawnSync(command, args, {
-    env: commonEnv,
+    env: process.env,
     stdio: "inherit",
   });
 

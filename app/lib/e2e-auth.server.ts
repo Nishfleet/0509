@@ -8,6 +8,7 @@ const E2E_USER_ID_PATTERN = /^e2e-[a-z0-9-]{3,80}$/;
 const E2E_SESSION_ID_PATTERN = /^e2e-session-e2e-[a-z0-9-]{3,80}$/;
 const PRODUCTION_HOST_PATTERN = /(^|\.)0509\.(io|in)$/i;
 const LOCAL_TEST_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+const E2E_DATABASE_SENTINEL_ID = "local-authenticated";
 
 type ProcessEnvCarrier = typeof globalThis & {
   process?: {
@@ -32,19 +33,43 @@ function requestFlag(request: Request) {
   return request.headers.get(E2E_TEST_MODE_HEADER)?.trim();
 }
 
-export function isE2ETestAuthEnabled(env: AppEnv, request: Request) {
+function serverTestModeEnabled(env: AppEnv) {
+  return (
+    isEnabled(envFlag(env, "E2E_TEST_MODE")) ||
+    isEnabled(processEnvFlag("E2E_TEST_MODE"))
+  );
+}
+
+function isLocalE2ETestRequest(request: Request) {
   const url = new URL(request.url);
   const hostname = url.hostname.toLowerCase();
-  const testModeEnabled =
-    isEnabled(envFlag(env, "E2E_TEST_MODE")) ||
-    isEnabled(processEnvFlag("E2E_TEST_MODE")) ||
-    isEnabled(requestFlag(request));
 
   return (
-    testModeEnabled &&
+    isEnabled(requestFlag(request)) &&
     LOCAL_TEST_HOSTS.has(hostname) &&
     !PRODUCTION_HOST_PATTERN.test(hostname)
   );
+}
+
+async function hasE2EDatabaseSentinel(env: AppEnv) {
+  if (!env.DB) {
+    return false;
+  }
+
+  try {
+    const row = await env.DB.prepare(
+      "SELECT enabled FROM e2e_test_mode WHERE id = ? LIMIT 1",
+    )
+      .bind(E2E_DATABASE_SENTINEL_ID)
+      .first<{ enabled: number | string | null }>();
+    return row?.enabled === 1 || row?.enabled === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function isE2ETestAuthEnabled(env: AppEnv, request: Request) {
+  return serverTestModeEnabled(env) && isLocalE2ETestRequest(request);
 }
 
 export function readE2ETestFixtureUserId(request: Request) {
@@ -72,7 +97,11 @@ export async function getE2ETestSession(
   env: AppEnv,
   request: Request,
 ): Promise<AppSession | null> {
-  if (!isE2ETestAuthEnabled(env, request) || !env.DB) {
+  if (!isLocalE2ETestRequest(request) || !env.DB) {
+    return null;
+  }
+
+  if (!serverTestModeEnabled(env) && !(await hasE2EDatabaseSentinel(env))) {
     return null;
   }
 

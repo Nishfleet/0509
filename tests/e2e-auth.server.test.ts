@@ -8,19 +8,25 @@ import {
   readE2ETestFixtureUserId,
 } from "~/lib/e2e-auth.server";
 
-function env() {
+function env({ databaseSentinel = false, testMode = "1" } = {}) {
   return {
-    E2E_TEST_MODE: "1",
+    E2E_TEST_MODE: testMode,
     DB: {
-      prepare: vi.fn(() => ({
+      prepare: vi.fn((sql: string) => ({
         bind: vi.fn(() => ({
-          first: vi.fn(async () => ({
-            id: "e2e-starter",
-            email: "e2e-starter@example.invalid",
-            image: null,
-            name: "E2E Starter",
-            onboardedAt: "2026-06-01T00:00:00.000Z",
-          })),
+          first: vi.fn(async () => {
+            if (sql.includes("e2e_test_mode")) {
+              return databaseSentinel ? { enabled: 1 } : null;
+            }
+
+            return {
+              id: "e2e-starter",
+              email: "e2e-starter@example.invalid",
+              image: null,
+              name: "E2E Starter",
+              onboardedAt: "2026-06-01T00:00:00.000Z",
+            };
+          }),
         })),
       })),
     },
@@ -29,11 +35,12 @@ function env() {
 
 describe("E2E test auth resolver", () => {
   it("enables only in explicit test mode on localhost", () => {
-    expect(isE2ETestAuthEnabled(env() as never, new Request("http://127.0.0.1:4179/app"))).toBe(true);
-    expect(isE2ETestAuthEnabled(env() as never, new Request("http://localhost:4179/app"))).toBe(true);
-    expect(isE2ETestAuthEnabled(env() as never, new Request("http://[::1]:4179/app"))).toBe(true);
-    expect(isE2ETestAuthEnabled(env() as never, new Request("https://0509.io/app"))).toBe(false);
-    expect(isE2ETestAuthEnabled({ ...env(), E2E_TEST_MODE: "0" } as never, new Request("http://127.0.0.1:4179/app"))).toBe(false);
+    const localHeaders = { [E2E_TEST_MODE_HEADER]: "1" };
+    expect(isE2ETestAuthEnabled(env() as never, new Request("http://127.0.0.1:4179/app", { headers: localHeaders }))).toBe(true);
+    expect(isE2ETestAuthEnabled(env() as never, new Request("http://localhost:4179/app", { headers: localHeaders }))).toBe(true);
+    expect(isE2ETestAuthEnabled(env() as never, new Request("http://[::1]:4179/app", { headers: localHeaders }))).toBe(true);
+    expect(isE2ETestAuthEnabled(env() as never, new Request("https://0509.io/app", { headers: localHeaders }))).toBe(false);
+    expect(isE2ETestAuthEnabled(env() as never, new Request("http://127.0.0.1:4179/app"))).toBe(false);
     expect(
       isE2ETestAuthEnabled(
         { ...env(), E2E_TEST_MODE: "0" } as never,
@@ -41,7 +48,24 @@ describe("E2E test auth resolver", () => {
           headers: { [E2E_TEST_MODE_HEADER]: "1" },
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("requires a server-side flag or local fixture database sentinel before resolving a fixture session", async () => {
+    const request = new Request("http://127.0.0.1:4179/app", {
+      headers: {
+        cookie: `${E2E_TEST_SESSION_COOKIE}=e2e-starter`,
+        [E2E_TEST_MODE_HEADER]: "1",
+      },
+    });
+
+    await expect(getE2ETestSession(env({ testMode: "0" }) as never, request)).resolves.toBeNull();
+    await expect(
+      getE2ETestSession(env({ databaseSentinel: true, testMode: "0" }) as never, request),
+    ).resolves.toMatchObject({
+      user: { id: "e2e-starter" },
+      session: { id: "e2e-session-e2e-starter" },
+    });
   });
 
   it("accepts only deterministic e2e fixture user ids", () => {
@@ -72,7 +96,10 @@ describe("E2E test auth resolver", () => {
     const session = await getE2ETestSession(
       env() as never,
       new Request("http://127.0.0.1:4179/app", {
-        headers: { cookie: `${E2E_TEST_SESSION_COOKIE}=e2e-starter` },
+        headers: {
+          cookie: `${E2E_TEST_SESSION_COOKIE}=e2e-starter`,
+          [E2E_TEST_MODE_HEADER]: "1",
+        },
       }),
     );
 

@@ -96,10 +96,10 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 
 | Check | Result |
 |---|---|
-| `npm test` | Passed, 152 files and 1417 tests |
+| `npm test` | Passed, 152 files and 1424 tests |
 | `npm run typecheck` | Passed |
 | `npm run build` | Passed |
-| `npm run e2e` | Passed, 6 local authenticated tests and 1 production-safe public test |
+| `SAFE_DEPLOY_APPROVED=d1 npm run e2e` | Passed, 6 local authenticated tests and 1 production-safe public test |
 | `npm run e2e:prod:auth` | Failed closed because `.auth/0509-internal.json` and the required account hash are missing locally |
 | `node scripts/validate-d1-backup.mjs` | Passed, latest migration `0061_support_case_events.sql` |
 | `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --local` | Passed, no local migrations to apply |
@@ -111,14 +111,13 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 | `npm run canary:prod` | Passed health, bypass, ops readiness, and Meta ads beta |
 | `npm run canary:presence` | Still blocked locally by missing `PRESENCE_INTERNAL_WORKSPACE_ID` |
 | `autoreview --mode local --base origin/main` | Passed clean after accepted findings were fixed |
-| `bugbot-gate status` | Recommended one paid Bugbot run because the diff touches auth/test-auth surfaces; waiting on explicit approval |
+| `bugbot-gate status` | Recommended one paid Bugbot run because the diff touches auth/test-auth surfaces; approved and manually triggered with `bugbot run`, but Cursor replied that Bugbot is disabled for this repository, so no ledger entry was recorded |
 
 ## Commands
 
 ```bash
 npm run e2e:install
-npm run e2e:local
-npm run e2e:prod:public
+SAFE_DEPLOY_APPROVED=d1 npm run e2e
 E2E_INTERNAL_ACCOUNT_EMAIL_SHA256=<sha256-of-internal-account-email> \
 AUTH_STATE=.auth/0509-internal.json npm run e2e:prod:auth
 ```

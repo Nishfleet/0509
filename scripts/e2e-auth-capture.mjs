@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { chromium } from "playwright";
 
 const baseURL = process.env.E2E_PROD_BASE_URL || "https://0509.io";
 const baseOrigin = new URL(baseURL).origin;
-const authStatePath = process.env.AUTH_STATE || ".auth/0509-internal.json";
-const authStateMetaPath = process.env.AUTH_STATE_META || authStatePath.replace(/\.json$/i, ".meta.json");
+const requestedAuthStatePath = process.env.AUTH_STATE || ".auth/0509-internal.json";
+const requestedAuthStateMetaPath = process.env.AUTH_STATE_META || defaultAuthStateMetaPath(requestedAuthStatePath);
 const timeoutMs = Number(process.env.AUTH_CAPTURE_TIMEOUT_MS || 5 * 60 * 1000);
 const expectedEmailHash = process.env.E2E_INTERNAL_ACCOUNT_EMAIL_SHA256?.trim().toLowerCase();
 
@@ -25,11 +26,73 @@ function hashEmail(email) {
   return sha256(email.trim().toLowerCase());
 }
 
+function defaultAuthStateMetaPath(authStatePath) {
+  if (/\.json$/i.test(authStatePath)) {
+    return authStatePath.replace(/\.json$/i, ".meta.json");
+  }
+  return `${authStatePath}.meta.json`;
+}
+
+function findRepoRoot() {
+  try {
+    return execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return process.cwd();
+  }
+}
+
+function isWithin(parent, child) {
+  const pathFromParent = relative(parent, child);
+  return pathFromParent === "" || (!pathFromParent.startsWith("..") && !isAbsolute(pathFromParent));
+}
+
+function isGitIgnored(repoRoot, resolvedPath) {
+  if (!isWithin(repoRoot, resolvedPath)) {
+    return false;
+  }
+
+  const repoRelativePath = relative(repoRoot, resolvedPath);
+  try {
+    execFileSync("git", ["-C", repoRoot, "check-ignore", "--quiet", "--", repoRelativePath], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveSafeAuthStatePath(label, candidatePath, repoRoot) {
+  const resolvedPath = resolve(candidatePath);
+  const authDir = resolve(repoRoot, ".auth");
+  if (isWithin(authDir, resolvedPath) || isGitIgnored(repoRoot, resolvedPath)) {
+    return resolvedPath;
+  }
+
+  fail(`${label} must point under .auth/ or to a Git-ignored path. Refusing to write production auth material to ${candidatePath}.`);
+}
+
 if (!expectedEmailHash || !/^[a-f0-9]{64}$/.test(expectedEmailHash)) {
   fail("Set E2E_INTERNAL_ACCOUNT_EMAIL_SHA256 to the internal non-customer account email SHA-256 before capture.");
 }
 
-mkdirSync(dirname(authStatePath), { recursive: true });
+const repoRoot = findRepoRoot();
+const authStatePath = resolveSafeAuthStatePath("AUTH_STATE", requestedAuthStatePath, repoRoot);
+const authStateMetaPath = resolveSafeAuthStatePath("AUTH_STATE_META", requestedAuthStateMetaPath, repoRoot);
+if (authStatePath === authStateMetaPath) {
+  fail("AUTH_STATE_META must not point to the same file as AUTH_STATE.");
+}
+
+mkdirSync(dirname(authStatePath), { recursive: true, mode: 0o700 });
+mkdirSync(dirname(authStateMetaPath), { recursive: true, mode: 0o700 });
+const authDir = resolve(repoRoot, ".auth");
+if (isWithin(authDir, authStatePath) || isWithin(authDir, authStateMetaPath)) {
+  mkdirSync(authDir, { recursive: true, mode: 0o700 });
+  chmodSync(authDir, 0o700);
+}
 
 const browser = await chromium.launch({ headless: false });
 const context = await browser.newContext();
@@ -61,6 +124,7 @@ try {
   }
 
   await context.storageState({ path: authStatePath });
+  chmodSync(authStatePath, 0o600);
   const storageStateSha256 = sha256(readFileSync(authStatePath));
   writeFileSync(
     authStateMetaPath,
@@ -74,7 +138,9 @@ try {
       null,
       2,
     )}\n`,
+    { mode: 0o600 },
   );
+  chmodSync(authStateMetaPath, 0o600);
   console.log(`Saved auth state to ${authStatePath}. Keep it local; it is ignored by Git.`);
 } catch (error) {
   console.error("Could not verify the internal account before saving auth state. No auth details were printed.");

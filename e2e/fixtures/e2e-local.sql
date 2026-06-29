@@ -32,6 +32,15 @@ DELETE FROM workspace_member WHERE owner_user_id LIKE 'e2e-%' OR member_user_id 
 DELETE FROM user_plan WHERE user_id LIKE 'e2e-%';
 DELETE FROM user WHERE id LIKE 'e2e-%';
 
+DROP TABLE IF EXISTS e2e_test_mode;
+CREATE TABLE e2e_test_mode (
+  id TEXT PRIMARY KEY,
+  enabled INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+INSERT INTO e2e_test_mode (id, enabled, created_at) VALUES
+  ('local-authenticated', 1, '2026-06-01T00:00:00.000Z');
+
 PRAGMA foreign_keys = ON;
 
 INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, onboardedAt) VALUES

@@ -42,11 +42,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const branding = await getWorkspaceBranding(env, session.user.id);
   const passkeysEnabled = !isE2EFixtureSession && isBetterAuthPasskeyEnabled(env);
   let passkeys: Awaited<ReturnType<typeof listBetterAuthPasskeys>> = [];
+  let passkeyControlsMessage: string | null = null;
   if (passkeysEnabled) {
     try {
       passkeys = await listBetterAuthPasskeys(env, request);
     } catch (error) {
       console.warn("[account] passkey controls unavailable", error);
+      passkeyControlsMessage = "Sign in again to manage passkeys.";
     }
   }
   let activeSessions: Awaited<ReturnType<typeof listBetterAuthSessions>> = [];
@@ -71,6 +73,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     brandWebsite: branding.brandWebsite,
     passkeys,
     passkeysEnabled,
+    passkeyControlsMessage,
     activeSessions,
     sessionControlsMessage,
   };
@@ -302,44 +305,50 @@ export default function AccountRoute() {
           </div>
           {passkeyMessage ? <p className="f9-message is-success">{passkeyMessage}</p> : null}
           {passkeyError ? <p className="f9-message is-error">{passkeyError}</p> : null}
-          <div className="f9-account-security-actions">
-            <button
-              className="f9-secondary-button"
-              disabled={passkeyPending}
-              onClick={() => {
-                void registerPasskey({
-                  setError: setPasskeyError,
-                  setMessage: setPasskeyMessage,
-                  setPending: setPasskeyPending,
-                });
-              }}
-              type="button"
-            >
-              {passkeyPending ? "Adding..." : "Add passkey"}
-            </button>
-          </div>
-          {data.passkeys.length > 0 ? (
-            <div className="f9-passkey-list">
-              {data.passkeys.map((passkey) => (
-                <div className="f9-passkey-row" key={passkey.id}>
-                  <div>
-                    <strong>{passkey.label}</strong>
-                    <span>Created <LocalTime iso={passkey.createdAt} mode="date" /></span>
-                  </div>
-                  <span>
-                    {passkey.lastUsedAt ? (
-                      <>Last used <LocalTime iso={passkey.lastUsedAt} mode="date" /></>
-                    ) : (
-                      "Not used yet"
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
+          {data.passkeyControlsMessage ? (
+            <p className="f9-muted-copy">{data.passkeyControlsMessage}</p>
           ) : (
-            <p className="f9-muted-copy">
-              No passkeys are attached to this account yet.
-            </p>
+            <>
+              <div className="f9-account-security-actions">
+                <button
+                  className="f9-secondary-button"
+                  disabled={passkeyPending}
+                  onClick={() => {
+                    void registerPasskey({
+                      setError: setPasskeyError,
+                      setMessage: setPasskeyMessage,
+                      setPending: setPasskeyPending,
+                    });
+                  }}
+                  type="button"
+                >
+                  {passkeyPending ? "Adding..." : "Add passkey"}
+                </button>
+              </div>
+              {data.passkeys.length > 0 ? (
+                <div className="f9-passkey-list">
+                  {data.passkeys.map((passkey) => (
+                    <div className="f9-passkey-row" key={passkey.id}>
+                      <div>
+                        <strong>{passkey.label}</strong>
+                        <span>Created <LocalTime iso={passkey.createdAt} mode="date" /></span>
+                      </div>
+                      <span>
+                        {passkey.lastUsedAt ? (
+                          <>Last used <LocalTime iso={passkey.lastUsedAt} mode="date" /></>
+                        ) : (
+                          "Not used yet"
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="f9-muted-copy">
+                  No passkeys are attached to this account yet.
+                </p>
+              )}
+            </>
           )}
         </article>
       ) : null}

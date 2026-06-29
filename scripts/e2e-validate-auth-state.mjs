@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { resolve } from "node:path";
 
 const authStatePath = process.env.AUTH_STATE || ".auth/0509-internal.json";
-const authStateMetaPath = process.env.AUTH_STATE_META || authStatePath.replace(/\.json$/i, ".meta.json");
+const authStateMetaPath = process.env.AUTH_STATE_META || defaultAuthStateMetaPath(authStatePath);
+const expectedOrigin = new URL(process.env.E2E_PROD_BASE_URL || "https://0509.io").origin;
 const maxAgeHours = Number(process.env.AUTH_STATE_MAX_AGE_HOURS || 24);
 const expectedEmailHash = process.env.E2E_INTERNAL_ACCOUNT_EMAIL_SHA256?.trim().toLowerCase();
 
@@ -17,10 +19,39 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function defaultAuthStateMetaPath(path) {
+  if (/\.json$/i.test(path)) {
+    return path.replace(/\.json$/i, ".meta.json");
+  }
+  return `${path}.meta.json`;
+}
+
+function assertPrivateFile(path, label) {
+  let stat;
+  try {
+    stat = statSync(path);
+  } catch {
+    fail(`${label} is missing.`);
+  }
+
+  if (!stat.isFile()) {
+    fail(`${label} must be a file.`);
+  }
+  if ((stat.mode & 0o077) !== 0) {
+    fail(`${label} must be readable only by the owner. Run chmod 600 ${path}, or recapture it.`);
+  }
+}
+
 const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
 if (!Number.isFinite(maxAgeMs) || maxAgeMs <= 0) {
   fail("AUTH_STATE_MAX_AGE_HOURS must be a positive number.");
 }
+
+if (resolve(authStatePath) === resolve(authStateMetaPath)) {
+  fail("AUTH_STATE_META must not point to the same file as AUTH_STATE.");
+}
+assertPrivateFile(authStatePath, "Auth state");
+assertPrivateFile(authStateMetaPath, "Auth-state metadata");
 
 let state;
 let stateRaw;
@@ -58,6 +89,9 @@ if (meta?.accountEmailSha256 !== expectedEmailHash) {
 }
 if (meta?.storageStateSha256 !== sha256(stateRaw)) {
   fail("Auth-state metadata does not match the storage-state file.");
+}
+if (meta?.origin !== expectedOrigin) {
+  fail(`Auth-state metadata origin does not match ${expectedOrigin}.`);
 }
 const capturedAtMs = Date.parse(typeof meta?.capturedAt === "string" ? meta.capturedAt : "");
 if (!Number.isFinite(capturedAtMs)) {
