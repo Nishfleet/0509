@@ -9,6 +9,14 @@ import {
   formatInsightDepthMarkdown,
 } from "~/lib/insight-depth";
 import { proofLinkForAd } from "~/lib/proof-link";
+import { stablePublicId } from "~/lib/public-stable-id";
+import {
+  classifyDigestItemSource,
+  classifyWatchEventSource,
+  filterClientReportWatchEvents,
+  proofMixLabel,
+  summarizeDigestProofMix,
+} from "~/lib/proof-classification";
 import type {
   CollectionItemRecord,
   CollectionRecord,
@@ -18,6 +26,7 @@ import type {
 } from "~/lib/types";
 
 export type ExportFormat = "csv" | "json" | "slack";
+const CLIENT_READY_EXPORT_SCHEMA = "client_ready_redacted_v1";
 
 export function exportFormatForRequest(
   request: Request,
@@ -89,9 +98,11 @@ export function watchlistExportResponse(
   events: WatchEventRecord[],
   format: ExportFormat,
 ) {
-  const enrichedEvents = events.map((event) => ({
+  const { eligibleEvents, sourceCoverage } = filterClientReportWatchEvents(events);
+  const enrichedEvents = eligibleEvents.map((event) => ({
     ...event,
     intelligence: buildChangeIntelligenceSummary(event),
+    classification: classifyWatchEventSource(event),
   }));
 
   if (format === "json") {
@@ -106,6 +117,7 @@ export function watchlistExportResponse(
       [
         `*Five to Nine watchlist: ${watchlist.name}*`,
         `Target: ${watchlist.targetLabel}`,
+        `_Source coverage_: ${sourceCoverage.note}`,
         formatInsightDepthMarkdown(payload.insightDepth),
         enrichedEvents.length === 0 ? "No recent changes yet." : "Latest changes:",
         ...enrichedEvents.map(
@@ -113,7 +125,7 @@ export function watchlistExportResponse(
             `- ${event.title}: ${event.summary}\n  Priority: ${priorityLabel(
               event.intelligence.priorityBand,
               event.intelligence.priorityScore,
-            )}\n  Next move: ${event.intelligence.recommendedAction}\n  Evidence: ${event.intelligence.proofTrail}`,
+            )}\n  Proof status: ${event.classification.label}\n  Source: ${event.classification.sourceTypeLabel}\n  Next move: ${event.intelligence.recommendedAction}\n  Evidence: ${event.intelligence.proofTrail}`,
         ),
       ],
     );
@@ -122,9 +134,11 @@ export function watchlistExportResponse(
   return csvResponse(
     "watchlist.csv",
     [
-      ["event_type", "title", "summary", "created_at"],
-      ...events.map((event) => [
+      ["event_type", "proof_status", "source_type", "title", "summary", "created_at"],
+      ...enrichedEvents.map((event) => [
         event.eventType,
+        event.classification.label,
+        event.classification.sourceTypeLabel,
         event.title,
         event.summary,
         event.createdAt,
@@ -137,6 +151,7 @@ export function digestExportResponse(digest: DigestRecord, format: ExportFormat)
   const enrichedItems = digest.items.map((item) => ({
     ...item,
     intelligence: readDigestIntelligence(item.metadata),
+    classification: classifyDigestItemSource(item),
   }));
 
   if (format === "json") {
@@ -151,13 +166,14 @@ export function digestExportResponse(digest: DigestRecord, format: ExportFormat)
       [
         `*Five to Nine digest: ${dateLabel(digest.periodStart)} to ${dateLabel(digest.periodEnd)}*`,
         formatInsightDepthMarkdown(payload.insightDepth),
+        `_Proof mix_: ${proofMixLabel(summarizeDigestProofMix(digest.items))}`,
         enrichedItems.length === 0 ? "No digest changes yet." : "Competitor changes:",
         ...enrichedItems.map(
           (item) =>
             `- ${item.watchlistName}: ${item.title}\n  Summary: ${item.summary}\n  Priority: ${priorityLabel(
               item.intelligence.priorityBand,
               item.intelligence.priorityScore,
-            )}\n  Next move: ${item.intelligence.recommendedAction}\n  Evidence: ${item.intelligence.proofTrail}`,
+            )}\n  Proof status: ${item.classification.label}\n  Source: ${item.classification.sourceTypeLabel}\n  Next move: ${item.intelligence.recommendedAction}\n  Evidence: ${item.intelligence.proofTrail}`,
         ),
       ],
     );
@@ -184,11 +200,22 @@ export function buildCollectionExportPayload(
   const insightDepth = buildCollectionInsightDepth(items);
   return {
     resourceType: "collection",
+    schemaVersion: CLIENT_READY_EXPORT_SCHEMA,
+    exportPolicy: redactedExportPolicy("all_saved_collection_items"),
     generatedAt: new Date().toISOString(),
-    collection,
+    collection: {
+      name: collection.name,
+      description: collection.description,
+      createdAt: collection.createdAt,
+      updatedAt: collection.updatedAt,
+    },
     insightDepth,
     items: items.map((item) => ({
-      id: item.id,
+      id: stablePublicId("collection_item", [
+        item.ad.metaAdId,
+        item.createdAt,
+        item.note,
+      ]),
       advertiser: stringValue(item.ad.advertiser),
       hook: stringValue(item.ad.hook),
       offer: stringValue(item.ad.offer),
@@ -208,27 +235,48 @@ export function buildWatchlistExportPayload(
   watchlist: WatchlistRecord,
   events: WatchEventRecord[],
 ) {
-  const insightDepth = buildWatchlistInsightDepth(events);
-  const enrichedEvents = events.map((event) => ({
+  const { eligibleEvents, sourceCoverage } = filterClientReportWatchEvents(events);
+  const insightDepth = buildWatchlistInsightDepth(eligibleEvents);
+  const enrichedEvents = eligibleEvents.map((event) => ({
     ...event,
     intelligence: buildChangeIntelligenceSummary(event),
+    classification: classifyWatchEventSource(event),
   }));
 
   return {
     resourceType: "watchlist",
+    schemaVersion: CLIENT_READY_EXPORT_SCHEMA,
+    exportPolicy: redactedExportPolicy("verified_proof_watch_events_only"),
     generatedAt: new Date().toISOString(),
-    watchlist,
+    watchlist: {
+      name: watchlist.name,
+      targetType: watchlist.targetType,
+      targetLabel: watchlist.targetLabel,
+      targetCountry: watchlist.targetCountry,
+      isActive: watchlist.isActive,
+      lastScannedAt: watchlist.lastScannedAt,
+      createdAt: watchlist.createdAt,
+      updatedAt: watchlist.updatedAt,
+    },
+    sourceCoverage,
     insightDepth,
     events: enrichedEvents.map((event) => ({
-      id: event.id,
+      id: stablePublicId("watch_event", [
+        event.eventType,
+        event.title,
+        event.createdAt,
+        event.adId,
+      ]),
       eventType: event.eventType,
       status: event.status,
+      proofStatus: event.classification.status,
+      proofStatusLabel: event.classification.label,
+      sourceTypeLabel: event.classification.sourceTypeLabel,
       title: event.title,
       summary: event.summary,
       importanceScore: event.importanceScore,
       confirmedAt: event.confirmedAt,
       createdAt: event.createdAt,
-      metadata: event.metadata,
       intelligence: event.intelligence,
     })),
   };
@@ -239,29 +287,58 @@ export function buildDigestExportPayload(digest: DigestRecord) {
   const enrichedItems = digest.items.map((item) => ({
     ...item,
     intelligence: readDigestIntelligence(item.metadata),
+    classification: classifyDigestItemSource(item),
   }));
 
   return {
     resourceType: "digest",
+    schemaVersion: CLIENT_READY_EXPORT_SCHEMA,
+    exportPolicy: redactedExportPolicy("digest_items_with_source_labels"),
     generatedAt: new Date().toISOString(),
     digest: {
-      id: digest.id,
+      id: stablePublicId("digest", [
+        digest.periodStart,
+        digest.periodEnd,
+        digest.createdAt,
+      ]),
       periodStart: digest.periodStart,
       periodEnd: digest.periodEnd,
       createdAt: digest.createdAt,
-      delivery: digest.delivery,
+      delivery: digest.delivery
+        ? {
+            status: digest.delivery.status,
+            provider: digest.delivery.provider,
+            deliveredAt: digest.delivery.deliveredAt,
+          }
+        : null,
     },
+    proofMix: summarizeDigestProofMix(digest.items),
     insightDepth,
     items: enrichedItems.map((item) => ({
-      id: item.id,
+      id: stablePublicId("digest_item", [
+        digest.periodStart,
+        item.watchlistName,
+        item.eventType,
+        item.title,
+        item.createdAt,
+      ]),
       watchlistName: item.watchlistName,
       eventType: item.eventType,
+      proofStatus: item.classification.status,
+      proofStatusLabel: item.classification.label,
+      sourceTypeLabel: item.classification.sourceTypeLabel,
       title: item.title,
       summary: item.summary,
       createdAt: item.createdAt,
-      metadata: item.metadata,
       intelligence: item.intelligence,
     })),
+  };
+}
+
+function redactedExportPolicy(eventPolicy: string) {
+  return {
+    eventPolicy,
+    redaction: "Internal IDs, owner IDs, provider payloads, recipient emails, and raw metadata are omitted.",
   };
 }
 

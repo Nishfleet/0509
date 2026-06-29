@@ -441,6 +441,8 @@ interface DigestDeliveryRow {
   external_message_id: string | null;
   error_message: string | null;
   delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface DeliveryAttemptRow {
@@ -6927,7 +6929,10 @@ export async function listRetryableDigestRuns(
       INNER JOIN user ON user.id = digest_run.user_id
       LEFT JOIN digest_delivery ON digest_delivery.digest_run_id = digest_run.id
       WHERE digest_run.period_end >= ?
-        AND (digest_delivery.status = 'failed' OR digest_delivery.id IS NULL)
+        AND (
+          digest_delivery.status = 'failed'
+          OR digest_delivery.id IS NULL
+        )
       ORDER BY digest_run.period_end ASC
       LIMIT ?
     `,
@@ -7873,10 +7878,13 @@ export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Dat
         SELECT
           COUNT(*) AS recent_attempts,
           SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS recent_sent,
-          MAX(COALESCE(sent_at, created_at)) AS latest_at
+          MAX(COALESCE(provider_status_last_seen_at, sent_at, updated_at, created_at)) AS latest_at
         FROM delivery_attempt
         WHERE digest_run_id IS NOT NULL
-          AND created_at >= ?
+          AND lane = 'customer'
+          AND channel = 'email'
+          AND provider = 'cloudflare_email'
+          AND COALESCE(provider_status_last_seen_at, sent_at, updated_at, created_at) >= ?
       `,
       since,
     ),

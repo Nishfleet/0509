@@ -27,4 +27,54 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Insight depth");
     expect(markup).not.toContain("Pending");
   });
+
+  it("does not render non-http report source URLs as links", () => {
+    const report = {
+      ...legacyReport,
+      rows: [
+        reportRow("row-1", "javascript:alert(1)"),
+        reportRow("row-2", "https://example.com/source"),
+      ],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report }),
+    );
+
+    expect(markup).not.toContain("href=\"javascript:alert(1)\"");
+    expect(markup).toContain("href=\"https://example.com/source\"");
+  });
 });
+
+function reportRow(id: string, sourceUrl: string): ReportDocument["rows"][number] {
+  return {
+    id,
+    advertiser: "Competitor",
+    previewHeadline: "New offer",
+    offer: "20% off",
+    cta: "Shop now",
+    formatLabel: "Image",
+    languageLabel: "English",
+    previewImageUrl: null,
+    creativeText: "Creative",
+    translatedText: "Creative",
+    landingPage: { url: "", headline: "", captureLabel: "", capturedAt: null, signals: [] },
+    analysisFields: [],
+    tags: [],
+    note: null,
+    event: {
+      typeLabel: "Offer",
+      title: "New offer",
+      summary: "A new offer launched.",
+      createdAt: "2026-06-08T01:00:00.000Z",
+      priorityScore: 82,
+      priorityBand: "high",
+      recommendedAction: "Review",
+      proofTrail: "Proof capture",
+      proofStatusLabel: "Verified proof",
+      sourceTypeLabel: "Proof snapshot",
+      sourceUrl,
+      metaAdId: null,
+    },
+  };
+}
