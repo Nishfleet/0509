@@ -41,9 +41,22 @@ export const demoProof = {
   ],
   digestPreview: {
     subject: "Nykaa changed the routine bundle angle",
+    whatChanged: "Nykaa moved the pricing page from a sale-led hero to a routine-first bundle.",
+    whyItMatters: "The page now sells a bundle habit, not a one-off discount, so your counter-offer should be reviewed before the next campaign refresh.",
     priority: "Review before next campaign refresh",
     recommendedMove: "Compare the bundle angle against your own acquisition offer and brief one counter-test.",
-    confidence: "Medium sample confidence",
+    confidence: "Verified proof with source and freshness attached.",
+    proofStatus: "Verified proof",
+    source: "Landing-page snapshot + page text capture",
+    freshness: "Sample captured at 05:09",
+  },
+  reportPreview: {
+    title: "Proof report preview",
+    rows: [
+      "What changed: offer text and CTA",
+      "How proven: screenshot, page text, original link",
+      "Next action: save to collection or share report",
+    ],
   },
   insightPreview: {
     topHooks: ["Routine-first bundle", "Dermat approved", "Sale ending soon"],

@@ -4,6 +4,7 @@ import {
   classifyDigestItemSource,
   classifyWatchEventSource,
   filterClientReportWatchEvents,
+  proofMixLabel,
   summarizeDigestProofMix,
 } from "~/lib/proof-classification";
 import type { WatchEventRecord } from "~/lib/types";
@@ -71,7 +72,7 @@ describe("proof classification", () => {
       }),
     ).toMatchObject({
       status: "proof_pending",
-      label: "Proof pending",
+      label: "Proof unavailable",
     });
     expect(
       classifyDigestItemSource({
@@ -98,8 +99,76 @@ describe("proof classification", () => {
       }),
     ).toMatchObject({
       status: "canary_or_test",
-      label: "Canary/test",
+      label: "Excluded from client report",
     });
+  });
+
+  it("uses customer-facing proof labels for unavailable and excluded statuses", () => {
+    expect(
+      classifyDigestItemSource({
+        metadata: { eventStatus: "proof_pending", sourceStatus: "scan_backed" },
+      }),
+    ).toMatchObject({
+      status: "proof_pending",
+      label: "Proof unavailable",
+      sourceTypeLabel: "Scheduled scan",
+    });
+
+    expect(
+      classifyDigestItemSource({
+        metadata: { status: "proof_failed" },
+      }),
+    ).toMatchObject({
+      status: "proof_failed",
+      label: "Proof unavailable",
+      sourceTypeLabel: "Source unavailable",
+    });
+
+    expect(classifyDigestItemSource({ metadata: {} })).toMatchObject({
+      status: "unknown",
+      label: "Proof unavailable",
+      sourceTypeLabel: "Source unavailable",
+    });
+
+    expect(
+      classifyWatchEventSource({
+        ...baseEvent,
+        status: "invalidated",
+        invalidatedAt: "2026-06-01T00:00:00.000Z",
+      }),
+    ).toMatchObject({
+      status: "invalidated",
+      label: "Excluded from client report",
+      sourceTypeLabel: "Source unavailable",
+    });
+
+    expect(
+      classifyWatchEventSource({
+        ...baseEvent,
+        status: "suppressed",
+        suppressedAt: "2026-06-01T00:00:00.000Z",
+      }),
+    ).toMatchObject({
+      status: "suppressed",
+      label: "Excluded from client report",
+      sourceTypeLabel: "Source unavailable",
+    });
+  });
+
+  it("summarizes unavailable proof without exposing pipeline status names", () => {
+    const label = proofMixLabel(
+      summarizeDigestProofMix([
+        { metadata: { eventStatus: "proof_pending", sourceStatus: "scan_backed" } },
+        { metadata: { status: "proof_failed" } },
+        { metadata: {} },
+        { metadata: { kind: "launch_readiness_canary" } },
+      ]),
+    );
+
+    expect(label).toBe("3 proof unavailable · 1 excluded from client report");
+    expect(label).not.toContain("proof pending");
+    expect(label).not.toContain("proof failed");
+    expect(label).not.toContain("unknown");
   });
 
   it("filters client reports to verified proof by default", () => {

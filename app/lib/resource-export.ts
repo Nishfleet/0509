@@ -134,7 +134,23 @@ export function watchlistExportResponse(
   return csvResponse(
     "watchlist.csv",
     [
-      ["event_type", "proof_status", "source_type", "title", "summary", "created_at"],
+      [
+        "event_type",
+        "proof_status",
+        "source_type",
+        "title",
+        "summary",
+        "created_at",
+        "what_changed",
+        "why_it_matters",
+        "urgency",
+        "proof_status_label",
+        "source",
+        "last_seen",
+        "next_action",
+        "proof_trail",
+        "source_url",
+      ],
       ...enrichedEvents.map((event) => [
         event.eventType,
         event.classification.label,
@@ -142,6 +158,15 @@ export function watchlistExportResponse(
         event.title,
         event.summary,
         event.createdAt,
+        event.title,
+        event.summary,
+        priorityLabel(event.intelligence.priorityBand, event.intelligence.priorityScore),
+        event.classification.label,
+        event.classification.sourceTypeLabel,
+        event.confirmedAt ?? event.createdAt,
+        event.intelligence.recommendedAction,
+        event.intelligence.proofTrail,
+        sourceUrlForMetadata(event.metadata),
       ]),
     ],
   );
@@ -182,12 +207,35 @@ export function digestExportResponse(digest: DigestRecord, format: ExportFormat)
   return csvResponse(
     "digest.csv",
     [
-      ["watchlist", "event_type", "title", "summary"],
-      ...digest.items.map((item) => [
+      [
+        "watchlist",
+        "event_type",
+        "title",
+        "summary",
+        "what_changed",
+        "why_it_matters",
+        "urgency",
+        "proof_status",
+        "source",
+        "last_seen",
+        "next_action",
+        "proof_trail",
+        "source_url",
+      ],
+      ...enrichedItems.map((item) => [
         item.watchlistName,
         item.eventType,
         item.title,
         item.summary,
+        item.title,
+        item.summary,
+        priorityLabel(item.intelligence.priorityBand, item.intelligence.priorityScore),
+        item.classification.label,
+        item.classification.sourceTypeLabel,
+        readMetadataString(item.metadata, "confirmedAt") ?? readMetadataString(item.metadata, "capturedAt") ?? readMetadataString(item.metadata, "createdAt") ?? item.createdAt,
+        item.intelligence.recommendedAction,
+        item.intelligence.proofTrail,
+        sourceUrlForMetadata(item.metadata),
       ]),
     ],
   );
@@ -396,6 +444,31 @@ function dateLabel(value: string) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function readMetadataString(metadata: Record<string, unknown> | undefined, key: string) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function sourceUrlForMetadata(metadata: Record<string, unknown> | undefined) {
+  return readHttpUrl(metadata?.sourceUrl)
+    ?? readHttpUrl(metadata?.proofUrl)
+    ?? readHttpUrl(metadata?.landingPageUrl)
+    ?? readHttpUrl(metadata?.websiteUrl)
+    ?? readHttpUrl(metadata?.websiteProofUrl)
+    ?? readHttpUrl(metadata?.canonicalUrl)
+    ?? "";
+}
+
+function readHttpUrl(value: unknown) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function metricProofForAd(ad: CollectionItemRecord["ad"]) {

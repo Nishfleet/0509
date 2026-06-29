@@ -45,8 +45,10 @@ export function buildChangeIntelligenceSummary(
 export function digestMetadataForEvent(event: WatchEventRecord, timeZone?: string | null) {
   return {
     ...buildChangeIntelligenceSummary(event, timeZone),
+    ...digestSourceMetadata(event.metadata),
     proofCaptureId: event.proofCaptureId,
     confirmedAt: event.confirmedAt,
+    createdAt: event.createdAt,
     eventStatus: event.status,
     sourceStatus: event.proofCaptureId ? "proof_backed" : "scan_backed",
   };
@@ -73,6 +75,27 @@ function fallbackDigestIntelligence(): ChangeIntelligenceSummary {
     recommendedAction: "Review the source evidence before acting.",
     proofTrail: "Proof trail pending",
   };
+}
+
+function digestSourceMetadata(metadata: Record<string, unknown> | undefined) {
+  const sourceKeys = [
+    "sourceUrl",
+    "proofUrl",
+    "landingPageUrl",
+    "websiteUrl",
+    "websiteProofUrl",
+    "canonicalUrl",
+    "capturedAt",
+  ];
+  const result: Record<string, string> = {};
+  const source = metadata ?? {};
+  for (const key of sourceKeys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      result[key] = value.trim();
+    }
+  }
+  return result;
 }
 
 function formatPriorityBand(score: number | null) {

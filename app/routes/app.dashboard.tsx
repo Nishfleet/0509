@@ -15,7 +15,9 @@ import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
+import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
 import { buildSearchParams } from "~/lib/normalize";
+import { classifyWatchEventSource } from "~/lib/proof-classification";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppEnv } from "~/lib/env.server";
@@ -597,16 +599,31 @@ export default function AppDashboardRoute() {
           </div>
 
           <div className="f9-work-list">
-            {visibleRecentEvents.map((event) => (
-              <article className="f9-work-row" key={event.id}>
-                <div>
-                  <h3>{event.title}</h3>
-                  <p className="f9-muted-copy">{event.summary}</p>
-                  <small>{event.eventType.replaceAll("_", " ")} · <LocalTime iso={event.createdAt} /></small>
-                </div>
-                <span className="f9-status-pill">{event.status.replaceAll("_", " ")}</span>
-              </article>
-            ))}
+            {visibleRecentEvents.map((event) => {
+              const intelligence = buildChangeIntelligenceSummary(event);
+              const classification = classifyWatchEventSource(event);
+              const urgency = intelligence.priorityScore === null
+                ? intelligence.priorityBand
+                : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
+              return (
+                <article className="f9-work-row" key={event.id}>
+                  <div>
+                    <h3>{event.title}</h3>
+                    <p className="f9-muted-copy">
+                      <strong>Why it matters:</strong> {event.summary}
+                    </p>
+                    <p className="f9-muted-copy">
+                      {urgency} · {classification.label} · Source: {classification.sourceTypeLabel}
+                    </p>
+                    <p className="f9-muted-copy">
+                      Next action: {intelligence.recommendedAction}
+                    </p>
+                    <small>{event.eventType.replaceAll("_", " ")} · Last seen <LocalTime iso={event.createdAt} /></small>
+                  </div>
+                  <span className="f9-status-pill">{classification.label}</span>
+                </article>
+              );
+            })}
           </div>
         </article>
       ) : null}

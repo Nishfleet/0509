@@ -2,7 +2,88 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
+import { DigestDecisionSummary, DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
+
+describe("DigestDecisionSummary", () => {
+  it("leads with the highest-priority customer decision", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DigestDecisionSummary, {
+        items: [
+          {
+            title: "CTA changed",
+            summary: "The competitor is pushing lead capture harder.",
+            eventType: "landing_page_cta_changed",
+            watchlistName: "Mamaearth",
+            metadata: {
+              priorityScore: 66,
+              priorityBand: "Medium priority",
+              recommendedAction: "Next review: compare the new CTA.",
+              proofTrail: "Spotted in the scheduled scan",
+              sourceStatus: "scan_backed",
+              confirmedAt: "2026-06-20T04:00:00.000Z",
+            },
+            createdAt: "2026-06-20T04:00:00.000Z",
+          },
+          {
+            title: "Offer changed",
+            summary: "The competitor lowered the anchor price.",
+            eventType: "landing_page_offer_changed",
+            watchlistName: "Nykaa",
+            metadata: {
+              priorityScore: 92,
+              priorityBand: "High priority",
+              recommendedAction: "Today: brief one counter-test.",
+              proofTrail: "Verified from a page snapshot",
+              proofCaptureId: "proof-1",
+              sourceStatus: "proof_backed",
+              confirmedAt: "2026-06-20T05:09:00.000Z",
+            },
+            createdAt: "2026-06-20T05:09:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("Decision summary");
+    expect(markup).toContain("Nykaa needs review");
+    expect(markup).toContain("What changed");
+    expect(markup).toContain("Offer changed");
+    expect(markup).toContain("Why it matters");
+    expect(markup).toContain("The competitor lowered the anchor price.");
+    expect(markup).toContain("High priority");
+    expect(markup).toContain("Verified proof");
+    expect(markup).toContain("Proof snapshot");
+    expect(markup).toContain("Today: brief one counter-test.");
+  });
+
+  it("uses evidence freshness from metadata before the digest packaging time", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DigestDecisionSummary, {
+        items: [
+          {
+            title: "Offer changed",
+            summary: "The competitor lowered the anchor price.",
+            eventType: "landing_page_offer_changed",
+            watchlistName: "Nykaa",
+            metadata: {
+              priorityScore: 92,
+              priorityBand: "High priority",
+              recommendedAction: "Today: brief one counter-test.",
+              proofTrail: "Verified from a page snapshot",
+              proofCaptureId: "proof-1",
+              sourceStatus: "proof_backed",
+              createdAt: "2026-06-20T04:00:00.000Z",
+            },
+            createdAt: "2026-06-25T10:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain('dateTime="2026-06-20T04:00:00.000Z"');
+    expect(markup).not.toContain('dateTime="2026-06-25T10:00:00.000Z"');
+  });
+});
 
 describe("DigestProofPacket", () => {
   it("summarizes the highest-priority move into a client handoff packet", () => {
@@ -36,7 +117,7 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Evidence packet");
+    expect(markup).toContain("Proof and source details");
     expect(markup).toContain("2 changes packaged for handoff");
     expect(markup).toContain("Offer changed: ready to send as a client or teammate digest");
     expect(markup).toContain("Today: brief one counter-test.");
@@ -243,7 +324,22 @@ describe("DigestIntelligence", () => {
       }),
     );
 
-    expect(markup).toContain("Canary/test");
+    expect(markup).toContain("Excluded from client report");
     expect(markup).not.toContain("Verified proof");
+  });
+});
+
+describe("readDigestSourceUrl", () => {
+  it("skips unsafe source candidates and returns the first safe fallback", async () => {
+    const { readDigestSourceUrl } = await import("~/routes/app.digests");
+
+    expect(
+      readDigestSourceUrl({
+        sourceUrl: "javascript:alert(1)",
+        proofUrl: "not a url",
+        websiteUrl: "https://example.com/safe-source",
+      }),
+    ).toBe("https://example.com/safe-source");
+    expect(readDigestSourceUrl({ sourceUrl: "mailto:support@example.com" })).toBeNull();
   });
 });

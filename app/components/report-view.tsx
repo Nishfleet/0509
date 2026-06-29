@@ -3,6 +3,7 @@ import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { safeInsightDepthSummary } from "~/lib/insight-depth";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { LocalTime } from "~/components/local-time";
+import { ProofGlossary } from "~/components/proof-glossary";
 
 export function ReportView({ report }: { report: ReportDocument }) {
   const reportSnapshot = report as ReportDocument & { insightDepth?: unknown };
@@ -28,10 +29,12 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
       <p className="report-summary">{report.summary}</p>
 
+      <ReportDecisionSummary report={report} />
+
       {report.sourceCoverage ? (
         <section className="f9-proof-packet" aria-label="Report source coverage">
           <div>
-            <span className="f9-app-kicker">Source coverage</span>
+            <span className="f9-app-kicker">Proof and source coverage</span>
             <h3>Client-ready evidence filter</h3>
             <p className="f9-muted-copy">{report.sourceCoverage.note}</p>
           </div>
@@ -64,6 +67,8 @@ export function ReportView({ report }: { report: ReportDocument }) {
           </article>
         ))}
       </section>
+
+      <ProofGlossary />
 
       {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
@@ -119,10 +124,10 @@ export function ReportView({ report }: { report: ReportDocument }) {
                     <dt>Proof trail</dt>
                     <dd>{row.event.proofTrail}</dd>
                   </div>
-	                  {row.event.sourceUrl && isHttpUrl(row.event.sourceUrl) ? (
-	                    <div>
-	                      <dt>Source link</dt>
-	                      <dd>
+                  {row.event.sourceUrl && isHttpUrl(row.event.sourceUrl) ? (
+                    <div>
+                      <dt>Source link</dt>
+                      <dd>
                         <a href={row.event.sourceUrl} rel="noreferrer" target="_blank">
                           Open source
                         </a>
@@ -252,6 +257,133 @@ export function ReportView({ report }: { report: ReportDocument }) {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function ReportDecisionSummary({ report }: { report: ReportDocument }) {
+  const topEvent = report.rows
+    .map((row) => row.event)
+    .filter((event): event is NonNullable<typeof event> => Boolean(event))
+    .sort((a, b) => (b.priorityScore ?? -1) - (a.priorityScore ?? -1))[0] ?? null;
+
+  if (!topEvent && report.resourceType === "collection") {
+    return <CollectionDecisionSummary report={report} />;
+  }
+
+  if (!topEvent) {
+    return (
+      <section className="f9-proof-packet" aria-label="Report decision summary">
+        <div>
+          <span className="f9-app-kicker">Decision summary</span>
+          <h3>No client-ready change needs action</h3>
+          <p className="f9-muted-copy">{report.summary}</p>
+        </div>
+        <dl className="proof-trail-list">
+          <div>
+            <dt>What changed</dt>
+            <dd>No verified report row is ready to act on.</dd>
+          </div>
+          <div>
+            <dt>Next action</dt>
+            <dd>Review source coverage or wait for the next proof-backed report.</dd>
+          </div>
+        </dl>
+      </section>
+    );
+  }
+
+  const urgency = topEvent.priorityScore === null
+    ? topEvent.priorityBand
+    : `${topEvent.priorityBand} · ${topEvent.priorityScore}/100`;
+
+  return (
+    <section className="f9-proof-packet" aria-label="Report decision summary">
+      <div>
+        <span className="f9-app-kicker">Decision summary</span>
+        <h3>{topEvent.title}</h3>
+        <p className="f9-muted-copy">{topEvent.summary}</p>
+      </div>
+      <dl className="proof-trail-list">
+        <div>
+          <dt>What changed</dt>
+          <dd>{topEvent.title}</dd>
+        </div>
+        <div>
+          <dt>Why it matters</dt>
+          <dd>{topEvent.summary}</dd>
+        </div>
+        <div>
+          <dt>Urgency</dt>
+          <dd>{urgency}</dd>
+        </div>
+        <div>
+          <dt>Proof status</dt>
+          <dd>{topEvent.proofStatusLabel}</dd>
+        </div>
+        <div>
+          <dt>Source</dt>
+          <dd>{topEvent.sourceTypeLabel}</dd>
+        </div>
+        <div>
+          <dt>Last seen</dt>
+          <dd><LocalTime iso={topEvent.createdAt} /></dd>
+        </div>
+        <div>
+          <dt>Next action</dt>
+          <dd>{topEvent.recommendedAction}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
+  const rowCount = report.rows.length;
+  const rowLabel = `${rowCount} saved proof item${rowCount === 1 ? "" : "s"}`;
+  const hasRows = rowCount > 0;
+
+  return (
+    <section className="f9-proof-packet" aria-label="Report decision summary">
+      <div>
+        <span className="f9-app-kicker">Decision summary</span>
+        <h3>{hasRows ? "Saved proof ready for review" : "No saved proof rows yet"}</h3>
+        <p className="f9-muted-copy">{report.summary}</p>
+      </div>
+      <dl className="proof-trail-list">
+        <div>
+          <dt>What changed</dt>
+          <dd>{hasRows ? `${rowLabel} packaged for review.` : "No saved proof is in this report."}</dd>
+        </div>
+        <div>
+          <dt>Why it matters</dt>
+          <dd>
+            {hasRows
+              ? "This is a curated proof set, not a live change alert."
+              : "The report is ready to fill once proof is saved."}
+          </dd>
+        </div>
+        <div>
+          <dt>Urgency</dt>
+          <dd>{hasRows ? "Review before sharing" : "No action needed"}</dd>
+        </div>
+        <div>
+          <dt>Proof status</dt>
+          <dd>{hasRows ? "Saved proof collection" : "Proof unavailable"}</dd>
+        </div>
+        <div>
+          <dt>Source</dt>
+          <dd>{hasRows ? "Saved collection" : "No source rows"}</dd>
+        </div>
+        <div>
+          <dt>Last seen</dt>
+          <dd><LocalTime iso={report.generatedAt} /></dd>
+        </div>
+        <div>
+          <dt>Next action</dt>
+          <dd>{hasRows ? "Review the rows below, then share or export the report." : "Save proof into this collection."}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 

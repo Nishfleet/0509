@@ -150,14 +150,13 @@ export function proofStatusLabel(status: CustomerProofStatus) {
 }
 
 export function proofMixLabel(mix: ProofMix) {
+  const proofUnavailable = mix.proofPending + mix.proofFailed + mix.unknown;
   return [
     mix.verifiedProof ? `${mix.verifiedProof} verified proof` : null,
     mix.scanSpotted ? `${mix.scanSpotted} scan-spotted` : null,
     mix.needsReview ? `${mix.needsReview} needs review` : null,
-    mix.proofPending ? `${mix.proofPending} proof pending` : null,
-    mix.proofFailed ? `${mix.proofFailed} proof failed` : null,
-    mix.excluded ? `${mix.excluded} excluded` : null,
-    mix.unknown ? `${mix.unknown} unknown` : null,
+    proofUnavailable ? `${proofUnavailable} proof unavailable` : null,
+    mix.excluded ? `${mix.excluded} excluded from client report` : null,
   ].filter(Boolean).join(" · ") || "No proof signals yet";
 }
 
@@ -393,19 +392,19 @@ const PROOF_STATUS_LABELS: Record<CustomerProofStatus, string> = {
   verified_proof: "Verified proof",
   scan_spotted: "Scan-spotted",
   needs_review: "Needs review",
-  proof_pending: "Proof pending",
-  proof_failed: "Proof failed",
-  suppressed: "Suppressed",
-  invalidated: "Invalidated",
-  internal_only: "Internal only",
-  canary_or_test: "Canary/test",
-  unknown: "Source unknown",
+  proof_pending: "Proof unavailable",
+  proof_failed: "Proof unavailable",
+  suppressed: "Excluded from client report",
+  invalidated: "Excluded from client report",
+  internal_only: "Excluded from client report",
+  canary_or_test: "Excluded from client report",
+  unknown: "Proof unavailable",
 };
 
 const SOURCE_TYPE_LABELS: Record<ProofClassification["sourceType"], string> = {
   proof_snapshot: "Proof snapshot",
   scheduled_scan: "Scheduled scan",
   manual: "Manual proof",
-  internal: "Internal signal",
-  unknown: "Source unknown",
+  internal: "Source unavailable",
+  unknown: "Source unavailable",
 };

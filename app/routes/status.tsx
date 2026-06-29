@@ -81,9 +81,9 @@ export default function StatusRoute() {
 
       <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
-          <li>Email digest delivery is the GA launch gate.</li>
+          <li>Email delivery is available for eligible accounts; delivery issues can be reviewed through support.</li>
           <li>Dodo customer portal subscription changes still need dashboard confirmation.</li>
-          <li>External uptime monitoring on <code>https://0509.io/api/health</code> is an owner setup step — see ops runbooks.</li>
+          <li>External uptime monitoring is still an owner setup step.</li>
           <li>Plan changes, cancellation, deletion, and sensitive account changes are handled through support until portal changes are confirmed.</li>
         </ul>
       </PublicDocBlock>

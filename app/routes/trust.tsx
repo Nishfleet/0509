@@ -43,18 +43,17 @@ export default function TrustRoute() {
 
       <PublicDocBlock title="Retention and backups">
         <p>
-          Product data lives in Cloudflare D1 and optional R2 artifact storage. Retention cleanup
-          runs on bounded scheduled sweeps. The repository validates the D1 backup scripts, D1 binding,
-          and current migration chain in dry-run checks; automated R2 backup scheduling and restore drills
-          remain owner-operated until recorded as verified. The public health probe is{" "}
+          Product data lives in Cloudflare-managed storage, with optional artifact storage for proof
+          captures. Retention cleanup runs on bounded scheduled sweeps. Backup validation and restore
+          drills remain owner-operated until recorded as verified. The public health probe is{" "}
           <code>https://0509.io/api/health</code> — it returns <code>{`{"status":"ok"}`}</code> without
-          touching D1. Account deletion, correction, and export help are handled through support.
+          touching customer records. Account deletion, correction, and export help are handled through support.
         </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Subprocessors and providers">
         <ul className="f9-doc-list">
-          <li>Cloudflare: hosting, Workers, D1, R2, Workers AI, and Cloudflare Email Service.</li>
+          <li>Cloudflare: hosting, storage, Workers AI, and email delivery.</li>
           <li>Dodo Payments: checkout, subscriptions, receipts, and billing portal.</li>
           <li>Meta public Ad Library surfaces and customer-provided Meta access when the customer connects it.</li>
         </ul>

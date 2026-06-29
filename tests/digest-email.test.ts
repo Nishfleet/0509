@@ -167,7 +167,8 @@ describe("buildDigestEmail", () => {
     expect(email.html).not.toContain("Internal item");
     expect(email.html).not.toContain("Canary item");
     expect(email.html).toContain("2 excluded");
-    expect(email.html).toContain("1 proof failed");
+    expect(email.html).toContain("1 proof unavailable");
+    expect(email.html).not.toContain("1 proof failed");
   });
 });
 

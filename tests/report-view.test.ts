@@ -44,6 +44,56 @@ describe("ReportView", () => {
     expect(markup).not.toContain("href=\"javascript:alert(1)\"");
     expect(markup).toContain("href=\"https://example.com/source\"");
   });
+
+  it("leads proof reports with a decision summary and glossary", () => {
+    const highPriorityRow = reportRow("row-high", "https://example.com/high");
+    const report = {
+      ...legacyReport,
+      rows: [
+        reportRow("row-low", "https://example.com/low"),
+        {
+          ...highPriorityRow,
+          event: {
+            ...highPriorityRow.event!,
+            title: "Pricing page changed",
+            summary: "The anchor price moved down before the weekend.",
+            priorityScore: 93,
+            priorityBand: "High priority",
+            recommendedAction: "Today: brief a counter-offer.",
+          },
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report }),
+    );
+
+    expect(markup).toContain("Decision summary");
+    expect(markup).toContain("Pricing page changed");
+    expect(markup).toContain("Why it matters");
+    expect(markup).toContain("High priority");
+    expect(markup).toContain("Today: brief a counter-offer.");
+    expect(markup).toContain("Proof glossary");
+    expect(markup).toContain("Proof unavailable");
+  });
+
+  it("does not describe saved collection proof as a no-action watchlist report", () => {
+    const savedProofRow = { ...reportRow("row-collection", ""), event: undefined };
+    const report = {
+      ...legacyReport,
+      rows: [savedProofRow],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report }),
+    );
+
+    expect(markup).toContain("Saved proof ready for review");
+    expect(markup).toContain("1 saved proof item packaged for review.");
+    expect(markup).toContain("This is a curated proof set, not a live change alert.");
+    expect(markup).not.toContain("No client-ready change needs action");
+  });
 });
 
 function reportRow(id: string, sourceUrl: string): ReportDocument["rows"][number] {
