@@ -12,6 +12,7 @@ import {
 import { mapCustomerRouteError } from "~/lib/customer-route-error";
 
 const appLayout = readFileSync("app/routes/app-layout.tsx", "utf8");
+const routeConfig = readFileSync("app/routes.ts", "utf8");
 const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
 const sourcesRoute = readFileSync("app/routes/app.sources.tsx", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
@@ -59,11 +60,25 @@ describe("dashboard v2 shell", () => {
     expect(appLayout).not.toContain("f9-app-shell");
     expect(shellSource).toContain("f9-cursor-shell");
     expect(shellSource).toContain("f9-dash-page");
+    expect(shellSource).toContain("f9-dash-page-app");
+    expect(shellSource).toContain("f9-dash-page-public");
+    expect(shellSource).toContain("f9-dash-nav-group");
   });
 
-  it("does not reorder main content above rail on mobile", () => {
+  it("keeps narrow authenticated navigation in page flow", () => {
     expect(appCss).not.toMatch(/\.f9-cursor-main\s*\{[^}]*order:\s*1/s);
     expect(shellSource).toContain("f9-dash-mobile-nav");
+    expect(appCss).toContain(".f9-dash-page-app .f9-dash-mobile-nav");
+    expect(appCss).toContain(".f9-dash-page-app .f9-dash-nav-group");
+    expect(appCss).not.toContain(".f9-cursor-rail > div:not(");
+    expect(appCss).not.toMatch(/\.f9-dash(?:-page-app)?\s+\.f9-dash-mobile-nav\s*\{[^}]*position:\s*fixed/s);
+    expect(appCss).not.toMatch(/\.f9-dash(?:-page-app)?\s+\.f9-dash-mobile-utility\s*\{[^}]*position:\s*fixed/s);
+    expect(shellSource.indexOf('className="f9-dash-mobile-nav"')).toBeLessThan(
+      shellSource.indexOf('className="f9-cursor-main"'),
+    );
+    expect(shellSource.indexOf('className="f9-dash-mobile-utility"')).toBeLessThan(
+      shellSource.indexOf('className="f9-cursor-main"'),
+    );
   });
 
   it("wraps primary app routes in DashboardPage except staff ops", () => {
@@ -79,6 +94,11 @@ describe("dashboard v2 shell", () => {
   it("does not duplicate legacy sidebar markup in layout", () => {
     expect(appLayout).not.toContain("f9-app-sidebar");
     expect(appLayout).not.toContain("BrandWordmark");
+  });
+
+  it("keeps intuitive app aliases away from the 404 route", () => {
+    expect(routeConfig).toContain('route("notifications", "routes/app.notifications.ts")');
+    expect(routeConfig).toContain('route("reports", "routes/app.reports.index.ts")');
   });
 });
 

@@ -33,7 +33,7 @@ function NavSections({ sections }: { sections: DashboardNavSection[] }) {
   return (
     <>
       {sections.map((section) => (
-        <div key={section.title ?? section.items[0]?.to ?? "nav"}>
+        <div className="f9-dash-nav-group" key={section.title ?? section.items[0]?.to ?? "nav"}>
           {section.title ? <p className="f9-dash-nav-section">{section.title}</p> : null}
           <nav aria-label={section.title ?? "Application"}>
             {section.items.map((item) => (
@@ -77,9 +77,12 @@ export function DashboardShell({
   });
   const staff = DASHBOARD_STAFF_NAV.filter((item) => !item.requiresOps || showOpsNav);
   const mobileNav = isPublic ? [] : buildDashboardMobileNav({ showPresence: showPresenceNav });
+  const pageClasses = ["f9-dash-page", isPublic ? "f9-dash-page-public" : "f9-dash-page-app", pageClassName]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <main className={pageClassName ? `f9-dash-page ${pageClassName}` : "f9-dash-page"}>
+    <main className={pageClasses}>
       <div className="f9-cursor-shell">
         <aside className="f9-cursor-rail f9-cursor-rail-desktop" aria-label="Application">
           <div className="f9-cursor-account">
@@ -145,21 +148,8 @@ export function DashboardShell({
           </div>
         </aside>
 
-        <div className="f9-cursor-main">
-          {headerActions ? <header className="f9-dash-topbar">{headerActions}</header> : null}
-          {children}
-        </div>
-
         {!isPublic && mobileNav.length > 0 ? (
           <>
-            <div className="f9-dash-mobile-utility">
-              <Link to="/app/team">Team</Link>
-              <Link to="/app/clients">Client rooms</Link>
-              <Link to="/help">Help</Link>
-              <Link to="/app/billing">Billing</Link>
-              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
-              <SignOutButton />
-            </div>
             <nav aria-label="Primary" className="f9-dash-mobile-nav">
               {mobileNav.map((item) => (
                 <NavLink
@@ -172,8 +162,21 @@ export function DashboardShell({
                 </NavLink>
               ))}
             </nav>
+            <div className="f9-dash-mobile-utility">
+              <Link to="/app/team">Team</Link>
+              <Link to="/app/clients">Client rooms</Link>
+              <Link to="/help">Help</Link>
+              <Link to="/app/billing">Billing</Link>
+              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+              <SignOutButton />
+            </div>
           </>
         ) : null}
+
+        <div className="f9-cursor-main">
+          {headerActions ? <header className="f9-dash-topbar">{headerActions}</header> : null}
+          {children}
+        </div>
       </div>
     </main>
   );

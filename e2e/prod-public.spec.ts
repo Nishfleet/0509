@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+async function expectNoHorizontalOverflow(page: import("@playwright/test").Page) {
+  const overflow = await page.evaluate(() =>
+    Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+}
+
 test.describe("public production-safe E2E smoke", () => {
   test("public pages and machine-readable surfaces render without auth", async ({ page, baseURL, request }) => {
     await page.goto("/");
@@ -37,5 +44,18 @@ test.describe("public production-safe E2E smoke", () => {
     expect(invalidShare?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
     await expect(page.getByText("The requested page could not be found.")).toBeVisible();
+  });
+
+  test("public search stays usable at tablet and mobile widths", async ({ page }) => {
+    for (const viewport of [
+      { width: 1024, height: 768 },
+      { width: 760, height: 900 },
+      { width: 375, height: 812 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/search");
+      await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+    }
   });
 });

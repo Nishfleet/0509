@@ -90,7 +90,7 @@ export function filterDashboardNav(
     .filter((section) => section.items.length > 0);
 }
 
-/** Primary routes for the fixed mobile navigation bar (≤760px). */
+/** Primary routes for the compact mobile navigation. */
 export function buildDashboardMobileNav(options: { showPresence: boolean }) {
   const items: DashboardNavItem[] = [
     { label: "Overview", to: "/app", end: true },

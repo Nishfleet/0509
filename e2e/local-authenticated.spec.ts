@@ -29,6 +29,98 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
+async function expectNoFixedAppChrome(page: Page) {
+  const fixedChrome = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".f9-dash-mobile-nav, .f9-dash-mobile-utility"))
+      .map((element) => {
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+
+        return {
+          display: style.display,
+          height: Math.round(rect.height),
+          position: style.position,
+          width: Math.round(rect.width),
+        };
+      })
+      .filter((item) => item.display !== "none" && item.width > 0 && item.height > 0 && item.position === "fixed"),
+  );
+  expect(fixedChrome).toEqual([]);
+}
+
+async function expectCompactHeaderActions(page: Page) {
+  const actions = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".f9-dash-topbar a")).map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        height: Math.round(rect.height),
+        text: element.textContent?.trim() ?? "",
+        width: Math.round(rect.width),
+      };
+    }),
+  );
+
+  expect(actions).toEqual([
+    expect.objectContaining({ height: expect.any(Number), text: "Overview", width: expect.any(Number) }),
+    expect.objectContaining({ height: expect.any(Number), text: "Add competitor", width: expect.any(Number) }),
+  ]);
+  for (const action of actions) {
+    expect(action.height).toBeLessThanOrEqual(48);
+    expect(action.width).toBeLessThanOrEqual(180);
+  }
+}
+
+async function expectMobileUtilityInViewport(page: Page) {
+  const utilityActions = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".f9-dash-mobile-utility a, .f9-dash-mobile-utility button")).map(
+      (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          bottom: Math.round(rect.bottom),
+          text: element.textContent?.trim() ?? "",
+          top: Math.round(rect.top),
+        };
+      },
+    ),
+  );
+
+  for (const text of ["Help", "Billing", "Sign out"]) {
+    expect(utilityActions).toContainEqual(expect.objectContaining({ text }));
+    const action = utilityActions.find((item) => item.text === text);
+    expect(action?.top).toBeGreaterThanOrEqual(0);
+    expect(action?.bottom).toBeLessThanOrEqual(page.viewportSize()!.height);
+  }
+}
+
+async function expectMobileNavLinksInContainer(page: Page) {
+  const clippedLinks = await page.evaluate(() => {
+    const nav = document.querySelector(".f9-dash-mobile-nav");
+    if (!nav) {
+      return ["missing mobile nav"];
+    }
+
+    const navRect = nav.getBoundingClientRect();
+    return Array.from(nav.querySelectorAll("a"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const text = element.textContent?.trim() ?? "";
+
+        return {
+          text,
+          clipped:
+            rect.left < navRect.left ||
+            rect.right > navRect.right ||
+            rect.top < navRect.top ||
+            rect.bottom > navRect.bottom,
+        };
+      })
+      .filter((item) => item.clipped)
+      .map((item) => item.text);
+  });
+
+  expect(clippedLinks).toEqual([]);
+}
+
 test.describe("local authenticated E2E harness", () => {
   test("new customer is routed to onboarding without magic-link login", async ({ page, context, baseURL }) => {
     await signInAs(context, baseURL!, "e2e-free");
@@ -95,6 +187,13 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "E2E Starter" })).toBeVisible();
     await expect(page.getByLabel("My brand website")).toHaveValue("https://starter.example.invalid");
+
+    await page.goto("/app/notifications");
+    await expect(page).toHaveURL(/\/app\/sources/);
+    await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
+
+    await page.goto("/app/reports");
+    await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
   });
 
   test("scout journey shows weekly cadence and gates starter or agency controls honestly", async ({ page, context, baseURL }) => {
@@ -139,17 +238,45 @@ test.describe("local authenticated E2E harness", () => {
       { width: 320, height: 700 },
       { width: 375, height: 812 },
       { width: 430, height: 932 },
+      { width: 640, height: 900 },
+      { width: 641, height: 900 },
+      { width: 750, height: 900 },
       { width: 760, height: 900 },
       { width: 761, height: 900 },
+      { width: 1024, height: 768 },
+    ];
+    const expectedRedirects: Record<string, RegExp> = {
+      "/app/notifications": /\/app\/sources/,
+      "/app/reports": /\/app\/shares/,
+    };
+    const routes = [
+      "/app",
+      "/app/watchlists",
+      "/app/sources",
+      "/app/notifications",
+      "/app/billing",
+      "/app/reports",
     ];
 
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
-      await page.goto("/app");
-      await expectAppPage(page);
-      await expect(page.getByRole("link", { name: "Watchlists" }).first()).toBeVisible();
-      await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
-      await expectNoHorizontalOverflow(page);
+      for (const route of routes) {
+        await page.goto(route);
+        if (expectedRedirects[route]) {
+          await expect(page).toHaveURL(expectedRedirects[route]);
+        }
+        await expectAppPage(page);
+        await expect(page.getByRole("link", { name: "Watchlists" }).first()).toBeVisible();
+        await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
+        await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+        await expectNoFixedAppChrome(page);
+        await expectCompactHeaderActions(page);
+        if (viewport.width <= 640) {
+          await expectMobileNavLinksInContainer(page);
+          await expectMobileUtilityInViewport(page);
+        }
+        await expectNoHorizontalOverflow(page);
+      }
     }
   });
 
