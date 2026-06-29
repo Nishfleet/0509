@@ -177,6 +177,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "request-account-deletion") {
+    if (isE2EFixtureSession) {
+      return { ok: false, intent, message: "Sign in with email to request account deletion." };
+    }
+
     if (String(formData.get("confirmDeletion") ?? "") !== "yes") {
       return {
         ok: false,

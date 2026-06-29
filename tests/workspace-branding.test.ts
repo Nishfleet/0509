@@ -296,6 +296,54 @@ describe("account report-branding action", () => {
     expect(revokeOtherBetterAuthSessions).not.toHaveBeenCalled();
   });
 
+  it("blocks account deletion requests for local E2E fixture sessions", async () => {
+    const fixtureSession = {
+      ...session,
+      session: {
+        ...session.session,
+        id: "e2e-session-e2e-starter",
+      },
+    };
+    const createSupportCase = vi.fn();
+    const getUserPlanBillingInfo = vi.fn();
+    const sendOperatorAlertEmail = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(fixtureSession),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createSupportCase,
+      getUserPlanBillingInfo,
+      getWorkspaceBranding: vi.fn(),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      sendOperatorAlertEmail,
+    }));
+
+    const { action } = await import("~/routes/app.account");
+    const formData = new FormData();
+    formData.set("intent", "request-account-deletion");
+    formData.set("confirmDeletion", "yes");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/account", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      intent: "request-account-deletion",
+      message: "Sign in with email to request account deletion.",
+    });
+    expect(getUserPlanBillingInfo).not.toHaveBeenCalled();
+    expect(createSupportCase).not.toHaveBeenCalled();
+    expect(sendOperatorAlertEmail).not.toHaveBeenCalled();
+  });
+
   it("rejects branding saves for non-agency plans", async () => {
     const upsertWorkspaceBrandingMock = vi.fn();
 

@@ -90,17 +90,18 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 
 - Production authenticated smoke needs owner-captured `.auth/0509-internal.json` and `.auth/0509-internal.meta.json`, with `E2E_INTERNAL_ACCOUNT_EMAIL_SHA256` set.
 - Local Presence canary needs `PRESENCE_INTERNAL_WORKSPACE_ID` if that canary remains required.
-- Bugbot needs to be enabled for `nish3451/0509` in the Cursor Bugbot dashboard before the protected merge gate can be completed. A verbose retry produced Cursor request id `serverGenReqId_79f9c692-5c66-46e2-9005-455af7884a82` and the same disabled-repository response.
-- In-app Codex Browser opened `https://0509.io/` and confirmed the live Five to Nine title, but the Browser DOM/screenshot calls hung in this session; Playwright supplied the detailed rendered checks.
+- Bugbot is enabled for `nish3451/0509`; the final PR head must have no accepted/actionable Bugbot findings before merge.
+- In-app Codex Browser opened the local E2E app at `http://127.0.0.1:4179/` and confirmed the Five to Nine title, primary headline, and sign-in surface.
 
 ## Final Verification
 
 | Check | Result |
 |---|---|
-| `npm test` | Passed, 152 files and 1424 tests |
+| `npm test` | Passed, 152 files and 1429 tests |
 | `npm run typecheck` | Passed |
 | `npm run build` | Passed |
-| `SAFE_DEPLOY_APPROVED=d1 npm run e2e` | Passed, 6 local authenticated tests and 1 production-safe public test |
+| `SAFE_DEPLOY_APPROVED=d1 npm run e2e:local` | Passed, 6 local authenticated tests |
+| `npm run e2e:prod:public` | Passed, 1 production-safe public test |
 | `npm run e2e:prod:auth` | Failed closed because `.auth/0509-internal.json` and the required account hash are missing locally |
 | `node scripts/validate-d1-backup.mjs` | Passed, latest migration `0061_support_case_events.sql` |
 | `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --local` | Passed, no local migrations to apply |
@@ -112,18 +113,20 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 | `npm run canary:prod` | Passed health, bypass, ops readiness, and Meta ads beta |
 | `npm run canary:presence` | Still blocked locally by missing `PRESENCE_INTERNAL_WORKSPACE_ID` |
 | `autoreview --mode local --base origin/main` | Passed clean after accepted findings were fixed |
-| `bugbot-gate status` | Recommended one paid Bugbot run because the diff touches auth/test-auth surfaces; approved and manually triggered with `bugbot run`, then retried with `bugbot run verbose=true`; Cursor replied that Bugbot is disabled for this repository and returned request id `serverGenReqId_79f9c692-5c66-46e2-9005-455af7884a82`, so no ledger entry was recorded |
+| In-app Codex Browser | Passed local rendered smoke for title, headline, and sign-in surface |
+| Bugbot | Enabled for the repository; accepted/actionable findings are fixed and rerun on the final PR head before merge |
 
 ## Commands
 
 ```bash
 npm run e2e:install
-SAFE_DEPLOY_APPROVED=d1 npm run e2e
+SAFE_DEPLOY_APPROVED=d1 npm run e2e:local
+npm run e2e:prod:public
 E2E_INTERNAL_ACCOUNT_EMAIL_SHA256=<sha256-of-internal-account-email> \
 AUTH_STATE=.auth/0509-internal.json npm run e2e:prod:auth
 ```
 
-After Bugbot is enabled for this repository in the Cursor dashboard, rerun:
+Before merge, rerun Bugbot on the final PR head:
 
 ```text
 bugbot run verbose=true
