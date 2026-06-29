@@ -6,6 +6,7 @@ import {
   getE2ETestSession,
   isE2ETestAuthEnabled,
   readE2ETestFixtureUserId,
+  shouldClearE2ETestSessionCookie,
 } from "~/lib/e2e-auth.server";
 
 function env({ databaseSentinel = false, testMode = "1" } = {}) {
@@ -66,6 +67,34 @@ describe("E2E test auth resolver", () => {
       user: { id: "e2e-starter" },
       session: { id: "e2e-session-e2e-starter" },
     });
+  });
+
+  it("clears fixture cookies for local logout in env-flag or database-sentinel mode only", async () => {
+    const request = new Request("http://127.0.0.1:4179/auth/logout", {
+      headers: { cookie: `${E2E_TEST_SESSION_COOKIE}=e2e-starter` },
+      method: "POST",
+    });
+
+    await expect(shouldClearE2ETestSessionCookie(env({ testMode: "1" }) as never, request)).resolves.toBe(true);
+    await expect(
+      shouldClearE2ETestSessionCookie(env({ databaseSentinel: true, testMode: "0" }) as never, request),
+    ).resolves.toBe(true);
+    await expect(shouldClearE2ETestSessionCookie(env({ testMode: "0" }) as never, request)).resolves.toBe(false);
+    await expect(
+      shouldClearE2ETestSessionCookie(
+        env() as never,
+        new Request("http://127.0.0.1:4179/auth/logout", { method: "POST" }),
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      shouldClearE2ETestSessionCookie(
+        env() as never,
+        new Request("https://0509.io/auth/logout", {
+          headers: { cookie: `${E2E_TEST_SESSION_COOKIE}=e2e-starter` },
+          method: "POST",
+        }),
+      ),
+    ).resolves.toBe(false);
   });
 
   it("accepts only deterministic e2e fixture user ids", () => {

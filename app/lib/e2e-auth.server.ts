@@ -40,15 +40,18 @@ function serverTestModeEnabled(env: AppEnv) {
   );
 }
 
-function isLocalE2ETestRequest(request: Request) {
+function isLocalTestHostRequest(request: Request) {
   const url = new URL(request.url);
   const hostname = url.hostname.toLowerCase();
 
   return (
-    isEnabled(requestFlag(request)) &&
     LOCAL_TEST_HOSTS.has(hostname) &&
     !PRODUCTION_HOST_PATTERN.test(hostname)
   );
+}
+
+function isLocalE2ETestRequest(request: Request) {
+  return isEnabled(requestFlag(request)) && isLocalTestHostRequest(request);
 }
 
 async function hasE2EDatabaseSentinel(env: AppEnv) {
@@ -70,6 +73,14 @@ async function hasE2EDatabaseSentinel(env: AppEnv) {
 
 export function isE2ETestAuthEnabled(env: AppEnv, request: Request) {
   return serverTestModeEnabled(env) && isLocalE2ETestRequest(request);
+}
+
+export async function shouldClearE2ETestSessionCookie(env: AppEnv, request: Request) {
+  if (!isLocalTestHostRequest(request) || !readE2ETestFixtureUserId(request)) {
+    return false;
+  }
+
+  return serverTestModeEnabled(env) || (await hasE2EDatabaseSentinel(env));
 }
 
 export function readE2ETestFixtureUserId(request: Request) {
