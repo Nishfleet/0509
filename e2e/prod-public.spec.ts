@@ -7,27 +7,31 @@ async function expectNoHorizontalOverflow(page: import("@playwright/test").Page)
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
+async function gotoPublicPage(page: import("@playwright/test").Page, path: string) {
+  return page.goto(path, { waitUntil: "domcontentloaded" });
+}
+
 test.describe("public production-safe E2E smoke", () => {
   test("public pages and machine-readable surfaces render without auth", async ({ page, baseURL, request }) => {
-    await page.goto("/");
+    await gotoPublicPage(page, "/");
     await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
     await expect(page.getByText("Five to Nine catches the change")).toBeVisible();
     await expect(page.getByText("WhatsApp", { exact: false })).toHaveCount(0);
 
-    await page.goto("/search");
+    await gotoPublicPage(page, "/search");
     await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
 
-    await page.goto("/auth/login");
+    await gotoPublicPage(page, "/auth/login");
     await expect(page.getByRole("heading", { name: "Return to the changes your team is watching." })).toBeVisible();
 
-    await page.goto("/auth/signup");
+    await gotoPublicPage(page, "/auth/signup");
     await expect(page.getByRole("heading", { name: "Start with the competitor your team keeps checking by hand." })).toBeVisible();
 
-    await page.goto("/bots/presence");
+    await gotoPublicPage(page, "/bots/presence");
     await expect(page.getByRole("heading", { name: "FiveToNinePresenceBot" })).toBeVisible();
 
     for (const path of ["/help", "/trust", "/privacy", "/terms", "/docs", "/changelog", "/api/docs"]) {
-      const response = await page.goto(path);
+      const response = await gotoPublicPage(page, path);
       expect(response?.ok(), `${path} should return 2xx`).toBeTruthy();
       await expect(page.locator("body")).toBeVisible();
     }
@@ -40,7 +44,7 @@ test.describe("public production-safe E2E smoke", () => {
     expect(llms.ok()).toBeTruthy();
     expect(await llms.text()).toContain("Five to Nine");
 
-    const invalidShare = await page.goto("/share/not-a-real-share-token");
+    const invalidShare = await gotoPublicPage(page, "/share/not-a-real-share-token");
     expect(invalidShare?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
     await expect(page.getByText("The requested page could not be found.")).toBeVisible();
@@ -53,7 +57,7 @@ test.describe("public production-safe E2E smoke", () => {
       { width: 375, height: 812 },
     ]) {
       await page.setViewportSize(viewport);
-      await page.goto("/search");
+      await gotoPublicPage(page, "/search");
       await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
     }
