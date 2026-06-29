@@ -52,7 +52,6 @@ import { PromiseTimeoutError, promiseWithTimeout } from "~/lib/fetch-timeout.ser
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
 const EMAIL_PROVIDER = "cloudflare_email" as const;
 const CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS = 10_000;
-const DIGEST_PENDING_RETRY_AFTER_MS = 30 * 60 * 1000;
 const SUPPORT_CASE_IDEMPOTENCY_PREFIX = "support-case:";
 const SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX = "support-case-reopen:";
 
@@ -491,7 +490,9 @@ async function deliverDigestToEmailTarget(
     targetValue: target.targetValue,
   });
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-  // Failed and stale provider-timeout attempts are retryable; anything else is a true duplicate.
+  // Failed sends are safe to retry. Provider-timeout attempts are not:
+  // Cloudflare may have accepted the email even if the worker timed out before
+  // persisting the provider message id.
   if (duplicate && !isRetryableDigestEmailAttempt(duplicate)) {
     return {
       channel: "email" as const,
@@ -1984,15 +1985,7 @@ function buildInstantDeliveryAttemptIdempotencyKey(input: {
 }
 
 function isRetryableDigestEmailAttempt(attempt: DeliveryAttemptRecord) {
-  if (attempt.status === "failed") {
-    return true;
-  }
-  if (attempt.status !== "pending" || attempt.providerMessageId) {
-    return false;
-  }
-
-  const updatedAtMs = new Date(attempt.updatedAt).getTime();
-  return Number.isFinite(updatedAtMs) && Date.now() - updatedAtMs >= DIGEST_PENDING_RETRY_AFTER_MS;
+  return attempt.status === "failed";
 }
 
 async function resolveInstantAttemptDedupe(

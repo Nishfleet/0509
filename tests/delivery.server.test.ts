@@ -1065,9 +1065,7 @@ describe("deliverWeeklyDigest", () => {
     );
   });
 
-  it("retries stale pending digest email attempts in place", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-10T05:00:00.000Z"));
+  it("does not retry provider-timeout pending digest email attempts", async () => {
     const sendMock = mockEmailSend("msg_retry_pending_1");
     const createDeliveryAttempt = vi.fn();
     const updateDeliveryAttemptResult = vi.fn();
@@ -1170,34 +1168,15 @@ describe("deliverWeeklyDigest", () => {
     expect(result).toMatchObject({
       attempts: 1,
       channels: ["email"],
-      details: [{ channel: "email", status: "sent", targetValue: "owner@example.com" }],
+      details: [{ channel: "email", status: "pending", targetValue: "owner@example.com" }],
     });
-    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock).not.toHaveBeenCalled();
     expect(createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      "attempt-pending-1",
-      expect.objectContaining({
-        status: "pending",
-        providerMessageId: null,
-        errorMessage: null,
-      }),
-    );
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      "attempt-pending-1",
-      expect.objectContaining({
-        status: "sent",
-        providerMessageId: "msg_retry_pending_1",
-        errorMessage: null,
-      }),
-    );
+    expect(updateDeliveryAttemptResult).not.toHaveBeenCalled();
     expect(upsertDigestDelivery).toHaveBeenCalledWith(
       expect.anything(),
       "digest-1",
-      expect.objectContaining({ status: "sent" }),
+      expect.objectContaining({ status: "pending" }),
     );
   });
 

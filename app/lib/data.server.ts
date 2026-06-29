@@ -6916,11 +6916,9 @@ export async function listRetryableDigestRuns(
   env: AppEnv,
   input: {
     since: string;
-    pendingBefore?: string;
     limit: number;
   },
 ) {
-  const pendingBefore = input.pendingBefore ?? new Date(Date.now() - 30 * 60 * 1000).toISOString();
   const rows = await many<
     DigestRunRow & { user_email: string; user_name: string }
   >(
@@ -6934,23 +6932,11 @@ export async function listRetryableDigestRuns(
         AND (
           digest_delivery.status = 'failed'
           OR digest_delivery.id IS NULL
-          OR EXISTS (
-            SELECT 1
-            FROM delivery_attempt
-            WHERE delivery_attempt.digest_run_id = digest_run.id
-              AND delivery_attempt.channel = 'email'
-              AND delivery_attempt.provider = 'cloudflare_email'
-              AND delivery_attempt.lane = 'customer'
-              AND delivery_attempt.status = 'pending'
-              AND delivery_attempt.provider_message_id IS NULL
-              AND delivery_attempt.updated_at <= ?
-          )
         )
       ORDER BY digest_run.period_end ASC
       LIMIT ?
     `,
     input.since,
-    pendingBefore,
     input.limit,
   );
 
@@ -7895,6 +7881,7 @@ export async function getLaunchReadinessSignals(env: AppEnv, now: Date = new Dat
           MAX(COALESCE(provider_status_last_seen_at, sent_at, updated_at, created_at)) AS latest_at
         FROM delivery_attempt
         WHERE digest_run_id IS NOT NULL
+          AND lane = 'customer'
           AND channel = 'email'
           AND provider = 'cloudflare_email'
           AND COALESCE(provider_status_last_seen_at, sent_at, updated_at, created_at) >= ?

@@ -91,7 +91,6 @@ const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
 const DIGEST_RETRY_WINDOW_DAYS = 7;
 const DIGEST_RETRY_SWEEP_LIMIT = 25;
-const DIGEST_PENDING_RETRY_AFTER_MS = 30 * 60 * 1000;
 const WEEKLY_DIGEST_UTC_DAY = 1;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 const DIRECT_WEBSITE_PROOF_INTERVAL_MS = 20 * 60 * 60 * 1000;
@@ -1185,7 +1184,6 @@ async function runDigests(
     since: new Date(
       periodEnd.getTime() - DIGEST_RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString(),
-    pendingBefore: new Date(periodEnd.getTime() - DIGEST_PENDING_RETRY_AFTER_MS).toISOString(),
     limit: DIGEST_RETRY_SWEEP_LIMIT,
   });
 
