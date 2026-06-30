@@ -3795,18 +3795,157 @@ export async function getWatchlist(env: AppEnv, watchlistId: string, userId?: st
   return row ? toWatchlistRecord(row) : null;
 }
 
+export interface CreateWatchlistInput {
+  name: string;
+  targetType: WatchTargetType;
+  targetId: string;
+  targetFingerprint: string;
+  targetLabel: string;
+  targetCountry?: string | null;
+  trackingRole?: WatchlistTrackingRole | null;
+}
+
+export type CreateWatchlistWithinLimitResult =
+  | {
+    status: "created" | "existing";
+    watchlist: WatchlistRecord;
+    current: number;
+    limit: number;
+  }
+  | {
+    status: "over_cap";
+    watchlist: null;
+    current: number;
+    limit: number;
+  };
+
+export async function createWatchlistWithinLimit(
+  env: AppEnv,
+  userId: string,
+  input: CreateWatchlistInput,
+  planLimit: number,
+): Promise<CreateWatchlistWithinLimitResult> {
+  const limit = Math.max(0, Math.floor(planLimit));
+  const trackingRole = normalizeWatchlistTrackingRole(input.trackingRole);
+  const existing = await one<WatchlistRow>(
+    env,
+    `
+      SELECT *
+      FROM watchlist
+      WHERE user_id = ?
+        AND tracking_role = ?
+        AND target_fingerprint = ?
+        AND is_active = 1
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+    userId,
+    trackingRole,
+    input.targetFingerprint,
+  );
+
+  if (existing) {
+    await ensureWebMentionTargetForWatchlist(env, userId, existing);
+    return {
+      status: "existing",
+      watchlist: toWatchlistRecord(existing),
+      current: await countActiveWatchlists(env, userId),
+      limit,
+    };
+  }
+
+  const id = createId();
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT OR IGNORE INTO watchlist (
+        id,
+        user_id,
+        name,
+        target_type,
+        tracking_role,
+        target_id,
+        target_fingerprint,
+        target_label,
+        target_country,
+        is_active,
+        created_at,
+        updated_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?
+      WHERE ? > (
+        SELECT COUNT(*)
+        FROM watchlist
+        WHERE user_id = ?
+          AND is_active = 1
+      )
+    `,
+    id,
+    userId,
+    input.name.trim(),
+    input.targetType,
+    trackingRole,
+    input.targetId,
+    input.targetFingerprint,
+    input.targetLabel,
+    input.targetCountry ?? null,
+    timestamp,
+    timestamp,
+    limit,
+    userId,
+  );
+
+  const created = await getWatchlist(env, id, userId);
+  if (created) {
+    await ensureWebMentionTargetForWatchlist(env, userId, created);
+    return {
+      status: "created",
+      watchlist: created,
+      current: await countActiveWatchlists(env, userId),
+      limit,
+    };
+  }
+
+  const concurrent = await one<WatchlistRow>(
+    env,
+    `
+      SELECT *
+      FROM watchlist
+      WHERE user_id = ?
+        AND tracking_role = ?
+        AND target_fingerprint = ?
+        AND is_active = 1
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+    userId,
+    trackingRole,
+    input.targetFingerprint,
+  );
+
+  if (concurrent) {
+    await ensureWebMentionTargetForWatchlist(env, userId, concurrent);
+    return {
+      status: "existing",
+      watchlist: toWatchlistRecord(concurrent),
+      current: await countActiveWatchlists(env, userId),
+      limit,
+    };
+  }
+
+  return {
+    status: "over_cap",
+    watchlist: null,
+    current: await countActiveWatchlists(env, userId),
+    limit,
+  };
+}
+
 export async function createWatchlist(
   env: AppEnv,
   userId: string,
-  input: {
-    name: string;
-    targetType: WatchTargetType;
-    targetId: string;
-    targetFingerprint: string;
-    targetLabel: string;
-    targetCountry?: string | null;
-    trackingRole?: WatchlistTrackingRole | null;
-  },
+  input: CreateWatchlistInput,
 ) {
   const trackingRole = normalizeWatchlistTrackingRole(input.trackingRole);
   const existing = await one<WatchlistRow>(
@@ -3894,6 +4033,21 @@ export async function createWatchlist(
   }
 
   return null;
+}
+
+async function countActiveWatchlists(env: AppEnv, userId: string) {
+  const row = await one<{ count: number }>(
+    env,
+    `
+      SELECT COUNT(*) AS count
+      FROM watchlist
+      WHERE user_id = ?
+        AND is_active = 1
+    `,
+    userId,
+  );
+
+  return Number(row?.count ?? 0);
 }
 
 async function ensureWebMentionTargetForWatchlist(

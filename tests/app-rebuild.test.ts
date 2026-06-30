@@ -78,7 +78,8 @@ describe("app rebuild", () => {
     expect(routeConfig).toContain('route("api/v1/workspace-readiness"');
     expect(routeConfig).toContain('route("clients", "routes/app.clients.tsx"');
     expect(dashboardRoute).toContain("getWorkspaceReadiness");
-    expect(dashboardRoute).toContain("Add your first competitor");
+    expect(dashboardRoute).toContain("buildMarketDeskBrief");
+    expect(dashboardRoute).toContain("Market Desk Brief");
     expect(dashboardRoute).toContain("Competitor website");
     expect(dashboardRoute).toContain("f9-dashboard-search");
     expect(dashboardRoute).toContain("f9-dashboard-metrics");
@@ -98,7 +99,8 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("Media mix");
     expect(appSurface).toContain("Observed campaign duration");
     expect(appSurface).toContain("Landing-page history");
-    expect(appSurface).toContain("Advanced: API keys and external tools");
+    expect(appSurface).toContain("Advanced: developer access");
+    expect(appSurface).toContain("approved actions");
     expect(appSurface).toContain("Create API key");
     expect(appSurface).toContain("/api/v1");
     expect(collectionsRoute).toContain("External proof");

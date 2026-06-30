@@ -146,6 +146,19 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     getUserPlan: vi.fn().mockResolvedValue(options.plan ?? "agency"),
     createCollection: vi.fn().mockResolvedValue(collection),
     createWatchlist: vi.fn().mockResolvedValue(watchlist),
+    createWatchlistWithinLimit: vi.fn().mockResolvedValue(options.planLimitAllowed === false
+      ? {
+        status: "over_cap",
+        watchlist: null,
+        limit: 10,
+        current: 10,
+      }
+      : {
+        status: "created",
+        watchlist,
+        limit: 10,
+        current: 2,
+      }),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
     updateWatchlist: vi.fn().mockResolvedValue({
       ...watchlist,
@@ -408,6 +421,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     createShareLink: mocks.createShareLink,
     createSupportCase: mocks.createSupportCase,
     createWatchlist: mocks.createWatchlist,
+    createWatchlistWithinLimit: mocks.createWatchlistWithinLimit,
     getDeliveryTargetById: mocks.getDeliveryTargetById,
     getClientRoom: mocks.getClientRoom,
     getCollection: mocks.getCollection,
@@ -627,7 +641,7 @@ describe("runCustomerAgentAction", () => {
       requiresNewIdempotencyKey: true,
     });
     expect(mocks.checkPlanLimit).toHaveBeenCalledWith(expect.anything(), "user-1", "watchlists");
-    expect(mocks.createWatchlist).toHaveBeenCalledWith(
+    expect(mocks.createWatchlistWithinLimit).toHaveBeenCalledWith(
       expect.anything(),
       "user-1",
       expect.objectContaining({
@@ -638,6 +652,7 @@ describe("runCustomerAgentAction", () => {
         targetCountry: "all",
         trackingRole: "competitor",
       }),
+      10,
     );
     expect(mocks.queueFirstWatchlistScan).not.toHaveBeenCalled();
     expect(mocks.finishAgentActionAudit).toHaveBeenCalledWith(
@@ -803,7 +818,7 @@ describe("runCustomerAgentAction", () => {
       ),
     ).rejects.toBeInstanceOf(CustomerAgentActionError);
 
-    expect(mocks.createWatchlist).not.toHaveBeenCalled();
+    expect(mocks.createWatchlistWithinLimit).toHaveBeenCalled();
     expect(mocks.finishAgentActionAudit).toHaveBeenCalledWith(
       expect.anything(),
       "audit-1",

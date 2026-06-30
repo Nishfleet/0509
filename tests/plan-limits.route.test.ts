@@ -46,7 +46,12 @@ const emptyWorkspaceReadiness = {
 
 describe("search watchlist limit", () => {
   it("returns a structured limit prompt when the watchlist plan limit is reached", async () => {
-    const createWatchlist = vi.fn();
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "over_cap",
+      watchlist: null,
+      current: 3,
+      limit: 3,
+    });
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
@@ -73,7 +78,7 @@ describe("search watchlist limit", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       createSavedQuery: vi.fn(),
-      createWatchlist,
+      createWatchlistWithinLimit,
       addAdToCollection: vi.fn(),
     }));
 
@@ -103,7 +108,7 @@ describe("search watchlist limit", () => {
       ok: false,
       upgradePath: "/#pricing",
     });
-    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(createWatchlistWithinLimit).not.toHaveBeenCalled();
   });
 });
 
@@ -360,7 +365,12 @@ describe("digest access", () => {
 
 describe("dashboard watchlist limit", () => {
   it("returns a structured limit prompt when the dashboard watchlist limit is reached", async () => {
-    const createWatchlist = vi.fn();
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "over_cap",
+      watchlist: null,
+      current: 3,
+      limit: 3,
+    });
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
@@ -386,11 +396,16 @@ describe("dashboard watchlist limit", () => {
       }),
     }));
     vi.doMock("~/lib/data.server", () => ({
-      createWatchlist,
+      createWatchlistWithinLimit,
       getSavedQuery: vi.fn().mockResolvedValue({
         id: "saved-query-1",
         name: "boAt",
         fingerprint: "fp-1",
+        normalizedQuery: {
+          filters: {
+            country: "all",
+          },
+        },
       }),
       touchSavedQueryRun: vi.fn(),
     }));
@@ -415,7 +430,7 @@ describe("dashboard watchlist limit", () => {
       message: "You have reached your competitor tracking limit.",
       ok: false,
     });
-    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(createWatchlistWithinLimit).toHaveBeenCalled();
   });
 });
 

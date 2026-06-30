@@ -203,8 +203,14 @@ describe("onboarding route", () => {
 
   it("creates a first watchlist and marks the user onboarded", async () => {
     const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
-    const createWatchlist = vi.fn().mockResolvedValue({
-      id: "watch-1",
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "created",
+      watchlist: {
+        id: "watch-1",
+        targetLabel: "Boat Lifestyle",
+      },
+      current: 1,
+      limit: 3,
     });
     const upsertWorkspaceBranding = vi.fn().mockResolvedValue({
       brandName: null,
@@ -227,7 +233,7 @@ describe("onboarding route", () => {
     vi.doMock("~/lib/data.server", () => ({
       completeUserOnboarding,
       createSavedQuery: vi.fn(),
-      createWatchlist,
+      createWatchlistWithinLimit,
       upsertWorkspaceBranding,
     }));
     vi.doMock("~/lib/plan.server", () => ({
@@ -256,7 +262,7 @@ describe("onboarding route", () => {
       "/app/watchlists?watchlist=watch-1",
     );
 
-    expect(createWatchlist).toHaveBeenCalledWith(
+    expect(createWatchlistWithinLimit).toHaveBeenCalledWith(
       {},
       "user-1",
       expect.objectContaining({
@@ -265,11 +271,599 @@ describe("onboarding route", () => {
         targetId: "https://boat-lifestyle.com",
         targetLabel: "Boat Lifestyle",
       }),
+      3,
     );
     expect(upsertWorkspaceBranding).toHaveBeenCalledWith({}, "user-1", {
       brandWebsite: "https://mybrand.example",
     });
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
+  });
+
+  it("previews a bulk competitor import without writing watchlists", async () => {
+    const completeUserOnboarding = vi.fn();
+    const createWatchlist = vi.fn();
+    const listWatchlists = vi.fn().mockResolvedValue([]);
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlist,
+      listWatchlists,
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 1,
+        limit: 3,
+      }),
+    }));
+
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "preview-market-desk-import");
+    formData.set("competitors", "boat-lifestyle.com\nnoise.com\nwakefit.co");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      intent: "preview-market-desk-import",
+      message: "Ready to create 2 competitor watchlists.",
+      preview: {
+        availableSlots: 2,
+        selectedCount: 2,
+        summary: {
+          duplicate: 0,
+          existing: 0,
+          invalid: 0,
+          over_cap: 1,
+          valid: 2,
+        },
+      },
+    });
+    expect(listWatchlists).toHaveBeenCalledWith({}, "user-1", { includeInactive: true });
+    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("previews competitor rows from an uploaded CSV file", async () => {
+    const completeUserOnboarding = vi.fn();
+    const createWatchlist = vi.fn();
+    const listWatchlists = vi.fn().mockResolvedValue([]);
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlist,
+      listWatchlists,
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 0,
+        limit: 3,
+      }),
+    }));
+
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "preview-market-desk-import");
+    formData.set("competitors", "");
+    formData.set(
+      "competitorFile",
+      new File(["name,domain\nBoat,boat-lifestyle.com\nNoise,noise.com\n"], "competitors.csv", {
+        type: "text/csv",
+      }),
+    );
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      intent: "preview-market-desk-import",
+      message: "Ready to create 2 competitor watchlists.",
+      rawText: "name,domain\nBoat,boat-lifestyle.com\nNoise,noise.com",
+      preview: {
+        selectedCount: 2,
+        summary: {
+          valid: 2,
+        },
+      },
+    });
+    expect(listWatchlists).toHaveBeenCalledWith({}, "user-1", { includeInactive: true });
+    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized competitor import files before reading plan state", async () => {
+    const completeUserOnboarding = vi.fn();
+    const createWatchlist = vi.fn();
+    const listWatchlists = vi.fn();
+    const checkPlanLimit = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlist,
+      listWatchlists,
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit,
+    }));
+
+    const { COMPETITOR_IMPORT_MAX_BYTES } = await import("~/lib/competitor-import");
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "preview-market-desk-import");
+    formData.set("competitors", "boat-lifestyle.com");
+    formData.set(
+      "competitorFile",
+      new File(["x".repeat(COMPETITOR_IMPORT_MAX_BYTES + 1)], "competitors.csv", {
+        type: "text/csv",
+      }),
+    );
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      intent: "preview-market-desk-import",
+      message: "Import is too large. Paste or upload 195 KB or less.",
+      rawText: "boat-lifestyle.com",
+      brandWebsiteInput: "",
+    });
+    expect(checkPlanLimit).not.toHaveBeenCalled();
+    expect(listWatchlists).not.toHaveBeenCalled();
+    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized multipart import requests before parsing the body", async () => {
+    const completeUserOnboarding = vi.fn();
+    const checkPlanLimit = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlistWithinLimit: vi.fn(),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit,
+    }));
+
+    const { COMPETITOR_IMPORT_MAX_BYTES } = await import("~/lib/competitor-import");
+    const { action } = await import("~/routes/app.onboard");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: new Blob(["x"]),
+        headers: {
+          "content-type": "multipart/form-data; boundary=too-large",
+          "content-length": String(COMPETITOR_IMPORT_MAX_BYTES + 40_000),
+        },
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      intent: "preview-market-desk-import",
+      message: "Import is too large. Paste or upload 195 KB or less.",
+      rawText: "",
+      brandWebsiteInput: "",
+    });
+    expect(checkPlanLimit).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("creates selected bulk competitors, saves branding, queues first scans, and finishes onboarding", async () => {
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    const createWatchlistWithinLimit = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "created",
+        watchlist: { id: "watch-1", targetLabel: "Boat Lifestyle" },
+        current: 1,
+        limit: 3,
+      })
+      .mockResolvedValueOnce({
+        status: "created",
+        watchlist: { id: "watch-2", targetLabel: "Noise" },
+        current: 2,
+        limit: 3,
+      });
+    const listWatchlists = vi.fn().mockResolvedValue([]);
+    const queueFirstWatchlistScan = vi.fn();
+    const upsertAgentMemory = vi.fn().mockResolvedValue({
+      id: "memory-1",
+    });
+    const upsertClientRoom = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "room-1",
+        name: "Client A Market Desk",
+        clientLabel: "Client A",
+        status: "active",
+        resourceRefs: [],
+        notes: {},
+      })
+      .mockResolvedValueOnce({
+        id: "room-1",
+        name: "Client A Market Desk",
+        clientLabel: "Client A",
+        status: "active",
+        resourceRefs: [
+          {
+            resourceType: "watchlist",
+            resourceId: "watch-1",
+            label: "Boat Lifestyle",
+          },
+        ],
+        notes: {
+          marketDeskImport: {
+            source: "onboarding",
+            importedGrouping: true,
+          },
+        },
+      });
+    const upsertWorkspaceBranding = vi.fn().mockResolvedValue({
+      brandName: null,
+      brandWebsite: "https://mybrand.example",
+    });
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlistWithinLimit,
+      listWatchlists,
+      upsertAgentMemory,
+      upsertClientRoom,
+      upsertWorkspaceBranding,
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      queueFirstWatchlistScan,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 0,
+        limit: 3,
+      }),
+    }));
+
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "create-market-desk-import");
+    formData.set(
+      "competitors",
+      [
+        "name,website,notes,tags,client",
+        "Boat Lifestyle,boat-lifestyle.com,Watch offers,audio; sale,Client A",
+        "Noise,noise.com,,,",
+      ].join("\n"),
+    );
+    formData.append("selectedRowIds", "row-2");
+    formData.append("selectedRowIds", "row-3");
+    formData.set("brandWebsite", "mybrand.example");
+
+    await expectRedirect(
+      () =>
+        action({
+          context: createContext(),
+          request: new Request("http://localhost/app/onboard", {
+            method: "POST",
+            body: formData,
+          }),
+        } as never),
+      "/app?setup=market-desk&created=2",
+    );
+
+    expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(2);
+    expect(createWatchlistWithinLimit).toHaveBeenNthCalledWith(
+      1,
+      {},
+      "user-1",
+      expect.objectContaining({
+        targetId: "https://boat-lifestyle.com",
+        targetLabel: "Boat Lifestyle",
+        trackingRole: "competitor",
+      }),
+      3,
+    );
+    expect(createWatchlistWithinLimit).toHaveBeenNthCalledWith(
+      2,
+      {},
+      "user-1",
+      expect.objectContaining({
+        targetId: "https://noise.com",
+        targetLabel: "Noise",
+        trackingRole: "competitor",
+      }),
+      3,
+    );
+    expect(upsertAgentMemory).toHaveBeenCalledWith({}, "user-1", {
+      scope: "competitor",
+      key: "import_context",
+      watchlistId: "watch-1",
+      value: {
+        competitor: "Boat Lifestyle",
+        importedFrom: "market_desk_onboarding",
+        notes: "Watch offers",
+        tags: ["audio", "sale"],
+        client: "Client A",
+      },
+      source: "market_desk_import",
+    });
+    expect(upsertClientRoom).toHaveBeenNthCalledWith(1, {}, "user-1", {
+      name: "Client A Market Desk",
+      clientLabel: "Client A",
+    });
+    expect(upsertClientRoom).toHaveBeenNthCalledWith(2, {}, "user-1", {
+      roomId: "room-1",
+      name: "Client A Market Desk",
+      clientLabel: "Client A",
+      status: "active",
+      resourceRefs: [
+        {
+          resourceType: "watchlist",
+          resourceId: "watch-1",
+          label: "Boat Lifestyle",
+        },
+      ],
+      notes: {
+        marketDeskImport: {
+          source: "onboarding",
+          importedGrouping: true,
+        },
+      },
+    });
+    expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(2);
+    expect(upsertWorkspaceBranding).toHaveBeenCalledWith({}, "user-1", {
+      brandWebsite: "https://mybrand.example",
+    });
+    expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
+  });
+
+  it("does not silently create selected bulk rows beyond the current plan cap", async () => {
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    const createWatchlistWithinLimit = vi.fn();
+    const queueFirstWatchlistScan = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlistWithinLimit,
+      listWatchlists: vi.fn().mockResolvedValue([]),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      queueFirstWatchlistScan,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: false,
+        current: 2,
+        limit: 3,
+      }),
+    }));
+
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "create-market-desk-import");
+    formData.set("competitors", "boat-lifestyle.com\nnoise.com");
+    formData.append("selectedRowIds", "row-1");
+    formData.append("selectedRowIds", "row-2");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: false,
+      intent: "create-market-desk-import",
+      error: "import_selection_rejected",
+      message: "Row 2 cannot be created: Over the current plan limit. Select fewer competitors or upgrade.",
+      rejectedRows: [
+        {
+          id: "row-2",
+          rowNumber: 2,
+          status: "over_cap",
+        },
+      ],
+      preview: {
+        selectedCount: 1,
+        summary: {
+          over_cap: 1,
+          valid: 1,
+        },
+      },
+    });
+    expect(createWatchlistWithinLimit).not.toHaveBeenCalled();
+    expect(queueFirstWatchlistScan).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("rejects an existing bulk competitor instead of creating a duplicate", async () => {
+    const { normalizeCompetitorWebsiteInput, watchlistFingerprint } = await import("~/lib/competitor-website");
+    const { normalizeSavedQuery } = await import("~/lib/normalize");
+    const existingWebsite = normalizeCompetitorWebsiteInput("https://boat-lifestyle.com");
+    const existingFingerprint = watchlistFingerprint(
+      normalizeSavedQuery("advertiser", {
+        query: existingWebsite.searchTerm ?? "boat-lifestyle.com",
+        country: "all",
+      }),
+      existingWebsite,
+    );
+    const completeUserOnboarding = vi.fn();
+    const createWatchlist = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlist,
+      listWatchlists: vi.fn().mockResolvedValue([
+        {
+          id: "watch-existing",
+          isActive: true,
+          targetFingerprint: existingFingerprint,
+        },
+      ]),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 1,
+        limit: 3,
+      }),
+    }));
+
+    const { action } = await import("~/routes/app.onboard");
+    const formData = new FormData();
+    formData.set("intent", "create-market-desk-import");
+    formData.set("competitors", "boat-lifestyle.com");
+    formData.append("selectedRowIds", "row-1");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: false,
+      intent: "create-market-desk-import",
+      error: "import_selection_rejected",
+      message: "Row 1 cannot be created: Already tracked in this workspace.",
+      rejectedRows: [
+        {
+          id: "row-1",
+          rowNumber: 1,
+          status: "existing",
+        },
+      ],
+      preview: {
+        selectedCount: 0,
+        summary: {
+          existing: 1,
+        },
+      },
+    });
+    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
   });
 
   it("rejects an incomplete website instead of creating a broken first watchlist", async () => {
@@ -377,7 +971,12 @@ describe("onboarding route", () => {
 
   it("returns a structured upgrade prompt when onboarding watchlists are capped", async () => {
     const completeUserOnboarding = vi.fn();
-    const createWatchlist = vi.fn();
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "over_cap",
+      watchlist: null,
+      current: 3,
+      limit: 3,
+    });
 
     vi.doMock("~/lib/auth.server", () => authModuleFromSession({
         user: {
@@ -394,7 +993,7 @@ describe("onboarding route", () => {
       }));
     vi.doMock("~/lib/data.server", () => ({
       completeUserOnboarding,
-      createWatchlist,
+      createWatchlistWithinLimit,
       upsertWorkspaceBranding: vi.fn(),
     }));
     vi.doMock("~/lib/plan.server", () => ({
@@ -426,7 +1025,7 @@ describe("onboarding route", () => {
       ok: false,
       upgradePath: "/#pricing",
     });
-    expect(createWatchlist).not.toHaveBeenCalled();
+    expect(createWatchlistWithinLimit).toHaveBeenCalled();
     expect(completeUserOnboarding).not.toHaveBeenCalled();
   });
 

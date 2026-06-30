@@ -239,7 +239,7 @@ describe("support route", () => {
     expect(result).toMatchObject({
       ok: true,
       caseId: "case-1",
-      message: "Support case opened. We'll reply by email.",
+      message: "Support case opened and support was notified. We'll reply by email.",
     });
     expect(createSupportCase).toHaveBeenCalledWith({}, {
       userId: "user-1",
@@ -299,7 +299,7 @@ describe("support route", () => {
     expect(result).toMatchObject({
       ok: true,
       caseId: "case-1",
-      message: "Support case opened. We'll reply by email.",
+      message: "Support case opened and support was notified. We'll reply by email.",
     });
     expect(createSupportCase).toHaveBeenCalledWith({}, expect.objectContaining({
       requestKey: "support-request-1",

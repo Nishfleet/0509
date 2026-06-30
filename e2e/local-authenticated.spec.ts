@@ -230,7 +230,10 @@ test.describe("local authenticated E2E harness", () => {
 
     await expect(page).toHaveURL(/\/app\/onboard/);
     await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
-    await expect(page.getByText("Start with one competitor site.")).toBeVisible();
+    await expect(
+      page.getByText("Paste competitors once. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Choose a plan to start monitoring" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
@@ -273,11 +276,11 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/sources");
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
-    await page.getByText("Advanced: API keys and external tools").click();
-    await expect(page.getByText("Use Five to Nine from your tools")).toBeVisible();
+    await page.getByText("Advanced: developer access").click();
+    await expect(page.getByText("Connect exports and approved actions")).toBeVisible();
     await page.getByLabel("Key name").fill("Starter denied key");
     await page.getByRole("button", { name: "Create API key" }).click();
-    await expect(page.getByText("API access is included in the Agency plan.")).toBeVisible();
+    await expect(page.getByText("Developer access is included in the Agency plan.")).toBeVisible();
 
     await page.goto("/app/support");
     await expectAppPage(page);
@@ -310,10 +313,10 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
 
     await page.goto("/app/sources");
-    await page.getByText("Advanced: API keys and external tools").click();
+    await page.getByText("Advanced: developer access").click();
     await page.getByLabel("Key name").fill("Scout denied key");
     await page.getByRole("button", { name: "Create API key" }).click();
-    await expect(page.getByText("API access is included in the Agency plan.")).toBeVisible();
+    await expect(page.getByText("Developer access is included in the Agency plan.")).toBeVisible();
   });
 
   test("agency fixture exposes developer controls without enabling unavailable social delivery", async ({ page, context, baseURL }) => {
@@ -322,7 +325,7 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/sources");
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
-    await page.getByText("Advanced: API keys and external tools").click();
+    await page.getByText("Advanced: developer access").click();
     await expect(page.getByText("Fixture read-only key")).toBeVisible();
     await expect(
       page.getByText("this does not add automated TikTok, Google, LinkedIn, or Pinterest ingestion"),
@@ -362,8 +365,8 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app");
     await expectAppPage(page);
     await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL(/\/auth\/login/);
-    await expect(page.getByRole("heading", { name: "Get a secure sign-in link." })).toBeVisible();
+    await expect(page).toHaveURL("/");
+    await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
     await page.goto("/app");
     await expect(page).toHaveURL(/\/auth\/login/);
   });

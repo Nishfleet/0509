@@ -191,7 +191,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   return {
     ok: true,
-    message: "Support case opened. We'll reply by email.",
+    message: "Support case opened and support was notified. We'll reply by email.",
     caseId: supportCase.id,
   };
 }

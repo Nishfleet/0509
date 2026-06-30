@@ -212,7 +212,10 @@ describe("dashboard route agent memory", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Add your first competitor");
+    expect(markup).toContain("Market Desk Brief");
+    expect(markup).toContain("Build your Market Desk");
+    expect(markup).toContain("Add competitors");
+    expect(markup).toContain("href=\"/app/onboard?resume=1\"");
     expect(markup).not.toContain("Account context saved");
     expect(markup).not.toContain("[redacted]: [redacted]");
     expect(markup).not.toContain("hunter2");
@@ -242,6 +245,38 @@ describe("dashboard route agent memory", () => {
 
     expect(deps.listWatchEvents).not.toHaveBeenCalled();
     expect(loaderData.recentEvents).toEqual([]);
+  });
+
+  it("renders the queued Market Desk Brief when an active competitor has no scan yet", async () => {
+    mockDashboardLoaderDependencies({
+      watchlists: [
+        {
+          id: "watch-boat",
+          name: "Boat watch",
+          targetType: "advertiser",
+          targetLabel: "Boat Lifestyle",
+          isActive: true,
+          lastScannedAt: null,
+        },
+      ],
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Market Desk Brief");
+    expect(markup).toContain("First sweep is queued");
+    expect(markup).toContain("Boat Lifestyle");
+    expect(markup).toContain("Open watchlists");
+    expect(markup).toContain("First scan pending");
   });
 
   it("surfaces safe counter-move follow-ups from agent action audits", async () => {
