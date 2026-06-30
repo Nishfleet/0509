@@ -616,7 +616,7 @@ async function createWatchlistFromAgent(
   input: Record<string, unknown>,
 ) {
   const { checkPlanLimit } = await import("~/lib/plan.server");
-  const { createWatchlist } = await import("~/lib/data.server");
+  const { createWatchlistWithinLimit } = await import("~/lib/data.server");
   const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
 
@@ -637,15 +637,6 @@ async function createWatchlistFromAgent(
   const workspaceUserId = await resolveWorkspaceDataUserId(env, context.userId);
 
   const limit = await checkPlanLimit(env, workspaceUserId, "watchlists");
-  if (!limit.allowed) {
-    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your competitor tracking limit.", {
-      status: 402,
-      details: {
-        limit: limit.limit,
-        current: limit.current,
-      },
-    });
-  }
 
   const country = readString(input, "targetCountry") ?? readString(input, "country") ?? "all";
   const normalizedQuery = applyWebsiteSearchFallback(
@@ -658,7 +649,7 @@ async function createWatchlistFromAgent(
   const inferredName = competitorWebsite.displayName ?? normalizedQuery.filters.query;
   const name = readString(input, "name") ?? `${inferredName} watch`;
   const trackingRole = normalizeWatchlistTrackingRole(readString(input, "trackingRole"));
-  const watchlist = await createWatchlist(env, workspaceUserId, {
+  const result = await createWatchlistWithinLimit(env, workspaceUserId, {
     name,
     targetType: "advertiser",
     targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
@@ -666,7 +657,19 @@ async function createWatchlistFromAgent(
     targetLabel: competitorTrackingLabel(competitorWebsite, normalizedQuery.filters.query),
     targetCountry: normalizedQuery.filters.country,
     trackingRole,
-  });
+  }, limit.limit);
+
+  if (result.status === "over_cap") {
+    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your competitor tracking limit.", {
+      status: 402,
+      details: {
+        limit: result.limit,
+        current: result.current,
+      },
+    });
+  }
+
+  const watchlist = result.watchlist;
 
   if (!watchlist) {
     throw new CustomerAgentActionError("watchlist_create_failed", "Could not create this watchlist.", {

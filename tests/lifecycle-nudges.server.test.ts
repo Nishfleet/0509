@@ -102,7 +102,7 @@ describe("buildLifecycleNudges", () => {
     expect(nudges).toEqual([
       expect.objectContaining({
         id: "agent_setup",
-        title: "Agent setup is missing",
+        title: "Developer access is missing",
       }),
     ]);
   });

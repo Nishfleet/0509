@@ -93,13 +93,54 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Start here");
+    expect(markup).toContain("Market Desk Brief");
+    expect(markup).toContain("Build your Market Desk");
     expect(markup).toContain("Add your first competitor");
-    expect(markup).toContain("Paste a competitor website");
+    expect(markup).toContain("Add competitors");
     expect(markup).toContain("Competitor website");
     expect(markup).toContain("Search ads");
     expect(markup).toContain("f9-primary-button");
-    expect(markup).toContain("href=\"/search\"");
+    expect(markup).toContain("href=\"/app/onboard?resume=1\"");
+  });
+
+  it("surfaces retention moves without showing the low-priority billing fallback", async () => {
+    await mockRouter(baseDashboardData({
+      workspaceReadiness: {
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        readyCount: 4,
+        totalCount: 4,
+        items: [],
+        nextActions: [],
+        nudges: [
+          {
+            id: "first_digest",
+            title: "No first digest yet",
+            detail: "Open Digests after the first monitored change or quiet check to confirm the delivery trail.",
+            href: "/app/digests",
+            priority: "medium",
+          },
+          {
+            id: "billing_support",
+            title: "Cancellation and help path",
+            detail: "Plan changes, cancellation, receipts, invoices, and sensitive requests now open as support cases.",
+            href: "/app/support?category=billing",
+            priority: "low",
+          },
+        ],
+        counts: {
+          agentMemoryEntries: 0,
+        },
+      },
+    }));
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Next moves");
+    expect(markup).toContain("Keep the Market Desk useful");
+    expect(markup).toContain("No first digest yet");
+    expect(markup).toContain("/app/digests");
+    expect(markup).not.toContain("Cancellation and help path");
   });
 
   it("shows the first setup loop complete when scan, proof, delivery, and context exist", async () => {
@@ -172,8 +213,10 @@ describe("dashboard first 15 minutes activation", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Overview");
-    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("Market Desk Brief");
+    expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
+    expect(markup).toContain("No changes worth your time");
     expect(markup).toContain("Competitors watched");
     expect(markup).toContain("Evidence checks");
     expect(markup).toContain("Being watched");
@@ -290,7 +333,7 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
     expect(markup).toContain("Being watched");
     expect(markup).not.toContain("First 15 minutes");
@@ -367,7 +410,7 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
     expect(markup).toContain("Being watched");
     expect(markup).not.toContain("First 15 minutes");

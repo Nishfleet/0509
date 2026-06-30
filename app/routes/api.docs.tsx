@@ -9,7 +9,7 @@ import {
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const description =
-  "Five to Nine API docs for account-owned exports and account actions.";
+  "Five to Nine API docs for account-owned exports and approved account actions.";
 
 export const links: LinksFunction = () => canonicalLinks("/api/docs");
 
@@ -23,9 +23,9 @@ export const meta: MetaFunction = () =>
 export default function ApiDocsRoute() {
   return (
     <PublicDocShell
-      kicker="API docs"
+      kicker="Developer access"
       title="Use account-owned proof from your tools."
-      intro="The API exports saved Five to Nine data that already belongs to the authenticated account and supports selected account actions."
+      intro="The API exports saved Five to Nine data that already belongs to the authenticated account and supports selected approved actions."
     >
       <PublicDocBlock title="Authentication">
         <p>
@@ -37,10 +37,10 @@ export default function ApiDocsRoute() {
         </pre>
       </PublicDocBlock>
 
-      <PublicDocBlock title="MCP for connected tools">
+      <PublicDocBlock title="Connected tools">
         <p>
           Tools that support MCP can connect with the same bearer token. Use an active customer API key for readiness
-          and exports. Use a write-enabled key only when the tool should update supported account resources.
+          and exports. Use a write-enabled key only when the tool should run approved account actions.
         </p>
         <pre className="f9-code-block">
           <code>{`POST /api/mcp
@@ -103,7 +103,7 @@ Authorization: Bearer f9_live_...
       <PublicDocBlock title="Limits and non-goals">
         <ul className="f9-doc-list">
           <li>API reads are account-scoped and rate limited.</li>
-          <li>Approved account actions are limited to safe operations and store an action log.</li>
+          <li>Approved account actions are limited to documented safe operations and store an action log.</li>
           <li>Keys are shown once, stored hashed, and can be revoked from Notifications.</li>
           <li>Restricted actions still require signed-in owner review: {AGENT_BLOCKED_CAPABILITIES.join(", ")}.</li>
           <li>Not live yet: automated X, Reddit, LinkedIn, YouTube, TikTok, Google, or Pinterest ingestion.</li>
