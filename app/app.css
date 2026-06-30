@@ -2935,6 +2935,90 @@ button[aria-busy="true"] {
   align-items: center;
 }
 
+.f9-onboard-import-form textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.f9-import-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.f9-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.f9-import-summary span {
+  padding: 6px 9px;
+  border: 1px solid rgba(6, 22, 41, 0.1);
+  border-radius: 8px;
+  background: #f6f9fc;
+  color: var(--f9-search-muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.f9-import-table {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.f9-import-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 56px;
+  padding: 10px;
+  border: 1px solid rgba(6, 22, 41, 0.1);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.f9-import-row input {
+  width: 18px;
+  height: 18px;
+}
+
+.f9-import-row span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.f9-import-row strong,
+.f9-import-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.f9-import-row small {
+  color: var(--f9-search-muted);
+}
+
+.f9-import-row em {
+  justify-self: end;
+  color: var(--f9-search-soft);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.f9-import-row.is-valid em {
+  color: #087764;
+}
+
+.f9-import-row.is-invalid em,
+.f9-import-row.is-over_cap em {
+  color: #9b341f;
+}
+
 .f9-text-link {
   color: #07725f;
   font-weight: 900;
