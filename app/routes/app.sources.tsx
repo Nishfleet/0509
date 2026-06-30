@@ -178,7 +178,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const apiGate = await requireWorkspacePlanFeature(env, workspaceUserId, "api_access");
     if (!apiGate.ok) {
-      return { ok: false, message: "API access is included in the Agency plan." };
+      return { ok: false, message: "Developer access is included in the Agency plan." };
     }
     const { createCustomerApiKey } = await import("~/lib/api-keys.server");
     const name = String(formData.get("apiKeyName") ?? "");
@@ -404,7 +404,7 @@ export default function AppSourcesRoute() {
     <DashboardPage>
       <DashboardPageHeader
         action={{ label: "Open watchlists", to: "/app/watchlists" }}
-        lead="Email delivery, backup Meta access, and developer keys."
+        lead="Email delivery, backup Meta access, and developer access."
         title="Notifications"
       />
     <section className="f9-app-stack">
@@ -513,11 +513,11 @@ export default function AppSourcesRoute() {
       </section>
 
       <details className="f9-app-panel f9-source-setup f9-settings-details" open={hasNewApiKeySecret ? true : undefined}>
-        <summary>Advanced: API keys and external tools</summary>
+        <summary>Advanced: developer access</summary>
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">API access</span>
-            <h2>Use Five to Nine from your tools</h2>
+            <span className="f9-app-kicker">Developer access</span>
+            <h2>Connect exports and approved actions</h2>
           </div>
           <a className="f9-secondary-button" href="/api/docs" target="_blank" rel="noreferrer">
             API docs
@@ -526,7 +526,7 @@ export default function AppSourcesRoute() {
 
         <p className="f9-muted-copy">
           API keys can read saved collections, watchlists, digests, proof trails, and exports for this account.
-          Write-enabled keys can update supported account resources. See the{" "}
+          Write-enabled keys can run approved account actions only for trusted workflows. See the{" "}
           <a href="/api/docs" rel="noreferrer" target="_blank">
             API documentation
           </a>{" "}
@@ -559,7 +559,7 @@ export default function AppSourcesRoute() {
               </li>
               <li>
                 <strong>Enable write access only when needed</strong>
-                <span>Allow trusted tools to update supported account resources.</span>
+                <span>Allow trusted workflows to run approved account actions.</span>
               </li>
               <li>
                 <strong>Review and revoke keys</strong>
@@ -599,7 +599,7 @@ export default function AppSourcesRoute() {
         <div className="f9-dashboard-grid">
           <section className="f9-app-panel f9-source-guide">
             <span className="f9-app-kicker">Create API key</span>
-            <h3>Exports and account actions</h3>
+            <h3>Exports and approved actions</h3>
             <Form className="f9-auth-form" method="post">
               <input name="intent" type="hidden" value="create-api-key" />
               <label className="f9-field">
@@ -613,7 +613,7 @@ export default function AppSourcesRoute() {
               </label>
               <label className="f9-checkbox-row">
                 <input name="actionsWriteEnabled" type="checkbox" value="1" />
-                <span>Allow account actions</span>
+                <span>Allow approved account actions</span>
               </label>
               <SubmitButton className="f9-primary-button" intent="create-api-key" pendingLabel="Creating…">
                 Create API key
@@ -636,7 +636,7 @@ export default function AppSourcesRoute() {
             </dl>
             <p className="f9-muted-copy">
               This API can read saved manual external proof links in collections. Write-enabled keys can update
-              supported account resources, but this does not add automated TikTok, Google, LinkedIn, or Pinterest
+              approved account resources, but this does not add automated TikTok, Google, LinkedIn, or Pinterest
               ingestion.
             </p>
           </section>

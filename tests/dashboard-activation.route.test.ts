@@ -103,6 +103,46 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("href=\"/app/onboard?resume=1\"");
   });
 
+  it("surfaces retention moves without showing the low-priority billing fallback", async () => {
+    await mockRouter(baseDashboardData({
+      workspaceReadiness: {
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        readyCount: 4,
+        totalCount: 4,
+        items: [],
+        nextActions: [],
+        nudges: [
+          {
+            id: "first_digest",
+            title: "No first digest yet",
+            detail: "Open Digests after the first monitored change or quiet check to confirm the delivery trail.",
+            href: "/app/digests",
+            priority: "medium",
+          },
+          {
+            id: "billing_support",
+            title: "Cancellation and help path",
+            detail: "Plan changes, cancellation, receipts, invoices, and sensitive requests now open as support cases.",
+            href: "/app/support?category=billing",
+            priority: "low",
+          },
+        ],
+        counts: {
+          agentMemoryEntries: 0,
+        },
+      },
+    }));
+
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Next moves");
+    expect(markup).toContain("Keep the Market Desk useful");
+    expect(markup).toContain("No first digest yet");
+    expect(markup).toContain("/app/digests");
+    expect(markup).not.toContain("Cancellation and help path");
+  });
+
   it("shows the first setup loop complete when scan, proof, delivery, and context exist", async () => {
     await mockRouter(baseDashboardData({
       watchlists: [

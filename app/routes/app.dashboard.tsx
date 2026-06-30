@@ -265,6 +265,9 @@ export default function AppDashboardRoute() {
     workspaceReadiness?.items.filter(
       (item) => item.status !== "ready" && item.status !== "not_applicable",
     ) ?? [];
+  const retentionMoves = (workspaceReadiness?.nudges ?? []).filter(
+    (nudge) => nudge.priority !== "low" || nudge.id !== "billing_support",
+  );
   const marketDeskBrief = buildMarketDeskBrief({
     watchlists,
     recentEvents: visibleRecentEvents,
@@ -354,6 +357,30 @@ export default function AppDashboardRoute() {
                 ) : (
                   <span className="f9-status-pill">{item.status.replaceAll("_", " ")}</span>
                 )}
+              </article>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
+      {retentionMoves.length > 0 ? (
+        <article className="f9-app-panel">
+          <div className="f9-panel-toolbar">
+            <div>
+              <span className="f9-app-kicker">Next moves</span>
+              <h2>Keep the Market Desk useful</h2>
+            </div>
+          </div>
+          <div className="f9-work-list is-compact">
+            {retentionMoves.slice(0, 4).map((nudge) => (
+              <article className="f9-work-row" key={nudge.id}>
+                <div>
+                  <h3>{nudge.title}</h3>
+                  <p className="f9-muted-copy">{nudge.detail}</p>
+                </div>
+                <Link className="f9-secondary-button" to={nudge.href}>
+                  Open
+                </Link>
               </article>
             ))}
           </div>

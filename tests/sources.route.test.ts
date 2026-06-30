@@ -885,7 +885,9 @@ describe("sources route component", () => {
     expect(markup).toContain("Test and save access");
     expect(markup).toContain("Ad Library API page");
     expect(markup).not.toContain("Recent tracking health");
-    expect(markup).toContain("Advanced: API keys and external tools");
+    expect(markup).toContain("Advanced: developer access");
+    expect(markup).toContain("Developer access");
+    expect(markup).toContain("Connect exports and approved actions");
     expect(markup).toContain("Tool setup");
     expect(markup).toContain("Create a read key");
     expect(markup).toContain("Enable write access only when needed");
@@ -896,6 +898,7 @@ describe("sources route component", () => {
     expect(markup).toContain("Billing changes and cancellation");
     expect(markup).toContain("Migration and setup help");
     expect(markup).toContain("Create API key");
+    expect(markup).toContain("Allow approved account actions");
     expect(markup).not.toContain("Slack delivery");
     expect(markup).not.toContain("Save Slack delivery");
     expect(markup).not.toContain("WhatsApp delivery");

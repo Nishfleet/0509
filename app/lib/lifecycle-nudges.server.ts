@@ -111,8 +111,8 @@ export function buildLifecycleNudges(input: {
   if (counts.activeApiKeys === 0) {
     nudges.push({
       id: "agent_setup",
-      title: "Agent setup is missing",
-      detail: "Create an API key so agents can read readiness and run approved account actions.",
+      title: "Developer access is missing",
+      detail: "Create a read key for exports; enable approved actions only for trusted workflows.",
       href: "/app/sources",
       priority: "medium",
     });
