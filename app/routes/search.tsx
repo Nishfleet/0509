@@ -33,10 +33,12 @@ import {
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
+import { buildSearchAnswer } from "~/lib/search-answer";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
+import type { SearchAnswer } from "~/lib/search-answer";
 
 const searchDescription =
   "Preview live competitor Meta ads before creating an account; sign in only when you want to save examples and track offer changes over time.";
@@ -401,6 +403,14 @@ export default function SearchRoute() {
     trackingRole,
   );
   broaderSearchParams.set("broader", "1");
+  const searchAnswer = hasSearchQuery && !data.inputError
+    ? buildSearchAnswer({
+      result: data.result,
+      displayDomain,
+      isDomainSearch,
+      isBroaderScope,
+    })
+    : null;
 
   return (
     <DashboardShell
@@ -551,6 +561,8 @@ export default function SearchRoute() {
                   </Link>
                 ) : null}
               </div>
+
+              {searchAnswer ? <SearchAnswerPanel answer={searchAnswer} /> : null}
 
               {discoverySummary && data.result.ads.length > 0 ? (
                 <div className="f9-discovery-banner">
@@ -765,6 +777,28 @@ export default function SearchRoute() {
         </div>
       </section>
     </DashboardShell>
+  );
+}
+
+function SearchAnswerPanel({ answer }: { answer: SearchAnswer }) {
+  return (
+    <section className={`f9-search-answer is-${answer.state}`} aria-label="Search answer">
+      <div>
+        <span>Search answer</span>
+        <h3>{answer.title}</h3>
+        <p>{answer.summary}</p>
+      </div>
+      <dl>
+        {answer.facts.map((fact) => (
+          <div key={`${fact.label}:${fact.value}`}>
+            <dt>{fact.label}</dt>
+            <dd>{fact.value}</dd>
+            <small>{fact.detail}</small>
+          </div>
+        ))}
+      </dl>
+      {answer.note ? <p className="f9-search-answer-note">{answer.note}</p> : null}
+    </section>
   );
 }
 

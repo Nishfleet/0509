@@ -6020,6 +6020,81 @@ one signal-green accent.
   background: #fbfaf5;
 }
 
+.f9-search-page .f9-search-answer {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid #e7e2d7;
+  background: #fffdf8;
+}
+
+.f9-search-page .f9-search-answer > div {
+  display: grid;
+  gap: 4px;
+}
+
+.f9-search-page .f9-search-answer span {
+  color: #0a7b62;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.f9-search-page .f9-search-answer h3,
+.f9-search-page .f9-search-answer p {
+  margin: 0;
+}
+
+.f9-search-page .f9-search-answer h3 {
+  color: #171611;
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.f9-search-page .f9-search-answer p {
+  color: #5f5a52;
+  font-size: 0.88rem;
+  line-height: 1.42;
+}
+
+.f9-search-page .f9-search-answer dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.f9-search-page .f9-search-answer dl div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #e7e2d7;
+  border-radius: 8px;
+  background: #f8f6ef;
+}
+
+.f9-search-page .f9-search-answer dt,
+.f9-search-page .f9-search-answer small {
+  color: #706b61;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.f9-search-page .f9-search-answer dd {
+  margin: 0;
+  color: #171611;
+  font-size: 0.94rem;
+  font-weight: 850;
+}
+
+.f9-search-page .f9-search-answer-note {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #f8f6ef;
+}
+
 .f9-search-page .f9-mode-toggle {
   border: 1px solid #e0ddd4;
   border-radius: 10px;
