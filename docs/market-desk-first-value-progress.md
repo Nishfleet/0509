@@ -49,12 +49,12 @@ The first-session outcome is: within five minutes, a paying customer has a usefu
 | Agent | Owner Area | Status |
 | --- | --- | --- |
 | A | Product and activation architecture | Read-only audit completed |
-| B | Bulk competitor import and normalization | Running |
+| B | Bulk competitor import and normalization | Implemented and committed |
 | C | Search to answer engine | Read-only audit completed |
 | D | Market Desk Brief and reports | Read-only audit completed |
-| E | Agency and team workflows | Running |
-| F | Retention, delivery, and customer delight | Running |
-| G | Tests, E2E, accessibility, and red team | Running |
+| E | Agency and team workflows | Developer/support framing implemented; checkout gates preserved |
+| F | Retention, delivery, and customer delight | Dashboard lifecycle moves and support clarity implemented |
+| G | Tests, E2E, accessibility, and red team | Focused tests and commit-hook full suite passing; browser QA still pending |
 
 ## Decisions
 
@@ -69,12 +69,33 @@ The first-session outcome is: within five minutes, a paying customer has a usefu
 - Provide `PRESENCE_INTERNAL_WORKSPACE_ID` if the local Presence canary must be part of the final gate.
 - Provide a real MagicBrief competitor export if full field parity beyond generic competitor CSV/text import is required.
 
-## Implementation Queue
+## Implemented Commits
 
-1. Bulk Market Desk setup from pasted competitor lines and generic CSV.
-2. Derived Market Desk Brief builder and dashboard placement.
-3. Evidence-aware search answer panel.
-4. Agency setup refinements for 75-competitor workflows.
-5. Developer/agent customer framing and support/billing clarity.
-6. Activation/retention event accounting using existing non-sensitive audit mechanisms.
-7. Focused tests, browser QA, CE review, autoreview, PR, deploy, canaries, cleanup.
+| Commit | Result |
+| --- | --- |
+| `2cad4ff` | Added product audit, experience contract, progress doc, and CE implementation plan. |
+| `cd42319` | Added pure competitor import parser and parser tests. |
+| `17541e2` | Added paid Market Desk bulk import preview/commit flow to onboarding. |
+| `63b25eb` | Added derived Market Desk Brief and dashboard placement. |
+| `5d85fb2` | Added evidence-aware answer summary above search results. |
+| `9aea279` | Added dashboard retention moves, Developer access framing, API docs boundary copy, and support success clarity. |
+
+## Current Implementation State
+
+1. Bulk Market Desk setup from pasted competitor lines and generic CSV is implemented.
+2. Derived Market Desk Brief builder and dashboard placement are implemented.
+3. Evidence-aware search answer panel is implemented.
+4. Agency setup now preserves plan gates and adds customer-facing Developer access/support framing.
+5. Dashboard now surfaces lifecycle retention moves from existing readiness logic.
+6. Activation/retention accounting stayed within existing readiness/nudge mechanisms; no analytics provider was added.
+7. Account-controls salvage review is documented in `docs/account-controls-salvage-review.md`; the referenced branch was not present locally or remotely.
+8. Remaining tail: browser QA, CE review, autoreview, PR, deploy, post-deploy canaries, provenance, and worktree cleanup.
+
+## Latest Verification
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Focused customer-surface tests | Passed | 7 files, 58 tests |
+| Commit hook `npm run typecheck` | Passed | Existing React Router/Vite warnings |
+| Commit hook `npm test` | Passed | 155 files, 1461 tests |
+| Commit hook `npm run build` | Passed | Existing React Router/Vite dynamic import warnings |
