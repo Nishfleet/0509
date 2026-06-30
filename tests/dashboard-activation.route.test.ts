@@ -93,13 +93,14 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Start here");
+    expect(markup).toContain("Market Desk Brief");
+    expect(markup).toContain("Build your Market Desk");
     expect(markup).toContain("Add your first competitor");
-    expect(markup).toContain("Paste a competitor website");
+    expect(markup).toContain("Add competitors");
     expect(markup).toContain("Competitor website");
     expect(markup).toContain("Search ads");
     expect(markup).toContain("f9-primary-button");
-    expect(markup).toContain("href=\"/search\"");
+    expect(markup).toContain("href=\"/app/onboard?resume=1\"");
   });
 
   it("shows the first setup loop complete when scan, proof, delivery, and context exist", async () => {
@@ -172,8 +173,10 @@ describe("dashboard first 15 minutes activation", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Overview");
-    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("Market Desk Brief");
+    expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
+    expect(markup).toContain("No changes worth your time");
     expect(markup).toContain("Competitors watched");
     expect(markup).toContain("Evidence checks");
     expect(markup).toContain("Being watched");
@@ -290,7 +293,7 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
     expect(markup).toContain("Being watched");
     expect(markup).not.toContain("First 15 minutes");
@@ -367,7 +370,7 @@ describe("dashboard first 15 minutes activation", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Watching for the first change");
+    expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
     expect(markup).toContain("Being watched");
     expect(markup).not.toContain("First 15 minutes");

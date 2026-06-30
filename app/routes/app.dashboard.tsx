@@ -16,6 +16,7 @@ import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
+import { buildMarketDeskBrief } from "~/lib/market-desk-brief";
 import { buildSearchParams } from "~/lib/normalize";
 import { classifyWatchEventSource } from "~/lib/proof-classification";
 import { formatNextScanLabel } from "~/lib/schedule-display";
@@ -255,131 +256,33 @@ export default function AppDashboardRoute() {
   const checkoutReturn = Boolean(data.checkoutReturn);
   const competitorCount = watchlists.length;
   const activeWatchlists = watchlists.filter((watchlist) => watchlist.isActive).length;
-  const hasSavedCompetitor = competitorCount > 0;
-  const hasOnlyPausedWatchlists = hasSavedCompetitor && activeWatchlists === 0;
   const visibleRecentEvents = activeWatchlists > 0 ? recentEvents : [];
-  const confirmedChanges = visibleRecentEvents.filter((event) => event.status === "confirmed" || event.status === "detected").length;
   const recentSuccessfulProofs = recentProofCaptures.filter((capture) => capture.status === "succeeded").length;
   const successfulProofs = data.successfulProofStats?.count ?? recentSuccessfulProofs;
-  const sentDigests = digests.filter((digest) => digest.delivery?.status === "sent").length;
-  const firstCompetitorReady = activeWatchlists > 0;
   const counterMoveFollowUps = data.counterMoveFollowUps ?? [];
-  const counterMoveFollowUpCount = counterMoveFollowUps.length;
   const workspaceReadiness = data.workspaceReadiness;
   const readinessGaps =
     workspaceReadiness?.items.filter(
       (item) => item.status !== "ready" && item.status !== "not_applicable",
     ) ?? [];
-  const statusCards = [
-    {
-      label: "Competitors watched",
-      value: competitorCount,
-      detail: hasSavedCompetitor ? (activeWatchlists > 0 ? `${activeWatchlists} active` : "All paused") : "Add your first competitor",
-    },
-    {
-      label: "Changes found",
-      value: confirmedChanges,
-      detail: hasOnlyPausedWatchlists
-        ? "Paused"
-        : visibleRecentEvents.length > 0
-          ? "Recent watch events"
-          : "Waiting for first scan",
-    },
-    {
-      label: "Evidence checks",
-      value: proofUsage.used ?? successfulProofs,
-      detail: proofUsage.limit ? `${proofUsage.remaining} left this month` : `${successfulProofs} recent successes`,
-    },
-    {
-      label: "Digests sent",
-      value: sentDigests,
-      detail: sentDigests > 0 ? "Email trail active" : "No digest sent yet",
-    },
-  ];
-  const overnightAdsSeen = data.overnightStats?.adsSeen ?? 0;
-  const overnightRuns = data.overnightStats?.runs ?? 0;
-  const overnightWatchlists = data.overnightStats?.watchlistsChecked ?? 0;
-  const hasOvernightCheck = overnightRuns > 0 || overnightWatchlists > 0;
-  const overnightCheckScope = overnightWatchlists > 0
-    ? `${overnightWatchlists} competitor${overnightWatchlists === 1 ? "" : "s"}`
-    : `${overnightRuns} scan${overnightRuns === 1 ? "" : "s"}`;
-  const counterMoveFollowUpLabel = `${counterMoveFollowUpCount} follow-up${counterMoveFollowUpCount === 1 ? "" : "s"}`;
-  const todaysAnswer = counterMoveFollowUpCount > 0
-    ? {
-      title: `${counterMoveFollowUpLabel} ${counterMoveFollowUpCount === 1 ? "needs" : "need"} a decision`,
-      detail: "Open the proof-backed follow-ups and choose the next response before the review window closes.",
-      href: "/app/watchlists",
-      cta: "Review digests",
-    }
-    : confirmedChanges > 0
-    ? {
-      title: `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} need review`,
-      detail: "Open the proof trail and decide whether to respond, ignore, or package the change.",
-      href: "/app/watchlists",
-      cta: "Review moves",
-    }
-    : hasOvernightCheck
-      ? {
-        title: "Quiet check completed",
-        detail: `${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightCheckScope}; no urgent competitor move is waiting.`,
-        href: "/app/watchlists",
-        cta: "Review watchlists",
-      }
-      : hasOnlyPausedWatchlists
-        ? {
-          title: "Tracking is paused",
-          detail: "Resume a competitor watch to keep checking for changes.",
-          href: "/app/watchlists",
-          cta: "Resume watch",
-        }
-      : activeWatchlists > 0
-        ? {
-          title: "First sweep is queued",
-          detail: `Your next scheduled sweep is ${nextScanLabel}. Open the watchlist to run one now.`,
-          href: "/app/watchlists",
-          cta: "Open watchlist",
-        }
-        : {
-          title: "No market watch yet",
-          detail: "Add one competitor website to turn the account into a daily market desk.",
-          href: "/search",
-          cta: "Add competitor",
-        };
-  const briefTitle = counterMoveFollowUpCount > 0
-    ? `${counterMoveFollowUpLabel} to decide`
-    : confirmedChanges > 0
-    ? `${confirmedChanges} move${confirmedChanges === 1 ? "" : "s"} to review`
-    : hasOnlyPausedWatchlists
-      ? "Tracking is paused"
-    : firstCompetitorReady
-      ? "Watching for the first change"
-      : "Add your first competitor";
-  const briefSummary = counterMoveFollowUpCount > 0
-    ? "A proof-backed follow-up is waiting for a response decision."
-    : confirmedChanges > 0
-    ? visibleRecentEvents.slice(0, 3).map((event) => event.title).join(". ")
-    : hasOvernightCheck
-      ? `All quiet — ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightCheckScope} in the last day. No changes worth your time.`
-      : hasOnlyPausedWatchlists
-        ? "Resume a competitor watch when you want Five to Nine checking changes again."
-      : firstCompetitorReady
-        ? "Your watchlist is ready. Refresh tracking to capture proof when the landing page or offer changes."
-        : "Paste a competitor website and Five to Nine will create the first market watch.";
-  const nextDashboardAction =
-    firstCompetitorReady || hasOnlyPausedWatchlists || counterMoveFollowUpCount > 0 || confirmedChanges > 0 || hasOvernightCheck
-      ? todaysAnswer
-      : { href: "/search", cta: "Add competitor" };
-  const hasDashboardMetrics =
-    competitorCount > 0 ||
-    confirmedChanges > 0 ||
-    successfulProofs > 0 ||
-    sentDigests > 0;
+  const marketDeskBrief = buildMarketDeskBrief({
+    watchlists,
+    recentEvents: visibleRecentEvents,
+    counterMoveFollowUps,
+    digests,
+    proofUsage,
+    overnightStats: data.overnightStats,
+    successfulProofCount: successfulProofs,
+    nextScanLabel,
+  });
+  const statusCards = marketDeskBrief.metrics;
+  const hasDashboardMetrics = marketDeskBrief.hasMetrics;
 
   return (
     <DashboardPage>
     <section className="f9-app-stack f9-dashboard-clean">
       <DashboardPageHeader
-        lead="Your competitors, recent changes, and what needs attention next."
+        lead="Your Market Desk Brief, competitor watchlists, and what needs attention next."
         title="Overview"
       />
 
@@ -460,14 +363,26 @@ export default function AppDashboardRoute() {
       <article className="f9-app-panel f9-dashboard-hero">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">{hasSavedCompetitor ? "Today" : "Start here"}</span>
-            <h2>{briefTitle}</h2>
-            <p className="f9-muted-copy">{briefSummary}</p>
+            <span className="f9-app-kicker">{marketDeskBrief.kicker}</span>
+            <h2>{marketDeskBrief.title}</h2>
+            <p className="f9-muted-copy">{marketDeskBrief.summary}</p>
           </div>
-          <Link className="f9-primary-button" to={nextDashboardAction.href}>
-            {nextDashboardAction.cta}
+          <Link className="f9-primary-button" to={marketDeskBrief.action.href}>
+            {marketDeskBrief.action.label}
           </Link>
         </div>
+
+        {marketDeskBrief.items.length > 0 ? (
+          <div className="f9-brief-snapshot" aria-label="Market Desk Brief details">
+            {marketDeskBrief.items.map((item) => (
+              <article key={`${item.label}:${item.title}`}>
+                <span>{item.label}</span>
+                <strong>{item.title}</strong>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>
+        ) : null}
 
         <Form action="/search" className="f9-dashboard-search" method="get">
           <label className="f9-field" htmlFor="dashboard-market-search">
