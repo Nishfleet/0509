@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildCompetitorImportPreview,
-  neutralizeCsvFormulaCell,
-} from "~/lib/competitor-import";
+import { buildCompetitorImportPreview } from "~/lib/competitor-import";
 
 describe("buildCompetitorImportPreview", () => {
   it("parses pasted domains and auto-selects rows within the plan cap", () => {
@@ -63,6 +60,19 @@ describe("buildCompetitorImportPreview", () => {
       normalizedUrl: "https://boat-lifestyle.com",
     });
     expect(preview.rows[1]?.normalizedUrl).toBe("https://nykaa.com");
+  });
+
+  it("does not treat a single-column CSV header as a competitor", () => {
+    const preview = buildCompetitorImportPreview({
+      rawText: "name\nBoat Lifestyle\nNoise",
+      country: "all",
+      planLimit: 10,
+      currentCount: 0,
+    });
+
+    expect(preview.summary.valid).toBe(2);
+    expect(preview.rows.map((row) => row.name)).toEqual(["Boat Lifestyle", "Noise"]);
+    expect(preview.rows.map((row) => row.raw)).not.toContain("name");
   });
 
   it("deduplicates exact and www variants before plan-cap selection", () => {
@@ -166,15 +176,5 @@ describe("buildCompetitorImportPreview", () => {
       currentCount: 0,
       maxRows: 2,
     }).error).toContain("2 rows or fewer");
-  });
-});
-
-describe("neutralizeCsvFormulaCell", () => {
-  it("neutralizes spreadsheet formula prefixes for exported previews", () => {
-    expect(neutralizeCsvFormulaCell("=IMPORTXML('https://example.com')")).toBe("'=IMPORTXML('https://example.com')");
-    expect(neutralizeCsvFormulaCell("+SUM(A1:A2)")).toBe("'+SUM(A1:A2)");
-    expect(neutralizeCsvFormulaCell("-10")).toBe("'-10");
-    expect(neutralizeCsvFormulaCell("@cmd")).toBe("'@cmd");
-    expect(neutralizeCsvFormulaCell("Safe brand")).toBe("Safe brand");
   });
 });

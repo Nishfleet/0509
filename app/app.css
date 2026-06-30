@@ -2953,12 +2953,12 @@ button[aria-busy="true"] {
 
 .f9-import-summary span {
   padding: 6px 9px;
-  border: 1px solid rgba(6, 22, 41, 0.1);
   border-radius: 8px;
   background: #f6f9fc;
+  box-shadow: 0 0 0 1px rgba(6, 22, 41, 0.1);
   color: var(--f9-search-muted);
   font-size: 0.82rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .f9-import-table {
@@ -2975,9 +2975,9 @@ button[aria-busy="true"] {
   align-items: center;
   min-height: 56px;
   padding: 10px;
-  border: 1px solid rgba(6, 22, 41, 0.1);
   border-radius: 8px;
   background: #fff;
+  box-shadow: 0 0 0 1px rgba(6, 22, 41, 0.1);
 }
 
 .f9-import-row input {
@@ -3006,7 +3006,7 @@ button[aria-busy="true"] {
   color: var(--f9-search-soft);
   font-size: 0.78rem;
   font-style: normal;
-  font-weight: 900;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -3021,7 +3021,7 @@ button[aria-busy="true"] {
 
 .f9-text-link {
   color: #07725f;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .f9-field-inline {
@@ -7374,16 +7374,16 @@ one signal-green accent.
   gap: 5px;
   min-width: 0;
   padding: 12px;
-  border: 1px solid #e7e0d4;
   border-radius: 8px;
   background: #fffdfa;
+  box-shadow: 0 0 0 1px #e7e0d4;
 }
 
 .f9-brief-snapshot span {
   color: #087764;
   font-size: 0.72rem;
-  font-weight: 850;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 

@@ -18,7 +18,7 @@ function ad(input: Partial<AdRecord> = {}): AdRecord {
     destinationType: input.destinationType ?? "website",
     landingPageUrl: "landingPageUrl" in input ? input.landingPageUrl ?? null : "https://boat-lifestyle.com/sale",
     adSnapshotUrl: input.adSnapshotUrl ?? "https://cdn.example.com/ad.png",
-    countries: input.countries ?? ["India"],
+    countries: input.countries ?? ["all"],
     platforms: input.platforms ?? ["Instagram"],
     firstSeenAt: input.firstSeenAt ?? null,
     lastSeenAt: input.lastSeenAt ?? null,
@@ -122,6 +122,76 @@ describe("buildSearchAnswer", () => {
     });
   });
 
+  it("does not turn an explicit zero verified count into proof", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 0,
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "no_verified",
+      title: "No verified ads found for boat-lifestyle.com",
+      summary: "Returned ads were not connected to this website through advertiser or landing-page evidence.",
+      note: "This is not proof that the competitor is inactive; it only means this search did not verify a connected ad.",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Verified ads",
+      value: "0",
+      detail: "Exact website match only",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Returned ads",
+      value: "1",
+      detail: "Review as unverified candidates only",
+    });
+  });
+
+  it("keeps returned exact-domain ads unverified when no proof count or domain match exists", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "no_verified",
+      title: "No verified ads found for boat-lifestyle.com",
+      summary: "Returned ads were not connected to this website through advertiser or landing-page evidence.",
+    });
+  });
+
+  it("can derive verified proof from domain-match metadata", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [
+          ad({
+            domainMatch: {
+              level: "registrable_domain",
+              reason: "Landing page matches boat-lifestyle.com",
+              matchedDomain: "boat-lifestyle.com",
+            },
+          }),
+        ],
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "verified",
+      title: "1 verified ad linked to boat-lifestyle.com",
+    });
+  });
+
   it("surfaces degraded live search without inventing results", () => {
     const answer = buildSearchAnswer({
       result: response({
@@ -151,6 +221,7 @@ describe("buildSearchAnswer", () => {
     const answer = buildSearchAnswer({
       result: response({
         ads: [ad({ landingPageUrl: null, landingPage: null })],
+        verifiedCount: 1,
       }),
       displayDomain: "boat-lifestyle.com",
       isDomainSearch: true,

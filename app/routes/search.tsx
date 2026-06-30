@@ -12,6 +12,7 @@ import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { DashboardShell } from "~/components/dashboard-shell";
+import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
 import {
   applyWebsiteSearchFallback,
@@ -38,7 +39,6 @@ import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
-import type { SearchAnswer } from "~/lib/search-answer";
 
 const searchDescription =
   "Preview live competitor Meta ads before creating an account; sign in only when you want to save examples and track offer changes over time.";
@@ -222,7 +222,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
-  const { addAdToCollection, createSavedQuery, createWatchlist } = await import("~/lib/data.server");
+  const { addAdToCollection, createSavedQuery } = await import("~/lib/data.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const workspaceUserId = (
@@ -283,7 +283,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const queryName = String(formData.get("name") ?? "").trim() || `${inferredName} watch`;
     const shouldUseAdvertiserMode = canCreateAdvertiserWatchlist(normalizedQuery);
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
-
     if (!watchlistLimit.allowed) {
       const isZeroLimit = watchlistLimit.limit === 0;
       return {
@@ -298,9 +297,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    let watchlist: Awaited<ReturnType<typeof createWatchlist>> = null;
+    const { createWatchlistWithinLimit } = await import("~/lib/data.server");
+    let watchlistResult: Awaited<ReturnType<typeof createWatchlistWithinLimit>> | null = null;
     if (shouldUseAdvertiserMode) {
-      watchlist = await createWatchlist(env, workspaceUserId!, {
+      watchlistResult = await createWatchlistWithinLimit(env, workspaceUserId!, {
         name: queryName,
         targetType: "advertiser",
         targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
@@ -308,7 +308,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetLabel: competitorTrackingLabel(competitorWebsite, normalizedQuery.filters.query),
         targetCountry: normalizedQuery.filters.country,
         trackingRole,
-      });
+      }, watchlistLimit.limit);
     } else {
       const savedQuery = await createSavedQuery(env, workspaceUserId!, {
         name: `${queryName} source`,
@@ -320,7 +320,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         return { ok: false, message: "Could not prepare this competitor for tracking." };
       }
 
-      watchlist = await createWatchlist(env, workspaceUserId!, {
+      watchlistResult = await createWatchlistWithinLimit(env, workspaceUserId!, {
         name: queryName,
         targetType: "saved_query",
         targetId: savedQuery.id,
@@ -328,9 +328,24 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetLabel: competitorTrackingLabel(competitorWebsite, normalizedQuery.filters.query) || savedQuery.name,
         targetCountry: normalizedQuery.filters.country,
         trackingRole,
-      });
+      }, watchlistLimit.limit);
     }
 
+    if (watchlistResult.status === "over_cap") {
+      const isZeroLimit = watchlistResult.limit === 0;
+      return {
+        ok: false,
+        error: "plan_limit_exceeded",
+        limit: watchlistResult.limit,
+        current: watchlistResult.current,
+        message: isZeroLimit
+          ? "Retained competitor monitoring is available on paid plans. Starter is the recommended plan to track this competitor."
+          : "You have reached your competitor tracking limit.",
+        upgradePath: "/#pricing",
+      };
+    }
+
+    const watchlist = watchlistResult.watchlist;
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
 
@@ -777,28 +792,6 @@ export default function SearchRoute() {
         </div>
       </section>
     </DashboardShell>
-  );
-}
-
-function SearchAnswerPanel({ answer }: { answer: SearchAnswer }) {
-  return (
-    <section className={`f9-search-answer is-${answer.state}`} aria-label="Search answer">
-      <div>
-        <span>Search answer</span>
-        <h3>{answer.title}</h3>
-        <p>{answer.summary}</p>
-      </div>
-      <dl>
-        {answer.facts.map((fact) => (
-          <div key={`${fact.label}:${fact.value}`}>
-            <dt>{fact.label}</dt>
-            <dd>{fact.value}</dd>
-            <small>{fact.detail}</small>
-          </div>
-        ))}
-      </dl>
-      {answer.note ? <p className="f9-search-answer-note">{answer.note}</p> : null}
-    </section>
   );
 }
 

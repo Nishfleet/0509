@@ -840,8 +840,13 @@ describe("search actions", () => {
       current: 0,
     });
     const createSavedQuery = vi.fn();
-    const createWatchlist = vi.fn().mockResolvedValue({
-      id: "watch-1",
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "created",
+      watchlist: {
+        id: "watch-1",
+      },
+      current: 1,
+      limit: 10,
     });
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -874,7 +879,7 @@ describe("search actions", () => {
     vi.doMock("~/lib/data.server", () => ({
       addAdToCollection: vi.fn(),
       createSavedQuery,
-      createWatchlist,
+      createWatchlistWithinLimit,
     }));
 
     const { action } = await import("~/routes/search");
@@ -905,7 +910,7 @@ describe("search actions", () => {
     expect(response?.headers.get("Location")).toBe("/app/watchlists?watchlist=watch-1");
     expect(checkPlanLimit).toHaveBeenCalledWith(env, "user-1", "watchlists");
     expect(createSavedQuery).not.toHaveBeenCalled();
-      expect(createWatchlist).toHaveBeenCalledWith(
+      expect(createWatchlistWithinLimit).toHaveBeenCalledWith(
         env,
         "user-1",
         expect.objectContaining({
@@ -915,6 +920,7 @@ describe("search actions", () => {
           targetLabel: "Nykaa",
           trackingRole: "competitor",
         }),
+        10,
       );
     });
 
@@ -981,8 +987,13 @@ describe("search actions", () => {
       limit: 10,
       current: 0,
     });
-    const createWatchlist = vi.fn().mockResolvedValue({
-      id: "watch-self",
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "created",
+      watchlist: {
+        id: "watch-self",
+      },
+      current: 1,
+      limit: 10,
     });
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -1004,7 +1015,7 @@ describe("search actions", () => {
     vi.doMock("~/lib/data.server", () => ({
       addAdToCollection: vi.fn(),
       createSavedQuery: vi.fn(),
-      createWatchlist,
+      createWatchlistWithinLimit,
     }));
 
     const { action } = await import("~/routes/search");
@@ -1033,7 +1044,7 @@ describe("search actions", () => {
     }
 
     expect(response?.headers.get("Location")).toBe("/app/watchlists?watchlist=watch-self");
-    expect(createWatchlist).toHaveBeenCalledWith(
+    expect(createWatchlistWithinLimit).toHaveBeenCalledWith(
       env,
       "user-1",
       expect.objectContaining({
@@ -1042,6 +1053,7 @@ describe("search actions", () => {
         targetLabel: "Samplebrand",
         trackingRole: "self",
       }),
+      10,
     );
   });
 });

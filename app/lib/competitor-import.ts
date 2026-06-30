@@ -101,12 +101,13 @@ export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput
   }
 
   const existingFingerprints = new Set(input.existingFingerprints ?? []);
-  const seenFingerprints = new Map<string, number>();
   const selectedIds = input.selectedRowIds ? new Set(input.selectedRowIds) : null;
-  let autoSelectedEligibleCount = 0;
-  let explicitSelectedEligibleCount = 0;
-
-  const rows = parsedRows.rows.map((parsed) => {
+  const previewState = parsedRows.rows.reduce<{
+    rows: CompetitorImportRow[];
+    seenFingerprints: Map<string, number>;
+    autoSelectedEligibleCount: number;
+    explicitSelectedEligibleCount: number;
+  }>((state, parsed) => {
     const prepared = prepareImportRow(parsed, input.country);
     const base = {
       id: `row-${parsed.rowNumber}`,
@@ -124,64 +125,113 @@ export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput
 
     if (!prepared.target) {
       return {
-        ...base,
-        status: "invalid" as const,
-        reason: prepared.reason ?? "Add a competitor name, domain, or URL.",
-        target: null,
+        ...state,
+        rows: [
+          ...state.rows,
+          {
+            ...base,
+            status: "invalid" as const,
+            reason: prepared.reason ?? "Add a competitor name, domain, or URL.",
+            target: null,
+          },
+        ],
       };
     }
 
-    const duplicateOf = seenFingerprints.get(prepared.target.targetFingerprint);
-    seenFingerprints.set(prepared.target.targetFingerprint, parsed.rowNumber);
+    const duplicateOf = state.seenFingerprints.get(prepared.target.targetFingerprint);
+    const seenFingerprints = new Map([
+      ...state.seenFingerprints,
+      [prepared.target.targetFingerprint, parsed.rowNumber] as const,
+    ]);
     if (duplicateOf) {
       return {
-        ...base,
-        status: "duplicate" as const,
-        reason: `Duplicate of row ${duplicateOf}.`,
-        target: prepared.target,
+        ...state,
+        seenFingerprints,
+        rows: [
+          ...state.rows,
+          {
+            ...base,
+            status: "duplicate" as const,
+            reason: `Duplicate of row ${duplicateOf}.`,
+            target: prepared.target,
+          },
+        ],
       };
     }
 
     if (existingFingerprints.has(prepared.target.targetFingerprint)) {
       return {
-        ...base,
-        status: "existing" as const,
-        reason: "Already tracked in this workspace.",
-        target: prepared.target,
+        ...state,
+        seenFingerprints,
+        rows: [
+          ...state.rows,
+          {
+            ...base,
+            status: "existing" as const,
+            reason: "Already tracked in this workspace.",
+            target: prepared.target,
+          },
+        ],
       };
     }
 
-    const selected = selectedIds ? selectedIds.has(`row-${parsed.rowNumber}`) : autoSelectedEligibleCount < availableSlots;
-    const selectedOrdinal = selectedIds ? explicitSelectedEligibleCount : autoSelectedEligibleCount;
-    if (selected) {
-      if (selectedIds) {
-        explicitSelectedEligibleCount += 1;
-      } else {
-        autoSelectedEligibleCount += 1;
-      }
-    } else if (!selectedIds) {
-      autoSelectedEligibleCount += 1;
-    }
+    const selected = selectedIds
+      ? selectedIds.has(`row-${parsed.rowNumber}`)
+      : state.autoSelectedEligibleCount < availableSlots;
+    const selectedOrdinal = selectedIds ? state.explicitSelectedEligibleCount : state.autoSelectedEligibleCount;
+    const nextExplicitSelectedEligibleCount = selected && selectedIds
+      ? state.explicitSelectedEligibleCount + 1
+      : state.explicitSelectedEligibleCount;
+    const nextAutoSelectedEligibleCount = selectedIds
+      ? state.autoSelectedEligibleCount
+      : state.autoSelectedEligibleCount + 1;
+    const exceedsAvailableSlots = selectedIds
+      ? selected && selectedOrdinal >= availableSlots
+      : nextAutoSelectedEligibleCount > availableSlots;
 
-    if ((selectedIds ? selected && selectedOrdinal >= availableSlots : autoSelectedEligibleCount > availableSlots)) {
+    if (exceedsAvailableSlots) {
       return {
-        ...base,
-        selected: false,
-        status: "over_cap" as const,
-        reason: "Over the current plan limit. Select fewer competitors or upgrade.",
-        target: prepared.target,
+        ...state,
+        seenFingerprints,
+        autoSelectedEligibleCount: nextAutoSelectedEligibleCount,
+        explicitSelectedEligibleCount: nextExplicitSelectedEligibleCount,
+        rows: [
+          ...state.rows,
+          {
+            ...base,
+            selected: false,
+            status: "over_cap" as const,
+            reason: "Over the current plan limit. Select fewer competitors or upgrade.",
+            target: prepared.target,
+          },
+        ],
       };
     }
 
     return {
-      ...base,
-      selected,
-      status: "valid" as const,
-      reason: prepared.normalizedUrl ? "Ready to track as a website competitor." : "Ready to track as a competitor name.",
-      target: prepared.target,
+      ...state,
+      seenFingerprints,
+      autoSelectedEligibleCount: nextAutoSelectedEligibleCount,
+      explicitSelectedEligibleCount: nextExplicitSelectedEligibleCount,
+      rows: [
+        ...state.rows,
+        {
+          ...base,
+          selected,
+          status: "valid" as const,
+          reason: prepared.normalizedUrl ? "Ready to track as a website competitor." : "Ready to track as a competitor name.",
+          target: prepared.target,
+        },
+      ],
     };
+  }, {
+    rows: [],
+    seenFingerprints: new Map(),
+    autoSelectedEligibleCount: 0,
+    explicitSelectedEligibleCount: 0,
   });
 
+  const rows = previewState.rows;
   const summary = summarizeImportRows(rows);
   return {
     ok: !rows.some((row) => row.status === "invalid") && rows.length > 0,
@@ -193,10 +243,6 @@ export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput
     rows,
     summary,
   };
-}
-
-export function neutralizeCsvFormulaCell(value: string) {
-  return /^[\t\r=+\-@]/.test(value.trimStart()) ? `'${value}` : value;
 }
 
 function emptyPreview(input: {
@@ -242,10 +288,16 @@ function parseCompetitorImportRows(rawText: string, maxRows: number): { rows: Pa
 }
 
 function shouldUseCsvRows(records: string[][]) {
-  if (records.length === 0 || records.every((record) => record.length <= 1)) {
+  if (records.length === 0) {
     return false;
   }
-  return hasKnownHeader(records[0] ?? []) || records.some((record) => record.length > 2);
+  if (hasKnownHeader(records[0] ?? [])) {
+    return true;
+  }
+  if (records.every((record) => record.length <= 1)) {
+    return false;
+  }
+  return records.some((record) => record.length > 2);
 }
 
 function parsedRowsFromCsv(records: string[][]) {
@@ -361,46 +413,62 @@ function invalidPreparedRow(row: ParsedImportRow, reason: string) {
 }
 
 function parseCsvRecords(input: string) {
-  const records: string[][] = [];
-  let record: string[] = [];
-  let cell = "";
-  let inQuotes = false;
+  const chars = Array.from(input);
+  const state = chars.reduce((current, char, index) => {
+    if (current.skipNext) {
+      return {
+        ...current,
+        skipNext: false,
+      };
+    }
 
-  for (let index = 0; index < input.length; index += 1) {
-    const char = input[index];
-    const next = input[index + 1];
+    const next = chars[index + 1];
     if (char === '"') {
-      if (inQuotes && next === '"') {
-        cell += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
+      if (current.inQuotes && next === '"') {
+        return {
+          ...current,
+          cell: `${current.cell}"`,
+          skipNext: true,
+        };
       }
-      continue;
-    }
-    if (char === "," && !inQuotes) {
-      record.push(cleanCell(cell) ?? "");
-      cell = "";
-      continue;
-    }
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") index += 1;
-      record.push(cleanCell(cell) ?? "");
-      if (record.some((value) => value.trim())) {
-        records.push(record);
-      }
-      record = [];
-      cell = "";
-      continue;
-    }
-    cell += char;
-  }
 
-  record.push(cleanCell(cell) ?? "");
-  if (record.some((value) => value.trim())) {
-    records.push(record);
-  }
-  return records;
+      return {
+        ...current,
+        inQuotes: !current.inQuotes,
+      };
+    }
+    if (char === "," && !current.inQuotes) {
+      return {
+        ...current,
+        record: [...current.record, cleanCell(current.cell) ?? ""],
+        cell: "",
+      };
+    }
+    if ((char === "\n" || char === "\r") && !current.inQuotes) {
+      const record = [...current.record, cleanCell(current.cell) ?? ""];
+      return {
+        ...current,
+        records: record.some((value) => value.trim()) ? [...current.records, record] : current.records,
+        record: [],
+        cell: "",
+        skipNext: char === "\r" && next === "\n",
+      };
+    }
+
+    return {
+      ...current,
+      cell: `${current.cell}${char}`,
+    };
+  }, {
+    records: [] as string[][],
+    record: [] as string[],
+    cell: "",
+    inQuotes: false,
+    skipNext: false,
+  });
+
+  const finalRecord = [...state.record, cleanCell(state.cell) ?? ""];
+  return finalRecord.some((value) => value.trim()) ? [...state.records, finalRecord] : state.records;
 }
 
 function hasKnownHeader(header: string[]) {
@@ -464,11 +532,13 @@ function splitTags(value: string | null) {
 }
 
 function summarizeImportRows(rows: CompetitorImportRow[]) {
-  const summary = emptySummary();
-  for (const row of rows) {
-    summary[row.status] += 1;
-  }
-  return summary;
+  return rows.reduce(
+    (summary, row) => ({
+      ...summary,
+      [row.status]: summary[row.status] + 1,
+    }),
+    emptySummary(),
+  );
 }
 
 function emptySummary(): Record<CompetitorImportRowStatus, number> {

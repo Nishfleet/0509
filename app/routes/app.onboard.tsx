@@ -5,6 +5,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
+import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import {
   hasInvalidCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
@@ -14,7 +15,14 @@ import {
   normalizeSavedQuery,
 } from "~/lib/normalize";
 import { defaultCountryForVisitor } from "~/lib/countries";
-import type { CompetitorImportPreview, CompetitorImportRow } from "~/lib/competitor-import";
+import {
+  buildCompetitorImportPreview,
+  COMPETITOR_IMPORT_MAX_BYTES,
+  type CompetitorImportPreview,
+  type CompetitorImportRow,
+} from "~/lib/competitor-import";
+import type { AppEnv } from "~/lib/env.server";
+import type { ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 export const meta: MetaFunction = () => [
   { title: "Set up your account | Five to Nine" },
@@ -75,7 +83,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
-  const { completeUserOnboarding, createWatchlist, upsertWorkspaceBranding } = await import("~/lib/data.server");
+  const { completeUserOnboarding, upsertWorkspaceBranding } = await import("~/lib/data.server");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
 
@@ -84,6 +92,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
     await completeUserOnboarding(env, session.user.id);
     throw redirect("/app");
   }
+  const multipartSizeError = oversizedMultipartImportMessage(request, COMPETITOR_IMPORT_MAX_BYTES);
+  if (multipartSizeError) {
+    return {
+      ok: false,
+      intent: "preview-market-desk-import",
+      message: multipartSizeError,
+      rawText: "",
+      brandWebsiteInput: "",
+    };
+  }
+
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   const websiteInput = String(formData.get("website") ?? "").trim();
@@ -109,7 +128,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "preview-market-desk-import" || intent === "create-market-desk-import") {
-    const { buildCompetitorImportPreview, COMPETITOR_IMPORT_MAX_BYTES } = await import("~/lib/competitor-import");
     const pastedText = String(formData.get("competitors") ?? "");
     const uploadedFile = formData.get("competitorFile");
     const fileText = await readSmallCompetitorImportFile(uploadedFile, COMPETITOR_IMPORT_MAX_BYTES);
@@ -174,6 +192,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
+    const selectedRejection = selectedImportRejection(preview, selectedRowIds ?? []);
+    if (selectedRejection) {
+      return {
+        ok: false,
+        intent,
+        error: "import_selection_rejected",
+        message: selectedRejection.message,
+        preview,
+        rawText,
+        brandWebsiteInput,
+        rejectedRows: selectedRejection.rows,
+      };
+    }
+
     if (preview.error || preview.selectedCount === 0) {
       return {
         ok: false,
@@ -186,17 +218,68 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const rowsToCreate = preview.rows.filter((row) => row.selected && row.status === "valid" && row.target);
+    const contextValidationMessage = await validateCompetitorImportContext(rowsToCreate);
+    if (contextValidationMessage) {
+      return {
+        ok: false,
+        intent,
+        error: "import_context_rejected",
+        message: contextValidationMessage,
+        preview,
+        rawText,
+        brandWebsiteInput,
+      };
+    }
+
+    const { createWatchlistWithinLimit, upsertAgentMemory, upsertClientRoom } = await import("~/lib/data.server");
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     let createdCount = 0;
     const queuedWatchlistIds = new Set<string>();
+    const liveRejectedRows: Array<Pick<CompetitorImportRow, "id" | "rowNumber" | "status" | "reason">> = [];
     for (const row of rowsToCreate) {
       if (!row.target) continue;
-      const watchlist = await createWatchlist(env, workspaceUserId, row.target);
-      if (watchlist && !queuedWatchlistIds.has(watchlist.id)) {
+      const result = await createWatchlistWithinLimit(env, workspaceUserId, row.target, watchlistLimit.limit);
+      if (result.status === "over_cap") {
+        liveRejectedRows.push({
+          id: row.id,
+          rowNumber: row.rowNumber,
+          status: "over_cap",
+          reason: "Your plan limit was reached before this row could be created.",
+        });
+        continue;
+      }
+
+      const watchlist = result.watchlist;
+      await persistCompetitorImportContext({
+        env,
+        workspaceUserId,
+        row,
+        watchlistId: watchlist.id,
+        watchlistLabel: watchlist.targetLabel,
+        upsertAgentMemory,
+        upsertClientRoom,
+      });
+      if (result.status === "created" && !queuedWatchlistIds.has(watchlist.id)) {
         queuedWatchlistIds.add(watchlist.id);
         createdCount += 1;
         queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
       }
+    }
+
+    if (liveRejectedRows.length > 0) {
+      return {
+        ok: false,
+        intent,
+        error: "plan_limit_exceeded",
+        message: createdCount > 0
+          ? `Created ${createdCount} competitor ${createdCount === 1 ? "watchlist" : "watchlists"}, but ${liveRejectedRows.length} selected ${liveRejectedRows.length === 1 ? "row no longer fits" : "rows no longer fit"} your plan. Review the remaining rows.`
+          : "Selected competitors no longer fit your current plan. Review the rows or upgrade before creating more watchlists.",
+        preview,
+        rawText,
+        brandWebsiteInput,
+        rejectedRows: liveRejectedRows,
+        createdCount,
+      };
     }
 
     if (createdCount === 0) {
@@ -232,20 +315,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
-    if (!watchlistLimit.allowed) {
-      const isZeroLimit = watchlistLimit.limit === 0;
-
-      return {
-        ok: false,
-        error: "plan_limit_exceeded",
-        limit: watchlistLimit.limit,
-        current: watchlistLimit.current,
-        message: isZeroLimit
-          ? "Competitor monitoring is available on paid plans. Starter is the recommended plan for daily tracking and daily/weekly digests."
-          : "You have reached your competitor monitoring limit.",
-        upgradePath: "/#pricing",
-      };
-    }
 
     const visitorCountry = defaultCountryForVisitor(
       (context.cloudflare as { country?: string | null } | undefined)?.country ??
@@ -257,7 +326,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
     const targetFingerprint = watchlistFingerprint(normalizedQuery, competitorWebsite);
     const targetLabel = competitorWebsite.displayName ?? competitorWebsite.searchTerm ?? query;
-    const watchlist = await createWatchlist(env, workspaceUserId, {
+    const { createWatchlistWithinLimit } = await import("~/lib/data.server");
+    const watchlistResult = await createWatchlistWithinLimit(env, workspaceUserId, {
       name: `${competitorWebsite.displayName ?? query} watch`,
       targetType: "advertiser",
       targetId: competitorWebsite.normalizedUrl || query,
@@ -265,9 +335,24 @@ export async function action({ context, request }: ActionFunctionArgs) {
       targetLabel,
       targetCountry: normalizedQuery.filters.country,
       trackingRole: "competitor",
-    });
+    }, watchlistLimit.limit);
+
+    if (watchlistResult.status === "over_cap") {
+      const isZeroLimit = watchlistResult.limit === 0;
+      return {
+        ok: false,
+        error: "plan_limit_exceeded",
+        limit: watchlistResult.limit,
+        current: watchlistResult.current,
+        message: isZeroLimit
+          ? "Competitor monitoring is available on paid plans. Starter is the recommended plan for daily tracking and daily/weekly digests."
+          : "You have reached your competitor monitoring limit.",
+        upgradePath: "/#pricing",
+      };
+    }
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    const watchlist = watchlistResult.watchlist;
     queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
 
     await saveOptionalBrandWebsite();
@@ -286,6 +371,168 @@ export async function action({ context, request }: ActionFunctionArgs) {
     ok: false,
     message: "Unknown onboarding action.",
   };
+}
+
+function oversizedMultipartImportMessage(request: Request, maxBytes: number) {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("multipart/form-data")) {
+    return null;
+  }
+
+  const contentLength = Number(request.headers.get("content-length"));
+  const multipartOverheadAllowance = 32_768;
+  if (!Number.isFinite(contentLength) || contentLength <= maxBytes + multipartOverheadAllowance) {
+    return null;
+  }
+
+  return `Import is too large. Paste or upload ${Math.floor(maxBytes / 1024)} KB or less.`;
+}
+
+function selectedImportRejection(preview: CompetitorImportPreview, selectedRowIds: readonly string[]) {
+  const selectedIds = Array.from(new Set(selectedRowIds.filter(Boolean)));
+  if (selectedIds.length === 0) {
+    return null;
+  }
+
+  const rowsById = new Map(preview.rows.map((row) => [row.id, row]));
+  const rows = selectedIds
+    .map((id) => {
+      const row = rowsById.get(id);
+      if (!row) {
+        return {
+          id,
+          rowNumber: 0,
+          status: "invalid" as const,
+          reason: "Selected row was not found. Preview the import again.",
+        };
+      }
+      if (row.selected && row.status === "valid" && row.target) {
+        return null;
+      }
+      return {
+        id: row.id,
+        rowNumber: row.rowNumber,
+        status: row.status,
+        reason: row.reason ?? "This row is not ready to create.",
+      };
+    })
+    .filter((row): row is {
+      id: string;
+      rowNumber: number;
+      status: CompetitorImportRow["status"];
+      reason: string;
+    } => Boolean(row));
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    rows,
+    message: rows.length === 1
+      ? `Row ${rows[0].rowNumber || rows[0].id} cannot be created: ${rows[0].reason}`
+      : `${rows.length} selected rows cannot be created. Review the preview and select only ready competitors within your plan limit.`,
+  };
+}
+
+async function validateCompetitorImportContext(rows: CompetitorImportRow[]) {
+  const { AgentMemoryInputError, rejectSecretishMemoryValue } = await import("~/lib/agent-memory.server");
+  for (const row of rows) {
+    if (!hasCompetitorImportContext(row)) {
+      continue;
+    }
+
+    try {
+      rejectSecretishMemoryValue(
+        competitorImportContextValue(row, row.target?.targetLabel ?? row.name ?? row.website ?? row.raw),
+        "Imported competitor notes, tags, and client labels cannot contain secrets or credentials.",
+      );
+    } catch (error) {
+      if (error instanceof AgentMemoryInputError || error instanceof Error) {
+        return sanitizeCustomerFacingMessage(error.message);
+      }
+      return "Imported competitor notes, tags, and client labels cannot contain secrets or credentials.";
+    }
+  }
+
+  return null;
+}
+
+async function persistCompetitorImportContext(input: {
+  env: AppEnv;
+  workspaceUserId: string;
+  row: CompetitorImportRow;
+  watchlistId: string;
+  watchlistLabel: string;
+  upsertAgentMemory: typeof import("~/lib/data.server").upsertAgentMemory;
+  upsertClientRoom: typeof import("~/lib/data.server").upsertClientRoom;
+}) {
+  if (!hasCompetitorImportContext(input.row)) {
+    return;
+  }
+
+  const value = competitorImportContextValue(input.row, input.watchlistLabel);
+  if (input.row.notes || input.row.tags.length > 0) {
+    await input.upsertAgentMemory(input.env, input.workspaceUserId, {
+      scope: "competitor",
+      key: "import_context",
+      watchlistId: input.watchlistId,
+      value,
+      source: "market_desk_import",
+    });
+  }
+
+  if (!input.row.client) {
+    return;
+  }
+
+  const room = await input.upsertClientRoom(input.env, input.workspaceUserId, {
+    name: `${input.row.client} Market Desk`,
+    clientLabel: input.row.client,
+  });
+  if (!room) {
+    return;
+  }
+
+  await input.upsertClientRoom(input.env, input.workspaceUserId, {
+    roomId: room.id,
+    name: room.name,
+    clientLabel: room.clientLabel ?? input.row.client,
+    status: room.status,
+    resourceRefs: mergeClientRoomWatchlistRef(room, {
+      resourceType: "watchlist",
+      resourceId: input.watchlistId,
+      label: input.watchlistLabel,
+    }),
+    notes: {
+      ...room.notes,
+      marketDeskImport: {
+        source: "onboarding",
+        importedGrouping: true,
+      },
+    },
+  });
+}
+
+function hasCompetitorImportContext(row: CompetitorImportRow) {
+  return Boolean(row.notes || row.tags.length > 0 || row.client);
+}
+
+function competitorImportContextValue(row: CompetitorImportRow, watchlistLabel: string) {
+  return {
+    competitor: watchlistLabel,
+    importedFrom: "market_desk_onboarding",
+    ...(row.notes ? { notes: row.notes } : {}),
+    ...(row.tags.length > 0 ? { tags: row.tags } : {}),
+    ...(row.client ? { client: row.client } : {}),
+  };
+}
+
+function mergeClientRoomWatchlistRef(room: ClientRoomRecord, ref: ClientRoomResourceRef) {
+  const existing = room.resourceRefs.filter((candidate) =>
+    !(candidate.resourceType === ref.resourceType && candidate.resourceId === ref.resourceId)
+  );
+  return [...existing, ref];
 }
 
 export default function AppOnboardRoute() {
@@ -333,11 +580,11 @@ export default function AppOnboardRoute() {
                 <textarea
                   defaultValue={importActionData?.rawText ?? ""}
                   name="competitors"
-                  placeholder={"competitor.com\nbrand two\nname,website,notes"}
+                  placeholder={"competitor.com\nbrand two\nname,website,notes,tags,client"}
                   rows={7}
                   spellCheck={false}
                 />
-                <small>Paste domains, URLs, names, or a CSV with name and website columns.</small>
+                <small>Paste domains, URLs, names, or a CSV with name, website, notes, tags, and client columns.</small>
               </label>
 
               <label className="f9-field">

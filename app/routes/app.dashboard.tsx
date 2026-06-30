@@ -153,7 +153,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
-  const { createWatchlist, getSavedQuery, touchSavedQueryRun } = await import("~/lib/data.server");
+  const { createWatchlistWithinLimit, getSavedQuery, touchSavedQueryRun } = await import("~/lib/data.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
@@ -186,26 +186,27 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
-    if (!watchlistLimit.allowed) {
-      return {
-        ok: false,
-        error: "plan_limit_exceeded",
-        limit: watchlistLimit.limit,
-        current: watchlistLimit.current,
-        message: "You have reached your competitor tracking limit.",
-      };
-    }
-
-    const watchlist = await createWatchlist(env, workspaceUserId, {
+    const result = await createWatchlistWithinLimit(env, workspaceUserId, {
       name: `${savedQuery.name} watch`,
       targetType: "saved_query",
       targetId: savedQuery.id,
       targetFingerprint: savedQuery.fingerprint,
       targetLabel: savedQuery.name,
       targetCountry: savedQuery.normalizedQuery.filters.country,
-    });
+    }, watchlistLimit.limit);
+
+    if (result.status === "over_cap") {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded",
+        limit: result.limit,
+        current: result.current,
+        message: "You have reached your competitor tracking limit.",
+      };
+    }
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    const watchlist = result.watchlist;
     queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
 
     return {

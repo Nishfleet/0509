@@ -79,6 +79,8 @@ The first-session outcome is: within five minutes, a paying customer has a usefu
 | `63b25eb` | Added derived Market Desk Brief and dashboard placement. |
 | `5d85fb2` | Added evidence-aware answer summary above search results. |
 | `9aea279` | Added dashboard retention moves, Developer access framing, API docs boundary copy, and support success clarity. |
+| `bb445b7` | Updated Market Desk first-value provenance after implementation verification. |
+| Pending | Review hardening: atomic plan-aware watchlist creation, persisted import metadata, fail-closed selected rows, no fabricated search proof, pre-parse import size rejection, parser/header fixes, and standards cleanup. |
 
 ## Current Implementation State
 
@@ -89,7 +91,8 @@ The first-session outcome is: within five minutes, a paying customer has a usefu
 5. Dashboard now surfaces lifecycle retention moves from existing readiness logic.
 6. Activation/retention accounting stayed within existing readiness/nudge mechanisms; no analytics provider was added.
 7. Account-controls salvage review is documented in `docs/account-controls-salvage-review.md`; the referenced branch was not present locally or remotely.
-8. Remaining tail: browser QA, CE review, autoreview, PR, deploy, post-deploy canaries, provenance, and worktree cleanup.
+8. Review-driven hardening is implemented: CSV notes/tags persist to watchlist-scoped context, client grouping links imported competitors to client rooms, selected rows that become invalid/over-cap are reported before writes, and shared plan-aware watchlist creation protects onboarding, search, dashboard, and customer-agent actions.
+9. Remaining tail: autoreview, PR, deploy, post-deploy canaries, provenance, and worktree cleanup.
 
 ## Latest Verification
 
@@ -99,3 +102,8 @@ The first-session outcome is: within five minutes, a paying customer has a usefu
 | Commit hook `npm run typecheck` | Passed | Existing React Router/Vite warnings |
 | Commit hook `npm test` | Passed | 155 files, 1461 tests |
 | Commit hook `npm run build` | Passed | Existing React Router/Vite dynamic import warnings |
+| Review-hardening focused tests | Passed | `tests/competitor-import.test.ts`, `tests/onboarding.route.test.ts`, `tests/search-answer.test.ts`, `tests/search.route.test.ts`, `tests/customer-agent-actions.server.test.ts`, `tests/plan-limits.route.test.ts`, `tests/market-desk-brief.test.ts` |
+| Full suite after review hardening | Passed | 155 files, 1467 tests |
+| `npm run typecheck` after review hardening | Passed | Existing React Router/Vite warnings |
+| `npm run build` after review hardening | Passed | Existing React Router/Vite warnings and pre-existing ineffective dynamic-import warnings |
+| Local authenticated E2E | Passed | 8 Playwright local-auth flows |

@@ -31,7 +31,7 @@ export function buildSearchAnswer(input: {
   const adCount = ads.length;
   const domain = input.displayDomain?.trim() || null;
   const landingPageCount = ads.filter((ad) => Boolean(ad.landingPage || ad.landingPageUrl)).length;
-  const verifiedCount = Math.max(0, Math.floor(result.verifiedCount ?? (input.isDomainSearch && !input.isBroaderScope ? adCount : 0)));
+  const verifiedCount = resolveVerifiedCount(result);
   const broaderCount = Math.max(0, Math.floor(result.broaderCandidateCount ?? (input.isBroaderScope ? adCount : 0)));
   const sourceLabel = formatSearchSource(result);
   const landingFact = {
@@ -98,13 +98,27 @@ export function buildSearchAnswer(input: {
     };
   }
 
+  if (input.isDomainSearch && domain && verifiedCount === 0) {
+    return {
+      state: "no_verified",
+      title: `No verified ads found for ${domain}`,
+      summary: "Returned ads were not connected to this website through advertiser or landing-page evidence.",
+      facts: [
+        { label: "Verified ads", value: "0", detail: "Exact website match only" },
+        { label: "Returned ads", value: String(adCount), detail: "Review as unverified candidates only" },
+        landingFact,
+      ],
+      note: "This is not proof that the competitor is inactive; it only means this search did not verify a connected ad.",
+    };
+  }
+
   if (input.isDomainSearch && domain) {
     return {
       state: "verified",
-      title: `${verifiedCount || adCount} verified ad${(verifiedCount || adCount) === 1 ? "" : "s"} linked to ${domain}`,
+      title: `${verifiedCount} verified ad${verifiedCount === 1 ? "" : "s"} linked to ${domain}`,
       summary: "These ads are connected to the competitor website through advertiser or landing-page evidence.",
       facts: [
-        { label: "Verified ads", value: String(verifiedCount || adCount), detail: "Connected to this domain" },
+        { label: "Verified ads", value: String(verifiedCount), detail: "Connected to this domain" },
         landingFact,
         { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
       ],
@@ -122,6 +136,22 @@ export function buildSearchAnswer(input: {
     ],
     note: landingPageCount === 0 ? "Landing-page signals are not captured yet." : null,
   };
+}
+
+function resolveVerifiedCount(result: SearchResponse) {
+  if (typeof result.verifiedCount === "number") {
+    return Math.max(0, Math.floor(result.verifiedCount));
+  }
+
+  return result.ads.filter((ad) => isVerifiedDomainMatchLevel(ad.domainMatch?.level)).length;
+}
+
+function isVerifiedDomainMatchLevel(level: string | null | undefined) {
+  return level === "exact_hostname" ||
+    level === "registrable_domain" ||
+    level === "verified_advertiser_domain" ||
+    level === "verified_alias" ||
+    level === "verified_entity";
 }
 
 function formatSearchSource(result: SearchResponse) {

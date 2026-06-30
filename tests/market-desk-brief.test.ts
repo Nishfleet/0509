@@ -13,7 +13,7 @@ function watchlist(input: Partial<WatchlistRecord> = {}): WatchlistRecord {
     targetId: input.targetId ?? "https://boat-lifestyle.com",
     targetFingerprint: input.targetFingerprint ?? "fingerprint-1",
     targetLabel: input.targetLabel ?? "Boat Lifestyle",
-    targetCountry: input.targetCountry ?? "India",
+    targetCountry: input.targetCountry ?? "all",
     isActive: input.isActive ?? true,
     lastScannedAt: input.lastScannedAt ?? null,
     createdAt: input.createdAt ?? "2026-06-20T00:00:00.000Z",
