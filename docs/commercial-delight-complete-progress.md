@@ -102,6 +102,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Owner/manual payment action: Dodo Scout/Starter monthly and annual pricing was corrected through Dodo's documented by-currency localized pricing flow before annual checkout was called live.
 - Monthly checkout: covered by route tests, checkout-return tests, and deployed live Dodo pricing canary proof in IN, US, and GB.
 - Annual checkout: covered by route tests and deployed live Dodo pricing canary proof. Dodo now serves Scout/Starter annual prices that validate as `4 months free` in IN, US, and GB.
+- Dodo portal product collection: redacted Dodo API verification confirms the Five to Nine Product Collection groups Scout/Starter monthly and annual products for Customer Portal plan-change eligibility. The remaining portal step is the dashboard-only **Allow Subscription Updates** setting plus an internal portal behavior check.
 
 ## Deployment
 
