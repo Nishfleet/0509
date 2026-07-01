@@ -17,7 +17,7 @@ Items below were **not completed by the launch-hardening code run**. They requir
 **Status:** REPO CONFIGURED — FIRST RUN / ALERT PROOF STILL OWNER-VERIFIED
 
 1. `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health` every 5 minutes without secrets.
-2. After merge, run **Uptime health check** manually once from GitHub Actions.
+2. Done: manual run `28540913266` passed on `main`.
 3. Confirm scheduled runs appear on `main`.
 4. Confirm failed-run notifications reach the intended inbox.
 5. If a separate external service is required, create an UptimeRobot (or equivalent) HTTP monitor for `https://0509.io/api/health`: 5 minute interval, keyword check `ok`, alert Nish on non-200 or missing `{ "status": "ok" }`.
