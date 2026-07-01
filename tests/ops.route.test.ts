@@ -1,3 +1,5 @@
+import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const session = {
@@ -22,6 +24,22 @@ function createContext(env: Record<string, unknown> = {}) {
   };
 }
 
+type MockUseLoaderData = () => unknown;
+
+async function mockRouter(useLoaderData: MockUseLoaderData) {
+  vi.doMock("react-router", async () => {
+    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const React = await import("react");
+
+    return {
+      ...actual,
+      Link: ({ children, to, ...props }: { children?: ReactNode; to?: string } & Record<string, unknown>) =>
+        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      useLoaderData: vi.fn(useLoaderData),
+    };
+  });
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -41,7 +59,10 @@ describe("ops route", () => {
         budgetBlockedProofs: 0,
         blockedTargets: 0,
         deliveryFailures: 0,
+        deliveryAttention: 0,
         degradedWatchlists: 1,
+        discoveryFailures: 0,
+        discoveryProvidersNeedingAttention: 0,
       },
       failingRuns: [],
       stuckRuns: [],
@@ -49,7 +70,10 @@ describe("ops route", () => {
       budgetBlockedProofs: [],
       blockedTargets: [],
       deliveryFailures: [],
+      deliveryAttention: [],
       degradedWatchlists: [],
+      discoveryFailures: [],
+      discoveryProviders: [],
     });
 
     vi.doMock("~/lib/auth.server", () => ({
@@ -172,5 +196,56 @@ describe("ops route", () => {
       status: 403,
     });
     expect(getOperatorSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("renders provider-unknown email attempts as delivery attention", async () => {
+    await mockRouter(() => ({
+      snapshot: {
+        summary: {
+          failingRuns: 0,
+          stuckRuns: 0,
+          failedProofs: 0,
+          budgetBlockedProofs: 0,
+          blockedTargets: 0,
+          deliveryFailures: 0,
+          deliveryAttention: 1,
+          degradedWatchlists: 0,
+          discoveryFailures: 0,
+          discoveryProvidersNeedingAttention: 0,
+        },
+        failingRuns: [],
+        stuckRuns: [],
+        failedProofs: [],
+        budgetBlockedProofs: [],
+        blockedTargets: [],
+        deliveryFailures: [],
+        deliveryAttention: [
+          {
+            attempt_id: "attempt-1",
+            watchlist_id: null,
+            watchlist_name: null,
+            channel: "email",
+            target_value: "ops@example.com",
+            status: "pending",
+            webhook_status: "provider_unknown",
+            provider_status_last_seen_at: "2026-07-02T00:00:00.000Z",
+            error_message: "Cloudflare Email send outcome is unknown after provider timeout.",
+            created_at: "2026-07-02T00:00:00.000Z",
+          },
+        ],
+        degradedWatchlists: [],
+        discoveryFailures: [],
+        discoveryProviders: [],
+      },
+    }));
+
+    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const markup = renderToStaticMarkup(createElement(OpsRoute));
+
+    expect(markup).toContain("Delivery attention");
+    expect(markup).toContain("Recent delivery attention");
+    expect(markup).toContain("Email to ops@example.com");
+    expect(markup).toContain("Cloudflare Email send outcome is unknown after provider timeout.");
+    expect(markup).not.toContain("No recent delivery failures.");
   });
 });
