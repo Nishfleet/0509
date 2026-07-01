@@ -52,6 +52,8 @@ export function buildLifecycleNudges(input: {
   const itemById = new Map(input.items.map((item) => [item.id, item]));
   const counts = input.counts;
   const proofUsage = input.proofUsage ?? null;
+  const hasFirstValue =
+    counts.activeWatchlists > 0 && counts.successfulProofs > 0 && counts.sentDigests > 0;
 
   if (counts.competitors === 0) {
     nudges.push({
@@ -114,7 +116,7 @@ export function buildLifecycleNudges(input: {
       title: "Developer access is missing",
       detail: "Create a read key for exports; enable approved actions only for trusted workflows.",
       href: "/app/sources",
-      priority: "medium",
+      priority: hasFirstValue ? "low" : "medium",
     });
   }
 

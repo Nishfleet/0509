@@ -5,6 +5,7 @@ import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-rout
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { SubmitButton } from "~/components/submit-button";
 import { demoProof } from "~/lib/demo-proof";
+import { dodoAnnualSavingsIsValid } from "~/lib/dodo-pricing-display";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
@@ -99,6 +100,7 @@ interface LocalPricingPreview {
       Partial<Record<PricingBillingCycle, { display?: string }>>
     >
   >;
+  annualValidation?: Partial<Record<PricingPlanSlug, { valid?: boolean; reason?: string }>>;
   usageBundles?: Partial<Record<UsageBundleSlug, { display?: string }>>;
 }
 
@@ -131,6 +133,16 @@ function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBund
   return Boolean(preview?.usageBundles?.[bundleId]?.display);
 }
 
+export function planIntentPath(
+  signedIn: boolean,
+  plan: PricingPlanSlug,
+  cycle: PricingBillingCycle,
+) {
+  const billingPath = `/app/billing?plan=${plan}&cycle=${cycle}&source=pricing#plans`;
+  if (signedIn) return billingPath;
+  return `/auth/signup?redirectTo=${encodeURIComponent(billingPath)}`;
+}
+
 export default function MarketingRoute() {
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const routeData = useLoaderData<typeof loader>();
@@ -144,6 +156,7 @@ export default function MarketingRoute() {
   const [localPricing, setLocalPricing] = useState<LocalPricingPreview | null>(
     routeData.pricingPreview?.available ? routeData.pricingPreview : null,
   );
+  const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>("monthly");
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -544,12 +557,34 @@ export default function MarketingRoute() {
             winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
           </p>
+          <div className="f9-cycle-toggle" role="group" aria-label="Billing cycle">
+            <button
+              aria-pressed={billingCycle === "monthly"}
+              className={billingCycle === "monthly" ? "is-active" : ""}
+              onClick={() => setBillingCycle("monthly")}
+              type="button"
+            >
+              Monthly
+            </button>
+            <button
+              aria-pressed={billingCycle === "yearly"}
+              className={billingCycle === "yearly" ? "is-active" : ""}
+              onClick={() => setBillingCycle("yearly")}
+              type="button"
+            >
+              Annual
+            </button>
+          </div>
         </div>
 
         <div className="f9-commerce-grid ld-reveal">
           {rootData.pricingPlans.map((plan) => {
-            const monthlyReady = hasPrice(localPricing, plan.slug, "monthly");
             const yearlyReady = hasPrice(localPricing, plan.slug, "yearly");
+            const selectedReady = hasPrice(localPricing, plan.slug, billingCycle);
+            const annualIsValid = dodoAnnualSavingsIsValid(
+              localPricing?.annualValidation?.[plan.slug],
+            );
+            const selectedAnnualBlocked = billingCycle === "yearly" && !annualIsValid;
             const planSaleOpen =
               plan.slug === "scout"
                 ? commercialLaunch.scoutSaleOpen
@@ -567,8 +602,14 @@ export default function MarketingRoute() {
                 {plan.slug === "agency" && !planSaleOpen ? (
                   <em className="f9-plan-badge">Held for capacity proof</em>
                 ) : null}
-                <h3>{priceLabel(localPricing, plan.slug, "monthly", plan.monthlyLabel)}</h3>
-                <small>{priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)}</small>
+                <h3>{priceLabel(localPricing, plan.slug, billingCycle, billingCycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel)}</h3>
+                <small>
+                  {billingCycle === "yearly"
+                    ? annualIsValid
+                      ? "Annual billing · 4 months free"
+                      : "Annual checkout unavailable until pricing validates"
+                    : `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`}
+                </small>
                 <p>{plan.detail}</p>
                 <ul className="f9-plan-feature-list">
                   {plan.features?.map((feature) => (
@@ -576,37 +617,31 @@ export default function MarketingRoute() {
                   ))}
                 </ul>
                 {rootData.session ? (
-                  planSaleOpen && (monthlyReady || yearlyReady) ? (
+                  planSaleOpen && selectedReady && !selectedAnnualBlocked ? (
                     <div className="f9-plan-actions">
-                      {monthlyReady ? (
-                        <Form method="post" action="/api/billing/dodo/checkout">
-                          <input type="hidden" name="plan" value={plan.slug} />
-                          <input type="hidden" name="cycle" value="monthly" />
-                          <SubmitButton match={{ plan: plan.slug, cycle: "monthly" }} pendingLabel="Redirecting…">
-                            Start monthly
-                          </SubmitButton>
-                        </Form>
-                      ) : null}
-                      {yearlyReady ? (
-                        <Form method="post" action="/api/billing/dodo/checkout">
-                          <input type="hidden" name="plan" value={plan.slug} />
-                          <input type="hidden" name="cycle" value="yearly" />
-                          <SubmitButton match={{ plan: plan.slug, cycle: "yearly" }} pendingLabel="Redirecting…">
-                            Annual
-                          </SubmitButton>
-                        </Form>
-                      ) : null}
+                      <Link to={planIntentPath(true, plan.slug, billingCycle)}>
+                        Choose {billingCycle === "yearly" ? "annual" : "monthly"}
+                      </Link>
                     </div>
                   ) : plan.slug === "agency" && !planSaleOpen ? (
                     <p className="f9-price-sync">
                       Agency checkout is temporarily unavailable. Email{" "}
                       <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will help.
                     </p>
+                  ) : selectedAnnualBlocked && yearlyReady ? (
+                    <span className="f9-price-sync">Annual pricing needs validation</span>
                   ) : (
                     <span className="f9-price-sync">Prices loading</span>
                   )
                 ) : (
-                  <Link to={primaryCta}>{primaryLabel}</Link>
+                  <Link to={planSaleOpen && selectedReady && !selectedAnnualBlocked
+                    ? planIntentPath(false, plan.slug, billingCycle)
+                    : primaryCta}
+                  >
+                    {planSaleOpen && selectedReady && !selectedAnnualBlocked
+                      ? `Choose ${billingCycle === "yearly" ? "annual" : "monthly"}`
+                      : primaryLabel}
+                  </Link>
                 )}
               </article>
             );
@@ -640,12 +675,7 @@ export default function MarketingRoute() {
                 <strong>{bundlePriceLabel(localPricing, bundle.slug, bundle.priceLabel)}</strong>
                 <p>{bundle.detail}</p>
                 {rootData.session && hasBundlePrice(localPricing, bundle.slug) ? (
-                  <Form method="post" action="/api/billing/dodo/checkout">
-                    <input type="hidden" name="bundle" value={bundle.slug} />
-                    <SubmitButton match={{ bundle: bundle.slug }} pendingLabel="Redirecting…">
-                      Buy pack
-                    </SubmitButton>
-                  </Form>
+                  <Link to="/app/billing?source=top-up#top-ups">Manage packs</Link>
                 ) : null}
               </article>
             ))}

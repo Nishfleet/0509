@@ -164,11 +164,89 @@ describe("Dodo 0509 pricing", () => {
       usageBundles: {
         proof_500: {
           amount: 499900,
+          validationAmount: 499900,
           currency: "INR",
           display: "₹4,999",
           bundleId: "proof_500",
         },
       },
+    });
+  });
+
+  it("does not expose Dodo product ids in display previews", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      jsonResponse({
+        currency: "USD",
+        current_breakup: { total_amount: 1100 },
+        billing_country: "US",
+        product_cart: [
+          {
+            product_id: "prod_scout_monthly",
+            is_subscription: true,
+            tax_inclusive: false,
+          },
+        ],
+      }),
+    );
+
+    const preview = await previewDodo0509PlanPrices({
+      env: {
+        DODO_0509_API_KEY: "secret",
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_ENVIRONMENT: "test",
+        DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+      },
+      request: new Request("https://0509.io/api/pricing-preview", {
+        headers: { "cf-ipcountry": "US" },
+      }),
+      fetcher: fetcher as never,
+    });
+
+    expect(preview.prices.scout?.monthly?.display).toBe("$11");
+    expect(JSON.stringify(preview)).not.toContain("prod_scout_monthly");
+    expect(preview.prices.scout?.monthly).not.toHaveProperty("productId");
+  });
+
+  it("filters Dodo display previews that return a different billing country", async () => {
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+      return jsonResponse({
+        currency: "USD",
+        current_breakup: { total_amount: 1100 },
+        billing_country: productId === "prod_pack_500" ? "US" : "GB",
+        product_cart: [
+          {
+            product_id: productId,
+            is_subscription: productId !== "prod_pack_500",
+            discounted_price: 1100,
+            tax_inclusive: false,
+          },
+        ],
+        total_tax: 0,
+      });
+    });
+
+    const request = new Request("https://0509.io/api/pricing-preview") as Request & {
+      cf?: { country?: string };
+    };
+    request.cf = { country: "US" };
+    const preview = await previewDodo0509PlanPrices({
+      env: {
+        DODO_0509_API_KEY: "secret",
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_ENVIRONMENT: "test",
+        DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+        DODO_0509_PRODUCT_PROOF_PACK_500_ID: "prod_pack_500",
+      },
+      request,
+      fetcher: fetcher as never,
+    });
+
+    expect(preview.country).toBe("US");
+    expect(preview.prices.scout?.monthly).toBeUndefined();
+    expect(preview.usageBundles.proof_500).toMatchObject({
+      billingCountry: "US",
+      currency: "USD",
     });
   });
 

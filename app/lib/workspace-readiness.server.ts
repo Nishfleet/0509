@@ -13,7 +13,8 @@ import {
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
 import { buildLifecycleNudges, type LifecycleNudge } from "~/lib/lifecycle-nudges.server";
-import { getProofUsageSummary } from "~/lib/plan.server";
+import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
+import { getProofUsageSummary, listActiveProofCreditGrants } from "~/lib/plan.server";
 import { listWorkspaceMembers } from "~/lib/workspace.server";
 
 export type WorkspaceReadinessStatus =
@@ -50,6 +51,42 @@ export interface WorkspaceReadiness {
   status: Exclude<WorkspaceReadinessStatus, "needs_proof" | "not_applicable">;
   readyCount: number;
   totalCount: number;
+  workspace: {
+    workspaceUserId: string;
+    isMember: boolean;
+    billingOwnerName: string | null;
+    canManageBilling: boolean;
+  };
+  billing: {
+    plan: "free" | "scout" | "starter" | "agency";
+    billingInterval: "monthly" | "annual" | null;
+    dodoStatus: string | null;
+    nextBillingAt: string | null;
+    planUpdatedAt: string | null;
+    hasPaymentIssue: boolean;
+    proofUsage: {
+      used: number;
+      baseLimit: number;
+      extraCredits: number;
+      limit: number;
+      remaining: number;
+      warningLevel: "ok" | "warning" | "exhausted";
+      periodStart: string | null;
+      periodEnd: string | null;
+      nextPeriodStart: string | null;
+      includedRemaining: number | null;
+      topUpRemaining: number;
+      topUpRetainedWhileInactive: number;
+      canSpendTopUps: boolean | null;
+    };
+    topUpGrants: Array<{
+      skuSlug: string | null;
+      packName: string;
+      remainingCredits: number;
+      grantedAt: string;
+      expiresAt: string | null;
+    }>;
+  };
   items: WorkspaceReadinessItem[];
   counts: {
     competitors: number;
@@ -66,9 +103,16 @@ export interface WorkspaceReadiness {
   nudges: LifecycleNudge[];
 }
 
+export interface WorkspaceReadinessOptions {
+  isMember?: boolean;
+  billingOwnerName?: string | null;
+  canManageBilling?: boolean;
+}
+
 export async function getWorkspaceReadiness(
   env: AppEnv,
   userId: string,
+  options: WorkspaceReadinessOptions = {},
 ): Promise<WorkspaceReadiness> {
   const [
     savedQueries,
@@ -77,6 +121,7 @@ export async function getWorkspaceReadiness(
     digests,
     deliveryTargetStats,
     proofUsage,
+    creditGrants,
     billingInfo,
     members,
     apiKeys,
@@ -91,6 +136,7 @@ export async function getWorkspaceReadiness(
     listDigests(env, userId),
     getDeliveryTargetReadinessStats(env, userId),
     getProofUsageSummary(env, userId),
+    listActiveProofCreditGrants(env, userId),
     getUserPlanBillingInfo(env, userId),
     listWorkspaceMembers(env, userId),
     listCustomerApiKeys(env, userId),
@@ -114,6 +160,8 @@ export async function getWorkspaceReadiness(
     billingInfo.plan !== "free" &&
     (billingInfo.dodoStatus === "subscription.failed" ||
       billingInfo.dodoStatus === "subscription.on_hold");
+  const isMember = options.isMember ?? false;
+  const canManageBilling = options.canManageBilling ?? !isMember;
 
   const items: WorkspaceReadinessItem[] = [
     {
@@ -257,6 +305,42 @@ export async function getWorkspaceReadiness(
     status,
     readyCount,
     totalCount: actionableItems.length,
+    workspace: {
+      workspaceUserId: userId,
+      isMember,
+      billingOwnerName: options.billingOwnerName ?? null,
+      canManageBilling,
+    },
+    billing: {
+      plan: billingInfo.plan,
+      billingInterval: billingInfo.billingInterval,
+      dodoStatus: billingInfo.dodoStatus,
+      nextBillingAt: billingInfo.dodoNextBillingAt,
+      planUpdatedAt: billingInfo.planUpdatedAt,
+      hasPaymentIssue: hasBillingPaymentIssue,
+      proofUsage: {
+        used: proofUsage.used,
+        baseLimit: proofUsage.baseLimit,
+        extraCredits: proofUsage.extraCredits,
+        limit: proofUsage.limit,
+        remaining: proofUsage.remaining,
+        warningLevel: proofUsage.warningLevel,
+        periodStart: proofUsage.periodStart ?? null,
+        periodEnd: proofUsage.periodEnd ?? null,
+        nextPeriodStart: proofUsage.nextPeriodStart ?? null,
+        includedRemaining: proofUsage.includedRemaining ?? null,
+        topUpRemaining: proofUsage.topUpRemaining ?? proofUsage.extraCredits ?? 0,
+        topUpRetainedWhileInactive: proofUsage.topUpRetainedWhileInactive ?? 0,
+        canSpendTopUps: proofUsage.canSpendTopUps ?? null,
+      },
+      topUpGrants: creditGrants.map((grant) => ({
+        skuSlug: grant.skuSlug,
+        packName: topUpPackName(grant.skuSlug, grant.credits),
+        remainingCredits: grant.credits,
+        grantedAt: grant.grantedAt,
+        expiresAt: grant.expiresAt,
+      })),
+    },
     items,
     counts: {
       competitors: competitorCount,
@@ -286,4 +370,11 @@ export async function getWorkspaceReadiness(
       hasPaymentIssue: hasBillingPaymentIssue,
     }),
   };
+}
+
+function topUpPackName(skuSlug: string | null | undefined, credits: number) {
+  if (skuSlug && skuSlug in TOP_UP_PACK_DISPLAY) {
+    return TOP_UP_PACK_DISPLAY[skuSlug as keyof typeof TOP_UP_PACK_DISPLAY].name;
+  }
+  return `${credits.toLocaleString("en-IN")} check pack`;
 }

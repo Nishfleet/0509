@@ -445,7 +445,7 @@ export default function AccountRoute() {
           </Form>
         ) : (
           <p className="f9-muted-copy">
-            Branded reports are part of Agency. <a href="/#pricing">See plans</a>
+            Branded reports are part of Agency. <a href="/app/billing?source=branding#plans">See plans</a>
           </p>
         )}
       </article>

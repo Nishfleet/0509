@@ -487,7 +487,11 @@ describe("MCP route", () => {
     });
     expect(body.result.content[0]?.text).toContain("Delivery proof");
     expect(JSON.stringify(body)).not.toContain("encryptedWebhookUrl");
-    expect(mocks.getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "user-1");
+    expect(mocks.getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      isMember: false,
+      billingOwnerName: null,
+      canManageBilling: true,
+    });
   });
 
   it("returns credential-free Meta source retest results through MCP", async () => {

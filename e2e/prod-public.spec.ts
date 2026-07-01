@@ -105,6 +105,73 @@ async function expectPublicGetTargetReachable(
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).toBeLessThan(500);
 }
 
+async function mockPricingPreview(page: import("@playwright/test").Page) {
+  await page.route("**/api/pricing-preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        available: true,
+        country: "US",
+        prices: {
+          scout: {
+            monthly: { display: "$19", currency: "USD", billingCountry: "US" },
+            yearly: { display: "$152", currency: "USD", billingCountry: "US" },
+          },
+          starter: {
+            monthly: { display: "$59", currency: "USD", billingCountry: "US" },
+            yearly: { display: "$472", currency: "USD", billingCountry: "US" },
+          },
+          agency: {
+            monthly: { display: "$199", currency: "USD", billingCountry: "US" },
+            yearly: { display: "$1,592", currency: "USD", billingCountry: "US" },
+          },
+        },
+        annualValidation: {
+          scout: {
+            valid: true,
+            reason: "valid_4_months_free",
+            monthlyAmount: 1900,
+            annualAmount: 15200,
+            expectedAnnualAmount: 15200,
+            currency: "USD",
+            billingCountry: "US",
+          },
+          starter: {
+            valid: true,
+            reason: "valid_4_months_free",
+            monthlyAmount: 5900,
+            annualAmount: 47200,
+            expectedAnnualAmount: 47200,
+            currency: "USD",
+            billingCountry: "US",
+          },
+          agency: {
+            valid: true,
+            reason: "valid_4_months_free",
+            monthlyAmount: 19900,
+            annualAmount: 159200,
+            expectedAnnualAmount: 159200,
+            currency: "USD",
+            billingCountry: "US",
+          },
+        },
+      }),
+    });
+  });
+}
+
+function expectSignedOutPlanIntent(href: string | null, cycle: "monthly" | "yearly") {
+  expect(href).toBeTruthy();
+  const target = new URL(href!, "https://0509.io");
+  expect(target.pathname).toBe("/auth/signup");
+  const redirectTo = target.searchParams.get("redirectTo") ?? "";
+  expect(redirectTo).toContain("/app/billing");
+  expect(redirectTo).toContain(`cycle=${cycle}`);
+  expect(redirectTo).toContain("source=pricing");
+  expect(redirectTo).toContain("#plans");
+}
+
 test.describe("public production-safe E2E smoke", () => {
   test("public pages and machine-readable surfaces render without auth", async ({ page, baseURL, request }) => {
     await gotoPublicPage(page, "/");
@@ -163,6 +230,29 @@ test.describe("public production-safe E2E smoke", () => {
       await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
     }
+  });
+
+  test("public pricing preserves monthly and annual plan intent for signed-out buyers", async ({ page, baseURL }) => {
+    test.skip(
+      isProductionBaseURL(baseURL),
+      "Branch pricing-intent UI is verified in preview before deploy, then covered by canaries after deploy.",
+    );
+    await mockPricingPreview(page);
+    await gotoPublicPage(page, "/");
+
+    await expect(page.getByRole("link", { name: "Choose monthly" }).first()).toBeVisible();
+    expectSignedOutPlanIntent(
+      await page.getByRole("link", { name: "Choose monthly" }).first().getAttribute("href"),
+      "monthly",
+    );
+
+    await page.getByRole("button", { name: "Annual" }).click();
+    await expect(page.getByRole("link", { name: "Choose annual" }).first()).toBeVisible();
+    expectSignedOutPlanIntent(
+      await page.getByRole("link", { name: "Choose annual" }).first().getAttribute("href"),
+      "yearly",
+    );
+    await expectNoHorizontalOverflow(page);
   });
 
   test("public buttons and links route to valid actions without sending side effects", async ({ page, baseURL, request }) => {

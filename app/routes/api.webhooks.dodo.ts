@@ -14,6 +14,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     extractDodoPlanGrant,
+    extractDodoPlanCheckoutFailure,
     extractDodoPlanRevocation,
     extractDodoProofCreditGrant,
     extractDodoRefund,
@@ -27,6 +28,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     applyDodoProofCreditGrantWithLedger,
     applyDodoRefundWithWatchlistReconcile,
     beginDodoWebhookEventProcessing,
+    clearDodoPlanCheckout,
     failDodoWebhookEventProcessing,
     finalizeDodoWebhookLedgerOnly,
     getUserIdForDodoPayment,
@@ -119,6 +121,46 @@ export async function action({ context, request }: ActionFunctionArgs) {
         metadata: { action: "plan_grant", userId: planGrant.userId, plan: planGrant.plan },
         body: { ok: true },
       };
+    }
+
+    const checkoutFailure = extractDodoPlanCheckoutFailure(env, payload);
+    if (checkoutFailure) {
+      let clearedCheckout = false;
+      if (checkoutFailure.checkoutId) {
+        clearedCheckout = await clearDodoPlanCheckout(env, checkoutFailure.userId, {
+          checkoutId: checkoutFailure.checkoutId,
+          occurredAt: checkoutFailure.failedAt,
+        });
+      }
+      const shouldDeferSubscriptionFailureToLifecycle =
+        checkoutFailure.eventType === "subscription.failed" && !clearedCheckout;
+      // Dodo also emits subscription.failed for active subscription payment
+      // issues. Only classify it as checkout failure when it cleared the
+      // matching pending checkout lock.
+      if (!shouldDeferSubscriptionFailureToLifecycle) {
+        await finalizeDodoWebhookLedgerOnly(env, {
+          ...ledgerBase,
+          outcome: "processed",
+          metadata: {
+            action: "checkout_failure",
+            checkoutId: checkoutFailure.checkoutId,
+            userId: checkoutFailure.userId,
+            eventType: checkoutFailure.eventType,
+            status: checkoutFailure.status,
+          },
+        });
+        return {
+          outcome: "processed",
+          metadata: {
+            action: "checkout_failure",
+            checkoutId: checkoutFailure.checkoutId,
+            userId: checkoutFailure.userId,
+            eventType: checkoutFailure.eventType,
+            status: checkoutFailure.status,
+          },
+          body: { ok: true, checkoutFailure: true },
+        };
+      }
     }
 
     const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);

@@ -72,7 +72,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     "~/lib/data.server"
   );
   const env = getEnv(context);
-  const { workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId, isMember, ownerName } = await requireWorkspaceSession(env, request);
   const checkoutReturn = new URL(request.url).searchParams.get("checkout") === "dodo";
   const { listWorkspaceMembers } = await import("~/lib/workspace.server");
   const [
@@ -97,7 +97,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getProofUsageSummary(env, workspaceUserId),
     getUserPlanBillingInfo(env, workspaceUserId),
     listWorkspaceMembers(env, workspaceUserId),
-    getWorkspaceReadiness(env, workspaceUserId),
+    getWorkspaceReadiness(env, workspaceUserId, {
+      isMember,
+      billingOwnerName: ownerName,
+      canManageBilling: !isMember,
+    }),
     listActionableCounterMoveFollowUps(env, workspaceUserId, listRecentAgentActionAudits),
   ]);
   const plan = billingInfo.plan;
@@ -267,7 +271,7 @@ export default function AppDashboardRoute() {
       (item) => item.status !== "ready" && item.status !== "not_applicable",
     ) ?? [];
   const retentionMoves = (workspaceReadiness?.nudges ?? []).filter(
-    (nudge) => nudge.priority !== "low" || nudge.id !== "billing_support",
+    (nudge) => nudge.priority !== "low",
   );
   const marketDeskBrief = buildMarketDeskBrief({
     watchlists,
@@ -321,7 +325,7 @@ export default function AppDashboardRoute() {
             </p>
           </div>
           <div className="f9-checkout-banner-actions">
-            <Link className="f9-primary-button" to="/#pricing">
+            <Link className="f9-primary-button" to="/app/billing?source=dashboard#plans">
               View plans
             </Link>
             <Link className="f9-secondary-button" to="/search">
@@ -330,6 +334,49 @@ export default function AppDashboardRoute() {
           </div>
         </article>
       ) : null}
+
+      <article className="f9-app-panel f9-dashboard-hero">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">{marketDeskBrief.kicker}</span>
+            <h2>{marketDeskBrief.title}</h2>
+            <p className="f9-muted-copy">{marketDeskBrief.summary}</p>
+          </div>
+          <Link className="f9-primary-button" to={marketDeskBrief.action.href}>
+            {marketDeskBrief.action.label}
+          </Link>
+        </div>
+
+        {marketDeskBrief.items.length > 0 ? (
+          <div className="f9-brief-snapshot" aria-label="Market Desk Brief details">
+            {marketDeskBrief.items.map((item) => (
+              <article key={`${item.label}:${item.title}`}>
+                <span>{item.label}</span>
+                <strong>{item.title}</strong>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        <Form action="/search" className="f9-dashboard-search" method="get">
+          <label className="f9-field" htmlFor="dashboard-market-search">
+            <span>Competitor website</span>
+            <input
+              autoComplete="url"
+              id="dashboard-market-search"
+              inputMode="url"
+              name="website"
+              placeholder="https://competitor.com"
+              spellCheck={false}
+              type="text"
+            />
+          </label>
+          <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
+            Search ads
+          </SubmitButton>
+        </Form>
+      </article>
 
       {readinessGaps.length > 0 ? (
         <article className="f9-app-panel">
@@ -387,49 +434,6 @@ export default function AppDashboardRoute() {
           </div>
         </article>
       ) : null}
-
-      <article className="f9-app-panel f9-dashboard-hero">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">{marketDeskBrief.kicker}</span>
-            <h2>{marketDeskBrief.title}</h2>
-            <p className="f9-muted-copy">{marketDeskBrief.summary}</p>
-          </div>
-          <Link className="f9-primary-button" to={marketDeskBrief.action.href}>
-            {marketDeskBrief.action.label}
-          </Link>
-        </div>
-
-        {marketDeskBrief.items.length > 0 ? (
-          <div className="f9-brief-snapshot" aria-label="Market Desk Brief details">
-            {marketDeskBrief.items.map((item) => (
-              <article key={`${item.label}:${item.title}`}>
-                <span>{item.label}</span>
-                <strong>{item.title}</strong>
-                <p>{item.detail}</p>
-              </article>
-            ))}
-          </div>
-        ) : null}
-
-        <Form action="/search" className="f9-dashboard-search" method="get">
-          <label className="f9-field" htmlFor="dashboard-market-search">
-            <span>Competitor website</span>
-            <input
-              autoComplete="url"
-              id="dashboard-market-search"
-              inputMode="url"
-              name="website"
-              placeholder="https://competitor.com"
-              spellCheck={false}
-              type="text"
-            />
-          </label>
-          <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
-            Search ads
-          </SubmitButton>
-        </Form>
-      </article>
 
       {hasDashboardMetrics ? (
         <div className="f9-dashboard-metrics" aria-label="Account summary">
@@ -509,7 +513,7 @@ export default function AppDashboardRoute() {
               ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
               : " Add an overflow pack before the next busy campaign."}
           </p>
-          <Link className="f9-secondary-button" to="/#pricing">
+          <Link className="f9-secondary-button" to="/app/billing?source=evidence#top-ups">
             Review capacity
           </Link>
         </article>
@@ -522,7 +526,7 @@ export default function AppDashboardRoute() {
             {"error" in actionData && actionData.error === "plan_limit_exceeded" ? (
               <>
                 {" "}
-                <Link to="/#pricing">View plans</Link> to raise the limit.
+                <Link to="/app/billing?source=dashboard-limit#plans">View plans</Link> to raise the limit.
               </>
             ) : null}
           </p>
@@ -818,7 +822,7 @@ function CheckoutReturnBanner(props: { plan: string }) {
           </p>
         </div>
         <div className="f9-checkout-banner-actions">
-          <Link className="f9-secondary-button" to="/app?checkout=dodo">
+          <Link className="f9-secondary-button" to="/app/billing?checkout=dodo&kind=plan">
             Check again
           </Link>
         </div>
