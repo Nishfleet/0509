@@ -39,7 +39,7 @@ describe("final launch documentation", () => {
     expect(ownerActions).toContain("MANUAL PASS / ALERT UNPROVEN");
     expect(backupUptime).toContain(".github/workflows/uptime-health.yml");
     expect(uptimeWorkflow).toContain("https://0509.io/api/health");
-    expect(uptimeWorkflow).toContain('cron: "*/5 * * * *"');
+    expect(uptimeWorkflow).toContain('cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"');
     expect(ownerActions).toContain("D1-to-R2 scheduled backup");
     expect(ownerActions).toContain("REPO CONFIGURED / OWNER SECRET");
     expect(scorecard).toContain("Restore drill");

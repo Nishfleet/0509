@@ -16,7 +16,7 @@ Items below were **not completed by the launch-hardening code run**. They requir
 
 **Status:** REPO CONFIGURED — FIRST RUN / ALERT PROOF STILL OWNER-VERIFIED
 
-1. `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health` every 5 minutes without secrets.
+1. `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health` on an offset five-minute schedule without secrets.
 2. Done: manual run `28540913266` passed on `main`.
 3. Confirm scheduled runs appear on `main`.
 4. Confirm failed-run notifications reach the intended inbox.
