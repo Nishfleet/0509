@@ -67,7 +67,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Local authenticated browser E2E: passed, 9 tests, including mobile billing cycle selection and overflow checks.
 - Public preview browser E2E: passed, 5 tests, including signed-out monthly and annual pricing intent with mocked preview data.
 - Production public E2E: passed, 3 tests with 2 preview-only tests skipped until branch deployment.
-- Deployed production Dodo pricing canary: reached live Dodo and passed monthly/top-up availability for IN, US, and GB, but failed annual validation for Scout and Starter because annual amount does not equal monthly amount x 8 in any checked country. The app fail-closes those annual CTAs; monthly checkout remains available.
+- Deployed production Dodo pricing canary: reached live Dodo and passed monthly/top-up availability for IN, US, and GB. The initial post-deploy annual canary failed because the Dodo annual product prices did not equal monthly x 8 in the checked pricing contexts; the follow-up Dodo provider repair now has annual Scout/Starter passing in IN, US, and GB.
 - Dodo billing canary after deploy: passed for plan webhook, proof-credit webhook, and cleanup.
 - Proof canary after deploy: passed.
 - Production readiness canary after deploy: passed for `0509.io`, `www.0509.io`, `api.0509.io`, fresh-live bypass, ops readiness, and Meta Ads beta.
@@ -87,7 +87,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 
 - CE code review synthesis and accepted fixes: completed.
 - Autoreview rerun on the final diff: completed clean.
-- Strict Dodo pricing canary against production with real Dodo bindings: failed because live Scout and Starter annual prices do not validate as `4 months free`.
+- Strict Dodo pricing canary against production with real Dodo bindings: completed after the Dodo provider repair; monthly, annual, and top-up prices validate in IN, US, and GB.
 - Presence website smoke under current GA rollout: completed.
 - Production authenticated E2E with internal account state: completed.
 - Search V2 dogfood or equivalent production-safe smoke: completed via provider bakeoff launch check.
@@ -99,9 +99,9 @@ Track the customer-facing commercial-delight release from staged implementation 
 
 - Provider fixture and signed webhook coverage: plan grant, subscription lifecycle, top-up grant, refund, duplicate/terminal checkout failure, retryable failure, and lock cleanup covered by tests/canaries.
 - Live/customer payment completion: not performed; no real customer card or subscription was used.
-- Owner/manual payment action: Dodo annual SKU pricing correction is required before annual checkout can be called live.
+- Owner/manual payment action: Dodo annual SKU pricing was corrected through Dodo's documented localized pricing flow before annual checkout was called live.
 - Monthly checkout: covered by route tests, checkout-return tests, and deployed live Dodo pricing canary proof in IN, US, and GB.
-- Annual checkout: covered by route tests and deployed live Dodo pricing canary proof that the app correctly fails annual closed when Dodo annual pricing does not meet the `4 months free` rule. Live annual checkout is not ready until Dodo annual SKU pricing is corrected.
+- Annual checkout: covered by route tests and deployed live Dodo pricing canary proof. Dodo now serves Scout/Starter annual prices that validate as `4 months free` in IN, US, and GB.
 
 ## Deployment
 
@@ -112,10 +112,9 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Worker deployment: `ad02524f-866a-4ef8-b2b6-d58040e94679`, serving version `cab91367-2fe1-46df-845e-33ec104186c2` at 100%.
 - Rollback Worker deployment: `f2b89e7a-cdf1-4f17-9cd3-dc5ec1d7731f`, serving version `bbd9c75c-84ff-4c2b-a1ca-5a36a93931c9` at 100% before the PR #271 deploy.
 - Deploy script checks: public-home source/current, D1 sync, production build, Wrangler deploy, live public-home, and Google OAuth branding guard all completed. Google OAuth branding check skipped because the provider is hidden/disabled.
-- Post-PR #271 production checks: Presence website canary passed, authenticated production smoke passed with fresh local internal-account auth state, billing canary passed, proof canary passed, production surface canary passed, and Dodo pricing canary reached live Dodo with monthly/top-up availability passing while annual Scout/Starter correctly failed closed on the Dodo annual amount mismatch.
+- Post-PR #271 production checks: Presence website canary passed, authenticated production smoke passed with fresh local internal-account auth state, billing canary passed, proof canary passed, production surface canary passed, and Dodo pricing canary reached live Dodo. After the Dodo provider repair, monthly, annual, and top-up pricing validate in IN, US, and GB.
 
 ## Owner Actions
 
 - None currently known for monthly checkout.
-- `DODO ANNUAL SKU CONFIG REQUIRED: scout_annual_v1` — live annual price must equal 8x monthly for each localized Dodo pricing context before Scout annual checkout can go live.
-- `DODO ANNUAL SKU CONFIG REQUIRED: starter_annual_v1` — live annual price must equal 8x monthly for each localized Dodo pricing context before Starter annual checkout can go live.
+- None currently known for annual Scout/Starter checkout after the Dodo localized pricing repair.
