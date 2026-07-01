@@ -93,7 +93,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Search V2 dogfood or equivalent production-safe smoke: completed via provider bakeoff launch check.
 - Bugbot/Cursor review: accepted findings fixed; final PR head had no new final-push comments and Bugbot completed neutral/skipped.
 - Protected PR, CI, merge, merged-main validation, deploy, production smokes, and Worker rollback version: completed.
-- Docs-only provenance PR: this branch.
+- Follow-up proof-gate PR #271 and production deploy: completed.
 
 ## Payments Tested
 
@@ -105,12 +105,14 @@ Track the customer-facing commercial-delight release from staged implementation 
 
 ## Deployment
 
-- Deployment status: deployed to production on 2026-07-01.
-- Runtime merge commit: `cb70aa24155f25174a3f0b29e0b5bc4d36799983`.
-- Feature head commit merged by PR 269: `c858855254ccc2bdd2e3f5dd64da21ef4aefded6`.
-- Worker deployment: `f2b89e7a-cdf1-4f17-9cd3-dc5ec1d7731f`, serving version `bbd9c75c-84ff-4c2b-a1ca-5a36a93931c9` at 100%.
-- Rollback Worker deployment: `ffd298a9-b911-49ca-8045-83f5e0e57aab`, serving version `95dab354-b270-449e-a221-9c2434b8cc23` at 100% before this release.
+- Deployment status: deployed to production on 2026-07-01 after PR #271.
+- Runtime merge commit: `9bef0c3f0a6778abda4739c7abc4ab029f7fc764`.
+- Commercial feature head commit merged by PR #269: `c858855254ccc2bdd2e3f5dd64da21ef4aefded6`.
+- Proof-gate follow-up head commit merged by PR #271: `e11a50b703ad99643aa06da6222d01169056c0ec`.
+- Worker deployment: `ad02524f-866a-4ef8-b2b6-d58040e94679`, serving version `cab91367-2fe1-46df-845e-33ec104186c2` at 100%.
+- Rollback Worker deployment: `f2b89e7a-cdf1-4f17-9cd3-dc5ec1d7731f`, serving version `bbd9c75c-84ff-4c2b-a1ca-5a36a93931c9` at 100% before the PR #271 deploy.
 - Deploy script checks: public-home source/current, D1 sync, production build, Wrangler deploy, live public-home, and Google OAuth branding guard all completed. Google OAuth branding check skipped because the provider is hidden/disabled.
+- Post-PR #271 production checks: Presence website canary passed, authenticated production smoke passed with fresh local internal-account auth state, billing canary passed, proof canary passed, production surface canary passed, and Dodo pricing canary reached live Dodo with monthly/top-up availability passing while annual Scout/Starter correctly failed closed on the Dodo annual amount mismatch.
 
 ## Owner Actions
 
