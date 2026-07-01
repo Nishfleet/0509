@@ -131,6 +131,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           allowMissingStoredCheckoutId: Boolean(checkoutFailure.checkoutId),
           checkoutId: checkoutFailure.checkoutId,
           occurredAt: checkoutFailure.failedAt,
+          requireMissingStoredCheckoutId: !checkoutFailure.checkoutId,
         });
       }
       const shouldDeferSubscriptionFailureToLifecycle =
@@ -235,6 +236,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         ) {
           const clearedCheckout = await clearDodoPlanCheckout(env, userId, {
             occurredAt: revocation.revokedAt,
+            requireMissingStoredCheckoutId: true,
           });
           if (clearedCheckout) {
             await finalizeDodoWebhookLedgerOnly(env, {

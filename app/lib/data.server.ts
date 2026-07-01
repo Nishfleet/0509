@@ -2797,6 +2797,7 @@ export async function clearDodoPlanCheckout(
     allowMissingStoredCheckoutId?: boolean;
     occurredAt?: string | null;
     checkoutId?: string | null;
+    requireMissingStoredCheckoutId?: boolean;
   } = {},
 ) {
   const occurredAt = validIsoTimestamp(options.occurredAt ?? undefined);
@@ -2808,7 +2809,9 @@ export async function clearDodoPlanCheckout(
     ? options.allowMissingStoredCheckoutId
       ? "\n        AND (dodo_payment_id = ? OR dodo_payment_id IS NULL)"
       : "\n        AND dodo_payment_id = ?"
-    : "";
+    : options.requireMissingStoredCheckoutId
+      ? "\n        AND dodo_payment_id IS NULL"
+      : "";
   const timestampGuard = occurredAt
     ? "\n        AND (plan_updated_at IS NULL OR julianday(plan_updated_at) <= julianday(?))"
     : "";
