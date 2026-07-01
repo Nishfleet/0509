@@ -58,8 +58,8 @@ Track the customer-facing commercial-delight release from staged implementation 
 
 ## Verification
 
-- Focused billing/API/checkout/webhook/data tests after final Bugbot fixes: passed, 18 files / 303 tests.
-- Full unit/integration tests: passed, 161 files / 1576 tests.
+- Focused billing/API/checkout/webhook/data tests after final Bugbot fixes: passed, 18 files / 305 tests.
+- Full unit/integration tests: passed, 161 files / 1578 tests.
 - Typecheck: passed.
 - Production build: passed.
 - Local authenticated browser E2E: passed, 9 tests, including mobile billing cycle selection and overflow checks.
@@ -74,7 +74,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Presence website canary: failed because `PRESENCE_INTERNAL_WORKSPACE_ID` is not present in the available environment.
 - D1 backup validation: passed.
 - Local and remote D1 migration lists: passed with no pending migrations.
-- Autoreview: found and fixed retryable `payment.failed` checkout-lock classification, cancelled-checkout retry copy mismatch, checkout-session fees-inclusive parity, pending-checkout CTA state, dashboard member readiness context, checkout-id gating for `subscription.failed`, Dodo-return pending-banner conflict, active-subscription `subscription.failed` payment-issue preservation, stale free-plan billing intervals, Dodo preview billing-country mismatch handling, Dodo-return false plan-success confirmation, no-checkout-id terminal failure cleanup, and legacy monthly plan-return compatibility. Final rerun clean with no accepted/actionable findings.
+- Autoreview: found and fixed retryable `payment.failed` checkout-lock classification, cancelled-checkout retry copy mismatch, checkout-session fees-inclusive parity, pending-checkout CTA state, dashboard member readiness context, checkout-id gating for `subscription.failed`, Dodo-return pending-banner conflict, active-subscription `subscription.failed` payment-issue preservation, stale free-plan billing intervals, Dodo preview billing-country mismatch handling, Dodo-return false plan-success confirmation, no-checkout-id terminal failure cleanup, guarded checkout-id-or-missing-id terminal cleanup, and short-window legacy monthly plan-return compatibility. Final rerun clean with no accepted/actionable findings.
 - CE code review: final targeted correctness and agent-native findings accepted and fixed.
 - Bugbot/Cursor review: found four post-PR checkout issues; accepted fixes are included for billing preview country parity, signed no-id terminal checkout cleanup, `subscription.failed` pending-lock cleanup, and false plan-return success.
 - Staged diff check: passed.

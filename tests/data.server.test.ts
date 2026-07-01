@@ -1408,6 +1408,29 @@ describe("Dodo billing persistence", () => {
     ]);
   });
 
+  it("can clear checkout locks with a matching id or missing stored id", async () => {
+    const mock = createMockDb();
+
+    await clearDodoPlanCheckout(
+      { DB: mock.db } as never,
+      "user-1",
+      {
+        allowMissingStoredCheckoutId: true,
+        checkoutId: "checkout_1",
+        occurredAt: "2026-07-01T08:00:00.000Z",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "checkout_pending");
+    expect(statement?.sql).toContain("(dodo_payment_id = ? OR dodo_payment_id IS NULL)");
+    expect(statement?.sql).toContain("julianday(plan_updated_at) <= julianday(?)");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "checkout_1",
+      "2026-07-01T08:00:00.000Z",
+    ]);
+  });
+
   it("derives the billing interval from the Dodo product id", async () => {
     const mock = createMockDb([
       {

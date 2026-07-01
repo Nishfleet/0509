@@ -24,6 +24,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
   vi.doUnmock("react-router");
@@ -361,6 +362,8 @@ describe("billing page", () => {
   });
 
   it("marks a legacy monthly plan return as confirmed only when it matches current billing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T10:05:00.000Z"));
     mockBillingLoaderDependencies({
       billing: {
         plan: "starter",
@@ -381,6 +384,33 @@ describe("billing page", () => {
     expect(result).toMatchObject({
       checkoutReturned: true,
       legacyPlanReturnConfirmed: true,
+      pendingCheckout: false,
+    });
+  });
+
+  it("does not confirm a stale bookmarked legacy monthly return", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T10:30:00.000Z"));
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "starter",
+        dodoStatus: "succeeded",
+        dodoProductId: null,
+        billingInterval: "monthly",
+        planUpdatedAt: "2026-07-01T10:01:00.000Z",
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=dodo&kind=plan&plan=starter&cycle=monthly"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      checkoutReturned: true,
+      legacyPlanReturnConfirmed: false,
       pendingCheckout: false,
     });
   });

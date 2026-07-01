@@ -2793,14 +2793,22 @@ export async function claimDodoPlanCheckout(
 export async function clearDodoPlanCheckout(
   env: AppEnv,
   userId: string,
-  options: { occurredAt?: string | null; checkoutId?: string | null } = {},
+  options: {
+    allowMissingStoredCheckoutId?: boolean;
+    occurredAt?: string | null;
+    checkoutId?: string | null;
+  } = {},
 ) {
   const occurredAt = validIsoTimestamp(options.occurredAt ?? undefined);
   const checkoutId =
     typeof options.checkoutId === "string" && options.checkoutId.trim()
       ? options.checkoutId.trim()
       : null;
-  const checkoutGuard = checkoutId ? "\n        AND dodo_payment_id = ?" : "";
+  const checkoutGuard = checkoutId
+    ? options.allowMissingStoredCheckoutId
+      ? "\n        AND (dodo_payment_id = ? OR dodo_payment_id IS NULL)"
+      : "\n        AND dodo_payment_id = ?"
+    : "";
   const timestampGuard = occurredAt
     ? "\n        AND (plan_updated_at IS NULL OR julianday(plan_updated_at) <= julianday(?))"
     : "";
