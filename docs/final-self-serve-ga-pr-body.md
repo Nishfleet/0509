@@ -58,7 +58,7 @@ Latest branch proof recorded in the scorecard:
 - `npm run launch:readiness` passed with local canary env exported.
 - Final autoreview passed with no accepted/actionable findings.
 
-Presence website canary remains owner-blocked because the local internal Presence workspace id is not configured.
+Presence website canary now follows the current GA rollout and runs without requiring the old internal workspace id.
 
 ## Owner Actions
 
@@ -67,7 +67,6 @@ These are not proven by repo code alone:
 - Confirm Dodo Product Collection membership for Scout/Starter, the subscription-update setting, and cancellation availability in the customer portal.
 - Confirm an external uptime monitor for `https://0509.io/api/health`.
 - Activate or explicitly defer D1-to-R2 scheduled backup and restore drill.
-- Provide internal Presence workspace config and rerun `npm run canary:presence`.
 - Monitor the next live Agency fan-out window for dispatch failures and real scan completion.
 - Confirm Cloudflare Email activity/log visibility.
 - Review unsupported WhatsApp stored targets without destructive cleanup.
