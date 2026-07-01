@@ -19,6 +19,9 @@ describe("final launch documentation", () => {
     );
     expect(scorecard).toContain("Dodo's documented by-currency localized pricing mode");
     expect(scorecard).toContain("redacted Dodo API product proof confirmed");
+    expect(scorecard).toContain("Dodo Product Collection membership is now configured");
+    expect(ownerActions).toContain("Product Collection membership is configured");
+    expect(launchReadiness).toContain("Five to Nine Product Collection");
     expect(scorecard).toContain("Latest commercial proof-gate deploy");
     expect(scorecard).toContain("No migrations to apply");
     expect(scorecard).toContain("D1 cleanup evidence");
