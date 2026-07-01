@@ -47,7 +47,27 @@ npx wrangler d1 execute 0509-restore-test --remote --file "$RESTORE_DIR/restore.
 Never execute a restore file against the production `0509` database without
 Nish's explicit go-ahead.
 
-## Uptime monitoring (needs Nish, ~2 minutes)
+## Uptime monitoring
+
+### Repo-configured GitHub health workflow
+
+`.github/workflows/uptime-health.yml` checks `https://0509.io/api/health`
+every 5 minutes and can be run manually from GitHub Actions. It uses no
+secrets or private canary tokens. The check passes only when the endpoint
+returns HTTP 200 JSON with `status: "ok"` and `app: "0509"`.
+
+GitHub documents 5 minutes as the shortest scheduled workflow interval, with
+scheduled workflows running on the latest default-branch commit. GitHub also
+routes scheduled-workflow notifications based on the workflow creator or the
+user who last changes the cron schedule. Because of that, this repo-configured
+check is not fully proven until an owner/operator confirms:
+
+1. The workflow exists on `main` after merge.
+2. A manual run succeeds.
+3. A scheduled run appears at roughly the configured cadence.
+4. Failed-run notifications reach the intended inbox.
+
+### Independent external monitor option
 
 Cloudflare has no free externally-initiated health checks, and a Worker
 can't reliably monitor itself. Recommended: [UptimeRobot](https://uptimerobot.com)
@@ -63,7 +83,7 @@ The endpoint is public and unauthenticated by design. It does **not** query D1 â
 
 ### Owner verification (no API token)
 
-This gate cannot be automated from the repo without an UptimeRobot API key. Nish verifies manually:
+This stronger independent gate cannot be automated from the repo without an UptimeRobot API key. Nish verifies manually:
 
 1. Sign in to the [UptimeRobot dashboard](https://uptimerobot.com/dashboard).
 2. Confirm a monitor named for 0509 (or similar) targets **`https://0509.io/api/health`**.

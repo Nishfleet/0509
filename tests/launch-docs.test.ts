@@ -13,6 +13,8 @@ describe("final launch documentation", () => {
     const ownerActions = readDoc("docs/ga-owner-actions.md");
     const launchReadiness = readDoc("docs/launch-readiness.md");
     const backupUptime = readDoc("docs/ops-backup-uptime.md");
+    const planCatalog = readDoc("docs/plan-catalog.md");
+    const uptimeWorkflow = readDoc(".github/workflows/uptime-health.yml");
 
     expect(scorecard).toContain(
       "SCOUT/STARTER MONTHLY AND ANNUAL, TOP-UPS, AND AGENCY SELF-SERVE RELEASED",
@@ -20,6 +22,8 @@ describe("final launch documentation", () => {
     expect(scorecard).toContain("Dodo's documented by-currency localized pricing mode");
     expect(scorecard).toContain("redacted Dodo API product proof confirmed");
     expect(scorecard).toContain("Dodo Product Collection membership is now configured");
+    expect(planCatalog).toContain("Dodo checkout, signed-webhook billing, top-ups");
+    expect(planCatalog).toContain("prices load from Dodo at runtime");
     expect(ownerActions).toContain("Product Collection membership is configured");
     expect(launchReadiness).toContain("Five to Nine Product Collection");
     expect(scorecard).toContain("Latest commercial proof-gate deploy");
@@ -29,6 +33,11 @@ describe("final launch documentation", () => {
     expect(progress).toContain("Post-cleanup canaries passed again");
     expect(ownerActions).toContain("Completed release actions");
     expect(ownerActions).toContain("Dodo customer portal subscription updates");
+    expect(ownerActions).toContain("Uptime health workflow");
+    expect(launchReadiness).toContain("first scheduled uptime run and notification path remain unproven");
+    expect(backupUptime).toContain(".github/workflows/uptime-health.yml");
+    expect(uptimeWorkflow).toContain("https://0509.io/api/health");
+    expect(uptimeWorkflow).toContain('cron: "*/5 * * * *"');
     expect(ownerActions).toContain("D1-to-R2 scheduled backup");
     expect(ownerActions).toContain("REPO CONFIGURED / OWNER SECRET");
     expect(scorecard).toContain("Restore drill");
@@ -63,6 +72,9 @@ describe("final launch documentation", () => {
     expect(authoritativeDocs).not.toMatch(/0509-\d{4}-\d{2}-\d{2}T/i);
     expect(authoritativeDocs).not.toMatch(/\b1 user\b/i);
     expect(authoritativeDocs).not.toMatch(/\b3 not-validated/i);
+    expect(planCatalog).not.toContain("prices unconfigured");
+    expect(planCatalog).not.toContain("Checkout SKUs and amounts are unconfigured");
+    expect(planCatalog).not.toContain("Dodo product IDs for v1 plan and top-up SKUs remain owner-configured");
   });
 
   it("marks older launch scorecards as historical instead of current truth", () => {

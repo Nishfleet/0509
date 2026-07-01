@@ -1,12 +1,12 @@
 # Final Self-Serve GA Scorecard
 
-Last updated: 2026-07-01
+Last updated: 2026-07-02
 
 ## Verdict
 
 Current live verdict: SCOUT/STARTER MONTHLY AND ANNUAL, TOP-UPS, AND AGENCY SELF-SERVE RELEASED.
 
-Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Monthly checkout, annual checkout, and top-ups pass the live Dodo preview canary in IN, US, and GB. Scout/Starter monthly and annual products use Dodo's documented by-currency localized pricing mode where fixed USD/GBP amounts are needed, while INR remains the corrected base price. Dodo Product Collection membership is now configured for Scout/Starter monthly and annual portal plan changes. Backup scheduling is now repo-configured and restore proof exists locally, but GitHub backup secrets and the first scheduled backup run remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo subscription-update dashboard confirmation, external uptime monitor, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
+Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Monthly checkout, annual checkout, and top-ups pass the live Dodo preview canary in IN, US, and GB. Scout/Starter monthly and annual products use Dodo's documented by-currency localized pricing mode where fixed USD/GBP amounts are needed, while INR remains the corrected base price. Dodo Product Collection membership is now configured for Scout/Starter monthly and annual portal plan changes. Backup scheduling and an uptime health workflow are now repo-configured, and restore proof exists locally, but GitHub backup secrets, the first scheduled backup run, and the first scheduled uptime alert path remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo subscription-update dashboard confirmation, first uptime workflow run/notification proof or UptimeRobot confirmation, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
 
 ## Baseline
 
@@ -35,6 +35,7 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 | Dependency audit | PASS | `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilities |
 | Backup validator | PASS local dry-run | `node scripts/validate-d1-backup.mjs`; latest repo migration `0060_remove_legacy_billing_provider.sql` |
 | D1-to-R2 scheduled workflow | REPO CONFIGURED / OWNER SECRET | `.github/workflows/d1-backup-r2.yml` runs weekly/manual backup through `npm run backup:d1:r2`; required GitHub Cloudflare secrets were not listed locally, so first scheduled run is unproven; D1 export blocking risk documented |
+| Uptime health workflow | REPO CONFIGURED / FIRST RUN UNPROVEN | `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health` every 5 minutes and can be run manually without secrets; first scheduled run and GitHub failure-notification routing still need owner/operator confirmation |
 | Restore drill | PASS local | Post-cleanup backup imported into isolated SQLite; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed |
 | Diff whitespace | PASS | `git diff --check HEAD` |
 | Autoreview | PASS | Final staged autoreview clean; no accepted/actionable findings |
@@ -82,7 +83,7 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 The live release still has these owner/operator actions:
 
 1. Enable and confirm the Dodo subscription-update dashboard setting, then verify plan-change and cancellation behavior in an internal customer portal session.
-2. Confirm external uptime monitoring on `https://0509.io/api/health`.
+2. Confirm the first scheduled uptime workflow run and failure-notification path, or keep/add UptimeRobot as the stronger independent external monitor for `https://0509.io/api/health`.
 3. Add GitHub Cloudflare secrets for the scheduled D1-to-R2 backup workflow, run it once, confirm a new R2 object, and decide R2 retention.
 4. Monitor the next nightly fan-out window for dispatch failures and real-customer scan completion.
 5. Confirm Cloudflare Email activity/log visibility in the Cloudflare dashboard.
