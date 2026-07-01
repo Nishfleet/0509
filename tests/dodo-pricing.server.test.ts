@@ -250,6 +250,73 @@ describe("Dodo 0509 pricing", () => {
     });
   });
 
+  it("does not cache filtered partial previews as complete", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          currency: "USD",
+          current_breakup: { total_amount: 1100 },
+          billing_country: "GB",
+          product_cart: [
+            {
+              product_id: "prod_cache_country_monthly",
+              is_subscription: true,
+              discounted_price: 1100,
+              tax_inclusive: false,
+            },
+          ],
+          total_tax: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          currency: "USD",
+          current_breakup: { total_amount: 1100 },
+          billing_country: "US",
+          product_cart: [
+            {
+              product_id: "prod_cache_country_monthly",
+              is_subscription: true,
+              discounted_price: 1100,
+              tax_inclusive: false,
+            },
+          ],
+          total_tax: 0,
+        }),
+      );
+
+    const env = {
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_cache_country_monthly",
+    };
+    const request = new Request("https://0509.io/api/pricing-preview") as Request & {
+      cf?: { country?: string };
+    };
+    request.cf = { country: "US" };
+
+    const filteredPreview = await previewDodo0509PlanPrices({
+      env,
+      request,
+      fetcher: fetcher as never,
+    });
+    const recoveredPreview = await previewDodo0509PlanPrices({
+      env,
+      request,
+      fetcher: fetcher as never,
+    });
+
+    expect(filteredPreview.prices.scout?.monthly).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(recoveredPreview.prices.scout?.monthly).toMatchObject({
+      billingCountry: "US",
+      currency: "USD",
+      display: "$11",
+    });
+  });
+
   it("bypasses the preview cache for private pricing canary requests", async () => {
     const fetcher = vi
       .fn()

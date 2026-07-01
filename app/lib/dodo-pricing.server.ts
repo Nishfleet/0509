@@ -324,8 +324,8 @@ export async function previewDodo0509PlanPrices({
 
   const expectedPreviewCount = configuredPlans.length + configuredBundles.length;
   const actualPreviewCount =
-    planEntries.filter(([, , price]) => Boolean(price?.display)).length +
-    bundleEntries.filter(([, price]) => Boolean(price?.display)).length;
+    configuredPlans.filter(({ planId, cycle }) => Boolean(prices[planId]?.[cycle]?.display)).length +
+    configuredBundles.filter(({ bundleId }) => Boolean(usageBundles[bundleId]?.display)).length;
   const previewIsComplete = expectedPreviewCount > 0 && actualPreviewCount === expectedPreviewCount;
 
   if (!skipCache && previewIsComplete) {

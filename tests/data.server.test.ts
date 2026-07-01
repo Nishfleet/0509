@@ -1452,6 +1452,119 @@ describe("Dodo billing persistence", () => {
     ]);
   });
 
+  it("can clear timestamp-matched stored checkout ids for no-id terminal failures", async () => {
+    const mock = createMockDb();
+
+    await clearDodoPlanCheckout(
+      { DB: mock.db } as never,
+      "user-1",
+      {
+        allowTimestampMatchedStoredCheckoutId: true,
+        occurredAt: "2026-07-01T08:00:00.000Z",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "checkout_pending");
+    expect(statement?.sql).not.toContain("dodo_payment_id IS NULL");
+    expect(statement?.sql).not.toContain("dodo_payment_id = ?");
+    expect(statement?.sql).toContain("julianday(plan_updated_at) <= julianday(?)");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "2026-07-01T08:00:00.000Z",
+    ]);
+  });
+
+  it("clears a UUID-backed pending checkout when a no-id failure timestamp matches it", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user_plan (
+          user_id TEXT PRIMARY KEY NOT NULL,
+          plan TEXT NOT NULL DEFAULT 'free',
+          dodo_payment_id TEXT,
+          dodo_status TEXT,
+          plan_updated_at TEXT
+        );
+        INSERT INTO user_plan (
+          user_id,
+          plan,
+          dodo_payment_id,
+          dodo_status,
+          plan_updated_at
+        ) VALUES (
+          'user-1',
+          'free',
+          'local-checkout-uuid',
+          'checkout_pending',
+          '2026-07-01T07:58:00.000Z'
+        );
+      `);
+
+      await clearDodoPlanCheckout(
+        { DB: sqlite.db } as never,
+        "user-1",
+        {
+          allowTimestampMatchedStoredCheckoutId: true,
+          occurredAt: "2026-07-01T08:00:00.000Z",
+        },
+      );
+
+      const row = sqlite.sqlite
+        .prepare("SELECT dodo_payment_id, dodo_status FROM user_plan WHERE user_id = ?")
+        .get("user-1") as { dodo_payment_id: string | null; dodo_status: string | null };
+      expect(row).toEqual({ dodo_payment_id: null, dodo_status: null });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("does not clear a newer UUID-backed pending checkout from an older no-id failure", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user_plan (
+          user_id TEXT PRIMARY KEY NOT NULL,
+          plan TEXT NOT NULL DEFAULT 'free',
+          dodo_payment_id TEXT,
+          dodo_status TEXT,
+          plan_updated_at TEXT
+        );
+        INSERT INTO user_plan (
+          user_id,
+          plan,
+          dodo_payment_id,
+          dodo_status,
+          plan_updated_at
+        ) VALUES (
+          'user-1',
+          'free',
+          'newer-local-checkout-uuid',
+          'checkout_pending',
+          '2026-07-01T08:02:00.000Z'
+        );
+      `);
+
+      await clearDodoPlanCheckout(
+        { DB: sqlite.db } as never,
+        "user-1",
+        {
+          allowTimestampMatchedStoredCheckoutId: true,
+          occurredAt: "2026-07-01T08:00:00.000Z",
+        },
+      );
+
+      const row = sqlite.sqlite
+        .prepare("SELECT dodo_payment_id, dodo_status FROM user_plan WHERE user_id = ?")
+        .get("user-1") as { dodo_payment_id: string | null; dodo_status: string | null };
+      expect(row).toEqual({
+        dodo_payment_id: "newer-local-checkout-uuid",
+        dodo_status: "checkout_pending",
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("derives the billing interval from the Dodo product id", async () => {
     const mock = createMockDb([
       {

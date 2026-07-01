@@ -275,10 +275,9 @@ describe("Dodo webhook route", () => {
 
     expect(await response.json()).toMatchObject({ ok: true, checkoutFailure: true });
     expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
-      allowMissingStoredCheckoutId: false,
+      allowTimestampMatchedStoredCheckoutId: true,
       checkoutId: null,
       occurredAt: "2026-07-01T08:00:00.000Z",
-      requireMissingStoredCheckoutId: true,
     });
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
       expect.anything(),
@@ -319,8 +318,8 @@ describe("Dodo webhook route", () => {
 
     expect(await response.json()).toMatchObject({ ok: true, checkoutFailure: true });
     expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      allowTimestampMatchedStoredCheckoutId: true,
       occurredAt: "2026-07-01T08:00:00.000Z",
-      requireMissingStoredCheckoutId: true,
     });
     expect(data.applyDodoPlanPaymentIssueWithLedger).not.toHaveBeenCalled();
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
