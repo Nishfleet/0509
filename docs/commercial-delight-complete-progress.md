@@ -16,13 +16,13 @@ Track the customer-facing commercial-delight release from staged implementation 
 
 - Audit artifact: `docs/commercial-delight-complete-audit.md`
 - Implementation plan: `docs/plans/2026-07-01-001-feat-commercial-delight-complete-plan.md`
-- Root cause: commercial surfaces were split across public pricing, checkout routes, onboarding, and billing usage. Signed-in customers could hit public pricing paths, annual billing had no fresh Dodo validation proof, and billing did not yet feel like the canonical in-app plan picker.
+- Root cause: commercial surfaces were split across public pricing, checkout routes, onboarding, and billing usage. Signed-in customers could hit public pricing paths, plan checkout needed fresh Dodo validation proof for both monthly and annual billing, and billing did not yet feel like the canonical in-app plan picker.
 
 ## Decisions
 
-- Dodo checkout preview remains the pricing source of truth.
-- Monthly, annual, and top-up checkout all fail closed unless the selected safe internal SKU validates through fresh Dodo preview.
-- The public `4 months free` claim is a Five to Nine business validation: annual amount must equal eight monthly periods in the same Dodo pricing context.
+- Dodo checkout preview remains the pricing source of truth for monthly, annual, and top-up checkout.
+- Monthly, annual, and top-up checkout each fail closed unless the selected safe internal SKU validates through fresh Dodo preview.
+- Annual checkout has one additional Five to Nine business validation: the public `4 months free` amount must equal eight monthly periods in the same Dodo pricing context.
 - Monthly checkout parity is required anywhere annual checkout is mentioned: route tests, return handling, and the pricing canary must prove both cycles.
 - Agency checkout remains held unless the existing commercial launch gate opens it.
 - Workspace members can view owner billing usage, but only the workspace owner can start checkout, buy top-ups, or open billing settings.
@@ -67,13 +67,15 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Local authenticated browser E2E: passed, 9 tests, including mobile billing cycle selection and overflow checks.
 - Public preview browser E2E: passed, 5 tests, including signed-out monthly and annual pricing intent with mocked preview data.
 - Production public E2E: passed, 3 tests with 2 preview-only tests skipped until branch deployment.
-- Dodo pricing canary: upgraded and intentionally strict. It currently fails against production because production has not deployed this branch and does not return `annualValidation`; it also cannot pass branch-local live preview on this machine because this worktree does not have Dodo API/product bindings. This is a post-branch-deploy gate, not proof to waive.
-- Dodo billing canary: passed for plan webhook, proof-credit webhook, and cleanup.
-- Proof canary: passed.
-- Production readiness canary: passed.
-- Provider bakeoff launch check: passed for the current 0509 provider path; alternate providers skipped due missing provider tokens.
-- Presence pilot canary: passed.
-- Presence website canary: failed because `PRESENCE_INTERNAL_WORKSPACE_ID` is not present in the available environment.
+- Deployed production Dodo pricing canary: reached live Dodo and passed monthly/top-up availability for IN, US, and GB, but failed annual validation for Scout and Starter because annual amount does not equal monthly amount x 8 in any checked country. The app fail-closes those annual CTAs; monthly checkout remains available.
+- Dodo billing canary after deploy: passed for plan webhook, proof-credit webhook, and cleanup.
+- Proof canary after deploy: passed.
+- Production readiness canary after deploy: passed for `0509.io`, `www.0509.io`, `api.0509.io`, fresh-live bypass, ops readiness, and Meta Ads beta.
+- Provider bakeoff launch check after deploy: passed for the current 0509 provider path across `nykaa`, `boat`, `mamaearth`, `swiggy`, `zomato`, and `meesho`; alternate providers skipped due missing optional provider tokens.
+- Presence pilot canary after deploy: passed, 4 files / 38 tests.
+- Presence website canary after deploy: failed because `PRESENCE_INTERNAL_WORKSPACE_ID` is not present in the available environment.
+- Production public E2E after deploy: passed, 3 tests with 2 preview-only tests skipped.
+- Production authenticated E2E after deploy: not run because local auth state is missing; capture requires an interactive internal-account login through `npm run e2e:auth:capture`.
 - D1 backup validation: passed.
 - Local and remote D1 migration lists: passed with no pending migrations.
 - Autoreview: found and fixed retryable `payment.failed` checkout-lock classification, cancelled-checkout retry copy mismatch, checkout-session fees-inclusive parity, pending-checkout CTA state, dashboard member readiness context, checkout-id gating for `subscription.failed`, Dodo-return pending-banner conflict, active-subscription `subscription.failed` payment-issue preservation, stale free-plan billing intervals, Dodo preview billing-country mismatch handling, Dodo-return false plan-success confirmation, no-checkout-id terminal failure cleanup, guarded checkout-id-or-missing-id terminal cleanup, missing-stored-id-only no-id terminal cleanup, short-window legacy monthly plan-return compatibility, UUID-backed no-id terminal checkout cleanup, and filtered-preview cache completeness. Final staged rerun clean with no accepted/actionable findings.
@@ -85,28 +87,35 @@ Track the customer-facing commercial-delight release from staged implementation 
 
 - CE code review synthesis and accepted fixes: completed.
 - Autoreview rerun on the final diff: completed clean.
-- Strict Dodo pricing canary against a branch deployment with real Dodo bindings: pending.
+- Strict Dodo pricing canary against production with real Dodo bindings: failed because live Scout and Starter annual prices do not validate as `4 months free`.
 - Presence website smoke with `PRESENCE_INTERNAL_WORKSPACE_ID`: pending.
-- Search V2 dogfood or equivalent production-safe smoke: pending if required as a separate launch sign-off beyond the completed provider bakeoff and proof canaries.
-- Bugbot/Cursor review: accepted findings fixed; final PR head remains subject to protected branch checks after push.
-- Protected PR, CI, merge, merged-main validation, deploy, production smokes, Worker rollback version, and docs-only provenance PR: pending.
+- Production authenticated E2E with internal account state: pending.
+- Search V2 dogfood or equivalent production-safe smoke: completed via provider bakeoff launch check.
+- Bugbot/Cursor review: accepted findings fixed; final PR head had no new final-push comments and Bugbot completed neutral/skipped.
+- Protected PR, CI, merge, merged-main validation, deploy, production smokes, and Worker rollback version: completed.
+- Docs-only provenance PR: this branch.
 
 ## Payments Tested
 
 - Provider fixture and signed webhook coverage: plan grant, subscription lifecycle, top-up grant, refund, duplicate/terminal checkout failure, retryable failure, and lock cleanup covered by tests/canaries.
 - Live/customer payment completion: not performed; no real customer card or subscription was used.
-- Owner/manual payment action: none recorded yet.
-- Monthly checkout: covered by route tests, checkout-return tests, and the upgraded pricing canary contract, but branch-deployed live Dodo preview proof remains pending with real Dodo bindings.
-- Annual checkout: covered by route tests and the upgraded pricing canary contract, including `4 months free` validation, but branch-deployed live Dodo preview proof remains pending with real Dodo bindings.
+- Owner/manual payment action: Dodo annual SKU pricing correction is required before annual checkout can be called live.
+- Monthly checkout: covered by route tests, checkout-return tests, and deployed live Dodo pricing canary proof in IN, US, and GB.
+- Annual checkout: covered by route tests and deployed live Dodo pricing canary proof that the app correctly fails annual closed when Dodo annual pricing does not meet the `4 months free` rule. Live annual checkout is not ready until Dodo annual SKU pricing is corrected.
 
 ## Deployment
 
-- Deployment status: not deployed yet.
-- Runtime commit: pending protected PR merge.
-- Worker version: pending deployment.
-- Rollback Worker version: pending pre-deploy capture.
+- Deployment status: deployed to production on 2026-07-01.
+- Runtime merge commit: `cb70aa24155f25174a3f0b29e0b5bc4d36799983`.
+- Feature head commit merged by PR 269: `c858855254ccc2bdd2e3f5dd64da21ef4aefded6`.
+- Worker deployment: `f2b89e7a-cdf1-4f17-9cd3-dc5ec1d7731f`, serving version `bbd9c75c-84ff-4c2b-a1ca-5a36a93931c9` at 100%.
+- Rollback Worker deployment: `ffd298a9-b911-49ca-8045-83f5e0e57aab`, serving version `95dab354-b270-449e-a221-9c2434b8cc23` at 100% before this release.
+- Deploy script checks: public-home source/current, D1 sync, production build, Wrangler deploy, live public-home, and Google OAuth branding guard all completed. Google OAuth branding check skipped because the provider is hidden/disabled.
 
 ## Owner Actions
 
 - None currently known for monthly checkout.
-- Annual checkout owner action is required only if the branch-deployed strict pricing canary shows a live Dodo annual SKU that fails the `4 months free` validation.
+- `DODO ANNUAL SKU CONFIG REQUIRED: scout_annual_v1` — live annual price must equal 8x monthly for each localized Dodo pricing context before Scout annual checkout can go live.
+- `DODO ANNUAL SKU CONFIG REQUIRED: starter_annual_v1` — live annual price must equal 8x monthly for each localized Dodo pricing context before Starter annual checkout can go live.
+- Set `PRESENCE_INTERNAL_WORKSPACE_ID` in the environment to unblock the production presence website smoke.
+- Recapture production auth state with the internal non-customer account, then rerun `npm run e2e:prod:auth`.
