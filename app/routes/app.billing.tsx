@@ -331,11 +331,20 @@ export default function BillingRoute() {
             <span className="f9-app-kicker">Payment issue</span>
             <h2>Your last renewal payment didn't go through.</h2>
             <p>
-              Your {planLabel} plan is still active while the payment provider retries. Please check
-              the card on the receipt email from Dodo Payments, or email{" "}
+              Your {planLabel} plan is still active while the payment provider retries.{" "}
+              {canManageBilling && data.hasPortal
+                ? "Open Dodo's hosted portal to update the payment method, or email "
+                : "Please check the card on the receipt email from Dodo Payments, or email "}
               <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll help sort it out before anything
               is interrupted.
             </p>
+            {canManageBilling && data.hasPortal ? (
+              <Form action="/api/billing/dodo/portal" method="post">
+                <SubmitButton className="f9-primary-button" pendingLabel="Redirecting…">
+                  Update payment method
+                </SubmitButton>
+              </Form>
+            ) : null}
           </div>
         </article>
       ) : null}

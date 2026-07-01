@@ -84,7 +84,7 @@ Required manual step: Dodo dashboard → Settings → Subscriptions → enable *
 
 The public health endpoint is `https://0509.io/api/health`. `.github/workflows/uptime-health.yml` now checks that endpoint every 5 minutes and fails if the response is not HTTP 200 JSON with `status: "ok"` and `app: "0509"`.
 
-The first scheduled uptime run and notification path remain unproven until an owner/operator confirms the workflow runs on `main` and failure notifications reach the right inbox. UptimeRobot remains the stronger independent external monitor if GitHub Actions notifications are not enough.
+Manual uptime workflow run `28540913266` passed on `main`. The first scheduled uptime run and notification path remain unproven until an owner/operator confirms the scheduled workflow runs on `main` and failure notifications reach the right inbox. UptimeRobot remains the stronger independent external monitor if GitHub Actions notifications are not enough.
 
 Owner verification steps (no API token): see `docs/ops-backup-uptime.md` § Uptime monitoring.
 
