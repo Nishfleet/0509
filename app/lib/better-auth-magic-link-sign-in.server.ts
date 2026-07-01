@@ -21,7 +21,7 @@ export async function completeBetterAuthMagicLinkSignIn(
 ): Promise<never> {
   const failureHeaders = new Headers();
   failureHeaders.set("Cache-Control", "no-store");
-  failureHeaders.append("Set-Cookie", betterAuth.clearBetterAuthMagicLinkConfirmationCookie(request));
+  appendSetCookies(failureHeaders, betterAuth.clearBetterAuthMagicLinkConfirmationCookies(request));
   appendSetCookies(failureHeaders, betterAuth.clearBetterAuthMagicLinkStateCookies(request));
   if (extraHeaders) {
     betterAuth.appendHeadersSetCookies(failureHeaders, extraHeaders);
@@ -72,7 +72,7 @@ export async function completeBetterAuthMagicLinkSignIn(
   const headers = new Headers();
   headers.set("Cache-Control", "no-store");
   betterAuth.appendBetterAuthSetCookieHeaders(headers, response.headers);
-  headers.append("Set-Cookie", betterAuth.clearBetterAuthMagicLinkConfirmationCookie(request));
+  appendSetCookies(headers, betterAuth.clearBetterAuthMagicLinkConfirmationCookies(request));
   appendSetCookies(headers, betterAuth.clearBetterAuthMagicLinkStateCookies(request));
   if (extraHeaders) {
     betterAuth.appendHeadersSetCookies(headers, extraHeaders);
