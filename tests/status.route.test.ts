@@ -96,7 +96,7 @@ describe("status route", () => {
     expect(markup).toContain("Core surfaces");
     expect(markup).toContain("Public search");
     expect(markup).toContain("Email delivery is available for eligible accounts");
-    expect(markup).toContain("External uptime monitoring is still an owner setup step");
+    expect(markup).toContain("Recurring uptime checks are configured");
     expect(markup).not.toContain("GA launch gate");
     expect(markup).not.toContain("GA launch proof");
     expect(markup).not.toContain("broad launch still needs fresh Slack proof");

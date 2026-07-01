@@ -1,14 +1,14 @@
 # Five to Nine Launch Readiness
 
-Last checked: 2026-07-01
+Last checked: 2026-07-02
 
 ## Current Verdict
 
-Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green, health is 200, D1 backups validate, and external uptime monitoring is owner-verified. Slack is **not offered at GA** — backend code stays dormant and launch readiness surfaces Slack only as optional advisories. Scout, Starter, and Agency self-serve checkout are released; Scout/Starter monthly and annual checkout validate through live Dodo preview. Agency remains on nightly fan-out monitoring watch after dispatch proof.
+Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green, health is 200, D1 backups validate, and recurring uptime monitoring is configured with owner-verified alert proof. Slack is **not offered at GA** — backend code stays dormant and launch readiness surfaces Slack only as optional advisories. Scout, Starter, and Agency self-serve checkout are released; Scout/Starter monthly and annual checkout validate through live Dodo preview. Agency remains on nightly fan-out monitoring watch after dispatch proof.
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
-Remaining owner gates outside this repo: Dodo **Allow Subscription Updates** dashboard confirmation, UptimeRobot monitor confirmation (no API token in repo), GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, next-window Agency scan-health monitoring, and Cloudflare Email dashboard visibility.
+Remaining owner gates outside this repo: Dodo **Allow Subscription Updates** dashboard confirmation, first uptime workflow run and alert-routing proof or UptimeRobot confirmation, GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, next-window Agency scan-health monitoring, and Cloudflare Email dashboard visibility.
 
 The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, dormant-channel advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
@@ -45,7 +45,7 @@ The public `/status` page summarizes coarse launch posture without rendering acc
 - WhatsApp must stay out of launch claims while provider/customer/webhook readiness is disabled.
 - Public pricing display must come from Dodo local-price preview.
 - Dodo checkout creation and signed webhook grant canaries must remain green.
-- External uptime monitor on `https://0509.io/api/health` (owner-verified; see `docs/ops-backup-uptime.md`).
+- Uptime health workflow on `https://0509.io/api/health` must stay configured; first scheduled run and alert-routing proof remain owner-verified (see `docs/ops-backup-uptime.md`).
 
 ## Email Gate (required)
 
@@ -80,9 +80,11 @@ Dodo customer portal sessions are wired in `/app/billing`, and the live Scout/St
 
 Required manual step: Dodo dashboard → Settings → Subscriptions → enable **Allow Subscription Updates**; then confirm plan changes and cancellation in an internal customer portal session.
 
-## External Uptime Manual Blocker
+## Uptime Monitoring Status
 
-The public health endpoint is `https://0509.io/api/health`. Create an external uptime monitor that checks this endpoint every 5 minutes and alerts Nish if it stops returning `ok`.
+The public health endpoint is `https://0509.io/api/health`. `.github/workflows/uptime-health.yml` now checks that endpoint every 5 minutes and fails if the response is not HTTP 200 JSON with `status: "ok"` and `app: "0509"`.
+
+The first scheduled uptime run and notification path remain unproven until an owner/operator confirms the workflow runs on `main` and failure notifications reach the right inbox. UptimeRobot remains the stronger independent external monitor if GitHub Actions notifications are not enough.
 
 Owner verification steps (no API token): see `docs/ops-backup-uptime.md` § Uptime monitoring.
 
@@ -109,4 +111,4 @@ Use this framing for the first customer:
 
 ## Next Slice
 
-Confirm UptimeRobot on `/api/health`, confirm the Dodo subscription-update portal setting, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.
+Confirm the uptime health workflow's first scheduled run and alert path or UptimeRobot on `/api/health`, confirm the Dodo subscription-update portal setting, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.

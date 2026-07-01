@@ -65,7 +65,7 @@ Presence website canary now follows the current GA rollout and runs without requ
 These are not proven by repo code alone:
 
 - Confirm the Dodo subscription-update setting and cancellation availability in the customer portal; Product Collection membership is already configured for Scout/Starter monthly and annual products.
-- Confirm an external uptime monitor for `https://0509.io/api/health`.
+- Confirm the uptime health workflow's first scheduled run and alert path, or add/keep an independent UptimeRobot monitor for `https://0509.io/api/health`.
 - Activate or explicitly defer D1-to-R2 scheduled backup and restore drill.
 - Monitor the next live Agency fan-out window for dispatch failures and real scan completion.
 - Confirm Cloudflare Email activity/log visibility.
