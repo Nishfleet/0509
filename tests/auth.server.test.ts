@@ -584,6 +584,20 @@ describe("Better Auth magic links", () => {
       stagingCookies.find(
         (value) => value.startsWith("f9_better_magic=;") && value.includes("Path=/auth/better/magic-link"),
       ) ?? "";
+    const domainPrimaryClearCookie =
+      stagingCookies.find(
+        (value) =>
+          value.startsWith("f9_better_magic=;") &&
+          value.includes("Path=/auth") &&
+          value.includes("Domain=0509.io"),
+      ) ?? "";
+    const domainLegacyClearCookie =
+      stagingCookies.find(
+        (value) =>
+          value.startsWith("f9_better_magic=;") &&
+          value.includes("Path=/auth/better/magic-link") &&
+          value.includes("Domain=0509.io"),
+      ) ?? "";
     expect(stagingCookie).toContain("f9_better_magic=");
     expect(stagingCookie).toContain("HttpOnly");
     expect(stagingCookie).toContain("SameSite=Lax");
@@ -591,6 +605,9 @@ describe("Better Auth magic links", () => {
     expect(stagingCookie).not.toContain("Path=/auth/better/magic-link");
     expect(stagingCookie).toContain("Secure");
     expect(legacyClearCookie).toContain("Max-Age=0");
+    expect(domainPrimaryClearCookie).toContain("Max-Age=0");
+    expect(domainLegacyClearCookie).toContain("Max-Age=0");
+    expect(stagingCookies.indexOf(domainPrimaryClearCookie)).toBeLessThan(stagingCookies.indexOf(stagingCookie));
     expect(redirectResponse.headers.get("Location")).not.toContain("ticket=");
   });
 
@@ -647,6 +664,142 @@ describe("Better Auth magic links", () => {
     expect(combinedSetCookie).toContain("__Secure-better-auth.session_token=session-token");
     expect(combinedSetCookie).toContain("f9_better_magic=;");
     expect(verifyBetterAuthMagicLink).toHaveBeenCalledTimes(1);
+    const [ticket] = ticketDb.tickets.values();
+    expect(ticket?.consumed_at).toEqual(expect.any(String));
+  });
+
+  it("ignores stale duplicate magic-link cookies before the staged ticket cookie", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
+
+    const { action, loader } = await import("~/routes/auth.better.magic-link");
+    const ticketDb = dbWithMagicLinkTickets();
+    const testEnv = env({ DB: ticketDb.db });
+    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
+    });
+    const { ticketCookie } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
+    const response = await postMagicLinkConfirmation(
+      action,
+      testEnv,
+      `f9_better_magic=stale-invalid-cookie; ${ticketCookie}`,
+      "login",
+      magicLinkConfirmDataUrl("login"),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://0509.io/app");
+    expect(verifyBetterAuthMagicLink).toHaveBeenCalledTimes(1);
+    const [ticket] = ticketDb.tickets.values();
+    expect(ticket?.consumed_at).toEqual(expect.any(String));
+  });
+
+  it("ignores stale well-formed ticket cookies before the staged ticket cookie", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
+
+    const { action, loader } = await import("~/routes/auth.better.magic-link");
+    const staleTicketDb = dbWithMagicLinkTickets();
+    const staleTicketEnv = env({ DB: staleTicketDb.db });
+    const staleTicketUrl = await betterAuthMagicLinkConfirmationUrl(staleTicketEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://0509.io/api/auth/magic-link/verify?token=stale-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
+    });
+    const { ticketCookie: staleTicketCookie } = await stageTicketFromEmailLink(
+      loader,
+      staleTicketEnv,
+      staleTicketUrl,
+    );
+    const ticketDb = dbWithMagicLinkTickets();
+    const testEnv = env({ DB: ticketDb.db });
+    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://0509.io/api/auth/magic-link/verify?token=fresh-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
+    });
+    const { ticketCookie } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
+    const combinedCookies = `${staleTicketCookie}; ${ticketCookie}`;
+    const cleanResponse = await loader({
+      context: context(testEnv),
+      params: {},
+      pattern: "/auth/better/magic-link",
+      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
+        headers: { cookie: combinedCookies },
+      }),
+      url: "https://0509.io/auth/better/magic-link?mode=login",
+    } as never);
+
+    expect(cleanResponse.status).toBe(200);
+    await expect(cleanResponse.json()).resolves.toEqual({
+      error: "",
+      mode: "login",
+    });
+
+    const response = await postMagicLinkConfirmation(
+      action,
+      testEnv,
+      combinedCookies,
+      "login",
+      magicLinkConfirmDataUrl("login"),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://0509.io/app");
+    expect(verifyBetterAuthMagicLink).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(Request),
+      expect.objectContaining({
+        token: "fresh-token",
+      }),
+    );
+    const [ticket] = ticketDb.tickets.values();
+    expect(ticket?.consumed_at).toEqual(expect.any(String));
+  });
+
+  it("prefers and consumes staged ticket cookies when legacy cookies are also present", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
+
+    const { action, loader } = await import("~/routes/auth.better.magic-link");
+    const ticketDb = dbWithMagicLinkTickets();
+    const testEnv = env({ DB: ticketDb.db });
+    const legacyUrl =
+      "https://0509.io/auth/better/magic-link?token=legacy-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&state=state-1";
+    const legacyRedirect = (await Promise.resolve(
+      loader({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request(legacyUrl, {
+          headers: { cookie: "f9_better_magic_state=state-1" },
+        }),
+        url: legacyUrl,
+      } as never),
+    ).catch((error) => error)) as Response;
+    const legacyCookie = cookieHeader(setCookieValues(legacyRedirect.headers), "f9_better_magic");
+    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://0509.io/api/auth/magic-link/verify?token=ticket-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
+    });
+    const { ticketCookie } = await stageTicketFromEmailLink(loader, testEnv, ticketUrl);
+    const response = await postMagicLinkConfirmation(
+      action,
+      testEnv,
+      `${legacyCookie}; ${ticketCookie}`,
+      "login",
+      magicLinkConfirmDataUrl("login"),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://0509.io/app");
+    expect(verifyBetterAuthMagicLink).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(Request),
+      expect.objectContaining({
+        token: "ticket-token",
+      }),
+    );
     const [ticket] = ticketDb.tickets.values();
     expect(ticket?.consumed_at).toEqual(expect.any(String));
   });
@@ -789,6 +942,55 @@ describe("Better Auth magic links", () => {
         token: "secret-token",
       }),
     );
+  });
+
+  it("loads a valid legacy confirmation when a stale ticket cookie is also present", async () => {
+    await mockBetterAuthMagicLinkServer();
+
+    const { loader } = await import("~/routes/auth.better.magic-link");
+    const staleTicketDb = dbWithMagicLinkTickets();
+    const staleTicketEnv = env({ DB: staleTicketDb.db });
+    const staleTicketUrl = await betterAuthMagicLinkConfirmationUrl(staleTicketEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://0509.io/api/auth/magic-link/verify?token=ticket-token&callbackURL=https%3A%2F%2F0509.io%2Fapp",
+    });
+    const { ticketCookie: staleTicketCookie } = await stageTicketFromEmailLink(
+      loader,
+      staleTicketEnv,
+      staleTicketUrl,
+    );
+    const legacyEnv = env({ DB: dbWithMagicLinkTickets().db });
+    const legacyUrl =
+      "https://0509.io/auth/better/magic-link?token=legacy-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&state=state-1";
+    const legacyRedirect = (await Promise.resolve(
+      loader({
+        context: context(legacyEnv),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request(legacyUrl, {
+          headers: { cookie: "f9_better_magic_state=state-1" },
+        }),
+        url: legacyUrl,
+      } as never),
+    ).catch((error) => error)) as Response;
+    const legacyCookie = cookieHeader(setCookieValues(legacyRedirect.headers), "f9_better_magic");
+
+    const cleanResponse = await loader({
+      context: context(legacyEnv),
+      params: {},
+      pattern: "/auth/better/magic-link",
+      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
+        headers: { cookie: `${staleTicketCookie}; ${legacyCookie}` },
+      }),
+      url: "https://0509.io/auth/better/magic-link?mode=login",
+    } as never);
+
+    expect(cleanResponse.status).toBe(200);
+    await expect(cleanResponse.json()).resolves.toEqual({
+      error: "",
+      mode: "login",
+    });
   });
 
   it("rejects confirmation posts without the staged legacy ticket", async () => {

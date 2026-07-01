@@ -11,11 +11,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     BetterAuthMagicLinkCallbackError,
     betterAuthLegacyMagicLinkConfirmationTicketCookie,
     betterAuthMagicLinkConfirmationTicketCookie,
-    clearBetterAuthLegacyMagicLinkConfirmationCookie,
     clearBetterAuthMagicLinkConfirmationCookies,
     clearBetterAuthMagicLinkStateCookies,
     readBetterAuthMagicLinkConfirmationTicket,
     readBetterAuthMagicLinkVerificationTicket,
+    replacementBetterAuthMagicLinkConfirmationCookies,
     requestHasBetterAuthSessionCookie,
   } = await import("~/lib/better-auth.server");
   const url = new URL(request.url);
@@ -29,11 +29,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     try {
       const headers = new Headers();
       headers.set("Cache-Control", "no-store");
-      headers.append(
-        "Set-Cookie",
-        await betterAuthLegacyMagicLinkConfirmationTicketCookie(env, request, { mode }),
+      appendSetCookies(
+        headers,
+        replacementBetterAuthMagicLinkConfirmationCookies(
+          request,
+          await betterAuthLegacyMagicLinkConfirmationTicketCookie(env, request, { mode }),
+        ),
       );
-      headers.append("Set-Cookie", clearBetterAuthLegacyMagicLinkConfirmationCookie(request));
       appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
       throw redirect(cleanMagicLinkPath(mode), { headers });
     } catch (error) {
@@ -75,8 +77,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         ticketId,
       });
       confirmMode = ticket.mode;
-      stagingHeaders.append("Set-Cookie", clearBetterAuthLegacyMagicLinkConfirmationCookie(request));
-      stagingHeaders.append("Set-Cookie", ticket.cookie);
+      appendSetCookies(
+        stagingHeaders,
+        replacementBetterAuthMagicLinkConfirmationCookies(request, ticket.cookie),
+      );
       appendSetCookies(stagingHeaders, clearBetterAuthMagicLinkStateCookies(request));
     } catch (error) {
       if (!(error instanceof BetterAuthMagicLinkCallbackError)) {
