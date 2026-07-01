@@ -75,7 +75,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? "top_up"
     : "plan";
   const portalNotice = url.searchParams.get("portal");
-  const selectedPlan = coercePricingPlan(url.searchParams.get("plan"));
+  const selectedPlanParam = cleanPricingPlan(url.searchParams.get("plan"));
+  const selectedPlan = selectedPlanParam ?? "starter";
   const selectedCycleParam = coerceBillingCycle(url.searchParams.get("cycle"));
   const selectedSource = cleanSourceParam(url.searchParams.get("source"));
   const checkoutStatus = cleanDodoCheckoutStatus(url.searchParams.get("status"));
@@ -97,7 +98,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     checkPlanLimit(env, workspaceUserId, "watchlists"),
     checkPlanLimit(env, workspaceUserId, "collections"),
     listActiveProofCreditGrants(env, workspaceUserId),
-    previewDodo0509PlanPrices({ env, request }),
+    previewDodo0509PlanPrices({ env, request, trustProxyHeaders: false }),
   ]);
   const customerBilling = {
     plan: billing.plan,
@@ -115,6 +116,22 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const terminalCheckoutReturned =
     checkoutNotice === "dodo" &&
     (checkoutStatus === "failed" || checkoutStatus === "cancelled" || checkoutStatus === "canceled");
+  const checkoutStartedAt =
+    checkoutNotice === "dodo" ? cleanCheckoutStartedAt(url.searchParams.get("started")) : null;
+  const currentCycleParam = billing.billingInterval === "annual"
+    ? "yearly"
+    : billing.billingInterval === "monthly"
+      ? "monthly"
+      : null;
+  const legacyPlanReturnConfirmed =
+    checkoutNotice === "dodo" &&
+    !terminalCheckoutReturned &&
+    checkoutKind === "plan" &&
+    !checkoutStartedAt &&
+    billing.plan !== "free" &&
+    selectedPlanParam === billing.plan &&
+    selectedCycleParam === currentCycleParam &&
+    Boolean(cleanCheckoutStartedAt(billing.planUpdatedAt));
 
   return {
     email: session.user.email,
@@ -139,7 +156,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     checkoutKind,
     checkoutTopUpSku: checkoutKind === "top_up" ? cleanSourceParam(url.searchParams.get("sku")) : null,
     checkoutTopUpPaymentId: checkoutKind === "top_up" ? cleanDodoPaymentId(url.searchParams.get("payment_id")) : null,
-    checkoutStartedAt: checkoutKind === "top_up" ? cleanCheckoutStartedAt(url.searchParams.get("started")) : null,
+    checkoutStartedAt,
+    legacyPlanReturnConfirmed,
     blockedCheckout: checkoutNotice === "already-subscribed",
     pendingCheckout:
       checkoutNotice === "already-started" ||
@@ -271,10 +289,12 @@ export default function BillingRoute() {
         <CheckoutReturnNotice
           creditGrants={data.creditGrants}
           kind={data.checkoutKind === "top_up" ? "top_up" : "plan"}
+          legacyPlanReturnConfirmed={data.legacyPlanReturnConfirmed}
           plan={billing.plan}
+          planUpdatedAt={billing.planUpdatedAt}
+          checkoutStartedAt={data.checkoutStartedAt}
           topUpPaymentId={data.checkoutTopUpPaymentId}
           topUpSku={data.checkoutTopUpSku}
-          topUpStartedAt={data.checkoutStartedAt}
         />
       ) : null}
 
@@ -711,8 +731,8 @@ function isTopUpDisplayKey(value: string): value is keyof typeof TOP_UP_PACK_DIS
   return value in TOP_UP_PACK_DISPLAY;
 }
 
-function coercePricingPlan(value: string | null): PricingPlanSlug {
-  return value === "scout" || value === "starter" || value === "agency" ? value : "starter";
+function cleanPricingPlan(value: string | null): PricingPlanSlug | null {
+  return value === "scout" || value === "starter" || value === "agency" ? value : null;
 }
 
 function coerceBillingCycle(value: string | null): PricingBillingCycle | null {

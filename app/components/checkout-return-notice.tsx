@@ -15,23 +15,29 @@ type CheckoutReturnGrant = {
 export function CheckoutReturnNotice({
   creditGrants = [],
   kind = "plan",
+  legacyPlanReturnConfirmed = false,
   plan,
+  planUpdatedAt = null,
+  checkoutStartedAt = null,
   topUpPaymentId = null,
   topUpSku = null,
-  topUpStartedAt = null,
 }: {
   creditGrants?: CheckoutReturnGrant[];
   kind?: "plan" | "top_up";
+  legacyPlanReturnConfirmed?: boolean;
   plan: string;
+  planUpdatedAt?: string | null;
+  checkoutStartedAt?: string | null;
   topUpPaymentId?: string | null;
   topUpSku?: string | null;
-  topUpStartedAt?: string | null;
 }) {
   const revalidator = useRevalidator();
-  const planActive = plan !== "free";
+  const planConfirmed =
+    plan !== "free" &&
+    hasReturnedPlanActivation(planUpdatedAt, checkoutStartedAt, legacyPlanReturnConfirmed);
   const topUpConfirmed =
-    kind === "top_up" && hasReturnedTopUpGrant(creditGrants, topUpSku, topUpStartedAt, topUpPaymentId);
-  const checkoutConfirmed = kind === "top_up" ? topUpConfirmed : planActive;
+    kind === "top_up" && hasReturnedTopUpGrant(creditGrants, topUpSku, checkoutStartedAt, topUpPaymentId);
+  const checkoutConfirmed = kind === "top_up" ? topUpConfirmed : planConfirmed;
   const [pollCount, setPollCount] = useState(0);
 
   useEffect(() => {
@@ -83,6 +89,18 @@ export function CheckoutReturnNotice({
       </p>
     </div>
   );
+}
+
+function hasReturnedPlanActivation(
+  planUpdatedAt: string | null | undefined,
+  startedAt: string | null,
+  legacyPlanReturnConfirmed: boolean,
+) {
+  if (legacyPlanReturnConfirmed) return true;
+  if (!startedAt) return false;
+  const startedAtMs = Date.parse(startedAt);
+  const planUpdatedAtMs = Date.parse(String(planUpdatedAt ?? ""));
+  return Number.isFinite(startedAtMs) && Number.isFinite(planUpdatedAtMs) && planUpdatedAtMs >= startedAtMs;
 }
 
 function hasReturnedTopUpGrant(

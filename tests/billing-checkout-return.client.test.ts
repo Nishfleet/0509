@@ -63,13 +63,67 @@ describe("billing checkout return polling", () => {
     const { CheckoutReturnNotice } = await import("~/components/checkout-return-notice");
 
     await act(async () => {
-      root.render(createElement(CheckoutReturnNotice, { kind: "plan", plan: "starter" }));
+      root.render(
+        createElement(CheckoutReturnNotice, {
+          checkoutStartedAt: "2026-07-01T10:00:00.000Z",
+          kind: "plan",
+          plan: "starter",
+          planUpdatedAt: "2026-07-01T10:01:00.000Z",
+        }),
+      );
     });
 
     expect(container.textContent).toContain("Your Starter plan is live");
 
     await act(async () => {
       vi.advanceTimersByTime(12_000);
+    });
+
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  it("does not treat an older paid plan as confirmation for a new checkout return", async () => {
+    const { CheckoutReturnNotice } = await import("~/components/checkout-return-notice");
+
+    await act(async () => {
+      root.render(
+        createElement(CheckoutReturnNotice, {
+          checkoutStartedAt: "2026-07-01T10:00:00.000Z",
+          kind: "plan",
+          plan: "starter",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Dodo is confirming the payment");
+    expect(container.textContent).not.toContain("Your Starter plan is live");
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("confirms a legacy plan return only when the loader marked it as matched", async () => {
+    const { CheckoutReturnNotice } = await import("~/components/checkout-return-notice");
+
+    await act(async () => {
+      root.render(
+        createElement(CheckoutReturnNotice, {
+          kind: "plan",
+          legacyPlanReturnConfirmed: true,
+          plan: "starter",
+          planUpdatedAt: "2026-07-01T10:01:00.000Z",
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Your Starter plan is live");
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
     });
 
     expect(revalidate).not.toHaveBeenCalled();
@@ -92,7 +146,7 @@ describe("billing checkout return polling", () => {
           kind: "top_up",
           plan: "starter",
           topUpSku: "burst_500_v1",
-          topUpStartedAt: "2026-07-01T10:00:00.000Z",
+          checkoutStartedAt: "2026-07-01T10:00:00.000Z",
         }),
       );
     });
@@ -118,7 +172,7 @@ describe("billing checkout return polling", () => {
           kind: "top_up",
           plan: "starter",
           topUpSku: "burst_500_v1",
-          topUpStartedAt: "2026-07-01T10:00:00.000Z",
+          checkoutStartedAt: "2026-07-01T10:00:00.000Z",
         }),
       );
     });
@@ -148,7 +202,7 @@ describe("billing checkout return polling", () => {
           kind: "top_up",
           plan: "starter",
           topUpSku: "burst_500_v1",
-          topUpStartedAt: "2026-07-01T10:04:00.000Z",
+          checkoutStartedAt: "2026-07-01T10:04:00.000Z",
         }),
       );
     });
@@ -176,7 +230,7 @@ describe("billing checkout return polling", () => {
           plan: "starter",
           topUpPaymentId: "pay_new",
           topUpSku: "burst_500_v1",
-          topUpStartedAt: "2026-07-01T10:04:00.000Z",
+          checkoutStartedAt: "2026-07-01T10:04:00.000Z",
         }),
       );
     });

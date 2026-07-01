@@ -146,6 +146,7 @@ function dodoCheckoutReturnUrl(
   if (target.kind === "plan") {
     url.searchParams.set("plan", target.planFamily);
     url.searchParams.set("cycle", target.cycle);
+    url.searchParams.set("started", new Date().toISOString());
   }
   if (target.kind === "top_up") {
     url.searchParams.set("sku", target.sku);
