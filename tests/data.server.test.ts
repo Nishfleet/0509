@@ -2725,7 +2725,7 @@ describe("discovery state persistence", () => {
 });
 
 describe("getOperatorSnapshot", () => {
-  it("limits stale failure rows to the recent ops window", async () => {
+  it("limits stale failure and provider-unknown rows to the recent ops window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-26T10:00:00.000Z"));
 
@@ -2765,6 +2765,8 @@ describe("getOperatorSnapshot", () => {
       expect(failedProofs?.bindings).toContain(recentWindowIso);
       expect(budgetBlockedProofs?.bindings).toContain(recentWindowIso);
       expect(deliveryFailures?.bindings).toContain(recentWindowIso);
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'pending'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.webhook_status = 'provider_unknown'");
       expect(discoveryFailures?.bindings).toContain(recentWindowIso);
     } finally {
       vi.useRealTimers();

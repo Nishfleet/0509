@@ -44,7 +44,7 @@ export default function OpsRoute() {
             <MetricCard label="Failed proofs" value={snapshot.summary.failedProofs} />
             <MetricCard label="Budget-blocked proofs" value={snapshot.summary.budgetBlockedProofs} />
             <MetricCard label="Blocked targets" value={snapshot.summary.blockedTargets} />
-            <MetricCard label="Delivery failures" value={snapshot.summary.deliveryFailures} />
+            <MetricCard label="Delivery attention" value={snapshot.summary.deliveryAttention} />
             <MetricCard label="Degraded watchlists" value={snapshot.summary.degradedWatchlists} />
             <MetricCard label="Discovery failures" value={snapshot.summary.discoveryFailures} />
             <MetricCard
@@ -109,16 +109,16 @@ export default function OpsRoute() {
           />
 
           <OpsSection
-            empty="No recent delivery failures."
-            items={snapshot.deliveryFailures}
-            title="Recent delivery failures"
+            empty="No recent delivery issues needing review."
+            items={snapshot.deliveryAttention}
+            title="Recent delivery attention"
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name ?? "Account default"}</p>
                 <h3>
                   {item.channel === "email" ? "Email" : "WhatsApp"} to {item.target_value}
                 </h3>
-                <p>{item.error_message ?? "Delivery failed for an operational reason."}</p>
+                <p>{describeDeliveryAttention(item)}</p>
                 <p className="f9-muted-copy">{formatTimestamp(item.created_at)}</p>
               </>
             )}
@@ -255,6 +255,18 @@ function describeBlockedTarget(item: {
     return "WhatsApp target is not template-eligible.";
   }
   return "WhatsApp target is blocked for an operational reason.";
+}
+
+function describeDeliveryAttention(item: {
+  status: string;
+  webhook_status: string;
+  error_message: string | null;
+}) {
+  if (item.status === "pending" && item.webhook_status === "provider_unknown") {
+    return item.error_message ?? "Provider outcome is unknown; check Cloudflare Email Sending logs.";
+  }
+
+  return item.error_message ?? "Delivery failed for an operational reason.";
 }
 
 function formatTimestamp(value: string) {
