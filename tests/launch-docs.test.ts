@@ -7,16 +7,18 @@ function readDoc(path: string) {
 }
 
 describe("final launch documentation", () => {
-  it("keeps the authoritative scorecard on the released posture after live closeout", () => {
+  it("keeps the authoritative scorecard on the live monthly/top-up posture after closeout", () => {
     const scorecard = readDoc("docs/final-self-serve-ga-scorecard.md");
     const progress = readDoc("docs/launch-hardening-progress.md");
     const ownerActions = readDoc("docs/ga-owner-actions.md");
     const launchReadiness = readDoc("docs/launch-readiness.md");
     const backupUptime = readDoc("docs/ops-backup-uptime.md");
 
-    expect(scorecard).toContain("SCOUT, STARTER, AND AGENCY SELF-SERVE RELEASED");
-    expect(scorecard).toContain("OWNER ACTIONS REMAIN");
-    expect(scorecard).toContain("Compatible Worker deployed");
+    expect(scorecard).toContain(
+      "SCOUT/STARTER MONTHLY, TOP-UPS, AND AGENCY SELF-SERVE RELEASED - ANNUAL SCOUT/STARTER BLOCKED ON DODO PRICING",
+    );
+    expect(scorecard).toContain("Dodo annual SKU pricing");
+    expect(scorecard).toContain("Latest commercial proof-gate deploy");
     expect(scorecard).toContain("No migrations to apply");
     expect(scorecard).toContain("D1 cleanup evidence");
     expect(progress).toContain("PR #251 merged");
