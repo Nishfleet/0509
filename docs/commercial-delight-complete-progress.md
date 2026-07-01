@@ -73,9 +73,9 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Production readiness canary after deploy: passed for `0509.io`, `www.0509.io`, `api.0509.io`, fresh-live bypass, ops readiness, and Meta Ads beta.
 - Provider bakeoff launch check after deploy: passed for the current 0509 provider path across `nykaa`, `boat`, `mamaearth`, `swiggy`, `zomato`, and `meesho`; alternate providers skipped due missing optional provider tokens.
 - Presence pilot canary after deploy: passed, 4 files / 38 tests.
-- Presence website canary after deploy: failed because `PRESENCE_INTERNAL_WORKSPACE_ID` is not present in the available environment.
+- Presence website canary after deploy: initially blocked by stale internal-rollout harness requirements; follow-up GA-aware canary passed, 4 files / 33 tests including GA rollout coverage.
 - Production public E2E after deploy: passed, 3 tests with 2 preview-only tests skipped.
-- Production authenticated E2E after deploy: not run because local auth state is missing; capture requires an interactive internal-account login through `npm run e2e:auth:capture`.
+- Production authenticated E2E after deploy: passed with fresh local internal-account auth state, including Overview, Account, Billing, Watchlists, Presence, Notifications, and Support.
 - D1 backup validation: passed.
 - Local and remote D1 migration lists: passed with no pending migrations.
 - Autoreview: found and fixed retryable `payment.failed` checkout-lock classification, cancelled-checkout retry copy mismatch, checkout-session fees-inclusive parity, pending-checkout CTA state, dashboard member readiness context, checkout-id gating for `subscription.failed`, Dodo-return pending-banner conflict, active-subscription `subscription.failed` payment-issue preservation, stale free-plan billing intervals, Dodo preview billing-country mismatch handling, Dodo-return false plan-success confirmation, no-checkout-id terminal failure cleanup, guarded checkout-id-or-missing-id terminal cleanup, missing-stored-id-only no-id terminal cleanup, short-window legacy monthly plan-return compatibility, UUID-backed no-id terminal checkout cleanup, and filtered-preview cache completeness. Final staged rerun clean with no accepted/actionable findings.
@@ -88,8 +88,8 @@ Track the customer-facing commercial-delight release from staged implementation 
 - CE code review synthesis and accepted fixes: completed.
 - Autoreview rerun on the final diff: completed clean.
 - Strict Dodo pricing canary against production with real Dodo bindings: failed because live Scout and Starter annual prices do not validate as `4 months free`.
-- Presence website smoke with `PRESENCE_INTERNAL_WORKSPACE_ID`: pending.
-- Production authenticated E2E with internal account state: pending.
+- Presence website smoke under current GA rollout: completed.
+- Production authenticated E2E with internal account state: completed.
 - Search V2 dogfood or equivalent production-safe smoke: completed via provider bakeoff launch check.
 - Bugbot/Cursor review: accepted findings fixed; final PR head had no new final-push comments and Bugbot completed neutral/skipped.
 - Protected PR, CI, merge, merged-main validation, deploy, production smokes, and Worker rollback version: completed.
@@ -117,5 +117,3 @@ Track the customer-facing commercial-delight release from staged implementation 
 - None currently known for monthly checkout.
 - `DODO ANNUAL SKU CONFIG REQUIRED: scout_annual_v1` — live annual price must equal 8x monthly for each localized Dodo pricing context before Scout annual checkout can go live.
 - `DODO ANNUAL SKU CONFIG REQUIRED: starter_annual_v1` — live annual price must equal 8x monthly for each localized Dodo pricing context before Starter annual checkout can go live.
-- Set `PRESENCE_INTERNAL_WORKSPACE_ID` in the environment to unblock the production presence website smoke.
-- Recapture production auth state with the internal non-customer account, then rerun `npm run e2e:prod:auth`.
