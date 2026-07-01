@@ -103,7 +103,7 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("href=\"/app/onboard?resume=1\"");
   });
 
-  it("surfaces retention moves without showing the low-priority billing fallback", async () => {
+  it("surfaces retention moves without showing low-priority optional setup", async () => {
     await mockRouter(baseDashboardData({
       workspaceReadiness: {
         generatedAt: "2026-06-20T00:00:00.000Z",
@@ -126,6 +126,20 @@ describe("dashboard first 15 minutes activation", () => {
             href: "/app/support?category=billing",
             priority: "low",
           },
+          {
+            id: "agent_setup",
+            title: "Developer access is missing",
+            detail: "Create a read key for exports; enable approved actions only for trusted workflows.",
+            href: "/app/sources",
+            priority: "low",
+          },
+          {
+            id: "client_room_setup",
+            title: "No client room yet",
+            detail: "Group one watchlist or report into a client room before agency handoff.",
+            href: "/app/clients",
+            priority: "low",
+          },
         ],
         counts: {
           agentMemoryEntries: 0,
@@ -141,6 +155,8 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("No first digest yet");
     expect(markup).toContain("/app/digests");
     expect(markup).not.toContain("Cancellation and help path");
+    expect(markup).not.toContain("Developer access is missing");
+    expect(markup).not.toContain("No client room yet");
   });
 
   it("shows the first setup loop complete when scan, proof, delivery, and context exist", async () => {
@@ -216,7 +232,7 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("Market Desk Brief");
     expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
-    expect(markup).toContain("No changes worth your time");
+    expect(markup).toContain("Completed checks found no action-worthy movement");
     expect(markup).toContain("Competitors watched");
     expect(markup).toContain("Evidence checks");
     expect(markup).toContain("Being watched");

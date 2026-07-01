@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
+import { pathToFileURL } from "node:url";
+
 const DEFAULT_BASE_URL = "https://0509.io";
 const REQUIRED_COUNTRIES = ["IN", "US", "GB"];
+const SALE_OPEN_PLANS = ["scout", "starter"];
+const REQUIRED_USAGE_BUNDLES = ["proof_500", "proof_2000", "proof_7500"];
 const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
 
 /**
@@ -16,8 +20,36 @@ const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
  *   country?: string,
  *   reason?: string,
  *   prices?: Record<string, Record<string, PricingDisplay | null | undefined> | null | undefined>,
+ *   annualValidation?: Record<string, {
+ *     valid?: boolean,
+ *     reason?: string,
+ *     monthlyAmount?: number | null,
+ *     annualAmount?: number | null,
+ *     expectedAnnualAmount?: number | null,
+ *     currency?: string | null,
+ *     billingCountry?: string | null
+ *   } | null | undefined>,
  *   usageBundles?: Record<string, PricingDisplay | null | undefined>
  * }} PricingPreview
+ *
+ * @typedef {{
+ *   plan: string,
+ *   ok: boolean,
+ *   monthlyDisplay: string,
+ *   annualDisplay: string,
+ *   currency: string,
+ *   billingCountry: string,
+ *   failures: string[]
+ * }} PlanPricingValidation
+ *
+ * @typedef {{
+ *   bundle: string,
+ *   ok: boolean,
+ *   display: string,
+ *   currency: string,
+ *   billingCountry: string,
+ *   failures: string[]
+ * }} UsageBundlePricingValidation
  *
  * @typedef {{
  *   requestedCountry: string,
@@ -27,7 +59,9 @@ const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
  *   currency: string,
  *   display: string,
  *   billingCountry: string,
- *   reason: string
+ *   reason: string,
+ *   planValidations: PlanPricingValidation[],
+ *   topUpValidations: UsageBundlePricingValidation[]
  * }} PricingCanaryResult
  */
 
@@ -35,7 +69,7 @@ const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
  * @param {string[]} args
  * @returns {{ baseUrl: string, countries: string[], json: boolean }}
  */
-function parseArgs(args) {
+export function parseArgs(args) {
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
     countries: REQUIRED_COUNTRIES,
@@ -63,32 +97,10 @@ function parseArgs(args) {
 }
 
 /**
- * @param {PricingPreview} preview
- */
-function readFirstDisplay(preview) {
-  for (const plan of Object.values(preview.prices ?? {})) {
-    if (!plan) continue;
-    for (const price of Object.values(plan)) {
-      if (price?.display) {
-        return price;
-      }
-    }
-  }
-
-  for (const price of Object.values(preview.usageBundles || {})) {
-    if (price?.display) {
-      return price;
-    }
-  }
-
-  return null;
-}
-
-/**
  * @param {{ baseUrl: string, country: string, token: string }} input
  * @returns {Promise<PricingCanaryResult>}
  */
-async function fetchPreview({ baseUrl, country, token }) {
+export async function fetchPreview({ baseUrl, country, token }) {
   const url = new URL("/api/pricing-preview", baseUrl);
   url.searchParams.set("country", country);
   url.searchParams.set("pricing-canary", String(Date.now()));
@@ -100,59 +112,229 @@ async function fetchPreview({ baseUrl, country, token }) {
     signal: AbortSignal.timeout(DODO_PRICING_CANARY_TIMEOUT_MS),
   });
   const body = /** @type {PricingPreview} */ (await response.json().catch(() => ({})));
-  const firstPrice = readFirstDisplay(body);
-  const billingCountry = firstPrice?.billingCountry || "";
-  const billingCountryMatches = !billingCountry || billingCountry === country;
-  return {
+  return validatePricingPreviewBody({
+    preview: body,
     requestedCountry: country,
-    ok:
-      response.ok &&
-      body.available === true &&
-      body.country === country &&
-      Boolean(firstPrice) &&
-      billingCountryMatches,
     status: response.status,
-    previewCountry: body.country || "",
-    currency: firstPrice?.currency || "",
-    display: firstPrice?.display || "",
-    billingCountry,
-    reason: body.reason || "",
+    responseOk: response.ok,
+  });
+}
+
+/**
+ * @param {{
+ *   preview: PricingPreview,
+ *   requestedCountry: string,
+ *   status: number,
+ *   responseOk: boolean
+ * }} input
+ * @returns {PricingCanaryResult}
+ */
+export function validatePricingPreviewBody({
+  preview,
+  requestedCountry,
+  status,
+  responseOk,
+}) {
+  const planValidations = SALE_OPEN_PLANS.map((plan) =>
+    validatePlanPricing(preview, plan, requestedCountry),
+  );
+  const topUpValidations = REQUIRED_USAGE_BUNDLES.map((bundle) =>
+    validateUsageBundlePricing(preview, bundle, requestedCountry),
+  );
+  const firstValidPrice = planValidations.find((plan) => plan.monthlyDisplay)?.monthlyDisplay
+    ? planValidations.find((plan) => plan.monthlyDisplay)
+    : planValidations[0];
+  return {
+    requestedCountry,
+    ok:
+      responseOk &&
+      preview.available === true &&
+      preview.country === requestedCountry &&
+      planValidations.every((plan) => plan.ok) &&
+      topUpValidations.every((bundle) => bundle.ok),
+    status,
+    previewCountry: preview.country || "",
+    currency: firstValidPrice?.currency || "",
+    display: firstValidPrice?.monthlyDisplay || "",
+    billingCountry: firstValidPrice?.billingCountry || "",
+    reason: preview.reason || "",
+    planValidations,
+    topUpValidations,
   };
+}
+
+/**
+ * @param {PricingPreview} preview
+ * @param {string} plan
+ * @param {string} country
+ * @returns {PlanPricingValidation}
+ */
+export function validatePlanPricing(preview, plan, country) {
+  const monthly = preview.prices?.[plan]?.monthly ?? null;
+  const annual = preview.prices?.[plan]?.yearly ?? null;
+  const annualValidation = preview.annualValidation?.[plan] ?? null;
+  const failures = [];
+  const monthlyCountry = normalizeCountry(monthly?.billingCountry);
+  const annualCountry = normalizeCountry(annual?.billingCountry);
+  const validationCountry = normalizeCountry(annualValidation?.billingCountry);
+  const monthlyCurrency = normalizeCurrency(monthly?.currency);
+  const annualCurrency = normalizeCurrency(annual?.currency);
+  const validationCurrency = normalizeCurrency(annualValidation?.currency);
+  const monthlyAmount = Number(annualValidation?.monthlyAmount);
+  const annualAmount = Number(annualValidation?.annualAmount);
+  const expectedAnnualAmount = Number(annualValidation?.expectedAnnualAmount);
+  const fourMonthsFreeAmount = monthlyAmount * 8;
+
+  if (!monthly?.display) failures.push("missing monthly price");
+  if (!annual?.display) failures.push("missing annual price");
+  if (!monthlyCurrency) failures.push("missing monthly currency");
+  if (!annualCurrency) failures.push("missing annual currency");
+  if (!validationCurrency) failures.push("missing annual validation currency");
+  if (!monthlyCountry) failures.push("missing monthly country");
+  if (!annualCountry) failures.push("missing annual country");
+  if (!validationCountry) failures.push("missing annual validation country");
+  if (monthlyCurrency && annualCurrency && monthlyCurrency !== annualCurrency) {
+    failures.push(`annual currency ${annualCurrency}`);
+  }
+  if (monthlyCurrency && validationCurrency && monthlyCurrency !== validationCurrency) {
+    failures.push(`annual validation currency ${validationCurrency}`);
+  }
+  if (monthlyCountry && monthlyCountry !== country) failures.push(`monthly country ${monthlyCountry}`);
+  if (annualCountry && annualCountry !== country) failures.push(`annual country ${annualCountry}`);
+  if (validationCountry && validationCountry !== country) {
+    failures.push(`annual validation country ${validationCountry}`);
+  }
+  if (annualValidation?.valid !== true) failures.push("annual validation failed");
+  if (annualValidation?.reason !== "valid_4_months_free") {
+    failures.push(`annual reason ${annualValidation?.reason || "missing"}`);
+  }
+  if (!Number.isFinite(monthlyAmount) || !Number.isFinite(annualAmount)) {
+    failures.push("missing validation amounts");
+  } else if (annualAmount !== fourMonthsFreeAmount) {
+    failures.push("annual amount is not monthly x 8");
+  }
+  if (Number.isFinite(expectedAnnualAmount) && expectedAnnualAmount !== fourMonthsFreeAmount) {
+    failures.push("expected annual amount is not monthly x 8");
+  }
+
+  return {
+    plan,
+    ok: failures.length === 0,
+    monthlyDisplay: monthly?.display || "",
+    annualDisplay: annual?.display || "",
+    currency: validationCurrency || monthlyCurrency || annualCurrency || "",
+    billingCountry: validationCountry || monthlyCountry || annualCountry || "",
+    failures,
+  };
+}
+
+/**
+ * @param {PricingPreview} preview
+ * @param {string} bundle
+ * @param {string} country
+ * @returns {UsageBundlePricingValidation}
+ */
+export function validateUsageBundlePricing(preview, bundle, country) {
+  const price = preview.usageBundles?.[bundle] ?? null;
+  const billingCountry = normalizeCountry(price?.billingCountry);
+  const failures = [];
+
+  if (!price?.display) failures.push("missing bundle price");
+  if (!price?.currency) failures.push("missing bundle currency");
+  if (!billingCountry) failures.push("missing bundle country");
+  if (billingCountry && billingCountry !== country) failures.push(`bundle country ${billingCountry}`);
+
+  return {
+    bundle,
+    ok: failures.length === 0,
+    display: price?.display || "",
+    currency: price?.currency || "",
+    billingCountry,
+    failures,
+  };
+}
+
+/**
+ * @param {unknown} value
+ */
+export function normalizeCountry(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+/**
+ * @param {unknown} value
+ */
+export function normalizeCurrency(value) {
+  return String(value || "").trim().toUpperCase();
 }
 
 /**
  * @param {PricingCanaryResult[]} results
  */
-function formatReport(results) {
+export function formatReport(results) {
   const lines = [`Dodo pricing canary: ${results.every((result) => result.ok) ? "ok" : "failed"}`];
   for (const result of results) {
     lines.push(
       `${result.requestedCountry}: ${result.ok ? "ok" : "failed"} ` +
         `(status ${result.status}, preview ${result.previewCountry || "none"}, ` +
-        `${result.currency || "no currency"} ${result.display || "no price"}, ` +
-        `billing ${result.billingCountry || "none"}${result.reason ? `, ${result.reason}` : ""})`,
+        `${result.currency || "no currency"} ${result.display || "no monthly price"}, ` +
+        `billing ${result.billingCountry || "none"}, ` +
+        `monthly/annual ${formatPlanValidations(result.planValidations)}, ` +
+        `top-ups ${formatTopUpValidations(result.topUpValidations)}` +
+        `${result.reason ? `, ${result.reason}` : ""})`,
     );
   }
   return lines.join("\n");
 }
 
-const config = parseArgs(process.argv.slice(2));
-const token = process.env.CANARY_BYPASS_TOKEN?.trim();
-if (!token) {
-  console.error("Missing CANARY_BYPASS_TOKEN; source .dev.vars or set the secret before running this canary.");
-  process.exit(1);
+/**
+ * @param {PlanPricingValidation[]} planValidations
+ */
+export function formatPlanValidations(planValidations) {
+  return planValidations
+    .map((plan) => {
+      if (plan.ok) return `${plan.plan}: ok`;
+      return `${plan.plan}: ${plan.failures.join("; ") || "failed"}`;
+    })
+    .join(", ");
 }
 
-const results = await Promise.all(
-  config.countries.map((country) => fetchPreview({ baseUrl: config.baseUrl, country, token })),
-);
-
-if (config.json) {
-  console.log(JSON.stringify({ ok: results.every((result) => result.ok), results }, null, 2));
-} else {
-  console.log(formatReport(results));
+/**
+ * @param {UsageBundlePricingValidation[]} topUpValidations
+ */
+export function formatTopUpValidations(topUpValidations) {
+  return topUpValidations
+    .map((bundle) => {
+      if (bundle.ok) return `${bundle.bundle}: ok`;
+      return `${bundle.bundle}: ${bundle.failures.join("; ") || "failed"}`;
+    })
+    .join(", ");
 }
 
-if (!results.every((result) => result.ok)) {
-  process.exitCode = 1;
+export async function main(args = process.argv.slice(2), env = process.env) {
+  const config = parseArgs(args);
+  const token = env.CANARY_BYPASS_TOKEN?.trim();
+  if (!token) {
+    console.error("Missing CANARY_BYPASS_TOKEN; source .dev.vars or set the secret before running this canary.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const results = await Promise.all(
+    config.countries.map((country) => fetchPreview({ baseUrl: config.baseUrl, country, token })),
+  );
+
+  if (config.json) {
+    console.log(JSON.stringify({ ok: results.every((result) => result.ok), results }, null, 2));
+  } else {
+    console.log(formatReport(results));
+  }
+
+  if (!results.every((result) => result.ok)) {
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
 }

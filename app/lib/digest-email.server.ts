@@ -131,7 +131,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
       <p style="margin: 0 0 16px;">
         We ran ${heartbeat.runs} check${heartbeat.runs === 1 ? "" : "s"} across ${heartbeat.watchlistsChecked} competitor${heartbeat.watchlistsChecked === 1 ? "" : "s"}
-        and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. No visible changes to offers, headlines, CTAs, forms, or destinations need action.
+        and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran.
       </p>
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
@@ -147,7 +147,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     `All quiet: no competitor moves worth action ${quietPeriodLabel}.`,
     dateRange,
     "",
-    `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. No visible changes to offers, headlines, CTAs, forms, or destinations need action.`,
+    `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
     "",
     `Review digest history: ${input.fullDigestUrl}`,
     `Manage frequency: ${input.manageFrequencyUrl}`,

@@ -293,7 +293,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         message: isZeroLimit
           ? "Retained competitor monitoring is available on paid plans. Starter is the recommended plan to track this competitor."
           : "You have reached your competitor tracking limit.",
-        upgradePath: "/#pricing",
+        upgradePath: "/app/billing?source=search#plans",
       };
     }
 
@@ -341,7 +341,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         message: isZeroLimit
           ? "Retained competitor monitoring is available on paid plans. Starter is the recommended plan to track this competitor."
           : "You have reached your competitor tracking limit.",
-        upgradePath: "/#pricing",
+        upgradePath: "/app/billing?source=search#plans",
       };
     }
 
@@ -517,7 +517,7 @@ export default function SearchRoute() {
                 {"error" in actionData && actionData.error === "plan_limit_exceeded" ? (
                   <>
                     {" "}
-                    <Link to="/#pricing">View plans</Link> to raise the limit.
+                    <Link to="/app/billing?source=search#plans">View plans</Link> to raise the limit.
                   </>
                 ) : null}
               </p>

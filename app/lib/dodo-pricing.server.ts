@@ -1,6 +1,7 @@
 import type { AppEnv } from "~/lib/env.server";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import {
+  legacyBundleSlugForSku,
   listSkusMissingProviderConfiguration,
   readProviderProductId,
   resolveBillingSku,
@@ -8,6 +9,15 @@ import {
   type BillingSkuSlug,
 } from "~/lib/billing-sku-catalog";
 import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
+import { countryFromRequest, hasValidCanaryToken } from "~/lib/dodo-pricing-country.server";
+import {
+  dodoPreviewProductIssue,
+  normalizeDodoPlanPricePreview,
+  normalizeDodoUsageBundlePricePreview,
+  pricingContextFromPrice,
+  type DodoCheckoutPricingContext,
+  type DodoDisplayPriceBase,
+} from "~/lib/dodo-pricing-preview.server";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 
 const DODO_LIVE_URL = "https://live.dodopayments.com";
@@ -20,19 +30,11 @@ const USAGE_BUNDLE_CREDITS: Record<UsageBundleSlug, number> = {
   proof_2000: 2000,
   proof_7500: 7500,
 };
+const PAID_PLAN_SLUGS: PricingPlanSlug[] = ["scout", "starter", "agency"];
+export type { DodoCheckoutPricingContext } from "~/lib/dodo-pricing-preview.server";
 
 type DodoProductMatrix = Record<PricingPlanSlug, Record<PricingBillingCycle, string>>;
 type DodoUsageBundleProductMap = Record<UsageBundleSlug, string>;
-
-interface DodoDisplayPriceBase {
-  amount: number | null;
-  billingCountry: string;
-  currency: string;
-  display: string;
-  feesInclusive: boolean;
-  taxInclusive: boolean;
-  totalTax: number | null;
-}
 
 export interface DodoPlanDisplayPrice extends DodoDisplayPriceBase {
   planId: PricingPlanSlug;
@@ -41,6 +43,59 @@ export interface DodoPlanDisplayPrice extends DodoDisplayPriceBase {
 
 export interface DodoUsageBundleDisplayPrice extends DodoDisplayPriceBase {
   bundleId: UsageBundleSlug;
+}
+
+export type DodoAnnualValidationReason =
+  | "valid_4_months_free"
+  | "missing_monthly_price"
+  | "missing_annual_price"
+  | "product_mismatch"
+  | "product_type_mismatch"
+  | "currency_mismatch"
+  | "billing_context_mismatch"
+  | "amount_mismatch";
+
+export interface DodoAnnualPlanValidation {
+  planId: PricingPlanSlug;
+  valid: boolean;
+  reason: DodoAnnualValidationReason;
+  monthlyAmount: number | null;
+  annualAmount: number | null;
+  expectedAnnualAmount: number | null;
+  currency: string | null;
+  billingCountry: string | null;
+}
+
+export type DodoPlanCheckoutValidationReason =
+  | "valid_preview"
+  | "missing_monthly_price"
+  | "missing_annual_price"
+  | DodoAnnualValidationReason;
+
+export interface DodoPlanCheckoutValidation {
+  planId: PricingPlanSlug;
+  cycle: PricingBillingCycle;
+  valid: boolean;
+  reason: DodoPlanCheckoutValidationReason;
+  price: DodoPlanDisplayPrice | null;
+  pricingContext: DodoCheckoutPricingContext | null;
+  annualValidation: DodoAnnualPlanValidation | null;
+}
+
+export type DodoTopUpCheckoutValidationReason =
+  | "valid_preview"
+  | "missing_bundle_price"
+  | "billing_context_mismatch"
+  | "product_mismatch"
+  | "product_type_mismatch";
+
+export interface DodoTopUpCheckoutValidation {
+  sku: BillingSkuSlug;
+  bundleId: UsageBundleSlug | null;
+  valid: boolean;
+  reason: DodoTopUpCheckoutValidationReason;
+  price: DodoUsageBundleDisplayPrice | null;
+  pricingContext: DodoCheckoutPricingContext | null;
 }
 
 export interface DodoPricingPreview {
@@ -52,6 +107,7 @@ export interface DodoPricingPreview {
   reason?: string;
   source: "dodo_checkout_preview";
   prices: Partial<Record<PricingPlanSlug, Partial<Record<PricingBillingCycle, DodoPlanDisplayPrice>>>>;
+  annualValidation: Partial<Record<PricingPlanSlug, DodoAnnualPlanValidation>>;
   usageBundles: Partial<Record<UsageBundleSlug, DodoUsageBundleDisplayPrice>>;
 }
 
@@ -149,18 +205,22 @@ export async function previewDodo0509PlanPrices({
   env,
   request,
   fetcher = fetch,
+  bypassCache = false,
+  trustProxyHeaders = true,
 }: {
   env: AppEnv;
   request: Request;
   fetcher?: typeof fetch;
+  bypassCache?: boolean;
+  trustProxyHeaders?: boolean;
 }): Promise<DodoPricingPreview> {
   const apiKey = dodo0509ApiKey(env);
   const brandId = dodo0509BrandId(env);
-  if (!apiKey) return unavailable("missing_api_key", env, request);
-  if (!brandId) return unavailable("missing_brand_id", env, request);
+  if (!apiKey) return unavailable("missing_api_key", env, request, trustProxyHeaders);
+  if (!brandId) return unavailable("missing_brand_id", env, request, trustProxyHeaders);
 
-  const country = countryFromRequest(env, request);
-  const bypassCache = hasValidCanaryToken(env, request);
+  const country = countryFromRequest(env, request, { trustProxyHeaders });
+  const skipCache = bypassCache || hasValidCanaryToken(env, request);
   const products = dodo0509ProductIds(env);
   const bundles = dodo0509UsageBundleProductIds(env);
   const configuredPlans = Object.entries(products).flatMap(([planId, cycles]) =>
@@ -193,7 +253,7 @@ export async function previewDodo0509PlanPrices({
     configuredBundles.map((item) => `${item.bundleId}:${item.productId}`).join("|"),
   ].join(":");
   const cached = pricePreviewCache.get(cacheKey);
-  if (!bypassCache && cached && Date.now() - cached.createdAt < PRICE_PREVIEW_CACHE_MS) {
+  if (!skipCache && cached && Date.now() - cached.createdAt < PRICE_PREVIEW_CACHE_MS) {
     return cached.value;
   }
 
@@ -201,7 +261,17 @@ export async function previewDodo0509PlanPrices({
     configuredPlans.map(async ({ planId, cycle, productId }) => {
       try {
         const payload = await requestDodo0509CheckoutPreview(env, apiKey, productId, country, fetcher);
-        return [planId, cycle, normalizeDodoPlanPricePreview(payload, env, planId, cycle)] as const;
+        return [
+          planId,
+          cycle,
+          normalizeDodoPlanPricePreview(payload, {
+            feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
+            planId,
+            cycle,
+            expectedProductId: productId,
+            expectedIsSubscription: true,
+          }),
+        ] as const;
       } catch {
         return [planId, cycle, null] as const;
       }
@@ -211,7 +281,15 @@ export async function previewDodo0509PlanPrices({
     configuredBundles.map(async ({ bundleId, productId }) => {
       try {
         const payload = await requestDodo0509CheckoutPreview(env, apiKey, productId, country, fetcher);
-        return [bundleId, normalizeDodoUsageBundlePricePreview(payload, env, bundleId)] as const;
+        return [
+          bundleId,
+          normalizeDodoUsageBundlePricePreview(payload, {
+            feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
+            bundleId,
+            expectedProductId: productId,
+            expectedIsSubscription: false,
+          }),
+        ] as const;
       } catch {
         return [bundleId, null] as const;
       }
@@ -220,12 +298,12 @@ export async function previewDodo0509PlanPrices({
 
   const prices: DodoPricingPreview["prices"] = {};
   for (const [planId, cycle, price] of planEntries) {
-    if (!price?.display) continue;
+    if (!price?.display || hasMismatchedBillingCountry(country, price)) continue;
     prices[planId] = { ...prices[planId], [cycle]: price };
   }
   const usageBundles: DodoPricingPreview["usageBundles"] = {};
   for (const [bundleId, price] of bundleEntries) {
-    if (!price?.display) continue;
+    if (!price?.display || hasMismatchedBillingCountry(country, price)) continue;
     usageBundles[bundleId] = price;
   }
 
@@ -237,16 +315,388 @@ export async function previewDodo0509PlanPrices({
     adaptiveCurrency: dodo0509AdaptiveCurrencyEnabled(env),
     feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
     prices,
+    annualValidation: buildDodoAnnualValidation(prices),
     usageBundles,
     ...(Object.keys(prices).length === 0 && Object.keys(usageBundles).length === 0
       ? { reason: "preview_failed" }
       : {}),
   };
 
-  if (!bypassCache) {
+  const expectedPreviewCount = configuredPlans.length + configuredBundles.length;
+  const actualPreviewCount =
+    configuredPlans.filter(({ planId, cycle }) => Boolean(prices[planId]?.[cycle]?.display)).length +
+    configuredBundles.filter(({ bundleId }) => Boolean(usageBundles[bundleId]?.display)).length;
+  const previewIsComplete = expectedPreviewCount > 0 && actualPreviewCount === expectedPreviewCount;
+
+  if (!skipCache && previewIsComplete) {
     pricePreviewCache.set(cacheKey, { createdAt: Date.now(), value });
   }
   return value;
+}
+
+export async function validateDodo0509PlanCheckout({
+  env,
+  request,
+  plan,
+  cycle,
+  fetcher = fetch,
+}: {
+  env: AppEnv;
+  request: Request;
+  plan: PricingPlanSlug;
+  cycle: PricingBillingCycle;
+  fetcher?: typeof fetch;
+}): Promise<DodoPlanCheckoutValidation> {
+  const apiKey = dodo0509ApiKey(env);
+  const brandId = dodo0509BrandId(env);
+  if (!apiKey || !brandId) {
+    return {
+      planId: plan,
+      cycle,
+      valid: false,
+      reason: cycle === "yearly" ? "missing_annual_price" : "missing_monthly_price",
+      price: null,
+      pricingContext: null,
+      annualValidation: cycle === "yearly" ? missingAnnualValidation(plan, "missing_annual_price") : null,
+    };
+  }
+
+  const products = dodo0509ProductIds(env);
+  const country = countryFromRequest(env, request, { trustProxyHeaders: false });
+  const productId = products[plan]?.[cycle];
+  if (!productId) {
+    return {
+      planId: plan,
+      cycle,
+      valid: false,
+      reason: cycle === "yearly" ? "missing_annual_price" : "missing_monthly_price",
+      price: null,
+      pricingContext: null,
+      annualValidation: cycle === "yearly" ? missingAnnualValidation(plan, "missing_annual_price") : null,
+    };
+  }
+
+  const selectedPreview = await requestStrictDodo0509PlanPricePreview(
+    env,
+    apiKey,
+    productId,
+    country,
+    fetcher,
+    plan,
+    cycle,
+  );
+  if (selectedPreview.productIssue) {
+    return {
+      planId: plan,
+      cycle,
+      valid: false,
+      reason: selectedPreview.productIssue,
+      price: selectedPreview.price,
+      pricingContext: pricingContextFromPrice(country, selectedPreview.price),
+      annualValidation:
+        cycle === "yearly" ? missingAnnualValidation(plan, selectedPreview.productIssue) : null,
+    };
+  }
+
+  const price = selectedPreview.price;
+  if (!price?.display || !Number.isFinite(price.amount)) {
+    return {
+      planId: plan,
+      cycle,
+      valid: false,
+      reason: cycle === "yearly" ? "missing_annual_price" : "missing_monthly_price",
+      price: price ?? null,
+      pricingContext: pricingContextFromPrice(country, price ?? null),
+      annualValidation: cycle === "yearly" ? missingAnnualValidation(plan, "missing_annual_price") : null,
+    };
+  }
+  if (hasMismatchedBillingCountry(country, price)) {
+    return {
+      planId: plan,
+      cycle,
+      valid: false,
+      reason: "billing_context_mismatch",
+      price,
+      pricingContext: pricingContextFromPrice(country, price),
+      annualValidation:
+        cycle === "yearly"
+          ? missingAnnualValidation(plan, "billing_context_mismatch", undefined, price)
+          : null,
+    };
+  }
+
+  if (cycle === "yearly") {
+    const monthlyProductId = products[plan]?.monthly;
+    const monthlyPreview =
+      monthlyProductId === productId
+        ? { price, productIssue: null }
+        : monthlyProductId
+          ? await requestStrictDodo0509PlanPricePreview(
+              env,
+              apiKey,
+              monthlyProductId,
+              country,
+              fetcher,
+              plan,
+              "monthly",
+            )
+          : { price: null, productIssue: null };
+    if (monthlyPreview.productIssue) {
+      return {
+        planId: plan,
+        cycle,
+        valid: false,
+        reason: monthlyPreview.productIssue,
+        price,
+        pricingContext: pricingContextFromPrice(country, price),
+        annualValidation: missingAnnualValidation(
+          plan,
+          monthlyPreview.productIssue,
+          monthlyPreview.price ?? undefined,
+          price,
+        ),
+      };
+    }
+    const monthlyPrice = monthlyPreview.price;
+    if (hasMismatchedBillingCountry(country, monthlyPrice)) {
+      return {
+        planId: plan,
+        cycle,
+        valid: false,
+        reason: "billing_context_mismatch",
+        price,
+        pricingContext: pricingContextFromPrice(country, price),
+        annualValidation: missingAnnualValidation(
+          plan,
+          "billing_context_mismatch",
+          monthlyPrice ?? undefined,
+          price,
+        ),
+      };
+    }
+    const annualValidation = validateDodoAnnualPricePair(plan, monthlyPrice ?? undefined, price);
+    return {
+      planId: plan,
+      cycle,
+      valid: annualValidation.valid,
+      reason: annualValidation.valid ? "valid_preview" : annualValidation.reason,
+      price,
+      pricingContext: pricingContextFromPrice(country, price),
+      annualValidation,
+    };
+  }
+
+  return {
+    planId: plan,
+    cycle,
+    valid: true,
+    reason: "valid_preview",
+    price,
+    pricingContext: pricingContextFromPrice(country, price),
+    annualValidation: null,
+  };
+}
+
+export async function validateDodo0509TopUpCheckout({
+  env,
+  request,
+  sku,
+  fetcher = fetch,
+}: {
+  env: AppEnv;
+  request: Request;
+  sku: BillingSkuSlug;
+  fetcher?: typeof fetch;
+}): Promise<DodoTopUpCheckoutValidation> {
+  const apiKey = dodo0509ApiKey(env);
+  const brandId = dodo0509BrandId(env);
+  const bundleId = legacyBundleSlugForSku(sku);
+  const invalid = (
+    reason: DodoTopUpCheckoutValidationReason,
+    price: DodoUsageBundleDisplayPrice | null = null,
+  ): DodoTopUpCheckoutValidation => ({
+    sku,
+    bundleId,
+    valid: false,
+    reason,
+    price,
+    pricingContext: pricingContextFromPrice(countryFromRequest(env, request, { trustProxyHeaders: false }), price),
+  });
+
+  if (!apiKey || !brandId || !bundleId) {
+    return invalid("missing_bundle_price");
+  }
+
+  const billingSku = resolveBillingSku(sku);
+  const productId = billingSku ? readProviderProductId(env, billingSku) : "";
+  if (!productId) {
+    return invalid("missing_bundle_price");
+  }
+
+  const country = countryFromRequest(env, request, { trustProxyHeaders: false });
+  let payload: unknown;
+  try {
+    payload = await requestDodo0509CheckoutPreview(env, apiKey, productId, country, fetcher);
+  } catch {
+    return {
+      sku,
+      bundleId,
+      valid: false,
+      reason: "missing_bundle_price",
+      price: null,
+      pricingContext: null,
+    };
+  }
+
+  const productIssue = dodoPreviewProductIssue(payload, productId, false, true);
+  const price = productIssue
+    ? null
+    : normalizeDodoUsageBundlePricePreview(payload, {
+        feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
+        bundleId,
+        expectedProductId: productId,
+        expectedIsSubscription: false,
+        requireExpectedProduct: true,
+      });
+  if (productIssue || !price?.display || !Number.isFinite(price.amount)) {
+    return {
+      sku,
+      bundleId,
+      valid: false,
+      reason: productIssue ?? "missing_bundle_price",
+      price,
+      pricingContext: pricingContextFromPrice(country, price),
+    };
+  }
+  if (hasMismatchedBillingCountry(country, price)) {
+    return {
+      sku,
+      bundleId,
+      valid: false,
+      reason: "billing_context_mismatch",
+      price,
+      pricingContext: pricingContextFromPrice(country, price),
+    };
+  }
+
+  return {
+    sku,
+    bundleId,
+    valid: true,
+    reason: "valid_preview",
+    price,
+    pricingContext: pricingContextFromPrice(country, price),
+  };
+}
+
+function buildDodoAnnualValidation(
+  prices: DodoPricingPreview["prices"],
+): DodoPricingPreview["annualValidation"] {
+  const result: DodoPricingPreview["annualValidation"] = {};
+  for (const planId of PAID_PLAN_SLUGS) {
+    const monthly = prices[planId]?.monthly;
+    const annual = prices[planId]?.yearly;
+    result[planId] = validateDodoAnnualPricePair(planId, monthly, annual);
+  }
+  return result;
+}
+
+function validateDodoAnnualPricePair(
+  planId: PricingPlanSlug,
+  monthly: DodoPlanDisplayPrice | undefined,
+  annual: DodoPlanDisplayPrice | undefined,
+): DodoAnnualPlanValidation {
+  if (!monthly || !Number.isFinite(monthly.amount)) {
+    return missingAnnualValidation(planId, "missing_monthly_price", monthly, annual);
+  }
+  if (!annual || !Number.isFinite(annual.amount)) {
+    return missingAnnualValidation(planId, "missing_annual_price", monthly, annual);
+  }
+
+  const monthlyCurrency = monthly.currency.trim().toUpperCase();
+  const annualCurrency = annual.currency.trim().toUpperCase();
+  const monthlyCountry = monthly.billingCountry.trim().toUpperCase();
+  const annualCountry = annual.billingCountry.trim().toUpperCase();
+  const monthlyValidationAmount = Number.isFinite(monthly.validationAmount)
+    ? Number(monthly.validationAmount)
+    : Number(monthly.amount);
+  const annualValidationAmount = Number.isFinite(annual.validationAmount)
+    ? Number(annual.validationAmount)
+    : Number(annual.amount);
+  const expectedAnnualAmount = monthlyValidationAmount * 8;
+  const base = {
+    planId,
+    monthlyAmount: monthlyValidationAmount,
+    annualAmount: annualValidationAmount,
+    expectedAnnualAmount,
+    currency: annualCurrency || monthlyCurrency || null,
+    billingCountry: annualCountry || monthlyCountry || null,
+  };
+
+  if (!monthlyCurrency || !annualCurrency || monthlyCurrency !== annualCurrency) {
+    return { ...base, valid: false, reason: "currency_mismatch" };
+  }
+  if (monthlyCountry && annualCountry && monthlyCountry !== annualCountry) {
+    return { ...base, valid: false, reason: "billing_context_mismatch" };
+  }
+  if (annualValidationAmount !== expectedAnnualAmount) {
+    return { ...base, valid: false, reason: "amount_mismatch" };
+  }
+
+  return { ...base, valid: true, reason: "valid_4_months_free" };
+}
+
+function missingAnnualValidation(
+  planId: PricingPlanSlug,
+  reason: Extract<
+    DodoAnnualValidationReason,
+    | "missing_monthly_price"
+    | "missing_annual_price"
+    | "product_mismatch"
+    | "product_type_mismatch"
+    | "billing_context_mismatch"
+  >,
+  monthly?: DodoPlanDisplayPrice,
+  annual?: DodoPlanDisplayPrice,
+): DodoAnnualPlanValidation {
+  const monthlyAmount = Number.isFinite(monthly?.validationAmount)
+    ? monthly!.validationAmount
+    : Number.isFinite(monthly?.amount)
+      ? monthly!.amount
+      : null;
+  const annualAmount = Number.isFinite(annual?.validationAmount)
+    ? annual!.validationAmount
+    : Number.isFinite(annual?.amount)
+      ? annual!.amount
+      : null;
+  const monthlyCurrency = monthly?.currency?.trim().toUpperCase() ?? "";
+  const annualCurrency = annual?.currency?.trim().toUpperCase() ?? "";
+  const monthlyCountry = monthly?.billingCountry?.trim().toUpperCase() ?? "";
+  const annualCountry = annual?.billingCountry?.trim().toUpperCase() ?? "";
+  return {
+    planId,
+    valid: false,
+    reason,
+    monthlyAmount,
+    annualAmount,
+    expectedAnnualAmount: monthlyAmount === null ? null : monthlyAmount * 8,
+    currency: annualCurrency || monthlyCurrency || null,
+    billingCountry: annualCountry || monthlyCountry || null,
+  };
+}
+
+function hasMismatchedBillingCountry(
+  expectedCountry: string,
+  price: DodoDisplayPriceBase | null | undefined,
+) {
+  const expected = normalizeIsoCountry(expectedCountry);
+  const actual = normalizeIsoCountry(price?.billingCountry);
+  return Boolean(expected && actual && actual !== expected);
+}
+
+function normalizeIsoCountry(value: unknown) {
+  const country = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(country) && country !== "XX" ? country : "";
 }
 
 async function requestDodo0509CheckoutPreview(
@@ -284,119 +734,52 @@ async function requestDodo0509CheckoutPreview(
   return payload;
 }
 
-function normalizeDodoPricePreviewBase(
-  payload: unknown,
+async function requestStrictDodo0509PlanPricePreview(
   env: AppEnv,
-): DodoDisplayPriceBase | null {
-  const value = objectOrEmpty(payload);
-  const currentBreakup = objectOrEmpty(value.current_breakup);
-  const product = Array.isArray(value.product_cart) ? objectOrEmpty(value.product_cart[0]) : {};
-  const currency = normalizeCurrency(value.currency ?? currentBreakup.currency);
-  const amount = numberOrNull(
-    currentBreakup.total_amount ?? value.total_price ?? value.total_amount ?? product.discounted_price,
-  );
-  const display = formatDodoAmount(amount, currency);
-  if (!display) return null;
-
-  return {
-    display,
-    amount,
-    currency,
-    billingCountry: String(value.billing_country || "").toUpperCase(),
-    taxInclusive: Boolean(product.tax_inclusive),
-    feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
-    totalTax: numberOrNull(value.total_tax),
-  };
-}
-
-function normalizeDodoPlanPricePreview(
-  payload: unknown,
-  env: AppEnv,
+  apiKey: string,
+  productId: string,
+  country: string,
+  fetcher: typeof fetch,
   planId: PricingPlanSlug,
   cycle: PricingBillingCycle,
-): DodoPlanDisplayPrice | null {
-  const base = normalizeDodoPricePreviewBase(payload, env);
-  return base ? { ...base, planId, cycle } : null;
+) {
+  try {
+    const payload = await requestDodo0509CheckoutPreview(env, apiKey, productId, country, fetcher);
+    const productIssue = dodoPreviewProductIssue(payload, productId, true, true);
+    return {
+      price: productIssue
+        ? null
+        : normalizeDodoPlanPricePreview(payload, {
+            feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
+            planId,
+            cycle,
+            expectedProductId: productId,
+            expectedIsSubscription: true,
+            requireExpectedProduct: true,
+          }),
+      productIssue,
+    };
+  } catch {
+    return { price: null, productIssue: null };
+  }
 }
 
-function normalizeDodoUsageBundlePricePreview(
-  payload: unknown,
+function unavailable(
+  reason: string,
   env: AppEnv,
-  bundleId: UsageBundleSlug,
-): DodoUsageBundleDisplayPrice | null {
-  const base = normalizeDodoPricePreviewBase(payload, env);
-  return base ? { ...base, bundleId } : null;
-}
-
-function unavailable(reason: string, env: AppEnv, request: Request): DodoPricingPreview {
+  request: Request,
+  trustProxyHeaders = true,
+): DodoPricingPreview {
   return {
     available: false,
     provider: "dodo",
     source: "dodo_checkout_preview",
-    country: countryFromRequest(env, request),
+    country: countryFromRequest(env, request, { trustProxyHeaders }),
     adaptiveCurrency: dodo0509AdaptiveCurrencyEnabled(env),
     feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
     reason,
     prices: {},
+    annualValidation: {},
     usageBundles: {},
   };
-}
-
-function countryFromRequest(env: AppEnv, request: Request) {
-  const canaryCountry = canaryCountryOverride(env, request);
-  if (canaryCountry) return canaryCountry;
-
-  const cloudflareCountry = String((request as Request & { cf?: { country?: string } }).cf?.country || "").toUpperCase();
-  const headerCountry = String(request.headers.get("cf-ipcountry") || request.headers.get("x-country") || "").toUpperCase();
-  const country = cloudflareCountry || headerCountry;
-  return /^[A-Z]{2}$/.test(country) && country !== "XX" ? country : "";
-}
-
-function canaryCountryOverride(env: AppEnv, request: Request) {
-  if (!hasValidCanaryToken(env, request)) {
-    return "";
-  }
-
-  const urlCountry = new URL(request.url).searchParams.get("country");
-  const headerCountry = request.headers.get("x-0509-pricing-country");
-  const country = String(urlCountry || headerCountry || "").toUpperCase();
-  return /^[A-Z]{2}$/.test(country) && country !== "XX" ? country : "";
-}
-
-function hasValidCanaryToken(env: AppEnv, request: Request) {
-  const token = env.CANARY_BYPASS_TOKEN?.trim();
-  return Boolean(token && request.headers.get("x-0509-canary-token") === token);
-}
-
-function formatDodoAmount(minorAmount: number | null, currency: string) {
-  if (!Number.isFinite(minorAmount) || !currency) return "";
-  try {
-    const decimals = new Intl.NumberFormat("en", {
-      style: "currency",
-      currency,
-    }).resolvedOptions().maximumFractionDigits ?? 2;
-    const majorAmount = Math.ceil(Number(minorAmount) / 10 ** decimals);
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      currencyDisplay: "narrowSymbol",
-      maximumFractionDigits: 0,
-      minimumFractionDigits: 0,
-    }).format(majorAmount);
-  } catch {
-    return `${currency} ${Math.ceil(Number(minorAmount) / 100)}`;
-  }
-}
-
-function normalizeCurrency(value: unknown) {
-  return String(value || "").trim().toUpperCase();
-}
-
-function numberOrNull(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function objectOrEmpty(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }

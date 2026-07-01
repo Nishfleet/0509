@@ -26,6 +26,7 @@ export default [
   route("auth/reset-password", "routes/auth.reset-password.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/billing/dodo/checkout", "routes/api.billing.dodo.checkout.ts"),
+  route("api/billing/dodo/cancel", "routes/api.billing.dodo.cancel.ts"),
   route("api/billing/dodo/canary", "routes/api.billing.dodo.canary.ts"),
   route("api/billing/dodo/portal", "routes/api.billing.dodo.portal.ts"),
   route("api/demo-proof", "routes/api.demo-proof.ts"),

@@ -96,18 +96,40 @@ async function mockRouter(loaderData: unknown) {
   });
 }
 
-function mockDashboardLoaderDependencies(options: { counterMoveAudits?: unknown[]; watchlists?: unknown[] } = {}) {
+function mockDashboardLoaderDependencies(options: {
+  counterMoveAudits?: unknown[];
+  watchlists?: unknown[];
+  workspace?: {
+    workspaceUserId?: string;
+    isMember?: boolean;
+    ownerName?: string | null;
+  };
+} = {}) {
   const liveKey = ["f9", "live", "dashboard"].join("_");
   const counterMoveAudits = options.counterMoveAudits ?? [];
   const listWatchlists = vi.fn().mockResolvedValue(options.watchlists ?? []);
   const listWatchEvents = vi.fn().mockResolvedValue([]);
+  const workspace = {
+    workspaceUserId: options.workspace?.workspaceUserId ?? session.user.id,
+    isMember: options.workspace?.isMember ?? false,
+    ownerName: options.workspace?.ownerName ?? null,
+  };
+  const getWorkspaceReadiness = vi.fn().mockResolvedValue({
+    generatedAt: "2026-06-20T00:00:00.000Z",
+    readyCount: 1,
+    totalCount: 1,
+    items: [],
+    nextActions: [],
+    nudges: [],
+    counts: {
+      agentMemoryEntries: 1,
+    },
+  });
 
   vi.doMock("~/lib/auth.server", () => ({
     requireWorkspaceSession: vi.fn(async () => ({
       session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
+      ...workspace,
     })),
   }));
   vi.doMock("~/lib/ad-source.server", () => ({
@@ -161,23 +183,14 @@ function mockDashboardLoaderDependencies(options: { counterMoveAudits?: unknown[
     }),
   }));
   vi.doMock("~/lib/workspace-readiness.server", () => ({
-    getWorkspaceReadiness: vi.fn().mockResolvedValue({
-      generatedAt: "2026-06-20T00:00:00.000Z",
-      readyCount: 1,
-      totalCount: 1,
-      items: [],
-      nextActions: [],
-      nudges: [],
-      counts: {
-        agentMemoryEntries: 1,
-      },
-    }),
+    getWorkspaceReadiness,
   }));
   vi.doMock("~/lib/workspace.server", () => ({
     listWorkspaceMembers: vi.fn().mockResolvedValue([]),
   }));
 
   return {
+    getWorkspaceReadiness,
     listWatchEvents,
     listWatchlists,
   };
@@ -245,6 +258,28 @@ describe("dashboard route agent memory", () => {
 
     expect(deps.listWatchEvents).not.toHaveBeenCalled();
     expect(loaderData.recentEvents).toEqual([]);
+  });
+
+  it("passes workspace member billing context into readiness", async () => {
+    const deps = mockDashboardLoaderDependencies({
+      workspace: {
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Agency Owner",
+      },
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(deps.getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "owner-1", {
+      isMember: true,
+      billingOwnerName: "Agency Owner",
+      canManageBilling: false,
+    });
   });
 
   it("renders the queued Market Desk Brief when an active competitor has no scan yet", async () => {
