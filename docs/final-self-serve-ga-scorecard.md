@@ -35,7 +35,7 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 | Dependency audit | PASS | `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilities |
 | Backup validator | PASS local dry-run | `node scripts/validate-d1-backup.mjs`; latest repo migration `0060_remove_legacy_billing_provider.sql` |
 | D1-to-R2 scheduled workflow | REPO CONFIGURED / OWNER SECRET | `.github/workflows/d1-backup-r2.yml` runs weekly/manual backup through `npm run backup:d1:r2`; required GitHub Cloudflare secrets were not listed locally, so first scheduled run is unproven; D1 export blocking risk documented |
-| Uptime health workflow | MANUAL PASS / SCHEDULED ALERT UNPROVEN | `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health` every 5 minutes without secrets; manual run `28540913266` passed on `main`; first scheduled run and GitHub failure-notification routing still need owner/operator confirmation |
+| Uptime health workflow | MANUAL PASS / SCHEDULED ALERT UNPROVEN | `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health` on an offset five-minute schedule without secrets; manual run `28540913266` passed on `main`; first scheduled run and GitHub failure-notification routing still need owner/operator confirmation |
 | Restore drill | PASS local | Post-cleanup backup imported into isolated SQLite; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed |
 | Diff whitespace | PASS | `git diff --check HEAD` |
 | Autoreview | PASS | Final staged autoreview clean; no accepted/actionable findings |
