@@ -2795,6 +2795,7 @@ export async function clearDodoPlanCheckout(
   userId: string,
   options: {
     allowMissingStoredCheckoutId?: boolean;
+    allowTimestampMatchedStoredCheckoutId?: boolean;
     occurredAt?: string | null;
     checkoutId?: string | null;
     requireMissingStoredCheckoutId?: boolean;
@@ -2805,13 +2806,16 @@ export async function clearDodoPlanCheckout(
     typeof options.checkoutId === "string" && options.checkoutId.trim()
       ? options.checkoutId.trim()
       : null;
-  const checkoutGuard = checkoutId
-    ? options.allowMissingStoredCheckoutId
+  const checkoutBindings: string[] = [];
+  let checkoutGuard = "";
+  if (checkoutId) {
+    checkoutGuard = options.allowMissingStoredCheckoutId
       ? "\n        AND (dodo_payment_id = ? OR dodo_payment_id IS NULL)"
-      : "\n        AND dodo_payment_id = ?"
-    : options.requireMissingStoredCheckoutId
-      ? "\n        AND dodo_payment_id IS NULL"
-      : "";
+      : "\n        AND dodo_payment_id = ?";
+    checkoutBindings.push(checkoutId);
+  } else if (options.requireMissingStoredCheckoutId || !options.allowTimestampMatchedStoredCheckoutId || !occurredAt) {
+    checkoutGuard = "\n        AND dodo_payment_id IS NULL";
+  }
   const timestampGuard = occurredAt
     ? "\n        AND (plan_updated_at IS NULL OR julianday(plan_updated_at) <= julianday(?))"
     : "";
@@ -2824,7 +2828,7 @@ export async function clearDodoPlanCheckout(
         AND plan = 'free'
         AND dodo_status = 'checkout_pending'${checkoutGuard}${timestampGuard}
     `)
-    .bind(...[userId, ...(checkoutId ? [checkoutId] : []), ...(occurredAt ? [occurredAt] : [])])
+    .bind(...[userId, ...checkoutBindings, ...(occurredAt ? [occurredAt] : [])])
     .run();
 
   return Number(result.meta?.changes ?? 0) > 0;

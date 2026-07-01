@@ -127,12 +127,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (checkoutFailure) {
       let clearedCheckout = false;
       if (checkoutFailure.checkoutId || checkoutFailure.eventType !== "subscription.failed") {
-        clearedCheckout = await clearDodoPlanCheckout(env, checkoutFailure.userId, {
-          allowMissingStoredCheckoutId: Boolean(checkoutFailure.checkoutId),
-          checkoutId: checkoutFailure.checkoutId,
-          occurredAt: checkoutFailure.failedAt,
-          requireMissingStoredCheckoutId: !checkoutFailure.checkoutId,
-        });
+        clearedCheckout = checkoutFailure.checkoutId
+          ? await clearDodoPlanCheckout(env, checkoutFailure.userId, {
+              allowMissingStoredCheckoutId: true,
+              checkoutId: checkoutFailure.checkoutId,
+              occurredAt: checkoutFailure.failedAt,
+              requireMissingStoredCheckoutId: false,
+            })
+          : await clearDodoPlanCheckout(env, checkoutFailure.userId, {
+              allowTimestampMatchedStoredCheckoutId: true,
+              checkoutId: null,
+              occurredAt: checkoutFailure.failedAt,
+            });
       }
       const shouldDeferSubscriptionFailureToLifecycle =
         checkoutFailure.eventType === "subscription.failed" && !clearedCheckout;
@@ -235,8 +241,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
           !subscriptionFailureWithCheckoutIdDidNotClear
         ) {
           const clearedCheckout = await clearDodoPlanCheckout(env, userId, {
+            allowTimestampMatchedStoredCheckoutId: true,
             occurredAt: revocation.revokedAt,
-            requireMissingStoredCheckoutId: true,
           });
           if (clearedCheckout) {
             await finalizeDodoWebhookLedgerOnly(env, {
