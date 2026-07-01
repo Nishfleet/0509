@@ -6273,7 +6273,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
     failedProofs,
     budgetBlockedProofs,
     blockedTargets,
-    deliveryFailures,
+    deliveryAttention,
     degradedWatchlists,
     discoveryFailures,
     discoveryProviders,
@@ -6425,6 +6425,9 @@ export async function getOperatorSnapshot(env: AppEnv) {
       watchlist_name: string | null;
       channel: DeliveryChannel;
       target_value: string;
+      status: DeliveryAttemptStatus;
+      webhook_status: WebhookReconciliationStatus;
+      provider_status_last_seen_at: string | null;
       error_message: string | null;
       created_at: string;
     }>(
@@ -6436,11 +6439,20 @@ export async function getOperatorSnapshot(env: AppEnv) {
           watchlist.name AS watchlist_name,
           delivery_attempt.channel,
           delivery_attempt.target_value,
+          delivery_attempt.status,
+          delivery_attempt.webhook_status,
+          delivery_attempt.provider_status_last_seen_at,
           delivery_attempt.error_message,
           delivery_attempt.created_at
         FROM delivery_attempt
         LEFT JOIN watchlist ON watchlist.id = delivery_attempt.watchlist_id
-        WHERE delivery_attempt.status = 'failed'
+        WHERE (
+            delivery_attempt.status = 'failed' OR
+            (
+              delivery_attempt.status = 'pending' AND
+              delivery_attempt.webhook_status = 'provider_unknown'
+            )
+          )
           AND delivery_attempt.created_at >= ?
         ORDER BY delivery_attempt.created_at DESC
         LIMIT 8
@@ -6571,7 +6583,8 @@ export async function getOperatorSnapshot(env: AppEnv) {
       failedProofs: failedProofs.length,
       budgetBlockedProofs: budgetBlockedProofs.length,
       blockedTargets: blockedTargets.length,
-      deliveryFailures: deliveryFailures.length,
+      deliveryFailures: deliveryAttention.filter((attempt) => attempt.status === "failed").length,
+      deliveryAttention: deliveryAttention.length,
       degradedWatchlists: degradedWatchlists.length,
       discoveryFailures: discoveryFailures.length,
       discoveryProvidersNeedingAttention: discoveryProviders.filter(
@@ -6583,7 +6596,10 @@ export async function getOperatorSnapshot(env: AppEnv) {
     failedProofs,
     budgetBlockedProofs,
     blockedTargets,
-    deliveryFailures,
+    deliveryFailures: deliveryAttention.filter(
+      (attempt) => attempt.status === "failed",
+    ),
+    deliveryAttention,
     degradedWatchlists,
     discoveryFailures,
     discoveryProviders,
