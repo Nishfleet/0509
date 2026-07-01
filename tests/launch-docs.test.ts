@@ -35,6 +35,8 @@ describe("final launch documentation", () => {
     expect(ownerActions).toContain("Dodo customer portal subscription updates");
     expect(ownerActions).toContain("Uptime health workflow");
     expect(launchReadiness).toContain("first scheduled uptime run and notification path remain unproven");
+    expect(scorecard).toContain("manual run `28540913266` passed on `main`");
+    expect(ownerActions).toContain("MANUAL PASS / ALERT UNPROVEN");
     expect(backupUptime).toContain(".github/workflows/uptime-health.yml");
     expect(uptimeWorkflow).toContain("https://0509.io/api/health");
     expect(uptimeWorkflow).toContain('cron: "*/5 * * * *"');

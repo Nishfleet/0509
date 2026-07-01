@@ -570,34 +570,61 @@ describe("billing page", () => {
     });
   });
 
-  it("renders the payment-issue banner and support path for a dunning customer", async () => {
-    mockReactRouterRender({
-      email: "owner@example.com",
-      billing: {
-        plan: "starter",
-        dodoStatus: "subscription.on_hold",
-        dodoProductId: null,
-        billingInterval: "monthly",
-        planUpdatedAt: "2026-06-04T12:00:00.000Z",
-      },
-      proofUsage: { used: 40, limit: 250, extraCredits: 0 },
-      watchlistUsage: { current: 3, limit: 10 },
-      collectionUsage: { current: 5, limit: 25 },
-      planLimits: { digestCadence: "weekly" },
-      dailyProofCap: 40,
-      creditGrants: [],
-      blockedCheckout: false,
-      pendingCheckout: false,
-    });
+  it("renders the portal payment-method CTA and support fallback for a dunning owner", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: {
+          plan: "starter",
+          dodoStatus: "subscription.on_hold",
+          dodoCustomerId: "cus_123",
+          dodoProductId: null,
+          billingInterval: "monthly",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        hasPortal: true,
+        proofUsage: { used: 40, baseLimit: 250, limit: 250, extraCredits: 0 },
+        watchlistUsage: { current: 3, limit: 10 },
+        collectionUsage: { current: 5, limit: 25 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
 
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup).toContain("Payment issue");
     expect(markup).toContain("still active");
+    expect(markup).toContain("Update payment method");
+    expect(markup).toContain('action="/api/billing/dodo/portal"');
     expect(markup).toContain("support@0509.io");
     expect(markup).toContain("Cancellation");
     expect(markup).toContain("payment retry in progress");
+  });
+
+  it("keeps the dunning banner support-backed when the Dodo portal is unavailable", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: {
+          plan: "starter",
+          dodoStatus: "subscription.on_hold",
+          dodoProductId: null,
+          billingInterval: "monthly",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        hasPortal: false,
+        proofUsage: { used: 40, baseLimit: 250, limit: 250, extraCredits: 0 },
+        watchlistUsage: { current: 3, limit: 10 },
+        collectionUsage: { current: 5, limit: 25 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Payment issue");
+    expect(markup).toContain("receipt email from Dodo Payments");
+    expect(markup).not.toContain("Update payment method");
   });
 
   it("points free users at pricing and never shows a cancel-needed state", async () => {

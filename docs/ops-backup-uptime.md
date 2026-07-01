@@ -62,8 +62,8 @@ routes scheduled-workflow notifications based on the workflow creator or the
 user who last changes the cron schedule. Because of that, this repo-configured
 check is not fully proven until an owner/operator confirms:
 
-1. The workflow exists on `main` after merge.
-2. A manual run succeeds.
+1. Done: the workflow exists on `main`.
+2. Done: manual run `28540913266` passed.
 3. A scheduled run appears at roughly the configured cadence.
 4. Failed-run notifications reach the intended inbox.
 
