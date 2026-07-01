@@ -249,7 +249,7 @@ describe("Dodo webhook route", () => {
     expect(data.applyDodoPlanGrantWithWatchlistReconcile).not.toHaveBeenCalled();
   });
 
-  it("does not clear a pending checkout when a terminal failure has no checkout id", async () => {
+  it("clears a stale pending checkout from signed terminal failure events without a checkout id", async () => {
     const { data } = mockWebhookDependencies({
       billing: {
         extractDodoPlanCheckoutFailure: vi.fn(() => ({
@@ -272,7 +272,10 @@ describe("Dodo webhook route", () => {
     } as never);
 
     expect(await response.json()).toMatchObject({ ok: true, checkoutFailure: true });
-    expect(data.clearDodoPlanCheckout).not.toHaveBeenCalled();
+    expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      checkoutId: null,
+      occurredAt: "2026-07-01T08:00:00.000Z",
+    });
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -282,6 +285,49 @@ describe("Dodo webhook route", () => {
           action: "checkout_failure",
           checkoutId: null,
           userId: "user-1",
+        }),
+      }),
+    );
+  });
+
+  it("clears a free pending checkout when subscription.failed has no checkout id", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanRevocation: vi.fn(() => ({
+          eventType: "subscription.failed",
+          action: "payment_issue",
+          userId: "user-1",
+          customerEmail: "owner@example.com",
+          subscriptionId: "sub_123",
+          status: "failed",
+          revokedAt: "2026-07-01T08:00:00.000Z",
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-subscription-failed-no-checkout", { type: "subscription.failed" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, checkoutFailure: true });
+    expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      occurredAt: "2026-07-01T08:00:00.000Z",
+    });
+    expect(data.applyDodoPlanPaymentIssueWithLedger).not.toHaveBeenCalled();
+    expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventId: "evt-subscription-failed-no-checkout",
+        outcome: "processed",
+        metadata: expect.objectContaining({
+          action: "checkout_failure",
+          checkoutId: null,
+          userId: "user-1",
+          eventType: "subscription.failed",
         }),
       }),
     );

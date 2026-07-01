@@ -111,8 +111,9 @@ describe("Dodo billing", () => {
       adaptive_currency_fees_inclusive: false,
       billing_address: { country: "IN" },
       billing_currency: "INR",
-      return_url:
-        "https://0509.io/app/billing?checkout=dodo&kind=plan&source=pricing&plan=scout&cycle=monthly",
+      return_url: expect.stringMatching(
+        /^https:\/\/0509\.io\/app\/billing\?checkout=dodo&kind=plan&source=pricing&plan=scout&cycle=monthly&started=/,
+      ),
       cancel_url:
         "https://0509.io/api/billing/dodo/cancel?checkout_id=checkout_plan_1&plan=scout&cycle=monthly&source=pricing",
       metadata: {

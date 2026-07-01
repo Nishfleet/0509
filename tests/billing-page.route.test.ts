@@ -30,6 +30,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/data.server");
+  vi.doUnmock("~/lib/dodo-pricing.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/monitoring.server");
 });
@@ -48,6 +49,12 @@ function mockBillingLoaderDependencies(input: {
     ownerName: input.workspace?.ownerName ?? null,
   };
   const getUserPlanBillingInfo = vi.fn().mockResolvedValue(input.billing);
+  const previewDodo0509PlanPrices = vi.fn().mockResolvedValue({
+    available: false,
+    prices: {},
+    annualValidation: {},
+    usageBundles: {},
+  });
   const checkPlanLimit = vi.fn(async (_env: unknown, _userId: string, resource: string) =>
     resource === "watchlists"
       ? { allowed: true, limit: 10, current: 3 }
@@ -81,6 +88,9 @@ function mockBillingLoaderDependencies(input: {
   vi.doMock("~/lib/monitoring.server", () => ({
     dailyProofCapForPlan: vi.fn(() => 40),
   }));
+  vi.doMock("~/lib/dodo-pricing.server", () => ({
+    previewDodo0509PlanPrices,
+  }));
   vi.doMock("~/lib/plan.server", () => ({
     PLAN_LIMITS: {
       free: { watchlists: 0, collections: 0, digests: false, digestCadence: "none", proofCapturesPerMonth: 0 },
@@ -95,6 +105,7 @@ function mockBillingLoaderDependencies(input: {
     getProofUsageSummary,
     getUserPlanBillingInfo,
     listActiveProofCreditGrants,
+    previewDodo0509PlanPrices,
   };
 }
 
@@ -132,6 +143,8 @@ function billingRenderData(overrides: Record<string, unknown> = {}) {
     selectedCycle: "monthly",
     selectedSource: null,
     checkoutReturned: false,
+    checkoutStartedAt: null,
+    legacyPlanReturnConfirmed: false,
     blockedCheckout: false,
     pendingCheckout: false,
     agencyCheckoutHeld: false,
@@ -194,7 +207,7 @@ function billingRenderData(overrides: Record<string, unknown> = {}) {
 
 describe("billing page", () => {
   it("loads plan, usage, and billing status for a paying customer", async () => {
-    mockBillingLoaderDependencies({
+    const mocks = mockBillingLoaderDependencies({
       billing: {
         plan: "starter",
         dodoStatus: "succeeded",
@@ -223,6 +236,11 @@ describe("billing page", () => {
     expect(result.billing).not.toHaveProperty("dodoProductId");
     expect(result.billing).not.toHaveProperty("dodoSubscriptionId");
     expect(result.billing).not.toHaveProperty("dodoCustomerId");
+    expect(mocks.previewDodo0509PlanPrices).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trustProxyHeaders: false,
+      }),
+    );
   });
 
   it("loads workspace owner billing for members without granting billing controls", async () => {
@@ -338,6 +356,31 @@ describe("billing page", () => {
 
     expect(result).toMatchObject({
       checkoutReturned: true,
+      pendingCheckout: false,
+    });
+  });
+
+  it("marks a legacy monthly plan return as confirmed only when it matches current billing", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "starter",
+        dodoStatus: "succeeded",
+        dodoProductId: null,
+        billingInterval: "monthly",
+        planUpdatedAt: "2026-07-01T10:01:00.000Z",
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=dodo&kind=plan&plan=starter&cycle=monthly"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      checkoutReturned: true,
+      legacyPlanReturnConfirmed: true,
       pendingCheckout: false,
     });
   });
@@ -682,6 +725,45 @@ describe("billing page", () => {
 
     expect(markup).toContain("Dodo is confirming the payment");
     expect(markup).toContain("check again automatically");
+  });
+
+  it("does not confirm a plan return from an older paid plan update", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        checkoutReturned: true,
+        checkoutStartedAt: "2026-07-01T10:00:00.000Z",
+        billing: {
+          plan: "starter",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Dodo is confirming the payment");
+    expect(markup).not.toContain("Your Starter plan is live");
+  });
+
+  it("confirms a matched legacy monthly plan return without a started timestamp", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        checkoutReturned: true,
+        legacyPlanReturnConfirmed: true,
+        billing: {
+          plan: "starter",
+          billingInterval: "monthly",
+          planUpdatedAt: "2026-07-01T10:01:00.000Z",
+        },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Your Starter plan is live");
+    expect(markup).not.toContain("Dodo is confirming the payment");
   });
 
   it("shows a safe cancelled checkout recovery state", async () => {

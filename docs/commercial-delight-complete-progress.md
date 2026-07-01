@@ -58,8 +58,8 @@ Track the customer-facing commercial-delight release from staged implementation 
 
 ## Verification
 
-- Focused billing/API/checkout/webhook/data tests after final red-team fixes: passed, 17 files / 293 tests.
-- Full unit/integration tests: passed, 161 files / 1570 tests.
+- Focused billing/API/checkout/webhook/data tests after final Bugbot fixes: passed, 18 files / 303 tests.
+- Full unit/integration tests: passed, 161 files / 1576 tests.
 - Typecheck: passed.
 - Production build: passed.
 - Local authenticated browser E2E: passed, 9 tests, including mobile billing cycle selection and overflow checks.
@@ -74,8 +74,9 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Presence website canary: failed because `PRESENCE_INTERNAL_WORKSPACE_ID` is not present in the available environment.
 - D1 backup validation: passed.
 - Local and remote D1 migration lists: passed with no pending migrations.
-- Autoreview: found and fixed retryable `payment.failed` checkout-lock classification, cancelled-checkout retry copy mismatch, checkout-session fees-inclusive parity, pending-checkout CTA state, dashboard member readiness context, checkout-id gating for `subscription.failed`, Dodo-return pending-banner conflict, active-subscription `subscription.failed` payment-issue preservation, stale free-plan billing intervals, and Dodo preview billing-country mismatch handling. Final rerun clean with no accepted/actionable findings.
+- Autoreview: found and fixed retryable `payment.failed` checkout-lock classification, cancelled-checkout retry copy mismatch, checkout-session fees-inclusive parity, pending-checkout CTA state, dashboard member readiness context, checkout-id gating for `subscription.failed`, Dodo-return pending-banner conflict, active-subscription `subscription.failed` payment-issue preservation, stale free-plan billing intervals, Dodo preview billing-country mismatch handling, Dodo-return false plan-success confirmation, no-checkout-id terminal failure cleanup, and legacy monthly plan-return compatibility. Final rerun clean with no accepted/actionable findings.
 - CE code review: final targeted correctness and agent-native findings accepted and fixed.
+- Bugbot/Cursor review: found four post-PR checkout issues; accepted fixes are included for billing preview country parity, signed no-id terminal checkout cleanup, `subscription.failed` pending-lock cleanup, and false plan-return success.
 - Staged diff check: passed.
 
 ## Remaining Required Gates
@@ -85,7 +86,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Strict Dodo pricing canary against a branch deployment with real Dodo bindings: pending.
 - Presence website smoke with `PRESENCE_INTERNAL_WORKSPACE_ID`: pending.
 - Search V2 dogfood or equivalent production-safe smoke: pending if required as a separate launch sign-off beyond the completed provider bakeoff and proof canaries.
-- Bugbot/Cursor review: pending PR availability/tooling.
+- Bugbot/Cursor review: accepted findings fixed; final PR head remains subject to protected branch checks.
 - Protected PR, CI, merge, merged-main validation, deploy, production smokes, Worker rollback version, and docs-only provenance PR: pending.
 
 ## Payments Tested
@@ -93,7 +94,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Provider fixture and signed webhook coverage: plan grant, subscription lifecycle, top-up grant, refund, duplicate/terminal checkout failure, retryable failure, and lock cleanup covered by tests/canaries.
 - Live/customer payment completion: not performed; no real customer card or subscription was used.
 - Owner/manual payment action: none recorded yet.
-- Monthly checkout: covered by route tests and the upgraded pricing canary contract, but branch-deployed live Dodo preview proof remains pending with real Dodo bindings.
+- Monthly checkout: covered by route tests, checkout-return tests, and the upgraded pricing canary contract, but branch-deployed live Dodo preview proof remains pending with real Dodo bindings.
 - Annual checkout: covered by route tests and the upgraded pricing canary contract, including `4 months free` validation, but branch-deployed live Dodo preview proof remains pending with real Dodo bindings.
 
 ## Deployment
