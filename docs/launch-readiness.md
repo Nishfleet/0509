@@ -1,10 +1,10 @@
 # Five to Nine Launch Readiness
 
-Last checked: 2026-06-28
+Last checked: 2026-07-01
 
 ## Current Verdict
 
-Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green, health is 200, D1 backups validate, and external uptime monitoring is owner-verified. Slack is **not offered at GA** — backend code stays dormant and launch readiness surfaces Slack only as optional advisories. Scout, Starter, and Agency self-serve checkout are released; Agency remains on nightly fan-out monitoring watch after dispatch proof.
+Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green, health is 200, D1 backups validate, and external uptime monitoring is owner-verified. Slack is **not offered at GA** — backend code stays dormant and launch readiness surfaces Slack only as optional advisories. Scout, Starter, and Agency self-serve checkout are released; Scout/Starter monthly and annual checkout validate through live Dodo preview. Agency remains on nightly fan-out monitoring watch after dispatch proof.
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
@@ -18,7 +18,7 @@ The public `/status` page summarizes coarse launch posture without rendering acc
 - `npm test` passes: 143 files / 1336 tests.
 - `npm run build` passes.
 - `npm audit --omit=dev --audit-level=moderate` passes with 0 vulnerabilities.
-- `npm run canary:pricing` passes for localized Dodo preview.
+- `npm run canary:pricing` passes for localized Dodo preview, including monthly, annual, and top-up checkout pricing in IN, US, and GB.
 - `npm run canary:billing` passes for Dodo signed-webhook plan and top-up grants.
 - `npm run canary:proof` (no `--require-slack`) creates a real proof capture and sends email — **GA gate**.
 - `npm run canary:prod` checks health on `0509.io`, `www.0509.io`, and `api.0509.io`, fresh-live search, and read-only ops readiness (email required; Slack surfaced as advisories).

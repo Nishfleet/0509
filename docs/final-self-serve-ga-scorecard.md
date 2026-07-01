@@ -4,9 +4,9 @@ Last updated: 2026-07-01
 
 ## Verdict
 
-Current live verdict: SCOUT/STARTER MONTHLY, TOP-UPS, AND AGENCY SELF-SERVE RELEASED - ANNUAL SCOUT/STARTER BLOCKED ON DODO PRICING.
+Current live verdict: SCOUT/STARTER MONTHLY AND ANNUAL, TOP-UPS, AND AGENCY SELF-SERVE RELEASED.
 
-Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Monthly checkout and top-ups pass the live Dodo preview canary; annual Scout/Starter checkout is intentionally fail-closed until Dodo annual prices equal the app's eight-month annual expectation. Backup scheduling is now repo-configured and restore proof exists locally, but GitHub backup secrets and the first scheduled backup run remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo annual SKU pricing, Dodo portal subscription-update confirmation, external uptime monitor, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
+Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Monthly checkout, annual checkout, and top-ups pass the live Dodo preview canary in IN, US, and GB. Annual uses Dodo's documented localized pricing mode where fixed USD/GBP annual amounts are needed, while INR remains the corrected base annual price. Backup scheduling is now repo-configured and restore proof exists locally, but GitHub backup secrets and the first scheduled backup run remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo portal subscription-update confirmation, external uptime monitor, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
 
 ## Baseline
 
@@ -42,12 +42,12 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 | Local D1 migration list | LOCAL ONLY | Local simulator reports pending `0053`-`0060` from prior local state |
 | Remote D1 migration list | PASS | No migrations to apply after `0060_remove_legacy_billing_provider.sql` |
 | D1 cleanup evidence | PASS | Aggregate pre/post evidence preserved plan rows and Dodo linkage; post evidence shows no legacy billing columns and no retired-provider webhook table |
-| Pricing canary | PARTIAL / FAIL-CLOSED | Live Dodo pricing canary reached IN, US, and GB previews; monthly and top-ups pass, annual Scout/Starter fail closed because Dodo annual prices do not equal eight monthly periods |
+| Pricing canary | PASS | Live Dodo pricing canary reached IN, US, and GB previews; monthly, annual, and top-ups pass for Scout/Starter annual validation and all public top-up packs |
 | Billing canary | PASS | Dodo signed-webhook plan/top-up canary passed and cleanup passed |
 | Proof/email canary | PASS | Launch proof canary passed with email delivery |
 | Production canary | PASS | Health on primary domains, fresh-live search, ops readiness, and Meta ads beta passed |
 | Provider bakeoff launch gate | PASS/PARTIAL | Current live provider passed all launch queries; optional alternate providers skipped because their credentials are absent |
-| Full launch readiness script | HISTORICAL PASS / CURRENT ANNUAL BLOCKER | The retired-provider cleanup launch gate passed at that time; the current stricter annual checkout pricing gate intentionally fails until Dodo annual SKU prices are corrected |
+| Full launch readiness script | PASS | `npm run launch:readiness` passed after the Dodo annual localized pricing repair |
 | Presence website canary | PASS | `npm run canary:presence` now follows the current GA rollout and runs without requiring the old internal workspace id |
 | Agency fan-out proof | PASS dispatch / WATCH scan health | Local fan-out tests passed; production cron queued 78 fan-out jobs for the internal Agency-scale proof workspace with 0 dispatch failures and 8 max concurrency slots; synthetic proof watchlists were deactivated after proof |
 | Cloudflare Email visibility | PARTIAL | Fresh proof canary sent email and aggregate D1 shows recent Cloudflare Email sends; dashboard Email Service Logs/Activity still needs owner/browser confirmation |
@@ -57,8 +57,8 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Scout sellable self-serve | Monthly verified / annual blocked | Dodo monthly checkout, plan copy, pricing preview, webhook grant, and canary covered; annual checkout remains fail-closed until Dodo annual price is corrected |
-| Starter sellable self-serve | Monthly verified / annual blocked | Daily monitoring/daily+weekly digest copy and monthly checkout path covered; annual checkout remains fail-closed until Dodo annual price is corrected |
+| Scout sellable self-serve | Monthly and annual verified | Dodo monthly and annual checkout, plan copy, pricing preview, webhook grant, and canary covered |
+| Starter sellable self-serve | Monthly and annual verified | Daily monitoring/daily+weekly digest copy plus monthly and annual checkout paths covered |
 | Top-ups self-serve | Verified in branch | Existing Dodo products, grants, cleanup, and non-expiring copy covered |
 | Agency sellable | Open | Live dispatch proof passed; keep monitoring nightly scan health and dispatch failures |
 | Email delivery | Verified | Email proof canary passed |
@@ -81,14 +81,13 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 
 The live release still has these owner/operator actions:
 
-1. Correct Dodo annual SKU pricing for Scout and Starter so each localized annual amount equals eight monthly periods, then rerun the pricing canary.
-2. Confirm Dodo Product Collection membership for Scout/Starter, the Dodo subscription-update setting, and cancellation availability in the customer portal.
-3. Confirm external uptime monitoring on `https://0509.io/api/health`.
-4. Add GitHub Cloudflare secrets for the scheduled D1-to-R2 backup workflow, run it once, confirm a new R2 object, and decide R2 retention.
-5. Monitor the next nightly fan-out window for dispatch failures and real-customer scan completion.
-6. Confirm Cloudflare Email activity/log visibility in the Cloudflare dashboard.
-7. Preserve unsupported WhatsApp stored targets unless owner approves a backup-backed anonymization/cleanup.
-8. Clean up retired provider dashboard artifacts: old webhooks, subscriptions, payment links, and live products.
+1. Confirm Dodo Product Collection membership for Scout/Starter, the Dodo subscription-update setting, and cancellation availability in the customer portal.
+2. Confirm external uptime monitoring on `https://0509.io/api/health`.
+3. Add GitHub Cloudflare secrets for the scheduled D1-to-R2 backup workflow, run it once, confirm a new R2 object, and decide R2 retention.
+4. Monitor the next nightly fan-out window for dispatch failures and real-customer scan completion.
+5. Confirm Cloudflare Email activity/log visibility in the Cloudflare dashboard.
+6. Preserve unsupported WhatsApp stored targets unless owner approves a backup-backed anonymization/cleanup.
+7. Clean up retired provider dashboard artifacts: old webhooks, subscriptions, payment links, and live products.
 
 ## Non-Exposure Confirmation
 
