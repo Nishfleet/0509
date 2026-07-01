@@ -231,7 +231,7 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page).toHaveURL(/\/app\/onboard/);
     await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
     await expect(
-      page.getByText("Paste competitors once. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."),
+      page.getByText("Paste your competitors. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."),
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Choose a plan to start monitoring" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
@@ -365,8 +365,8 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app");
     await expectAppPage(page);
     await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL("/");
-    await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+    await expect(page).toHaveURL(/\/auth\/login/);
+    await expect(page.getByRole("heading", { name: "Get a secure sign-in link." })).toBeVisible();
     await page.goto("/app");
     await expect(page).toHaveURL(/\/auth\/login/);
   });
@@ -416,6 +416,32 @@ test.describe("local authenticated E2E harness", () => {
         }
         await expectNoHorizontalOverflow(page);
       }
+    }
+  });
+
+  test("billing cycle picker keeps monthly and annual intent accessible on small screens", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await signInAs(context, baseURL!, "e2e-free-onboarded");
+
+    for (const viewport of [
+      { width: 320, height: 700 },
+      { width: 375, height: 812 },
+      { width: 430, height: 932 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/app/billing?plan=starter&cycle=yearly&source=e2e#plans");
+      await expectAppPage(page);
+      await expect(page.getByRole("heading", { name: "Billing & usage" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Annual" })).toHaveAttribute("aria-current", "true");
+      await expect(page.getByRole("link", { name: "Monthly" })).not.toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("link", { name: "Monthly" })).toHaveAttribute(
+        "href",
+        /plan=starter.*cycle=monthly.*source=e2e/,
+      );
+      await expectNoHorizontalOverflow(page);
     }
   });
 

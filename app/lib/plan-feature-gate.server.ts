@@ -21,7 +21,6 @@ export const CUSTOMER_AGENT_ACTION_FEATURES = {
 export const ROUTE_FEATURE_REQUIREMENTS = [
   { routeId: "api.v1.$resourceType.$resourceId", feature: "api_access" as PlanFeature },
   { routeId: "api.v1.actions", feature: "api_access" as PlanFeature },
-  { routeId: "api.v1.workspace-readiness", feature: "api_access" as PlanFeature },
   { routeId: "api.mcp", feature: "mcp_access" as PlanFeature },
   { routeId: "export.$resourceType.$resourceId", feature: "export_json" as PlanFeature },
   { routeId: "app.reports", feature: "client_reports" as PlanFeature },

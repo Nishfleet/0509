@@ -13,14 +13,17 @@ export function loader(_args: LoaderFunctionArgs) {
 // dunning escape hatch; without it a failed renewal could only be fixed by
 // emailing support.
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlanBillingInfo } = await import("~/lib/data.server");
   const { createDodoCustomerPortalSession } = await import("~/lib/dodo-billing.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
+  const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
+  if (isMember && workspaceUserId !== session.user.id) {
+    throw new Response("Only the workspace owner can manage billing.", { status: 403 });
+  }
 
-  const billing = await getUserPlanBillingInfo(env, session.user.id);
+  const billing = await getUserPlanBillingInfo(env, workspaceUserId);
   if (!billing.dodoCustomerId) {
     // No linked Dodo customer yet (e.g. plan granted before linkage existed).
     throw redirect("/app/billing?portal=unavailable", { status: 303 });

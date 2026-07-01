@@ -13,8 +13,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { resolveWorkspace } = await import("~/lib/workspace.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
+  const path = new URL(request.url).pathname;
 
-  if (!session.user.onboardedAt) {
+  if (!session.user.onboardedAt && path !== "/app/billing") {
     throw redirect("/app/onboard");
   }
 

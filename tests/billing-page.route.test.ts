@@ -36,21 +36,47 @@ afterEach(() => {
 
 function mockBillingLoaderDependencies(input: {
   billing: Record<string, unknown>;
+  workspace?: {
+    workspaceUserId?: string;
+    isMember?: boolean;
+    ownerName?: string | null;
+  };
 }) {
+  const workspace = {
+    workspaceUserId: input.workspace?.workspaceUserId ?? session.user.id,
+    isMember: input.workspace?.isMember ?? false,
+    ownerName: input.workspace?.ownerName ?? null,
+  };
+  const getUserPlanBillingInfo = vi.fn().mockResolvedValue(input.billing);
+  const checkPlanLimit = vi.fn(async (_env: unknown, _userId: string, resource: string) =>
+    resource === "watchlists"
+      ? { allowed: true, limit: 10, current: 3 }
+      : { allowed: true, limit: 25, current: 5 },
+  );
+  const listActiveProofCreditGrants = vi.fn().mockResolvedValue([]);
+  const getProofUsageSummary = vi.fn().mockResolvedValue({
+    plan: "starter",
+    used: 40,
+    baseLimit: 250,
+    extraCredits: 0,
+    limit: 250,
+    remaining: 210,
+    usageRatio: 0.16,
+    warningLevel: "ok",
+    upgradeTarget: "Agency",
+  });
   vi.doMock("~/lib/auth.server", () => ({
     requireSession: vi.fn().mockResolvedValue(session),
     requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
       session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
+      ...workspace,
     })),
   }));
   vi.doMock("~/lib/context.server", () => ({
     getEnv: vi.fn(() => ({})),
   }));
   vi.doMock("~/lib/data.server", () => ({
-    getUserPlanBillingInfo: vi.fn().mockResolvedValue(input.billing),
+    getUserPlanBillingInfo,
   }));
   vi.doMock("~/lib/monitoring.server", () => ({
     dailyProofCapForPlan: vi.fn(() => 40),
@@ -60,24 +86,16 @@ function mockBillingLoaderDependencies(input: {
       free: { watchlists: 0, collections: 0, digests: false, digestCadence: "none", proofCapturesPerMonth: 0 },
       starter: { watchlists: 10, collections: 25, digests: true, digestCadence: "weekly", proofCapturesPerMonth: 250 },
     },
-    checkPlanLimit: vi.fn(async (_env: unknown, _userId: string, resource: string) =>
-      resource === "watchlists"
-        ? { allowed: true, limit: 10, current: 3 }
-        : { allowed: true, limit: 25, current: 5 },
-    ),
-    listActiveProofCreditGrants: vi.fn().mockResolvedValue([]),
-    getProofUsageSummary: vi.fn().mockResolvedValue({
-      plan: "starter",
-      used: 40,
-      baseLimit: 250,
-      extraCredits: 0,
-      limit: 250,
-      remaining: 210,
-      usageRatio: 0.16,
-      warningLevel: "ok",
-      upgradeTarget: "Agency",
-    }),
+    checkPlanLimit,
+    listActiveProofCreditGrants,
+    getProofUsageSummary,
   }));
+  return {
+    checkPlanLimit,
+    getProofUsageSummary,
+    getUserPlanBillingInfo,
+    listActiveProofCreditGrants,
+  };
 }
 
 function mockReactRouterRender(loaderData: unknown) {
@@ -93,8 +111,85 @@ function mockReactRouterRender(loaderData: unknown) {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+      useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn() }),
     };
   });
+}
+
+function billingRenderData(overrides: Record<string, unknown> = {}) {
+  const base = {
+    email: "owner@example.com",
+    billing: { plan: "free", dodoStatus: null, billingInterval: null, planUpdatedAt: null },
+    proofUsage: { used: 0, baseLimit: 0, limit: 0, extraCredits: 0 },
+    watchlistUsage: { current: 0, limit: 0 },
+    collectionUsage: { current: 0, limit: 0 },
+    planLimits: { digestCadence: "none" },
+    dailyProofCap: 0,
+    creditGrants: [],
+    canManageBilling: true,
+    billingOwnerName: null,
+    selectedPlan: "starter",
+    selectedCycle: "monthly",
+    selectedSource: null,
+    checkoutReturned: false,
+    blockedCheckout: false,
+    pendingCheckout: false,
+    agencyCheckoutHeld: false,
+    planCheckoutUnavailable: false,
+    annualCheckoutUnavailable: false,
+    topUpRequiresPlan: false,
+    topUpCheckoutUnavailable: false,
+    portalUnavailable: false,
+    hasPortal: false,
+    pricingPreview: {
+      available: true,
+      prices: {
+        scout: {
+          monthly: { display: "$19" },
+          yearly: { display: "$152" },
+        },
+        starter: {
+          monthly: { display: "$59" },
+          yearly: { display: "$472" },
+        },
+        agency: {
+          monthly: { display: "$199" },
+          yearly: { display: "$1,592" },
+        },
+      },
+      annualValidation: {
+        scout: { planId: "scout", valid: true, reason: "valid_4_months_free" },
+        starter: { planId: "starter", valid: true, reason: "valid_4_months_free" },
+        agency: { planId: "agency", valid: true, reason: "valid_4_months_free" },
+      },
+      usageBundles: {
+        proof_500: { display: "$25" },
+        proof_2000: { display: "$80" },
+        proof_7500: { display: "$240" },
+      },
+    },
+    commercialLaunch: {
+      scoutSaleOpen: true,
+      starterSaleOpen: true,
+      agencySaleOpen: false,
+    },
+  };
+  return {
+    ...base,
+    ...overrides,
+    billing: {
+      ...base.billing,
+      ...((overrides.billing as Record<string, unknown> | undefined) ?? {}),
+    },
+    pricingPreview: {
+      ...base.pricingPreview,
+      ...((overrides.pricingPreview as Record<string, unknown> | undefined) ?? {}),
+    },
+    commercialLaunch: {
+      ...base.commercialLaunch,
+      ...((overrides.commercialLaunch as Record<string, unknown> | undefined) ?? {}),
+    },
+  };
 }
 
 describe("billing page", () => {
@@ -104,6 +199,7 @@ describe("billing page", () => {
         plan: "starter",
         dodoStatus: "succeeded",
         dodoProductId: "prod_starter_monthly",
+        billingInterval: "monthly",
         planUpdatedAt: "2026-06-04T12:00:00.000Z",
       },
     });
@@ -117,7 +213,7 @@ describe("billing page", () => {
 
     expect(result).toMatchObject({
       email: "owner@example.com",
-      billing: { plan: "starter", dodoStatus: "succeeded" },
+      billing: { plan: "starter", dodoStatus: "succeeded", billingInterval: "monthly" },
       watchlistUsage: { current: 3, limit: 10 },
       collectionUsage: { current: 5, limit: 25 },
       proofUsage: { used: 40, limit: 250 },
@@ -127,6 +223,40 @@ describe("billing page", () => {
     expect(result.billing).not.toHaveProperty("dodoProductId");
     expect(result.billing).not.toHaveProperty("dodoSubscriptionId");
     expect(result.billing).not.toHaveProperty("dodoCustomerId");
+  });
+
+  it("loads workspace owner billing for members without granting billing controls", async () => {
+    const mocks = mockBillingLoaderDependencies({
+      billing: {
+        plan: "starter",
+        dodoStatus: "succeeded",
+        dodoProductId: "prod_starter_monthly",
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+      workspace: {
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Agency Owner",
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      billing: { plan: "starter", dodoStatus: "succeeded" },
+      canManageBilling: false,
+      billingOwnerName: "Agency Owner",
+    });
+    expect(mocks.getUserPlanBillingInfo).toHaveBeenCalledWith(expect.anything(), "owner-1");
+    expect(mocks.getProofUsageSummary).toHaveBeenCalledWith(expect.anything(), "owner-1");
+    expect(mocks.checkPlanLimit).toHaveBeenCalledWith(expect.anything(), "owner-1", "watchlists");
+    expect(mocks.checkPlanLimit).toHaveBeenCalledWith(expect.anything(), "owner-1", "collections");
+    expect(mocks.listActiveProofCreditGrants).toHaveBeenCalledWith(expect.anything(), "owner-1");
   });
 
   it("flags a blocked duplicate checkout from the query string", async () => {
@@ -169,6 +299,49 @@ describe("billing page", () => {
     expect(result).toMatchObject({ pendingCheckout: true });
   });
 
+  it("flags a pending checkout from billing state without a query string", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: "checkout_pending",
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ pendingCheckout: true });
+  });
+
+  it("shows Dodo return confirmation without the generic pending checkout warning", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: "checkout_pending",
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=dodo"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      checkoutReturned: true,
+      pendingCheckout: false,
+    });
+  });
+
   it("flags agency-held checkout from the query string", async () => {
     mockBillingLoaderDependencies({
       billing: {
@@ -189,6 +362,141 @@ describe("billing page", () => {
     expect(result).toMatchObject({ agencyCheckoutHeld: true });
   });
 
+  it("flags annual-unavailable checkout from the query string", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: null,
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=annual-unavailable&plan=starter"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      annualCheckoutUnavailable: true,
+      selectedPlan: "starter",
+    });
+  });
+
+  it("flags top-up-requires-plan checkout from the query string", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: null,
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=top-up-requires-plan"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ topUpRequiresPlan: true });
+  });
+
+  it("flags top-up-unavailable checkout from the query string", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "starter",
+        dodoStatus: null,
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=top-up-unavailable"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ topUpCheckoutUnavailable: true });
+  });
+
+  it("normalizes selected billing picker params in the loader", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: null,
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?plan=scout&cycle=yearly&source=pricing"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      selectedPlan: "scout",
+      selectedCycle: "yearly",
+      selectedSource: "pricing",
+    });
+  });
+
+  it("falls back to safe billing picker params when the query string is malformed", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: null,
+        dodoProductId: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?plan=enterprise&cycle=forever&source=<script>"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      selectedPlan: "starter",
+      selectedCycle: "monthly",
+      selectedSource: null,
+    });
+  });
+
+  it("defaults the picker to annual for an activated annual subscription", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "starter",
+        dodoStatus: "subscription.active",
+        dodoProductId: "prod_starter_annual",
+        billingInterval: "annual",
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({
+      billing: { plan: "starter", billingInterval: "annual" },
+      selectedCycle: "yearly",
+    });
+  });
+
   it("renders the payment-issue banner and support path for a dunning customer", async () => {
     mockReactRouterRender({
       email: "owner@example.com",
@@ -196,6 +504,7 @@ describe("billing page", () => {
         plan: "starter",
         dodoStatus: "subscription.on_hold",
         dodoProductId: null,
+        billingInterval: "monthly",
         planUpdatedAt: "2026-06-04T12:00:00.000Z",
       },
       proofUsage: { used: 40, limit: 250, extraCredits: 0 },
@@ -236,9 +545,202 @@ describe("billing page", () => {
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup).toContain("View plans");
-    expect(markup).toContain("/#pricing");
+    expect(markup).toContain("/app/billing?source=billing#plans");
     expect(markup).toContain("Free account");
     expect(markup).not.toContain("Payment issue");
+  });
+
+  it("renders a Dodo-validated monthly plan checkout form for free users", async () => {
+    mockReactRouterRender(billingRenderData({ selectedSource: "pricing" }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Start monthly");
+    expect(markup).toContain('action="/api/billing/dodo/checkout"');
+    expect(markup).toContain('name="sku"');
+    expect(markup).toContain('value="starter_monthly_v1"');
+    expect(markup).toContain('name="source"');
+    expect(markup).toContain('value="pricing"');
+    expect(markup).toContain("Every plan checkout must validate against Dodo checkout preview");
+  });
+
+  it("keeps plan checkout disabled while a pending Dodo checkout exists", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        pendingCheckout: true,
+        billing: {
+          plan: "free",
+          dodoStatus: "checkout_pending",
+        },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("A Dodo checkout is already open");
+    expect(markup).not.toContain("Start monthly");
+    expect(markup).not.toContain('action="/api/billing/dodo/checkout"');
+  });
+
+  it("renders annual billing state for activated annual subscribers", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        selectedCycle: "yearly",
+        billing: {
+          plan: "starter",
+          dodoStatus: "subscription.active",
+          billingInterval: "annual",
+          dodoProductId: "prod_starter_annual",
+          dodoNextBillingAt: "2027-06-04T12:00:00.000Z",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        proofUsage: { used: 40, baseLimit: 250, limit: 250, extraCredits: 0 },
+        watchlistUsage: { current: 3, limit: 10 },
+        collectionUsage: { current: 5, limit: 25 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Billing cycle");
+    expect(markup).toContain("Annual");
+    expect(markup).toContain('aria-current="true"');
+    expect(markup).not.toContain("Start annual");
+  });
+
+  it("renders workspace member billing as read-only without checkout controls", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        canManageBilling: false,
+        billingOwnerName: "Agency Owner",
+        billing: {
+          plan: "starter",
+          dodoStatus: "succeeded",
+          dodoCustomerId: "cus_123",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        hasPortal: true,
+        proofUsage: { used: 40, baseLimit: 250, limit: 250, extraCredits: 0 },
+        watchlistUsage: { current: 3, limit: 10 },
+        collectionUsage: { current: 5, limit: 25 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Billing is managed by the workspace owner, Agency Owner");
+    expect(markup).toContain("Owner managed");
+    expect(markup).not.toContain('action="/api/billing/dodo/checkout"');
+    expect(markup).not.toContain("Start monthly");
+    expect(markup).not.toContain("Buy pack");
+    expect(markup).not.toContain("Open billing portal");
+  });
+
+  it("keeps annual checkout disabled when Dodo savings validation fails", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        selectedCycle: "yearly",
+        pricingPreview: {
+          annualValidation: {
+            scout: { planId: "scout", valid: true, reason: "valid_4_months_free" },
+            starter: { planId: "starter", valid: false, reason: "amount_mismatch" },
+            agency: { planId: "agency", valid: true, reason: "valid_4_months_free" },
+          },
+        },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Annual unavailable");
+    expect(markup).toContain("does not validate as 4 months free");
+    expect(markup).not.toContain('value="starter_annual_v1"');
+  });
+
+  it("keeps Agency checkout held in the in-app picker", async () => {
+    mockReactRouterRender(billingRenderData({ selectedPlan: "agency" }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Request Agency access");
+    expect(markup).not.toContain('value="agency_monthly_v1"');
+  });
+
+  it("auto-rechecks activation when a buyer returns from Dodo checkout", async () => {
+    mockReactRouterRender(billingRenderData({ checkoutReturned: true }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Dodo is confirming the payment");
+    expect(markup).toContain("check again automatically");
+  });
+
+  it("shows a safe cancelled checkout recovery state", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        cancelledCheckout: true,
+        selectedPlan: "starter",
+        selectedCycle: "yearly",
+        selectedSource: "pricing",
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Checkout was cancelled");
+    expect(markup).toContain("a new monthly or annual checkout opens after Dodo confirms cancellation");
+    expect(markup).toContain("/app/billing?plan=starter&amp;cycle=monthly&amp;source=pricing#plans");
+    expect(markup).toContain("/app/billing?plan=starter&amp;cycle=yearly&amp;source=pricing#plans");
+  });
+
+  it("renders the unavailable annual checkout banner", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        selectedPlan: "starter",
+        annualCheckoutUnavailable: true,
+        pricingPreview: {
+          annualValidation: {
+            starter: { planId: "starter", valid: false, reason: "amount_mismatch" },
+          },
+        },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Starter annual checkout is unavailable");
+    expect(markup).toContain("does not validate as 4 months free");
+  });
+
+  it("renders the top-up requires paid plan banner", async () => {
+    mockReactRouterRender(billingRenderData({ topUpRequiresPlan: true }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Top-up packs can only be added to a paid plan");
+    expect(markup).toContain("Choose a plan first");
+  });
+
+  it("renders the unavailable top-up checkout banner", async () => {
+    mockReactRouterRender(billingRenderData({ topUpCheckoutUnavailable: true }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("That top-up pack is temporarily unavailable");
+    expect(markup).toContain("Your plan is unchanged");
   });
 
   it("renders the stale agency-held checkout fallback banner", async () => {
@@ -298,6 +800,7 @@ describe("billing page", () => {
       creditGrants: [
         {
           skuSlug: "burst_500_v1",
+          providerPaymentId: "pay_top_up",
           credits: 500,
           grantedAt: "2026-06-20T00:00:00.000Z",
         },
@@ -350,416 +853,5 @@ describe("billing page", () => {
     expect(markup).toContain("/app/support?category=billing");
     expect(markup).not.toContain("cancel — self-serve");
     expect(markup).not.toContain("100% customer satisfaction");
-  });
-});
-
-describe("Dodo checkout double-subscription guard", () => {
-  function mockCheckoutDependencies(currentPlan: string, options: { checkoutClaimed?: boolean; checkoutFails?: boolean } = {}) {
-    const createDodo0509CheckoutSession = vi.fn().mockResolvedValue({
-      checkoutUrl: "https://checkout.dodo.example/session",
-      sessionId: "sess_1",
-    });
-    if (options.checkoutFails) {
-      createDodo0509CheckoutSession.mockRejectedValue(new Response("Dodo checkout failed.", { status: 502 }));
-    }
-    const claimDodoPlanCheckout = vi.fn().mockResolvedValue(options.checkoutClaimed ?? true);
-    const clearDodoPlanCheckout = vi.fn().mockResolvedValue(undefined);
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
-    }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({})),
-    }));
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue(currentPlan),
-    }));
-    vi.doMock("~/lib/workspace.server", () => ({
-      resolveWorkspace: vi.fn().mockResolvedValue({
-        workspaceUserId: session.user.id,
-        isMember: false,
-        ownerName: null,
-      }),
-    }));
-    vi.doMock("~/lib/dodo-billing.server", async (importOriginal) => {
-      const actual = await importOriginal<typeof import("~/lib/dodo-billing.server")>();
-      return {
-        ...actual,
-        createDodo0509CheckoutSession,
-      };
-    });
-    vi.doMock("~/lib/data.server", () => ({
-      claimDodoPlanCheckout,
-      clearDodoPlanCheckout,
-    }));
-    return { createDodo0509CheckoutSession, claimDodoPlanCheckout, clearDodoPlanCheckout };
-  }
-
-  function checkoutRequest(body: Record<string, string>) {
-    return new Request("https://0509.io/api/billing/dodo/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(body).toString(),
-    });
-  }
-
-  afterEach(() => {
-    vi.doUnmock("~/lib/dodo-billing.server");
-  });
-
-  it("redirects an already-subscribed user to billing instead of opening a second checkout", async () => {
-    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("starter");
-
-    const { action } = await import("~/routes/api.billing.dodo.checkout");
-
-    try {
-      await action({
-        context: {},
-        request: checkoutRequest({ plan: "agency", cycle: "monthly" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect(response).toBeInstanceOf(Response);
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "/app/billing?checkout=already-subscribed",
-      );
-    }
-
-    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
-  });
-
-  it("holds Agency checkout until fan-out proof is documented", async () => {
-    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("free");
-
-    const { action } = await import("~/routes/api.billing.dodo.checkout");
-
-    try {
-      await action({
-        context: {},
-        request: checkoutRequest({ plan: "agency", cycle: "monthly" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "/app/billing?checkout=agency-held",
-      );
-    }
-
-    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
-  });
-
-  it("lets a free user start a plan checkout", async () => {
-    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("free");
-
-    const { action } = await import("~/routes/api.billing.dodo.checkout");
-
-    try {
-      await action({
-        context: {},
-        request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "https://checkout.dodo.example/session",
-      );
-    }
-
-    expect(createDodo0509CheckoutSession).toHaveBeenCalledTimes(1);
-  });
-
-  it("lets a free user start scout checkout via canonical SKU", async () => {
-    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("free");
-
-    const { action } = await import("~/routes/api.billing.dodo.checkout");
-
-    try {
-      await action({
-        context: {},
-        request: checkoutRequest({ sku: "scout_monthly_v1" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "https://checkout.dodo.example/session",
-      );
-    }
-
-    expect(createDodo0509CheckoutSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        target: expect.objectContaining({
-          kind: "plan",
-          planFamily: "scout",
-          sku: "scout_monthly_v1",
-        }),
-      }),
-    );
-  });
-
-  it("blocks a second pending Dodo plan checkout before opening another session", async () => {
-    const { createDodo0509CheckoutSession, claimDodoPlanCheckout } = mockCheckoutDependencies("free", {
-      checkoutClaimed: false,
-    });
-
-    const { action } = await import("~/routes/api.billing.dodo.checkout");
-
-    try {
-      await action({
-        context: {},
-        request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "/app/billing?checkout=already-started",
-      );
-    }
-
-    expect(claimDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), { userId: "user-1" });
-    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
-  });
-
-  it("clears the pending Dodo plan checkout lock when Dodo session creation fails", async () => {
-    const { clearDodoPlanCheckout } = mockCheckoutDependencies("free", { checkoutFails: true });
-
-    const { action } = await import("~/routes/api.billing.dodo.checkout");
-
-    await expect(
-      action({
-        context: {},
-        request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
-        params: {},
-      } as never),
-    ).rejects.toBeInstanceOf(Response);
-
-    expect(clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1");
-  });
-
-  it("still lets a subscriber buy usage bundles", async () => {
-    const { createDodo0509CheckoutSession } = mockCheckoutDependencies("starter");
-
-    const { action } = await import("~/routes/api.billing.dodo.checkout");
-
-    try {
-      await action({
-        context: {},
-        request: checkoutRequest({ bundle: "proof_500" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "https://checkout.dodo.example/session",
-      );
-    }
-
-    expect(createDodo0509CheckoutSession).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("Dodo customer portal route", () => {
-  afterEach(() => {
-    vi.doUnmock("~/lib/dodo-billing.server");
-  });
-
-  it("303s into a fresh portal session for a linked customer", async () => {
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
-    }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({})),
-    }));
-    vi.doMock("~/lib/data.server", () => ({
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-        plan: "starter",
-        dodoCustomerId: "cus_123",
-      }),
-    }));
-    const createDodoCustomerPortalSession = vi
-      .fn()
-      .mockResolvedValue("https://customer.dodopayments.com/session");
-    vi.doMock("~/lib/dodo-billing.server", () => ({ createDodoCustomerPortalSession }));
-
-    const { action } = await import("~/routes/api.billing.dodo.portal");
-
-    try {
-      await action({
-        context: {},
-        request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "https://customer.dodopayments.com/session",
-      );
-    }
-    expect(createDodoCustomerPortalSession).toHaveBeenCalledWith(
-      expect.anything(),
-      "cus_123",
-      expect.objectContaining({ request: expect.any(Request) }),
-    );
-  });
-
-  it("falls back to the billing page when no Dodo customer is linked", async () => {
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
-    }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({})),
-    }));
-    vi.doMock("~/lib/data.server", () => ({
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-        plan: "starter",
-        dodoCustomerId: null,
-      }),
-    }));
-    vi.doMock("~/lib/dodo-billing.server", () => ({
-      createDodoCustomerPortalSession: vi.fn(),
-    }));
-
-    const { action } = await import("~/routes/api.billing.dodo.portal");
-
-    try {
-      await action({
-        context: {},
-        request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).headers.get("Location")).toBe(
-        "/app/billing?portal=unavailable",
-      );
-    }
-  });
-
-  it("does not open the workspace owner's portal for a teammate without their own billing link", async () => {
-    const memberSession = {
-      ...session,
-      user: {
-        ...session.user,
-        email: "teammate@example.com",
-        id: "member-1",
-        name: "Teammate",
-      },
-      session: {
-        ...session.session,
-        id: "member-session-1",
-        userId: "member-1",
-      },
-    };
-    const getUserPlanBillingInfo = vi.fn().mockImplementation(async (_env, userId: string) => {
-      if (userId === "owner-1") {
-        return { plan: "starter", dodoCustomerId: "cus_owner" };
-      }
-      return { plan: "free", dodoCustomerId: null };
-    });
-    const createDodoCustomerPortalSession = vi.fn();
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(memberSession),
-      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-        session: memberSession,
-        workspaceUserId: "owner-1",
-        isMember: true,
-        ownerName: "Owner",
-      })),
-    }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({})),
-    }));
-    vi.doMock("~/lib/data.server", () => ({
-      getUserPlanBillingInfo,
-    }));
-    vi.doMock("~/lib/dodo-billing.server", () => ({ createDodoCustomerPortalSession }));
-
-    const { action } = await import("~/routes/api.billing.dodo.portal");
-
-    try {
-      await action({
-        context: {},
-        request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "/app/billing?portal=unavailable",
-      );
-    }
-
-    expect(getUserPlanBillingInfo).toHaveBeenCalledWith(expect.anything(), "member-1");
-    expect(getUserPlanBillingInfo).not.toHaveBeenCalledWith(expect.anything(), "owner-1");
-    expect(createDodoCustomerPortalSession).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the billing page when a linked Dodo customer cannot open a portal session", async () => {
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(session),
-      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-        session,
-        workspaceUserId: session.user.id,
-        isMember: false,
-        ownerName: null,
-      })),
-    }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({})),
-    }));
-    vi.doMock("~/lib/data.server", () => ({
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-        plan: "starter",
-        dodoCustomerId: "cus_123",
-      }),
-    }));
-    const createDodoCustomerPortalSession = vi.fn().mockResolvedValue(null);
-    vi.doMock("~/lib/dodo-billing.server", () => ({ createDodoCustomerPortalSession }));
-
-    const { action } = await import("~/routes/api.billing.dodo.portal");
-
-    try {
-      await action({
-        context: {},
-        request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
-        params: {},
-      } as never);
-      throw new Error("expected redirect");
-    } catch (response) {
-      expect((response as Response).status).toBe(303);
-      expect((response as Response).headers.get("Location")).toBe(
-        "/app/billing?portal=unavailable",
-      );
-    }
-    expect(createDodoCustomerPortalSession).toHaveBeenCalledTimes(1);
   });
 });

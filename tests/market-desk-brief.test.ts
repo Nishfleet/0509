@@ -119,7 +119,7 @@ describe("buildMarketDeskBrief", () => {
 
     expect(brief.state).toBe("quiet");
     expect(brief.title).toBe("Quiet check completed");
-    expect(brief.summary).toBe("All quiet - 18 ads checked across 1 competitor. No changes worth your time.");
+    expect(brief.summary).toBe("All quiet - 18 ads checked across 1 competitor. Completed checks found no action-worthy movement.");
   });
 
   it("prioritizes confirmed competitor changes over quiet run stats", () => {

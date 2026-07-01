@@ -17,6 +17,7 @@ import {
   isSlackDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
+import { resolveBillingSkuFromProviderProductId } from "~/lib/billing-sku-catalog";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import { normalizeSupportCaseInput, SupportCaseInputError } from "~/lib/support";
 import { SUPPORT_CASE_EVENT_TYPES } from "~/lib/types";
@@ -2266,8 +2267,8 @@ export async function grantDodoPlanAccess(
 ) {
   const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
 
-  // COALESCE keeps existing linkage when an event doesn't carry it: payment
-  // events lack next_billing_date, subscription events lack a payment id.
+  // Preserve confirmed payment ids when subscription events lack a payment id,
+  // but clear temporary checkout ids left by checkout_pending locks.
   await run(
     env,
     `
@@ -2286,7 +2287,11 @@ export async function grantDodoPlanAccess(
       ON CONFLICT(user_id)
       DO UPDATE SET
         plan = excluded.plan,
-        dodo_payment_id = COALESCE(excluded.dodo_payment_id, user_plan.dodo_payment_id),
+        dodo_payment_id = CASE
+          WHEN excluded.dodo_payment_id IS NOT NULL THEN excluded.dodo_payment_id
+          WHEN user_plan.dodo_status = 'checkout_pending' THEN NULL
+          ELSE user_plan.dodo_payment_id
+        END,
         dodo_product_id = COALESCE(excluded.dodo_product_id, user_plan.dodo_product_id),
         dodo_subscription_id = COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id),
         dodo_customer_id = COALESCE(excluded.dodo_customer_id, user_plan.dodo_customer_id),
@@ -2294,8 +2299,7 @@ export async function grantDodoPlanAccess(
         dodo_status = excluded.dodo_status,
         plan_updated_at = excluded.plan_updated_at
       WHERE
-        (excluded.dodo_payment_id IS NOT NULL AND user_plan.dodo_payment_id = excluded.dodo_payment_id)
-        OR julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+        julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
     `,
     input.userId,
     input.plan,
@@ -2354,7 +2358,26 @@ function buildWatchlistGrantReconcileStatements(
   userId: string,
   keepActive: number,
   timestamp: string,
+  acceptedPlan?: {
+    plan: string;
+    status: string;
+    planUpdatedAt: string;
+  },
 ) {
+  const acceptedGuard = acceptedPlan
+    ? `
+        AND EXISTS (
+          SELECT 1
+          FROM user_plan
+          WHERE user_id = ?
+            AND plan = ?
+            AND dodo_status = ?
+            AND plan_updated_at = ?
+        )`
+    : "";
+  const acceptedBindings = acceptedPlan
+    ? [userId, acceptedPlan.plan, acceptedPlan.status, acceptedPlan.planUpdatedAt]
+    : [];
   return [
     db.prepare(`
       UPDATE watchlist
@@ -2370,8 +2393,8 @@ function buildWatchlistGrantReconcileStatements(
             AND is_active = 1
           ORDER BY created_at DESC
           LIMIT ?
-        )
-    `).bind(timestamp, userId, userId, keepActive),
+        )${acceptedGuard}
+    `).bind(timestamp, userId, userId, keepActive, ...acceptedBindings),
     db.prepare(`
       UPDATE watchlist
       SET is_active = 1,
@@ -2398,8 +2421,8 @@ function buildWatchlistGrantReconcileStatements(
               )
             )
           )
-        )
-    `).bind(timestamp, userId, userId, keepActive, userId),
+        )${acceptedGuard}
+    `).bind(timestamp, userId, userId, keepActive, userId, ...acceptedBindings),
   ];
 }
 
@@ -2408,7 +2431,26 @@ function buildWatchlistRevokeReconcileStatement(
   userId: string,
   keepActive: number,
   timestamp: string,
+  acceptedPlan?: {
+    plan: string;
+    status: string;
+    planUpdatedAt: string;
+  },
 ) {
+  const acceptedGuard = acceptedPlan
+    ? `
+        AND EXISTS (
+          SELECT 1
+          FROM user_plan
+          WHERE user_id = ?
+            AND plan = ?
+            AND dodo_status = ?
+            AND plan_updated_at = ?
+        )`
+    : "";
+  const acceptedBindings = acceptedPlan
+    ? [userId, acceptedPlan.plan, acceptedPlan.status, acceptedPlan.planUpdatedAt]
+    : [];
   return db.prepare(`
       UPDATE watchlist
       SET is_active = 0,
@@ -2423,8 +2465,8 @@ function buildWatchlistRevokeReconcileStatement(
             AND is_active = 1
           ORDER BY created_at DESC
           LIMIT ?
-        )
-    `).bind(timestamp, userId, userId, keepActive);
+        )${acceptedGuard}
+    `).bind(timestamp, userId, userId, keepActive, ...acceptedBindings);
 }
 
 async function syncWatchlistMentionTargetsIfChanged(
@@ -2472,7 +2514,11 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
       ON CONFLICT(user_id)
       DO UPDATE SET
         plan = excluded.plan,
-        dodo_payment_id = COALESCE(excluded.dodo_payment_id, user_plan.dodo_payment_id),
+        dodo_payment_id = CASE
+          WHEN excluded.dodo_payment_id IS NOT NULL THEN excluded.dodo_payment_id
+          WHEN user_plan.dodo_status = 'checkout_pending' THEN NULL
+          ELSE user_plan.dodo_payment_id
+        END,
         dodo_product_id = COALESCE(excluded.dodo_product_id, user_plan.dodo_product_id),
         dodo_subscription_id = COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id),
         dodo_customer_id = COALESCE(excluded.dodo_customer_id, user_plan.dodo_customer_id),
@@ -2480,8 +2526,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
         dodo_status = excluded.dodo_status,
         plan_updated_at = excluded.plan_updated_at
       WHERE
-        (excluded.dodo_payment_id IS NOT NULL AND user_plan.dodo_payment_id = excluded.dodo_payment_id)
-        OR julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+        julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
     `).bind(
       input.userId,
       input.plan,
@@ -2493,7 +2538,11 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
       input.status,
       planUpdatedAt,
     ),
-    ...buildWatchlistGrantReconcileStatements(db, input.userId, keepActive, timestamp),
+    ...buildWatchlistGrantReconcileStatements(db, input.userId, keepActive, timestamp, {
+      plan: input.plan,
+      status: input.status,
+      planUpdatedAt,
+    }),
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
   ]);
 
@@ -2535,7 +2584,11 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
         plan_updated_at = excluded.plan_updated_at
       WHERE julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
     `).bind(input.userId, input.status, planUpdatedAt),
-    buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp),
+    buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
+      plan: "free",
+      status: input.status,
+      planUpdatedAt,
+    }),
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
   ]);
 
@@ -2576,7 +2629,11 @@ export async function applyDodoRefundWithWatchlistReconcile(
   ];
 
   if (input.userId) {
-    statements.push(buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp));
+    statements.push(buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
+      plan: "free",
+      status: "refunded",
+      planUpdatedAt: refundedAt,
+    }));
   }
 
   statements.push(buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt));
@@ -2689,11 +2746,14 @@ export async function claimDodoPlanCheckout(
   env: AppEnv,
   input: {
     userId: string;
+    checkoutId?: string | null;
     claimedAt?: string;
     staleAfterMinutes?: number;
   },
 ) {
   const claimedAt = validIsoTimestamp(input.claimedAt) ?? nowIso();
+  const checkoutId =
+    typeof input.checkoutId === "string" && input.checkoutId.trim() ? input.checkoutId.trim() : null;
   const staleAfterMs =
     Math.max(
       DODO_PLAN_CHECKOUT_LOCK_MINUTES,
@@ -2707,12 +2767,14 @@ export async function claimDodoPlanCheckout(
       INSERT INTO user_plan (
         user_id,
         plan,
+        dodo_payment_id,
         dodo_status,
         plan_updated_at
       )
-      VALUES (?, 'free', 'checkout_pending', ?)
+      VALUES (?, 'free', ?, 'checkout_pending', ?)
       ON CONFLICT(user_id)
       DO UPDATE SET
+        dodo_payment_id = excluded.dodo_payment_id,
         dodo_status = 'checkout_pending',
         plan_updated_at = excluded.plan_updated_at
       WHERE user_plan.plan = 'free'
@@ -2722,24 +2784,39 @@ export async function claimDodoPlanCheckout(
           OR julianday(user_plan.plan_updated_at) <= julianday(?)
         )
     `)
-    .bind(input.userId, claimedAt, staleBefore)
+    .bind(input.userId, checkoutId, claimedAt, staleBefore)
     .run();
 
   return Number(result.meta?.changes ?? 0) > 0;
 }
 
-export async function clearDodoPlanCheckout(env: AppEnv, userId: string) {
-  await run(
-    env,
-    `
+export async function clearDodoPlanCheckout(
+  env: AppEnv,
+  userId: string,
+  options: { occurredAt?: string | null; checkoutId?: string | null } = {},
+) {
+  const occurredAt = validIsoTimestamp(options.occurredAt ?? undefined);
+  const checkoutId =
+    typeof options.checkoutId === "string" && options.checkoutId.trim()
+      ? options.checkoutId.trim()
+      : null;
+  const checkoutGuard = checkoutId ? "\n        AND dodo_payment_id = ?" : "";
+  const timestampGuard = occurredAt
+    ? "\n        AND (plan_updated_at IS NULL OR julianday(plan_updated_at) <= julianday(?))"
+    : "";
+  const db = ensureDb(env);
+  const result = await db.prepare(`
       UPDATE user_plan
-      SET dodo_status = NULL
+      SET dodo_payment_id = NULL,
+          dodo_status = NULL
       WHERE user_id = ?
         AND plan = 'free'
-        AND dodo_status = 'checkout_pending'
-    `,
-    userId,
-  );
+        AND dodo_status = 'checkout_pending'${checkoutGuard}${timestampGuard}
+    `)
+    .bind(...[userId, ...(checkoutId ? [checkoutId] : []), ...(occurredAt ? [occurredAt] : [])])
+    .run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
 }
 
 export async function revokeDodoPlanAccess(
@@ -3247,6 +3324,7 @@ export interface UserPlanBillingInfo {
   plan: "free" | "scout" | "starter" | "agency";
   dodoStatus: string | null;
   dodoProductId: string | null;
+  billingInterval: "monthly" | "annual" | null;
   dodoSubscriptionId: string | null;
   dodoCustomerId: string | null;
   dodoNextBillingAt: string | null;
@@ -3280,11 +3358,22 @@ export async function getUserPlanBillingInfo(
     row?.plan === "scout" || row?.plan === "starter" || row?.plan === "agency"
       ? row.plan
       : "free";
+  const skuMatch = row?.dodo_product_id
+    ? resolveBillingSkuFromProviderProductId(env, row.dodo_product_id)
+    : null;
+  const billingInterval =
+    plan !== "free" &&
+    skuMatch?.purchaseType === "subscription" &&
+    skuMatch.planFamily === plan &&
+    skuMatch.billingInterval !== "none"
+      ? skuMatch.billingInterval
+      : null;
 
   return {
     plan,
     dodoStatus: row?.dodo_status ?? null,
     dodoProductId: row?.dodo_product_id ?? null,
+    billingInterval,
     dodoSubscriptionId: row?.dodo_subscription_id ?? null,
     dodoCustomerId: row?.dodo_customer_id ?? null,
     dodoNextBillingAt: row?.dodo_next_billing_at ?? null,

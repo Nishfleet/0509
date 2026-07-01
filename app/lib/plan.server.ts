@@ -305,6 +305,7 @@ export async function listActiveProofCreditGrants(env: AppEnv, userId: string) {
     .map((grant) => ({
       credits: grant.quantity_remaining,
       skuSlug: grant.sku_slug,
+      providerPaymentId: grant.provider_payment_id,
       grantedAt: grant.granted_at,
       expiresAt: null as string | null,
     }));

@@ -60,6 +60,7 @@ describe("billing route exposure", () => {
 
     expect(paths.filter((path) => path.startsWith("api/billing/")).sort()).toEqual([
       "api/billing/dodo/canary",
+      "api/billing/dodo/cancel",
       "api/billing/dodo/checkout",
       "api/billing/dodo/portal",
     ]);
@@ -67,6 +68,7 @@ describe("billing route exposure", () => {
       "api/webhooks/dodo",
     ]);
     expect(paths).toContain("api/billing/dodo/checkout");
+    expect(paths).toContain("api/billing/dodo/cancel");
     expect(paths).toContain("api/billing/dodo/canary");
     expect(paths).toContain("api/pricing-preview");
     expect(paths).toContain("api/webhooks/dodo");
@@ -105,7 +107,7 @@ describe("app layout loader", () => {
 });
 
 describe("marketing route", () => {
-  it("renders customer-facing pricing with purchase forms for signed-in users", async () => {
+  it("renders customer-facing pricing with in-app plan intent for signed-in users", async () => {
     vi.doMock("react-router", async () => {
       const actual = await vi.importActual<typeof import("react-router")>("react-router");
       const React = await import("react");
@@ -127,7 +129,15 @@ describe("marketing route", () => {
               detail: "Saved searches.",
             },
           ],
-          usageBundles: [],
+          usageBundles: [
+            {
+              slug: "proof_500",
+              name: "500 checks",
+              creditLabel: "500 checks",
+              priceLabel: "$25",
+              detail: "For a busy week.",
+            },
+          ],
           session,
         }),
         useLoaderData: vi.fn().mockReturnValue({
@@ -139,7 +149,15 @@ describe("marketing route", () => {
                 yearly: { display: "$499" },
               },
             },
-            usageBundles: {},
+            annualValidation: {
+              starter: {
+                valid: true,
+                reason: "valid_4_months_free",
+              },
+            },
+            usageBundles: {
+              proof_500: { display: "$25" },
+            },
           },
           commercialLaunch: {
             scoutSaleOpen: true,
@@ -160,11 +178,143 @@ describe("marketing route", () => {
     expect(markup).toContain("Start with Starter");
     expect(markup).not.toContain("Dodo preview");
     expect(markup).not.toContain("Buyer currency");
-    expect(markup).toContain("Start monthly");
-    expect(markup).toContain("/api/billing/dodo/checkout");
+    expect(markup).toContain("Choose monthly");
+    expect(markup).toContain("/app/billing?plan=starter&amp;cycle=monthly&amp;source=pricing#plans");
+    expect(markup).toContain("/app/billing?source=top-up#top-ups");
+    expect(markup).toContain("Manage packs");
+    expect(markup).not.toContain("/api/billing/dodo/checkout");
     expect(markup).not.toContain("/pricing-region");
     expect(markup).not.toContain("Rest of world");
     expect(markup).not.toContain("/api/checkout");
+  });
+
+  it("preserves plan intent through signup for signed-out users", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+        useRouteLoaderData: vi.fn().mockReturnValue({
+          pricingPlans: [
+            {
+              slug: "starter",
+              name: "Starter",
+              monthlyLabel: "Monthly price loading",
+              yearlyLabel: "Annual price loading",
+              detail: "Saved searches.",
+              features: [],
+            },
+          ],
+          usageBundles: [],
+          session: null,
+        }),
+        useLoaderData: vi.fn().mockReturnValue({
+          pricingPreview: {
+            available: true,
+            prices: {
+              starter: {
+                monthly: { display: "$59" },
+                yearly: { display: "$499" },
+              },
+            },
+            annualValidation: {
+              starter: {
+                valid: true,
+                reason: "valid_4_months_free",
+              },
+            },
+            usageBundles: {},
+          },
+          commercialLaunch: {
+            scoutSaleOpen: true,
+            starterSaleOpen: true,
+            agencySaleOpen: false,
+          },
+        }),
+      };
+    });
+
+    const { default: MarketingRoute } = await import("~/routes/marketing");
+    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+
+    expect(markup).toContain(
+      "/auth/signup?redirectTo=%2Fapp%2Fbilling%3Fplan%3Dstarter%26cycle%3Dmonthly%26source%3Dpricing%23plans",
+    );
+    expect(markup).not.toContain("/api/billing/dodo/checkout");
+  });
+
+  it("preserves annual plan intent through signup for signed-out users", async () => {
+    const { planIntentPath } = await import("~/routes/marketing");
+
+    expect(planIntentPath(false, "starter", "yearly")).toBe(
+      "/auth/signup?redirectTo=%2Fapp%2Fbilling%3Fplan%3Dstarter%26cycle%3Dyearly%26source%3Dpricing%23plans",
+    );
+  });
+
+  it("does not send signed-out users to held Agency checkout", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+        useRouteLoaderData: vi.fn().mockReturnValue({
+          pricingPlans: [
+            {
+              slug: "agency",
+              name: "Agency",
+              monthlyLabel: "Talk to us",
+              yearlyLabel: "Talk to us",
+              detail: "High-volume monitoring.",
+              features: [],
+            },
+          ],
+          usageBundles: [],
+          session: null,
+        }),
+        useLoaderData: vi.fn().mockReturnValue({
+          pricingPreview: {
+            available: true,
+            prices: {
+              agency: {
+                monthly: { display: "$199" },
+                yearly: { display: "$1,592" },
+              },
+            },
+            annualValidation: {
+              agency: {
+                valid: true,
+                reason: "valid_4_months_free",
+              },
+            },
+            usageBundles: {},
+          },
+          commercialLaunch: {
+            scoutSaleOpen: true,
+            starterSaleOpen: true,
+            agencySaleOpen: false,
+          },
+        }),
+      };
+    });
+
+    const { default: MarketingRoute } = await import("~/routes/marketing");
+    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+
+    expect(markup).toContain("Held for capacity proof");
+    expect(markup).toContain('href="/auth/signup"');
+    expect(markup).not.toContain("plan=agency");
   });
 });
 

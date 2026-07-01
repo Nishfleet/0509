@@ -103,7 +103,33 @@ describe("buildLifecycleNudges", () => {
       expect.objectContaining({
         id: "agent_setup",
         title: "Developer access is missing",
+        priority: "low",
       }),
+    ]);
+  });
+
+  it("keeps developer setup in the active next-move lane until first value exists", () => {
+    const nudges = buildLifecycleNudges({
+      items: readyItems,
+      counts: {
+        competitors: 1,
+        activeWatchlists: 1,
+        successfulProofs: 0,
+        sentDigests: 0,
+        deliveryTargets: 0,
+        activeApiKeys: 0,
+        agentMemoryEntries: 0,
+        clientRooms: 0,
+      },
+      proofUsage: { warningLevel: "ok", used: 0, limit: 100 },
+      includeBillingSupport: false,
+    });
+
+    expect(nudges).toEqual([
+      expect.objectContaining({ id: "first_proof", priority: "high" }),
+      expect.objectContaining({ id: "first_digest", priority: "medium" }),
+      expect.objectContaining({ id: "agent_setup", priority: "medium" }),
+      expect.objectContaining({ id: "client_room_setup", priority: "low" }),
     ]);
   });
 

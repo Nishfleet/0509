@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { dodoAnnualUnavailableCopy } from "~/lib/dodo-pricing-display";
 import {
   pricingPlans,
   pricingPlansForRegion,
@@ -67,5 +68,12 @@ describe("pricingPlans", () => {
 
   it("does not branch copy by India versus rest of world anymore", () => {
     expect(pricingPlansForRegion()).toEqual(pricingPlans());
+  });
+
+  it("keeps annual-unavailable fallback copy readable without validation details", () => {
+    expect(dodoAnnualUnavailableCopy(null)).toBe(
+      "Annual checkout is unavailable while pricing syncs. Monthly checkout still works.",
+    );
+    expect(dodoAnnualUnavailableCopy(null)).not.toContain("Annual annual");
   });
 });

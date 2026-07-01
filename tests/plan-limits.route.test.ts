@@ -106,7 +106,7 @@ describe("search watchlist limit", () => {
       limit: 3,
       message: "You have reached your competitor tracking limit.",
       ok: false,
-      upgradePath: "/#pricing",
+      upgradePath: "/app/billing?source=search#plans",
     });
     expect(createWatchlistWithinLimit).not.toHaveBeenCalled();
   });
@@ -474,7 +474,7 @@ describe("pricing CTA rendering", () => {
 
     expect(markup).toContain("Digests are included in paid plans.");
     expect(markup).toContain("View plans");
-    expect(markup).toContain("/#pricing");
+    expect(markup).toContain("/app/billing?source=limit#plans");
   });
 
   it("offers an upgrade path on dashboard plan-limit errors", async () => {
@@ -506,7 +506,7 @@ describe("pricing CTA rendering", () => {
 
     expect(markup).toContain("You have reached your workspace watchlist limit.");
     expect(markup).toContain("View plans");
-    expect(markup).toContain("/#pricing");
+    expect(markup).toContain("/app/billing?source=dashboard-limit#plans");
   });
 
   it("credits successful quiet dashboard checks even when no ads are found", async () => {
@@ -546,7 +546,7 @@ describe("pricing CTA rendering", () => {
 
     expect(markup).toContain("0 ads checked");
     expect(markup).toContain("All quiet");
-    expect(markup).toContain("No changes worth your time");
+    expect(markup).toContain("Completed checks found no action-worthy movement");
     expect(markup).not.toContain("Next sweep: tomorrow morning");
   });
 
@@ -726,7 +726,7 @@ describe("pricing CTA rendering", () => {
 
     expect(markup).toContain("You have reached your collection limit.");
     expect(markup).toContain("View plans");
-    expect(markup).toContain("/#pricing");
+    expect(markup).toContain("/app/billing?source=collections#plans");
   });
 
   it("renders the external proof form inside collections", async () => {

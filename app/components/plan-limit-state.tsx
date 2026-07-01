@@ -23,7 +23,7 @@ export function PlanLimitState({
           : null}
       </p>
       <div className="f9-inline-actions">
-        <Link className="f9-primary-button" to="/#pricing">
+        <Link className="f9-primary-button" to="/app/billing?source=limit#plans">
           View plans
         </Link>
         <Link className="f9-secondary-button" to="/app/billing">

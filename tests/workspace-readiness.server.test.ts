@@ -59,6 +59,7 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
       plan: "agency",
       dodoStatus: "active",
       dodoProductId: "prod-1",
+      billingInterval: "annual",
       dodoSubscriptionId: "sub-1",
       dodoCustomerId: "cus-1",
       dodoNextBillingAt: now,
@@ -121,7 +122,23 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
       usageRatio: 0.001,
       warningLevel: "ok",
       upgradeTarget: null,
+      periodStart: now,
+      periodEnd: now,
+      includedRemaining: 2498,
+      topUpRemaining: 0,
+      topUpRetainedWhileInactive: 0,
+      canSpendTopUps: true,
+      nextPeriodStart: now,
     }),
+    listActiveProofCreditGrants: vi.fn().mockResolvedValue([
+      {
+        credits: 500,
+        skuSlug: "burst_500_v1",
+        providerPaymentId: "pay_secret",
+        grantedAt: now,
+        expiresAt: null,
+      },
+    ]),
   }));
   vi.doMock("~/lib/workspace.server", () => ({
     listWorkspaceMembers: vi.fn().mockResolvedValue([
@@ -189,11 +206,43 @@ describe("getWorkspaceReadiness", () => {
     expect(readiness.nudges).toEqual([
       expect.objectContaining({ id: "billing_support", priority: "low" }),
     ]);
+    expect(readiness.billing).toMatchObject({
+      plan: "agency",
+      billingInterval: "annual",
+      dodoStatus: "active",
+      nextBillingAt: now,
+      hasPaymentIssue: false,
+      proofUsage: {
+        limit: 2500,
+        remaining: 2498,
+        topUpRemaining: 0,
+        canSpendTopUps: true,
+      },
+      topUpGrants: [
+        {
+          skuSlug: "burst_500_v1",
+          packName: "Burst Pack",
+          remainingCredits: 500,
+          grantedAt: now,
+          expiresAt: null,
+        },
+      ],
+    });
+    expect(readiness.workspace).toMatchObject({
+      workspaceUserId: "user-1",
+      isMember: false,
+      billingOwnerName: null,
+      canManageBilling: true,
+    });
     expect(itemStatuses.delivery).toBe("ready");
     expect(itemStatuses.api).toBe("ready");
     expect(serialized).not.toContain("encryptedWebhookUrl");
     expect(serialized).not.toContain("ciphertext");
     expect(serialized).not.toContain("f9_live_abc");
+    expect(serialized).not.toContain("prod-1");
+    expect(serialized).not.toContain("sub-1");
+    expect(serialized).not.toContain("cus-1");
+    expect(serialized).not.toContain("pay_secret");
   });
 
   it("marks configured Slack without a successful send as needing proof", async () => {
@@ -222,6 +271,7 @@ describe("getWorkspaceReadiness", () => {
         plan: "starter",
         dodoStatus: "subscription.on_hold",
         dodoProductId: "prod-1",
+        billingInterval: "monthly",
         dodoSubscriptionId: "sub-1",
         dodoCustomerId: "cus-1",
         dodoNextBillingAt: now,
@@ -237,6 +287,12 @@ describe("getWorkspaceReadiness", () => {
       status: "attention",
       detail: "Payment issue needs review before retained monitoring is ready.",
       action: { href: "/app/billing" },
+    });
+    expect(readiness.billing).toMatchObject({
+      plan: "starter",
+      billingInterval: "monthly",
+      dodoStatus: "subscription.on_hold",
+      hasPaymentIssue: true,
     });
   });
 
@@ -341,6 +397,7 @@ describe("getWorkspaceReadiness", () => {
         plan: "free",
         dodoStatus: null,
         dodoProductId: null,
+        billingInterval: null,
         dodoSubscriptionId: null,
         dodoCustomerId: null,
         dodoNextBillingAt: null,
@@ -359,6 +416,7 @@ describe("getWorkspaceReadiness", () => {
         warningLevel: "ok",
         upgradeTarget: null,
       }),
+      listActiveProofCreditGrants: vi.fn().mockResolvedValue([]),
     }));
     vi.doMock("~/lib/workspace.server", () => ({
       listWorkspaceMembers: vi.fn().mockResolvedValue([]),

@@ -950,9 +950,13 @@ async function buildWorkspaceReadinessToolResult(
   format: AgentFormat,
 ) {
   const { getWorkspaceReadiness } = await import("~/lib/workspace-readiness.server");
-  const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
-  const workspaceUserId = await resolveWorkspaceDataUserId(env, userId);
-  const readiness = await getWorkspaceReadiness(env, workspaceUserId);
+  const { resolveWorkspace } = await import("~/lib/workspace.server");
+  const workspace = await resolveWorkspace(env, userId);
+  const readiness = await getWorkspaceReadiness(env, workspace.workspaceUserId, {
+    isMember: workspace.isMember,
+    billingOwnerName: workspace.ownerName,
+    canManageBilling: !workspace.isMember,
+  });
   const structuredContent = readiness as unknown as Record<string, unknown>;
 
   if (format === "slack") {
