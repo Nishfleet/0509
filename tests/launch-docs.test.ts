@@ -15,9 +15,9 @@ describe("final launch documentation", () => {
     const backupUptime = readDoc("docs/ops-backup-uptime.md");
 
     expect(scorecard).toContain(
-      "SCOUT/STARTER MONTHLY, TOP-UPS, AND AGENCY SELF-SERVE RELEASED - ANNUAL SCOUT/STARTER BLOCKED ON DODO PRICING",
+      "SCOUT/STARTER MONTHLY AND ANNUAL, TOP-UPS, AND AGENCY SELF-SERVE RELEASED",
     );
-    expect(scorecard).toContain("Dodo annual SKU pricing");
+    expect(scorecard).toContain("Dodo's documented localized pricing mode");
     expect(scorecard).toContain("Latest commercial proof-gate deploy");
     expect(scorecard).toContain("No migrations to apply");
     expect(scorecard).toContain("D1 cleanup evidence");
@@ -53,6 +53,9 @@ describe("final launch documentation", () => {
     expect(authoritativeDocs).not.toContain("Agency remains held until live fan-out proof passes");
     expect(authoritativeDocs).not.toContain("keep Agency held until fan-out proof passes");
     expect(authoritativeDocs).not.toContain("Agency fan-out proof, and Cloudflare Email dashboard visibility");
+    expect(authoritativeDocs).not.toContain("ANNUAL SCOUT/STARTER BLOCKED ON DODO PRICING");
+    expect(authoritativeDocs).not.toContain("annual Scout/Starter checkout remains intentionally fail-closed");
+    expect(authoritativeDocs).not.toContain("DODO ANNUAL SKU CONFIG REQUIRED");
     expect(authoritativeDocs).not.toMatch(/0509-\d{4}-\d{2}-\d{2}T/i);
     expect(authoritativeDocs).not.toMatch(/\b1 user\b/i);
     expect(authoritativeDocs).not.toMatch(/\b3 not-validated/i);
