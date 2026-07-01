@@ -11,15 +11,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     BetterAuthMagicLinkCallbackError,
     betterAuthLegacyMagicLinkConfirmationTicketCookie,
     betterAuthMagicLinkConfirmationTicketCookie,
-    clearBetterAuthMagicLinkConfirmationCookie,
+    clearBetterAuthLegacyMagicLinkConfirmationCookie,
+    clearBetterAuthMagicLinkConfirmationCookies,
     clearBetterAuthMagicLinkStateCookies,
-    readBetterAuthMagicLinkConfirmationCookie,
     readBetterAuthMagicLinkConfirmationTicket,
     readBetterAuthMagicLinkVerificationTicket,
     requestHasBetterAuthSessionCookie,
   } = await import("~/lib/better-auth.server");
   const url = new URL(request.url);
-  const mode =
+  const mode: "login" | "signup" =
     Boolean(url.searchParams.get("newUserCallbackURL")) || url.searchParams.get("mode") === "signup"
       ? "signup"
       : "login";
@@ -33,6 +33,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         "Set-Cookie",
         await betterAuthLegacyMagicLinkConfirmationTicketCookie(env, request, { mode }),
       );
+      headers.append("Set-Cookie", clearBetterAuthLegacyMagicLinkConfirmationCookie(request));
       appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
       throw redirect(cleanMagicLinkPath(mode), { headers });
     } catch (error) {
@@ -49,7 +50,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       }
       const headers = new Headers();
       headers.set("Cache-Control", "no-store");
-      headers.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
+      appendSetCookies(headers, clearBetterAuthMagicLinkConfirmationCookies(request));
       appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
       throw redirect(`/auth/${mode}?error=callback_failed`, { headers });
     }
@@ -59,7 +60,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     if (requestHasBetterAuthSessionCookie(request)) {
       const headers = new Headers();
       headers.set("Cache-Control", "no-store");
-      headers.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
+      appendSetCookies(headers, clearBetterAuthMagicLinkConfirmationCookies(request));
       appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
       throw redirect(mode === "signup" ? "/app/onboard" : "/app", { headers });
     }
@@ -67,30 +68,29 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     const ticketId = url.searchParams.get("ticket") || "";
     const stagingHeaders = new Headers();
     stagingHeaders.set("Cache-Control", "no-store");
+    let confirmMode = mode;
 
-    const stagedCookie = await readBetterAuthMagicLinkConfirmationCookie(env, request);
-    if (stagedCookie?.ticketId !== ticketId) {
-      try {
-        const ticket = await betterAuthMagicLinkConfirmationTicketCookie(env, request, {
-          ticketId,
-        });
-        stagingHeaders.append("Set-Cookie", ticket.cookie);
-        appendSetCookies(stagingHeaders, clearBetterAuthMagicLinkStateCookies(request));
-      } catch (error) {
-        if (!(error instanceof BetterAuthMagicLinkCallbackError)) {
-          throw error;
-        }
-        const stagedConfirmation = await readBetterAuthMagicLinkConfirmationTicket(env, request);
-        if (!stagedConfirmation) {
-          stagingHeaders.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
-          appendSetCookies(stagingHeaders, clearBetterAuthMagicLinkStateCookies(request));
-          throw redirect(`/auth/${mode}?error=callback_failed`, { headers: stagingHeaders });
-        }
+    try {
+      const ticket = await betterAuthMagicLinkConfirmationTicketCookie(env, request, {
+        ticketId,
+      });
+      confirmMode = ticket.mode;
+      stagingHeaders.append("Set-Cookie", clearBetterAuthLegacyMagicLinkConfirmationCookie(request));
+      stagingHeaders.append("Set-Cookie", ticket.cookie);
+      appendSetCookies(stagingHeaders, clearBetterAuthMagicLinkStateCookies(request));
+    } catch (error) {
+      if (!(error instanceof BetterAuthMagicLinkCallbackError)) {
+        throw error;
       }
+      const stagedConfirmation = await readBetterAuthMagicLinkConfirmationTicket(env, request);
+      if (!stagedConfirmation) {
+        appendSetCookies(stagingHeaders, clearBetterAuthMagicLinkConfirmationCookies(request));
+        appendSetCookies(stagingHeaders, clearBetterAuthMagicLinkStateCookies(request));
+        throw redirect(`/auth/${mode}?error=callback_failed`, { headers: stagingHeaders });
+      }
+      confirmMode = stagedConfirmation.mode;
     }
 
-    const stagedConfirmation = await readBetterAuthMagicLinkConfirmationTicket(env, request);
-    const confirmMode = stagedConfirmation?.mode ?? mode;
     throw redirect(cleanMagicLinkPath(confirmMode), { headers: stagingHeaders });
   }
 
@@ -116,7 +116,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
     const headers = new Headers();
     headers.set("Cache-Control", "no-store");
-    headers.append("Set-Cookie", clearBetterAuthMagicLinkConfirmationCookie(request));
+    appendSetCookies(headers, clearBetterAuthMagicLinkConfirmationCookies(request));
     appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
     throw redirect(`/auth/${mode}?error=callback_failed`, {
       headers,

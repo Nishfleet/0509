@@ -16,6 +16,8 @@ export const BETTER_AUTH_BASE_PATH = "/api/auth";
 export const BETTER_AUTH_OAUTH_PROVIDERS = ["google", "microsoft"] as const;
 export const BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS = 10_000;
 const BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE = "f9_better_magic";
+const BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE_PATH = "/auth";
+const BETTER_AUTH_MAGIC_LINK_CONFIRMATION_LEGACY_COOKIE_PATH = "/auth/better/magic-link";
 const BETTER_AUTH_MAGIC_LINK_STATE_COOKIE = "f9_better_magic_state";
 const BETTER_AUTH_MAGIC_LINK_CONTEXT_TTL_MS = 15 * 60 * 1000;
 const BETTER_AUTH_MAGIC_LINK_STATE_COOKIE_PATH = "/auth";
@@ -842,7 +844,7 @@ export async function betterAuthMagicLinkConfirmationTicketCookie(
       cookieValue,
       {
         maxAge: Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000)),
-        path: "/auth/better/magic-link",
+        path: BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE_PATH,
       },
     ),
     mode: payload.mode,
@@ -871,7 +873,7 @@ export async function betterAuthLegacyMagicLinkConfirmationTicketCookie(
     }),
     {
       maxAge: 15 * 60,
-      path: "/auth/better/magic-link",
+      path: BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE_PATH,
     },
   );
 }
@@ -1180,10 +1182,23 @@ function d1ChangedRows(result: unknown) {
   return Number((result as { meta?: { changes?: number } }).meta?.changes ?? 0);
 }
 
-export function clearBetterAuthMagicLinkConfirmationCookie(request: Request) {
+export function clearBetterAuthMagicLinkConfirmationCookies(request: Request) {
+  return [
+    buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE, "", {
+      maxAge: 0,
+      path: BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE_PATH,
+    }),
+    buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE, "", {
+      maxAge: 0,
+      path: BETTER_AUTH_MAGIC_LINK_CONFIRMATION_LEGACY_COOKIE_PATH,
+    }),
+  ];
+}
+
+export function clearBetterAuthLegacyMagicLinkConfirmationCookie(request: Request) {
   return buildBetterAuthCookie(request, BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE, "", {
     maxAge: 0,
-    path: "/auth/better/magic-link",
+    path: BETTER_AUTH_MAGIC_LINK_CONFIRMATION_LEGACY_COOKIE_PATH,
   });
 }
 
