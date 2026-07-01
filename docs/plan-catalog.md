@@ -19,7 +19,7 @@ Authoritative entitlements live in `app/lib/plan-entitlements.ts`. Prices are lo
 
 ## Top-ups
 
-- Burst Pack 500 / Campaign Pack 2,000 / Scale Pack 7,500 evidence checks (quantities only — prices unconfigured).
+- Burst Pack 500 / Campaign Pack 2,000 / Scale Pack 7,500 evidence checks. Quantities are fixed in code; prices load from Dodo at runtime and are verified by the live pricing canary.
 - Purchased checks **never expire** and remain owned after cancellation.
 - Spending top-ups requires an active Scout, Starter, or Agency plan.
 
@@ -42,7 +42,7 @@ Server routes, API/MCP tools, exports, shares, reports, Slack delivery, and acco
 
 ### Pricing
 
-Checkout SKUs and amounts are unconfigured until Dodo products are wired. Unknown/inactive SKUs fail closed at checkout. Partial refunds are an owner decision — ledger code revokes on full refund only.
+Checkout SKUs are mapped in `app/lib/billing-sku-catalog.ts` and provider product IDs are supplied by environment. Public prices and checkout totals come from Dodo localized pricing preview, not this document. Unknown, inactive, or unmapped SKUs fail closed at checkout. Partial refunds are an owner decision — ledger code revokes on full refund only.
 
 ## Evidence checks
 
@@ -50,6 +50,6 @@ Scheduled monitoring is included. One evidence check = one successful, unique, n
 
 Customer copy: see `EVIDENCE_USAGE_CUSTOMER_COPY` in `app/lib/pricing.ts`.
 
-## Production status (2026-06-24)
+## Production status (2026-07-01)
 
-Entitlement catalog and evidence usage accounting are live in production (PR #234). Dodo product IDs for v1 plan and top-up SKUs remain owner-configured; checkout rejects unmapped SKUs.
+Entitlement catalog and evidence usage accounting are live in production. Dodo checkout, signed-webhook billing, top-ups, and Scout/Starter monthly and annual localized pricing are live-proven by the launch canaries. The current commercial truth lives in `docs/final-self-serve-ga-scorecard.md`.

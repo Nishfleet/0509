@@ -83,7 +83,7 @@ export default function StatusRoute() {
         <ul className="f9-doc-list">
           <li>Email delivery is available for eligible accounts; delivery issues can be reviewed through support.</li>
           <li>Dodo customer portal subscription changes still need dashboard confirmation.</li>
-          <li>External uptime monitoring is still an owner setup step.</li>
+          <li>Recurring uptime checks are configured; first alert proof is still operator-verified.</li>
           <li>Plan changes, cancellation, deletion, and sensitive account changes are handled through support until portal changes are confirmed.</li>
         </ul>
       </PublicDocBlock>
