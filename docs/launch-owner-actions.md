@@ -36,10 +36,10 @@ Slack advisories may appear on private readiness views, but they are not GA bloc
 
 ### Enable Dodo customer subscription updates / portal
 
-**Status:** NOT COMPLETED BY THIS CODE RUN
+**Status:** PARTIAL — PRODUCT COLLECTION CONFIGURED; DASHBOARD TOGGLE STILL NEEDS CONFIRMATION
 
 1. Open the Dodo Payments dashboard for the live 0509 brand.
-2. Add the live Scout and Starter subscription products to the same Product Collection.
+2. Done: the live Scout/Starter monthly and annual subscription products are grouped in the Five to Nine Product Collection.
 3. Enable **Allow Subscription Updates** under subscription settings.
 4. Confirm `/app/billing` → **Open billing portal** loads, plan changes are allowed between that Product Collection, and cancellation is available from subscription details.
 
