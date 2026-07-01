@@ -99,7 +99,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 
 - Provider fixture and signed webhook coverage: plan grant, subscription lifecycle, top-up grant, refund, duplicate/terminal checkout failure, retryable failure, and lock cleanup covered by tests/canaries.
 - Live/customer payment completion: not performed; no real customer card or subscription was used.
-- Owner/manual payment action: Dodo annual SKU pricing was corrected through Dodo's documented localized pricing flow before annual checkout was called live.
+- Owner/manual payment action: Dodo Scout/Starter monthly and annual pricing was corrected through Dodo's documented by-currency localized pricing flow before annual checkout was called live.
 - Monthly checkout: covered by route tests, checkout-return tests, and deployed live Dodo pricing canary proof in IN, US, and GB.
 - Annual checkout: covered by route tests and deployed live Dodo pricing canary proof. Dodo now serves Scout/Starter annual prices that validate as `4 months free` in IN, US, and GB.
 

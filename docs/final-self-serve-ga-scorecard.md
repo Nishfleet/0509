@@ -6,7 +6,7 @@ Last updated: 2026-07-01
 
 Current live verdict: SCOUT/STARTER MONTHLY AND ANNUAL, TOP-UPS, AND AGENCY SELF-SERVE RELEASED.
 
-Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Monthly checkout, annual checkout, and top-ups pass the live Dodo preview canary in IN, US, and GB. Annual uses Dodo's documented localized pricing mode where fixed USD/GBP annual amounts are needed, while INR remains the corrected base annual price. Backup scheduling is now repo-configured and restore proof exists locally, but GitHub backup secrets and the first scheduled backup run remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo portal subscription-update confirmation, external uptime monitor, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
+Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Monthly checkout, annual checkout, and top-ups pass the live Dodo preview canary in IN, US, and GB. Scout/Starter monthly and annual products use Dodo's documented by-currency localized pricing mode where fixed USD/GBP amounts are needed, while INR remains the corrected base price. Backup scheduling is now repo-configured and restore proof exists locally, but GitHub backup secrets and the first scheduled backup run remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo portal subscription-update confirmation, external uptime monitor, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
 
 ## Baseline
 
@@ -42,12 +42,12 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 | Local D1 migration list | LOCAL ONLY | Local simulator reports pending `0053`-`0060` from prior local state |
 | Remote D1 migration list | PASS | No migrations to apply after `0060_remove_legacy_billing_provider.sql` |
 | D1 cleanup evidence | PASS | Aggregate pre/post evidence preserved plan rows and Dodo linkage; post evidence shows no legacy billing columns and no retired-provider webhook table |
-| Pricing canary | PASS | Live Dodo pricing canary reached IN, US, and GB previews; monthly, annual, and top-ups pass for Scout/Starter annual validation and all public top-up packs |
+| Pricing canary | PASS | Live Dodo pricing canary reached IN, US, and GB previews; monthly, annual, and top-ups pass for Scout/Starter annual validation and all public top-up packs; redacted Dodo API product proof confirmed Scout/Starter monthly and annual products are `by_currency` with active USD/GBP localized rules |
 | Billing canary | PASS | Dodo signed-webhook plan/top-up canary passed and cleanup passed |
 | Proof/email canary | PASS | Launch proof canary passed with email delivery |
 | Production canary | PASS | Health on primary domains, fresh-live search, ops readiness, and Meta ads beta passed |
 | Provider bakeoff launch gate | PASS/PARTIAL | Current live provider passed all launch queries; optional alternate providers skipped because their credentials are absent |
-| Full launch readiness script | PASS | `npm run launch:readiness` passed after the Dodo annual localized pricing repair |
+| Full launch readiness script | PASS | `npm run launch:readiness` passed after the Dodo Scout/Starter monthly and annual by-currency localized pricing repair |
 | Presence website canary | PASS | `npm run canary:presence` now follows the current GA rollout and runs without requiring the old internal workspace id |
 | Agency fan-out proof | PASS dispatch / WATCH scan health | Local fan-out tests passed; production cron queued 78 fan-out jobs for the internal Agency-scale proof workspace with 0 dispatch failures and 8 max concurrency slots; synthetic proof watchlists were deactivated after proof |
 | Cloudflare Email visibility | PARTIAL | Fresh proof canary sent email and aggregate D1 shows recent Cloudflare Email sends; dashboard Email Service Logs/Activity still needs owner/browser confirmation |
