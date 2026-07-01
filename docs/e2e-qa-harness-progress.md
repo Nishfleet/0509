@@ -23,7 +23,7 @@
 | `npm run canary:billing` | Passed against internal canary path |
 | `npm run canary:proof` | Failed before harness work with `no_digest_delivery_sent` after one email delivery attempt |
 | `npm run canary:prod` | Passed health, bypass, ops readiness, and Meta ads beta |
-| `npm run canary:presence` | Blocked locally by missing `PRESENCE_INTERNAL_WORKSPACE_ID` |
+| `npm run canary:presence` | Historical baseline: stopped locally before GA-aware canary fallback existed |
 | Search V2 dogfood tests | Passed, 3 files and 28 tests |
 
 ## Harness Design
@@ -88,8 +88,8 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 
 ## Current Open Items
 
-- Production authenticated smoke needs owner-captured `.auth/0509-internal.json` and `.auth/0509-internal.meta.json`, with `E2E_INTERNAL_ACCOUNT_EMAIL_SHA256` set.
-- Local Presence canary needs `PRESENCE_INTERNAL_WORKSPACE_ID` if that canary remains required.
+- Production authenticated smoke passed on 2026-07-01 with fresh local internal-account auth state. Recapture `.auth/0509-internal.json` and `.auth/0509-internal.meta.json` when the local state expires.
+- Local Presence canary now follows the current GA rollout and does not need `PRESENCE_INTERNAL_WORKSPACE_ID` unless the rollout is explicitly changed back to `internal`.
 - Bugbot is enabled for `nish3451/0509`; the final PR head must have no accepted/actionable Bugbot findings before merge.
 - In-app Codex Browser opened the local E2E app at `http://127.0.0.1:4179/` and confirmed the Five to Nine title, primary headline, and sign-in surface.
 
@@ -102,7 +102,7 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 | `npm run build` | Passed |
 | `SAFE_DEPLOY_APPROVED=d1 npm run e2e:local` | Passed, 6 local authenticated tests |
 | `npm run e2e:prod:public` | Passed, 1 production-safe public test |
-| `npm run e2e:prod:auth` | Failed closed because `.auth/0509-internal.json` and the required account hash are missing locally |
+| `npm run e2e:prod:auth` | Passed with fresh local internal-account auth state |
 | `node scripts/validate-d1-backup.mjs` | Passed, latest migration `0061_support_case_events.sql` |
 | `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --local` | Passed, no local migrations to apply |
 | `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --remote` | Passed, no remote migrations to apply |
@@ -111,7 +111,7 @@ The validator rejects missing, stale, malformed, non-0509, account-hash-mismatch
 | `npm run canary:billing` | Passed |
 | `npm run canary:proof` | Passed on rerun; baseline `no_digest_delivery_sent` did not reproduce |
 | `npm run canary:prod` | Passed health, bypass, ops readiness, and Meta ads beta |
-| `npm run canary:presence` | Still blocked locally by missing `PRESENCE_INTERNAL_WORKSPACE_ID` |
+| `npm run canary:presence` | Passed under GA rollout without requiring the old internal workspace id |
 | `autoreview --mode local --base origin/main` | Passed clean after accepted findings were fixed |
 | In-app Codex Browser | Passed local rendered smoke for title, headline, and sign-in surface |
 | Bugbot | Enabled for the repository; accepted/actionable findings are fixed and rerun on the final PR head before merge |

@@ -48,7 +48,7 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 | Production canary | PASS | Health on primary domains, fresh-live search, ops readiness, and Meta ads beta passed |
 | Provider bakeoff launch gate | PASS/PARTIAL | Current live provider passed all launch queries; optional alternate providers skipped because their credentials are absent |
 | Full launch readiness script | PASS | Rerun after the retired-provider history removal and scorecard/copy refresh: typecheck, tests, build, audit, pricing, billing, proof/email, prod, and provider bakeoff passed with local canary env exported |
-| Presence website canary | PROVIDER CONFIGURED / LOCAL BLOCKED | Worker secret exists; `npm run canary:presence` still stops locally because the internal workspace id is not in local env |
+| Presence website canary | PASS | `npm run canary:presence` now follows the current GA rollout and runs without requiring the old internal workspace id |
 | Agency fan-out proof | PASS dispatch / WATCH scan health | Local fan-out tests passed; production cron queued 78 fan-out jobs for the internal Agency-scale proof workspace with 0 dispatch failures and 8 max concurrency slots; synthetic proof watchlists were deactivated after proof |
 | Cloudflare Email visibility | PARTIAL | Fresh proof canary sent email and aggregate D1 shows recent Cloudflare Email sends; dashboard Email Service Logs/Activity still needs owner/browser confirmation |
 | WhatsApp stored target review | REVIEWED / PRESERVE | Aggregate-only review found stale unsupported WhatsApp target/config rows and no send-attempt evidence; no deletion performed |
@@ -84,10 +84,9 @@ The live release still has these owner/operator actions:
 1. Confirm Dodo Product Collection membership for Scout/Starter, the Dodo subscription-update setting, and cancellation availability in the customer portal.
 2. Confirm external uptime monitoring on `https://0509.io/api/health`.
 3. Add GitHub Cloudflare secrets for the scheduled D1-to-R2 backup workflow, run it once, confirm a new R2 object, and decide R2 retention.
-4. Provide local internal Presence workspace config, then rerun `npm run canary:presence`.
-5. Monitor the next nightly fan-out window for dispatch failures and real-customer scan completion.
-6. Confirm Cloudflare Email activity/log visibility in the Cloudflare dashboard.
-7. Preserve unsupported WhatsApp stored targets unless owner approves a backup-backed anonymization/cleanup.
+4. Monitor the next nightly fan-out window for dispatch failures and real-customer scan completion.
+5. Confirm Cloudflare Email activity/log visibility in the Cloudflare dashboard.
+6. Preserve unsupported WhatsApp stored targets unless owner approves a backup-backed anonymization/cleanup.
 8. Clean up retired provider dashboard artifacts: old webhooks, subscriptions, payment links, and live products.
 
 ## Non-Exposure Confirmation
