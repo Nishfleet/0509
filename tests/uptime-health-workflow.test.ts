@@ -19,9 +19,11 @@ describe("uptime health workflow", () => {
     };
   };
 
-  it("checks the public health endpoint on the shortest documented GitHub schedule", () => {
+  it("checks the public health endpoint on an offset five-minute GitHub schedule", () => {
     expect(parsed.on.workflow_dispatch).toBeDefined();
-    expect(parsed.on.schedule).toEqual([{ cron: "*/5 * * * *" }]);
+    expect(parsed.on.schedule).toEqual([
+      { cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *" },
+    ]);
     expect(parsed.jobs.health?.["timeout-minutes"]).toBe(2);
 
     const healthStep = parsed.jobs.health?.steps?.find((step) => step.name === "Check production health endpoint");

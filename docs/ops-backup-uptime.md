@@ -52,8 +52,8 @@ Nish's explicit go-ahead.
 ### Repo-configured GitHub health workflow
 
 `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health`
-every 5 minutes and can be run manually from GitHub Actions. It uses no
-secrets or private canary tokens. The check passes only when the endpoint
+on an offset five-minute schedule and can be run manually from GitHub Actions.
+It uses no secrets or private canary tokens. The check passes only when the endpoint
 returns HTTP 200 JSON with `status: "ok"` and `app: "0509"`.
 
 GitHub documents 5 minutes as the shortest scheduled workflow interval, with
