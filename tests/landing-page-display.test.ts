@@ -109,7 +109,8 @@ describe("formatWhyAlertedLabel", () => {
 
 describe("formatDeliveryAttemptStatusLabel", () => {
   it("maps delivery statuses to concise trust wording", () => {
-    expect(formatDeliveryAttemptStatusLabel("sent", "email")).toBe("Delivered by email");
+    expect(formatDeliveryAttemptStatusLabel("sent", "email")).toBe("Accepted by email provider");
+    expect(formatDeliveryAttemptStatusLabel("sent", "slack")).toBe("Sent to Slack");
     expect(formatDeliveryAttemptStatusLabel("failed", "whatsapp")).toBe("WhatsApp failed");
     expect(formatDeliveryAttemptStatusLabel("skipped_due_to_quiet_hours", "email")).toBe("Deferred by quiet hours");
   });

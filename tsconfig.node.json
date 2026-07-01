@@ -7,6 +7,7 @@
     "scripts/monitoring-fanout-canary*.mjs",
     "scripts/provider-bakeoff*.mjs",
     "scripts/dodo-pricing-canary.mjs",
+    "scripts/presence-website-canary.mjs",
     "scripts/d1-cleanup-0060-evidence.mjs",
     "scripts/d1-migration-sync-check*.mjs",
     "scripts/d1-backup-command-args.mjs",
