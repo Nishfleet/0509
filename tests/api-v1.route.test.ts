@@ -191,8 +191,9 @@ const digest: DigestRecord = {
   ],
 };
 
-function setupMocks(authOk = true, actionsWriteEnabled = true) {
+function setupMocks(authOk = true, actionsWriteEnabled = true, workspaceUserId = apiKey.userId) {
   mockAgencyWorkspacePlan();
+  const isMemberWorkspace = workspaceUserId !== apiKey.userId;
   const mocks = {
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
     claimAgentActionAudit: vi.fn().mockResolvedValue({
@@ -236,6 +237,14 @@ function setupMocks(authOk = true, actionsWriteEnabled = true) {
     getEnv: vi.fn(() => ({ DB: {} })),
   }));
   vi.doMock("~/lib/data.server", () => mocks);
+  vi.doMock("~/lib/workspace.server", () => ({
+    resolveWorkspace: vi.fn().mockResolvedValue({
+      workspaceUserId,
+      isMember: isMemberWorkspace,
+      ownerName: isMemberWorkspace ? "Owner User" : null,
+    }),
+    resolveWorkspaceDataUserId: vi.fn().mockResolvedValue(workspaceUserId),
+  }));
 
   return mocks;
 }
@@ -254,8 +263,8 @@ async function loadApi(url: string) {
   } as never);
 }
 
-async function loadReadinessApi(authOk = true) {
-  setupMocks(authOk);
+async function loadReadinessApi(authOk = true, workspaceUserId = apiKey.userId) {
+  setupMocks(authOk, true, workspaceUserId);
   const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
   vi.doMock("~/lib/workspace-readiness.server", () => ({
     getWorkspaceReadiness,
@@ -419,7 +428,21 @@ describe("customer API v1", () => {
       ],
     });
     expect(JSON.stringify(body)).not.toContain("encryptedWebhookUrl");
-    expect(getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "user-1");
+    expect(getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      isMember: false,
+      billingOwnerName: null,
+      canManageBilling: true,
+    });
+  });
+
+  it("returns workspace-owner readiness for a member API key", async () => {
+    const { getWorkspaceReadiness } = await loadReadinessApi(true, "owner-1");
+
+    expect(getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "owner-1", {
+      isMember: true,
+      billingOwnerName: "Owner User",
+      canManageBilling: false,
+    });
   });
 
   it("returns account-scoped collection JSON by API key", async () => {

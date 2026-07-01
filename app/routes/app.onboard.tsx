@@ -154,7 +154,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         current: watchlistLimit.current,
         message:
           "Competitor monitoring is available on paid plans. Starter is the recommended plan for daily tracking and daily/weekly digests.",
-        upgradePath: "/#pricing",
+        upgradePath: "/app/billing?source=onboarding#plans",
         rawText,
         brandWebsiteInput,
       };
@@ -347,7 +347,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         message: isZeroLimit
           ? "Competitor monitoring is available on paid plans. Starter is the recommended plan for daily tracking and daily/weekly digests."
           : "You have reached your competitor monitoring limit.",
-        upgradePath: "/#pricing",
+        upgradePath: "/app/billing?source=onboarding#plans",
       };
     }
 
@@ -557,8 +557,8 @@ export default function AppOnboardRoute() {
         <article className="f9-onboard-card">
           <DashboardPageHeader
             lead={data.resumeSetup
-              ? "Paste another set of competitors. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."
-              : "Paste competitors once. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."}
+              ? "Paste your competitors. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."
+              : "Paste your competitors. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."}
             title={data.resumeSetup ? "Resume setup" : "Get started"}
           />
 
@@ -567,7 +567,7 @@ export default function AppOnboardRoute() {
               <p>{actionData.message}</p>
               {!actionData.ok && "upgradePath" in actionData && actionData.upgradePath ? (
                 <Link className="f9-text-link" to={actionData.upgradePath}>
-                  View pricing
+                  View plans
                 </Link>
               ) : null}
             </div>
@@ -648,7 +648,7 @@ export default function AppOnboardRoute() {
                 Starter is the recommended plan for retained competitor tracking with daily scans and daily/weekly digests.
               </p>
               <div className="f9-action-row">
-                <Link className="f9-primary-button" to="/#pricing">
+                <Link className="f9-primary-button" to="/app/billing?source=onboarding#plans">
                   View plans
                 </Link>
                 <span className="f9-muted-copy">Current plan: {data.plan}</span>

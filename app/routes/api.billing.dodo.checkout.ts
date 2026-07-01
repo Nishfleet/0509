@@ -1,5 +1,6 @@
 import { redirect } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type { DodoCheckoutPricingContext } from "~/lib/dodo-pricing.server";
 
 export function loader(_args: LoaderFunctionArgs) {
   return Response.json(
@@ -19,14 +20,24 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const session = await requireSession(env, request);
   const formData = await request.formData();
   const target = parseCheckoutTarget(formData, checkoutTargetFromSkuSlug);
+  const source = cleanSourceParam(formData.get("source"));
   let planCheckoutClaimed = false;
+  let pricingContext: DodoCheckoutPricingContext | null = null;
+  const checkoutId = target.kind === "plan" ? crypto.randomUUID() : null;
 
   const workspace = await resolveWorkspace(env, session.user.id);
   const billingUserId = workspace.workspaceUserId;
+  if (workspace.isMember && billingUserId !== session.user.id) {
+    throw new Response("Only the workspace owner can manage billing.", { status: 403 });
+  }
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const currentPlan = await getUserPlan(env, billingUserId);
 
   if (target.kind === "plan") {
-    const { getUserPlan } = await import("~/lib/plan.server");
-    const currentPlan = await getUserPlan(env, billingUserId);
+    if (!isCheckoutPlanSlug(target.planFamily)) {
+      throw new Response("Invalid plan checkout target.", { status: 400 });
+    }
+
     if (currentPlan !== "free") {
       throw redirect("/app/billing?checkout=already-subscribed", { status: 303 });
     }
@@ -37,13 +48,39 @@ export async function action({ context, request }: ActionFunctionArgs) {
       throw redirect(`/app/billing?checkout=${heldParam}`, { status: 303 });
     }
 
+    const { validateDodo0509PlanCheckout } = await import("~/lib/dodo-pricing.server");
+    const checkoutValidation = await validateDodo0509PlanCheckout({
+      env,
+      request,
+      plan: target.planFamily,
+      cycle: target.cycle,
+    });
+    if (!checkoutValidation.valid) {
+      const checkoutParam = target.cycle === "yearly" ? "annual-unavailable" : "plan-unavailable";
+      throw redirect(`/app/billing?checkout=${checkoutParam}&plan=${target.planFamily}`, {
+        status: 303,
+      });
+    }
+    pricingContext = checkoutValidation.pricingContext;
+
     const { claimDodoPlanCheckout } = await import("~/lib/data.server");
-    planCheckoutClaimed = await claimDodoPlanCheckout(env, { userId: billingUserId });
+    planCheckoutClaimed = await claimDodoPlanCheckout(env, { userId: billingUserId, checkoutId });
     if (!planCheckoutClaimed) {
       throw redirect("/app/billing?checkout=already-started", { status: 303 });
     }
-  } else if (billingUserId !== session.user.id && workspace.isMember) {
-    throw new Response("Only the workspace owner can purchase top-up packs.", { status: 403 });
+  } else if (currentPlan === "free") {
+    throw redirect("/app/billing?checkout=top-up-requires-plan#plans", { status: 303 });
+  } else {
+    const { validateDodo0509TopUpCheckout } = await import("~/lib/dodo-pricing.server");
+    const checkoutValidation = await validateDodo0509TopUpCheckout({
+      env,
+      request,
+      sku: target.sku,
+    });
+    if (!checkoutValidation.valid) {
+      throw redirect("/app/billing?checkout=top-up-unavailable#top-ups", { status: 303 });
+    }
+    pricingContext = checkoutValidation.pricingContext;
   }
 
   let checkout;
@@ -59,16 +96,28 @@ export async function action({ context, request }: ActionFunctionArgs) {
         },
       },
       target,
+      pricingContext,
+      checkoutId,
+      source,
     });
   } catch (error) {
     if (planCheckoutClaimed) {
-      const { clearDodoPlanCheckout } = await import("~/lib/data.server");
-      await clearDodoPlanCheckout(env, billingUserId);
+      try {
+        const { clearDodoPlanCheckout } = await import("~/lib/data.server");
+        await clearDodoPlanCheckout(env, billingUserId, { checkoutId });
+      } catch (cleanupError) {
+        console.error("Failed to clear pending Dodo checkout lock after checkout failure.", cleanupError);
+      }
     }
     throw error;
   }
 
   throw redirect(checkout.checkoutUrl, { status: 303 });
+}
+
+function cleanSourceParam(value: FormDataEntryValue | null) {
+  const cleaned = String(value ?? "").trim().toLowerCase();
+  return /^[a-z0-9_-]{1,40}$/.test(cleaned) ? cleaned : null;
 }
 
 function parseCheckoutTarget(
@@ -114,4 +163,8 @@ function parseCheckoutTarget(
   }
 
   throw new Response("Invalid Dodo checkout target.", { status: 400 });
+}
+
+function isCheckoutPlanSlug(value: string): value is "scout" | "starter" | "agency" {
+  return value === "scout" || value === "starter" || value === "agency";
 }

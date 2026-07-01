@@ -37,6 +37,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.doUnmock("~/lib/auth.server");
+  vi.doUnmock("~/lib/context.server");
+  vi.doUnmock("~/lib/env.server");
+  vi.doUnmock("~/lib/presence-internal-access.server");
+  vi.doUnmock("~/lib/workspace.server");
   vi.resetModules();
 });
 
@@ -199,6 +203,51 @@ describe("onboarding route", () => {
         } as never),
       "/app/onboard",
     );
+  });
+
+  it("lets unfinished users reach billing before setup is complete", async () => {
+    const unfinishedSession = {
+      user: {
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+        onboardedAt: null,
+      },
+      session: {
+        id: "session-1",
+        userId: "user-1",
+        expiresAt: "2026-04-03T00:00:00.000Z",
+      },
+    };
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession(unfinishedSession));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/env.server", () => ({
+      isOpsUserAllowed: vi.fn(() => false),
+    }));
+    vi.doMock("~/lib/presence-internal-access.server", () => ({
+      presenceNavVisible: vi.fn().mockResolvedValue(false),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn().mockResolvedValue({
+        workspaceUserId: "user-1",
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/app-layout");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/billing?plan=starter&cycle=monthly#plans"),
+    } as never);
+
+    expect(result).toMatchObject({
+      session: unfinishedSession,
+      showOpsNav: false,
+      showPresenceNav: false,
+    });
   });
 
   it("creates a first watchlist and marks the user onboarded", async () => {
@@ -1023,7 +1072,7 @@ describe("onboarding route", () => {
       limit: 3,
       message: "You have reached your competitor monitoring limit.",
       ok: false,
-      upgradePath: "/#pricing",
+      upgradePath: "/app/billing?source=onboarding#plans",
     });
     expect(createWatchlistWithinLimit).toHaveBeenCalled();
     expect(completeUserOnboarding).not.toHaveBeenCalled();
@@ -1095,7 +1144,7 @@ describe("onboarding route", () => {
           error: "plan_limit_exceeded",
           message:
             "Watchlists are available on paid plans. Starter is the recommended plan for monitoring this competitor.",
-          upgradePath: "/#pricing",
+          upgradePath: "/app/billing?source=onboarding#plans",
         }),
         useLoaderData: vi.fn().mockReturnValue({
           session: {
@@ -1131,8 +1180,8 @@ describe("onboarding route", () => {
     expect(markup).not.toContain("Quiet still counts");
     expect(markup).not.toContain("Proof feeds briefs");
     expect(markup).not.toContain("Choose Scout or higher");
-    expect(markup).toContain("View pricing");
-    expect(markup).toContain("href=\"/#pricing\"");
+    expect(markup).toContain("View plans");
+    expect(markup).toContain("href=\"/app/billing?source=onboarding#plans\"");
     expect(markup).not.toContain("Create watchlist for");
   });
 });

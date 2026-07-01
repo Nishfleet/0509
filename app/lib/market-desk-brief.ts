@@ -150,7 +150,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       state: "quiet",
       kicker: "Market Desk Brief",
       title: "Quiet check completed",
-      summary: `All quiet - ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightScope}. No changes worth your time.`,
+      summary: `All quiet - ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightScope}. Completed checks found no action-worthy movement.`,
       action: { href: "/app/watchlists", label: "Review watchlists" },
       metrics,
       items: activeWatchlists.slice(0, 3).map((watchlist) => ({

@@ -246,7 +246,7 @@ export default function CollectionsRoute() {
             {"error" in actionData && actionData.error === "plan_limit_exceeded" ? (
               <>
                 {" "}
-                <Link to="/#pricing">View plans</Link> to raise the limit.
+                <Link to="/app/billing?source=collections#plans">View plans</Link> to raise the limit.
               </>
             ) : null}
           </p>

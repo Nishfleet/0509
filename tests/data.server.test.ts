@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
   claimDodoPlanCheckout,
+  clearDodoPlanCheckout,
   beginDodoWebhookEventProcessing,
   claimDodoWebhookEvent,
   claimAgentActionAudit,
@@ -18,9 +19,11 @@ import {
   createSupportCaseEvent,
   createWatchEvent,
   DODO_PLAN_CHECKOUT_LOCK_MINUTES,
+  applyDodoPlanGrantWithWatchlistReconcile,
   grantDodoPlanAccess,
   getDeliveryTargetReadinessStats,
   getUserIdForDodoLifecycle,
+  getUserPlanBillingInfo,
   markDodoPlanPaymentIssue,
   revokeDodoAccessForRefundedPayment,
   revokeDodoPlanAccess,
@@ -1303,8 +1306,11 @@ describe("Dodo billing persistence", () => {
     const statement = findStatement(mock.statements, "INSERT INTO user_plan", "dodo_payment_id");
 
     expect(statement?.sql).toContain("julianday(excluded.plan_updated_at)");
-    expect(statement?.sql).toContain("user_plan.dodo_payment_id = excluded.dodo_payment_id");
-    // COALESCE keeps linkage fields when an event doesn't carry them
+    expect(statement?.sql).not.toContain("user_plan.dodo_payment_id = excluded.dodo_payment_id");
+    // Subscription events with no payment id must clear temporary checkout locks,
+    // while preserving already-confirmed real payment ids.
+    expect(statement?.sql).toContain("WHEN user_plan.dodo_status = 'checkout_pending' THEN NULL");
+    expect(statement?.sql).toContain("WHEN excluded.dodo_payment_id IS NOT NULL THEN excluded.dodo_payment_id");
     expect(statement?.sql).toContain("COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id)");
     expect(statement?.sql).toContain("COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at)");
     expect(statement?.bindings).toEqual([
@@ -1320,6 +1326,45 @@ describe("Dodo billing persistence", () => {
     ]);
   });
 
+  it("clears a temporary checkout payment id on subscription grants with no payment id", async () => {
+    const mock = createMockDb();
+
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter_annual",
+        providerSubscriptionId: "sub_123",
+        providerCustomerId: "cus_123",
+        nextBillingAt: "2027-06-04T12:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-04T12:00:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt_subscription_active",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+
+    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "dodo_payment_id");
+    expect(statement?.sql).toContain("WHEN user_plan.dodo_status = 'checkout_pending' THEN NULL");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "starter",
+      null,
+      "prod_starter_annual",
+      "sub_123",
+      "cus_123",
+      "2027-06-04T12:00:00.000Z",
+      "active",
+      "2026-06-04T12:00:00.000Z",
+    ]);
+  });
+
   it("keeps the pending plan checkout lock for the full Dodo checkout window", async () => {
     const mock = createMockDb();
 
@@ -1327,17 +1372,296 @@ describe("Dodo billing persistence", () => {
       { DB: mock.db } as never,
       {
         userId: "user-1",
+        checkoutId: "checkout_1",
         claimedAt: "2026-06-15T12:00:00.000Z",
       },
     );
 
     const statement = findStatement(mock.statements, "INSERT INTO user_plan", "checkout_pending");
     expect(DODO_PLAN_CHECKOUT_LOCK_MINUTES).toBe(24 * 60);
+    expect(statement?.sql).toContain("dodo_payment_id");
     expect(statement?.bindings).toEqual([
       "user-1",
+      "checkout_1",
       "2026-06-15T12:00:00.000Z",
       "2026-06-14T12:00:00.000Z",
     ]);
+  });
+
+  it("guards webhook checkout cleanup against newer pending checkout locks", async () => {
+    const mock = createMockDb();
+
+    await clearDodoPlanCheckout(
+      { DB: mock.db } as never,
+      "user-1",
+      { checkoutId: "checkout_1", occurredAt: "2026-07-01T08:00:00.000Z" },
+    );
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "checkout_pending");
+    expect(statement?.sql).toContain("dodo_payment_id = NULL");
+    expect(statement?.sql).toContain("AND dodo_payment_id = ?");
+    expect(statement?.sql).toContain("julianday(plan_updated_at) <= julianday(?)");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "checkout_1",
+      "2026-07-01T08:00:00.000Z",
+    ]);
+  });
+
+  it("can clear checkout locks with a matching id or missing stored id", async () => {
+    const mock = createMockDb();
+
+    await clearDodoPlanCheckout(
+      { DB: mock.db } as never,
+      "user-1",
+      {
+        allowMissingStoredCheckoutId: true,
+        checkoutId: "checkout_1",
+        occurredAt: "2026-07-01T08:00:00.000Z",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "checkout_pending");
+    expect(statement?.sql).toContain("(dodo_payment_id = ? OR dodo_payment_id IS NULL)");
+    expect(statement?.sql).toContain("julianday(plan_updated_at) <= julianday(?)");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "checkout_1",
+      "2026-07-01T08:00:00.000Z",
+    ]);
+  });
+
+  it("can require a missing stored checkout id for no-id terminal failures", async () => {
+    const mock = createMockDb();
+
+    await clearDodoPlanCheckout(
+      { DB: mock.db } as never,
+      "user-1",
+      {
+        occurredAt: "2026-07-01T08:00:00.000Z",
+        requireMissingStoredCheckoutId: true,
+      },
+    );
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "checkout_pending");
+    expect(statement?.sql).toContain("dodo_payment_id IS NULL");
+    expect(statement?.sql).toContain("julianday(plan_updated_at) <= julianday(?)");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "2026-07-01T08:00:00.000Z",
+    ]);
+  });
+
+  it("can clear timestamp-matched stored checkout ids for no-id terminal failures", async () => {
+    const mock = createMockDb();
+
+    await clearDodoPlanCheckout(
+      { DB: mock.db } as never,
+      "user-1",
+      {
+        allowTimestampMatchedStoredCheckoutId: true,
+        occurredAt: "2026-07-01T08:00:00.000Z",
+      },
+    );
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "checkout_pending");
+    expect(statement?.sql).not.toContain("dodo_payment_id IS NULL");
+    expect(statement?.sql).not.toContain("dodo_payment_id = ?");
+    expect(statement?.sql).toContain("julianday(plan_updated_at) <= julianday(?)");
+    expect(statement?.bindings).toEqual([
+      "user-1",
+      "2026-07-01T08:00:00.000Z",
+    ]);
+  });
+
+  it("clears a UUID-backed pending checkout when a no-id failure timestamp matches it", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user_plan (
+          user_id TEXT PRIMARY KEY NOT NULL,
+          plan TEXT NOT NULL DEFAULT 'free',
+          dodo_payment_id TEXT,
+          dodo_status TEXT,
+          plan_updated_at TEXT
+        );
+        INSERT INTO user_plan (
+          user_id,
+          plan,
+          dodo_payment_id,
+          dodo_status,
+          plan_updated_at
+        ) VALUES (
+          'user-1',
+          'free',
+          'local-checkout-uuid',
+          'checkout_pending',
+          '2026-07-01T07:58:00.000Z'
+        );
+      `);
+
+      await clearDodoPlanCheckout(
+        { DB: sqlite.db } as never,
+        "user-1",
+        {
+          allowTimestampMatchedStoredCheckoutId: true,
+          occurredAt: "2026-07-01T08:00:00.000Z",
+        },
+      );
+
+      const row = sqlite.sqlite
+        .prepare("SELECT dodo_payment_id, dodo_status FROM user_plan WHERE user_id = ?")
+        .get("user-1") as { dodo_payment_id: string | null; dodo_status: string | null };
+      expect(row).toEqual({ dodo_payment_id: null, dodo_status: null });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("does not clear a newer UUID-backed pending checkout from an older no-id failure", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user_plan (
+          user_id TEXT PRIMARY KEY NOT NULL,
+          plan TEXT NOT NULL DEFAULT 'free',
+          dodo_payment_id TEXT,
+          dodo_status TEXT,
+          plan_updated_at TEXT
+        );
+        INSERT INTO user_plan (
+          user_id,
+          plan,
+          dodo_payment_id,
+          dodo_status,
+          plan_updated_at
+        ) VALUES (
+          'user-1',
+          'free',
+          'newer-local-checkout-uuid',
+          'checkout_pending',
+          '2026-07-01T08:02:00.000Z'
+        );
+      `);
+
+      await clearDodoPlanCheckout(
+        { DB: sqlite.db } as never,
+        "user-1",
+        {
+          allowTimestampMatchedStoredCheckoutId: true,
+          occurredAt: "2026-07-01T08:00:00.000Z",
+        },
+      );
+
+      const row = sqlite.sqlite
+        .prepare("SELECT dodo_payment_id, dodo_status FROM user_plan WHERE user_id = ?")
+        .get("user-1") as { dodo_payment_id: string | null; dodo_status: string | null };
+      expect(row).toEqual({
+        dodo_payment_id: "newer-local-checkout-uuid",
+        dodo_status: "checkout_pending",
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("derives the billing interval from the Dodo product id", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM user_plan",
+        results: [
+          {
+            plan: "starter",
+            dodo_status: "subscription.active",
+            dodo_product_id: "prod_starter_annual",
+            dodo_subscription_id: "sub_123",
+            dodo_customer_id: "cus_123",
+            dodo_next_billing_at: "2027-06-04T12:00:00.000Z",
+            plan_updated_at: "2026-06-04T12:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      getUserPlanBillingInfo(
+        {
+          DB: mock.db,
+          DODO_0509_PRODUCT_STARTER_YEARLY_ID: "prod_starter_annual",
+        } as never,
+        "user-1",
+      ),
+    ).resolves.toMatchObject({
+      plan: "starter",
+      dodoProductId: "prod_starter_annual",
+      billingInterval: "annual",
+    });
+  });
+
+  it("does not derive a billing interval from stale Dodo product ids on free plans", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM user_plan",
+        results: [
+          {
+            plan: "free",
+            dodo_status: "refunded",
+            dodo_product_id: "prod_starter_annual",
+            dodo_subscription_id: "sub_123",
+            dodo_customer_id: "cus_123",
+            dodo_next_billing_at: "2027-06-04T12:00:00.000Z",
+            plan_updated_at: "2026-06-04T12:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      getUserPlanBillingInfo(
+        {
+          DB: mock.db,
+          DODO_0509_PRODUCT_STARTER_YEARLY_ID: "prod_starter_annual",
+        } as never,
+        "user-1",
+      ),
+    ).resolves.toMatchObject({
+      plan: "free",
+      dodoProductId: "prod_starter_annual",
+      billingInterval: null,
+    });
+  });
+
+  it("does not derive a billing interval from product ids for another paid plan", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM user_plan",
+        results: [
+          {
+            plan: "scout",
+            dodo_status: "subscription.active",
+            dodo_product_id: "prod_starter_annual",
+            dodo_subscription_id: "sub_123",
+            dodo_customer_id: "cus_123",
+            dodo_next_billing_at: "2027-06-04T12:00:00.000Z",
+            plan_updated_at: "2026-06-04T12:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      getUserPlanBillingInfo(
+        {
+          DB: mock.db,
+          DODO_0509_PRODUCT_STARTER_YEARLY_ID: "prod_starter_annual",
+        } as never,
+        "user-1",
+      ),
+    ).resolves.toMatchObject({
+      plan: "scout",
+      dodoProductId: "prod_starter_annual",
+      billingInterval: null,
+    });
   });
 
   it("revokes Dodo plan access to free with monotonic timestamp ordering", async () => {

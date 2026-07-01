@@ -14,6 +14,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     extractDodoPlanGrant,
+    extractDodoPlanCheckoutFailure,
     extractDodoPlanRevocation,
     extractDodoProofCreditGrant,
     extractDodoRefund,
@@ -27,6 +28,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     applyDodoProofCreditGrantWithLedger,
     applyDodoRefundWithWatchlistReconcile,
     beginDodoWebhookEventProcessing,
+    clearDodoPlanCheckout,
     failDodoWebhookEventProcessing,
     finalizeDodoWebhookLedgerOnly,
     getUserIdForDodoPayment,
@@ -91,7 +93,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     body: Record<string, unknown>;
   }> {
     const ledgerBase = { eventId };
-
+    let subscriptionFailureWithCheckoutIdDidNotClear = false;
     const planGrant = extractDodoPlanGrant(env, payload);
     if (planGrant) {
       await applyDodoPlanGrantWithWatchlistReconcile(
@@ -119,6 +121,56 @@ export async function action({ context, request }: ActionFunctionArgs) {
         metadata: { action: "plan_grant", userId: planGrant.userId, plan: planGrant.plan },
         body: { ok: true },
       };
+    }
+
+    const checkoutFailure = extractDodoPlanCheckoutFailure(env, payload);
+    if (checkoutFailure) {
+      let clearedCheckout = false;
+      if (checkoutFailure.checkoutId || checkoutFailure.eventType !== "subscription.failed") {
+        clearedCheckout = checkoutFailure.checkoutId
+          ? await clearDodoPlanCheckout(env, checkoutFailure.userId, {
+              allowMissingStoredCheckoutId: true,
+              checkoutId: checkoutFailure.checkoutId,
+              occurredAt: checkoutFailure.failedAt,
+              requireMissingStoredCheckoutId: false,
+            })
+          : await clearDodoPlanCheckout(env, checkoutFailure.userId, {
+              allowTimestampMatchedStoredCheckoutId: true,
+              checkoutId: null,
+              occurredAt: checkoutFailure.failedAt,
+            });
+      }
+      const shouldDeferSubscriptionFailureToLifecycle =
+        checkoutFailure.eventType === "subscription.failed" && !clearedCheckout;
+      subscriptionFailureWithCheckoutIdDidNotClear =
+        shouldDeferSubscriptionFailureToLifecycle && Boolean(checkoutFailure.checkoutId);
+      // Dodo also emits subscription.failed for active subscription payment
+      // issues. Only classify it as checkout failure when it cleared the
+      // matching pending checkout lock.
+      if (!shouldDeferSubscriptionFailureToLifecycle) {
+        await finalizeDodoWebhookLedgerOnly(env, {
+          ...ledgerBase,
+          outcome: "processed",
+          metadata: {
+            action: "checkout_failure",
+            checkoutId: checkoutFailure.checkoutId,
+            userId: checkoutFailure.userId,
+            eventType: checkoutFailure.eventType,
+            status: checkoutFailure.status,
+          },
+        });
+        return {
+          outcome: "processed",
+          metadata: {
+            action: "checkout_failure",
+            checkoutId: checkoutFailure.checkoutId,
+            userId: checkoutFailure.userId,
+            eventType: checkoutFailure.eventType,
+            status: checkoutFailure.status,
+          },
+          body: { ok: true, checkoutFailure: true },
+        };
+      }
     }
 
     const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);
@@ -184,6 +236,40 @@ export async function action({ context, request }: ActionFunctionArgs) {
       }
 
       if (revocation.action === "payment_issue") {
+        if (
+          revocation.eventType === "subscription.failed" &&
+          !subscriptionFailureWithCheckoutIdDidNotClear
+        ) {
+          const clearedCheckout = await clearDodoPlanCheckout(env, userId, {
+            allowTimestampMatchedStoredCheckoutId: true,
+            occurredAt: revocation.revokedAt,
+          });
+          if (clearedCheckout) {
+            await finalizeDodoWebhookLedgerOnly(env, {
+              ...ledgerBase,
+              outcome: "processed",
+              metadata: {
+                action: "checkout_failure",
+                checkoutId: null,
+                userId,
+                eventType: revocation.eventType,
+                status: revocation.status,
+              },
+            });
+            return {
+              outcome: "processed",
+              metadata: {
+                action: "checkout_failure",
+                checkoutId: null,
+                userId,
+                eventType: revocation.eventType,
+                status: revocation.status,
+              },
+              body: { ok: true, checkoutFailure: true },
+            };
+          }
+        }
+
         await applyDodoPlanPaymentIssueWithLedger(
           env,
           {

@@ -2813,6 +2813,174 @@ button[aria-busy="true"] {
   justify-content: flex-end;
 }
 
+.f9-plan-picker-panel {
+  border-radius: 8px;
+}
+
+.f9-cycle-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 999px;
+  background: #f6f9fc;
+}
+
+.f9-cycle-toggle a,
+.f9-cycle-toggle button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--f9-search-muted);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 850;
+  font-family: inherit;
+  text-decoration: none;
+}
+
+.f9-cycle-toggle a.is-active,
+.f9-cycle-toggle button.is-active {
+  background: #171611;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(6, 22, 41, 0.12);
+}
+
+.f9-app-plan-grid,
+.f9-topup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.f9-app-plan-card,
+.f9-topup-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow:
+    rgba(0, 0, 0, 0.08) 0 0 0 1px,
+    rgba(0, 0, 0, 0.04) 0 2px 2px,
+    #fafafa 0 0 0 1px;
+}
+
+.f9-app-plan-card.is-selected {
+  box-shadow:
+    rgba(23, 23, 23, 0.26) 0 0 0 1px,
+    rgba(0, 0, 0, 0.08) 0 2px 6px,
+    #fafafa 0 0 0 1px;
+}
+
+.f9-app-plan-card.is-recommended {
+  box-shadow:
+    rgba(23, 23, 23, 0.18) 0 0 0 1px,
+    rgba(0, 0, 0, 0.05) 0 2px 4px,
+    #fafafa 0 0 0 1px;
+}
+
+.f9-app-plan-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.f9-app-plan-card-head strong,
+.f9-topup-card strong {
+  display: block;
+  margin-top: 4px;
+  color: #171611;
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.f9-app-plan-card p,
+.f9-topup-card p {
+  margin: 0;
+  color: var(--f9-search-muted);
+  line-height: 1.5;
+}
+
+.f9-plan-limit-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.f9-plan-limit-strip span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #edf3f8;
+  color: var(--f9-search-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.f9-annual-note {
+  padding: 10px;
+  border-radius: 8px;
+  background: #f6f9fc;
+  color: var(--f9-search-muted);
+  font-size: 0.88rem;
+  font-weight: 760;
+}
+
+.f9-annual-note.is-valid {
+  background: rgba(10, 169, 130, 0.12);
+  color: #087764;
+}
+
+.f9-annual-note.is-unavailable {
+  background: rgba(255, 95, 80, 0.1);
+  color: #9e3328;
+}
+
+.f9-app-plan-card .f9-plan-feature-list {
+  margin: 0;
+}
+
+.f9-app-plan-card .f9-plan-actions,
+.f9-topup-card form {
+  margin-top: auto;
+}
+
+.f9-topup-card .f9-secondary-button,
+.f9-app-plan-card .f9-primary-button,
+.f9-app-plan-card .f9-secondary-button {
+  width: 100%;
+}
+
+@media (max-width: 920px) {
+  .f9-app-plan-grid,
+  .f9-topup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .f9-cycle-toggle {
+    width: 100%;
+  }
+
+  .f9-cycle-toggle a,
+  .f9-cycle-toggle button {
+    flex: 1;
+  }
+}
+
 .f9-onboard-page {
   --f9-search-ink: #061629;
   --f9-search-muted: #40546a;
@@ -4080,6 +4248,33 @@ one signal-green accent.
 
 .f9-home .ld-pricing-note a { color: var(--ld-ink); text-decoration: underline; }
 
+.f9-home .f9-cycle-toggle {
+  gap: 0;
+  padding: 3px;
+  border: 2px solid var(--ld-ink);
+  border-radius: 0;
+  background: var(--ld-card);
+  box-shadow: none;
+}
+
+.f9-home .f9-cycle-toggle a,
+.f9-home .f9-cycle-toggle button {
+  min-height: 38px;
+  border-radius: 0;
+  color: var(--ld-ink-soft);
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.f9-home .f9-cycle-toggle a.is-active,
+.f9-home .f9-cycle-toggle button.is-active {
+  background: var(--ld-green);
+  color: var(--ld-ink);
+  box-shadow: none;
+}
+
 .f9-home .f9-commerce-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -4169,6 +4364,7 @@ one signal-green accent.
 }
 
 .f9-home .f9-commerce-card > a,
+.f9-home .f9-plan-actions a,
 .f9-home .f9-plan-actions button {
   margin-top: auto;
   background: var(--ld-ink);
@@ -4179,9 +4375,11 @@ one signal-green accent.
   font-size: 0.92rem;
   text-align: center;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .f9-home .f9-commerce-card > a:hover,
+.f9-home .f9-plan-actions a:hover,
 .f9-home .f9-plan-actions button:hover { background: #2a2820; }
 
 .f9-home .f9-plan-actions {
@@ -4191,6 +4389,7 @@ one signal-green accent.
 }
 
 .f9-home .f9-plan-actions form { flex: 1; display: flex; }
+.f9-home .f9-plan-actions a,
 .f9-home .f9-plan-actions button { flex: 1; }
 
 .f9-home .f9-price-sync {
