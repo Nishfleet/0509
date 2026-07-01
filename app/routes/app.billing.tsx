@@ -26,6 +26,7 @@ import {
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const PAYMENT_ISSUE_STATUSES = new Set(["subscription.failed", "subscription.on_hold"]);
+const LEGACY_PLAN_RETURN_CONFIRMATION_WINDOW_MS = 15 * 60 * 1000;
 
 type AppPricingPreview = {
   available?: boolean;
@@ -131,7 +132,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     billing.plan !== "free" &&
     selectedPlanParam === billing.plan &&
     selectedCycleParam === currentCycleParam &&
-    Boolean(cleanCheckoutStartedAt(billing.planUpdatedAt));
+    isRecentTimestamp(billing.planUpdatedAt, LEGACY_PLAN_RETURN_CONFIRMATION_WINDOW_MS);
 
   return {
     email: session.user.email,
@@ -756,6 +757,13 @@ function cleanCheckoutStartedAt(value: string | null) {
   if (!cleaned || cleaned.length > 40) return null;
   const timestamp = Date.parse(cleaned);
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function isRecentTimestamp(value: string | null, windowMs: number) {
+  const timestamp = Date.parse(String(value ?? ""));
+  if (!Number.isFinite(timestamp)) return false;
+  const now = Date.now();
+  return timestamp <= now + 2 * 60 * 1000 && now - timestamp <= windowMs;
 }
 
 function cleanDodoPaymentId(value: string | null) {

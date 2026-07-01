@@ -94,7 +94,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }> {
     const ledgerBase = { eventId };
     let subscriptionFailureWithCheckoutIdDidNotClear = false;
-
     const planGrant = extractDodoPlanGrant(env, payload);
     if (planGrant) {
       await applyDodoPlanGrantWithWatchlistReconcile(
@@ -129,6 +128,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       let clearedCheckout = false;
       if (checkoutFailure.checkoutId || checkoutFailure.eventType !== "subscription.failed") {
         clearedCheckout = await clearDodoPlanCheckout(env, checkoutFailure.userId, {
+          allowMissingStoredCheckoutId: Boolean(checkoutFailure.checkoutId),
           checkoutId: checkoutFailure.checkoutId,
           occurredAt: checkoutFailure.failedAt,
         });
