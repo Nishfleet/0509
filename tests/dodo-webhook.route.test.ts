@@ -233,6 +233,7 @@ describe("Dodo webhook route", () => {
       allowMissingStoredCheckoutId: true,
       checkoutId: "checkout_1",
       occurredAt: "2026-07-01T08:00:00.000Z",
+      requireMissingStoredCheckoutId: false,
     });
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
       expect.anything(),
@@ -277,6 +278,7 @@ describe("Dodo webhook route", () => {
       allowMissingStoredCheckoutId: false,
       checkoutId: null,
       occurredAt: "2026-07-01T08:00:00.000Z",
+      requireMissingStoredCheckoutId: true,
     });
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
       expect.anything(),
@@ -318,6 +320,7 @@ describe("Dodo webhook route", () => {
     expect(await response.json()).toMatchObject({ ok: true, checkoutFailure: true });
     expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
       occurredAt: "2026-07-01T08:00:00.000Z",
+      requireMissingStoredCheckoutId: true,
     });
     expect(data.applyDodoPlanPaymentIssueWithLedger).not.toHaveBeenCalled();
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
@@ -362,6 +365,7 @@ describe("Dodo webhook route", () => {
       allowMissingStoredCheckoutId: true,
       checkoutId: "checkout_failed_sub",
       occurredAt: "2026-07-01T08:00:00.000Z",
+      requireMissingStoredCheckoutId: false,
     });
     expect(data.applyDodoPlanPaymentIssueWithLedger).not.toHaveBeenCalled();
   });
@@ -407,6 +411,7 @@ describe("Dodo webhook route", () => {
       allowMissingStoredCheckoutId: true,
       checkoutId: "checkout_old",
       occurredAt: "2026-07-01T08:00:00.000Z",
+      requireMissingStoredCheckoutId: false,
     });
     expect(data.finalizeDodoWebhookLedgerOnly).not.toHaveBeenCalledWith(
       expect.anything(),
