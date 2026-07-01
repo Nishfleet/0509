@@ -8,7 +8,7 @@ Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green,
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
-Remaining owner gates outside this repo: Dodo Product Collection membership plus **Allow Subscription Updates**, UptimeRobot monitor confirmation (no API token in repo), GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, next-window Agency scan-health monitoring, and Cloudflare Email dashboard visibility.
+Remaining owner gates outside this repo: Dodo **Allow Subscription Updates** dashboard confirmation, UptimeRobot monitor confirmation (no API token in repo), GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, next-window Agency scan-health monitoring, and Cloudflare Email dashboard visibility.
 
 The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, dormant-channel advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
@@ -76,9 +76,9 @@ WhatsApp is not launch-scoped until the provider/customer/webhook lane is delibe
 
 ## Dodo Portal Manual Blocker
 
-Dodo customer portal sessions are wired in `/app/billing`, but Dodo must have the relevant subscription products grouped into a Product Collection and **Allow Subscription Updates** enabled before customers can change plans without emailing support. Cancellation also needs a separate portal check from subscription details.
+Dodo customer portal sessions are wired in `/app/billing`, and the live Scout/Starter monthly and annual subscription products are now grouped into the Five to Nine Product Collection. Dodo still needs **Allow Subscription Updates** enabled before customers can change plans without emailing support. Cancellation also needs a separate portal check from subscription details.
 
-Required manual step: Dodo dashboard → Product Collections → group the live Scout/Starter subscription products; then Settings → Subscriptions → enable **Allow Subscription Updates**; then confirm plan changes and cancellation in an internal customer portal session.
+Required manual step: Dodo dashboard → Settings → Subscriptions → enable **Allow Subscription Updates**; then confirm plan changes and cancellation in an internal customer portal session.
 
 ## External Uptime Manual Blocker
 
@@ -109,4 +109,4 @@ Use this framing for the first customer:
 
 ## Next Slice
 
-Confirm UptimeRobot on `/api/health`, confirm the Dodo customer portal setting, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.
+Confirm UptimeRobot on `/api/health`, confirm the Dodo subscription-update portal setting, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.
