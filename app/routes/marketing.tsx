@@ -5,7 +5,10 @@ import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-rout
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { SubmitButton } from "~/components/submit-button";
 import { demoProof } from "~/lib/demo-proof";
-import { dodoAnnualSavingsIsValid } from "~/lib/dodo-pricing-display";
+import {
+  dodoAnnualSavingsIsValid,
+  dodoAnnualUnavailableCopy,
+} from "~/lib/dodo-pricing-display";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
@@ -584,13 +587,21 @@ export default function MarketingRoute() {
             const annualIsValid = dodoAnnualSavingsIsValid(
               localPricing?.annualValidation?.[plan.slug],
             );
-            const selectedAnnualBlocked = billingCycle === "yearly" && !annualIsValid;
             const planSaleOpen =
               plan.slug === "scout"
                 ? commercialLaunch.scoutSaleOpen
                 : plan.slug === "starter"
                   ? commercialLaunch.starterSaleOpen
                   : commercialLaunch.agencySaleOpen;
+            const selectedAnnualBlocked =
+              billingCycle === "yearly" && planSaleOpen && yearlyReady && !annualIsValid;
+            const annualStatusCopy = !planSaleOpen
+              ? "Checkout temporarily unavailable"
+              : annualIsValid
+                ? "Annual billing · 4 months free"
+                : yearlyReady
+                  ? "Annual checkout unavailable. Monthly still works."
+                  : "Annual price loading";
 
             return (
               <article
@@ -600,14 +611,12 @@ export default function MarketingRoute() {
                 <span>{plan.name}</span>
                 {plan.slug === "starter" ? <em className="f9-plan-badge">Recommended</em> : null}
                 {plan.slug === "agency" && !planSaleOpen ? (
-                  <em className="f9-plan-badge">Held for capacity proof</em>
+                  <em className="f9-plan-badge">Contact us</em>
                 ) : null}
                 <h3>{priceLabel(localPricing, plan.slug, billingCycle, billingCycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel)}</h3>
                 <small>
                   {billingCycle === "yearly"
-                    ? annualIsValid
-                      ? "Annual billing · 4 months free"
-                      : "Annual checkout unavailable until pricing validates"
+                    ? annualStatusCopy
                     : `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`}
                 </small>
                 <p>{plan.detail}</p>
@@ -629,7 +638,9 @@ export default function MarketingRoute() {
                       <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will help.
                     </p>
                   ) : selectedAnnualBlocked && yearlyReady ? (
-                    <span className="f9-price-sync">Annual pricing needs validation</span>
+                    <span className="f9-price-sync">
+                      {dodoAnnualUnavailableCopy(localPricing?.annualValidation?.[plan.slug])}
+                    </span>
                   ) : (
                     <span className="f9-price-sync">Prices loading</span>
                   )

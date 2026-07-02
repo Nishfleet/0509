@@ -4,7 +4,6 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "https://0509.io";
 const REQUIRED_COUNTRIES = ["IN", "US", "GB"];
-const SALE_OPEN_PLANS = ["scout", "starter"];
 const REQUIRED_USAGE_BUNDLES = ["proof_500", "proof_2000", "proof_7500"];
 const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
 
@@ -29,6 +28,11 @@ const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
  *     currency?: string | null,
  *     billingCountry?: string | null
  *   } | null | undefined>,
+ *   commercialLaunch?: {
+ *     scoutSaleOpen?: boolean,
+ *     starterSaleOpen?: boolean,
+ *     agencySaleOpen?: boolean
+ *   } | null,
  *   usageBundles?: Record<string, PricingDisplay | null | undefined>
  * }} PricingPreview
  *
@@ -135,7 +139,8 @@ export function validatePricingPreviewBody({
   status,
   responseOk,
 }) {
-  const planValidations = SALE_OPEN_PLANS.map((plan) =>
+  const saleOpenPlans = saleOpenPlansForPreview(preview);
+  const planValidations = saleOpenPlans.map((plan) =>
     validatePlanPricing(preview, plan, requestedCountry),
   );
   const topUpValidations = REQUIRED_USAGE_BUNDLES.map((bundle) =>
@@ -161,6 +166,21 @@ export function validatePricingPreviewBody({
     planValidations,
     topUpValidations,
   };
+}
+
+/**
+ * @param {PricingPreview} preview
+ * @returns {string[]}
+ */
+export function saleOpenPlansForPreview(preview) {
+  const commercialLaunch = preview.commercialLaunch;
+  const plans = [];
+
+  if (commercialLaunch?.scoutSaleOpen !== false) plans.push("scout");
+  if (commercialLaunch?.starterSaleOpen !== false) plans.push("starter");
+  if (commercialLaunch?.agencySaleOpen === true) plans.push("agency");
+
+  return plans;
 }
 
 /**

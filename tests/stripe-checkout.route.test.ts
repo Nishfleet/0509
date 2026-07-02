@@ -313,7 +313,7 @@ describe("marketing route", () => {
     const { default: MarketingRoute } = await import("~/routes/marketing");
     const markup = renderToStaticMarkup(createElement(MarketingRoute));
 
-    expect(markup).toContain("Held for capacity proof");
+    expect(markup).toContain("Contact us");
     expect(markup).toContain('href="/auth/signup"');
     expect(markup).not.toContain("plan=agency");
   });

@@ -2,17 +2,25 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
+  const { summarizeCommercialLaunch } = await import("~/lib/commercial-launch-gate.server");
   const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+  const env = getEnv(context);
   const preview = await previewDodo0509PlanPrices({
-    env: getEnv(context),
+    env,
     request,
   });
 
-  return Response.json(preview, {
-    headers: {
-      "Cache-Control": preview.available ? "private, max-age=300" : "no-store",
+  return Response.json(
+    {
+      ...preview,
+      commercialLaunch: summarizeCommercialLaunch(env),
     },
-  });
+    {
+      headers: {
+        "Cache-Control": preview.available ? "private, max-age=300" : "no-store",
+      },
+    },
+  );
 }
 
 export function action(_args: ActionFunctionArgs) {

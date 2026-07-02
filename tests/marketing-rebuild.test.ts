@@ -38,6 +38,11 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toMatch(/pilot|manual|fit review|self-serve|not live/i);
   });
 
+  it("keeps generic annual validation blockers out of the pricing cards", () => {
+    expect(marketingRoute).not.toContain("Annual pricing needs validation");
+    expect(marketingRoute).not.toContain("Annual checkout unavailable until pricing validates");
+  });
+
   it("labels live search and keeps preview read-only before account", () => {
     expect(marketingRoute).toContain("Live search");
     expect(marketingRoute).not.toContain("Early access");
@@ -135,9 +140,10 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Brief export");
   });
 
-  it("gates Agency checkout on the pricing page until fan-out is proven", () => {
+  it("keeps Agency checkout live without the stale held-language", () => {
     expect(marketingRoute).toContain("summarizeCommercialLaunch");
-    expect(marketingRoute).toContain("Held for capacity proof");
+    expect(marketingRoute).toContain("Checkout temporarily unavailable");
+    expect(marketingRoute).not.toContain("Held for capacity proof");
     expect(marketingRoute).toContain("Common billing questions");
     expect(marketingRoute).toContain("What changes on Agency?");
     expect(marketingRoute).not.toContain("Why is Agency held?");
