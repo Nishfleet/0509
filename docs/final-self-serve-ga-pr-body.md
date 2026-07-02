@@ -26,7 +26,7 @@ This PR closes the remaining in-repo Five to Nine launch-hardening gaps for the 
 - Public copy/doc drift: resolved. Scout, Starter, top-up, Agency, Presence, support, and channel copy match the current product contract.
 - Backup/trust overclaim: resolved. Public trust copy is limited to proven dry-run validation and owner-operated backup posture.
 - Backup validator coverage: resolved. Validation walks the current migration chain through the latest repo migration.
-- Billing portal: honest partial self-serve. Portal route exists and Dodo Product Collection membership is configured for Scout/Starter monthly and annual products, but plan changes/cancellation remain support-backed until the Dodo subscription-update dashboard setting and portal behavior are owner-verified.
+- Billing management: repo-configured self-serve. Portal route exists for hosted portal tasks, Dodo Product Collection membership is configured for Scout/Starter monthly and annual products, and in-app plan switching now uses Dodo's documented plan-change preview/change endpoints. One internal provider smoke is still needed before claiming live customer plan-change proof; cancellation remains portal/support-backed until checked.
 - Provider reliability: improved. Dodo, email, Browser Run/Browserless, Meta/customer token checks, landing/proof fetches, Presence checks, Slack, WhatsApp, and LinkedIn OAuth token exchange now use timeout/bounded handling where touched.
 - Agency state: open. Live production fan-out dispatch proof passed; scan health remains monitored.
 - Account-controls branch: reviewed and not merged. Useful ideas were classified for later rebuild; stale migrations/code were not imported.
@@ -64,7 +64,7 @@ Presence website canary now follows the current GA rollout and runs without requ
 
 These are not proven by repo code alone:
 
-- Confirm the Dodo subscription-update setting and cancellation availability in the customer portal; Product Collection membership is already configured for Scout/Starter monthly and annual products.
+- After deploy, confirm in-app Dodo plan switching with an internal linked subscription, signed webhook account update, and cancellation availability in the customer portal.
 - Confirm the uptime health workflow's first scheduled run and alert path, or add/keep an independent UptimeRobot monitor for `https://0509.io/api/health`.
 - Activate or explicitly defer D1-to-R2 scheduled backup and restore drill.
 - Monitor the next live Agency fan-out window for dispatch failures and real scan completion.

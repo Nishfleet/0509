@@ -62,6 +62,7 @@ describe("billing route exposure", () => {
       "api/billing/dodo/canary",
       "api/billing/dodo/cancel",
       "api/billing/dodo/checkout",
+      "api/billing/dodo/plan-change",
       "api/billing/dodo/portal",
     ]);
     expect(paths.filter((path) => path.startsWith("api/webhooks/"))).toEqual([

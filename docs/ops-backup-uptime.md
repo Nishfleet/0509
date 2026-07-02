@@ -98,16 +98,17 @@ If sign-up is undesirable, the fallback is a health-ping cron inside the
 uncommitted local changes on 2026-06-12, so the cron was deliberately not
 added; revisit once that working tree is clean.
 
-## Dodo customer portal — subscription updates (needs Nish)
+## Dodo billing — plan switching and portal cancellation (needs smoke)
 
 The customer portal button on `/app/billing` opens Dodo's hosted portal.
-Whether customers can change subscriptions there is controlled by Dodo product
-collection setup and a dashboard setting:
+Plan switching is now handled from the in-app billing cards through Dodo's
+documented subscription plan-change preview/change endpoints:
 
 1. Done: the live Scout/Starter monthly and annual products are grouped in the Five to Nine Product Collection.
-2. Dodo dashboard → **Settings → Subscriptions** → enable **Allow Subscription Updates**.
-3. Open a test/internal customer portal session and confirm plan changes appear only between products in that collection.
-4. Separately confirm cancellation remains available from subscription details.
+2. After deploy, use an internal linked paid subscription to switch Scout/Starter or monthly/annual from `/app/billing`.
+3. Confirm Dodo sends the signed webhook and the account updates.
+4. Separately confirm cancellation remains available from hosted portal subscription details.
 
-Until those are verified, customers can use the hosted portal for card/invoice
-tasks, while plan changes and cancellation stay support-assisted in product copy.
+Until those are verified, customers can use in-app plan switching and the hosted
+portal for card/invoice tasks, while support remains the fallback for exceptions
+and cancellation questions.

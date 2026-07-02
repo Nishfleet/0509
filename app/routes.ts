@@ -29,6 +29,7 @@ export default [
   route("api/billing/dodo/cancel", "routes/api.billing.dodo.cancel.ts"),
   route("api/billing/dodo/canary", "routes/api.billing.dodo.canary.ts"),
   route("api/billing/dodo/portal", "routes/api.billing.dodo.portal.ts"),
+  route("api/billing/dodo/plan-change", "routes/api.billing.dodo.plan-change.ts"),
   route("api/demo-proof", "routes/api.demo-proof.ts"),
   route("api/mcp", "routes/api.mcp.ts"),
   route("api/v1", "routes/api.v1.ts"),

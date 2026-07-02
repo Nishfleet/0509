@@ -23,12 +23,13 @@ function seedBillingSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) 
       plan TEXT NOT NULL DEFAULT 'free',
       dodo_payment_id TEXT,
       dodo_product_id TEXT,
-      dodo_subscription_id TEXT,
-      dodo_customer_id TEXT,
-      dodo_next_billing_at TEXT,
-      dodo_status TEXT,
-      plan_updated_at TEXT
-    );
+	      dodo_subscription_id TEXT,
+	      dodo_customer_id TEXT,
+	      dodo_next_billing_at TEXT,
+	      dodo_plan_change_product_id TEXT,
+	      dodo_status TEXT,
+	      plan_updated_at TEXT
+	    );
 
     CREATE TABLE watchlist (
       id TEXT PRIMARY KEY NOT NULL,
@@ -169,6 +170,369 @@ describe("Dodo billing atomicity (sqlite)", () => {
     expect(activeCount.count).toBe(3);
     expect(ledger.outcome).toBe("processed");
     expect(ledger.processed_at).toEqual(expect.any(String));
+  });
+
+  it("reconciles a no-timestamp plan-changed event after a matching payment grant", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+    harness.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_payment_id,
+        dodo_product_id,
+        dodo_subscription_id,
+        dodo_customer_id,
+        dodo_plan_change_product_id,
+        dodo_status,
+        plan_updated_at
+      ) VALUES (
+        'user-1',
+        'scout',
+        'pay-old',
+        'prod_scout',
+        'sub-1',
+        'cus-1',
+        'prod_starter',
+        'plan_change_pending',
+        '2026-06-10T00:00:00.000Z'
+      );
+    `);
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-plan-change-payment",
+      eventType: "payment.succeeded",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: "pay-new",
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        status: "succeeded",
+        grantedAt: "2026-06-10T00:01:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt-plan-change-payment",
+        outcome: "processed",
+        metadata: { action: "plan_grant" },
+      },
+    );
+
+    const afterPayment = harness.sqlite
+      .prepare(`
+        SELECT plan, dodo_status, dodo_product_id, dodo_plan_change_product_id
+        FROM user_plan
+        WHERE user_id = ?
+      `)
+      .get("user-1") as {
+      plan: string;
+      dodo_status: string;
+      dodo_product_id: string;
+      dodo_plan_change_product_id: string | null;
+    };
+
+    expect(afterPayment).toEqual({
+      plan: "starter",
+      dodo_status: "succeeded",
+      dodo_product_id: "prod_starter",
+      dodo_plan_change_product_id: "prod_starter",
+    });
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-plan-changed-no-timestamp",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-10T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-10T00:02:00.000Z",
+        forcePlanChangePending: true,
+        requirePlanChangePending: true,
+      },
+      10,
+      {
+        eventId: "evt-plan-changed-no-timestamp",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+
+    const finalPlan = harness.sqlite
+      .prepare(`
+        SELECT dodo_status, dodo_next_billing_at, dodo_plan_change_product_id
+        FROM user_plan
+        WHERE user_id = ?
+      `)
+      .get("user-1") as {
+      dodo_status: string;
+      dodo_next_billing_at: string | null;
+      dodo_plan_change_product_id: string | null;
+    };
+    const ledger = harness.sqlite
+      .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+      .get("evt-plan-changed-no-timestamp") as { outcome: string };
+
+    expect(finalPlan).toEqual({
+      dodo_status: "active",
+      dodo_next_billing_at: "2026-07-10T00:00:00.000Z",
+      dodo_plan_change_product_id: null,
+    });
+    expect(ledger.outcome).toBe("processed");
+  });
+
+  it("applies matching plan-change confirmations older than the local claim time", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+    harness.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_payment_id,
+        dodo_product_id,
+        dodo_subscription_id,
+        dodo_customer_id,
+        dodo_plan_change_product_id,
+        dodo_status,
+        plan_updated_at
+      ) VALUES (
+        'user-1',
+        'scout',
+        'pay-old',
+        'prod_scout',
+        'sub-1',
+        'cus-1',
+        'prod_starter',
+        'plan_change_pending',
+        '2026-06-10T00:02:00.000Z'
+      );
+    `);
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-plan-change-provider-time-skew",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-10T00:01:00.000Z",
+    });
+
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-10T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-10T00:01:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt-plan-change-provider-time-skew",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+
+    const plan = harness.sqlite
+      .prepare(`
+        SELECT plan, dodo_status, dodo_next_billing_at, dodo_plan_change_product_id
+        FROM user_plan
+        WHERE user_id = ?
+      `)
+      .get("user-1") as {
+      plan: string;
+      dodo_status: string;
+      dodo_next_billing_at: string | null;
+      dodo_plan_change_product_id: string | null;
+    };
+
+    expect(plan).toEqual({
+      plan: "starter",
+      dodo_status: "active",
+      dodo_next_billing_at: "2026-07-10T00:00:00.000Z",
+      dodo_plan_change_product_id: null,
+    });
+  });
+
+  it("preserves the pending target when a plan-change payment issue recovers", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+    harness.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_payment_id,
+        dodo_product_id,
+        dodo_subscription_id,
+        dodo_customer_id,
+        dodo_plan_change_product_id,
+        dodo_status,
+        plan_updated_at
+      ) VALUES (
+        'user-1',
+        'scout',
+        'pay-old',
+        'prod_scout',
+        'sub-1',
+        'cus-1',
+        'prod_starter',
+        'payment.failed',
+        '2026-06-10T00:00:00.000Z'
+      );
+    `);
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-plan-change-payment-recovered",
+      eventType: "payment.succeeded",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: "pay-new",
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        status: "succeeded",
+        grantedAt: "2026-06-10T00:01:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt-plan-change-payment-recovered",
+        outcome: "processed",
+        metadata: { action: "plan_grant" },
+      },
+    );
+
+    const plan = harness.sqlite
+      .prepare("SELECT dodo_status, dodo_plan_change_product_id FROM user_plan WHERE user_id = ?")
+      .get("user-1") as { dodo_status: string; dodo_plan_change_product_id: string | null };
+
+    expect(plan).toEqual({
+      dodo_status: "succeeded",
+      dodo_plan_change_product_id: "prod_starter",
+    });
+  });
+
+  it("rolls back guarded plan-change grants when watchlist reconciliation fails", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+    harness.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id,
+        plan,
+        dodo_payment_id,
+        dodo_product_id,
+        dodo_subscription_id,
+        dodo_customer_id,
+        dodo_plan_change_product_id,
+        dodo_status,
+        plan_updated_at
+      ) VALUES (
+        'user-1',
+        'scout',
+        'pay-old',
+        'prod_scout',
+        'sub-1',
+        'cus-1',
+        'prod_starter',
+        'plan_change_pending',
+        '2026-06-10T00:00:00.000Z'
+      );
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-plan-change-rollback",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    const originalPrepare = harness.sqlite.prepare.bind(harness.sqlite);
+    harness.sqlite.prepare = (sql: string) => {
+      const statement = originalPrepare(sql);
+      const originalRun = statement.run.bind(statement);
+      statement.run = (...args: never[]) => {
+        if (sql.includes("UPDATE watchlist") && sql.includes("paused_reason = 'plan_limit'")) {
+          throw new Error("watchlist reconcile failed");
+        }
+        return originalRun(...args);
+      };
+      return statement;
+    };
+
+    await expect(
+      applyDodoPlanGrantWithWatchlistReconcile(
+        env,
+        {
+          userId: "user-1",
+          plan: "starter",
+          providerPaymentId: null,
+          providerProductId: "prod_starter",
+          providerSubscriptionId: "sub-1",
+          providerCustomerId: "cus-1",
+          nextBillingAt: "2026-07-10T00:00:00.000Z",
+          status: "active",
+          grantedAt: "2026-06-10T00:02:00.000Z",
+          forcePlanChangePending: true,
+          requirePlanChangePending: true,
+        },
+        10,
+        {
+          eventId: "evt-plan-change-rollback",
+          outcome: "processed",
+          metadata: { action: "subscription_grant" },
+        },
+      ),
+    ).rejects.toThrow("watchlist reconcile failed");
+
+    const plan = harness.sqlite
+      .prepare(`
+        SELECT plan, dodo_status, dodo_next_billing_at, dodo_plan_change_product_id
+        FROM user_plan
+        WHERE user_id = ?
+      `)
+      .get("user-1") as {
+      plan: string;
+      dodo_status: string;
+      dodo_next_billing_at: string | null;
+      dodo_plan_change_product_id: string | null;
+    };
+    const ledger = harness.sqlite
+      .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+      .get("evt-plan-change-rollback") as { outcome: string };
+
+    expect(plan).toEqual({
+      plan: "scout",
+      dodo_status: "plan_change_pending",
+      dodo_next_billing_at: null,
+      dodo_plan_change_product_id: "prod_starter",
+    });
+    expect(ledger.outcome).toBe("processing");
   });
 
   it("rolls back grant mutations when a watchlist reconcile statement fails", async () => {

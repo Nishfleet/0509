@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractDodoPlanCheckoutFailure } from "~/lib/dodo-billing.server";
+import { extractDodoPlanCheckoutFailure, extractDodoPlanRevocation } from "~/lib/dodo-billing.server";
 
 const env = {
   DODO_0509_BRAND_ID: "brand_0509",
@@ -133,14 +133,13 @@ describe("Dodo plan checkout failure extraction", () => {
   });
 
   it("does not clear the checkout lock for retryable payment.failed attempts", () => {
-    const failure = extractDodoPlanCheckoutFailure(
-      env,
-      planPayment({
-        status: "failed",
-        failed_at: "2026-07-01T08:00:00.000Z",
-      }),
-    );
+    const payload = planPayment({
+      status: "failed",
+      failed_at: "2026-07-01T08:00:00.000Z",
+    });
+    const failure = extractDodoPlanCheckoutFailure(env, payload);
 
     expect(failure).toBeNull();
+    expect(extractDodoPlanRevocation(env, payload)).toBeNull();
   });
 });

@@ -162,7 +162,7 @@ export function buildLifecycleNudges(input: {
     nudges.push({
       id: "billing_support",
       title: "Cancellation and help path",
-      detail: "Plan changes, cancellation, receipts, invoices, and sensitive requests now open as support cases.",
+      detail: "Plan changes start from billing; cancellation, receipts, invoices, and sensitive requests keep a support path.",
       href: "/app/support?category=billing",
       priority: "low",
     });

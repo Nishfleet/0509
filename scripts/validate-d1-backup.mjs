@@ -71,6 +71,7 @@ function applyMigrationsToScratchDatabase() {
       "dodo_next_billing_at",
       "evidence_entitlement_anchor",
       "evidence_entitlement_anchor_source",
+      "dodo_plan_change_product_id",
     ];
     if (userPlanColumns.join(",") !== expectedUserPlanColumns.join(",")) {
       throw new Error(`user_plan schema mismatch after migration replay: ${userPlanColumns.join(",")}`);

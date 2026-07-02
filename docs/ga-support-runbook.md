@@ -25,7 +25,7 @@ Dormant-channel advisories on `/api/launch-readiness` do not block Scout or Star
 | Checkout failed | Check Dodo receipt email; verify plan not already active | Billing support case |
 | Agency unavailable | Explain fan-out capacity gate; offer Starter | Owner when Agency timeline needed |
 | Evidence checks exhausted | Explain monthly reset + top-up packs | — |
-| Portal won't open | Dodo portal setting may be disabled | Owner enables subscription updates |
+| Portal won't open | Dodo portal session failed or no linked customer exists | Support handles card/invoice/cancellation task manually |
 | Email not delivering | Cloudflare Email Service Activity log; `delivery_attempt` for `channel = email` | `docs/ga-incident-runbook.md` § Email |
 | Slack requested | Explain Slack is not part of the GA customer offer and route to owner for a future product decision | Owner only |
 | Downgrade over limit | Watchlists auto-pause; newest kept | — |
@@ -34,7 +34,7 @@ Dormant-channel advisories on `/api/launch-readiness` do not block Scout or Star
 
 1. Customer opens `/app/support?category=billing`.
 2. Support reviews `user_plan`, `dodo_webhook_event` ledger (operator D1).
-3. Plan changes before portal confirmed: manual Dodo dashboard or support-assisted checkout.
+3. For plan-change issues, check whether `/app/billing` submitted a Dodo plan change and whether the signed webhook updated the account; use manual Dodo dashboard only as the fallback.
 
 ## Evidence check disputes
 

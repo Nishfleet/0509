@@ -6,7 +6,7 @@ Last updated: 2026-07-02
 
 Current live verdict: SCOUT/STARTER MONTHLY AND ANNUAL, TOP-UPS, AND AGENCY SELF-SERVE RELEASED.
 
-Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Monthly checkout, annual checkout, and top-ups pass the live Dodo preview canary in IN, US, and GB. Scout/Starter monthly and annual products use Dodo's documented by-currency localized pricing mode where fixed USD/GBP amounts are needed, while INR remains the corrected base price. Dodo Product Collection membership is now configured for Scout/Starter monthly and annual portal plan changes. Backup scheduling and an uptime health workflow are now repo-configured, the uptime workflow manual run passed, and restore proof exists locally, but GitHub backup secrets, the first scheduled backup run, and the first scheduled uptime alert path remain owner-controlled. The remaining gaps are owner/dashboard/operator actions: Dodo subscription-update dashboard confirmation, first scheduled uptime workflow run/notification proof or UptimeRobot confirmation, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
+Scout, Starter, and Agency are deployed and verified on the live Worker with Dodo checkout, top-ups, webhook grants, email proof, pricing preview, public copy, API/MCP Slack removal, and Agency fan-out dispatch covered by tests and live canaries. Monthly checkout, annual checkout, and top-ups pass the live Dodo preview canary in IN, US, and GB. Scout/Starter monthly and annual products use Dodo's documented by-currency localized pricing mode where fixed USD/GBP amounts are needed, while INR remains the corrected base price. Dodo Product Collection membership is configured for Scout/Starter monthly and annual products, and the repo now has owner-only in-app plan switching through Dodo's documented subscription plan-change preview/change endpoints. Backup scheduling and an uptime health workflow are now repo-configured, the uptime workflow manual run passed, and restore proof exists locally, but GitHub backup secrets, the first scheduled backup run, and the first scheduled uptime alert path remain owner-controlled. The remaining gaps are owner/operator actions: one internal Dodo plan-change/cancellation smoke after deploy, first scheduled uptime workflow run/notification proof or UptimeRobot confirmation, Cloudflare Email dashboard visibility, and retired-provider dashboard cleanup.
 
 ## Baseline
 
@@ -66,7 +66,7 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 | Slack public/API/MCP surface | Removed from GA surfaces | Dormant implementation preserved behind product gates |
 | WhatsApp public surface | Hidden | Dormant implementation preserved; readiness and launch blockers gated off while non-GA |
 | Presence website/blog | GA in repo config and copy | X, Reddit, and LinkedIn remain disabled |
-| Billing portal | Partial self-serve | Hosted portal route works in code and Dodo Product Collection membership is configured for Scout/Starter monthly and annual products; plan changes/cancellation remain support-backed until the Dodo subscription-update dashboard setting and portal behavior are verified |
+| Billing management | Repo-configured self-serve | Hosted portal route works for portal tasks, and owner-only in-app plan switching uses Dodo's documented plan-change preview/change endpoints; one internal provider smoke is still needed before claiming real-customer plan-change proof, and cancellation remains portal/support-backed until checked |
 | Trust/backup wording | Truthful in branch | Public trust copy limited to dry-run validation and owner-operated backup posture |
 | Provider/network timeouts | Improved | Shared timeout/bounded-response helpers and regression tests added across touched hot paths; stalled Cloudflare Email sends now move to pending/provider-unknown rather than retryable failure |
 | Retired billing provider | Removed from runtime and remote schema | Routes, helpers, env typing, tests, active docs, lookup index, live code references, fresh-start setup migrations, legacy remote plan columns, and retired-provider webhook table removed |
@@ -82,7 +82,7 @@ Scout, Starter, and Agency are deployed and verified on the live Worker with Dod
 
 The live release still has these owner/operator actions:
 
-1. Enable and confirm the Dodo subscription-update dashboard setting, then verify plan-change and cancellation behavior in an internal customer portal session.
+1. After deploy, use an internal linked subscription to verify in-app Dodo plan switching, signed webhook account update, and cancellation availability in the hosted portal.
 2. Confirm the first scheduled uptime workflow run and failure-notification path, or keep/add UptimeRobot as the stronger independent external monitor for `https://0509.io/api/health`.
 3. Add GitHub Cloudflare secrets for the scheduled D1-to-R2 backup workflow, run it once, confirm a new R2 object, and decide R2 retention.
 4. Monitor the next nightly fan-out window for dispatch failures and real-customer scan completion.

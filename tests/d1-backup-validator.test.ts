@@ -43,6 +43,7 @@ describe("D1 backup validator", () => {
       "dodo_next_billing_at",
       "evidence_entitlement_anchor",
       "evidence_entitlement_anchor_source",
+      "dodo_plan_change_product_id",
     ]);
   });
 });
