@@ -843,7 +843,7 @@ function PlanChangeNotice({
     return (
       <div className="f9-message" role="status">
         <p>
-          Dodo previewed {preview.charge} due now for the {targetCycleLabel} {targetPlanLabel}
+          Dodo calculated {preview.charge} due now for the {targetCycleLabel} {targetPlanLabel}
           change. Confirm to apply it {timingLabel} with the saved payment method.
         </p>
         <Form action="/api/billing/dodo/plan-change" method="post">
