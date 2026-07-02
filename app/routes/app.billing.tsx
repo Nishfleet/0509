@@ -537,10 +537,14 @@ export default function BillingRoute() {
                         Start {selectedCycle === "yearly" ? "annual" : "monthly"}
                       </SubmitButton>
                     </Form>
-                  ) : !planCanUseInAppChange || !planSaleOpen ? (
+                  ) : !planCanUseInAppChange ? (
                     <Link className="f9-secondary-button" to="/app/support?category=billing">
                       Request Agency access
                     </Link>
+                  ) : !planSaleOpen ? (
+                    <button className="f9-secondary-button" disabled type="button">
+                      {billing.plan === "free" ? "Checkout unavailable" : "Change unavailable"}
+                    </button>
                   ) : canChangePlan && checkoutSku ? (
                     <Form action="/api/billing/dodo/plan-change" method="post">
                       <input name="intent" type="hidden" value="preview" />
