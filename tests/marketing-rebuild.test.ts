@@ -43,6 +43,15 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("Annual checkout unavailable until pricing validates");
   });
 
+  it("highlights the annual savings offer", () => {
+    expect(marketingRoute).toContain("annualSavingsValidated");
+    expect(marketingRoute).toContain("DODO_ANNUAL_SAVINGS_LABEL");
+    expect(marketingRoute).toContain('className="f9-toggle-savings"');
+    expect(marketingRoute).toContain('className="f9-annual-status"');
+    expect(appCss).toContain(".f9-home .f9-toggle-savings");
+    expect(appCss).toContain(".f9-home .f9-annual-status strong");
+  });
+
   it("labels live search and keeps preview read-only before account", () => {
     expect(marketingRoute).toContain("Live search");
     expect(marketingRoute).not.toContain("Early access");
