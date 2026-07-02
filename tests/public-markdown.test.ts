@@ -62,11 +62,11 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(PUBLIC_MARKDOWN).toContain("Starter is the recommended plan");
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample proof loop");
-    expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 evidence checks/month");
-    expect(PUBLIC_MARKDOWN).toContain("daily and weekly digest delivery, and 250 evidence checks/month");
-    expect(PUBLIC_MARKDOWN).toContain("Usage bundles add purchased evidence checks that never expire");
-    expect(PUBLIC_MARKDOWN).toContain("Included evidence checks reset monthly and do not roll over");
-    expect(PUBLIC_MARKDOWN).toContain("Scheduled monitoring does not spend evidence checks");
+    expect(PUBLIC_MARKDOWN).toContain("weekly digest delivery, and 50 proof captures/month");
+    expect(PUBLIC_MARKDOWN).toContain("daily and weekly digest delivery, and 250 proof captures/month");
+    expect(PUBLIC_MARKDOWN).toContain("Usage bundles add purchased proof captures that never expire");
+    expect(PUBLIC_MARKDOWN).toContain("Included proof captures reset monthly and do not roll over");
+    expect(PUBLIC_MARKDOWN).toContain("Scheduled monitoring spends proof captures");
     expect(PUBLIC_MARKDOWN).not.toContain("30-day");
     expect(PUBLIC_MARKDOWN).not.toContain("30 day");
     expect(PUBLIC_MARKDOWN).not.toContain("Starter includes 10 watchlists, 25 collections, weekly digest delivery");
@@ -83,8 +83,8 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("user-supplied metric proof");
     expect(LLMS_TEXT).toContain("automated spend, reach, impression, and unsupported-channel benchmarks are not live");
     expect(LLMS_TEXT).toContain("setup status plus collection, watchlist, and digest exports");
-    expect(LLMS_TEXT).toContain("Purchased top-up checks never expire");
-    expect(LLMS_TEXT).toContain("included checks reset monthly without rollover");
+    expect(LLMS_TEXT).toContain("Purchased proof packs never expire");
+    expect(LLMS_TEXT).toContain("included proof captures reset monthly without rollover");
     expect(LLMS_TEXT).not.toContain("usage bundles add 30-day");
     expect(LLMS_TEXT).not.toContain("Starter includes weekly digest delivery");
     expect(LLMS_TEXT).toContain("approved account actions");
