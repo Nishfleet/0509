@@ -90,10 +90,10 @@ const quietSignals = [
 ] as const;
 
 const backboneStats = [
-  { value: "1", label: "competitor website", detail: "turns into a watchlist" },
-  { value: "24h", label: "change checks", detail: "daily on Starter & Agency plans" },
-  { value: "3", label: "saved evidence", detail: "screenshot, page text, original link" },
-  { value: "05:09", label: "morning brief", detail: "what changed and why it matters" },
+  { value: "Paste", label: "competitor sites", detail: "start from the brands you already track" },
+  { value: "Watch", label: "ads, pages, website moves", detail: "scheduled monitoring is included with your plan" },
+  { value: "Prove", label: "screenshots and source links", detail: "no proof, no claim" },
+  { value: "Brief", label: "the counter-move", detail: "what changed, why it matters, what to do next" },
 ] as const;
 
 type LocalDisplayPrice = {
@@ -388,7 +388,7 @@ export default function MarketingRoute() {
         <div className="ld-hero-grid">
           <div className="ld-hero-copy">
             <h1 className="ld-wall">
-              <span className="ld-row">Paste your competitors. Wake up to the counter-move brief.</span>
+              <span className="ld-row">Paste your competitors. Wake up to the proof-backed counter-move brief.</span>
             </h1>
 
             <p className="ld-deck-copy">
