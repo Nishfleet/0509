@@ -39,9 +39,9 @@ const differences = [
       "Five to Nine is built around what changed: offers, prices, CTAs, and landing-page copy — each change saved with screenshots, text, and links. If you mainly browsed creative inspiration, our library is narrower and our change evidence is deeper.",
   },
   {
-    title: "Evidence over vibes",
+    title: "Receipts for every move",
     detail:
-      "Every alert ships with a screenshot, the page text, and the original link. No screenshots, no claim.",
+      "Every alert includes the screenshot, page text, and original link, so your team can decide the next move without guessing.",
   },
   {
     title: "Honest limits",
