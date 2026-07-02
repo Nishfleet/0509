@@ -390,11 +390,11 @@ export default function MarketingRoute() {
             <h1 className="ld-wall">
               <span className="ld-row">They cut</span>
               <span className="ld-row">
-                the price <s className="ld-del">$2,400</s>
+                the price <s className="ld-del">$240</s>
               </span>
               <span className="ld-row ld-row-indent">
                 <ins className="ld-ins">
-                  $1,999<i className="ld-flag">03:47 AM</i>
+                  $199<i className="ld-flag">03:47 AM</i>
                 </ins>{" "}
                 last
               </span>
