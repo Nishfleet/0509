@@ -67,7 +67,7 @@ const howSteps = [
     step: "03",
     title: "The morning brief lands",
     detail:
-      "What changed and why it matters, before your day starts — every claim backed by evidence on file.",
+      "What changed and why it matters, before your day starts — with the screenshots and links your team needs to act fast.",
   },
 ] as const;
 
