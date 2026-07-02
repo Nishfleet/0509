@@ -37,3 +37,33 @@
 ## Notes
 
 - This provenance PR is docs-only and should not be redeployed. The deployed runtime remains `34b31cdc5b8d627da8412b345c60c7da3da22795`.
+
+## Design QA Follow-up
+
+- App PR: #298, `fix(marketing): polish homepage conversion without redesigning brand`
+- Feature branch: `codex/homepage-design-qa`
+- Feature commit: `1495f9fae8158c0b2d5fc5b067b4fd30bf9b2b5d`
+- App merge commit / runtime commit: `c50c22a7d8963867e6c0c6d8c0577d8378072e98`
+- Production deploy: 2026-07-02 after PR #298 merge
+- Worker version: `d56f073b-05a3-4248-98c3-1875da9b4553`, 100%
+- Rollback version: `8a79ca90-4f19-4b2c-bdfe-09f95857cc65`, 100%
+
+### Scope
+
+- Preserved the existing Five to Nine brand system: cream/off-white background, black editorial type, green proof accents, chunky borders, and restrained brutalist/editorial tone.
+- Tightened the homepage design QA issues raised from screenshots: over-rounded black CTA pills, overly broad hero input treatment, dense mobile cards, pricing card wrapping, and mobile CTA readability.
+- Kept Dodo-backed pricing, annual validation, signed-out plan intent, Search V2, Presence, auth, billing, and plan gating intact.
+
+### Verification
+
+- Local feature verification before PR: `npm test`, `npm run typecheck`, `npm run build`, `node scripts/validate-d1-backup.mjs`, `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --remote`, `git diff --check`, `npm run canary:pricing`, `npm run canary:billing`, `npm run canary:prod`, `npm run provider:bakeoff:launch`, and `npm run check:public-home` passed.
+- Rendered design QA before merge: homepage desktop/mobile screenshots, mobile overflow checks, annual toggle behavior, CTA targets, pricing card wrapping, and sample artifact readability passed.
+- Autoreview: first review found a URL input regression; the fields were reverted to text inputs with URL keyboard hints, and the final pushed diff autoreview exited clean with no accepted/actionable findings.
+- Bugbot: `bugbot-gate status` returned `SKIP BUGBOT` for normal-risk diff; the GitHub PR Cursor Bugbot check completed as neutral/skipping.
+- PR #298 CI: Gitleaks passed, `codex-node-checks` passed, Cursor Bugbot was neutral/skipping.
+- Post-deploy checks: `npm run check:public-home`, `npm run canary:pricing`, `npm run canary:billing`, and `npm run canary:prod` passed with the local canary token loaded.
+- Post-deploy rendered smoke: homepage, single H1, sample artifact, Create account / Sign in CTAs, annual pricing toggle, signed-out plan intent, `/search`, `/api/health`, and mobile horizontal overflow all passed.
+
+### Notes
+
+- This provenance update is docs-only and should not be redeployed. The deployed runtime remains `c50c22a7d8963867e6c0c6d8c0577d8378072e98`.
