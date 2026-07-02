@@ -320,7 +320,7 @@ export default function MarketingRoute() {
 
   const tickerRun = (
     <span className="ld-ticker-run">
-      <em>Sample watch</em>
+      <em>Sample brief</em>
       {tickerEvents.map(([time, event, evidence]) => (
         <span className="ld-ticker-item" key={time}>
           <b>{time}</b> {event} <small>[{evidence}]</small>
@@ -338,7 +338,7 @@ export default function MarketingRoute() {
         </div>
       </div>
       <p className="ld-sr-only">
-        A sample capture feed: timestamped competitor changes with saved evidence, ending in the
+        A sample competitor feed: timestamped changes with saved evidence, ending in the
         05:09 morning brief.
       </p>
 
@@ -487,13 +487,12 @@ export default function MarketingRoute() {
         <div className="f9-hero-proof-actions" aria-label="Sample brief before signup">
           <Link to={publicSearchTrialPath}>Try live search</Link>
           <a href="#demo">Review sample brief</a>
-          <a href="/api/demo-proof?format=markdown">Open markdown brief</a>
         </div>
 
         <p className="ld-honest" role="note">
-          <strong>Honest by design.</strong> The case above is a sample. Live results are always
-          labeled fresh, recent, or sample — and Meta ads tracking stays marked beta until it
-          is reliable on your competitors. Live search is free, no account. Why
+          <strong>Honest by design.</strong> The preview is an example. Your live search is clearly
+          labeled by freshness, and Meta ads tracking stays marked beta until it is reliable for
+          your competitors. Live search is free, no account. Why
           &ldquo;0509&rdquo;? Five to Nine — we work while you sleep.
         </p>
       </section>
@@ -513,16 +512,15 @@ export default function MarketingRoute() {
 
       <section className="ld-proof" id="demo">
         <div className="ld-section-head">
-          <span className="ld-kicker">Sample watch</span>
-          <h2>See the morning brief before creating an account.</h2>
+          <span className="ld-kicker">Sample brief</span>
+          <h2>Preview the morning brief before creating an account.</h2>
           <p>
-            This is sample data, not the live search result. It shows the buyer moment Five to
-            Nine is built around: one competitor, source trail, insight summary, digest preview,
-            and export.
+            See how Five to Nine turns one competitor change into a clear summary, saved
+            evidence, recommended next step, and shareable report.
           </p>
           <div className="ld-proof-actions">
-            <a href="/api/demo-proof">View JSON</a>
-            <a href="/api/demo-proof?format=markdown">Markdown brief</a>
+            <Link to={publicSearchTrialPath}>Try live search</Link>
+            <a href="#pricing">See plans</a>
           </div>
         </div>
 
