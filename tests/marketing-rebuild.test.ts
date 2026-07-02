@@ -82,8 +82,8 @@ describe("marketing rebuild", () => {
   it("leads with the concrete price-change hook and proof-backed sample framing", () => {
     expect(marketingRoute).toContain("They cut");
     expect(marketingRoute).toContain("the price <s");
-    expect(marketingRoute).toContain("₹2,400");
-    expect(marketingRoute).toContain("₹1,999");
+    expect(marketingRoute).toContain("$2,400");
+    expect(marketingRoute).toContain("$1,999");
     expect(marketingRoute).toContain("last");
     expect(marketingRoute).toContain("night.");
     expect(marketingRoute).toContain("Sample proof-backed brief");
