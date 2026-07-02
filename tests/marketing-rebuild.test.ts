@@ -80,10 +80,16 @@ describe("marketing rebuild", () => {
   });
 
   it("leads with the counter-move outcome instead of clever price-drop copy", () => {
-    expect(marketingRoute).toContain("Paste your competitors. Wake up to the counter-move brief.");
+    expect(marketingRoute).toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
     expect(marketingRoute).toContain(
       "Five to Nine watches competitor ads, pages, and public website moves, then shows the proof and next action.",
     );
+    expect(marketingRoute).toContain("start from the brands you already track");
+    expect(marketingRoute).toContain("scheduled monitoring is included with your plan");
+    expect(marketingRoute).toContain("no proof, no claim");
+    expect(marketingRoute).toContain("what changed, why it matters, what to do next");
+    expect(marketingRoute).not.toContain("turns into a watchlist");
+    expect(marketingRoute).not.toContain("daily on Starter & Agency plans");
     expect(marketingRoute).not.toContain("They cut");
     expect(marketingRoute).not.toContain("₹2,400");
     expect(marketingRoute).not.toContain("₹1,999");
