@@ -79,20 +79,24 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
   });
 
-  it("leads with the counter-move outcome instead of clever price-drop copy", () => {
-    expect(marketingRoute).toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
-    expect(marketingRoute).toContain(
-      "Five to Nine watches competitor ads, pages, and public website moves, then shows the proof and next action.",
-    );
+  it("leads with the concrete price-change hook and proof-backed sample framing", () => {
+    expect(marketingRoute).toContain("They cut");
+    expect(marketingRoute).toContain("the price <s");
+    expect(marketingRoute).toContain("₹2,400");
+    expect(marketingRoute).toContain("₹1,999");
+    expect(marketingRoute).toContain("last");
+    expect(marketingRoute).toContain("night.");
+    expect(marketingRoute).toContain("Sample proof-backed brief");
+    expect(marketingRoute).toContain("A rival page changed while your team was offline");
+    expect(marketingRoute).toContain("Your sales team would&rsquo;ve walked in blind.");
+    expect(marketingRoute).toContain("before your alarm goes off");
+    expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
     expect(marketingRoute).toContain("start from the brands you already track");
     expect(marketingRoute).toContain("scheduled monitoring is included with your plan");
     expect(marketingRoute).toContain("no proof, no claim");
     expect(marketingRoute).toContain("what changed, why it matters, what to do next");
     expect(marketingRoute).not.toContain("turns into a watchlist");
     expect(marketingRoute).not.toContain("daily on Starter & Agency plans");
-    expect(marketingRoute).not.toContain("They cut");
-    expect(marketingRoute).not.toContain("₹2,400");
-    expect(marketingRoute).not.toContain("₹1,999");
     expect(marketingRoute).not.toContain("Diff: −₹401");
   });
 
@@ -240,8 +244,8 @@ describe("marketing rebuild", () => {
     expect(rootRoute).toContain("IBM+Plex+Mono");
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
-    expect(marketingRoute).toContain("Proof-backed brief");
-    expect(marketingRoute).toContain("Competitor moves, source trail, next action");
+    expect(marketingRoute).toContain("Sample proof-backed brief");
+    expect(marketingRoute).toContain("A rival page changed while your team was offline");
     expect(marketingRoute).toContain('action="/search"');
     expect(marketingRoute).toContain("Catch them in the act");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');
