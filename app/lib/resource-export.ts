@@ -58,7 +58,7 @@ export function collectionExportResponse(
         `*Five to Nine board: ${collection.name}*`,
         collection.description ? collection.description : null,
         formatInsightDepthMarkdown(payload.insightDepth),
-        items.length === 0 ? "No saved proof yet." : "Saved proof:",
+        items.length === 0 ? "No saved evidence yet." : "Saved evidence:",
         ...items.map(
           (item) => {
             const proofLink = proofLinkForAd(item.ad);
@@ -66,7 +66,7 @@ export function collectionExportResponse(
             return `- ${stringValue(item.ad.advertiser)}: ${stringValue(item.ad.hook)} | ${stringValue(
               item.ad.offer,
             )} | CTA: ${stringValue(item.ad.cta)}${metricProof ? ` | ${metricProof}` : ""}${
-              proofLink ? ` | Proof: ${proofLink}` : ""}${
+              proofLink ? ` | Evidence: ${proofLink}` : ""}${
               item.note ? ` | Note: ${item.note}` : ""
             }`;
           },
@@ -125,7 +125,7 @@ export function watchlistExportResponse(
             `- ${event.title}: ${event.summary}\n  Priority: ${priorityLabel(
               event.intelligence.priorityBand,
               event.intelligence.priorityScore,
-            )}\n  Proof status: ${event.classification.label}\n  Source: ${event.classification.sourceTypeLabel}\n  Next move: ${event.intelligence.recommendedAction}\n  Evidence: ${event.intelligence.proofTrail}`,
+            )}\n  Source status: ${event.classification.label}\n  Source: ${event.classification.sourceTypeLabel}\n  Next move: ${event.intelligence.recommendedAction}\n  Evidence: ${event.intelligence.proofTrail}`,
         ),
       ],
     );
@@ -191,14 +191,14 @@ export function digestExportResponse(digest: DigestRecord, format: ExportFormat)
       [
         `*Five to Nine digest: ${dateLabel(digest.periodStart)} to ${dateLabel(digest.periodEnd)}*`,
         formatInsightDepthMarkdown(payload.insightDepth),
-        `_Proof mix_: ${proofMixLabel(summarizeDigestProofMix(digest.items))}`,
+        `_Evidence mix_: ${proofMixLabel(summarizeDigestProofMix(digest.items))}`,
         enrichedItems.length === 0 ? "No digest changes yet." : "Competitor changes:",
         ...enrichedItems.map(
           (item) =>
             `- ${item.watchlistName}: ${item.title}\n  Summary: ${item.summary}\n  Priority: ${priorityLabel(
               item.intelligence.priorityBand,
               item.intelligence.priorityScore,
-            )}\n  Proof status: ${item.classification.label}\n  Source: ${item.classification.sourceTypeLabel}\n  Next move: ${item.intelligence.recommendedAction}\n  Evidence: ${item.intelligence.proofTrail}`,
+            )}\n  Source status: ${item.classification.label}\n  Source: ${item.classification.sourceTypeLabel}\n  Next move: ${item.intelligence.recommendedAction}\n  Evidence: ${item.intelligence.proofTrail}`,
         ),
       ],
     );

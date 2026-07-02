@@ -21,7 +21,7 @@ const EXPECTED_MCP_ACTION_GROUPS = [
     actions: ["create_watchlist", "update_watchlist", "refresh_watchlist", "pause_watchlist", "resume_watchlist"],
   },
   {
-    label: "Proof and reports",
+    label: "Evidence and reports",
     requiresWriteEnabled: true,
     actions: [
       "create_collection",

@@ -33,7 +33,7 @@ export default function ChangelogRoute() {
 
       <PublicDocBlock title="2026-06-13">
         <ul className="f9-doc-list">
-          <li>Hardened billing verification so signed plan and proof-credit grants clean up after checks.</li>
+          <li>Hardened billing verification so signed plan and record-pack grants clean up after checks.</li>
           <li>Kept Slack delivery claims limited until real customer delivery could be verified.</li>
         </ul>
       </PublicDocBlock>

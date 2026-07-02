@@ -70,7 +70,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
-        <p style="margin: 0;"><strong>Proof mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
+        <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
       <h2 style="font-size: 18px; margin: 0 0 12px;">Top moves</h2>
       <ol style="margin: 0 0 20px; padding-left: 20px;">
@@ -81,7 +81,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full digest</a>
       </p>
       <p style="margin: 0; color: #5b6577; font-size: 13px;">
-        Source coverage: verified proof means a stored proof snapshot is attached. Scan-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
+        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
         Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Sources</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
     </div>
@@ -94,7 +94,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     dateRange,
     "",
     `Priority mix: ${priorityMixLabel(priorityMix)}`,
-    `Proof mix: ${proofMixLabel(proofMix)}`,
+    `Evidence mix: ${proofMixLabel(proofMix)}`,
     "",
     "Top moves:",
     ...topItems.flatMap((item, index) => renderTopMoveText(item, index + 1, input.periodEnd, input.timeZone, input.fullDigestUrl)),
@@ -105,7 +105,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
     "",
-    "Source coverage: verified proof means a stored proof snapshot is attached. Scan-spotted and needs-review items are scheduled monitoring signals to review before external sharing.",
+    "Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are scheduled monitoring signals to review before external sharing.",
   ].filter((line): line is string => typeof line === "string").join("\n");
 
   return {
@@ -235,7 +235,7 @@ function renderTopMoveText(
     `${index}. ${watchlistName}: ${title}`,
     `   What changed: ${truncate(summary, 220)}`,
     `   Priority: ${priority}`,
-    `   Proof status: ${classification.label}`,
+    `   Source status: ${classification.label}`,
     `   Source type: ${classification.sourceTypeLabel}`,
     `   Timestamp: ${safeTimestamp(item, fallbackTimestamp, timeZone)}`,
     `   Suggested next action: ${intelligence.recommendedAction}`,

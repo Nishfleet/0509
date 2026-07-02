@@ -30,8 +30,8 @@ describe("buildDigestEmail", () => {
     expect(email.html).toContain("boAt: New ad detected");
     expect(email.html).toContain("Mamaearth: CTA changed");
     expect(email.html).not.toContain("Plum: Headline changed");
-    expect(email.html).toContain("Verified proof");
-    expect(email.html).toContain("Scan-spotted");
+    expect(email.html).toContain("Verified evidence");
+    expect(email.html).toContain("Check-spotted");
     expect(email.text).toContain("View full digest: https://0509.io/app/digests");
     expect(email.text).toContain("Manage frequency: https://0509.io/app/sources");
     expect(email.text).toContain("Unsubscribe: https://0509.io/unsubscribe?sig=test");
@@ -167,7 +167,7 @@ describe("buildDigestEmail", () => {
     expect(email.html).not.toContain("Internal item");
     expect(email.html).not.toContain("Canary item");
     expect(email.html).toContain("2 excluded");
-    expect(email.html).toContain("1 proof unavailable");
+    expect(email.html).toContain("1 evidence unavailable");
     expect(email.html).not.toContain("1 proof failed");
   });
 });

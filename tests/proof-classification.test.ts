@@ -43,8 +43,8 @@ describe("proof classification", () => {
       }),
     ).toMatchObject({
       status: "scan_spotted",
-      label: "Scan-spotted",
-      sourceTypeLabel: "Scheduled scan",
+      label: "Check-spotted",
+      sourceTypeLabel: "Scheduled check",
     });
 
     expect(
@@ -72,7 +72,7 @@ describe("proof classification", () => {
       }),
     ).toMatchObject({
       status: "proof_pending",
-      label: "Proof unavailable",
+      label: "Evidence unavailable",
     });
     expect(
       classifyDigestItemSource({
@@ -103,15 +103,15 @@ describe("proof classification", () => {
     });
   });
 
-  it("uses customer-facing proof labels for unavailable and excluded statuses", () => {
+  it("uses customer-facing evidence labels for unavailable and excluded statuses", () => {
     expect(
       classifyDigestItemSource({
         metadata: { eventStatus: "proof_pending", sourceStatus: "scan_backed" },
       }),
     ).toMatchObject({
       status: "proof_pending",
-      label: "Proof unavailable",
-      sourceTypeLabel: "Scheduled scan",
+      label: "Evidence unavailable",
+      sourceTypeLabel: "Scheduled check",
     });
 
     expect(
@@ -120,13 +120,13 @@ describe("proof classification", () => {
       }),
     ).toMatchObject({
       status: "proof_failed",
-      label: "Proof unavailable",
+      label: "Evidence unavailable",
       sourceTypeLabel: "Source unavailable",
     });
 
     expect(classifyDigestItemSource({ metadata: {} })).toMatchObject({
       status: "unknown",
-      label: "Proof unavailable",
+      label: "Evidence unavailable",
       sourceTypeLabel: "Source unavailable",
     });
 
@@ -165,7 +165,7 @@ describe("proof classification", () => {
       ]),
     );
 
-    expect(label).toBe("3 proof unavailable · 1 excluded from client report");
+    expect(label).toBe("3 evidence unavailable · 1 excluded from client report");
     expect(label).not.toContain("proof pending");
     expect(label).not.toContain("proof failed");
     expect(label).not.toContain("unknown");

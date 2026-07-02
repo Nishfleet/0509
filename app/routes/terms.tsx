@@ -30,8 +30,8 @@ export default function TermsRoute() {
 
           <LegalBlock title="Product status">
             <p>
-              The product helps teams search competitor ads, save proof, create watchlists, and review proof-backed
-              monitoring outputs. Recent results, delayed checks, and fresh checks are labeled honestly wherever
+              The product helps teams search competitor ads, save evidence, create watchlists, and review
+              source-backed monitoring outputs. Recent results, delayed checks, and fresh checks are labeled honestly wherever
               they appear.
             </p>
           </LegalBlock>
@@ -54,7 +54,7 @@ export default function TermsRoute() {
           <LegalBlock title="Tracking limits">
             <p>
               Five to Nine must label tracking status honestly. Recent results, delayed checks, and sample data must
-              not be described as fresh live proof. Backup Meta access must be owner-provided, tested before saving,
+              not be described as fresh live results. Backup Meta access must be owner-provided, tested before saving,
               and used only for that account.
             </p>
           </LegalBlock>
@@ -85,7 +85,7 @@ function SimpleHeader() {
     <header className="f9-legal-nav">
       <div className="f9-container f9-legal-nav-inner">
         <Link className="f9-app-brand" to="/">
-          <BrandWordmark meta="Proof-backed competitor monitoring" />
+          <BrandWordmark meta="Competitor change monitoring" />
         </Link>
         <nav className="f9-search-nav-links" aria-label="Legal navigation">
           <Link to="/">Home</Link>

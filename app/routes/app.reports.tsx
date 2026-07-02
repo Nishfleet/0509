@@ -127,7 +127,7 @@ export default function ReportsRoute() {
       <article className="f9-app-panel f9-report-page">
         <div className="f9-panel-toolbar f9-report-toolbar">
           <div>
-            <p className="f9-app-kicker">Proof report</p>
+            <p className="f9-app-kicker">Evidence report</p>
             <h2>Client-ready report</h2>
           </div>
 

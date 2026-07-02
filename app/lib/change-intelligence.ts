@@ -64,7 +64,7 @@ export function readDigestIntelligence(metadata: unknown): ChangeIntelligenceSum
     priorityScore: typeof candidate.priorityScore === "number" ? candidate.priorityScore : null,
     priorityBand: stringOr(candidate.priorityBand, "Priority pending"),
     recommendedAction: stringOr(candidate.recommendedAction, "Review the source evidence before acting."),
-    proofTrail: stringOr(candidate.proofTrail, "Proof trail pending"),
+    proofTrail: stringOr(candidate.proofTrail, "Source trail pending"),
   };
 }
 
@@ -73,7 +73,7 @@ function fallbackDigestIntelligence(): ChangeIntelligenceSummary {
     priorityScore: null,
     priorityBand: "Priority pending",
     recommendedAction: "Review the source evidence before acting.",
-    proofTrail: "Proof trail pending",
+    proofTrail: "Source trail pending",
   };
 }
 

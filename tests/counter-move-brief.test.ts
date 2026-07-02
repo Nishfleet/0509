@@ -45,7 +45,7 @@ const offerEvent: WatchEventRecord = {
 };
 
 describe("buildCounterMoveBrief", () => {
-  it("prioritizes proof-backed moves and turns them into counter-move briefs", () => {
+  it("prioritizes source-backed moves and turns them into counter-move briefs", () => {
     const brief = buildCounterMoveBrief({
       watchlist,
       events: [
@@ -73,7 +73,7 @@ describe("buildCounterMoveBrief", () => {
       watchlistId: "watch-1",
       targetLabel: "Nykaa",
       generatedAt: "2026-06-19T02:00:00.000Z",
-      summary: "1 proof-backed move to review for Nykaa.",
+      summary: "1 source-backed move to review for Nykaa.",
     });
     expect(brief.workflow).toMatchObject({
       ownerLabel: "Growth owner",
@@ -98,7 +98,7 @@ describe("buildCounterMoveBrief", () => {
     });
   });
 
-  it("returns quiet workflow state when no proof-backed moves are ready", () => {
+  it("returns quiet workflow state when no source-backed moves are ready", () => {
     const brief = buildCounterMoveBrief({
       watchlist,
       events: [],
@@ -106,7 +106,7 @@ describe("buildCounterMoveBrief", () => {
       generatedAt: "2026-06-19T02:00:00.000Z",
     });
 
-    expect(brief.summary).toBe("No proof-backed moves are ready for Nykaa.");
+    expect(brief.summary).toBe("No source-backed moves are ready for Nykaa.");
     expect(brief.workflow).toMatchObject({
       ownerLabel: "Workspace owner",
       channel: "app",

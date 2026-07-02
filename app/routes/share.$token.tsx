@@ -110,7 +110,7 @@ export default function ShareRoute() {
       <div className="f9-container">
         <div className="f9-share-header">
           <Link className="f9-app-brand" to="/">
-            <BrandWordmark meta="Shared proof" />
+            <BrandWordmark meta="Shared evidence" />
           </Link>
         </div>
 
@@ -325,9 +325,11 @@ function hasVerifiedReportRowProof(row: Record<string, unknown>) {
     return false;
   }
 
+  const proofStatusLabel = readString(row.event.proofStatusLabel)?.toLowerCase();
+  const sourceTypeLabel = readString(row.event.sourceTypeLabel)?.toLowerCase();
   return (
-    readString(row.event.proofStatusLabel)?.toLowerCase() === "verified proof" &&
-    readString(row.event.sourceTypeLabel)?.toLowerCase() === "proof snapshot"
+    (proofStatusLabel === "verified evidence" || proofStatusLabel === "verified proof") &&
+    (sourceTypeLabel === "saved evidence" || sourceTypeLabel === "proof snapshot")
   );
 }
 

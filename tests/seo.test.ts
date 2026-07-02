@@ -30,6 +30,15 @@ describe("public SEO files", () => {
     expect(rootSecurity).not.toContain("0509.in");
   });
 
+  it("keeps the cached social card customer-facing", () => {
+    const card = publicSeoFileForPathname("/social-card.svg");
+
+    expect(card?.body).toContain("Watch ads and landing pages with sources.");
+    expect(card?.body).toContain("Saved evidence");
+    expect(card?.body).not.toContain("with proof");
+    expect(card?.body).not.toContain("Saved proof");
+  });
+
   it("keeps skill.md entry points on the io domain", () => {
     const skill = readFileSync("public/.well-known/skill.md", "utf8");
 

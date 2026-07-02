@@ -31,7 +31,7 @@ export function InsightDepthPanel({ summary }: { summary: InsightDepthSummary })
           }))}
         />
         <InsightList
-          title="Metric proof"
+          title="Metric evidence"
           items={summary.metricProof.map((item) => ({
             label: item.label,
             detail: item.count > 0 ? `${item.count} signal${item.count === 1 ? "" : "s"} · ${item.detail}` : item.detail,

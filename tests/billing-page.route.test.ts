@@ -1288,7 +1288,7 @@ describe("billing page", () => {
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup).toContain("200 of 250 included used");
-    expect(markup).toContain("500 purchased proof captures remaining");
+    expect(markup).toContain("500 purchased records remaining");
     expect(markup).toContain("Burst Pack");
     expect(markup).not.toContain("burst_500_v1");
     expect(markup).toContain("never expire");

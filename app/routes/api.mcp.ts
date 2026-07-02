@@ -60,7 +60,7 @@ const MCP_TOOLS = [
     name: "get_workspace_readiness",
     title: "Get Workspace Readiness",
     description:
-      "Read the account setup state for Five to Nine monitoring, proof, delivery, billing, API, and MCP readiness.",
+      "Read the account setup state for Five to Nine monitoring, evidence, delivery, billing, API, and tool readiness.",
     inputSchema: {
       type: "object",
       properties: {
@@ -79,7 +79,7 @@ const MCP_TOOLS = [
     name: "get_collection_export",
     title: "Get Collection Export",
     description:
-      "Read an account-owned Five to Nine collection with saved competitor proof and insight-depth summaries.",
+      "Read an account-owned Five to Nine collection with saved competitor evidence and insight-depth summaries.",
     inputSchema: resourceInputSchema("collectionId"),
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
@@ -87,7 +87,7 @@ const MCP_TOOLS = [
     name: "get_watchlist_export",
     title: "Get Watchlist Export",
     description:
-      "Read an account-owned Five to Nine watchlist with recent proof-backed changes and next-move intelligence.",
+      "Read an account-owned Five to Nine watchlist with recent source-backed changes and next-move intelligence.",
     inputSchema: resourceInputSchema("watchlistId"),
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
@@ -95,7 +95,7 @@ const MCP_TOOLS = [
     name: "get_digest_export",
     title: "Get Digest Export",
     description:
-      "Read an account-owned Five to Nine digest with priority, recommendation, proof trail, and insight-depth summaries.",
+      "Read an account-owned Five to Nine digest with priority, recommendation, source trail, and insight-depth summaries.",
     inputSchema: resourceInputSchema("digestId"),
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
@@ -218,7 +218,7 @@ const MCP_TOOLS = [
     name: "create_collection",
     title: "Create Collection",
     description:
-      "Create an account-owned collection for saved proof links after checking the workspace collection limit.",
+      "Create an account-owned collection for saved evidence links after checking the workspace collection limit.",
     inputSchema: {
       type: "object",
       properties: {
@@ -237,9 +237,9 @@ const MCP_TOOLS = [
   },
   {
     name: "add_external_proof",
-    title: "Add External Proof",
+    title: "Add External Evidence",
     description:
-      "Save a manual cross-channel proof URL into an account-owned collection with audit logging.",
+      "Save a manual cross-channel evidence URL into an account-owned collection with audit logging.",
     inputSchema: {
       type: "object",
       properties: {
@@ -260,7 +260,7 @@ const MCP_TOOLS = [
         },
         hook: {
           type: "string",
-          description: "Visible headline, hook, or proof summary.",
+          description: "Visible headline, hook, or evidence summary.",
         },
         offer: {
           type: "string",
@@ -323,7 +323,7 @@ const MCP_TOOLS = [
     name: "update_delivery_settings",
     title: "Update Delivery Settings",
     description:
-      "Update per-watchlist delivery policy after explicit approval. This does not send proof, test webhooks, or configure secret-bearing integrations.",
+      "Update per-watchlist delivery policy after explicit approval. This does not send evidence, test webhooks, or configure secret-bearing integrations.",
     inputSchema: {
       type: "object",
       properties: {
@@ -436,7 +436,7 @@ const MCP_TOOLS = [
     name: "create_counter_move_brief",
     title: "Create Counter-Move Brief",
     description:
-      "Build a proof-backed counter-move brief from recent account-owned watchlist changes.",
+      "Build a source-backed counter-move brief from recent account-owned watchlist changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -597,7 +597,7 @@ const MCP_TOOLS = [
     name: "list_web_mentions",
     title: "List Presence Observations",
     description:
-      "Read existing proof-backed website, blog, and Substack mention observations tied to account-owned watchlists. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
+      "Read existing source-backed website, blog, and Substack mention observations tied to account-owned watchlists. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
     inputSchema: {
       type: "object",
       properties: {
@@ -666,12 +666,12 @@ export function loader({ request }: LoaderFunctionArgs) {
       "Account-owned collections",
       "Account-owned watchlists",
       "Account-owned digests",
-      "Saved Meta and landing-page proof already captured in Five to Nine",
-      "Manual external proof links saved in account-owned collections",
+      "Saved Meta and landing-page evidence already captured in Five to Nine",
+      "Manual external evidence links saved in account-owned collections",
       "Client rooms and scoped account memory saved by this account",
       "Account support case summaries created by this account",
       "Redacted delivery settings and delivery target state owned by this account",
-      "Existing proof-backed website, blog, and Substack mention observations tied to watchlists",
+      "Existing source-backed website, blog, and Substack mention observations tied to watchlists",
     ],
     agentActivation: {
       firstWorkflow: AGENT_FIRST_WORKFLOW,
@@ -736,7 +736,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        `Use these tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package proof, and save memory. Manual external proof links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
+        `Use these tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
     });
   }
 

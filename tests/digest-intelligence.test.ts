@@ -51,8 +51,8 @@ describe("DigestDecisionSummary", () => {
     expect(markup).toContain("Why it matters");
     expect(markup).toContain("The competitor lowered the anchor price.");
     expect(markup).toContain("High priority");
-    expect(markup).toContain("Verified proof");
-    expect(markup).toContain("Proof snapshot");
+    expect(markup).toContain("Verified evidence");
+    expect(markup).toContain("Saved evidence");
     expect(markup).toContain("Today: brief one counter-test.");
   });
 
@@ -117,12 +117,12 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Proof and source details");
+    expect(markup).toContain("Evidence and source details");
     expect(markup).toContain("2 changes packaged for handoff");
     expect(markup).toContain("Offer changed: ready to send as a client or teammate digest");
     expect(markup).toContain("Today: brief one counter-test.");
-    expect(markup).toContain("1 verified proof");
-    expect(markup).toContain("1 scan-spotted");
+    expect(markup).toContain("1 verified evidence");
+    expect(markup).toContain("1 check-spotted");
     expect(markup).toContain("2 competitors");
     expect(markup).toContain("1 high");
     expect(markup).toContain("Verified from a page snapshot");
@@ -148,9 +148,9 @@ describe("DigestProofPacket", () => {
     );
 
     expect(markup).toContain("Headline changed: ready to review");
-    expect(markup).toContain("add page proof before sharing");
-    expect(markup).toContain("1 scan-spotted");
-    expect(markup).not.toContain("verified proof");
+    expect(markup).toContain("add page evidence before sharing");
+    expect(markup).toContain("1 check-spotted");
+    expect(markup).not.toContain("verified evidence");
   });
 
   it("keeps a scan-backed top change internal even when another item has proof", () => {
@@ -185,9 +185,9 @@ describe("DigestProofPacket", () => {
     );
 
     expect(markup).toContain("Breaking offer changed: ready to review");
-    expect(markup).toContain("add page proof before sharing");
-    expect(markup).toContain("1 verified proof");
-    expect(markup).toContain("1 scan-spotted");
+    expect(markup).toContain("add page evidence before sharing");
+    expect(markup).toContain("1 verified evidence");
+    expect(markup).toContain("1 check-spotted");
     expect(markup).toContain("Today: review the offer before briefing the client.");
     expect(markup).toContain("Spotted in the scheduled scan");
     expect(markup).not.toContain("Breaking offer changed: ready to send");
@@ -202,7 +202,7 @@ describe("DigestProofPacket", () => {
 
     expect(markup).toContain("No action-worthy changes yet");
     expect(markup).toContain("No decision queued.");
-    expect(markup).toContain("Proof trail pending.");
+    expect(markup).toContain("Source trail pending.");
   });
 
   it("keeps internal or canary rows out of the featured decision", () => {
@@ -325,7 +325,7 @@ describe("DigestIntelligence", () => {
     );
 
     expect(markup).toContain("Excluded from client report");
-    expect(markup).not.toContain("Verified proof");
+    expect(markup).not.toContain("Verified evidence");
   });
 });
 

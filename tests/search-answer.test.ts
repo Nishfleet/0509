@@ -93,7 +93,7 @@ describe("buildSearchAnswer", () => {
     expect(answer).toMatchObject({
       state: "broader",
       title: "1 broader match for boat-lifestyle.com",
-      summary: "These are related ad results, not verified website matches. Use them for leads, not proof.",
+      summary: "These are related ad results, not verified website matches. Use them for leads, not confirmed evidence.",
       note: "Landing-page signals are not captured on these matches yet.",
     });
     expect(answer.facts).toContainEqual({
@@ -118,7 +118,7 @@ describe("buildSearchAnswer", () => {
       state: "no_verified",
       title: "No verified ads found for boat-lifestyle.com",
       summary: "We could not confirm ads whose advertiser or landing page is connected to this website.",
-      note: "This is not proof that the competitor is inactive; it only means this search did not verify a connected ad.",
+      note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",
     });
   });
 
@@ -137,7 +137,7 @@ describe("buildSearchAnswer", () => {
       state: "no_verified",
       title: "No verified ads found for boat-lifestyle.com",
       summary: "Returned ads were not connected to this website through advertiser or landing-page evidence.",
-      note: "This is not proof that the competitor is inactive; it only means this search did not verify a connected ad.",
+      note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",
     });
     expect(answer.facts).toContainEqual({
       label: "Verified ads",
@@ -230,12 +230,12 @@ describe("buildSearchAnswer", () => {
 
     expect(answer).toMatchObject({
       state: "verified",
-      note: "Landing-page signals are missing, so treat the ad creative as the current proof.",
+      note: "Landing-page signals are missing, so treat the ad creative as the current signal.",
     });
     expect(answer.facts).toContainEqual({
       label: "Landing-page signal",
       value: "0/1",
-      detail: "Not captured yet; use the ad cards as creative proof only",
+      detail: "Not captured yet; use the ad cards as creative signals only",
     });
   });
 });

@@ -30,7 +30,7 @@ interface ExternalProofInput {
 
 export function buildExternalProofAd(input: ExternalProofInput, now = new Date()): AdRecord {
   const advertiser = requireText(input.advertiser, "Advertiser is required.");
-  const hook = requireText(input.hook, "Proof headline is required.");
+  const hook = requireText(input.hook, "Evidence headline is required.");
   const proofUrl = normalizeProofUrl(input.proofUrl);
   const channel = normalizeExternalProofChannel(input.channel);
   const observedAt = normalizeObservedAt(input.observedAt) ?? now.toISOString();
@@ -74,13 +74,13 @@ export function buildExternalProofAd(input: ExternalProofInput, now = new Date()
     firstSeenAt: observedAt,
     lastSeenAt: null,
     active: false,
-    researchSummary: note || metricSummary || `Manual ${channel} proof saved for ${advertiser}.`,
+    researchSummary: note || metricSummary || `Manual ${channel} evidence saved for ${advertiser}.`,
     source: "external",
     analysisFields,
     creativeText: null,
     creativeTextCaptureMethod: null,
     creativeTextMetadata: null,
-    tags: [channel, "manual proof"],
+    tags: [channel, "manual evidence"],
   };
 }
 
@@ -100,11 +100,11 @@ function normalizeProofUrl(value: string) {
   try {
     url = new URL(raw);
   } catch {
-    throw new Response("Paste a valid proof URL.", { status: 400 });
+    throw new Response("Paste a valid evidence URL.", { status: 400 });
   }
 
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Response("Proof URL must start with http or https.", { status: 400 });
+    throw new Response("Evidence URL must start with http or https.", { status: 400 });
   }
 
   return url.toString();

@@ -152,12 +152,12 @@ export function proofStatusLabel(status: CustomerProofStatus) {
 export function proofMixLabel(mix: ProofMix) {
   const proofUnavailable = mix.proofPending + mix.proofFailed + mix.unknown;
   return [
-    mix.verifiedProof ? `${mix.verifiedProof} verified proof` : null,
-    mix.scanSpotted ? `${mix.scanSpotted} scan-spotted` : null,
+    mix.verifiedProof ? `${mix.verifiedProof} verified evidence` : null,
+    mix.scanSpotted ? `${mix.scanSpotted} check-spotted` : null,
     mix.needsReview ? `${mix.needsReview} needs review` : null,
-    proofUnavailable ? `${proofUnavailable} proof unavailable` : null,
+    proofUnavailable ? `${proofUnavailable} evidence unavailable` : null,
     mix.excluded ? `${mix.excluded} excluded from client report` : null,
-  ].filter(Boolean).join(" · ") || "No proof signals yet";
+  ].filter(Boolean).join(" · ") || "No evidence signals yet";
 }
 
 export function priorityMixLabel(mix: PriorityMix) {
@@ -271,8 +271,8 @@ function buildSourceCoverageSummary(
     excluded,
     note:
       excluded > 0
-        ? `${included} verified-proof event${included === 1 ? "" : "s"} included. ${excluded} non-client-ready event${excluded === 1 ? "" : "s"} excluded from this report.`
-        : `${included} verified-proof event${included === 1 ? "" : "s"} included. No non-client-ready watch events were present.`,
+        ? `${included} verified-evidence event${included === 1 ? "" : "s"} included. ${excluded} non-client-ready event${excluded === 1 ? "" : "s"} excluded from this report.`
+        : `${included} verified-evidence event${included === 1 ? "" : "s"} included. No non-client-ready watch events were present.`,
   };
 }
 
@@ -389,22 +389,22 @@ function readNumber(value: unknown) {
 }
 
 const PROOF_STATUS_LABELS: Record<CustomerProofStatus, string> = {
-  verified_proof: "Verified proof",
-  scan_spotted: "Scan-spotted",
+  verified_proof: "Verified evidence",
+  scan_spotted: "Check-spotted",
   needs_review: "Needs review",
-  proof_pending: "Proof unavailable",
-  proof_failed: "Proof unavailable",
+  proof_pending: "Evidence unavailable",
+  proof_failed: "Evidence unavailable",
   suppressed: "Excluded from client report",
   invalidated: "Excluded from client report",
   internal_only: "Excluded from client report",
   canary_or_test: "Excluded from client report",
-  unknown: "Proof unavailable",
+  unknown: "Evidence unavailable",
 };
 
 const SOURCE_TYPE_LABELS: Record<ProofClassification["sourceType"], string> = {
-  proof_snapshot: "Proof snapshot",
-  scheduled_scan: "Scheduled scan",
-  manual: "Manual proof",
+  proof_snapshot: "Saved evidence",
+  scheduled_scan: "Scheduled check",
+  manual: "Manual evidence",
   internal: "Source unavailable",
   unknown: "Source unavailable",
 };

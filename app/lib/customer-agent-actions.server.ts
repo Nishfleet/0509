@@ -881,7 +881,7 @@ async function addExternalProofFromAgent(
     action: "proof.add_external",
     collectionId: collection.id,
     ad,
-    message: `Saved ${ad.platforms[0] ?? "external"} proof for ${ad.advertiser}.`,
+    message: `Saved ${ad.platforms[0] ?? "external"} evidence for ${ad.advertiser}.`,
   };
 }
 
@@ -1601,7 +1601,7 @@ async function listWebMentionsFromAgent(
     action: "web_mentions.list",
     status: "available",
     boundary:
-      "Returns existing proof-backed website, blog, and Substack observations only. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
+      "Returns existing source-backed website, blog, and Substack observations only. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
     watchlistId,
     supportedSources: supportedWebMentionSources,
     targets: targets.map(safeWebMentionTargetRecord),
