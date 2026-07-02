@@ -4,7 +4,7 @@
 
 - `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available.
 - The repository validation gate is `node scripts/validate-d1-backup.mjs`. It dry-runs backup-script prerequisites, the D1 binding, and the current migration chain through the latest migration; it does not prove that a fresh production R2 object exists.
-- `.github/workflows/d1-backup-r2.yml` schedules the same D1-to-R2 backup weekly at 22:17 UTC Sunday (03:47 IST Monday) and can be run manually from GitHub Actions. It requires repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`; those secret names were not listed by `gh secret list` on 2026-06-28, so the first scheduled Actions run is still unproven.
+- `.github/workflows/d1-backup-r2.yml` schedules the same D1-to-R2 backup weekly at 22:17 UTC Sunday and can be run manually from GitHub Actions. It requires repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`; the required Cloudflare repository secrets were absent on 2026-07-02, so the first scheduled Actions run is still blocked.
 - Cloudflare documents that D1 export blocks other database requests while it runs. Keep this schedule in a low-traffic window and move it if real customer traffic shows a better quiet period.
 - Manual run any time: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available). This marker is the script's explicit confirmation for a production-blocking remote D1 export; unapproved manual runs fail before Wrangler starts.
 - Backup command output redacts temporary signed export URL query strings before logging.
@@ -14,6 +14,8 @@
 - 2026-06-27 release backup before `0060`: timestamped object under the private R2 backup prefix confirmed.
 - 2026-06-28 post-cleanup backup after `0060`: timestamped object under the private R2 backup prefix confirmed.
 - The post-cleanup backup passed an isolated local SQLite import smoke; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed.
+- 2026-07-02 owner-operated manual backup: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` exported remote D1, uploaded a fresh object under the private R2 backup prefix, and pruned only old local backup copies. `node scripts/validate-d1-backup.mjs` passed afterward through migration `0062_dodo_plan_change_pending_target.sql`.
+- 2026-06-28 scheduled GitHub Actions backup run `28339411098` reached `node scripts/validate-d1-backup.mjs`, then failed at `Run approved D1-to-R2 backup` because the required Cloudflare repository secrets were not configured.
 - A remote scratch D1 restore attempt was intentionally isolated from production but hit `SQLITE_TOOBIG` on large exported insert statements. Production-like D1 rebuild is not proven until the export is split/transformed into D1-importable statements and restored into a scratch D1 database.
 
 ### Post-deploy D1 cleanup evidence
@@ -64,7 +66,7 @@ check is not fully proven until an owner/operator confirms:
 
 1. Done: the workflow exists on `main`.
 2. Done: manual run `28540913266` passed.
-3. A scheduled run appears at roughly the configured cadence.
+3. Done: scheduled runs `28548096175`, `28552452662`, and `28555610571` passed on `main`.
 4. Failed-run notifications reach the intended inbox.
 
 ### Independent external monitor option
@@ -105,9 +107,10 @@ Plan switching is now handled from the in-app billing cards through Dodo's
 documented subscription plan-change preview/change endpoints:
 
 1. Done: the live Scout/Starter monthly and annual products are grouped in the Five to Nine Product Collection.
-2. After deploy, use an internal linked paid subscription to switch Scout/Starter or monthly/annual from `/app/billing`.
-3. Confirm Dodo sends the signed webhook and the account updates.
-4. Separately confirm cancellation remains available from hosted portal subscription details.
+2. Current blocker: a 2026-07-02 aggregate remote D1 check found no linked Scout/Starter subscriptions, so there is no safe internal subscription target yet.
+3. After an internal linked paid subscription exists, switch Scout/Starter or monthly/annual from `/app/billing`.
+4. Confirm Dodo sends the signed webhook and the account updates.
+5. Separately confirm cancellation remains available from hosted portal subscription details.
 
 Until those are verified, customers can use in-app plan switching and the hosted
 portal for card/invoice tasks, while support remains the fallback for exceptions
