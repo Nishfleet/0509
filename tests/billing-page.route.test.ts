@@ -1078,6 +1078,35 @@ describe("billing page", () => {
     expect(markup).not.toContain('value="starter_annual_v1"');
   });
 
+  it("keeps held Scout and Starter checkout out of Agency access copy", async () => {
+    for (const scenario of [
+      { plan: "scout", name: "Scout", saleFlag: "scoutSaleOpen", sku: "scout_monthly_v1" },
+      { plan: "starter", name: "Starter", saleFlag: "starterSaleOpen", sku: "starter_monthly_v1" },
+    ]) {
+      vi.resetModules();
+      mockReactRouterRender(
+        billingRenderData({
+          selectedPlan: scenario.plan,
+          commercialLaunch: {
+            [scenario.saleFlag]: false,
+          },
+        }),
+      );
+
+      const { default: BillingRoute } = await import("~/routes/app.billing");
+      const markup = renderToStaticMarkup(createElement(BillingRoute));
+      const selectedCard = markup.match(
+        new RegExp(
+          `<section class="[^"]*is-selected[^"]*">[\\s\\S]*?<span class="f9-app-kicker">${scenario.name}<\\/span>[\\s\\S]*?<\\/section>`,
+        ),
+      )?.[0];
+
+      expect(selectedCard).toContain("Checkout unavailable");
+      expect(selectedCard).not.toContain("Request Agency access");
+      expect(selectedCard).not.toContain(`value="${scenario.sku}"`);
+    }
+  });
+
   it("keeps Agency checkout held in the in-app picker", async () => {
     mockReactRouterRender(billingRenderData({ selectedPlan: "agency" }));
 
