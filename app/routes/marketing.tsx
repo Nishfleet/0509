@@ -258,7 +258,7 @@ export default function MarketingRoute() {
     agencySaleOpen: false,
   };
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
-  const primaryLabel = rootData.session ? "Open account" : "Start now";
+  const primaryLabel = rootData.session ? "Open app" : "Create account";
   const [localPricing, setLocalPricing] = useState<LocalPricingPreview | null>(
     routeData.pricingPreview?.available ? routeData.pricingPreview : null,
   );
@@ -474,10 +474,11 @@ export default function MarketingRoute() {
           <input
             aria-label="Competitor website"
             name="website"
-            placeholder="paste-their-website.com"
+            placeholder="paste-their-website.com…"
             type="text"
             inputMode="url"
-            autoComplete="off"
+            autoComplete="url"
+            spellCheck={false}
           />
           <button type="submit">
             Catch them in the act <span aria-hidden="true">→</span>
@@ -733,7 +734,14 @@ export default function MarketingRoute() {
                 {plan.slug === "agency" && !planSaleOpen ? (
                   <em className="f9-plan-badge">Account review</em>
                 ) : null}
-                <h3>{priceLabel(localPricing, plan.slug, billingCycle, billingCycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel)}</h3>
+                <h3 className={selectedReady ? undefined : "is-loading-price"}>
+                  {priceLabel(
+                    localPricing,
+                    plan.slug,
+                    billingCycle,
+                    billingCycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel,
+                  )}
+                </h3>
                 <small>
                   {billingCycle === "yearly"
                     ? annualIsValid && planSaleOpen
@@ -899,7 +907,14 @@ export default function MarketingRoute() {
           {rootData.session ? (
             <span className="f9-email-state">Account ready</span>
           ) : (
-            <input aria-label="Work email" name="email" placeholder="Work email" type="email" />
+            <input
+              aria-label="Work email"
+              name="email"
+              placeholder="work@company.com…"
+              type="email"
+              autoComplete="email"
+              spellCheck={false}
+            />
           )}
           <SubmitButton getAction={primaryCta} pendingLabel="Redirecting…">{primaryLabel}</SubmitButton>
         </Form>

@@ -66,7 +66,7 @@ export default function CompareMagicBriefRoute() {
             Sign in
           </Link>
           <Link className="ld-nav-pill" to="/auth/signup">
-            Start now
+            Create account
           </Link>
         </nav>
       </header>
@@ -89,10 +89,11 @@ export default function CompareMagicBriefRoute() {
           <input
             aria-label="Competitor website"
             name="website"
-            placeholder="paste-a-competitor-website.com"
+            placeholder="paste-a-competitor-website.com…"
             type="text"
             inputMode="url"
-            autoComplete="off"
+            autoComplete="url"
+            spellCheck={false}
           />
           <button type="submit">
             Try it free, no account <span aria-hidden="true">→</span>
