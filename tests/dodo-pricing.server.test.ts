@@ -84,16 +84,17 @@ describe("Dodo 0509 pricing", () => {
   });
 
   it("previews configured products through Dodo checkout preview", async () => {
-    const fetcher = vi.fn().mockImplementation(() =>
-      jsonResponse({
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+      return jsonResponse({
         currency: "INR",
         current_breakup: {
           total_amount: 499900,
         },
-        product_cart: [{ tax_inclusive: true }],
+        product_cart: [{ product_id: productId, is_subscription: productId !== "prod_pack_500", tax_inclusive: true }],
         total_tax: 0,
-      }),
-    );
+      });
+    });
 
     const preview = await previewDodo0509PlanPrices({
       env: {
@@ -320,20 +321,22 @@ describe("Dodo 0509 pricing", () => {
   it("bypasses the preview cache for private pricing canary requests", async () => {
     const fetcher = vi
       .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
+      .mockImplementationOnce((_url: string, init: RequestInit) => {
+        const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+        return jsonResponse({
           currency: "INR",
           current_breakup: { total_amount: 99900 },
-          product_cart: [{ tax_inclusive: true }],
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+          product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: true }],
+        });
+      })
+      .mockImplementationOnce((_url: string, init: RequestInit) => {
+        const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+        return jsonResponse({
           currency: "USD",
           current_breakup: { total_amount: 1100 },
-          product_cart: [{ tax_inclusive: true }],
-        }),
-      );
+          product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: true }],
+        });
+      });
     const env = {
       CANARY_BYPASS_TOKEN: "canary-token",
       DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE: "true",
@@ -367,16 +370,17 @@ describe("Dodo 0509 pricing", () => {
   });
 
   it("ignores pricing country overrides without the private canary token", async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      jsonResponse({
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+      return jsonResponse({
         currency: "INR",
         current_breakup: {
           total_amount: 499900,
         },
-        product_cart: [{ tax_inclusive: true }],
+        product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: true }],
         total_tax: 0,
-      }),
-    );
+      });
+    });
     const request = new Request("https://0509.io/api/pricing-preview?country=US", {
       headers: {
         "cf-ipcountry": "IN",
@@ -403,17 +407,18 @@ describe("Dodo 0509 pricing", () => {
   });
 
   it("allows tokened canary pricing probes to override Cloudflare country", async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      jsonResponse({
+    const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
+      return jsonResponse({
         currency: "USD",
         current_breakup: {
           total_amount: 5900,
         },
         billing_country: "US",
-        product_cart: [{ tax_inclusive: false }],
+        product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: false }],
         total_tax: 0,
-      }),
-    );
+      });
+    });
     const request = new Request("https://0509.io/api/pricing-preview?country=US", {
       headers: {
         "cf-ipcountry": "IN",
@@ -448,6 +453,45 @@ describe("Dodo 0509 pricing", () => {
           },
         },
       },
+    });
+  });
+
+  it("keeps annual pricing unavailable when Dodo omits product identity", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      jsonResponse({
+        currency: "USD",
+        current_breakup: {
+          total_amount: 5900,
+        },
+        recurring_breakup: {
+          subtotal: 5900,
+        },
+        billing_country: "US",
+        product_cart: [{ tax_inclusive: false }],
+        total_tax: 0,
+      }),
+    );
+
+    const preview = await previewDodo0509PlanPrices({
+      env: {
+        DODO_0509_API_KEY: "secret",
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_ENVIRONMENT: "test",
+        DODO_0509_PRODUCT_STARTER_MONTHLY_ID: "prod_starter_monthly",
+        DODO_0509_PRODUCT_STARTER_YEARLY_ID: "prod_starter_yearly",
+      },
+      request: new Request("https://0509.io/api/pricing-preview", {
+        headers: { "cf-ipcountry": "US" },
+      }),
+      fetcher: fetcher as never,
+      bypassCache: true,
+    });
+
+    expect(preview.prices.starter?.monthly).toBeUndefined();
+    expect(preview.prices.starter?.yearly).toBeUndefined();
+    expect(preview.annualValidation.starter).toMatchObject({
+      valid: false,
+      reason: "missing_monthly_price",
     });
   });
 });

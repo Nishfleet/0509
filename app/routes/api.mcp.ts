@@ -19,6 +19,7 @@ import type { CustomerApiKeyRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
+const API_PLAN_REQUIREMENT = "Agency";
 const READ_ONLY_TOOL_ANNOTATIONS = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -653,6 +654,7 @@ export function loader({ request }: LoaderFunctionArgs) {
   return jsonResponse({
     name: "Five to Nine MCP",
     status: "live",
+    planRequirement: API_PLAN_REQUIREMENT,
     endpoint: `${origin}/api/mcp`,
     transport: "streamable-http-json-rpc",
     protocolVersion: MCP_PROTOCOL_VERSION,
@@ -736,7 +738,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        `Use these tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
+        `Use these Agency tools to retrieve Five to Nine account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Readiness and export tools work with any active Agency customer API key; account action tools require a write-enabled key. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
     });
   }
 
@@ -1153,6 +1155,7 @@ function mcpToolDiscoveryEntry(tool: (typeof MCP_TOOLS)[number]) {
   const requiresWriteEnabled = isWriteToolName(tool.name);
   return {
     ...tool,
+    planRequirement: API_PLAN_REQUIREMENT,
     requiresWriteEnabled,
     credentialRequirement: requiresWriteEnabled
       ? WRITE_ENABLED_API_KEY_REQUIREMENT

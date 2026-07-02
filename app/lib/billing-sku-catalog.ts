@@ -293,18 +293,18 @@ export const TOP_UP_PACK_DISPLAY: Record<
 > = {
   burst_500_v1: {
     name: "Burst Pack",
-    creditLabel: "500 extra change records",
-    detail: "For sale-week spikes when landing pages need extra saved records.",
+    creditLabel: "500 extra checks",
+    detail: "For sale-week spikes when campaigns need extra proof-backed checks.",
   },
   campaign_2000_v1: {
     name: "Campaign Pack",
-    creditLabel: "2,000 extra change records",
-    detail: "Overflow record volume for active launches and promo weeks.",
+    creditLabel: "2,000 extra checks",
+    detail: "Overflow check volume for active launches and promo weeks.",
   },
   scale_7500_v1: {
     name: "Scale Pack",
-    creditLabel: "7,500 extra change records",
-    detail: "Bulk change-record volume for agencies tracking heavy categories.",
+    creditLabel: "7,500 extra checks",
+    detail: "Bulk check volume for agencies tracking heavy categories.",
   },
 };
 

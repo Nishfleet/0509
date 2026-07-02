@@ -660,7 +660,7 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("220 of 250 saved change records used in the current billing period.");
+    expect(markup).toContain("220 of 250 checks used in the current billing period.");
     expect(markup).not.toContain("evidence checks used in the last 30 days");
   });
 

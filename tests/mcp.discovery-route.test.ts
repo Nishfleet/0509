@@ -60,8 +60,8 @@ const READ_EXPORT_TOOL_NAMES = [
   "get_digest_export",
 ] as const;
 const READ_EXPORT_TOOL_NAME_SET = new Set<string>(READ_EXPORT_TOOL_NAMES);
-const READ_ONLY_API_KEY_REQUIREMENT = "Works with any active customer API key.";
-const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled customer API key.";
+const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
+const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
 
 async function loadDocs() {
   const { loader } = await import("~/routes/api.mcp");
@@ -85,9 +85,11 @@ describe("MCP route discovery", () => {
     const response = await loadDocs();
     const body = await response.json() as {
       status: string;
+      planRequirement: string;
       endpoint: string;
       tools: Array<{
         name: string;
+        planRequirement: string;
         requiresWriteEnabled: boolean;
         credentialRequirement: string;
         inputSchema: unknown;
@@ -116,6 +118,7 @@ describe("MCP route discovery", () => {
     );
 
     expect(body.status).toBe("live");
+    expect(body.planRequirement).toBe("Agency");
     expect(body.endpoint).toBe("https://0509.io/api/mcp");
     expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
     expect(body.agentActivation.actionGroups.map(({ label, requiresWriteEnabled, actions }) => ({
@@ -160,6 +163,7 @@ describe("MCP route discovery", () => {
     body.tools.forEach((tool) => {
       const requiresWriteEnabled = expectedWriteToolNameSet.has(tool.name);
       expect(tool).toMatchObject({
+        planRequirement: "Agency",
         requiresWriteEnabled,
         credentialRequirement: requiresWriteEnabled
           ? WRITE_ENABLED_API_KEY_REQUIREMENT

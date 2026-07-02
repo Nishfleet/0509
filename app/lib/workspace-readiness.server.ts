@@ -237,7 +237,7 @@ export async function getWorkspaceReadiness(
     },
     {
       id: "billing",
-      label: "Billing and record packs",
+      label: "Billing and check packs",
       status:
         hasBillingPaymentIssue || proofUsage.warningLevel === "exhausted"
           ? "attention"
