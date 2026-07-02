@@ -21,10 +21,12 @@ describe("final launch documentation", () => {
     );
     expect(scorecard).toContain("Dodo's documented by-currency localized pricing mode");
     expect(scorecard).toContain("redacted Dodo API product proof confirmed");
-    expect(scorecard).toContain("Dodo Product Collection membership is now configured");
+    expect(scorecard).toContain("Dodo Product Collection membership is configured");
+    expect(scorecard).toContain("owner-only in-app plan switching");
     expect(planCatalog).toContain("Dodo checkout, signed-webhook billing, top-ups");
     expect(planCatalog).toContain("prices load from Dodo at runtime");
-    expect(ownerActions).toContain("Product Collection membership is configured");
+    expect(ownerActions).toContain("owner-only in-app switching");
+    expect(ownerActions).toContain("Dodo's documented plan-change preview/change endpoints");
     expect(launchReadiness).toContain("Five to Nine Product Collection");
     expect(scorecard).toContain("Latest commercial proof-gate deploy");
     expect(scorecard).toContain("No migrations to apply");
@@ -32,7 +34,7 @@ describe("final launch documentation", () => {
     expect(progress).toContain("PR #251 merged");
     expect(progress).toContain("Post-cleanup canaries passed again");
     expect(ownerActions).toContain("Completed release actions");
-    expect(ownerActions).toContain("Dodo customer portal subscription updates");
+    expect(ownerActions).toContain("Dodo in-app plan switching and portal cancellation");
     expect(ownerActions).toContain("Uptime health workflow");
     expect(launchReadiness).toContain("first scheduled uptime run and notification path remain unproven");
     expect(scorecard).toContain("manual run `28540913266` passed on `main`");

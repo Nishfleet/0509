@@ -92,12 +92,37 @@ describe("Dodo subscription lifecycle", () => {
     expect(extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope("subscription.on_hold"))).toMatchObject({
       eventType: "subscription.on_hold",
       action: "payment_issue",
+      status: "subscription.on_hold",
       userId: "user-1",
     });
     expect(extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope("subscription.failed"))).toMatchObject({
       eventType: "subscription.failed",
       action: "payment_issue",
+      status: "subscription.failed",
       userId: "user-1",
+    });
+    expect(extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope("payment.failed"))).toMatchObject({
+      eventType: "payment.failed",
+      action: "payment_issue",
+      status: "payment.failed",
+      userId: "user-1",
+    });
+    expect(
+      extractDodoPlanRevocation(lifecycleEnv, subscriptionEnvelope("payment.failed", {
+        status: "failed",
+        metadata: {
+          app: "0509",
+          user_id: "user-1",
+          target_kind: "plan",
+          plan: "starter",
+          checkout_id: "checkout_original_plan",
+        },
+      })),
+    ).toMatchObject({
+      eventType: "payment.failed",
+      action: "payment_issue",
+      status: "payment.failed",
+      subscriptionId: "sub_123",
     });
     expect(extractDodoPlanCheckoutFailure(lifecycleEnv, subscriptionEnvelope("subscription.failed", {
       status: "failed",
@@ -244,6 +269,7 @@ describe("extractDodoSubscriptionGrant", () => {
         previous_billing_date: "2026-07-12T05:30:00.000Z",
         next_billing_date: "2026-08-12T05:30:00.000Z",
         created_at: "2026-06-12T05:30:00.000Z",
+        updated_at: "2026-07-12T05:31:00.000Z",
         cancel_at_next_billing_date: false,
         ...overrides,
       },
@@ -260,11 +286,35 @@ describe("extractDodoSubscriptionGrant", () => {
         plan: "starter",
         cycle: "monthly",
         status: "active",
-        grantedAt: "2026-07-12T05:30:00.000Z",
+        grantedAt: "2026-07-12T05:31:00.000Z",
         nextBillingAt: "2026-08-12T05:30:00.000Z",
       });
     }
   });
+
+  it("uses previous billing date for renewal grants when updated_at is absent", () => {
+    expect(
+      extractDodoSubscriptionGrant(
+        env,
+        subscriptionPayload("subscription.renewed", { updated_at: "" }),
+      ),
+    ).toMatchObject({
+      grantedAt: "2026-07-12T05:30:00.000Z",
+      nextBillingAt: "2026-08-12T05:30:00.000Z",
+    });
+  });
+
+	  it("does not use previous billing date or subscription creation as the plan-changed event timestamp", () => {
+	    const grant = extractDodoSubscriptionGrant(
+	      env,
+	      subscriptionPayload("subscription.plan_changed", { updated_at: "" }),
+	    );
+
+	    expect(grant).toMatchObject({
+	      grantedAt: null,
+	      hasProviderGrantTimestamp: false,
+	    });
+	  });
 
   it("ignores unknown subscription product ids even with trusted plan metadata", () => {
     const grant = extractDodoSubscriptionGrant(
@@ -296,6 +346,31 @@ describe("extractDodoSubscriptionGrant", () => {
       plan: "starter",
       cycle: "monthly",
     });
+  });
+
+  it("does not treat failed one-time top-ups as subscription payment issues", () => {
+    expect(
+      extractDodoPlanRevocation(
+        env,
+        {
+          type: "payment.failed",
+          data: {
+            payload_type: "Payment",
+            id: "pay_top_up_failed",
+            brand_id: "brand_0509",
+            status: "failed",
+            product_cart: [{ product_id: "prod_pack_500" }],
+            subscription_id: "",
+            metadata: {
+              app: "0509",
+              user_id: "user-1",
+              target_kind: "top_up",
+              sku: "burst_500_v1",
+            },
+          },
+        },
+      ),
+    ).toBeNull();
   });
 
   it("ignores unknown subscription products without trusted 0509 metadata", () => {

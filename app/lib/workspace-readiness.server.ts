@@ -158,7 +158,8 @@ export async function getWorkspaceReadiness(
   const isAgency = billingInfo.plan === "agency";
   const hasBillingPaymentIssue =
     billingInfo.plan !== "free" &&
-    (billingInfo.dodoStatus === "subscription.failed" ||
+    (billingInfo.dodoStatus === "payment.failed" ||
+      billingInfo.dodoStatus === "subscription.failed" ||
       billingInfo.dodoStatus === "subscription.on_hold");
   const isMember = options.isMember ?? false;
   const canManageBilling = options.canManageBilling ?? !isMember;

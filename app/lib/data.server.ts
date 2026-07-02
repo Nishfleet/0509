@@ -2263,6 +2263,8 @@ export async function grantDodoPlanAccess(
     status: string;
     grantedAt?: string;
     metadata?: JsonRecord;
+    forcePlanChangePending?: boolean;
+    requirePlanChangePending?: boolean;
   },
 ) {
   const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
@@ -2280,10 +2282,11 @@ export async function grantDodoPlanAccess(
         dodo_subscription_id,
         dodo_customer_id,
         dodo_next_billing_at,
+        dodo_plan_change_product_id,
         dodo_status,
         plan_updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET
         plan = excluded.plan,
@@ -2296,10 +2299,62 @@ export async function grantDodoPlanAccess(
         dodo_subscription_id = COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id),
         dodo_customer_id = COALESCE(excluded.dodo_customer_id, user_plan.dodo_customer_id),
         dodo_next_billing_at = COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at),
+        dodo_plan_change_product_id = CASE
+          WHEN user_plan.dodo_status IN (
+              'plan_change_pending',
+              'plan_change_scheduled',
+              'payment.failed',
+              'subscription.failed',
+              'subscription.on_hold'
+            )
+            AND excluded.dodo_payment_id IS NOT NULL
+            AND user_plan.dodo_plan_change_product_id = excluded.dodo_product_id
+            AND (
+              excluded.dodo_subscription_id IS NULL
+              OR user_plan.dodo_subscription_id = excluded.dodo_subscription_id
+            )
+            AND (
+              excluded.dodo_customer_id IS NULL
+              OR user_plan.dodo_customer_id IS NULL
+              OR user_plan.dodo_customer_id = excluded.dodo_customer_id
+            )
+          THEN user_plan.dodo_plan_change_product_id
+          ELSE NULL
+        END,
         dodo_status = excluded.dodo_status,
         plan_updated_at = excluded.plan_updated_at
       WHERE
-        julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+        (
+          ? = 0
+          AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+        )
+        OR (
+          (
+            ? = 1
+            OR
+            user_plan.dodo_status IN (
+              'plan_change_pending',
+              'plan_change_scheduled',
+              'payment.failed',
+              'subscription.failed',
+              'subscription.on_hold'
+            )
+            OR (
+              user_plan.dodo_status IN ('succeeded', 'payment.succeeded')
+              AND user_plan.dodo_product_id = excluded.dodo_product_id
+            )
+          )
+          AND user_plan.dodo_plan_change_product_id = excluded.dodo_product_id
+          AND (
+            excluded.dodo_subscription_id IS NULL
+            OR user_plan.dodo_subscription_id = excluded.dodo_subscription_id
+          )
+          AND (
+            excluded.dodo_customer_id IS NULL
+            OR user_plan.dodo_customer_id IS NULL
+            OR user_plan.dodo_customer_id = excluded.dodo_customer_id
+          )
+        )
     `,
     input.userId,
     input.plan,
@@ -2308,8 +2363,11 @@ export async function grantDodoPlanAccess(
     input.providerSubscriptionId ?? null,
     input.providerCustomerId ?? null,
     input.nextBillingAt ?? null,
+    null,
     input.status,
     planUpdatedAt,
+    input.requirePlanChangePending ? 1 : 0,
+    input.forcePlanChangePending ? 1 : 0,
   );
 }
 
@@ -2353,6 +2411,28 @@ function buildDodoWebhookLedgerFinalizeStatement(
   );
 }
 
+function buildDodoWebhookLedgerFinalizeAfterChangedStatement(
+  db: ReturnType<typeof ensureDb>,
+  ledger: DodoWebhookLedgerFinalize,
+  processedAt: string,
+) {
+  return db.prepare(`
+      UPDATE dodo_webhook_event
+      SET outcome = ?,
+          processed_at = ?,
+          processing_started_at = NULL,
+          metadata_json = ?
+      WHERE event_id = ?
+        AND outcome = 'processing'
+        AND changes() > 0
+    `).bind(
+    ledger.outcome,
+    processedAt,
+    jsonValue(ledger.metadata),
+    ledger.eventId,
+  );
+}
+
 function buildWatchlistGrantReconcileStatements(
   db: ReturnType<typeof ensureDb>,
   userId: string,
@@ -2362,6 +2442,7 @@ function buildWatchlistGrantReconcileStatements(
     plan: string;
     status: string;
     planUpdatedAt: string;
+    processedLedgerEventId?: string;
   },
 ) {
   const acceptedGuard = acceptedPlan
@@ -2375,8 +2456,20 @@ function buildWatchlistGrantReconcileStatements(
             AND plan_updated_at = ?
         )`
     : "";
+  const acceptedLedgerGuard = acceptedPlan?.processedLedgerEventId
+    ? `
+        AND EXISTS (
+          SELECT 1
+          FROM dodo_webhook_event
+          WHERE event_id = ?
+            AND outcome = 'processed'
+        )`
+    : "";
   const acceptedBindings = acceptedPlan
     ? [userId, acceptedPlan.plan, acceptedPlan.status, acceptedPlan.planUpdatedAt]
+    : [];
+  const acceptedLedgerBindings = acceptedPlan?.processedLedgerEventId
+    ? [acceptedPlan.processedLedgerEventId]
     : [];
   return [
     db.prepare(`
@@ -2393,8 +2486,8 @@ function buildWatchlistGrantReconcileStatements(
             AND is_active = 1
           ORDER BY created_at DESC
           LIMIT ?
-        )${acceptedGuard}
-    `).bind(timestamp, userId, userId, keepActive, ...acceptedBindings),
+        )${acceptedGuard}${acceptedLedgerGuard}
+    `).bind(timestamp, userId, userId, keepActive, ...acceptedBindings, ...acceptedLedgerBindings),
     db.prepare(`
       UPDATE watchlist
       SET is_active = 1,
@@ -2421,8 +2514,8 @@ function buildWatchlistGrantReconcileStatements(
               )
             )
           )
-        )${acceptedGuard}
-    `).bind(timestamp, userId, userId, keepActive, userId, ...acceptedBindings),
+        )${acceptedGuard}${acceptedLedgerGuard}
+    `).bind(timestamp, userId, userId, keepActive, userId, ...acceptedBindings, ...acceptedLedgerBindings),
   ];
 }
 
@@ -2497,8 +2590,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   const processedAt = nowIso();
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
 
-  const results = await db.batch([
-    db.prepare(`
+  const grantStatement = db.prepare(`
       INSERT INTO user_plan (
         user_id,
         plan,
@@ -2507,10 +2599,11 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
         dodo_subscription_id,
         dodo_customer_id,
         dodo_next_billing_at,
+        dodo_plan_change_product_id,
         dodo_status,
         plan_updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET
         plan = excluded.plan,
@@ -2523,21 +2616,202 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
         dodo_subscription_id = COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id),
         dodo_customer_id = COALESCE(excluded.dodo_customer_id, user_plan.dodo_customer_id),
         dodo_next_billing_at = COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at),
+        dodo_plan_change_product_id = CASE
+          WHEN user_plan.dodo_status IN (
+              'plan_change_pending',
+              'plan_change_scheduled',
+              'payment.failed',
+              'subscription.failed',
+              'subscription.on_hold'
+            )
+            AND excluded.dodo_payment_id IS NOT NULL
+            AND user_plan.dodo_plan_change_product_id = excluded.dodo_product_id
+            AND (
+              excluded.dodo_subscription_id IS NULL
+              OR user_plan.dodo_subscription_id = excluded.dodo_subscription_id
+            )
+            AND (
+              excluded.dodo_customer_id IS NULL
+              OR user_plan.dodo_customer_id IS NULL
+              OR user_plan.dodo_customer_id = excluded.dodo_customer_id
+            )
+          THEN user_plan.dodo_plan_change_product_id
+          ELSE NULL
+        END,
         dodo_status = excluded.dodo_status,
         plan_updated_at = excluded.plan_updated_at
       WHERE
-        julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+        (
+          ? = 0
+          AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+        )
+        OR (
+          (
+            ? = 1
+            OR
+            user_plan.dodo_status IN (
+              'plan_change_pending',
+              'plan_change_scheduled',
+              'payment.failed',
+              'subscription.failed',
+              'subscription.on_hold'
+            )
+            OR (
+              user_plan.dodo_status IN ('succeeded', 'payment.succeeded')
+              AND user_plan.dodo_product_id = excluded.dodo_product_id
+            )
+          )
+          AND user_plan.dodo_plan_change_product_id = excluded.dodo_product_id
+          AND (
+            excluded.dodo_subscription_id IS NULL
+            OR user_plan.dodo_subscription_id = excluded.dodo_subscription_id
+          )
+          AND (
+            excluded.dodo_customer_id IS NULL
+            OR user_plan.dodo_customer_id IS NULL
+            OR user_plan.dodo_customer_id = excluded.dodo_customer_id
+          )
+        )
     `).bind(
-      input.userId,
+    input.userId,
+    input.plan,
+    input.providerPaymentId ?? null,
+    input.providerProductId ?? null,
+    input.providerSubscriptionId ?? null,
+    input.providerCustomerId ?? null,
+    input.nextBillingAt ?? null,
+    null,
+    input.status,
+    planUpdatedAt,
+    input.requirePlanChangePending ? 1 : 0,
+    input.forcePlanChangePending ? 1 : 0,
+  );
+
+  if (input.requirePlanChangePending) {
+    const guardedGrantStatement = db.prepare(`
+      UPDATE user_plan
+      SET plan = ?,
+          dodo_payment_id = CASE
+            WHEN ? IS NOT NULL THEN ?
+            WHEN dodo_status = 'checkout_pending' THEN NULL
+            ELSE dodo_payment_id
+          END,
+          dodo_product_id = COALESCE(?, dodo_product_id),
+          dodo_subscription_id = COALESCE(?, dodo_subscription_id),
+          dodo_customer_id = COALESCE(?, dodo_customer_id),
+          dodo_next_billing_at = COALESCE(?, dodo_next_billing_at),
+          dodo_plan_change_product_id = CASE
+            WHEN dodo_status IN (
+                'plan_change_pending',
+                'plan_change_scheduled',
+                'payment.failed',
+                'subscription.failed',
+                'subscription.on_hold'
+              )
+              AND ? IS NOT NULL
+              AND dodo_plan_change_product_id = ?
+              AND (
+                ? IS NULL
+                OR dodo_subscription_id = ?
+              )
+              AND (
+                ? IS NULL
+                OR dodo_customer_id IS NULL
+                OR dodo_customer_id = ?
+              )
+            THEN dodo_plan_change_product_id
+            ELSE NULL
+          END,
+          dodo_status = ?,
+          plan_updated_at = ?
+      WHERE user_id = ?
+        AND (
+          dodo_status IN (
+            'plan_change_pending',
+            'plan_change_scheduled',
+            'payment.failed',
+            'subscription.failed',
+            'subscription.on_hold'
+          )
+          OR (
+            dodo_status IN ('succeeded', 'payment.succeeded')
+            AND dodo_product_id = ?
+          )
+        )
+        AND dodo_plan_change_product_id = ?
+        AND (
+          ? IS NULL
+          OR dodo_subscription_id = ?
+        )
+        AND (
+          ? IS NULL
+          OR dodo_customer_id IS NULL
+          OR dodo_customer_id = ?
+        )
+    `).bind(
       input.plan,
+      input.providerPaymentId ?? null,
       input.providerPaymentId ?? null,
       input.providerProductId ?? null,
       input.providerSubscriptionId ?? null,
       input.providerCustomerId ?? null,
       input.nextBillingAt ?? null,
+      input.providerPaymentId ?? null,
+      input.providerProductId ?? null,
+      input.providerSubscriptionId ?? null,
+      input.providerSubscriptionId ?? null,
+      input.providerCustomerId ?? null,
+      input.providerCustomerId ?? null,
       input.status,
       planUpdatedAt,
-    ),
+      input.userId,
+      input.providerProductId ?? null,
+      input.providerProductId ?? null,
+      input.providerSubscriptionId ?? null,
+      input.providerSubscriptionId ?? null,
+      input.providerCustomerId ?? null,
+      input.providerCustomerId ?? null,
+    );
+    const acceptedPlan = {
+      plan: input.plan,
+      status: input.status,
+      planUpdatedAt,
+      processedLedgerEventId: ledger.eventId,
+    };
+    const results = await db.batch([
+      guardedGrantStatement,
+      buildDodoWebhookLedgerFinalizeAfterChangedStatement(db, ledger, processedAt),
+      ...buildWatchlistGrantReconcileStatements(db, input.userId, keepActive, timestamp, acceptedPlan),
+      buildDodoWebhookLedgerFinalizeStatement(
+        db,
+        {
+          ...ledger,
+          outcome: "ignored",
+          metadata: {
+            ...ledger.metadata,
+            ignoredReason: "plan_change_guard_mismatch",
+          },
+        },
+        processedAt,
+      ),
+    ]);
+
+    const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
+    await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [2, 3]);
+
+    if (!grantChanged) return;
+
+    try {
+      const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
+      await persistWorkspaceEntitlementAnchor(env, input.userId, planUpdatedAt, "plan_activation");
+    } catch {
+      // Anchor columns may be absent on pre-migration databases during local dev.
+    }
+    return;
+  }
+
+  const results = await db.batch([
+    grantStatement,
     ...buildWatchlistGrantReconcileStatements(db, input.userId, keepActive, timestamp, {
       plan: input.plan,
       status: input.status,
@@ -2741,6 +3015,156 @@ export async function finalizeDodoWebhookLedgerOnly(
 // Dodo checkout links are payable for 24 hours by default, so the local lock
 // must last at least as long as the provider session can still be completed.
 export const DODO_PLAN_CHECKOUT_LOCK_MINUTES = 24 * 60;
+export const DODO_SUBSCRIPTION_PLAN_CHANGE_LOCK_MINUTES = 60;
+export const DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS = "plan_change_pending";
+export const DODO_SUBSCRIPTION_PLAN_CHANGE_SCHEDULED_STATUS = "plan_change_scheduled";
+
+export function isDodoSubscriptionPlanChangeStatus(status: string | null | undefined) {
+  return (
+    status === DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS ||
+    status === DODO_SUBSCRIPTION_PLAN_CHANGE_SCHEDULED_STATUS
+  );
+}
+
+export function isBlockingDodoSubscriptionPlanChangeStatus(
+  status: string | null | undefined,
+  _planUpdatedAt: string | null | undefined,
+  planChangeProductId?: string | null | undefined,
+) {
+  if (planChangeProductId) return true;
+  if (status === DODO_SUBSCRIPTION_PLAN_CHANGE_SCHEDULED_STATUS) return true;
+  return status === DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS;
+}
+
+export async function claimDodoSubscriptionPlanChange(
+  env: AppEnv,
+    input: {
+      userId: string;
+      status:
+        | typeof DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS
+        | typeof DODO_SUBSCRIPTION_PLAN_CHANGE_SCHEDULED_STATUS;
+      providerProductId: string;
+      currentSubscriptionId: string;
+      currentProductId: string | null;
+      currentStatus: string | null;
+      currentPlanUpdatedAt: string | null;
+    },
+  ) {
+    const db = ensureDb(env);
+    const claimedAt = nowIso();
+    const result = await db.prepare(`
+        UPDATE user_plan
+      SET dodo_status = ?,
+          plan_updated_at = ?,
+          dodo_plan_change_product_id = ?
+        WHERE user_id = ?
+          AND plan != 'free'
+          AND dodo_subscription_id = ?
+          AND (
+            (? IS NULL AND dodo_product_id IS NULL)
+            OR dodo_product_id = ?
+          )
+          AND (
+            (? IS NULL AND dodo_status IS NULL)
+            OR dodo_status = ?
+          )
+          AND (
+            (? IS NULL AND plan_updated_at IS NULL)
+            OR plan_updated_at = ?
+          )
+          AND (
+            dodo_status IS NULL
+            OR dodo_status NOT IN (
+              'checkout_pending',
+              'plan_change_pending',
+              'plan_change_scheduled',
+              'payment.failed',
+              'subscription.failed',
+              'subscription.on_hold',
+              'cancellation_scheduled'
+            )
+          )
+      `)
+    .bind(
+      input.status,
+      claimedAt,
+      input.providerProductId.trim(),
+      input.userId,
+      input.currentSubscriptionId.trim(),
+      input.currentProductId?.trim() ?? null,
+      input.currentProductId?.trim() ?? null,
+      input.currentStatus ?? null,
+      input.currentStatus ?? null,
+      validIsoTimestamp(input.currentPlanUpdatedAt ?? undefined) ?? null,
+      validIsoTimestamp(input.currentPlanUpdatedAt ?? undefined) ?? null,
+    )
+    .run();
+
+    return Number(result.meta?.changes ?? 0) > 0 ? { claimedAt } : null;
+  }
+
+export async function clearDodoSubscriptionPlanChangeClaim(
+  env: AppEnv,
+  input: {
+    userId: string;
+      claimedStatus:
+        | typeof DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS
+        | typeof DODO_SUBSCRIPTION_PLAN_CHANGE_SCHEDULED_STATUS;
+      previousStatus: string | null;
+      previousPlanUpdatedAt?: string | null;
+      providerProductId: string;
+      subscriptionId: string;
+      claimedAt: string;
+    },
+  ) {
+    const db = ensureDb(env);
+    const result = await db.prepare(`
+        UPDATE user_plan
+      SET dodo_status = ?,
+          plan_updated_at = COALESCE(?, plan_updated_at),
+          dodo_plan_change_product_id = NULL
+        WHERE user_id = ?
+          AND dodo_status = ?
+          AND dodo_plan_change_product_id = ?
+          AND dodo_subscription_id = ?
+          AND plan_updated_at = ?
+      `)
+    .bind(
+      input.previousStatus ?? null,
+      validIsoTimestamp(input.previousPlanUpdatedAt ?? undefined),
+      input.userId,
+      input.claimedStatus,
+      input.providerProductId.trim(),
+      input.subscriptionId.trim(),
+      validIsoTimestamp(input.claimedAt) ?? input.claimedAt,
+    )
+    .run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+export async function markDodoSubscriptionPlanChangeScheduled(
+  env: AppEnv,
+  input: { userId: string },
+) {
+  const db = ensureDb(env);
+  const result = await db.prepare(`
+      UPDATE user_plan
+      SET dodo_status = ?,
+          plan_updated_at = ?
+      WHERE user_id = ?
+        AND dodo_status = ?
+    `)
+    .bind(
+      DODO_SUBSCRIPTION_PLAN_CHANGE_SCHEDULED_STATUS,
+      nowIso(),
+      input.userId,
+      DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
+    )
+    .run();
+
+  return Number(result.meta?.changes ?? 0) > 0;
+}
 
 export async function claimDodoPlanCheckout(
   env: AppEnv,
@@ -3339,6 +3763,7 @@ export interface UserPlanBillingInfo {
   plan: "free" | "scout" | "starter" | "agency";
   dodoStatus: string | null;
   dodoProductId: string | null;
+  dodoPlanChangeProductId: string | null;
   billingInterval: "monthly" | "annual" | null;
   dodoSubscriptionId: string | null;
   dodoCustomerId: string | null;
@@ -3354,6 +3779,7 @@ export async function getUserPlanBillingInfo(
     plan: string | null;
     dodo_status: string | null;
     dodo_product_id: string | null;
+    dodo_plan_change_product_id: string | null;
     dodo_subscription_id: string | null;
     dodo_customer_id: string | null;
     dodo_next_billing_at: string | null;
@@ -3362,7 +3788,8 @@ export async function getUserPlanBillingInfo(
     env,
     `
       SELECT plan, dodo_status, dodo_product_id, dodo_subscription_id,
-             dodo_customer_id, dodo_next_billing_at, plan_updated_at
+             dodo_customer_id, dodo_next_billing_at, dodo_plan_change_product_id,
+             plan_updated_at
       FROM user_plan
       WHERE user_id = ?
     `,
@@ -3388,6 +3815,7 @@ export async function getUserPlanBillingInfo(
     plan,
     dodoStatus: row?.dodo_status ?? null,
     dodoProductId: row?.dodo_product_id ?? null,
+    dodoPlanChangeProductId: row?.dodo_plan_change_product_id ?? null,
     billingInterval,
     dodoSubscriptionId: row?.dodo_subscription_id ?? null,
     dodoCustomerId: row?.dodo_customer_id ?? null,
@@ -4967,7 +5395,7 @@ export async function getWeeklyBusinessSummary(env: AppEnv): Promise<WeeklyBusin
           SELECT COUNT(*) AS count
           FROM user_plan
           WHERE plan != 'free'
-            AND dodo_status IN ('subscription.failed', 'subscription.on_hold')
+            AND dodo_status IN ('payment.failed', 'subscription.failed', 'subscription.on_hold')
         `,
       ),
       one<{ count: number }>(

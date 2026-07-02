@@ -334,7 +334,7 @@ export default function SupportRoute() {
             <div className="f9-work-row">
               <strong>Billing</strong>
               <span>
-                Plan changes and cancellation stay backed by support until the hosted portal setting is confirmed.
+                Plan changes start from the billing page. Cancellation and sensitive billing help stay backed by support.
               </span>
             </div>
             <div className="f9-work-row">

@@ -31,6 +31,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/data.server");
+  vi.doUnmock("~/lib/dodo-billing.server");
   vi.doUnmock("~/lib/dodo-pricing.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/monitoring.server");
@@ -55,6 +56,14 @@ function mockBillingLoaderDependencies(input: {
     prices: {},
     annualValidation: {},
     usageBundles: {},
+  });
+  const validateDodo0509PlanCheckout = vi.fn().mockResolvedValue({
+    valid: true,
+    price: { currency: "INR" },
+    pricingContext: {
+      billingCountry: "IN",
+      billingCurrency: "INR",
+    },
   });
   const checkPlanLimit = vi.fn(async (_env: unknown, _userId: string, resource: string) =>
     resource === "watchlists"
@@ -91,6 +100,7 @@ function mockBillingLoaderDependencies(input: {
   }));
   vi.doMock("~/lib/dodo-pricing.server", () => ({
     previewDodo0509PlanPrices,
+    validateDodo0509PlanCheckout,
   }));
   vi.doMock("~/lib/plan.server", () => ({
     PLAN_LIMITS: {
@@ -107,6 +117,7 @@ function mockBillingLoaderDependencies(input: {
     getUserPlanBillingInfo,
     listActiveProofCreditGrants,
     previewDodo0509PlanPrices,
+    validateDodo0509PlanCheckout,
   };
 }
 
@@ -155,6 +166,8 @@ function billingRenderData(overrides: Record<string, unknown> = {}) {
     topUpCheckoutUnavailable: false,
     portalUnavailable: false,
     hasPortal: false,
+    hasDodoSubscription: false,
+    planChangeNotice: null,
     pricingPreview: {
       available: true,
       prices: {
@@ -213,6 +226,7 @@ describe("billing page", () => {
         plan: "starter",
         dodoStatus: "succeeded",
         dodoProductId: "prod_starter_monthly",
+        dodoPlanChangeProductId: "prod_starter_annual",
         billingInterval: "monthly",
         planUpdatedAt: "2026-06-04T12:00:00.000Z",
       },
@@ -227,14 +241,21 @@ describe("billing page", () => {
 
     expect(result).toMatchObject({
       email: "owner@example.com",
-      billing: { plan: "starter", dodoStatus: "succeeded", billingInterval: "monthly" },
+      billing: {
+        plan: "starter",
+        dodoStatus: "succeeded",
+        billingInterval: "monthly",
+        hasDodoPlanChangePendingTarget: true,
+      },
       watchlistUsage: { current: 3, limit: 10 },
       collectionUsage: { current: 5, limit: 25 },
       proofUsage: { used: 40, limit: 250 },
       blockedCheckout: false,
     });
     expect(JSON.stringify(result)).not.toContain("prod_starter_monthly");
+    expect(JSON.stringify(result)).not.toContain("prod_starter_annual");
     expect(result.billing).not.toHaveProperty("dodoProductId");
+    expect(result.billing).not.toHaveProperty("dodoPlanChangeProductId");
     expect(result.billing).not.toHaveProperty("dodoSubscriptionId");
     expect(result.billing).not.toHaveProperty("dodoCustomerId");
     expect(mocks.previewDodo0509PlanPrices).toHaveBeenCalledWith(
@@ -242,6 +263,124 @@ describe("billing page", () => {
         trustProxyHeaders: false,
       }),
     );
+  });
+
+  it("derives plan-change preview amounts server-side instead of trusting URL params", async () => {
+    const mocks = mockBillingLoaderDependencies({
+      billing: {
+        plan: "scout",
+        dodoStatus: "subscription.active",
+        dodoSubscriptionId: "sub_123",
+        dodoProductId: "prod_scout_monthly",
+        billingInterval: "monthly",
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+    });
+    const previewDodo0509SubscriptionPlanChange = vi.fn().mockResolvedValue({
+      immediate_charge: {
+        summary: {
+          total_amount: 1234,
+        },
+      },
+    });
+    const getDodo0509SubscriptionCurrency = vi.fn().mockResolvedValue("INR");
+    const createDodoSubscriptionPlanChangePreviewToken = vi.fn().mockResolvedValue("preview_token_123");
+    const summarizeDodoSubscriptionPlanChangePreview = vi.fn(() => ({
+      amount: 1234,
+      currency: "INR",
+      display: "₹12.34",
+    }));
+    vi.doMock("~/lib/dodo-billing.server", () => ({
+      checkoutTargetFromSkuSlug: vi.fn((sku: string) => ({
+        kind: "plan",
+        sku,
+        planFamily: "starter",
+        cycle: "monthly",
+      })),
+      createDodoSubscriptionPlanChangePreviewToken,
+      getDodo0509SubscriptionCurrency,
+      previewDodo0509SubscriptionPlanChange,
+      summarizeDodoSubscriptionPlanChangePreview,
+    }));
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request(
+        "https://0509.io/app/billing?plan-change=preview&plan=starter&cycle=monthly&sku=starter_monthly_v1&charge=$0.00&effective=immediately",
+      ),
+      params: {},
+    } as never);
+
+    expect(result.planChangePreview).toEqual({
+      plan: "starter",
+      cycle: "monthly",
+      sku: "starter_monthly_v1",
+      effectiveAt: "immediately",
+      charge: "₹12.34",
+      previewToken: "preview_token_123",
+    });
+    expect(mocks.validateDodo0509PlanCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ plan: "starter", cycle: "monthly" }),
+    );
+    expect(previewDodo0509SubscriptionPlanChange).toHaveBeenCalledWith(
+      expect.objectContaining({ subscriptionId: "sub_123", userId: "user-1" }),
+    );
+    expect(getDodo0509SubscriptionCurrency).toHaveBeenCalledWith(
+      expect.objectContaining({ subscriptionId: "sub_123" }),
+    );
+    expect(summarizeDodoSubscriptionPlanChangePreview).toHaveBeenCalledWith(
+      expect.any(Object),
+      "INR",
+    );
+    expect(createDodoSubscriptionPlanChangePreviewToken).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        subscriptionId: "sub_123",
+        amount: 1234,
+        currency: "INR",
+      }),
+    );
+  });
+
+  it("does not load owner plan-change previews for read-only workspace members", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "scout",
+        dodoStatus: "subscription.active",
+        dodoSubscriptionId: "sub_123",
+        dodoProductId: "prod_scout_monthly",
+        billingInterval: "monthly",
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+      workspace: {
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Agency Owner",
+      },
+    });
+    const previewDodo0509SubscriptionPlanChange = vi.fn();
+    vi.doMock("~/lib/dodo-billing.server", () => ({
+      checkoutTargetFromSkuSlug: vi.fn(),
+      createDodoSubscriptionPlanChangePreviewToken: vi.fn(),
+      getDodo0509SubscriptionCurrency: vi.fn(),
+      previewDodo0509SubscriptionPlanChange,
+      summarizeDodoSubscriptionPlanChangePreview: vi.fn(),
+    }));
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request(
+        "https://0509.io/app/billing?plan-change=preview&plan=starter&cycle=monthly&sku=starter_monthly_v1&effective=immediately",
+      ),
+      params: {},
+    } as never);
+
+    expect(result.canManageBilling).toBe(false);
+    expect(result.planChangeNotice).toBeNull();
+    expect(result.planChangePreview).toBeNull();
+    expect(previewDodo0509SubscriptionPlanChange).not.toHaveBeenCalled();
   });
 
   it("loads workspace owner billing for members without granting billing controls", async () => {
@@ -712,6 +851,181 @@ describe("billing page", () => {
     expect(markup).not.toContain("Start annual");
   });
 
+  it("renders Dodo plan-change controls for paid owners with linked subscriptions", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: {
+          plan: "scout",
+          dodoStatus: "subscription.active",
+          billingInterval: "monthly",
+          dodoProductId: "prod_scout_monthly",
+          dodoNextBillingAt: "2026-08-04T12:00:00.000Z",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        hasPortal: true,
+        hasDodoSubscription: true,
+        proofUsage: { used: 40, baseLimit: 50, limit: 50, extraCredits: 0 },
+        watchlistUsage: { current: 2, limit: 3 },
+        collectionUsage: { current: 4, limit: 10 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain('action="/api/billing/dodo/plan-change"');
+    expect(markup).toContain('value="starter_monthly_v1"');
+    expect(markup).toContain("Preview switch");
+    expect(markup).toContain("Current plan");
+    expect(markup).not.toContain("Change with support");
+  });
+
+  it("routes paid owners without linked Dodo subscriptions to billing support", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: {
+          plan: "scout",
+          dodoStatus: "subscription.active",
+          billingInterval: "monthly",
+          dodoProductId: "prod_scout_monthly",
+          dodoNextBillingAt: "2026-08-04T12:00:00.000Z",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        hasDodoSubscription: false,
+        proofUsage: { used: 40, baseLimit: 50, limit: 50, extraCredits: 0 },
+        watchlistUsage: { current: 2, limit: 3 },
+        collectionUsage: { current: 4, limit: 10 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain('href="/app/support?category=billing"');
+    expect(markup).toContain("Request billing help");
+    expect(markup).not.toContain('action="/api/billing/dodo/plan-change"');
+    expect(markup).not.toContain("Price loading");
+  });
+
+  it("keeps old pending Dodo plan changes blocked until webhook or support resolution", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: {
+          plan: "scout",
+          dodoStatus: "plan_change_pending",
+          billingInterval: "monthly",
+          dodoProductId: "prod_scout_monthly",
+          dodoNextBillingAt: "2026-08-04T12:00:00.000Z",
+          planUpdatedAt: "2026-01-04T12:00:00.000Z",
+        },
+        hasPortal: true,
+        hasDodoSubscription: true,
+        proofUsage: { used: 40, baseLimit: 50, limit: 50, extraCredits: 0 },
+        watchlistUsage: { current: 2, limit: 3 },
+        collectionUsage: { current: 4, limit: 10 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Active — plan change pending");
+    expect(markup).toContain("Change pending");
+    expect(markup).not.toContain("Preview switch");
+    expect(markup).not.toContain('action="/api/billing/dodo/plan-change"');
+  });
+
+  it("labels accepted next-cycle Dodo plan changes as scheduled", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: {
+          plan: "starter",
+          dodoStatus: "plan_change_scheduled",
+          billingInterval: "annual",
+          dodoProductId: "prod_starter_annual",
+          dodoNextBillingAt: "2026-08-04T12:00:00.000Z",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        hasPortal: true,
+        hasDodoSubscription: true,
+        proofUsage: { used: 40, baseLimit: 250, limit: 250, extraCredits: 0 },
+        watchlistUsage: { current: 2, limit: 10 },
+        collectionUsage: { current: 4, limit: 25 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Active — plan change scheduled");
+    expect(markup).not.toContain("Active — plan change pending");
+    expect(markup).toContain("Change pending");
+    expect(markup).not.toContain("Preview switch");
+  });
+
+  it("keeps scheduled Dodo cancellations out of the plan-change preview flow", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: {
+          plan: "scout",
+          dodoStatus: "cancellation_scheduled",
+          billingInterval: "monthly",
+          dodoProductId: "prod_scout_monthly",
+          dodoNextBillingAt: "2026-08-04T12:00:00.000Z",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        hasPortal: true,
+        hasDodoSubscription: true,
+        proofUsage: { used: 40, baseLimit: 50, limit: 50, extraCredits: 0 },
+        watchlistUsage: { current: 2, limit: 3 },
+        collectionUsage: { current: 4, limit: 10 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Active — cancels at the end of this billing period");
+    expect(markup).toContain("Cancellation scheduled");
+    expect(markup).not.toContain("Preview switch");
+    expect(markup).not.toContain('action="/api/billing/dodo/plan-change"');
+  });
+
+  it("keeps Agency on support instead of posting to the Scout/Starter plan-change route", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        billing: {
+          plan: "scout",
+          dodoStatus: "subscription.active",
+          billingInterval: "monthly",
+          dodoProductId: "prod_scout_monthly",
+          dodoNextBillingAt: "2026-08-04T12:00:00.000Z",
+          planUpdatedAt: "2026-06-04T12:00:00.000Z",
+        },
+        commercialLaunch: {
+          agencySaleOpen: true,
+        },
+        hasPortal: true,
+        hasDodoSubscription: true,
+        proofUsage: { used: 40, baseLimit: 50, limit: 50, extraCredits: 0 },
+        watchlistUsage: { current: 2, limit: 3 },
+        collectionUsage: { current: 4, limit: 10 },
+        planLimits: { digestCadence: "weekly" },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).not.toContain('value="agency_monthly_v1"');
+    expect(markup).toContain("Request Agency access");
+  });
+
   it("renders workspace member billing as read-only without checkout controls", async () => {
     mockReactRouterRender(
       billingRenderData({
@@ -772,6 +1086,24 @@ describe("billing page", () => {
 
     expect(markup).toContain("Request Agency access");
     expect(markup).not.toContain('value="agency_monthly_v1"');
+  });
+
+  it("keeps free Agency checkout reachable when Agency sales are open", async () => {
+    mockReactRouterRender(
+      billingRenderData({
+        selectedPlan: "agency",
+        commercialLaunch: {
+          agencySaleOpen: true,
+        },
+      }),
+    );
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain('action="/api/billing/dodo/checkout"');
+    expect(markup).toContain('value="agency_monthly_v1"');
+    expect(markup).toContain("Start monthly");
   });
 
   it("auto-rechecks activation when a buyer returns from Dodo checkout", async () => {
@@ -962,7 +1294,7 @@ describe("billing page", () => {
     expect(markup).toContain("never expire");
   });
 
-  it("does not overpromise cancellation through the hosted billing portal", async () => {
+  it("presents the hosted billing portal as card and invoice support with cancellation fallback", async () => {
     mockReactRouterRender({
       email: "owner@example.com",
       billing: {
@@ -982,13 +1314,16 @@ describe("billing page", () => {
       pendingCheckout: false,
       portalUnavailable: false,
       hasPortal: true,
+      hasDodoSubscription: true,
     });
 
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup).toContain("Open Dodo");
-    expect(markup).toContain("subscription-update setting is confirmed");
+    expect(markup).toContain("card and invoice tasks");
+    expect(markup).toContain("use support for cancellation");
+    expect(markup).toContain("Use the plan cards above to switch plans");
     expect(markup).toContain("/app/support?category=billing");
     expect(markup).not.toContain("cancel — self-serve");
     expect(markup).not.toContain("100% customer satisfaction");

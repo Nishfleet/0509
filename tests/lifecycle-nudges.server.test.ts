@@ -179,7 +179,7 @@ describe("buildLifecycleNudges", () => {
       expect.objectContaining({
         id: "billing_support",
         href: "/app/support?category=billing",
-        detail: expect.stringContaining("support cases"),
+        detail: expect.stringContaining("support path"),
       }),
     ]);
   });
