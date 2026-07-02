@@ -78,12 +78,12 @@ describe("formatProofAgeLabel", () => {
         now: "2026-04-18T12:00:00.000Z",
       }),
     ).toBe("2d ago");
-    expect(formatProofAgeLabel(null)).toBe("No proof yet");
+    expect(formatProofAgeLabel(null)).toBe("No evidence yet");
   });
 });
 
 describe("formatWhyAlertedLabel", () => {
-  it("explains why a confirmed proof-backed change surfaced", () => {
+  it("explains why a confirmed source-backed change surfaced", () => {
     expect(
       formatWhyAlertedLabel({
         eventType: "landing_page_offer_changed",
@@ -103,7 +103,7 @@ describe("formatWhyAlertedLabel", () => {
         status: "proof_pending",
         metadata: {},
       }),
-    ).toBe("Possible change detected. Proof is still running.");
+    ).toBe("Possible change detected. The evidence check is still running.");
   });
 });
 

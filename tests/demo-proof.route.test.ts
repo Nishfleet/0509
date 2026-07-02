@@ -20,7 +20,7 @@ describe("demo proof API", () => {
     expect(body.trackedPreview.loop).toContain("Run a public live search");
     expect(body.proofTrail.length).toBeGreaterThanOrEqual(3);
     expect(body.digestPreview.recommendedMove).toContain("counter-test");
-    expect(body.digestPreview.confidence).toBe("Verified proof with source and freshness attached.");
+    expect(body.digestPreview.confidence).toBe("Verified evidence with source and freshness attached.");
     expect(body.exports.apiPath).toBe("/api/demo-proof");
     expect(body.trackedPreview.deliveryPreview).not.toContain("Slack-ready");
     expect(body.exports.digestMarkdown).toContain("\nPriority:");
@@ -41,11 +41,11 @@ describe("demo proof API", () => {
     expect(body).toContain("Public live search is read-only; retained monitoring requires an account");
     expect(body).toContain("Tracked preview: Nykaa weekly competitor watch");
     expect(body).toContain("Cadence: Weekly digest");
-    expect(body).toContain("## Proof Trail");
+    expect(body).toContain("## Source Trail");
     expect(body).toContain("## Digest Markdown");
     expect(body).not.toContain("Slack Export");
     expect(body).toContain("\nPriority: Review before next campaign refresh");
-    expect(body).toContain("- Confidence: Verified proof with source and freshness attached.");
+    expect(body).toContain("- Confidence: Verified evidence with source and freshness attached.");
     expect(body).not.toContain("Deprecated sample field");
     expect(body).not.toContain("\\nPriority");
   });

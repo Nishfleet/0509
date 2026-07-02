@@ -97,10 +97,11 @@ describe("status route", () => {
     expect(markup).toContain("Public search");
     expect(markup).toContain("Email delivery is available for eligible accounts");
     expect(markup).toContain("Recurring uptime checks are configured");
+    expect(markup).toContain("Held while larger-account monitoring capacity is verified");
     expect(markup).not.toContain("GA launch gate");
     expect(markup).not.toContain("GA launch proof");
     expect(markup).not.toContain("broad launch still needs fresh Slack proof");
-    expect(markup).toContain("Dodo-backed plan switching is repo-configured");
+    expect(markup).toContain("Dodo-backed plan switching is configured");
     expect(markup).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(markup).toContain("Cancellation, deletion, and sensitive account changes");
     expect(markup).not.toContain("Recent Slack delivery proof is visible");

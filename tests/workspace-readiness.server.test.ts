@@ -260,7 +260,7 @@ describe("getWorkspaceReadiness", () => {
     expect(readiness.status).toBe("needs_setup");
     expect(delivery).toMatchObject({
       status: "needs_proof",
-      detail: "A delivery target exists but needs successful delivery proof.",
+      detail: "A delivery target exists but needs a successful delivery check.",
       action: { href: "/app/sources" },
     });
   });

@@ -24,7 +24,7 @@ export default function ApiDocsRoute() {
   return (
     <PublicDocShell
       kicker="Developer access"
-      title="Use account-owned proof from your tools."
+      title="Use account-owned evidence from your tools."
       intro="The API exports saved Five to Nine data that already belongs to the authenticated account and supports selected approved actions."
     >
       <PublicDocBlock title="Authentication">
@@ -39,8 +39,9 @@ export default function ApiDocsRoute() {
 
       <PublicDocBlock title="Connected tools">
         <p>
-          Tools that support MCP can connect with the same bearer token. Use an active customer API key for readiness
-          and exports. Use a write-enabled key only when the tool should run approved account actions.
+          Compatible tools can connect with the same bearer token. Use an active customer API key
+          for readiness and exports. Use a write-enabled key only when the tool should run approved
+          account actions.
         </p>
         <pre className="f9-code-block">
           <code>{`POST /api/mcp

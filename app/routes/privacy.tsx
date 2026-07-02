@@ -35,7 +35,7 @@ export default function PrivacyRoute() {
             </p>
           </LegalBlock>
 
-          <LegalBlock title="Proof data">
+          <LegalBlock title="Evidence data">
             <p>
               The product may store ad records, landing-page snapshots, extracted text, screenshots, HTML, timestamps,
               source URLs, and delivery attempts so teams can verify what changed. Tracking status stays visible when
@@ -74,7 +74,7 @@ function SimpleHeader() {
     <header className="f9-legal-nav">
       <div className="f9-container f9-legal-nav-inner">
         <Link className="f9-app-brand" to="/">
-          <BrandWordmark meta="Proof-backed competitor monitoring" />
+          <BrandWordmark meta="Competitor change monitoring" />
         </Link>
         <nav className="f9-search-nav-links" aria-label="Legal navigation">
           <Link to="/">Home</Link>

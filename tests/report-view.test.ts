@@ -28,6 +28,31 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Pending");
   });
 
+  it("normalizes legacy system labels without rewriting customer-owned report text", () => {
+    const report = {
+      ...legacyReport,
+      title: "Proofpoint watch",
+      subtitle: "Proofpoint executive summary",
+      summary: "Proofpoint proof review.",
+      rows: [reportRow("row-proofpoint", "https://example.com/source")],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report }),
+    );
+
+    expect(markup).toContain("Proofpoint watch");
+    expect(markup).toContain("Proofpoint executive summary");
+    expect(markup).toContain("Proofpoint proof review.");
+    expect(markup).toContain("Verified evidence");
+    expect(markup).toContain("Saved evidence");
+    expect(markup).toContain("Evidence capture");
+    expect(markup).not.toContain("Evidencepoint");
+    expect(markup).not.toContain("Verified proof");
+    expect(markup).not.toContain("Proof snapshot");
+    expect(markup).not.toContain("Proof capture");
+  });
+
   it("does not render non-http report source URLs as links", () => {
     const report = {
       ...legacyReport,
@@ -74,8 +99,8 @@ describe("ReportView", () => {
     expect(markup).toContain("Why it matters");
     expect(markup).toContain("High priority");
     expect(markup).toContain("Today: brief a counter-offer.");
-    expect(markup).toContain("Proof glossary");
-    expect(markup).toContain("Proof unavailable");
+    expect(markup).toContain("Source glossary");
+    expect(markup).toContain("Evidence unavailable");
   });
 
   it("does not describe saved collection proof as a no-action watchlist report", () => {
@@ -89,9 +114,9 @@ describe("ReportView", () => {
       createElement(ReportView, { report }),
     );
 
-    expect(markup).toContain("Saved proof ready for review");
-    expect(markup).toContain("1 saved proof item packaged for review.");
-    expect(markup).toContain("This is a curated proof set, not a live change alert.");
+    expect(markup).toContain("Saved evidence ready for review");
+    expect(markup).toContain("1 saved evidence item packaged for review.");
+    expect(markup).toContain("This is a curated evidence set, not a live change alert.");
     expect(markup).not.toContain("No client-ready change needs action");
   });
 });

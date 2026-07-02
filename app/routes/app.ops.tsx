@@ -32,7 +32,7 @@ export default function OpsRoute() {
       <div className="f9-panel-toolbar">
         <div>
           <p className="f9-app-kicker">Ops</p>
-          <h2>Proof-first monitoring health</h2>
+          <h2>Evidence-first monitoring health</h2>
         </div>
       </div>
 
@@ -41,8 +41,8 @@ export default function OpsRoute() {
           <div className="f9-work-list is-compact">
             <MetricCard label="Failing runs" value={snapshot.summary.failingRuns} />
             <MetricCard label="Stuck runs" value={snapshot.summary.stuckRuns} />
-            <MetricCard label="Failed proofs" value={snapshot.summary.failedProofs} />
-            <MetricCard label="Budget-blocked proofs" value={snapshot.summary.budgetBlockedProofs} />
+            <MetricCard label="Failed evidence checks" value={snapshot.summary.failedProofs} />
+            <MetricCard label="Budget-blocked evidence checks" value={snapshot.summary.budgetBlockedProofs} />
             <MetricCard label="Blocked targets" value={snapshot.summary.blockedTargets} />
             <MetricCard label="Delivery attention" value={snapshot.summary.deliveryAttention} />
             <MetricCard label="Degraded watchlists" value={snapshot.summary.degradedWatchlists} />
@@ -83,26 +83,26 @@ export default function OpsRoute() {
           />
 
           <OpsSection
-            empty="No failed proofs in the recent window."
+            empty="No failed evidence checks in the recent window."
             items={snapshot.failedProofs}
-            title="Recent proof failures"
+            title="Recent evidence-check failures"
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
-                <h3>{item.failure_reason ?? item.failure_code ?? "Proof capture failed"}</h3>
+                <h3>{item.failure_reason ?? item.failure_code ?? "Evidence check failed"}</h3>
                 <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
           />
 
           <OpsSection
-            empty="No proofs are currently paused by budget or rate limits."
+            empty="No evidence checks are currently paused by budget or rate limits."
             items={snapshot.budgetBlockedProofs}
             title="What is paused by budget"
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
-                <h3>{item.status === "skipped_due_to_rate_limit" ? "Rate-limited proof" : "Budget-skipped proof"}</h3>
+                <h3>{item.status === "skipped_due_to_rate_limit" ? "Rate-limited evidence check" : "Budget-skipped evidence check"}</h3>
                 <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
@@ -189,7 +189,7 @@ export default function OpsRoute() {
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
                 <h3>{item.failed_runs + item.failed_proofs + item.failed_deliveries} recent issues</h3>
                 <p>
-                  {item.failed_runs} failed runs · {item.failed_proofs} failed proofs · {item.failed_deliveries} failed deliveries
+                  {item.failed_runs} failed runs · {item.failed_proofs} failed evidence checks · {item.failed_deliveries} failed deliveries
                 </p>
                 <p className="f9-muted-copy">
                   {item.last_seen_at ? formatTimestamp(item.last_seen_at) : "No recent timestamp"}

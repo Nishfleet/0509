@@ -294,7 +294,7 @@ describe("clients route agent memory", () => {
         key: "client_review_tone",
         watchlistId: null,
         clientRoomId: "room-1",
-        value: { value: "Direct weekly review with proof links." },
+        value: { value: "Direct weekly review with evidence links." },
         source: "owner_ui",
         createdAt: "2026-06-20T00:00:00.000Z",
         updatedAt: "2026-06-20T00:00:00.000Z",
@@ -333,7 +333,7 @@ describe("clients route agent memory", () => {
       id: "memory-room-1",
       key: "client_review_tone",
       clientRoomId: "room-1",
-      preview: "Direct weekly review with proof links.",
+      preview: "Direct weekly review with evidence links.",
     });
   });
 
@@ -507,7 +507,7 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Weekly client-ready review with direct tone.");
     expect(markup).toContain("Nykaa weekly desk");
     expect(markup).toContain("Ready for client review");
-    expect(markup).toContain("1 proof source");
+    expect(markup).toContain("1 evidence source");
     expect(markup).toContain("1 report");
     expect(markup).toContain("1 saved memory");
     expect(markup).toContain("room notes saved");
@@ -537,7 +537,7 @@ describe("clients route agent memory", () => {
     const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
     expect(markup).toContain("Needs setup before client review");
-    expect(markup).toContain("No linked proof yet");
+    expect(markup).toContain("No linked evidence yet");
     expect(markup).toContain("No client context saved");
     expect(markup).toContain("Link a watchlist or collection to this room.");
   });

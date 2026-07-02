@@ -437,7 +437,7 @@ export default function SearchRoute() {
       railNote={
         data.result.ads.length > 0 ? (
           <div className="f9-cursor-rail-note">
-            <span>Saved proof</span>
+            <span>Saved evidence</span>
             <strong>
               {landingPageCount}/{data.result.ads.length}
             </strong>

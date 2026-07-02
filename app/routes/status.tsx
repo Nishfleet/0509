@@ -39,7 +39,7 @@ export default function StatusRoute() {
     <PublicDocShell
       kicker="Status"
       title="Five to Nine service status."
-      intro="A plain view of what is available today, what is intentionally limited, and what still blocks broad launch."
+      intro="A plain view of what is available today, what is intentionally limited, and what customers can rely on now."
     >
       <PublicDocBlock title="Core surfaces">
         <dl className="proof-trail-list">
@@ -74,7 +74,7 @@ export default function StatusRoute() {
           </div>
           <div>
             <dt>Agency</dt>
-            <dd>{data.commercialLaunch?.agencySaleOpen ? "Available for checkout" : "Held while we finish proving nightly monitoring capacity at scale"}</dd>
+            <dd>{data.commercialLaunch?.agencySaleOpen ? "Available for checkout" : "Held while larger-account monitoring capacity is verified"}</dd>
           </div>
         </dl>
       </PublicDocBlock>
@@ -82,8 +82,8 @@ export default function StatusRoute() {
       <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
           <li>Email delivery is available for eligible accounts; delivery issues can be reviewed through support.</li>
-          <li>Dodo-backed plan switching is repo-configured for linked paid subscriptions; support handles changes until internal smoke proof is complete.</li>
-          <li>Recurring uptime checks are configured; first alert proof is still operator-verified.</li>
+          <li>Dodo-backed plan switching is configured for linked paid subscriptions; support can help with changes when needed.</li>
+          <li>Recurring uptime checks are configured and reviewed by the operator.</li>
           <li>Cancellation, deletion, and sensitive account changes still use the hosted portal or support path.</li>
         </ul>
       </PublicDocBlock>
@@ -91,9 +91,9 @@ export default function StatusRoute() {
       <PublicDocBlock title="Safety controls">
         <ul className="f9-doc-list">
           <li>Sign-in, saved account data, search, and public pages are rate limited.</li>
-          <li>Plans have watchlist, collection, digest, proof-capture, and team-seat caps.</li>
-          <li>Proof usage warns after 80% and hard-stops when paid capacity is exhausted.</li>
-          <li>Support can review delivery failures, stale tracking, and capacity risk when something needs attention.</li>
+          <li>Plans have watchlist, collection, digest, saved-record, and team-seat caps.</li>
+          <li>Saved-record usage warns after 80% and hard-stops when paid volume is exhausted.</li>
+          <li>Support can review delivery failures, stale tracking, and account-volume risk when something needs attention.</li>
         </ul>
       </PublicDocBlock>
     </PublicDocShell>

@@ -2130,7 +2130,7 @@ function renderDigestHtml(input: {
                         <div style="margin-top: 6px; color: #5b6577; font-size: 13px;">
                           ${escapeHtml(scoreLabel)}<br />
                           Next: ${escapeHtml(intelligence.recommendedAction)}<br />
-                          Proof: ${escapeHtml(intelligence.proofTrail)}
+                          Evidence: ${escapeHtml(intelligence.proofTrail)}
                         </div>
                       </li>
                     `;
@@ -2173,7 +2173,7 @@ function renderDigestSlackText(input: {
         `  ${escapeSlackText(item.summary)}`,
         `  Priority: ${escapeSlackText(scoreLabel)}`,
         `  Next: ${escapeSlackText(intelligence.recommendedAction)}`,
-        `  Proof: ${escapeSlackText(intelligence.proofTrail)}`,
+        `  Evidence: ${escapeSlackText(intelligence.proofTrail)}`,
       ].join("\n"),
     );
   }

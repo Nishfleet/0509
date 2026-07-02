@@ -41,7 +41,7 @@ export function buildSearchAnswer(input: {
       ? "No ads to inspect yet"
       : landingPageCount > 0
         ? "Captured from ad destinations when available"
-        : "Not captured yet; use the ad cards as creative proof only",
+        : "Not captured yet; use the ad cards as creative signals only",
   };
 
   if (result.discoveryStatus === "degraded" && adCount === 0) {
@@ -66,7 +66,7 @@ export function buildSearchAnswer(input: {
         { label: "Verified ads", value: "0", detail: "Exact website match only" },
         { label: "Broader candidates", value: String(broaderCount), detail: "Use broader search when you want related matches" },
       ],
-      note: "This is not proof that the competitor is inactive; it only means this search did not verify a connected ad.",
+      note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",
     };
   }
 
@@ -88,7 +88,7 @@ export function buildSearchAnswer(input: {
     return {
       state: "broader",
       title: `${adCount} broader match${adCount === 1 ? "" : "es"} for ${domain}`,
-      summary: "These are related ad results, not verified website matches. Use them for leads, not proof.",
+      summary: "These are related ad results, not verified website matches. Use them for leads, not confirmed evidence.",
       facts: [
         { label: "Broader matches", value: String(adCount), detail: "Related advertiser/text candidates" },
         landingFact,
@@ -108,7 +108,7 @@ export function buildSearchAnswer(input: {
         { label: "Returned ads", value: String(adCount), detail: "Review as unverified candidates only" },
         landingFact,
       ],
-      note: "This is not proof that the competitor is inactive; it only means this search did not verify a connected ad.",
+      note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",
     };
   }
 
@@ -122,7 +122,7 @@ export function buildSearchAnswer(input: {
         landingFact,
         { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
       ],
-      note: landingPageCount === 0 ? "Landing-page signals are missing, so treat the ad creative as the current proof." : null,
+      note: landingPageCount === 0 ? "Landing-page signals are missing, so treat the ad creative as the current signal." : null,
     };
   }
 

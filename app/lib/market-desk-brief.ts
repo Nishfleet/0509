@@ -115,7 +115,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       state: "follow_up",
       kicker: "Market Desk Brief",
       title: `${count} follow-up${count === 1 ? "" : "s"} to decide`,
-      summary: "Proof-backed response work is waiting. Review the open follow-ups before the response window closes.",
+      summary: "Source-backed response work is waiting. Review the open follow-ups before the response window closes.",
       action: { href: "/app/watchlists", label: "Review follow-ups" },
       metrics,
       items: input.counterMoveFollowUps.slice(0, 3).map((followUp) => ({
@@ -133,7 +133,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       state: "changes",
       kicker: "Market Desk Brief",
       title: `${count} competitor move${count === 1 ? "" : "s"} to review`,
-      summary: "A watched competitor changed. Open the proof trail and decide whether to respond, ignore, or package it.",
+      summary: "A watched competitor changed. Open the source trail and decide whether to respond, ignore, or package it.",
       action: { href: "/app/watchlists", label: "Review moves" },
       metrics,
       items: confirmedChanges.slice(0, 3).map((event) => ({
@@ -185,7 +185,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         state: "queued",
         kicker: "Market Desk Brief",
         title: "Watching for the first change",
-        summary: "Your watchlist is ready. Refresh tracking to capture proof when the landing page or offer changes.",
+        summary: "Your watchlist is ready. Refresh tracking to save evidence when the landing page or offer changes.",
         action: { href: "/app/watchlists", label: "Open watchlists" },
         metrics,
         items: activeWatchlists.slice(0, 3).map((watchlist) => ({
@@ -217,7 +217,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     state: "empty",
     kicker: "Market Desk Brief",
     title: "Build your Market Desk",
-    summary: "Add your first competitor or paste several at once, then Five to Nine turns daily checks into a proof-backed brief.",
+    summary: "Add your first competitor or paste several at once, then Five to Nine turns daily checks into a source-backed brief.",
     action: { href: "/app/onboard?resume=1", label: "Add competitors" },
     metrics,
     items: [],

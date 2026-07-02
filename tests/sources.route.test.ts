@@ -49,7 +49,7 @@ const discoveryStatus = {
 
 const betaReadiness = {
   ok: false,
-  label: "Beta: needs proof",
+  label: "Beta: needs validation",
   windowDays: 7,
   sampleTarget: 20,
   samples: 6,

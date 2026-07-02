@@ -211,7 +211,7 @@ export default function ClientsRoute() {
       <section className="f9-app-stack">
         <DashboardPageHeader
           action={{ label: "Notifications", to: "/app/sources" }}
-          lead="Package proof around each client."
+          lead="Package evidence and reports around each client."
           title="Client rooms"
         />
 
@@ -226,7 +226,7 @@ export default function ClientsRoute() {
           <div className="f9-panel-toolbar">
             <div>
               <span className="f9-app-kicker">Create room</span>
-              <h2>Bundle proof and notes.</h2>
+              <h2>Bundle evidence and notes.</h2>
             </div>
           </div>
 
@@ -243,7 +243,7 @@ export default function ClientsRoute() {
             </label>
             <label className="f9-field">
               <span>Goal</span>
-              <textarea name="goal" placeholder="What the client wants from the weekly proof review" rows={3} />
+              <textarea name="goal" placeholder="What the client wants from the weekly review" rows={3} />
             </label>
             <div className="f9-field-grid">
               <label className="f9-field">
@@ -265,7 +265,7 @@ export default function ClientsRoute() {
                 </label>
               ))}
               {data.watchlists.length === 0 ? (
-                <p className="f9-muted-copy">Add a watchlist before linking tracked proof.</p>
+                <p className="f9-muted-copy">Add a watchlist before linking tracked evidence.</p>
               ) : null}
             </div>
 
@@ -278,7 +278,7 @@ export default function ClientsRoute() {
                 </label>
               ))}
               {data.collections.length === 0 ? (
-                <p className="f9-muted-copy">Create a collection before linking saved proof.</p>
+                <p className="f9-muted-copy">Create a collection before linking saved evidence.</p>
               ) : null}
             </div>
 
@@ -465,7 +465,7 @@ function ClientRoomCard({
           <dd>{handoff.status}</dd>
         </div>
         <div>
-          <dt>Proof</dt>
+          <dt>Evidence</dt>
           <dd>{handoff.proof}</dd>
         </div>
         <div>
@@ -504,8 +504,8 @@ function summarizeClientRoomHandoff(
   const hasRoomNotes = formatRoomNotes(room.notes) !== "No room notes yet.";
   const hasContext = hasRoomNotes || memories.length > 0;
   const proof = linkedProofCount > 0
-    ? `${linkedProofCount} proof source${linkedProofCount === 1 ? "" : "s"} · ${reportCount} report${reportCount === 1 ? "" : "s"}`
-    : "No linked proof yet";
+    ? `${linkedProofCount} evidence source${linkedProofCount === 1 ? "" : "s"} · ${reportCount} report${reportCount === 1 ? "" : "s"}`
+    : "No linked evidence yet";
   const memorySummary = `${memories.length} saved memor${memories.length === 1 ? "y" : "ies"}`;
   const context = memories.length > 0 && hasRoomNotes
     ? `${memorySummary} · room notes saved`

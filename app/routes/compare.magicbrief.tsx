@@ -36,7 +36,7 @@ const differences = [
   {
     title: "We monitor changes, not just creatives",
     detail:
-      "Five to Nine is built around what changed: offers, prices, CTAs, and landing-page copy — each change captured with proof. If you mainly browsed creative inspiration, our library is narrower and our change evidence is deeper.",
+      "Five to Nine is built around what changed: offers, prices, CTAs, and landing-page copy — each change saved with screenshots, text, and links. If you mainly browsed creative inspiration, our library is narrower and our change evidence is deeper.",
   },
   {
     title: "Evidence over vibes",
@@ -46,7 +46,7 @@ const differences = [
   {
     title: "Honest limits",
     detail:
-      "Meta ads tracking is labeled beta until it proves itself on your competitors. Results are always marked fresh, recent, or sample.",
+      "Meta ads tracking is labeled beta until it is reliable on your competitors. Results are always marked fresh, recent, or sample.",
   },
 ] as const;
 

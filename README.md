@@ -2,23 +2,23 @@
 
 `0509` is the internal repo and domain handle for `Five to Nine`.
 
-`Five to Nine` is the customer-facing product name: proof-backed competitor monitoring for growth teams.
+`Five to Nine` is the customer-facing product name: source-backed competitor monitoring for growth teams.
 
 ## North Star
 
-- Promise: `See what changed, with proof.`
+- Promise: `See what changed, with sources attached.`
 - Story: `Five to Nine` closes the gap between when a team stops checking and when the next decision gets made.
-- Positioning: lead with proof-backed competitor monitoring, not a generic competitor-analysis workspace.
-- Product shape: the public hook is read-only live search plus a sample proof loop; account-gated save/track starts the real monitoring product, and workspace memory is the compounding layer.
+- Positioning: lead with source-backed competitor monitoring, not a generic competitor-analysis workspace.
+- Product shape: the public hook is read-only live search plus a sample watch; signed-in save and track starts the real monitoring product, and workspace memory is the compounding layer.
 
 Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-north-star.md`
 
 ## Product shape
 
-- `Public trial` is the public hook: logged-out buyers can run read-only live search and inspect a sample tracked competitor, proof trail, and digest preview before creating an account.
-- `Analysis` is account-gated after the preview: signed-in users save searches, track competitors, inspect deeper proof, and save useful findings.
+- `Public trial` is the public hook: logged-out buyers can run read-only live search and inspect a sample tracked competitor, source trail, and digest preview before creating an account.
+- `Analysis` is available after the preview: signed-in users save searches, track competitors, inspect deeper evidence, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, insight-depth summaries, observed campaign duration, daily and weekly digests.
-- `Workspace memory` is the compounding layer: collections, notes, tags, manual external proof links, visible metric proof fields, CSV/API JSON exports, customer API keys, narrow audited agent actions, agent memory, client rooms, email delivery, and share links.
+- `Workspace memory` is the compounding layer: collections, notes, tags, manual external evidence links, visible metric evidence fields, CSV/API JSON exports, customer API keys, narrow audited agent actions, agent memory, client rooms, email delivery, and share links.
 
 ## Current stack
 
@@ -40,11 +40,11 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/status` public launch and operations status
 - `/changelog` public product changelog
 - `/trust` public trust and security basics
-- `/api/demo-proof` sample public proof payload for buyer and agent evaluation
+- `/api/demo-proof` sample public brief payload for buyer and agent evaluation
 - `/api/mcp` MCP JSON-RPC endpoint for account-owned readiness, exports, and narrow audited workspace actions with a customer API key
 - `/api/v1` machine-readable customer API index for workspace readiness, account exports, and audited agent actions
 - `/api/v1/:resourceType/:resourceId` customer API-key export endpoint for account-owned collections, watchlists, and digests
-- `/search` public read-only live search trial; save, track, collections, and deeper proof enrichment require an account while private canary probes can force fresh live checks with the configured token
+- `/search` public read-only live search trial; save, track, collections, and deeper evidence enrichment require an account while private canary probes can force fresh live checks with the configured token
 - `/privacy`
 - `/terms`
 - `/api/pricing-preview`
@@ -123,16 +123,16 @@ Important bindings and secrets:
 - Auth UI stays intentionally small: email link primary, passkeys after sign-in, plus Google/Microsoft only when the corresponding Better Auth OAuth credentials are configured and branded account chooser behavior is verified. Microsoft also requires an explicit same-email account-linking trust flag before it is registered. OAuth state cookies are HTTP-only, provider tokens are encrypted at rest, email-link confirmation is bound to a same-browser state cookie before token exchange, and callback tokens are never rendered into HTML.
 - Current B2B scope is one account workspace per email because the product data model is keyed by local `user.id`. Multi-workspace organization membership is blocked until account data is organization-scoped.
 - `.env.local` and `.env.local.example` are legacy Next.js env files for the old `src/` runtime and should not be treated as the source of truth for the Worker app.
-- Meta ads tracking is a beta feature until the production canary proves fresh discovery, proof capture, and digest delivery are reliable.
-- `META_AD_LIBRARY_TOKEN` should not be treated as proof that live India commercial-ad discovery is production-ready. The official Meta API is diagnostic-only by default. Customer-facing Meta API fallback requires a customer-owned Meta connection that is test-before-save and stored encrypted; the platform token can only be used if `ALLOW_PLATFORM_META_API_FALLBACK=true` is deliberately configured.
+- Meta ads tracking is a beta feature until the production canary confirms fresh discovery, saved evidence, and digest delivery are reliable.
+- `META_AD_LIBRARY_TOKEN` should not be treated as confirmation that live India commercial-ad discovery is production-ready. The official Meta API is diagnostic-only by default. Customer-facing Meta API fallback requires a customer-owned Meta connection that is test-before-save and stored encrypted; the platform token can only be used if `ALLOW_PLATFORM_META_API_FALLBACK=true` is deliberately configured.
 - If no live commercial discovery provider is configured, the app should operate only in explicit demo mode. Production should not silently fall back to demo data on live-provider failures.
-- Daily and weekly digests share the same proof-backed event model. Each digest item should carry a priority score, next action, source proof trail, timestamp, and confidence label.
-- Account insight-depth summaries are generated from real saved ads, manual external proof links, watch events, and digest items: top hooks, media mix, observed campaign duration from first-seen/last-seen proof, manual metric proof, creative timeline, and landing-page history. Customer API keys are live for account-owned readiness, exports, and narrow audited workspace actions at `/api/v1/actions`; `/api/mcp` exposes the same account-owned context and safe actions to agents, including watchlist updates, collection creation, redacted delivery state, explicit-approval delivery settings, scoped memory, client rooms, and existing proof-backed website/blog/Substack observations. Billing, team invites, secret setup, external delivery sends, unsupported-channel ingestion, and broad public write APIs are not exposed as agent actions. Slack incoming-webhook setup is not part of the public GA offer; existing stored Slack configuration is preserved behind product gates. Manual external proof links can store TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing-page, or other proof in collections, including user-supplied visible spend, impression, and reach values. They do not imply automated non-Meta ingestion, X/Reddit/YouTube listening, or automated spend/reach/impression benchmarks.
+- Daily and weekly digests share the same source-backed event model. Each digest item should carry a priority score, next action, source trail, timestamp, and confidence label.
+- Account insight-depth summaries are generated from real saved ads, manual external evidence links, watch events, and digest items: top hooks, media mix, observed campaign duration from first-seen/last-seen evidence, manual metric evidence, creative timeline, and landing-page history. Customer API keys are live for account-owned readiness, exports, and narrow audited workspace actions at `/api/v1/actions`; `/api/mcp` exposes the same account-owned context and safe actions to agents, including watchlist updates, collection creation, redacted delivery state, explicit-approval delivery settings, scoped memory, client rooms, and existing source-backed website/blog/Substack observations. Billing, team invites, secret setup, external delivery sends, unsupported-channel ingestion, and broad public write APIs are not exposed as agent actions. Slack incoming-webhook setup is not part of the public GA offer; existing stored Slack configuration is preserved behind product gates. Manual external evidence links can store TikTok, Google/YouTube, LinkedIn, Pinterest, Meta, landing-page, or other evidence in collections, including user-supplied visible spend, impression, and reach values. They do not imply automated non-Meta ingestion, X/Reddit/YouTube listening, or automated spend/reach/impression benchmarks.
 - Cloudflare cost policy: stay on the included/free tier by default. Do not enable usage-billed add-ons just because they exist; enable them when the missing capability is materially hampering product quality, operations, or launch.
 - `LANDING_PAGE_ARTIFACTS` is optional right now. If R2 is not enabled, landing-page snapshots still work and simply return `artifactKey: null` instead of persisting raw HTML.
 - R2 is now provisioned for `0509` as the `0509-landing-page-artifacts` bucket, but it is still an enhancement path rather than a launch blocker.
-- Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the configured Dodo account API key, brand id, and product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Buyers can review public read-only search and the sample proof loop before signup. Current caps are Scout: 3 watchlists, 10 collections, weekly digests, 50 proof captures/month; Starter: 10 watchlists, 25 collections, daily and weekly digests, 250 proof captures/month; Agency: 75 watchlists, 250 collections, daily and weekly digests, 2,500 proof captures/month. Workspaces warn after 80% proof-capture usage. Usage bundles are overflow proof-capture packs, not unlimited monitoring; included proof captures reset monthly without rollover, and purchased proof packs never expire.
-- Broad launch is gated by `npm run launch:readiness`, including pricing, billing, proof/email, production, and provider canaries. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can prove it bypassed cache and provider cooldown. The production canary checks recent monitoring, proof capture, sent email digest signals, and provider-canary success. Slack and WhatsApp are not public GA delivery channels; do not require or advertise them for launch unless a future product decision reintroduces them with verified proof.
+- Public pricing display is Dodo-backed. The landing page and `/api/pricing-preview` load localized checkout preview from the Dodo 0509 brand using the configured Dodo account API key, brand id, and product ids. Do not show hardcoded visible currency or fixed local prices as product truth. There is no free retained-monitoring plan. Buyers can review public read-only search and the sample watch before signup. Current caps are Scout: 3 watchlists, 10 collections, weekly digests, 50 saved change records/month; Starter: 10 watchlists, 25 collections, daily and weekly digests, 250 saved change records/month; Agency: 75 watchlists, 250 collections, daily and weekly digests, 2,500 saved change records/month. Workspaces warn after 80% saved-record usage. Usage bundles are overflow record packs, not unlimited monitoring; included saved records reset monthly without rollover, and purchased record packs never expire.
+- Broad launch is gated by `npm run launch:readiness`, including pricing, billing, evidence/email, production, and provider canaries. `CANARY_BYPASS_TOKEN` must be set locally and as a Worker secret so the canary can confirm it bypassed cache and provider cooldown. The production canary checks recent monitoring, saved evidence, sent email digest signals, and provider-canary success. Slack and WhatsApp are not public GA delivery channels; do not require or advertise them for launch unless a future product decision reintroduces them with verified evidence.
 - Use `npm run provider:bakeoff:launch` when comparing discovery providers for launch. The default bakeoff is useful for debugging, but the launch gate requires `current_0509` to return fresh live Ad Library results, not API fallback or cached live results.
 - The old `src/` Next.js app remains in the repo as legacy reference material and is no longer the live production runtime.
 - Production note: as of 2026-06-15, `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains. Legacy `0509.in`, `www.0509.in`, and `api.0509.in` custom domains remain only to redirect old safe requests to the matching `.io` host while preserving signed provider callbacks.

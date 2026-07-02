@@ -134,7 +134,7 @@ describe("marketing route", () => {
             {
               slug: "proof_500",
               name: "Burst Pack",
-              creditLabel: "500 extra proof captures",
+              creditLabel: "500 extra change records",
               priceLabel: "$25",
               detail: "For a busy week.",
               creditQuantity: 500,
@@ -185,8 +185,10 @@ describe("marketing route", () => {
     expect(markup).not.toContain("INR");
     expect(markup).toContain("Recommended launch plan");
     expect(markup).toContain("Start with Starter");
-    expect(markup).toContain("Proof packs");
-    expect(markup).toContain("$0.05 per proof capture");
+    expect(markup).toContain("Record packs");
+    expect(markup).toContain("500 extra change records");
+    expect(markup).toContain("$0.05 per saved record");
+    expect(markup).not.toContain("500 extra proof captures");
     expect(markup).not.toContain("Dodo preview");
     expect(markup).not.toContain("Buyer currency");
     expect(markup).toContain("Choose monthly");

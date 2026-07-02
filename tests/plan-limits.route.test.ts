@@ -255,7 +255,7 @@ describe("collection limit", () => {
     );
     expect(result).toEqual({
       ok: true,
-      message: "Saved LinkedIn proof for Mamaearth.",
+      message: "Saved LinkedIn evidence for Mamaearth.",
     });
   });
 });
@@ -660,7 +660,7 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("220 of 250 evidence checks used in the current billing period.");
+    expect(markup).toContain("220 of 250 saved change records used in the current billing period.");
     expect(markup).not.toContain("evidence checks used in the last 30 days");
   });
 
@@ -757,11 +757,11 @@ describe("pricing CTA rendering", () => {
     const { default: CollectionsRoute } = await import("~/routes/app.collections");
     const markup = renderToStaticMarkup(createElement(CollectionsRoute));
 
-    expect(markup).toContain("External proof");
+    expect(markup).toContain("External evidence");
     expect(markup).toContain("add-external-proof");
     expect(markup).toContain("Google / YouTube");
     expect(markup).toContain("LinkedIn");
-    expect(markup).toContain("Save proof link");
+    expect(markup).toContain("Save evidence link");
   });
 
   it("keeps rendering legacy collection items without stored platforms", async () => {
@@ -880,7 +880,7 @@ describe("pricing CTA rendering", () => {
     const { default: CollectionsRoute } = await import("~/routes/app.collections");
     const markup = renderToStaticMarkup(createElement(CollectionsRoute));
 
-    expect(markup).toContain("Open proof");
+    expect(markup).toContain("Open evidence");
     expect(markup).toContain("https://www.linkedin.com/posts/mamaearth-campaign");
   });
 

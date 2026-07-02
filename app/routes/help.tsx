@@ -23,13 +23,13 @@ export default function HelpRoute() {
     <PublicDocShell
       kicker="Help"
       title="Get Five to Nine working for your team."
-      intro="The fastest path is one competitor, one watchlist, one proof capture, then one delivery channel."
+      intro="The fastest path is one competitor, one watchlist, one saved change record, then one delivery channel."
     >
       <PublicDocBlock title="Start here">
         <ol className="f9-numbered-guide">
           <li>Run a public search from the homepage or Search page.</li>
           <li>Create an account and add one competitor website.</li>
-          <li>Open the watchlist and refresh tracking to capture the first proof trail.</li>
+          <li>Open the watchlist and refresh tracking to save the first evidence trail.</li>
           <li>Review the digest page after the first monitored change or quiet check.</li>
         </ol>
       </PublicDocBlock>
@@ -45,7 +45,7 @@ export default function HelpRoute() {
 
       <PublicDocBlock title="Billing help">
         <p>
-          Plans and extra evidence-check packs use Dodo Payments. Signed-in customers can open the
+          Plans and extra record packs use Dodo Payments. Signed-in customers can open the
           billing portal from <Link to="/app/billing">Plan &amp; billing</Link> when their account has
           a linked Dodo customer id. Plan changes and cancellation stay backed by{" "}
           <Link to="/app/support?category=billing">signed-in support cases</Link>.

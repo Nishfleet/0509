@@ -1855,7 +1855,7 @@ describe("runCustomerAgentAction", () => {
     };
     expect(result).toMatchObject({
       status: "available",
-      boundary: "Returns existing proof-backed website, blog, and Substack observations only. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
+      boundary: "Returns existing source-backed website, blog, and Substack observations only. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
     });
     expect(result.supportedSources).toEqual(["blog", "substack", "web"]);
     expect(result.targets[0]?.sources).toEqual(["blog", "substack", "web"]);

@@ -30,39 +30,39 @@ describe("pricingPlans", () => {
     const [scout, starter, agency] = pricingPlans();
 
     expect(scout.features).toContain("3 active watchlists");
-    expect(scout.features).toContain("Weekly evidence-backed digest");
+    expect(scout.features).toContain("Weekly change brief with screenshots and links");
     expect(scout.features).toContain("Email digest delivery");
     expect(scout.features).not.toContain("Slack");
-    expect(scout.features).toContain("50 proof captures per month");
+    expect(scout.features).toContain("50 saved change records per month");
     expect(starter.features).toContain("10 active watchlists");
     expect(starter.features).toContain("Email delivery");
     expect(starter.features).not.toContain("Slack");
-    expect(starter.features).toContain("250 proof captures per month");
+    expect(starter.features).toContain("250 saved change records per month");
     expect(agency.features).toContain("75 active watchlists");
     expect(agency.features).not.toContain("Slack");
-    expect(agency.features).toContain("2,500 proof captures per month");
-    expect(agency.features).toContain("Priority nightly monitoring coverage");
-    expect(agency.features).toContain("Read-only API + MCP exports; owner-approved workflow actions");
-    expect(agency.features.filter((feature) => feature === "Daily and weekly evidence-backed digests")).toHaveLength(1);
+    expect(agency.features).toContain("2,500 saved change records per month");
+    expect(agency.features).toContain("Priority nightly review coverage");
+    expect(agency.features).toContain("Developer exports and workspace-approved workflow actions");
+    expect(agency.features.filter((feature) => feature === "Daily and weekly change briefs with screenshots and links")).toHaveLength(1);
     expect(agency.features.join("\n")).not.toContain("nightly queue");
   });
 
-  it("offers paid proof-capture bundles for temporary spikes", () => {
+  it("offers paid record packs for temporary spikes", () => {
     expect(usageBundles()).toEqual([
       expect.objectContaining({
         slug: "proof_500",
         priceLabel: "Pack price loading",
-        creditLabel: "500 extra proof captures",
+        creditLabel: "500 extra change records",
       }),
       expect.objectContaining({
         slug: "proof_2000",
         priceLabel: "Pack price loading",
-        creditLabel: "2,000 extra proof captures",
+        creditLabel: "2,000 extra change records",
       }),
       expect.objectContaining({
         slug: "proof_7500",
         priceLabel: "Pack price loading",
-        creditLabel: "7,500 extra proof captures",
+        creditLabel: "7,500 extra change records",
       }),
     ]);
   });

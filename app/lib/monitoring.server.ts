@@ -273,7 +273,7 @@ export async function runScheduledMonitoring(
 
     if (skippedForBudget > 0 && fanoutMode === "inline") {
       console.error(
-        `Scheduled monitoring hit its time budget with ${skippedForBudget} of ${watchlists.length} watchlists left unscanned; scan capacity must grow before more watchlists are added.`,
+        `Scheduled monitoring hit its time budget with ${skippedForBudget} of ${watchlists.length} watchlists left unchecked; review volume must be expanded before more watchlists are added.`,
       );
     }
   }
@@ -415,7 +415,7 @@ export async function sendCustomerAtRiskAlert(
 
   if ((options.skippedForBudget ?? 0) > 0) {
     lines.push(
-      `${options.skippedForBudget} watchlist(s) were SKIPPED last night because the scan window filled — capacity must grow before adding more watchlists (revive the Workflow path).`,
+      `${options.skippedForBudget} watchlist(s) were SKIPPED last night because the check window filled — review volume must be expanded before adding more watchlists (revive the Workflow path).`,
     );
   }
 
@@ -969,7 +969,7 @@ export async function runWatchlist(
         );
         await logMetaIntegrationStatus(env, {
           status: "degraded",
-          summary: "Commercial discovery failed and direct website proof did not complete.",
+          summary: "Commercial discovery failed and direct website evidence did not complete.",
           errorCode,
           errorMessage: details,
           metadata: {
@@ -1022,7 +1022,7 @@ export async function runWatchlist(
       await touchWatchlistScanned(env, watchlist.id);
       await logMetaIntegrationStatus(env, {
         status: "degraded",
-        summary: "Commercial discovery failed, but direct website proof still completed.",
+        summary: "Commercial discovery failed, but direct website evidence still completed.",
         errorCode,
         errorMessage: details,
         metadata: {
@@ -1879,7 +1879,7 @@ async function evaluateSelectiveProofCandidates(
           proofTargetId: proofTarget.id,
           status: proofDecision.skipReason,
           skipReason: proofDecision.skipReason,
-          failureReason: "Proof policy skipped the attempt.",
+          failureReason: "Evidence policy skipped the attempt.",
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         });
       }
@@ -1927,7 +1927,7 @@ async function evaluateSelectiveProofCandidates(
         proofTargetId: proofTarget.id,
         status: "failed",
         failureCode: "proof_capture_failed",
-        failureReason: "Landing page proof capture failed.",
+        failureReason: "Landing-page evidence check failed.",
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         idempotencyKey: proofRequestKey,
       });
@@ -2181,7 +2181,7 @@ async function evaluateDirectWebsiteProofCandidate(
       proofTargetId: proofTarget.id,
       status: "skipped_due_to_dedupe",
       skipReason: "skipped_due_to_dedupe",
-      failureReason: "Direct website proof was already requested recently.",
+      failureReason: "Direct website evidence was already requested recently.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
     });
     return emptyProofEvaluation(websiteUrl);
@@ -2195,7 +2195,7 @@ async function evaluateDirectWebsiteProofCandidate(
       proofTargetId: proofTarget.id,
       status: "skipped_due_to_rate_limit",
       skipReason: "skipped_due_to_rate_limit",
-      failureReason: "Direct website proof policy skipped the attempt.",
+      failureReason: "Direct website evidence policy skipped the attempt.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
     });
     return emptyProofEvaluation(websiteUrl);
@@ -2249,7 +2249,7 @@ async function evaluateDirectWebsiteProofCandidate(
       proofTargetId: proofTarget.id,
       status: "failed",
       failureCode: "direct_website_proof_capture_failed",
-      failureReason: "Competitor website proof capture failed.",
+      failureReason: "Competitor website evidence check failed.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: proofRequestKey,
     });

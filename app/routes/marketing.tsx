@@ -214,8 +214,8 @@ export function valueMathLabel(
 
 function planValueSummary(planId: PricingPlanSlug) {
   if (planId === "starter") return "10 competitors checked daily";
-  if (planId === "agency") return "75 competitors with client-ready proof";
-  return "3 competitors watched with proof";
+  if (planId === "agency") return "75 competitors with client-ready reports";
+  return "3 competitors watched with source history";
 }
 
 function bundleValueLabel(
@@ -225,14 +225,14 @@ function bundleValueLabel(
 ) {
   const price = preview?.usageBundles?.[bundleId];
   if (!Number.isFinite(price?.amount) || !Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
-    return "Proof packs never expire";
+    return "Record packs never expire";
   }
   const unit = formatMinorCurrency(
     Number(price?.amount) / Number(creditQuantity),
     price?.currency,
     { roundWhole: false },
   );
-  return unit ? `${unit} per proof capture` : "Proof packs never expire";
+  return unit ? `${unit} per saved record` : "Record packs never expire";
 }
 
 function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBundleSlug) {
@@ -349,7 +349,7 @@ export default function MarketingRoute() {
 
         <nav className="ld-nav-links" aria-label="Primary">
           <Link to={publicSearchTrialPath}>Live search</Link>
-          <a href="#demo">Proof loop</a>
+          <a href="#demo">Sample brief</a>
           <a href="#pricing">Pricing</a>
         </nav>
 
@@ -484,16 +484,16 @@ export default function MarketingRoute() {
           </button>
         </Form>
 
-        <div className="f9-hero-proof-actions" aria-label="Sample proof before signup">
+        <div className="f9-hero-proof-actions" aria-label="Sample brief before signup">
           <Link to={publicSearchTrialPath}>Try live search</Link>
-          <a href="#demo">Review sample proof loop</a>
-          <a href="/api/demo-proof?format=markdown">Open markdown proof</a>
+          <a href="#demo">Review sample brief</a>
+          <a href="/api/demo-proof?format=markdown">Open markdown brief</a>
         </div>
 
         <p className="ld-honest" role="note">
           <strong>Honest by design.</strong> The case above is a sample. Live results are always
           labeled fresh, recent, or sample — and Meta ads tracking stays marked beta until it
-          proves itself on your competitors. Live search is free, no account. Why
+          is reliable on your competitors. Live search is free, no account. Why
           &ldquo;0509&rdquo;? Five to Nine — we work while you sleep.
         </p>
       </section>
@@ -513,20 +513,20 @@ export default function MarketingRoute() {
 
       <section className="ld-proof" id="demo">
         <div className="ld-section-head">
-          <span className="ld-kicker">Sample proof loop</span>
-          <h2>See the proof shape before creating an account.</h2>
+          <span className="ld-kicker">Sample watch</span>
+          <h2>See the morning brief before creating an account.</h2>
           <p>
             This is sample data, not the live search result. It shows the buyer moment Five to
-            Nine is built around: one competitor, evidence trail, insight summary, digest preview,
+            Nine is built around: one competitor, source trail, insight summary, digest preview,
             and export.
           </p>
           <div className="ld-proof-actions">
             <a href="/api/demo-proof">View JSON</a>
-            <a href="/api/demo-proof?format=markdown">Markdown proof</a>
+            <a href="/api/demo-proof?format=markdown">Markdown brief</a>
           </div>
         </div>
 
-        <div className="ld-caseboard ld-reveal" aria-label="Sample Five to Nine proof trail">
+        <div className="ld-caseboard ld-reveal" aria-label="Sample Five to Nine evidence trail">
           <article className="ld-case-lead">
             <span className="ld-kicker">{demoProof.competitor.market}</span>
             <h3>{demoProof.competitor.name}</h3>
@@ -551,7 +551,7 @@ export default function MarketingRoute() {
                 <dd>{demoProof.digestPreview.priority}</dd>
               </div>
               <div>
-                <dt>Proof status</dt>
+                <dt>Source status</dt>
                 <dd>{demoProof.digestPreview.proofStatus}</dd>
               </div>
               <div>
@@ -570,7 +570,7 @@ export default function MarketingRoute() {
           </article>
 
           <article className="ld-case-card">
-            <span className="ld-kicker">Proof trail</span>
+            <span className="ld-kicker">Source trail</span>
             <ul className="ld-trail">
               {demoProof.proofTrail.map((item) => (
                 <li key={item.signal}>
@@ -637,7 +637,7 @@ export default function MarketingRoute() {
             something actually moved — and tells you what it checked when nothing did.
           </p>
         </div>
-        <div className="ld-quiet-grid ld-reveal" aria-label="Zero-noise proof points">
+        <div className="ld-quiet-grid ld-reveal" aria-label="Zero-noise monitoring points">
           {quietSignals.map((item) => (
             <article key={item.title}>
               <h3>{item.title}</h3>
@@ -663,15 +663,15 @@ export default function MarketingRoute() {
       <section className="f9-growth-pricing" id="pricing">
         <div className="ld-section-head">
           <span className="ld-kicker">Plans</span>
-          <h2>Daily competitor proof, priced to start now.</h2>
+          <h2>Daily competitor change alerts, priced to start now.</h2>
           <div className="ld-plan-summary" aria-label="Pricing summary">
             <span>Recommended launch plan</span>
             <strong>Start with Starter</strong>
-            <p>Daily proof-backed competitor monitoring for 10 competitors, plus daily and weekly digests.</p>
+            <p>Daily competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
-            Review live search and the sample proof loop first. Paid plans add account-gated
-            competitor research, watchlists, proof captures, saved collections, and clear caps. Save
+            Review live search and the sample watch first. Paid plans add saved competitor
+            research, watchlists, saved change records, saved collections, and clear caps. Save
             winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
           </p>
@@ -800,12 +800,12 @@ export default function MarketingRoute() {
           and we&rsquo;ll help you move.
         </p>
 
-        <div className="ld-bundles" aria-label="Proof packs">
+        <div className="ld-bundles" aria-label="Record packs">
           <div className="ld-bundles-head">
-            <span className="ld-kicker">Proof packs</span>
-            <h3>Extra proof when campaigns move fast.</h3>
+            <span className="ld-kicker">Record packs</span>
+            <h3>Extra records when campaigns move fast.</h3>
             <p>
-              Add proof captures for busy weeks or big campaigns without changing the team&rsquo;s
+              Add saved change records for busy weeks or big campaigns without changing the team&rsquo;s
               plan.
             </p>
           </div>
@@ -832,23 +832,23 @@ export default function MarketingRoute() {
           <h3>Common billing questions</h3>
           <dl className="proof-trail-list">
             <div>
-              <dt>What is a proof capture?</dt>
+              <dt>What is a saved change record?</dt>
               <dd>
-                Scheduled monitoring is included. A proof capture is used when we save a new
-                landing-page proof record with screenshot, page text, and the original link.
+                Scheduled monitoring is included. A saved change record is used when we store
+                screenshots, page text, and the original link for a landing-page update.
               </dd>
             </div>
             <div>
-              <dt>Do unused proof captures roll over?</dt>
+              <dt>Do unused records roll over?</dt>
               <dd>
-                Included monthly proof captures reset on your subscription anniversary and do not
-                roll over. Proof packs never expire.
+                Included monthly records reset on your subscription anniversary and do not roll
+                over. Record packs never expire.
               </dd>
             </div>
             <div>
               <dt>What changes on Agency?</dt>
               <dd>
-                Agency includes 75 watchlists with daily scans, priority monitoring coverage,
+                Agency includes 75 watchlists with daily reviews, priority monitoring coverage,
                 client-ready reports, shared report branding, developer access, and three team
                 seats. We keep monitoring coverage visible as account volume grows.
               </dd>

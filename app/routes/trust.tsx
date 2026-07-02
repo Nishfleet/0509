@@ -36,15 +36,15 @@ export default function TrustRoute() {
       <PublicDocBlock title="Data handled">
         <p>
           Five to Nine stores account records, saved searches, watchlists, collections, notes, reports,
-          share links, delivery settings, API keys, proof captures, landing-page snapshots,
+          share links, delivery settings, API keys, saved change records, landing-page snapshots,
           source URLs, delivery attempts, and service logs needed to run the product.
         </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Retention and backups">
         <p>
-          Product data lives in Cloudflare-managed storage, with optional artifact storage for proof
-          captures. Retention cleanup runs on bounded scheduled sweeps. Backup validation and restore
+          Product data lives in Cloudflare-managed storage, with optional artifact storage for saved
+          screenshots and page records. Retention cleanup runs on bounded scheduled sweeps. Backup validation and restore
           drills remain owner-operated until recorded as verified. The public health probe is{" "}
           <code>https://0509.io/api/health</code> — it returns <code>{`{"status":"ok"}`}</code> without
           touching customer records. Account deletion, correction, and export help are handled through support.

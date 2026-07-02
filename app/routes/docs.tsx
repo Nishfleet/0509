@@ -37,7 +37,7 @@ export default function DocsRoute() {
         <ul className="f9-doc-list">
           <li>Public competitor ad search from a website.</li>
           <li>Saved watchlists, collections, digests, reports, share links, and exports.</li>
-          <li>Checkout, receipts, proof-credit packs, and billing support.</li>
+          <li>Checkout, receipts, record packs, and billing support.</li>
           <li>Email delivery for digests and high-priority change alerts.</li>
           <li>Rate limits, plan caps, evidence-usage warnings, and service status.</li>
         </ul>

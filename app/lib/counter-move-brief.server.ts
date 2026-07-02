@@ -86,8 +86,8 @@ export function buildCounterMoveBrief(input: {
     targetLabel: input.watchlist.targetLabel,
     generatedAt,
     summary: moves.length > 0
-      ? `${moves.length} proof-backed move${moves.length === 1 ? "" : "s"} to review for ${input.watchlist.targetLabel}.`
-      : `No proof-backed moves are ready for ${input.watchlist.targetLabel}.`,
+      ? `${moves.length} source-backed move${moves.length === 1 ? "" : "s"} to review for ${input.watchlist.targetLabel}.`
+      : `No source-backed moves are ready for ${input.watchlist.targetLabel}.`,
     moves,
     workflow,
   };
@@ -187,7 +187,7 @@ function counterMoveForEvent(event: WatchEventRecord) {
     case "ad_inactive":
       return "Check whether the paused campaign was replaced; avoid reacting until the next active creative or offer appears.";
     default:
-      return "Review the proof, decide whether this changes your next campaign decision, and keep the response reversible.";
+      return "Review the evidence, decide whether this changes your next campaign decision, and keep the response reversible.";
   }
 }
 

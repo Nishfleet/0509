@@ -256,7 +256,8 @@ describe("/share/:token route", () => {
         expect.objectContaining({
           id: "item-1",
           proofStatus: "verified_proof",
-          sourceTypeLabel: "Proof snapshot",
+          proofStatusLabel: "Verified evidence",
+          sourceTypeLabel: "Saved evidence",
         }),
       ],
     });
@@ -365,9 +366,9 @@ describe("/share/:token route", () => {
                 priorityScore: 82,
                 priorityBand: "high",
                 recommendedAction: "Review",
-                proofTrail: "Proof capture",
-                proofStatusLabel: "Verified proof",
-                sourceTypeLabel: "Proof snapshot",
+                proofTrail: "Evidence capture",
+                proofStatusLabel: "Verified evidence",
+                sourceTypeLabel: "Saved evidence",
                 sourceUrl: "javascript:alert(1)",
                 metaAdId: null,
                 delivery: { recipientEmail: "owner@example.com" },

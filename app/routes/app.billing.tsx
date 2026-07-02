@@ -662,14 +662,14 @@ export default function BillingRoute() {
             </span>
           </div>
           <div className="f9-work-row">
-            <strong>Proof captures (this month)</strong>
+            <strong>Saved change records (this month)</strong>
             <span>
               {data.proofUsage.limit > 0 ? (
                 <>
                   {data.proofUsage.includedUsed ?? data.proofUsage.used} of{" "}
                   {data.proofUsage.baseLimit} included used
                   {data.proofUsage.topUpRemaining && data.proofUsage.topUpRemaining > 0
-                    ? ` · ${data.proofUsage.topUpRemaining} purchased proof captures remaining`
+                    ? ` · ${data.proofUsage.topUpRemaining} purchased records remaining`
                     : ""}
                   {data.proofUsage.periodStart && data.proofUsage.periodEnd ? (
                     <>
@@ -697,7 +697,7 @@ export default function BillingRoute() {
             <div className="f9-work-row" key={`${grant.skuSlug ?? "grant"}-${grant.grantedAt}`}>
               <strong>Purchased pack</strong>
               <span>
-                {grant.credits} proof captures from {topUpPackName(grant.skuSlug, grant.credits)} — never expire
+                {grant.credits} saved change records from {topUpPackName(grant.skuSlug, grant.credits)} — never expire
               </span>
             </div>
           ))}
@@ -711,10 +711,10 @@ export default function BillingRoute() {
       <article className="f9-app-panel" id="top-ups">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Proof packs</span>
+            <span className="f9-app-kicker">Record packs</span>
             <h2>Top up busy weeks without changing plans</h2>
             <p className="f9-muted-copy">
-              Purchased proof packs never expire. They add proof-capture capacity only; they do not
+              Purchased record packs never expire. They add saved-record volume only; they do not
               change watchlist limits, cadence, or plan features.
             </p>
           </div>
@@ -781,7 +781,7 @@ export default function BillingRoute() {
               <span>
                   Open Dodo's hosted portal for card and invoice tasks. Use the plan cards above
                   to switch plans or billing cycles through Dodo; use support for cancellation
-                  until portal cancellation proof is complete.{" "}
+                  until portal cancellation is fully available.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
                   <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
                     Open billing portal

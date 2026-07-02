@@ -59,7 +59,7 @@ export function buildLifecycleNudges(input: {
     nudges.push({
       id: "first_competitor",
       title: "No first watchlist yet",
-      detail: "Add one competitor so the first sweep and proof trail can start.",
+      detail: "Add one competitor so the first sweep and source trail can start.",
       href: "/search",
       priority: "high",
     });
@@ -74,7 +74,7 @@ export function buildLifecycleNudges(input: {
   } else if (counts.successfulProofs === 0) {
     nudges.push({
       id: "first_proof",
-      title: "First proof is missing",
+      title: "First evidence is missing",
       detail: "Refresh an active watchlist to attach landing-page evidence before sharing the account.",
       href: "/app/watchlists",
       priority: "high",
@@ -95,7 +95,7 @@ export function buildLifecycleNudges(input: {
   if (delivery?.status === "needs_proof") {
     nudges.push({
       id: "delivery_proof",
-      title: "Delivery proof is missing",
+      title: "Delivery check is missing",
       detail: "A destination exists but has no successful delivery yet.",
       href: "/app/sources",
       priority: "high",

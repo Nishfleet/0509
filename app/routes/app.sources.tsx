@@ -525,7 +525,7 @@ export default function AppSourcesRoute() {
         </div>
 
         <p className="f9-muted-copy">
-          API keys can read saved collections, watchlists, digests, proof trails, and exports for this account.
+          API keys can read saved collections, watchlists, digests, source trails, and exports for this account.
           Write-enabled keys can run approved account actions only for trusted workflows. See the{" "}
           <a href="/api/docs" rel="noreferrer" target="_blank">
             API documentation
@@ -607,7 +607,7 @@ export default function AppSourcesRoute() {
                 <input
                   autoComplete="off"
                   name="apiKeyName"
-                  placeholder="Zapier, internal script, Claude…"
+                  placeholder="Zapier, workflow script, assistant..."
                   type="text"
                 />
               </label>
@@ -635,7 +635,7 @@ export default function AppSourcesRoute() {
               </div>
             </dl>
             <p className="f9-muted-copy">
-              This API can read saved manual external proof links in collections. Write-enabled keys can update
+              This API can read saved manual external evidence links in collections. Write-enabled keys can update
               approved account resources, but this does not add automated TikTok, Google, LinkedIn, or Pinterest
               ingestion.
             </p>
