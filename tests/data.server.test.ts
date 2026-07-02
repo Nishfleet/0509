@@ -15,6 +15,7 @@ import {
   createDeliveryAttempt,
   createDiscoveryFetchLog,
   createAgentActionAudit,
+  createEventCandidate,
   createLandingPageSnapshot,
   createProofCapture,
   createSupportCase,
@@ -2704,6 +2705,166 @@ describe("createWatchEvent", () => {
     expect(statement?.bindings).toContain("confirmed");
     expect(statement?.bindings).toContain(0);
   });
+
+  it("reuses an existing proof-backed watch event for the same proof capture", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM watch_event",
+        results: [{ id: "event-existing" }],
+      },
+    ]);
+
+    const eventId = await createWatchEvent(
+      { DB: mock.db } as never,
+      {
+        watchlistId: "watch-1",
+        runId: "run-1",
+        eventType: "landing_page_cta_changed",
+        adId: "meta-boat-1",
+        baselineFromRunId: null,
+        candidateId: "candidate-1",
+        proofCaptureId: "proof-1",
+        title: "CTA changed",
+        summary: "The landing page CTA changed.",
+        metadata: {},
+      },
+    );
+
+    expect(eventId).toBe("event-existing");
+    expect(mock.statements.some((entry) => entry.sql.includes("INSERT INTO watch_event"))).toBe(false);
+  });
+
+  it("recovers a proof-backed watch event inserted by a concurrent writer", async () => {
+    let lookupCount = 0;
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind() {
+            return {
+              async run() {
+                if (sql.includes("INSERT INTO watch_event")) {
+                  throw new Error(
+                    "D1_ERROR: UNIQUE constraint failed: watch_event.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)",
+                  );
+                }
+                return { success: true };
+              },
+              async all<T>() {
+                if (sql.includes("FROM watch_event")) {
+                  lookupCount += 1;
+                  return {
+                    results: (lookupCount === 1 ? [] : [{ id: "event-existing" }]) as T[],
+                  };
+                }
+                return { results: [] as T[] };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await expect(
+      createWatchEvent(
+        { DB: db } as never,
+        {
+          watchlistId: "watch-1",
+          runId: "run-1",
+          eventType: "landing_page_cta_changed",
+          adId: "meta-boat-1",
+          baselineFromRunId: null,
+          candidateId: "candidate-1",
+          proofCaptureId: "proof-1",
+          title: "CTA changed",
+          summary: "The landing page CTA changed.",
+          metadata: {},
+        },
+      ),
+    ).resolves.toBe("event-existing");
+    expect(lookupCount).toBe(2);
+  });
+});
+
+describe("createEventCandidate", () => {
+  it("reuses an existing proof-backed event candidate for the same proof target", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM event_candidate",
+        results: [{ id: "candidate-existing" }],
+      },
+    ]);
+
+    const candidateId = await createEventCandidate(
+      { DB: mock.db } as never,
+      {
+        watchlistId: "watch-1",
+        runId: "run-1",
+        eventType: "landing_page_cta_changed",
+        status: "confirmed",
+        importanceScore: 7,
+        adId: "meta-boat-1",
+        proofTargetId: "target-1",
+        title: "CTA changed",
+        summary: "The landing page CTA changed.",
+        metadata: {},
+        proofRequired: true,
+      },
+    );
+
+    expect(candidateId).toBe("candidate-existing");
+    expect(mock.statements.some((entry) => entry.sql.includes("INSERT INTO event_candidate"))).toBe(false);
+  });
+
+  it("recovers a proof-backed event candidate inserted by a concurrent writer", async () => {
+    let lookupCount = 0;
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind() {
+            return {
+              async run() {
+                if (sql.includes("INSERT INTO event_candidate")) {
+                  throw new Error(
+                    "D1_ERROR: UNIQUE constraint failed: event_candidate.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)",
+                  );
+                }
+                return { success: true };
+              },
+              async all<T>() {
+                if (sql.includes("FROM event_candidate")) {
+                  lookupCount += 1;
+                  return {
+                    results: (lookupCount === 1 ? [] : [{ id: "candidate-existing" }]) as T[],
+                  };
+                }
+                return { results: [] as T[] };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await expect(
+      createEventCandidate(
+        { DB: db } as never,
+        {
+          watchlistId: "watch-1",
+          runId: "run-1",
+          eventType: "landing_page_cta_changed",
+          status: "confirmed",
+          importanceScore: 7,
+          adId: "meta-boat-1",
+          proofTargetId: "target-1",
+          title: "CTA changed",
+          summary: "The landing page CTA changed.",
+          metadata: {},
+          proofRequired: true,
+        },
+      ),
+    ).resolves.toBe("candidate-existing");
+    expect(lookupCount).toBe(2);
+  });
 });
 
 describe("discovery state persistence", () => {
@@ -3013,6 +3174,269 @@ describe("createProofCapture", () => {
       ),
     ).toBe(true);
     expect(statement?.bindings).toContain("capture:watch-1:meta-boat-1");
+  });
+
+  it("reuses an existing idempotent proof capture under foreign-key enforcement", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);
+        CREATE TABLE watchlist (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+        );
+        CREATE TABLE ad (id TEXT PRIMARY KEY NOT NULL);
+        CREATE TABLE proof_target (
+          id TEXT PRIMARY KEY NOT NULL,
+          watchlist_id TEXT NOT NULL,
+          ad_id TEXT,
+          landing_page_url TEXT,
+          canonical_page_identity TEXT NOT NULL,
+          proof_target_identity TEXT NOT NULL,
+          last_capture_attempt_at TEXT,
+          last_successful_proof_at TEXT,
+          last_successful_capture_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (watchlist_id) REFERENCES watchlist(id) ON DELETE CASCADE,
+          FOREIGN KEY (ad_id) REFERENCES ad(id) ON DELETE SET NULL
+        );
+        CREATE UNIQUE INDEX idx_proof_target_identity
+          ON proof_target(proof_target_identity);
+        CREATE TABLE proof_capture (
+          id TEXT PRIMARY KEY NOT NULL,
+          proof_target_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          skip_reason TEXT,
+          failure_code TEXT,
+          failure_reason TEXT,
+          screenshot_artifact_key TEXT,
+          html_artifact_key TEXT,
+          extracted_fields_json TEXT NOT NULL DEFAULT '{}',
+          field_confidence_json TEXT,
+          extraction_warnings_json TEXT,
+          capture_metadata_json TEXT NOT NULL DEFAULT '{}',
+          render_mode TEXT NOT NULL DEFAULT 'mobile',
+          device_profile TEXT NOT NULL DEFAULT 'mobile_default',
+          extractor_version TEXT NOT NULL,
+          idempotency_key TEXT,
+          attempted_at TEXT NOT NULL,
+          succeeded_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (proof_target_id) REFERENCES proof_target(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX idx_proof_capture_idempotency
+          ON proof_capture(idempotency_key);
+        INSERT INTO user (id) VALUES ('user-1');
+        INSERT INTO watchlist (id, user_id) VALUES ('watch-1', 'user-1');
+        INSERT INTO ad (id) VALUES ('meta-boat-1');
+      `);
+
+      const target = await upsertProofTarget(
+        { DB: sqlite.db } as never,
+        {
+          watchlistId: "watch-1",
+          adId: "meta-boat-1",
+          landingPageUrl: "https://example.com/glow",
+          canonicalPageIdentity: "example.com/glow",
+          proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+        },
+      );
+      expect(target?.id).toEqual(expect.any(String));
+
+      const firstId = await createProofCapture(
+        { DB: sqlite.db } as never,
+        {
+          proofTargetId: target!.id,
+          status: "succeeded",
+          extractorVersion: "proof-extractor-v1",
+          idempotencyKey: "capture:watch-1:meta-boat-1",
+          attemptedAt: "2026-04-18T16:00:00.000Z",
+          succeededAt: "2026-04-18T16:00:05.000Z",
+        },
+      );
+      const secondId = await createProofCapture(
+        { DB: sqlite.db } as never,
+        {
+          proofTargetId: target!.id,
+          status: "succeeded",
+          extractorVersion: "proof-extractor-v1",
+          idempotencyKey: "capture:watch-1:meta-boat-1",
+          attemptedAt: "2026-04-18T16:00:00.000Z",
+          succeededAt: "2026-04-18T16:00:05.000Z",
+        },
+      );
+      const row = sqlite.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM proof_capture WHERE idempotency_key = ?")
+        .get("capture:watch-1:meta-boat-1") as { count: number };
+
+      expect(secondId).toBe(firstId);
+      expect(row.count).toBe(1);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("does not reuse a successful idempotent proof capture with different proof payload", async () => {
+    const existingCapture = {
+      id: "proof-existing",
+      proof_target_id: "target-1",
+      status: "succeeded",
+      skip_reason: null,
+      failure_code: null,
+      failure_reason: null,
+      screenshot_artifact_key: null,
+      html_artifact_key: null,
+      extracted_fields_json: "{}",
+      field_confidence_json: "{}",
+      extraction_warnings_json: "[]",
+      capture_metadata_json: "{}",
+      render_mode: "mobile",
+      device_profile: "mobile_default",
+      extractor_version: "proof-extractor-v1",
+      idempotency_key: "capture:payload-mismatch",
+      attempted_at: "2026-04-18T16:00:00.000Z",
+      succeeded_at: "2026-04-18T16:00:05.000Z",
+      created_at: "2026-04-18T16:00:00.000Z",
+      updated_at: "2026-04-18T16:00:00.000Z",
+    };
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM proof_capture",
+        results: [existingCapture],
+      },
+    ]);
+
+    await expect(
+      createProofCapture(
+        { DB: mock.db } as never,
+        {
+          proofTargetId: "target-1",
+          status: "succeeded",
+          extractorVersion: "proof-extractor-v1",
+          idempotencyKey: "capture:payload-mismatch",
+          attemptedAt: "2026-04-18T16:01:00.000Z",
+          succeededAt: "2026-04-18T16:01:05.000Z",
+        },
+      ),
+    ).rejects.toThrow(/incompatible proof payload/);
+    expect(mock.statements.some((entry) => entry.sql.includes("INSERT INTO proof_capture"))).toBe(false);
+  });
+
+  it("recovers an idempotent proof capture created by a concurrent writer", async () => {
+    let lookupCount = 0;
+    const existingCapture = {
+      id: "proof-existing",
+      proof_target_id: "target-1",
+      status: "succeeded",
+      skip_reason: null,
+      failure_code: null,
+      failure_reason: null,
+      screenshot_artifact_key: null,
+      html_artifact_key: null,
+      extracted_fields_json: "{}",
+      field_confidence_json: "{}",
+      extraction_warnings_json: "[]",
+      capture_metadata_json: "{}",
+      render_mode: "mobile",
+      device_profile: "mobile_default",
+      extractor_version: "proof-extractor-v1",
+      idempotency_key: "capture:race",
+      attempted_at: "2026-04-18T16:00:00.000Z",
+      succeeded_at: "2026-04-18T16:00:05.000Z",
+      created_at: "2026-04-18T16:00:00.000Z",
+      updated_at: "2026-04-18T16:00:00.000Z",
+    };
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind() {
+            return {
+              async run() {
+                if (sql.includes("INSERT INTO proof_capture")) {
+                  throw new Error(
+                    "D1_ERROR: UNIQUE constraint failed: proof_capture.idempotency_key: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)",
+                  );
+                }
+                return { success: true };
+              },
+              async all<T>() {
+                if (sql.includes("FROM proof_capture") && sql.includes("idempotency_key")) {
+                  lookupCount += 1;
+                  return {
+                    results: (lookupCount === 1 ? [] : [existingCapture]) as T[],
+                  };
+                }
+                return { results: [] as T[] };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await expect(
+      createProofCapture(
+        { DB: db } as never,
+        {
+          proofTargetId: "target-1",
+          status: "succeeded",
+          extractorVersion: "proof-extractor-v1",
+          idempotencyKey: "capture:race",
+          attemptedAt: "2026-04-18T16:00:00.000Z",
+          succeededAt: "2026-04-18T16:00:05.000Z",
+        },
+      ),
+    ).resolves.toBe("proof-existing");
+    expect(lookupCount).toBe(2);
+  });
+
+  it("does not reuse a failed idempotent proof capture for a later success", async () => {
+    const failedCapture = {
+      id: "proof-failed",
+      proof_target_id: "target-1",
+      status: "failed",
+      skip_reason: null,
+      failure_code: "proof_capture_failed",
+      failure_reason: "Landing page proof capture failed.",
+      screenshot_artifact_key: null,
+      html_artifact_key: null,
+      extracted_fields_json: "{}",
+      field_confidence_json: "{}",
+      extraction_warnings_json: "[]",
+      capture_metadata_json: "{}",
+      render_mode: "mobile",
+      device_profile: "mobile_default",
+      extractor_version: "proof-extractor-v1",
+      idempotency_key: "capture:failed-then-success",
+      attempted_at: "2026-04-18T16:00:00.000Z",
+      succeeded_at: null,
+      created_at: "2026-04-18T16:00:00.000Z",
+      updated_at: "2026-04-18T16:00:00.000Z",
+    };
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM proof_capture",
+        results: [failedCapture],
+      },
+    ]);
+
+    await expect(
+      createProofCapture(
+        { DB: mock.db } as never,
+        {
+          proofTargetId: "target-1",
+          status: "succeeded",
+          extractorVersion: "proof-extractor-v1",
+          idempotencyKey: "capture:failed-then-success",
+          attemptedAt: "2026-04-18T16:01:00.000Z",
+          succeededAt: "2026-04-18T16:01:05.000Z",
+        },
+      ),
+    ).rejects.toThrow(/incompatible status/);
+    expect(mock.statements.some((entry) => entry.sql.includes("INSERT INTO proof_capture"))).toBe(false);
   });
 });
 

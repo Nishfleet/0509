@@ -59,6 +59,15 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+export function isEvidenceUsageStorageUnavailableError(message: string) {
+  return (
+    /D1 binding/i.test(message) ||
+    /no such table:\s*(?:main\.)?(?:evidence_usage_period|evidence_usage_reservation|evidence_top_up_grant|evidence_top_up_adjustment|evidence_top_up_ledger_entry|proof_usage_credit|proof_usage_credit_migration)\b/i.test(
+      message,
+    )
+  );
+}
+
 async function readWorkspacePlanFamily(env: AppEnv, workspaceUserId: string): Promise<PlanFamily> {
   return getUserPlan(env, workspaceUserId);
 }
@@ -689,7 +698,7 @@ export async function tryReserveEvidenceForProofCapture(
     return await reserveEvidenceForProofCapture(env, input);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/evidence_usage|evidence_top_up|no such table|D1 binding/i.test(message)) {
+    if (isEvidenceUsageStorageUnavailableError(message)) {
       return null;
     }
     throw error;
@@ -716,7 +725,7 @@ export async function tryReleaseEvidenceForProofCapture(
     await releaseEvidenceReservation(env, logicalOperationKey);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!/evidence_usage|no such table/i.test(message)) {
+    if (!isEvidenceUsageStorageUnavailableError(message)) {
       throw error;
     }
   }
@@ -731,7 +740,7 @@ export async function tryFinalizeEvidenceForProofCapture(
     await finalizeEvidenceForProofCapture(env, logicalOperationKey, outcome);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!/evidence_usage|no such table/i.test(message)) {
+    if (!isEvidenceUsageStorageUnavailableError(message)) {
       throw error;
     }
   }
