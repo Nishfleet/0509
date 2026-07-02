@@ -7,12 +7,13 @@ function pricingPreview(overrides: Record<string, unknown> = {}) {
     monthly: { display: "$49/mo", currency: "USD", billingCountry: country },
     yearly: { display: "$392/yr", currency: "USD", billingCountry: country },
   });
-  return {
+  const base = {
     available: true,
     country: "US",
     prices: {
       scout: planPrice(),
       starter: planPrice(),
+      agency: planPrice(),
     },
     annualValidation: {
       scout: {
@@ -33,13 +34,46 @@ function pricingPreview(overrides: Record<string, unknown> = {}) {
         currency: "USD",
         billingCountry: "US",
       },
+      agency: {
+        valid: true,
+        reason: "valid_4_months_free",
+        monthlyAmount: 4900,
+        annualAmount: 39200,
+        expectedAnnualAmount: 39200,
+        currency: "USD",
+        billingCountry: "US",
+      },
     },
     usageBundles: {
       proof_500: { display: "$25", currency: "USD", billingCountry: "US" },
       proof_2000: { display: "$80", currency: "USD", billingCountry: "US" },
       proof_7500: { display: "$240", currency: "USD", billingCountry: "US" },
     },
+    commercialLaunch: {
+      scoutSaleOpen: true,
+      starterSaleOpen: true,
+      agencySaleOpen: true,
+    },
+  };
+  return {
+    ...base,
     ...overrides,
+    prices: {
+      ...base.prices,
+      ...((overrides.prices as typeof base.prices | undefined) ?? {}),
+    },
+    annualValidation: {
+      ...base.annualValidation,
+      ...((overrides.annualValidation as typeof base.annualValidation | undefined) ?? {}),
+    },
+    usageBundles: {
+      ...base.usageBundles,
+      ...((overrides.usageBundles as typeof base.usageBundles | undefined) ?? {}),
+    },
+    commercialLaunch: {
+      ...base.commercialLaunch,
+      ...((overrides.commercialLaunch as typeof base.commercialLaunch | undefined) ?? {}),
+    },
   };
 }
 
@@ -56,11 +90,43 @@ describe("Dodo pricing canary script", () => {
     expect(result.planValidations).toEqual([
       expect.objectContaining({ plan: "scout", ok: true }),
       expect.objectContaining({ plan: "starter", ok: true }),
+      expect.objectContaining({ plan: "agency", ok: true }),
     ]);
     expect(result.topUpValidations).toEqual([
       expect.objectContaining({ bundle: "proof_500", ok: true }),
       expect.objectContaining({ bundle: "proof_2000", ok: true }),
       expect.objectContaining({ bundle: "proof_7500", ok: true }),
+    ]);
+  });
+
+  it("skips Agency validation when the commercial launch gate is closed", () => {
+    const result = validatePricingPreviewBody({
+      preview: pricingPreview({
+        commercialLaunch: {
+          agencySaleOpen: false,
+        },
+        prices: {
+          agency: {
+            monthly: null,
+            yearly: null,
+          },
+        },
+        annualValidation: {
+          agency: {
+            valid: false,
+            reason: "missing_price",
+          },
+        },
+      }),
+      requestedCountry: "US",
+      status: 200,
+      responseOk: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.planValidations).toEqual([
+      expect.objectContaining({ plan: "scout", ok: true }),
+      expect.objectContaining({ plan: "starter", ok: true }),
     ]);
   });
 
