@@ -107,7 +107,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const plan = billingInfo.plan;
   const hasPaymentIssue =
     plan !== "free" &&
-    (billingInfo.dodoStatus === "subscription.failed" ||
+    (billingInfo.dodoStatus === "payment.failed" ||
+      billingInfo.dodoStatus === "subscription.failed" ||
       billingInfo.dodoStatus === "subscription.on_hold");
   const overnightSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const activeWatchlistsForEvents = watchlists.filter((watchlist) => watchlist.isActive);

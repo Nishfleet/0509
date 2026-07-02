@@ -35,14 +35,14 @@ Slack advisories may appear on private readiness views, but they are not GA bloc
 
 ## Billing and portal
 
-### Enable Dodo customer subscription updates / portal
+### Verify Dodo plan switching and portal cancellation
 
-**Status:** PARTIAL — PRODUCT COLLECTION CONFIGURED; DASHBOARD TOGGLE STILL NEEDS CONFIRMATION
+**Status:** REPO CONFIGURED — INTERNAL PROVIDER SMOKE STILL NEEDED
 
 1. Open the Dodo Payments dashboard for the live 0509 brand.
 2. Done: the live Scout/Starter monthly and annual subscription products are grouped in the Five to Nine Product Collection.
-3. Enable **Allow Subscription Updates** under subscription settings.
-4. Confirm `/app/billing` → **Open billing portal** loads, plan changes are allowed between that Product Collection, and cancellation is available from subscription details.
+3. After deploy, use an internal linked paid subscription to switch a Scout/Starter plan or billing cycle from `/app/billing`.
+4. Confirm the signed Dodo webhook updates the account, then confirm cancellation is available from hosted portal subscription details.
 
 ## Data and observability
 

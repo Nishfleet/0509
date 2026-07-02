@@ -8,7 +8,7 @@ Five to Nine is GA-ready on the ops/delivery lane when **email** proof is green,
 
 The core app is real: public competitor search, authenticated workspace, watchlists, collections, digests, reports, share/export flows, operator health, Dodo-backed pricing/checkout, billing webhooks, email delivery, proof-first monitoring, workspace readiness, and narrow audited API/MCP agent actions all exist.
 
-Remaining owner gates outside this repo: Dodo **Allow Subscription Updates** dashboard confirmation, first uptime workflow run and alert-routing proof or UptimeRobot confirmation, GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, next-window Agency scan-health monitoring, and Cloudflare Email dashboard visibility.
+Remaining owner gates outside this repo: one internal Dodo plan-change/cancellation smoke after deploy, first uptime workflow run and alert-routing proof or UptimeRobot confirmation, GitHub Cloudflare secrets plus first scheduled backup run, Presence local workspace smoke, next-window Agency scan-health monitoring, and Cloudflare Email dashboard visibility.
 
 The public `/status` page summarizes coarse launch posture without rendering account activity, aggregate counts, or private canary evidence. Detailed monitoring, proof-capture, digest, email, dormant-channel advisories, Dodo, and uptime proof stays in private launch checks and signed-in operational views.
 
@@ -74,11 +74,11 @@ Do not add Slack smoke targets for GA. Re-enable Slack only through a separate v
 
 WhatsApp is not launch-scoped until the provider/customer/webhook lane is deliberately configured. Aggregate review found stored but not validated WhatsApp target/config rows; preserve them unless owner approves a backup-backed anonymization or cleanup, and keep them non-claimable.
 
-## Dodo Portal Manual Blocker
+## Dodo Billing Smoke
 
-Dodo customer portal sessions are wired in `/app/billing`, and the live Scout/Starter monthly and annual subscription products are now grouped into the Five to Nine Product Collection. Dodo still needs **Allow Subscription Updates** enabled before customers can change plans without emailing support. Cancellation also needs a separate portal check from subscription details.
+Dodo customer portal sessions are wired in `/app/billing`, and the live Scout/Starter monthly and annual subscription products are grouped into the Five to Nine Product Collection. Plan switching now uses Dodo's documented subscription plan-change preview/change endpoints from the in-app billing cards instead of depending on the portal subscription-update setting.
 
-Required manual step: Dodo dashboard → Settings → Subscriptions → enable **Allow Subscription Updates**; then confirm plan changes and cancellation in an internal customer portal session.
+Required manual step after deploy: use an internal linked paid subscription to switch a Scout/Starter plan or billing cycle from `/app/billing`, confirm Dodo sends the signed webhook and the account updates, then confirm cancellation remains available from the hosted portal subscription details.
 
 ## Uptime Monitoring Status
 
@@ -111,4 +111,4 @@ Use this framing for the first customer:
 
 ## Next Slice
 
-Confirm the uptime health workflow's first scheduled run and alert path or UptimeRobot on `/api/health`, confirm the Dodo subscription-update portal setting, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.
+Confirm the uptime health workflow's first scheduled run and alert path or UptimeRobot on `/api/health`, complete one internal Dodo plan-change/cancellation smoke after deploy, add GitHub backup secrets and observe the first scheduled backup object, complete the Presence internal smoke, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, then rerun `npm run canary:proof` and `npm run canary:prod`.
