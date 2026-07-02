@@ -48,7 +48,7 @@ const tickerEvents = [
   ["02:14", "New Meta ad set — third repeat of the routine-first hook", "ad library"],
   ["03:47", "Pricing page — plan renamed, anchor price added", "screenshot saved"],
   ["04:58", "Lead form appeared on the campaign landing page", "page text + link"],
-  ["05:09", "Morning brief delivered — 3 changes, 9 pieces of evidence", "sample watch"],
+  ["05:09", "Morning brief delivered — 3 changes, 9 pieces of evidence", "sample brief"],
 ] as const;
 
 const howSteps = [
@@ -668,7 +668,7 @@ export default function MarketingRoute() {
             <p>Daily competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
-            Review live search and the sample watch first. Paid plans add saved competitor
+            Review live search and the sample brief first. Paid plans add saved competitor
             research, watchlists, saved change records, saved collections, and clear caps. Save
             winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
