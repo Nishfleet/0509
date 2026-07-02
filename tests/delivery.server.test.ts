@@ -155,7 +155,7 @@ describe("deliverWeeklyDigest", () => {
       }),
     });
     expect(emailSendPayload(sendMock).html).toContain("Unsubscribe");
-    expect(emailSendPayload(sendMock).html).toContain("Verified proof");
+    expect(emailSendPayload(sendMock).html).toContain("Verified evidence");
     expect(emailSendPayload(sendMock).text).toContain(
       "View full digest: https://app.0509.test/app/digests?digest=digest-1",
     );

@@ -30,8 +30,8 @@ export function emptyInsightDepthSummary(): InsightDepthSummary {
   return {
     topHooks: [{ label: "Pending", count: 0, detail: "No repeated hooks yet." }],
     mediaMix: [{ label: "Pending", count: 0, detail: "No channel mix yet." }],
-    campaignDurations: [{ label: "Pending", count: 0, detail: "No duration proof yet." }],
-    metricProof: [{ label: "Pending", count: 0, detail: "No spend, reach, or impression proof yet." }],
+    campaignDurations: [{ label: "Pending", count: 0, detail: "No duration evidence yet." }],
+    metricProof: [{ label: "Pending", count: 0, detail: "No spend, reach, or impression evidence yet." }],
     creativeTimeline: [],
     landingPageHistory: [],
   };
@@ -99,7 +99,7 @@ export function buildCollectionInsightDepth(items: CollectionItemRecord[]): Insi
       lastSeenAt: lastObservedAtForAd(item),
       active: item.ad.active,
       timestamp: item.ad.lastSeenAt ?? item.ad.firstSeenAt ?? item.createdAt,
-      detail: item.ad.offer || item.ad.previewHeadline || item.note || "Saved proof",
+      detail: item.ad.offer || item.ad.previewHeadline || item.note || "Saved evidence",
       landingPageDetail: landingPageDetailForAd(item),
       analysisFields: normalizeAnalysisFields(item.ad.analysisFields),
     })),
@@ -138,7 +138,7 @@ export function formatInsightDepthMarkdown(summary: InsightDepthSummary) {
     markdownSection("Top hooks", summary.topHooks),
     markdownSection("Media mix", summary.mediaMix),
     markdownSection("Observed campaign duration", summary.campaignDurations),
-    markdownSection("Metric proof", summary.metricProof),
+    markdownSection("Metric evidence", summary.metricProof),
     markdownTimeline("Creative timeline", summary.creativeTimeline),
     markdownTimeline("Landing-page history", summary.landingPageHistory),
   ].join("\n\n");
@@ -148,8 +148,8 @@ function buildInsightDepth(sources: InsightSource[]): InsightDepthSummary {
   return {
     topHooks: summarizeCounts(readHookLabels(sources), "No repeated hooks yet."),
     mediaMix: summarizeCounts(readMediaLabels(sources), "No channel mix yet."),
-    campaignDurations: summarizeCounts(readCampaignDurationLabels(sources), "No duration proof yet."),
-    metricProof: summarizeCounts(readMetricProofLabels(sources), "No spend, reach, or impression proof yet."),
+    campaignDurations: summarizeCounts(readCampaignDurationLabels(sources), "No duration evidence yet."),
+    metricProof: summarizeCounts(readMetricProofLabels(sources), "No spend, reach, or impression evidence yet."),
     creativeTimeline: readCreativeTimeline(sources),
     landingPageHistory: readLandingPageHistory(sources),
   };
@@ -218,7 +218,7 @@ function readMetricProofLabels(sources: InsightSource[]) {
       return [];
     }
 
-    const channel = normalizeStringArray(source.platforms)[0] ?? "Manual proof";
+    const channel = normalizeStringArray(source.platforms)[0] ?? "Manual evidence";
     return [
       {
         label: source.advertiser,

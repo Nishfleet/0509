@@ -397,7 +397,7 @@ describe("customer API v1", () => {
     expect(body.agentActivation).toEqual(body.toolActivation);
     expect(body.toolActivation.readinessEndpoint).toBe("/api/v1/workspace-readiness");
     expect(body.toolActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
-    expect(body.toolActivation.actionGroups.map((group) => group.label)).toContain("Proof and reports");
+    expect(body.toolActivation.actionGroups.map((group) => group.label)).toContain("Evidence and reports");
     expect(body.toolActivation.actionGroups.every((group) => group.requiresWriteEnabled)).toBe(true);
     expect(body.toolActivation.actionGroups.every((group) => group.credentialRequirement.includes("write-enabled"))).toBe(true);
     expect(body.toolActivation.actionGroups.flatMap((group) => group.actions)).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);

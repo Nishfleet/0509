@@ -321,8 +321,8 @@ export default function AppDashboardRoute() {
             <span className="f9-app-kicker">Plan required for monitoring</span>
             <h2>Search is free. Retained tracking starts on a paid plan.</h2>
             <p>
-              Upgrade to Starter or above to keep nightly competitor scans, change digests, and proof
-              capture on a watchlist.
+              Upgrade to Starter or above to keep nightly competitor checks, change digests, and saved
+              evidence on a watchlist.
             </p>
           </div>
           <div className="f9-checkout-banner-actions">
@@ -509,13 +509,13 @@ export default function AppDashboardRoute() {
             </h2>
           </div>
           <p>
-            {proofUsage.used} of {proofUsage.limit} evidence checks used in the current billing period.
+            {proofUsage.used} of {proofUsage.limit} saved change records used in the current billing period.
             {proofUsage.upgradeTarget
               ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
               : " Add an overflow pack before the next busy campaign."}
           </p>
           <Link className="f9-secondary-button" to="/app/billing?source=evidence#top-ups">
-            Review capacity
+            Review record packs
           </Link>
         </article>
       ) : null}
@@ -796,7 +796,7 @@ function CheckoutReturnBanner(props: { plan: string }) {
         <div>
           <span className="f9-app-kicker">Payment received</span>
           <h2>Your {planLabel} plan is live.</h2>
-          <p>Monitoring, digests, and evidence checks are unlocked. Add your next competitor while the trail is warm.</p>
+          <p>Monitoring, digests, and saved evidence are unlocked. Add your next competitor while the trail is warm.</p>
         </div>
         <div className="f9-checkout-banner-actions">
           <Link className="f9-primary-button" to="/search">

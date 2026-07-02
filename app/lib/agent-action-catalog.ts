@@ -45,8 +45,8 @@ export const AGENT_ACTION_GROUPS = [
   },
   {
     id: "proof",
-    label: "Proof and reports",
-    detail: "Create collections, save visible external proof, build reports, share links, and counter-move briefs.",
+    label: "Evidence and reports",
+    detail: "Create collections, save visible external evidence, build reports, share links, and counter-move briefs.",
     actions: [
       "collection.create",
       "proof.add_external",
@@ -97,7 +97,7 @@ export const AGENT_ACTION_GROUPS = [
   {
     id: "mentions",
     label: "Presence observations",
-    detail: "Read existing proof-backed website, blog, and Substack observations.",
+    detail: "Read existing source-backed website, blog, and Substack observations.",
     actions: ["web_mentions.list"],
     requiresWriteEnabled: true,
     credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
@@ -124,15 +124,15 @@ export function isCustomerAgentActionName(actionName: string | null | undefined)
 export const AGENT_FIRST_WORKFLOW = [
   {
     label: "Check readiness",
-    detail: "Use account readiness to find missing proof, delivery, billing, API, team, context, and client-room setup.",
+    detail: "Use account readiness to find missing evidence, delivery, billing, API, team, context, and client-room setup.",
   },
   {
     label: "Set up monitoring",
-    detail: "Create or tune a competitor watchlist, then refresh paid watches when a human wants current proof.",
+    detail: "Create or tune a competitor watchlist, then refresh paid watches when a human wants current evidence.",
   },
   {
-    label: "Package proof",
-    detail: "Create a board, add visible external proof when needed, build a report, and create a share link.",
+    label: "Package evidence",
+    detail: "Create a board, add visible external evidence when needed, build a report, and create a share link.",
   },
   {
     label: "Preserve context",

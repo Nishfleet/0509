@@ -210,7 +210,7 @@ describe("insight depth", () => {
     expect(summary.mediaMix[0]).toMatchObject({ label: "Landing page", count: 1 });
     expect(summary.campaignDurations[0]).toMatchObject({
       label: "Pending",
-      detail: "No duration proof yet.",
+      detail: "No duration evidence yet.",
     });
     expect(summary.landingPageHistory[0]).toMatchObject({
       label: "Landing page offer changed",

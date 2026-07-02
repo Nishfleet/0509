@@ -32,7 +32,7 @@ function formatDemoProofMarkdown() {
     .join("\n");
   const hooks = demoProof.insightPreview.topHooks.map((hook) => `- ${hook}`).join("\n");
 
-  return `# Five to Nine Demo Proof
+  return `# Five to Nine Sample Brief
 
 Status: sample only. Public live search is read-only; retained monitoring requires an account.
 
@@ -42,7 +42,7 @@ Tracked preview: ${demoProof.trackedPreview.watchlistName}
 Cadence: ${demoProof.trackedPreview.cadence}
 Saved competitor: ${demoProof.trackedPreview.savedCompetitor}
 
-## Proof Trail
+## Source Trail
 
 ${proofItems}
 
@@ -52,7 +52,7 @@ ${proofItems}
 - What changed: ${demoProof.digestPreview.whatChanged}
 - Why it matters: ${demoProof.digestPreview.whyItMatters}
 - Urgency: ${demoProof.digestPreview.priority}
-- Proof status: ${demoProof.digestPreview.proofStatus}
+- Source status: ${demoProof.digestPreview.proofStatus}
 - Source: ${demoProof.digestPreview.source}
 - Freshness: ${demoProof.digestPreview.freshness}
 - Next action: ${demoProof.digestPreview.recommendedMove}

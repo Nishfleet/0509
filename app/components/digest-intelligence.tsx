@@ -46,7 +46,7 @@ export function DigestDecisionSummary({ items }: { items: DigestProofPacketItem[
           <dd>{decision.urgency}</dd>
         </div>
         <div>
-          <dt>Proof status</dt>
+          <dt>Source status</dt>
           <dd>{decision.proofStatus}</dd>
         </div>
         <div>
@@ -76,9 +76,9 @@ export function DigestProofPacket({ items }: { items: DigestProofPacketItem[] })
   const packet = summarizeProofPacket(items);
 
   return (
-    <section className="f9-proof-packet" aria-label="Digest proof packet">
+    <section className="f9-proof-packet" aria-label="Digest evidence packet">
       <div>
-        <span className="f9-app-kicker">Proof and source details</span>
+        <span className="f9-app-kicker">Evidence and source details</span>
         <h3>{packet.title}</h3>
         <p className="f9-muted-copy">{packet.summary}</p>
       </div>
@@ -121,7 +121,7 @@ export function DigestMovementSummary({ items }: { items: DigestMovementItem[] }
       </div>
       <div>
         <dt>Report status</dt>
-        <dd>Digest detail with proof and scan labels. Client reports include verified proof by default.</dd>
+        <dd>Digest detail with evidence and check labels. Client reports include verified evidence by default.</dd>
       </div>
     </dl>
   );
@@ -159,13 +159,13 @@ export function DigestIntelligence({
         <dd>{intelligence.recommendedAction}</dd>
       </div>
       <div>
-        <dt>Proof status</dt>
+        <dt>Source status</dt>
         <dd>
           {classification.label} · {classification.sourceTypeLabel}
         </dd>
       </div>
       <div>
-        <dt>Evidence trail</dt>
+        <dt>Source trail</dt>
         <dd>{intelligence.proofTrail}</dd>
       </div>
     </dl>
@@ -196,11 +196,11 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
   if (!top) {
     return {
       title: "No action-worthy changes yet",
-      summary: "The packet will fill in once a digest has verified proof or scan-spotted movement.",
+      summary: "The packet will fill in once a digest has verified evidence or check-spotted movement.",
       decision: "No decision queued.",
       evidence: "No evidence signals attached yet.",
       coverage: "No competitors in this packet.",
-      confidenceTrail: "Proof trail pending.",
+      confidenceTrail: "Source trail pending.",
     };
   }
 
@@ -209,7 +209,7 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
     summary: `${top.item.title}: ${
       topClassification?.status === "verified_proof"
         ? "ready to send as a client or teammate digest without rereading every event."
-        : "ready to review; add page proof before sharing."
+        : "ready to review; add page evidence before sharing."
     }`,
     decision: top.intelligence.recommendedAction,
     evidence: proofMixLabel(proofMix),
@@ -249,7 +249,7 @@ function summarizeDecision(items: DigestProofPacketItem[]) {
       whatChanged: "No competitor movement worth action.",
       whyItMatters: "Silence is useful only because the checks still ran.",
       urgency: "No action needed",
-      proofStatus: "Proof unavailable",
+      proofStatus: "Evidence unavailable",
       source: "No source change detected",
       lastSeen: null,
       nextAction: "Review digest history only if you need the audit trail.",

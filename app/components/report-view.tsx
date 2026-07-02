@@ -5,6 +5,15 @@ import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { LocalTime } from "~/components/local-time";
 import { ProofGlossary } from "~/components/proof-glossary";
 
+function legacyReportLabelText(value: string) {
+  return value
+    .replace(/\bVerified proof\b/g, "Verified evidence")
+    .replace(/\bProof unavailable\b/g, "Evidence unavailable")
+    .replace(/\bProof snapshot\b/g, "Saved evidence")
+    .replace(/\bProof capture\b/g, "Evidence capture")
+    .replace(/\bproof capture\b/g, "evidence capture");
+}
+
 export function ReportView({ report }: { report: ReportDocument }) {
   const reportSnapshot = report as ReportDocument & { insightDepth?: unknown };
   const insightDepth = reportSnapshot.insightDepth
@@ -15,7 +24,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
     <div className="report-layout">
       <section className="report-hero">
         <div>
-          <p className="f9-app-kicker">Proof report</p>
+          <p className="f9-app-kicker">Evidence report</p>
           <h1>{report.title}</h1>
           <p className="f9-muted-copy">{report.subtitle}</p>
         </div>
@@ -34,17 +43,17 @@ export function ReportView({ report }: { report: ReportDocument }) {
       {report.sourceCoverage ? (
         <section className="f9-proof-packet" aria-label="Report source coverage">
           <div>
-            <span className="f9-app-kicker">Proof and source coverage</span>
+            <span className="f9-app-kicker">Evidence and source coverage</span>
             <h3>Client-ready evidence filter</h3>
             <p className="f9-muted-copy">{report.sourceCoverage.note}</p>
           </div>
           <dl className="proof-trail-list">
             <div>
-              <dt>Verified proof</dt>
+              <dt>Verified evidence</dt>
               <dd>{report.sourceCoverage.proofMix.verifiedProof}</dd>
             </div>
             <div>
-              <dt>Scan-spotted</dt>
+              <dt>Check-spotted</dt>
               <dd>{report.sourceCoverage.proofMix.scanSpotted}</dd>
             </div>
             <div>
@@ -102,12 +111,12 @@ export function ReportView({ report }: { report: ReportDocument }) {
                 <p>{row.event.summary}</p>
                 <dl className="proof-trail-list">
                   <div>
-                    <dt>Proof status</dt>
-                    <dd>{row.event.proofStatusLabel}</dd>
+                    <dt>Source status</dt>
+                    <dd>{legacyReportLabelText(row.event.proofStatusLabel)}</dd>
                   </div>
                   <div>
                     <dt>Source type</dt>
-                    <dd>{row.event.sourceTypeLabel}</dd>
+                    <dd>{legacyReportLabelText(row.event.sourceTypeLabel)}</dd>
                   </div>
                   <div>
                     <dt>Priority</dt>
@@ -121,8 +130,8 @@ export function ReportView({ report }: { report: ReportDocument }) {
                     <dd>{row.event.recommendedAction}</dd>
                   </div>
                   <div>
-                    <dt>Proof trail</dt>
-                    <dd>{row.event.proofTrail}</dd>
+                    <dt>Source trail</dt>
+                    <dd>{legacyReportLabelText(row.event.proofTrail)}</dd>
                   </div>
                   {row.event.sourceUrl && isHttpUrl(row.event.sourceUrl) ? (
                     <div>
@@ -230,7 +239,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
             {row.analysisFields.length > 0 ? (
               <section className="report-analysis">
-                <p className="f9-app-kicker">Proof fields</p>
+                <p className="f9-app-kicker">Evidence fields</p>
                 <dl className="report-field-list">
                   {row.analysisFields.map((field) => (
                     <div className="report-field" key={`${row.id}-${field.label}`}>
@@ -249,11 +258,8 @@ export function ReportView({ report }: { report: ReportDocument }) {
       </section>
       {report.rows.length === 0 ? (
         <section className="f9-empty-panel">
-          <h2>No client-ready proof in this report</h2>
-          <p>
-            Suppressed, invalidated, proof-failed, internal, canary, and scan-only events are excluded
-            from proof-backed reports by default.
-          </p>
+          <h2>No client-ready evidence in this report</h2>
+          <p>Only client-ready changes with saved evidence are included in source-backed reports.</p>
         </section>
       ) : null}
     </div>
@@ -285,7 +291,7 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
           </div>
           <div>
             <dt>Next action</dt>
-            <dd>Review source coverage or wait for the next proof-backed report.</dd>
+            <dd>Review source coverage or wait for the next source-backed report.</dd>
           </div>
         </dl>
       </section>
@@ -317,12 +323,12 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
           <dd>{urgency}</dd>
         </div>
         <div>
-          <dt>Proof status</dt>
-          <dd>{topEvent.proofStatusLabel}</dd>
+          <dt>Source status</dt>
+          <dd>{legacyReportLabelText(topEvent.proofStatusLabel)}</dd>
         </div>
         <div>
           <dt>Source</dt>
-          <dd>{topEvent.sourceTypeLabel}</dd>
+          <dd>{legacyReportLabelText(topEvent.sourceTypeLabel)}</dd>
         </div>
         <div>
           <dt>Last seen</dt>
@@ -339,27 +345,27 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
 
 function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
   const rowCount = report.rows.length;
-  const rowLabel = `${rowCount} saved proof item${rowCount === 1 ? "" : "s"}`;
+  const rowLabel = `${rowCount} saved evidence item${rowCount === 1 ? "" : "s"}`;
   const hasRows = rowCount > 0;
 
   return (
     <section className="f9-proof-packet" aria-label="Report decision summary">
       <div>
         <span className="f9-app-kicker">Decision summary</span>
-        <h3>{hasRows ? "Saved proof ready for review" : "No saved proof rows yet"}</h3>
+        <h3>{hasRows ? "Saved evidence ready for review" : "No saved evidence rows yet"}</h3>
         <p className="f9-muted-copy">{report.summary}</p>
       </div>
       <dl className="proof-trail-list">
         <div>
           <dt>What changed</dt>
-          <dd>{hasRows ? `${rowLabel} packaged for review.` : "No saved proof is in this report."}</dd>
+          <dd>{hasRows ? `${rowLabel} packaged for review.` : "No saved evidence is in this report."}</dd>
         </div>
         <div>
           <dt>Why it matters</dt>
           <dd>
             {hasRows
-              ? "This is a curated proof set, not a live change alert."
-              : "The report is ready to fill once proof is saved."}
+              ? "This is a curated evidence set, not a live change alert."
+              : "The report is ready to fill once evidence is saved."}
           </dd>
         </div>
         <div>
@@ -367,8 +373,8 @@ function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
           <dd>{hasRows ? "Review before sharing" : "No action needed"}</dd>
         </div>
         <div>
-          <dt>Proof status</dt>
-          <dd>{hasRows ? "Saved proof collection" : "Proof unavailable"}</dd>
+          <dt>Source status</dt>
+          <dd>{hasRows ? "Saved evidence collection" : "Evidence unavailable"}</dd>
         </div>
         <div>
           <dt>Source</dt>
@@ -380,7 +386,7 @@ function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
         </div>
         <div>
           <dt>Next action</dt>
-          <dd>{hasRows ? "Review the rows below, then share or export the report." : "Save proof into this collection."}</dd>
+          <dd>{hasRows ? "Review the rows below, then share or export the report." : "Save evidence into this collection."}</dd>
         </div>
       </dl>
     </section>

@@ -1664,7 +1664,7 @@ describe("runWatchlistManual cheap scan path", () => {
 	    expect.anything(),
 	    expect.objectContaining({
 	      status: "degraded",
-	      summary: "Commercial discovery failed and direct website proof did not complete.",
+		      summary: "Commercial discovery failed and direct website evidence did not complete.",
 	    }),
 	  );
 	});

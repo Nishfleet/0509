@@ -116,7 +116,7 @@ export function formatProofAgeLabel(
   options: { now?: string } = {},
 ) {
   if (!timestamp) {
-    return "No proof yet";
+    return "No evidence yet";
   }
 
   const nowMs = new Date(options.now ?? new Date().toISOString()).getTime();
@@ -143,7 +143,7 @@ export function formatWhyAlertedLabel(input: {
   metadata: Record<string, unknown> | null | undefined;
 }) {
   if (input.status === "detected" || input.status === "proof_pending") {
-    return "Possible change detected. Proof is still running.";
+    return "Possible change detected. The evidence check is still running.";
   }
 
   const from = typeof input.metadata?.from === "string" ? input.metadata.from : null;
@@ -172,9 +172,9 @@ export function formatWhyAlertedLabel(input: {
     case "ad_inactive":
       return "The ad disappeared across consecutive scans.";
     case "landing_page_url_changed":
-      return "The destination changed and forced a proof refresh.";
+      return "The destination changed and forced an evidence refresh.";
     default:
-      return "Proof-backed change cleared the alert threshold.";
+      return "Source-backed change cleared the alert threshold.";
   }
 }
 

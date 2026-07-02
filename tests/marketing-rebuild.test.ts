@@ -62,10 +62,10 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Try live search");
     expect(marketingRoute).toContain("/search?website=https%3A%2F%2Fnykaa.com");
     expect(marketingRoute).toContain('id="demo"');
-    expect(marketingRoute).toContain('aria-label="Sample proof before signup"');
-    expect(marketingRoute).toContain("Review sample proof loop");
-    expect(marketingRoute).toContain("Open markdown proof");
-    expect(marketingRoute).toContain("See the proof shape before creating an account.");
+    expect(marketingRoute).toContain('aria-label="Sample brief before signup"');
+    expect(marketingRoute).toContain("Review sample brief");
+    expect(marketingRoute).toContain("Open markdown brief");
+    expect(marketingRoute).toContain("See the morning brief before creating an account.");
     expect(marketingRoute).toContain("/api/demo-proof");
     expect(marketingRoute).not.toContain("Account search");
     expect(marketingRoute).not.toContain('to={rootData.session ? "/search" : "/auth/signup"}');
@@ -75,7 +75,7 @@ describe("marketing rebuild", () => {
   it("keeps README route truth aligned with public read-only search", () => {
     expect(readme).toContain("/api/demo-proof");
     expect(readme).toContain("/search` public read-only live search trial");
-    expect(readme).toContain("save, track, collections, and deeper proof enrichment require an account");
+    expect(readme).toContain("save, track, collections, and deeper evidence enrichment require an account");
     expect(readme).not.toContain("/search` account-gated analysis flow");
   });
 
@@ -120,16 +120,16 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Client-ready view");
     expect(marketingRoute).toContain("What changed");
     expect(marketingRoute).toContain("Why it matters");
-    expect(marketingRoute).toContain("Proof status");
+    expect(marketingRoute).toContain("Source status");
     expect(marketingRoute).toContain("Freshness");
     expect(marketingRoute).toContain("Next action");
     expect(marketingRoute).toContain("Visible offer text changed");
     expect(marketingRoute).toContain("CTA changed on the destination page");
     expect(marketingRoute).toContain("Recommended launch plan");
     expect(marketingRoute).toContain("Start with Starter");
-    expect(marketingRoute).toContain("Daily proof-backed competitor monitoring");
+    expect(marketingRoute).toContain("Daily competitor monitoring");
     expect(marketingRoute).toContain("valueMathLabel");
-    expect(marketingRoute).toContain("Proof packs");
+    expect(marketingRoute).toContain("Record packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");
@@ -142,7 +142,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("boAt removed COD offer");
     expect(marketingRoute).not.toContain("Meesho added discount hook");
     expect(marketingRoute.indexOf("Decision summary")).toBeLessThan(
-      marketingRoute.indexOf("Proof trail"),
+      marketingRoute.indexOf("Source trail"),
     );
   });
 

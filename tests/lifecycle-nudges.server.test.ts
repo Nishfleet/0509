@@ -55,7 +55,7 @@ describe("buildLifecycleNudges", () => {
     ]);
   });
 
-  it("prompts delivery proof without claiming readiness when delivery has no proof", () => {
+  it("prompts delivery check without claiming readiness when delivery has no successful send", () => {
     const nudges = buildLifecycleNudges({
       items: [{ id: "delivery", status: "needs_proof" }],
       counts: {
@@ -75,7 +75,7 @@ describe("buildLifecycleNudges", () => {
     expect(nudges).toEqual([
       expect.objectContaining({
         id: "delivery_proof",
-        title: "Delivery proof is missing",
+        title: "Delivery check is missing",
         href: "/app/sources",
         priority: "high",
       }),

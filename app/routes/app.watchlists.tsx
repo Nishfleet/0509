@@ -713,7 +713,7 @@ export default function WatchlistsRoute() {
             </div>
           </div>
           <p className="f9-muted-copy">
-            Pick a tracked brand to review changes, proof freshness, and alert delivery.
+            Pick a tracked brand to review changes, evidence freshness, and alert delivery.
           </p>
 
           <div className="f9-work-list is-compact">
@@ -1006,7 +1006,7 @@ export default function WatchlistsRoute() {
                                 <p className="f9-app-kicker">Evidence summary</p>
                                 <p className="f9-muted-copy">
                                   {proofCapture
-                                    ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · proof age ${formatProofAgeLabel(
+                                    ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · evidence age ${formatProofAgeLabel(
                                         proofCapture.succeededAt ?? proofCapture.attemptedAt,
                                       )}`
                                     : "No separate landing-page evidence check was needed for this event."}
@@ -1078,7 +1078,7 @@ export default function WatchlistsRoute() {
                           </div>
                         ))}
                         {data.recentProofCaptures.length === 0 ? (
-                          <p className="f9-muted-copy">Evidence checks will appear here after the next capture.</p>
+                          <p className="f9-muted-copy">Evidence checks will appear here after the next saved record.</p>
                         ) : null}
                       </div>
                     </article>
@@ -1544,7 +1544,7 @@ function formatRunSummary(summary: Record<string, unknown>) {
     message || null,
     formatNumericSummaryPart(summary, "adsSeen", "ads seen"),
     formatNumericSummaryPart(summary, "candidatesDetected", "candidates detected"),
-    formatNumericSummaryPart(summary, "proofsAttempted", "proofs attempted"),
+    formatNumericSummaryPart(summary, "proofsAttempted", "evidence checks attempted"),
     formatNumericSummaryPart(summary, "eventsConfirmed", "events confirmed"),
     formatNumericSummaryPart(summary, "sendsTriggered", "sends triggered"),
     formatNumericSummaryPart(summary, "events", "events total"),
@@ -1708,7 +1708,7 @@ function formatRunStatusLabel(status: string, errorCode?: string | null) {
   if (status === "succeeded") return "Succeeded";
   if (status === "failed") return "Failed";
   if (status === "skipped") {
-    if (errorCode === "capacity_budget") return "Delayed — capacity limit";
+    if (errorCode === "capacity_budget") return "Delayed — monitoring window filled";
     if (errorCode === "workflow_binding_missing" || errorCode === "dispatch_createbatch_missing") {
       return "Delayed — monitoring service unavailable";
     }

@@ -73,7 +73,7 @@ describe("launch readiness route", () => {
     vi.doMock("~/lib/meta-ads-readiness.server", () => ({
       getMetaAdsBetaReadiness: vi.fn().mockResolvedValue({
         ok: false,
-        label: "Beta: needs proof",
+        label: "Beta: needs validation",
         blockers: ["success_rate_below_95_percent", "recent_live_failures"],
       }),
     }));

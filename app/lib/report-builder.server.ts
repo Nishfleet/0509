@@ -51,7 +51,7 @@ const FIELD_LABEL_OVERRIDES: Record<string, string> = {
   cta: "CTA",
   cta_text: "CTA text",
   ocr_text: "OCR text",
-  proof_url: "Proof URL",
+  proof_url: "Evidence URL",
 };
 
 export function buildCollectionReport(input: {
@@ -141,7 +141,7 @@ export function buildWatchlistReport(input: {
     resourceId: input.watchlist.id,
     title: input.watchlist.name,
     subtitle: `${input.watchlist.targetType.replaceAll("_", " ")} · ${input.watchlist.targetLabel}`,
-    summary: `${rows.length} verified-proof watch event${rows.length === 1 ? "" : "s"} with linked ad context where available.`,
+    summary: `${rows.length} verified-evidence watch event${rows.length === 1 ? "" : "s"} with linked ad context where available.`,
     generatedAt,
     stats: [
       { label: "Events", value: String(rows.length) },

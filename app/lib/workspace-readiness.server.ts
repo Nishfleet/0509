@@ -193,13 +193,13 @@ export async function getWorkspaceReadiness(
     },
     {
       id: "first_proof",
-      label: "First proof",
+      label: "First evidence",
       status: successfulProofs > 0 ? "ready" : proofUsage.used > 0 ? "needs_proof" : "needs_setup",
       detail:
         successfulProofs > 0
           ? `${successfulProofs} successful evidence check${successfulProofs === 1 ? "" : "s"} recorded.`
           : proofUsage.used > 0
-            ? "Evidence attempts have run, but no successful proof is attached yet."
+            ? "Evidence attempts have run, but no successful source is attached yet."
             : "Refresh a watchlist to capture landing-page evidence.",
       action: successfulProofs > 0 ? null : { label: "Open watchlists", href: "/app/watchlists" },
     },
@@ -215,7 +215,7 @@ export async function getWorkspaceReadiness(
     },
     {
       id: "delivery",
-      label: "Delivery proof",
+      label: "Delivery check",
       status:
         deliveryProofCount > 0
           ? "ready"
@@ -224,12 +224,12 @@ export async function getWorkspaceReadiness(
             : "needs_setup",
       detail:
         deliveryProofCount > 0
-          ? "A delivery path has successful proof."
+          ? "A delivery path has a successful check."
           : activeDeliveryTargetCount > 0
-            ? "A delivery target exists but needs successful delivery proof."
+            ? "A delivery target exists but needs a successful delivery check."
             : sentDigests > 0
               ? "Digest history exists, but no active delivery target is configured."
-              : "Connect email when the team wants proof pushed out.",
+              : "Connect email when the team wants briefs pushed out.",
       action:
         deliveryProofCount > 0
           ? null
@@ -237,7 +237,7 @@ export async function getWorkspaceReadiness(
     },
     {
       id: "billing",
-      label: "Billing and proof credits",
+      label: "Billing and record packs",
       status:
         hasBillingPaymentIssue || proofUsage.warningLevel === "exhausted"
           ? "attention"

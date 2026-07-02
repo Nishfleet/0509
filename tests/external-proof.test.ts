@@ -35,7 +35,7 @@ describe("external proof builder", () => {
       firstSeenAt: "2026-06-06T00:00:00.000Z",
       lastSeenAt: null,
       active: false,
-      tags: ["LinkedIn", "manual proof"],
+      tags: ["LinkedIn", "manual evidence"],
       creativeText: null,
       creativeTextCaptureMethod: null,
     });

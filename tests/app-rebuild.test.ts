@@ -103,8 +103,8 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("approved actions");
     expect(appSurface).toContain("Create API key");
     expect(appSurface).toContain("/api/v1");
-    expect(collectionsRoute).toContain("External proof");
-    expect(collectionsRoute).toContain("Save proof link");
+    expect(collectionsRoute).toContain("External evidence");
+    expect(collectionsRoute).toContain("Save evidence link");
     expect(collectionsRoute).toContain("Google / YouTube");
     expect(collectionsRoute).toContain("LinkedIn");
     expect(clientsRoute).toContain("Report preferences and notes");

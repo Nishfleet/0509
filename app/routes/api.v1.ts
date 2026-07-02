@@ -82,10 +82,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       ],
       liveDataScope: [
-        "Meta ad proof saved in this account",
-        "Landing-page proof captured by this account",
+        "Meta ad evidence saved in this account",
+        "Landing-page evidence captured by this account",
         "Watchlist changes and digest items owned by this account",
-        "Manual external proof links, scoped memory, client rooms, redacted delivery settings, and existing web mention observations owned by this account",
+        "Manual external evidence links, scoped memory, client rooms, redacted delivery settings, and existing web mention observations owned by this account",
       ],
       agentActivation: toolActivation,
       toolActivation,

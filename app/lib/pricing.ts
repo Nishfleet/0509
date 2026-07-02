@@ -15,26 +15,26 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   const features: string[] = [];
 
   if (plan === "scout") {
-    features.push("Sample proof review before signup");
+    features.push("Sample competitor brief before signup");
   }
 
   features.push(`${entitlements.watchlists} active watchlists`);
 
   if (entitlements.scheduledScanCadence === "weekly_monday") {
-    features.push("Weekly competitor scan (every Monday) + on-demand fresh proof");
+    features.push("Weekly competitor review (every Monday) + on-demand fresh evidence");
   } else if (entitlements.scheduledScanCadence === "daily") {
-    features.push("Daily competitor scans + on-demand fresh proof");
+    features.push("Daily competitor reviews + on-demand fresh evidence");
     if (plan === "agency") {
-      features.push("Priority nightly monitoring coverage");
+      features.push("Priority nightly review coverage");
     }
   }
 
   features.push(`${entitlements.collections} saved collections`);
 
   if (entitlements.digestCadence === "weekly") {
-    features.push("Weekly evidence-backed digest");
+    features.push("Weekly change brief with screenshots and links");
   } else if (entitlements.digestCadence === "daily_and_weekly") {
-    features.push("Daily and weekly evidence-backed digests");
+    features.push("Daily and weekly change briefs with screenshots and links");
   }
 
   if (plan !== "scout") {
@@ -42,14 +42,14 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   }
 
   features.push(
-    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} proof captures per month`,
+    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} saved change records per month`,
   );
 
   if (plan === "scout") {
-    features.push("Account-gated competitor research", "Email digest delivery");
+    features.push("Saved competitor research", "Email digest delivery");
   }
   if (plan === "starter" || plan === "agency") {
-    features.push("Landing-page evidence for material changes");
+    features.push("Landing-page change history with screenshots");
     features.push("Email delivery");
     features.push(
       "Reads ad text in 30+ languages and scripts — auto-translated into English",
@@ -57,9 +57,9 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
     features.push("CSV and JSON exports");
   }
   if (plan === "agency") {
-    features.push("Client-ready proof reports (share link + PDF print)");
+    features.push("Client-ready change reports (share link + PDF print)");
     features.push("Your agency name on shared reports");
-    features.push("Read-only API + MCP exports; owner-approved workflow actions");
+    features.push("Developer exports and workspace-approved workflow actions");
     features.push(
       `${entitlements.workspaceSeats} team seats — teammates share watchlists, collections, and digests`,
     );
@@ -77,10 +77,10 @@ const PLANS: PricingPlan[] = PLAN_FAMILIES.filter((plan) => plan !== "free").map
     yearlyLabel: "Annual price loading",
     detail:
       slug === "scout"
-        ? "Proof-backed monitoring for a focused competitor set."
+        ? "Focused competitor monitoring for a small watchlist."
         : slug === "starter"
-          ? "Daily proof-backed competitor monitoring for one brand's core competitor set."
-          : "Client-ready competitor proof for agencies and crowded categories.",
+          ? "Daily competitor monitoring for one brand's core market."
+          : "Client-ready competitor reports for agencies and crowded categories.",
     features: planMarketingFeatures(slug),
     monthlySku: `${slug}_monthly_v1`,
     yearlySku: `${slug}_annual_v1`,
@@ -121,10 +121,10 @@ const USAGE_BUNDLES: UsageBundle[] = [
 ];
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
-  "Scheduled monitoring is included with your plan. Proof captures are used when Five to Nine saves a new landing-page proof capture. Included proof captures refresh every month and do not roll over. Purchased proof packs never expire.";
+  "Scheduled monitoring is included with your plan. Saved change records are used when Five to Nine stores a landing-page record with screenshots, page text, and the original link. Included records refresh every month and do not roll over. Purchased record packs never expire.";
 
 export const TOP_UP_INACTIVE_PLAN_COPY =
-  "Your purchased proof packs are saved and will be available when a paid plan is active.";
+  "Your purchased record packs are saved and will be available when a paid plan is active.";
 
 export function pricingPlans(): PricingPlan[] {
   return PLANS.map((plan) => ({ ...plan, features: [...plan.features] }));

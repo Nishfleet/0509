@@ -142,7 +142,7 @@ const externalCollectionItem: CollectionItemRecord = {
   createdAt: "2026-06-06T09:31:00.000Z",
   updatedAt: "2026-06-06T09:31:00.000Z",
   ad: externalAd,
-  tags: ["LinkedIn", "manual proof", "creator"],
+  tags: ["LinkedIn", "manual evidence", "creator"],
 };
 
 const watchlist: WatchlistRecord = {
@@ -375,7 +375,7 @@ describe("authenticated export route", () => {
         impressions: "120k",
         reach: "80k",
       },
-      tags: ["LinkedIn", "manual proof", "creator"],
+      tags: ["LinkedIn", "manual evidence", "creator"],
     });
     expect(body.insightDepth.metricProof[0]).toMatchObject({
       label: "Mamaearth",
@@ -395,9 +395,9 @@ describe("authenticated export route", () => {
     const body = await response.text();
 
     expect(response.headers.get("content-type")).toContain("text/markdown");
-    expect(body).toContain("_Metric proof_");
+    expect(body).toContain("_Metric evidence_");
     expect(body).toContain("Spend: ₹50k | Impressions: 120k | Reach: 80k - LinkedIn");
-    expect(body).toContain("CTA: Shop now | Spend: ₹50k | Impressions: 120k | Reach: 80k | Proof:");
+    expect(body).toContain("CTA: Shop now | Spend: ₹50k | Impressions: 120k | Reach: 80k | Evidence:");
   });
 
   it("returns Slack-ready markdown for watchlist exports", async () => {
@@ -412,7 +412,7 @@ describe("authenticated export route", () => {
     expect(body).toContain("*Insight depth*");
     expect(body).toContain("_Landing-page history_");
     expect(body).toContain("Priority: Medium priority (84/100)");
-    expect(body).toContain("Proof status: Verified proof");
+    expect(body).toContain("Source status: Verified evidence");
     expect(body).toContain("Next move: Next review:");
     expect(body).toContain("Evidence: Verified from a page snapshot");
   });
@@ -435,7 +435,7 @@ describe("authenticated export route", () => {
 
     expect(response.headers.get("content-type")).toContain("text/csv");
     expect(body).toContain('"event_type","proof_status","source_type","title","summary","created_at","what_changed","why_it_matters","urgency","proof_status_label","source","last_seen","next_action","proof_trail","source_url"');
-    expect(body).toContain('"landing_page_offer_changed","Verified proof","Proof snapshot","Landing page offer changed","The routine bundle offer changed.","2026-04-18T10:00:00.000Z","Landing page offer changed","The routine bundle offer changed.","Medium priority (84/100)"');
+    expect(body).toContain('"landing_page_offer_changed","Verified evidence","Saved evidence","Landing page offer changed","The routine bundle offer changed.","2026-04-18T10:00:00.000Z","Landing page offer changed","The routine bundle offer changed.","Medium priority (84/100)"');
     expect(body).toContain('"https://example.com/proof"');
     expect(body).not.toContain("javascript:alert");
     expect(body).not.toContain("not a url");
@@ -472,8 +472,8 @@ describe("authenticated export route", () => {
     expect(body.events[0]).toMatchObject({
       id: expect.stringMatching(/^watch_event_/),
       title: "Landing page offer changed",
-      proofStatusLabel: "Verified proof",
-      sourceTypeLabel: "Proof snapshot",
+      proofStatusLabel: "Verified evidence",
+      sourceTypeLabel: "Saved evidence",
     });
     expect(body.events[0]).not.toHaveProperty("metadata");
     expect(body.watchlist).not.toHaveProperty("userId");

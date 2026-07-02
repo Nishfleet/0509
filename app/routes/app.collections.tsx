@@ -160,7 +160,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      message: `Saved ${ad.platforms[0] ?? "external"} proof for ${ad.advertiser}.`,
+      message: `Saved ${ad.platforms[0] ?? "external"} evidence for ${ad.advertiser}.`,
     };
   }
 
@@ -226,7 +226,7 @@ export default function CollectionsRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          lead="Save the best competitor examples, external proof, and notes for your team."
+          lead="Save the best competitor examples, external evidence, and notes for your team."
           title="Collections"
         />
 
@@ -292,8 +292,8 @@ export default function CollectionsRoute() {
             ))}
             {data.collections.length === 0 ? (
               <div className="f9-empty-panel">
-                <h3>Create your first proof collection</h3>
-                <p>Group competitor ads, offers, and landing-page proof for the deal or client you are working on.</p>
+                <h3>Create your first evidence collection</h3>
+                <p>Group competitor ads, offers, and landing-page evidence for the deal or client you are working on.</p>
               </div>
             ) : null}
           </div>
@@ -357,8 +357,8 @@ export default function CollectionsRoute() {
                 <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
                 <div className="f9-panel-toolbar">
                   <div>
-                    <span className="f9-app-kicker">External proof</span>
-                    <h3>Add a proof link</h3>
+                    <span className="f9-app-kicker">External evidence</span>
+                    <h3>Add an evidence link</h3>
                   </div>
                 </div>
                 <div className="f9-field-grid">
@@ -378,7 +378,7 @@ export default function CollectionsRoute() {
                   </label>
                 </div>
                 <label className="f9-field">
-                  <span>Proof URL</span>
+                  <span>Evidence URL</span>
                   <input name="proofUrl" placeholder="https://..." required type="url" />
                 </label>
                 <label className="f9-field">
@@ -424,14 +424,14 @@ export default function CollectionsRoute() {
                   <textarea name="note" placeholder="Optional team context" rows={2} />
                 </label>
                 <SubmitButton className="f9-secondary-button" intent="add-external-proof" pendingLabel="Saving…">
-                  Save proof link
+                  Save evidence link
                 </SubmitButton>
               </Form>
 
               {data.items.length === 0 ? (
                 <div className="f9-empty-panel">
-                  <h2>Add proof or save from search</h2>
-                  <p>Save a proof link here, or run a competitor search and save the examples your team needs to reuse.</p>
+                  <h2>Add evidence or save from search</h2>
+                  <p>Save an evidence link here, or run a competitor search and save the examples your team needs to reuse.</p>
                   <Link className="f9-primary-button" to="/search">
                     Open search
                   </Link>
@@ -455,7 +455,7 @@ export default function CollectionsRoute() {
                       {proofLinkForAd(item.ad) ? (
                         <p className="f9-muted-copy">
                           <a href={proofLinkForAd(item.ad) ?? undefined} rel="noreferrer" target="_blank">
-                            Open proof
+                            Open evidence
                           </a>
                         </p>
                       ) : null}
@@ -501,7 +501,7 @@ export default function CollectionsRoute() {
             </>
           ) : (
             <div className="f9-empty-panel">
-              <h2>Create your first proof collection</h2>
+              <h2>Create your first evidence collection</h2>
               <p>Collections keep competitor examples, notes, tags, and share links ready for your team.</p>
             </div>
           )}

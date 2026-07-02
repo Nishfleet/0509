@@ -188,7 +188,7 @@ export default function DigestsRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          lead="Review competitor changes with proof, scan labels, history, and delivery health."
+          lead="Review competitor changes with evidence, check labels, history, and delivery health."
           title="Digests"
         />
 
@@ -211,7 +211,7 @@ export default function DigestsRoute() {
 
       {!data.canAccessDigests ? (
         <PlanLimitState
-          message="Digests are included in paid plans. Upgrade to get daily or weekly competitor change briefs with proof and scan labels in your inbox. Until then, watchlists and collections keep your research organized."
+          message="Digests are included in paid plans. Upgrade to get daily or weekly competitor change briefs with evidence and check labels in your inbox. Until then, watchlists and collections keep your research organized."
           title="Digests are included in paid plans"
         />
       ) : (
@@ -333,9 +333,9 @@ export default function DigestsRoute() {
                       </select>
                     </label>
                     <label>
-                      Proof
+                      Source
                       <select name="proofStatus" defaultValue={selectedFilters.proofStatus}>
-                        <option value="all">All proof states</option>
+                        <option value="all">All source states</option>
                         {filterOptions.proofStatuses.map((status) => (
                           <option key={status.value} value={status.value}>{status.label}</option>
                         ))}
