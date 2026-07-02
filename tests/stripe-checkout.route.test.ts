@@ -174,6 +174,8 @@ describe("marketing route", () => {
 
     expect(markup).toContain("$59");
     expect(markup).toContain("$499");
+    expect(markup).toContain("f9-toggle-savings");
+    expect(markup).toContain("4 months free");
     expect(markup).not.toContain("INR");
     expect(markup).toContain("Recommended launch plan");
     expect(markup).toContain("Start with Starter");
@@ -187,6 +189,82 @@ describe("marketing route", () => {
     expect(markup).not.toContain("/pricing-region");
     expect(markup).not.toContain("Rest of world");
     expect(markup).not.toContain("/api/checkout");
+  });
+
+  it("does not advertise annual savings in the toggle until every open displayed annual plan validates", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+        useRouteLoaderData: vi.fn().mockReturnValue({
+          pricingPlans: [
+            {
+              slug: "scout",
+              name: "Scout",
+              monthlyLabel: "Monthly price loading",
+              yearlyLabel: "Annual price loading",
+              detail: "Small team monitoring.",
+              features: [],
+            },
+            {
+              slug: "starter",
+              name: "Starter",
+              monthlyLabel: "Monthly price loading",
+              yearlyLabel: "Annual price loading",
+              detail: "Saved searches.",
+              features: [],
+            },
+          ],
+          usageBundles: [],
+          session: null,
+        }),
+        useLoaderData: vi.fn().mockReturnValue({
+          pricingPreview: {
+            available: true,
+            prices: {
+              scout: {
+                monthly: { display: "$29" },
+                yearly: { display: "$232" },
+              },
+              starter: {
+                monthly: { display: "$59" },
+                yearly: { display: "$520" },
+              },
+            },
+            annualValidation: {
+              scout: {
+                valid: true,
+                reason: "valid_4_months_free",
+              },
+              starter: {
+                planId: "starter",
+                valid: false,
+                reason: "amount_mismatch",
+              },
+            },
+            usageBundles: {},
+          },
+          commercialLaunch: {
+            scoutSaleOpen: true,
+            starterSaleOpen: true,
+            agencySaleOpen: false,
+          },
+        }),
+      };
+    });
+
+    const { default: MarketingRoute } = await import("~/routes/marketing");
+    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+
+    expect(markup).not.toContain("f9-toggle-savings");
+    expect(markup).not.toContain("4 months free");
   });
 
   it("preserves plan intent through signup for signed-out users", async () => {

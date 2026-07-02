@@ -6,6 +6,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { SubmitButton } from "~/components/submit-button";
 import { demoProof } from "~/lib/demo-proof";
 import {
+  DODO_ANNUAL_SAVINGS_LABEL,
   dodoAnnualSavingsIsValid,
   dodoAnnualUnavailableCopy,
 } from "~/lib/dodo-pricing-display";
@@ -160,6 +161,18 @@ export default function MarketingRoute() {
     routeData.pricingPreview?.available ? routeData.pricingPreview : null,
   );
   const [billingCycle, setBillingCycle] = useState<PricingBillingCycle>("monthly");
+  const isPlanSaleOpen = (plan: PricingPlanSlug) =>
+    plan === "scout"
+      ? commercialLaunch.scoutSaleOpen
+      : plan === "starter"
+        ? commercialLaunch.starterSaleOpen
+        : commercialLaunch.agencySaleOpen;
+  const saleOpenPricingPlans = rootData.pricingPlans.filter((plan) => isPlanSaleOpen(plan.slug));
+  const annualSavingsValidated =
+    saleOpenPricingPlans.length > 0 &&
+    saleOpenPricingPlans.every((plan) =>
+      dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
+    );
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -575,7 +588,10 @@ export default function MarketingRoute() {
               onClick={() => setBillingCycle("yearly")}
               type="button"
             >
-              Annual
+              <span>Annual</span>
+              {annualSavingsValidated ? (
+                <span className="f9-toggle-savings">{DODO_ANNUAL_SAVINGS_LABEL}</span>
+              ) : null}
             </button>
           </div>
         </div>
@@ -587,18 +603,13 @@ export default function MarketingRoute() {
             const annualIsValid = dodoAnnualSavingsIsValid(
               localPricing?.annualValidation?.[plan.slug],
             );
-            const planSaleOpen =
-              plan.slug === "scout"
-                ? commercialLaunch.scoutSaleOpen
-                : plan.slug === "starter"
-                  ? commercialLaunch.starterSaleOpen
-                  : commercialLaunch.agencySaleOpen;
+            const planSaleOpen = isPlanSaleOpen(plan.slug);
             const selectedAnnualBlocked =
               billingCycle === "yearly" && planSaleOpen && yearlyReady && !annualIsValid;
             const annualStatusCopy = !planSaleOpen
               ? "Checkout temporarily unavailable"
               : annualIsValid
-                ? "Annual billing · 4 months free"
+                ? null
                 : yearlyReady
                   ? "Annual checkout unavailable. Monthly still works."
                   : "Annual price loading";
@@ -616,7 +627,14 @@ export default function MarketingRoute() {
                 <h3>{priceLabel(localPricing, plan.slug, billingCycle, billingCycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel)}</h3>
                 <small>
                   {billingCycle === "yearly"
-                    ? annualStatusCopy
+                    ? annualIsValid && planSaleOpen
+                      ? (
+                        <span className="f9-annual-status">
+                          <span>Annual billing</span>
+                          <strong>{DODO_ANNUAL_SAVINGS_LABEL}</strong>
+                        </span>
+                      )
+                      : annualStatusCopy
                     : `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`}
                 </small>
                 <p>{plan.detail}</p>
