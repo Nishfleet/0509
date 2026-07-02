@@ -64,9 +64,13 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain('id="demo"');
     expect(marketingRoute).toContain('aria-label="Sample brief before signup"');
     expect(marketingRoute).toContain("Review sample brief");
-    expect(marketingRoute).toContain("Open markdown brief");
-    expect(marketingRoute).toContain("See the morning brief before creating an account.");
-    expect(marketingRoute).toContain("/api/demo-proof");
+    expect(marketingRoute).toContain("Preview the morning brief before creating an account.");
+    expect(marketingRoute).toContain("See plans");
+    expect(marketingRoute).not.toContain("buyer moment");
+    expect(marketingRoute).not.toContain("not the live search result");
+    expect(marketingRoute).not.toContain("View JSON");
+    expect(marketingRoute).not.toContain("Markdown brief");
+    expect(marketingRoute).not.toContain("/api/demo-proof");
     expect(marketingRoute).not.toContain("Account search");
     expect(marketingRoute).not.toContain('to={rootData.session ? "/search" : "/auth/signup"}');
     expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
