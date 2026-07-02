@@ -3699,11 +3699,17 @@ one signal-green accent.
 }
 
 .f9-home .ld-nav-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
   background: var(--ld-ink);
   color: var(--ld-bone);
-  border-radius: 999px;
+  border: 2px solid var(--ld-ink);
+  border-radius: 8px;
   padding: 10px 20px;
   font-weight: 600;
+  touch-action: manipulation;
 }
 
 .f9-home .ld-nav-pill:hover { background: #2a2820; }
@@ -3807,14 +3813,17 @@ one signal-green accent.
 .ld-command {
   margin: clamp(26px, 4vw, 40px) 0 0;
   display: flex;
+  align-items: stretch;
+  max-width: 1120px;
   border: 2.5px solid var(--ld-ink);
-  border-radius: 16px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--ld-card);
 }
 
 .f9-home .ld-command input {
   flex: 1;
+  min-height: 66px;
   border: 0;
   background: transparent;
   padding: clamp(16px, 2.4vw, 24px) clamp(16px, 2.4vw, 28px);
@@ -3829,7 +3838,10 @@ one signal-green accent.
 .f9-home .ld-command:focus-within { box-shadow: 0 0 0 3px var(--ld-green); }
 
 .f9-home .ld-command button {
+  min-width: 260px;
   border: 0;
+  border-left: 2.5px solid var(--ld-ink);
+  border-radius: 0;
   background: var(--ld-ink);
   color: var(--ld-bone);
   font-family: var(--ld-display);
@@ -3841,8 +3853,10 @@ one signal-green accent.
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   white-space: nowrap;
+  touch-action: manipulation;
 }
 
 .f9-home .ld-command button span { color: var(--ld-green); }
@@ -4204,6 +4218,7 @@ one signal-green accent.
 .f9-home .f9-growth-pricing {
   background: var(--ld-bone);
   border-top: 2.5px solid var(--ld-ink);
+  scroll-margin-top: 16px;
 }
 
 .f9-home .f9-growth-pricing .ld-section-head {
@@ -4218,6 +4233,7 @@ one signal-green accent.
   max-width: 620px;
   text-align: center;
   box-shadow: 6px 6px 0 var(--ld-ink);
+  overflow-wrap: anywhere;
 }
 
 .ld-plan-summary span {
@@ -4264,10 +4280,15 @@ one signal-green accent.
   border-radius: 0;
   background: var(--ld-card);
   box-shadow: 8px 8px 0 var(--ld-ink);
+  max-width: calc(100% - 8px);
 }
 
 .f9-home .f9-cycle-toggle a,
 .f9-home .f9-cycle-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
   flex: 1;
   min-height: 66px;
   padding: 0 clamp(18px, 3vw, 28px);
@@ -4329,6 +4350,7 @@ one signal-green accent.
   flex-direction: column;
   gap: 6px;
   color: var(--ld-ink);
+  min-width: 0;
 }
 
 .f9-home .f9-commerce-card > span {
@@ -4364,6 +4386,13 @@ one signal-green accent.
   letter-spacing: -0.02em;
   margin: 4px 0 0;
   color: var(--ld-ink);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.f9-home .f9-commerce-card h3.is-loading-price {
+  font-size: clamp(1.45rem, 2.2vw, 1.8rem);
+  line-height: 1.08;
 }
 
 .f9-home .f9-commerce-card small {
@@ -4392,6 +4421,8 @@ one signal-green accent.
 .f9-home .f9-plan-value strong,
 .f9-home .f9-plan-value span {
   line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .f9-home .f9-plan-value strong {
@@ -4446,6 +4477,8 @@ one signal-green accent.
   padding: 5px 0 5px 18px;
   position: relative;
   border-bottom: 1px dotted var(--ld-line);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .f9-home .f9-plan-feature-list li::before {
@@ -4458,16 +4491,26 @@ one signal-green accent.
 .f9-home .f9-commerce-card > a,
 .f9-home .f9-plan-actions a,
 .f9-home .f9-plan-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 50px;
+  width: 100%;
   margin-top: auto;
   background: var(--ld-ink);
   color: var(--ld-bone);
   border: 0;
+  border-radius: 8px;
   padding: 12px 18px;
   font-weight: 600;
   font-size: 0.92rem;
   text-align: center;
   cursor: pointer;
   text-decoration: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  touch-action: manipulation;
 }
 
 .f9-home .f9-commerce-card > a:hover,
@@ -4478,6 +4521,7 @@ one signal-green accent.
   display: flex;
   gap: 8px;
   margin-top: auto;
+  width: 100%;
 }
 
 .f9-home .f9-plan-actions form { flex: 1; display: flex; }
@@ -4596,11 +4640,15 @@ one signal-green accent.
   display: flex;
   max-width: 520px;
   border: 2.5px solid var(--ld-ink);
-  border-radius: 14px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--ld-card);
   padding: 0;
   box-shadow: none;
+}
+
+.f9-home .ld-final .f9-email-cta:focus-within {
+  box-shadow: 0 0 0 3px var(--ld-green);
 }
 
 .f9-home .ld-final .f9-email-cta input {
@@ -4617,6 +4665,10 @@ one signal-green accent.
 .f9-home .ld-final .f9-email-cta input:focus { outline: none; }
 
 .f9-home .ld-final .f9-email-cta button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
   border: 0;
   border-radius: 0;
   background: var(--ld-ink);
@@ -4624,6 +4676,8 @@ one signal-green accent.
   font-weight: 700;
   padding: 16px 26px;
   cursor: pointer;
+  white-space: normal;
+  touch-action: manipulation;
 }
 
 .f9-home .ld-final .f9-email-state {
@@ -4631,6 +4685,7 @@ one signal-green accent.
   padding: 16px 18px;
   font-family: var(--ld-mono);
   font-size: 0.9rem;
+  color: var(--ld-ink-soft);
 }
 
 .ld-final > p {
@@ -4669,14 +4724,50 @@ one signal-green accent.
 @media (max-width: 860px) {
   .ld-nav-links { display: none; }
 
+  .ld-nav {
+    gap: 10px;
+    padding: 18px 20px;
+  }
+
+  .ld-nav-actions {
+    gap: 10px;
+    font-size: 0.86rem;
+  }
+
+  .f9-home .ld-nav-actions .f9-link-arrow {
+    white-space: nowrap;
+  }
+
+  .f9-home .ld-nav-pill {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 0.84rem;
+    line-height: 1.1;
+    text-align: center;
+  }
+
   .ld-deck {
     flex-direction: column;
     align-items: flex-start;
   }
 
-    .ld-command { flex-direction: column; }
+  .ld-command {
+    flex-direction: column;
+    max-width: 100%;
+  }
 
-  .f9-home .ld-command button { justify-content: center; }
+  .f9-home .ld-command input {
+    min-height: 58px;
+  }
+
+  .f9-home .ld-command button {
+    justify-content: center;
+    min-width: 0;
+    width: 100%;
+    border-left: 0;
+    border-top: 2.5px solid var(--ld-ink);
+    white-space: normal;
+  }
 
   .ld-caseboard { grid-template-columns: 1fr; }
 
@@ -4704,6 +4795,45 @@ one signal-green accent.
   .f9-home .f9-commerce-grid,
   .ld-bundle-grid {
     grid-template-columns: 1fr;
+  }
+
+  .f9-home .f9-cycle-toggle {
+    width: calc(100% - 6px);
+    max-width: calc(100% - 6px);
+    box-shadow: 6px 6px 0 var(--ld-ink);
+  }
+
+  .f9-home .f9-cycle-toggle button {
+    min-height: 58px;
+    padding: 0 12px;
+  }
+
+  .f9-home .f9-commerce-card h3 {
+    font-size: 1.75rem;
+  }
+
+  .f9-home .f9-commerce-card h3.is-loading-price {
+    font-size: 1.5rem;
+  }
+
+  .f9-home .f9-plan-value {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .f9-home .f9-plan-actions,
+  .f9-home .f9-plan-actions a,
+  .f9-home .f9-commerce-card > a {
+    width: 100%;
+  }
+
+  .ld-case-card dl {
+    display: grid;
+    gap: 12px;
+  }
+
+  .ld-case-card dl > div {
+    flex: none;
   }
 
   .ld-stats-belt article {
