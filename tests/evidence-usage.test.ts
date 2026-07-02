@@ -24,6 +24,7 @@ type TestEnv = AppEnv & {
 function createTestEnv(plan = "starter") {
   const { db, sqlite } = createSqliteD1();
   sqlite.exec(`
+    PRAGMA foreign_keys = ON;
     CREATE TABLE user (id TEXT PRIMARY KEY);
     CREATE TABLE user_plan (
       user_id TEXT PRIMARY KEY,
@@ -42,7 +43,8 @@ function createTestEnv(plan = "starter") {
       plan_family TEXT NOT NULL,
       included_allowance INTEGER NOT NULL,
       included_consumed INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (workspace_user_id) REFERENCES user(id) ON DELETE CASCADE
     );
     CREATE UNIQUE INDEX idx_evidence_usage_period_workspace_start
       ON evidence_usage_period(workspace_user_id, period_start);
@@ -57,7 +59,8 @@ function createTestEnv(plan = "starter") {
       granted_at TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
       catalog_version TEXT,
-      metadata_json TEXT NOT NULL DEFAULT '{}'
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      FOREIGN KEY (workspace_user_id) REFERENCES user(id) ON DELETE CASCADE
     );
     CREATE TABLE evidence_top_up_ledger_entry (
       id TEXT PRIMARY KEY,
@@ -68,7 +71,9 @@ function createTestEnv(plan = "starter") {
       reservation_id TEXT,
       idempotency_key TEXT NOT NULL UNIQUE,
       metadata_json TEXT NOT NULL DEFAULT '{}',
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (grant_id) REFERENCES evidence_top_up_grant(id) ON DELETE CASCADE,
+      FOREIGN KEY (workspace_user_id) REFERENCES user(id) ON DELETE CASCADE
     );
     CREATE TABLE evidence_usage_reservation (
       id TEXT PRIMARY KEY,
@@ -82,7 +87,10 @@ function createTestEnv(plan = "starter") {
       expires_at TEXT NOT NULL,
       settled_at TEXT,
       released_at TEXT,
-      source TEXT NOT NULL
+      source TEXT NOT NULL,
+      FOREIGN KEY (workspace_user_id) REFERENCES user(id) ON DELETE CASCADE,
+      FOREIGN KEY (usage_period_id) REFERENCES evidence_usage_period(id) ON DELETE SET NULL,
+      FOREIGN KEY (top_up_grant_id) REFERENCES evidence_top_up_grant(id) ON DELETE SET NULL
     );
     CREATE TABLE proof_usage_credit (
       id TEXT PRIMARY KEY,
@@ -90,14 +98,17 @@ function createTestEnv(plan = "starter") {
       credits INTEGER NOT NULL,
       provider_payment_id TEXT,
       granted_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
     );
     CREATE TABLE proof_usage_credit_migration (
       legacy_credit_id TEXT PRIMARY KEY,
       grant_id TEXT NOT NULL,
       workspace_user_id TEXT NOT NULL,
       migrated_at TEXT NOT NULL,
-      idempotency_key TEXT NOT NULL UNIQUE
+      idempotency_key TEXT NOT NULL UNIQUE,
+      FOREIGN KEY (grant_id) REFERENCES evidence_top_up_grant(id) ON DELETE CASCADE,
+      FOREIGN KEY (workspace_user_id) REFERENCES user(id) ON DELETE CASCADE
     );
     INSERT INTO user (id) VALUES ('user-1');
     INSERT INTO user_plan (
@@ -200,6 +211,41 @@ describe("evidence usage periods", () => {
     expect(first.migrated).toBe(1);
     expect(second.migrated).toBe(0);
     const summary = await getEvidenceUsageSummary(env, "user-1");
+    expect(summary.topUpRemaining).toBe(7);
+  });
+
+  it("links legacy migration rows to an existing top-up grant", async () => {
+    env.sqlite.exec(`
+      INSERT INTO proof_usage_credit (id, user_id, credits, provider_payment_id, granted_at, expires_at)
+      VALUES ('legacy-existing-grant', 'user-1', 7, 'legacy-pay-existing', '2026-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z');
+      INSERT INTO evidence_top_up_grant (
+        id, workspace_user_id, sku_slug, provider_payment_id, provider_product_id,
+        quantity_granted, quantity_remaining, granted_at, status, catalog_version, metadata_json
+      )
+      VALUES (
+        'existing-grant-1', 'user-1', 'legacy_migrated_v1', 'legacy-pay-existing', 'legacy',
+        7, 7, '2026-01-01T00:00:00.000Z', 'active', 'legacy', '{"legacyCreditId":"legacy-existing-grant"}'
+      );
+    `);
+
+    const first = await migrateLegacyTopUpCreditsIfNeeded(env, "user-1");
+    const second = await migrateLegacyTopUpCreditsIfNeeded(env, "user-1");
+    const grantCount = await env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM evidence_top_up_grant WHERE provider_payment_id = 'legacy-pay-existing'`,
+    )
+      .bind()
+      .first<{ count: number }>();
+    const migration = await env.DB.prepare(
+      `SELECT grant_id FROM proof_usage_credit_migration WHERE legacy_credit_id = 'legacy-existing-grant'`,
+    )
+      .bind()
+      .first<{ grant_id: string }>();
+    const summary = await getEvidenceUsageSummary(env, "user-1");
+
+    expect(first.migrated).toBe(1);
+    expect(second.migrated).toBe(0);
+    expect(grantCount?.count).toBe(1);
+    expect(migration?.grant_id).toBe("existing-grant-1");
     expect(summary.topUpRemaining).toBe(7);
   });
 
