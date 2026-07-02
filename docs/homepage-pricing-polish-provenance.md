@@ -5,12 +5,12 @@
 - App PR: #294, `fix(marketing): polish homepage conversion without redesigning brand`
 - Feature branch: `fix/marketing-homepage-pricing-polish`
 - Feature commit: `e42fe667d822a60dcb0af1f362ffefb32206419e`
-- Protected squash merge/runtime commit: `e31fdf38e779126318ef70085ca5a4e06d094ace`
-- Production deploy: 2026-07-02 after PR #294 merge
-- Worker deployment: `d2c6226d-e454-4ea8-9fe4-a0074507fdeb`
-- Worker version: `a1506e3e-a541-45c1-ad56-eafb7b53b7c5` (#403), 100%
-- Rollback deployment: `d5ade0f4-9a01-432f-a864-e69186c8afe4`
-- Rollback version: `bced0e5b-b181-42b0-93a1-8977e6d268f2` (#402), 100%
+- App merge commit: `e31fdf38e779126318ef70085ca5a4e06d094ace`
+- Follow-up PR: #296, `fix(billing): keep held plan checkout out of Agency copy`
+- Final runtime commit: `34b31cdc5b8d627da8412b345c60c7da3da22795`
+- Production deploy: 2026-07-02 after PR #296 merge
+- Worker version: `8a79ca90-4f19-4b2c-bdfe-09f95857cc65`, 100%
+- Rollback version: `a1506e3e-a541-45c1-ad56-eafb7b53b7c5`, 100%
 
 ## Scope Preserved
 
@@ -20,7 +20,7 @@
 
 ## Verification
 
-- `npm test`: 165 files, 1666 tests passed.
+- `npm test`: 165 files, 1667 tests passed after the billing fallback regression was added.
 - `npm run typecheck`: passed.
 - `npm run build`: passed.
 - `node scripts/validate-d1-backup.mjs`: passed in dry-run mode through migration `0062_dodo_plan_change_pending_target.sql`.
@@ -31,9 +31,9 @@
 - `npm run canary:prod -- --query example.com`: passed after deploy for all production health domains, fresh-live bypass, ops readiness, and Meta ads beta.
 - `npm run provider:bakeoff:launch`: passed after deploy for current 0509 live Search queries `nykaa`, `boat`, `mamaearth`, `swiggy`, `zomato`, and `meesho`; optional alternate providers were skipped because their tokens are not configured.
 - Rendered browser smoke after deploy: homepage, sample artifact, annual toggle, signed-out plan intent, mobile overflow, `/search`, `/api/health`, and sanitized `/api/pricing-preview` all passed.
-- Autoreview: clean after accepted findings were fixed and regression tests were added.
-- Cursor Bugbot: `bugbot-gate` recommended one run; `/review-bugbot` was posted on PR #294; GitHub reported Cursor Bugbot as neutral/skipping, with no findings posted.
+- Autoreview: the first merged app-commit review found a billing fallback issue; PR #296 fixed it, and the follow-up staged diff autoreview exited clean with no accepted/actionable findings.
+- Cursor Bugbot: attempted on PR #294 and PR #296, but Cursor reported usage limit reached both times. No Bugbot findings were produced.
 
 ## Notes
 
-- This provenance PR is docs-only and should not be redeployed. The deployed runtime remains `e31fdf38e779126318ef70085ca5a4e06d094ace`.
+- This provenance PR is docs-only and should not be redeployed. The deployed runtime remains `34b31cdc5b8d627da8412b345c60c7da3da22795`.
