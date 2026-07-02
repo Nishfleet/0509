@@ -24,8 +24,13 @@ import {
   type UsageBundleSlug,
 } from "~/lib/pricing";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import type { UserPlanBillingInfo } from "~/lib/data.server";
+import type { AppEnv } from "~/lib/env.server";
 
-const PAYMENT_ISSUE_STATUSES = new Set(["subscription.failed", "subscription.on_hold"]);
+const PAYMENT_ISSUE_STATUSES = new Set(["payment.failed", "subscription.failed", "subscription.on_hold"]);
+const PLAN_CHANGE_PENDING_STATUS = "plan_change_pending";
+const PLAN_CHANGE_SCHEDULED_STATUS = "plan_change_scheduled";
+const CANCELLATION_SCHEDULED_STATUS = "cancellation_scheduled";
 const LEGACY_PLAN_RETURN_CONFIRMATION_WINDOW_MS = 15 * 60 * 1000;
 
 type AppPricingPreview = {
@@ -50,6 +55,30 @@ type AppAnnualValidation = {
   currency: string | null;
   billingCountry: string | null;
 };
+
+type PlanChangeNoticeKind =
+  | "preview"
+  | "accepted"
+  | "scheduled"
+  | "requires-subscription"
+  | "unavailable"
+  | "pending-checkout"
+  | "pending-change"
+  | "cancellation-scheduled"
+  | "payment-issue"
+  | "current"
+  | "annual-unavailable";
+
+type PlanChangePreviewNotice = {
+  plan: "scout" | "starter";
+  cycle: PricingBillingCycle;
+  sku: string;
+  charge: string;
+  previewToken: string;
+  effectiveAt: "immediately" | "next_billing_date";
+};
+
+type PlanChangePreviewTarget = Omit<PlanChangePreviewNotice, "charge" | "previewToken">;
 
 export const meta = () => [{ title: "Billing & usage | Five to Nine" }];
 
@@ -76,6 +105,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? "top_up"
     : "plan";
   const portalNotice = url.searchParams.get("portal");
+  const planChangeNotice = cleanPlanChangeNotice(url.searchParams.get("plan-change"));
+  const planChangePreviewTarget = planChangeNotice === "preview"
+    ? cleanPlanChangePreviewTarget(url.searchParams)
+    : null;
   const selectedPlanParam = cleanPricingPlan(url.searchParams.get("plan"));
   const selectedPlan = selectedPlanParam ?? "starter";
   const selectedCycleParam = coerceBillingCycle(url.searchParams.get("cycle"));
@@ -104,6 +137,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const customerBilling = {
     plan: billing.plan,
     dodoStatus: billing.dodoStatus,
+    hasDodoPlanChangePendingTarget: Boolean(billing.dodoPlanChangeProductId),
     dodoNextBillingAt: billing.dodoNextBillingAt,
     billingInterval: billing.billingInterval,
     planUpdatedAt: billing.planUpdatedAt,
@@ -133,6 +167,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     selectedPlanParam === billing.plan &&
     selectedCycleParam === currentCycleParam &&
     isRecentTimestamp(billing.planUpdatedAt, LEGACY_PLAN_RETURN_CONFIRMATION_WINDOW_MS);
+  const planChangePreview = canManageBilling && planChangePreviewTarget
+    ? await loadPlanChangePreviewNotice({
+        env,
+        request,
+        billing,
+        workspaceUserId,
+        target: planChangePreviewTarget,
+      })
+    : null;
 
   return {
     email: session.user.email,
@@ -171,6 +214,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     topUpCheckoutUnavailable: checkoutNotice === "top-up-unavailable",
     portalUnavailable: portalNotice === "unavailable",
     hasPortal: Boolean(billing.dodoCustomerId),
+    hasDodoSubscription: Boolean(billing.dodoSubscriptionId),
+    planChangeNotice: canManageBilling ? planChangeNotice : null,
+    planChangePreview,
   };
 }
 
@@ -180,6 +226,14 @@ export default function BillingRoute() {
   const planLabel = billing.plan.charAt(0).toUpperCase() + billing.plan.slice(1);
   const isPaid = billing.plan !== "free";
   const hasPaymentIssue = isPaid && PAYMENT_ISSUE_STATUSES.has(billing.dodoStatus ?? "");
+  const hasPlanChangePending =
+    isPaid &&
+    isBlockingPlanChangeStatus(
+      billing.dodoStatus,
+      billing.planUpdatedAt,
+      billing.hasDodoPlanChangePendingTarget,
+    );
+  const hasCancellationScheduled = isPaid && billing.dodoStatus === CANCELLATION_SCHEDULED_STATUS;
   const selectedPlan = data.selectedPlan ?? "starter";
   const selectedCycle = data.selectedCycle ?? (billing.billingInterval === "annual" ? "yearly" : "monthly");
   const selectedSource = data.selectedSource ?? null;
@@ -286,6 +340,14 @@ export default function BillingRoute() {
         </div>
       ) : null}
 
+      {data.planChangeNotice ? (
+        <PlanChangeNotice
+          notice={data.planChangeNotice}
+          preview={data.planChangePreview}
+          selectedCycle={selectedCycle}
+        />
+      ) : null}
+
       {data.checkoutReturned ? (
         <CheckoutReturnNotice
           creditGrants={data.creditGrants}
@@ -386,12 +448,30 @@ export default function BillingRoute() {
             const annualBlocked = selectedCycle === "yearly" && !annualIsValid;
             const priceReady = Boolean(planCyclePrice);
             const planSaleOpen = planSaleIsOpen(commercialLaunch, plan.slug);
+            const planCanUseInAppChange = plan.slug === "scout" || plan.slug === "starter";
             const isCurrentPlan = billing.plan === plan.slug;
+            const isCurrentBillingChoice =
+              isCurrentPlan &&
+              ((billing.billingInterval === "annual" ? "yearly" : "monthly") === selectedCycle);
             const checkoutSku = billingSkuForPlanCheckout(plan.slug, selectedCycle);
             const canStartCheckout =
               canManageBilling &&
               billing.plan === "free" &&
-              !isCurrentPlan &&
+              !isCurrentBillingChoice &&
+              planSaleOpen &&
+              billing.dodoStatus !== "checkout_pending" &&
+              priceReady &&
+              Boolean(checkoutSku) &&
+              !annualBlocked;
+            const canChangePlan =
+              canManageBilling &&
+              billing.plan !== "free" &&
+              planCanUseInAppChange &&
+              data.hasDodoSubscription &&
+              !hasPaymentIssue &&
+              !hasPlanChangePending &&
+              !hasCancellationScheduled &&
+              !isCurrentBillingChoice &&
               planSaleOpen &&
               billing.dodoStatus !== "checkout_pending" &&
               priceReady &&
@@ -408,8 +488,10 @@ export default function BillingRoute() {
                     <span className="f9-app-kicker">{plan.name}</span>
                     <strong>{planCyclePrice || priceFallback(plan, selectedCycle)}</strong>
                   </div>
-                  {isCurrentPlan ? (
+                  {isCurrentBillingChoice ? (
                     <span className="f9-status-pill is-healthy">Current plan</span>
+                  ) : isCurrentPlan ? (
+                    <span className="f9-status-pill is-healthy">Current tier</span>
                   ) : plan.slug === "starter" ? (
                     <span className="f9-status-pill">Recommended</span>
                   ) : null}
@@ -439,14 +521,10 @@ export default function BillingRoute() {
                     <button className="f9-secondary-button" disabled type="button">
                       Owner managed
                     </button>
-                  ) : isCurrentPlan ? (
-                    <Link className="f9-secondary-button" to="/app/support?category=billing">
-                      Change with support
-                    </Link>
-                  ) : !planSaleOpen ? (
-                    <Link className="f9-secondary-button" to="/app/support?category=billing">
-                      Request Agency access
-                    </Link>
+                  ) : isCurrentBillingChoice ? (
+                    <button className="f9-secondary-button" disabled type="button">
+                      Current plan
+                    </button>
                   ) : canStartCheckout && checkoutSku ? (
                     <Form action="/api/billing/dodo/checkout" method="post">
                       <input name="sku" type="hidden" value={checkoutSku} />
@@ -459,10 +537,41 @@ export default function BillingRoute() {
                         Start {selectedCycle === "yearly" ? "annual" : "monthly"}
                       </SubmitButton>
                     </Form>
-                  ) : billing.plan !== "free" ? (
+                  ) : !planCanUseInAppChange || !planSaleOpen ? (
                     <Link className="f9-secondary-button" to="/app/support?category=billing">
-                      Change with support
+                      Request Agency access
                     </Link>
+                  ) : canChangePlan && checkoutSku ? (
+                    <Form action="/api/billing/dodo/plan-change" method="post">
+                      <input name="intent" type="hidden" value="preview" />
+                      <input name="sku" type="hidden" value={checkoutSku} />
+                      <SubmitButton
+                        className="f9-primary-button"
+                        intent="preview"
+                        match={{ sku: checkoutSku }}
+                        pendingLabel="Previewing…"
+                      >
+                        Preview switch
+                      </SubmitButton>
+                    </Form>
+                  ) : billing.plan !== "free" && !data.hasDodoSubscription ? (
+                    <Link className="f9-secondary-button" to="/app/support?category=billing">
+                      Request billing help
+                    </Link>
+                  ) : billing.plan !== "free" ? (
+                    <button className="f9-secondary-button" disabled type="button">
+                      {hasPaymentIssue
+                        ? "Resolve payment first"
+                        : hasCancellationScheduled
+                          ? "Cancellation scheduled"
+                        : hasPlanChangePending
+                          ? "Change pending"
+                        : annualBlocked
+                          ? "Annual unavailable"
+                          : checkoutSku
+                            ? "Price loading"
+                            : "Change unavailable"}
+                    </button>
                   ) : (
                     <button className="f9-secondary-button" disabled type="button">
                       {annualBlocked ? "Annual unavailable" : checkoutSku ? "Price loading" : "Checkout unavailable"}
@@ -501,7 +610,14 @@ export default function BillingRoute() {
         <div className="f9-work-list is-compact">
           <div className="f9-work-row">
             <strong>Status</strong>
-            <span>{formatBillingStatus(billing.plan, billing.dodoStatus)}</span>
+            <span>
+              {formatBillingStatus(
+                billing.plan,
+                billing.dodoStatus,
+                billing.planUpdatedAt,
+                billing.hasDodoPlanChangePendingTarget,
+              )}
+            </span>
           </div>
           {isPaid && billing.dodoNextBillingAt ? (
             <div className="f9-work-row">
@@ -663,8 +779,9 @@ export default function BillingRoute() {
             <div className="f9-work-row">
               <strong>Manage subscription</strong>
               <span>
-                Open Dodo's hosted portal for card and invoice tasks. Plan changes and cancellation
-                stay backed by support until the subscription-update setting is confirmed.{" "}
+                  Open Dodo's hosted portal for card and invoice tasks. Use the plan cards above
+                  to switch plans or billing cycles through Dodo; use support for cancellation
+                  until portal cancellation proof is complete.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
                   <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
                     Open billing portal
@@ -707,7 +824,122 @@ export default function BillingRoute() {
   );
 }
 
-function formatBillingStatus(plan: string, dodoStatus: string | null) {
+function PlanChangeNotice({
+  notice,
+  preview,
+  selectedCycle,
+}: {
+  notice: PlanChangeNoticeKind;
+  preview: PlanChangePreviewNotice | null;
+  selectedCycle: PricingBillingCycle;
+}) {
+  const cycleLabel = selectedCycle === "yearly" ? "annual" : "monthly";
+  if (notice === "preview" && preview) {
+    const targetCycleLabel = preview.cycle === "yearly" ? "annual" : "monthly";
+    const targetPlanLabel = preview.plan.charAt(0).toUpperCase() + preview.plan.slice(1);
+    const timingLabel = preview.effectiveAt === "next_billing_date"
+      ? "at the next billing date"
+      : "now";
+    return (
+      <div className="f9-message" role="status">
+        <p>
+          Dodo previewed {preview.charge} due now for the {targetCycleLabel} {targetPlanLabel}
+          change. Confirm to apply it {timingLabel} with the saved payment method.
+        </p>
+        <Form action="/api/billing/dodo/plan-change" method="post">
+          <input name="intent" type="hidden" value="confirm" />
+          <input name="sku" type="hidden" value={preview.sku} />
+          <input name="preview_token" type="hidden" value={preview.previewToken} />
+          <SubmitButton
+            className="f9-primary-button"
+            intent="confirm"
+            match={{ sku: preview.sku }}
+            pendingLabel="Confirming…"
+          >
+            Confirm switch
+          </SubmitButton>
+        </Form>
+      </div>
+    );
+  }
+  if (notice === "accepted") {
+    return (
+      <div className="f9-message" role="status">
+        <p>
+          Dodo accepted that plan change. Your account will update here after Dodo sends the signed
+          billing event.
+        </p>
+      </div>
+    );
+  }
+  if (notice === "scheduled") {
+    return (
+      <div className="f9-message" role="status">
+        <p>
+          Dodo scheduled that plan change for the next billing date. Your current plan stays active
+          until then.
+        </p>
+      </div>
+    );
+  }
+  if (notice === "current") {
+    return (
+      <div className="f9-message" role="status">
+        <p>You are already on that plan and billing cycle.</p>
+      </div>
+    );
+  }
+  if (notice === "requires-subscription") {
+    return (
+      <div className="f9-message is-error" role="alert">
+        <p>Choose a paid plan first. After that, you can switch plans or billing cycles here.</p>
+      </div>
+    );
+  }
+  if (notice === "pending-checkout") {
+    return (
+      <div className="f9-message is-error" role="alert">
+        <p>Finish the open Dodo checkout or wait for it to expire before changing plans.</p>
+      </div>
+    );
+  }
+  if (notice === "pending-change") {
+    return (
+      <div className="f9-message" role="status">
+        <p>Dodo is already processing a plan change for this subscription.</p>
+      </div>
+    );
+  }
+  if (notice === "cancellation-scheduled") {
+    return (
+      <div className="f9-message is-error" role="alert">
+        <p>Cancel the scheduled subscription cancellation before changing plans.</p>
+      </div>
+    );
+  }
+  if (notice === "payment-issue") {
+    return (
+      <div className="f9-message is-error" role="alert">
+        <p>Update your payment method before changing plans. Dodo has a payment retry in progress.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="f9-message is-error" role="alert">
+      <p>
+        Dodo could not verify that {cycleLabel} plan change just now. Your plan is unchanged. Email{" "}
+        <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need us to handle it directly.
+      </p>
+    </div>
+  );
+}
+
+function formatBillingStatus(
+  plan: string,
+  dodoStatus: string | null,
+  planUpdatedAt: string | null,
+  hasPlanChangePendingTarget?: boolean | null,
+) {
   if (plan === "free") {
     if (dodoStatus === "refunded") return "Refunded — reverted to the free account";
     if (dodoStatus === "subscription.cancelled") return "Cancelled — on the free account";
@@ -719,11 +951,27 @@ function formatBillingStatus(plan: string, dodoStatus: string | null) {
     return "Active — payment retry in progress";
   }
 
-  if (dodoStatus === "cancellation_scheduled") {
+  if (dodoStatus === CANCELLATION_SCHEDULED_STATUS) {
     return "Active — cancels at the end of this billing period";
+  }
+  if (dodoStatus === PLAN_CHANGE_SCHEDULED_STATUS) {
+    return "Active — plan change scheduled";
+  }
+  if (isBlockingPlanChangeStatus(dodoStatus, planUpdatedAt, hasPlanChangePendingTarget)) {
+    return "Active — plan change pending";
   }
 
   return "Active";
+}
+
+function isBlockingPlanChangeStatus(
+  status: string | null,
+  _planUpdatedAt: string | null,
+  hasPlanChangePendingTarget?: boolean | null,
+) {
+  if (hasPlanChangePendingTarget) return true;
+  if (status === PLAN_CHANGE_SCHEDULED_STATUS) return true;
+  return status === PLAN_CHANGE_PENDING_STATUS;
 }
 
 function formatDate(value: string) {
@@ -754,6 +1002,171 @@ function coerceBillingCycle(value: string | null): PricingBillingCycle | null {
 function cleanSourceParam(value: string | null) {
   const cleaned = String(value ?? "").trim().toLowerCase();
   return /^[a-z0-9_-]{1,40}$/.test(cleaned) ? cleaned : null;
+}
+
+function cleanPlanChangeNotice(value: string | null): PlanChangeNoticeKind | null {
+  switch (value) {
+    case "preview":
+    case "accepted":
+    case "scheduled":
+    case "requires-subscription":
+    case "unavailable":
+    case "pending-checkout":
+    case "pending-change":
+    case "cancellation-scheduled":
+    case "payment-issue":
+    case "current":
+    case "annual-unavailable":
+      return value;
+    default:
+      return null;
+  }
+}
+
+function cleanPlanChangePreviewTarget(params: URLSearchParams): PlanChangePreviewTarget | null {
+  const plan = cleanPricingPlan(params.get("plan"));
+  const cycle = coerceBillingCycle(params.get("cycle"));
+  const sku = cleanSourceParam(params.get("sku"));
+  const effectiveAt = cleanPlanChangeEffectiveAt(params.get("effective"));
+  if ((plan !== "scout" && plan !== "starter") || !cycle || !sku || !effectiveAt) {
+    return null;
+  }
+  if (billingSkuForPlanCheckout(plan, cycle) !== sku) return null;
+  return { plan, cycle, sku, effectiveAt };
+}
+
+async function loadPlanChangePreviewNotice({
+  env,
+  request,
+  billing,
+  workspaceUserId,
+  target,
+}: {
+  env: AppEnv;
+  request: Request;
+  billing: UserPlanBillingInfo;
+  workspaceUserId: string;
+  target: PlanChangePreviewTarget;
+}): Promise<PlanChangePreviewNotice | null> {
+  if (
+    billing.plan === "free" ||
+    !billing.dodoSubscriptionId ||
+    !billing.billingInterval ||
+    billing.dodoStatus === "checkout_pending" ||
+    billing.dodoStatus === CANCELLATION_SCHEDULED_STATUS ||
+    isBlockingPlanChangeStatus(
+      billing.dodoStatus,
+      billing.planUpdatedAt,
+      Boolean(billing.dodoPlanChangeProductId),
+    ) ||
+    PAYMENT_ISSUE_STATUSES.has(billing.dodoStatus ?? "") ||
+    isCurrentBillingChoice(billing.plan, billing.billingInterval, target)
+  ) {
+    return null;
+  }
+
+  const {
+    checkoutTargetFromSkuSlug,
+    createDodoSubscriptionPlanChangePreviewToken,
+    getDodo0509SubscriptionCurrency,
+    previewDodo0509SubscriptionPlanChange,
+    summarizeDodoSubscriptionPlanChangePreview,
+  } = await import("~/lib/dodo-billing.server");
+  const providerTarget = checkoutTargetFromSkuSlug(target.sku);
+  if (
+    providerTarget?.kind !== "plan" ||
+    providerTarget.planFamily !== target.plan ||
+    providerTarget.cycle !== target.cycle ||
+    (providerTarget.planFamily !== "scout" && providerTarget.planFamily !== "starter")
+  ) {
+    return null;
+  }
+  const selfServeTarget = providerTarget as typeof providerTarget & {
+    planFamily: "scout" | "starter";
+  };
+
+  const { validateDodo0509PlanCheckout } = await import("~/lib/dodo-pricing.server");
+  const validation = await validateDodo0509PlanCheckout({
+    env,
+    request,
+    plan: selfServeTarget.planFamily,
+    cycle: selfServeTarget.cycle,
+  });
+  if (!validation.valid) return null;
+
+  const timing = planChangeTiming(billing.plan, billing.billingInterval, selfServeTarget);
+  if (timing.effectiveAt !== target.effectiveAt) return null;
+
+  try {
+    const [subscriptionCurrency, preview] = await Promise.all([
+      getDodo0509SubscriptionCurrency({
+        env,
+        subscriptionId: billing.dodoSubscriptionId,
+      }),
+      previewDodo0509SubscriptionPlanChange({
+        env,
+        subscriptionId: billing.dodoSubscriptionId,
+        target: selfServeTarget,
+        userId: workspaceUserId,
+        effectiveAt: timing.effectiveAt,
+        prorationBillingMode: timing.prorationBillingMode,
+      }),
+    ]);
+    const summary = summarizeDodoSubscriptionPlanChangePreview(preview, subscriptionCurrency);
+    if (!summary) return null;
+    const previewToken = await createDodoSubscriptionPlanChangePreviewToken(env, {
+      subscriptionId: billing.dodoSubscriptionId,
+      target: selfServeTarget,
+      userId: workspaceUserId,
+      effectiveAt: timing.effectiveAt,
+      prorationBillingMode: timing.prorationBillingMode,
+      amount: summary.amount,
+      currency: summary.currency,
+    });
+    return { ...target, charge: summary.display, previewToken };
+  } catch {
+    return null;
+  }
+}
+
+function isCurrentBillingChoice(
+  currentPlan: string,
+  currentInterval: "monthly" | "annual",
+  target: { plan: string; cycle: PricingBillingCycle },
+) {
+  const targetInterval = target.cycle === "yearly" ? "annual" : "monthly";
+  return currentPlan === target.plan && currentInterval === targetInterval;
+}
+
+function planChangeTiming(
+  currentPlan: "scout" | "starter" | "agency",
+  currentInterval: "monthly" | "annual",
+  target: { planFamily: "scout" | "starter" | "agency"; cycle: PricingBillingCycle },
+) {
+  const targetInterval = target.cycle === "yearly" ? "annual" : "monthly";
+  const rankDelta = planRank(target.planFamily) - planRank(currentPlan);
+  const upgradesValue = rankDelta > 0 || (rankDelta === 0 && currentInterval === "monthly" && targetInterval === "annual");
+  if (upgradesValue) {
+    return { effectiveAt: "immediately" as const, prorationBillingMode: "prorated_immediately" as const };
+  }
+  return { effectiveAt: "next_billing_date" as const, prorationBillingMode: "full_immediately" as const };
+}
+
+function planRank(plan: string) {
+  switch (plan) {
+    case "scout":
+      return 1;
+    case "starter":
+      return 2;
+    case "agency":
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function cleanPlanChangeEffectiveAt(value: string | null) {
+  return value === "immediately" || value === "next_billing_date" ? value : null;
 }
 
 function cleanDodoCheckoutStatus(value: string | null) {

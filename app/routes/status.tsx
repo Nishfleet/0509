@@ -82,9 +82,9 @@ export default function StatusRoute() {
       <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
           <li>Email delivery is available for eligible accounts; delivery issues can be reviewed through support.</li>
-          <li>Dodo customer portal subscription changes still need dashboard confirmation.</li>
+          <li>Dodo-backed plan switching is repo-configured for linked paid subscriptions; support handles changes until internal smoke proof is complete.</li>
           <li>Recurring uptime checks are configured; first alert proof is still operator-verified.</li>
-          <li>Plan changes, cancellation, deletion, and sensitive account changes are handled through support until portal changes are confirmed.</li>
+          <li>Cancellation, deletion, and sensitive account changes still use the hosted portal or support path.</li>
         </ul>
       </PublicDocBlock>
 

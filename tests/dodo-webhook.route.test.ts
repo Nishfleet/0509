@@ -206,6 +206,146 @@ describe("Dodo webhook route", () => {
     );
   });
 
+  it("refreshes local entitlements when Dodo confirms a subscription plan change", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoSubscriptionGrant: vi.fn(() => ({
+          eventType: "subscription.plan_changed",
+          userId: "user-1",
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+          productId: "pdt_starter_annual",
+          plan: "starter",
+          cycle: "yearly",
+          status: "active",
+          grantedAt: "2026-07-02T00:00:00.000Z",
+          hasProviderGrantTimestamp: true,
+          nextBillingAt: "2027-07-02T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-plan-changed", { type: "subscription.plan_changed" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true });
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        plan: "starter",
+        providerProductId: "pdt_starter_annual",
+        providerSubscriptionId: "sub_123",
+        providerCustomerId: "cus_123",
+        nextBillingAt: "2027-07-02T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-07-02T00:00:00.000Z",
+        forcePlanChangePending: false,
+        requirePlanChangePending: false,
+      }),
+      10,
+      expect.objectContaining({
+        eventId: "evt-plan-changed",
+        outcome: "processed",
+        metadata: expect.objectContaining({ eventType: "subscription.plan_changed" }),
+      }),
+    );
+  });
+
+  it("uses the signed webhook timestamp for no-timestamp Dodo plan-changed webhooks", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoSubscriptionGrant: vi.fn(() => ({
+          eventType: "subscription.plan_changed",
+          userId: "user-1",
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+          productId: "pdt_starter_annual",
+          plan: "starter",
+          cycle: "yearly",
+          status: "active",
+          grantedAt: null,
+          hasProviderGrantTimestamp: false,
+          nextBillingAt: "2027-07-02T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-plan-changed-no-timestamp", { type: "subscription.plan_changed" }),
+      params: {},
+    } as never);
+
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+          userId: "user-1",
+          plan: "starter",
+          grantedAt: expect.any(String),
+          forcePlanChangePending: true,
+          requirePlanChangePending: true,
+        }),
+      10,
+      expect.objectContaining({ eventId: "evt-plan-changed-no-timestamp" }),
+    );
+  });
+
+  it("falls back to the pending-target guard when a no-timestamp plan-changed webhook lacks a timestamp header", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoSubscriptionGrant: vi.fn(() => ({
+          eventType: "subscription.plan_changed",
+          userId: "user-1",
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+          productId: "pdt_starter_annual",
+          plan: "starter",
+          cycle: "yearly",
+          status: "active",
+          grantedAt: null,
+          hasProviderGrantTimestamp: false,
+          nextBillingAt: "2027-07-02T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: new Request("https://0509.io/api/webhooks/dodo", {
+        method: "POST",
+        headers: {
+          "webhook-id": "evt-plan-changed-no-header-timestamp",
+          "webhook-signature": "v1=signed",
+        },
+        body: JSON.stringify({ type: "subscription.plan_changed" }),
+      }),
+      params: {},
+    } as never);
+
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        plan: "starter",
+        grantedAt: undefined,
+        forcePlanChangePending: true,
+        requirePlanChangePending: true,
+      }),
+      10,
+      expect.objectContaining({ eventId: "evt-plan-changed-no-header-timestamp" }),
+    );
+  });
+
   it("clears the pending plan checkout lock when a signed terminal checkout failure arrives", async () => {
     const { data } = mockWebhookDependencies({
       billing: {
@@ -427,6 +567,44 @@ describe("Dodo webhook route", () => {
       }),
       expect.objectContaining({
         eventId: "evt-subscription-failed-active",
+        outcome: "processed",
+      }),
+    );
+  });
+
+  it("records Dodo plan-change payment.failed events as payment issues", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanRevocation: vi.fn(() => ({
+          eventType: "payment.failed",
+          action: "payment_issue",
+          userId: "user-1",
+          customerEmail: "owner@example.com",
+          subscriptionId: "sub_123",
+          status: "failed",
+          revokedAt: "2026-07-01T08:00:00.000Z",
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-plan-change-payment-failed", { type: "payment.failed" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
+    expect(data.applyDodoPlanPaymentIssueWithLedger).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        status: "payment.failed",
+        occurredAt: "2026-07-01T08:00:00.000Z",
+      }),
+      expect.objectContaining({
+        eventId: "evt-plan-change-payment-failed",
         outcome: "processed",
       }),
     );

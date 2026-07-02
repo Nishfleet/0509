@@ -820,7 +820,7 @@ describe("support route", () => {
     expect(markup).toContain("Open support case");
     expect(markup).toContain("name=\"requestKey\"");
     expect(markup).toContain("value=\"support-request-render-1\"");
-    expect(markup).toContain("hosted portal setting is confirmed");
+    expect(markup).toContain("Plan changes start from the billing page");
     expect(markup).toContain("support@0509.io");
   });
 });

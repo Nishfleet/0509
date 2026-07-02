@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import {
   claimDodoPlanCheckout,
+  claimDodoSubscriptionPlanChange,
+  clearDodoSubscriptionPlanChangeClaim,
   clearDodoPlanCheckout,
   beginDodoWebhookEventProcessing,
   claimDodoWebhookEvent,
@@ -19,6 +21,8 @@ import {
   createSupportCaseEvent,
   createWatchEvent,
   DODO_PLAN_CHECKOUT_LOCK_MINUTES,
+  DODO_SUBSCRIPTION_PLAN_CHANGE_LOCK_MINUTES,
+  DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
   applyDodoPlanGrantWithWatchlistReconcile,
   grantDodoPlanAccess,
   getDeliveryTargetReadinessStats,
@@ -37,6 +41,8 @@ import {
   getWeeklyBusinessSummary,
   findAgentActionAuditByIdempotencyKey,
   finishAgentActionAudit,
+  isBlockingDodoSubscriptionPlanChangeStatus,
+  markDodoSubscriptionPlanChangeScheduled,
   listRecentAgentActionAudits,
   listClientRooms,
   listAgentMemory,
@@ -1309,22 +1315,37 @@ describe("Dodo billing persistence", () => {
     expect(statement?.sql).not.toContain("user_plan.dodo_payment_id = excluded.dodo_payment_id");
     // Subscription events with no payment id must clear temporary checkout locks,
     // while preserving already-confirmed real payment ids.
-    expect(statement?.sql).toContain("WHEN user_plan.dodo_status = 'checkout_pending' THEN NULL");
-    expect(statement?.sql).toContain("WHEN excluded.dodo_payment_id IS NOT NULL THEN excluded.dodo_payment_id");
-    expect(statement?.sql).toContain("COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id)");
-    expect(statement?.sql).toContain("COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at)");
-    expect(statement?.bindings).toEqual([
-      "user-1",
-      "starter",
-      "pay_123",
-      "prod_starter_monthly",
-      null,
-      null,
-      null,
-      "succeeded",
-      "2026-06-04T12:00:00.000Z",
-    ]);
-  });
+      expect(statement?.sql).toContain("WHEN user_plan.dodo_status = 'checkout_pending' THEN NULL");
+      expect(statement?.sql).toContain("WHEN excluded.dodo_payment_id IS NOT NULL THEN excluded.dodo_payment_id");
+      expect(statement?.sql).toContain("COALESCE(excluded.dodo_subscription_id, user_plan.dodo_subscription_id)");
+      expect(statement?.sql).toContain("COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at)");
+      expect(statement?.sql).toContain("dodo_plan_change_product_id = CASE");
+      expect(statement?.sql).toContain("THEN user_plan.dodo_plan_change_product_id");
+      expect(statement?.sql).toContain("ELSE NULL");
+      expect(statement?.sql).toContain("'plan_change_pending'");
+      expect(statement?.sql).toContain("'plan_change_scheduled'");
+      expect(statement?.sql).toContain("'payment.failed'");
+      expect(statement?.sql).toContain("'subscription.failed'");
+      expect(statement?.sql).toContain("'subscription.on_hold'");
+      expect(statement?.sql).toContain("'payment.succeeded'");
+      expect(statement?.sql).toContain("user_plan.dodo_plan_change_product_id = excluded.dodo_product_id");
+      expect(statement?.sql).toContain("user_plan.dodo_subscription_id = excluded.dodo_subscription_id");
+      expect(statement?.sql).toContain("user_plan.dodo_customer_id = excluded.dodo_customer_id");
+      expect(statement?.bindings).toEqual([
+        "user-1",
+        "starter",
+        "pay_123",
+        "prod_starter_monthly",
+        null,
+        null,
+        null,
+        null,
+        "succeeded",
+        "2026-06-04T12:00:00.000Z",
+        0,
+        0,
+      ]);
+    });
 
   it("clears a temporary checkout payment id on subscription grants with no payment id", async () => {
     const mock = createMockDb();
@@ -1350,20 +1371,23 @@ describe("Dodo billing persistence", () => {
       },
     );
 
-    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "dodo_payment_id");
-    expect(statement?.sql).toContain("WHEN user_plan.dodo_status = 'checkout_pending' THEN NULL");
-    expect(statement?.bindings).toEqual([
-      "user-1",
-      "starter",
-      null,
-      "prod_starter_annual",
-      "sub_123",
-      "cus_123",
-      "2027-06-04T12:00:00.000Z",
-      "active",
-      "2026-06-04T12:00:00.000Z",
-    ]);
-  });
+      const statement = findStatement(mock.statements, "INSERT INTO user_plan", "dodo_payment_id");
+      expect(statement?.sql).toContain("WHEN user_plan.dodo_status = 'checkout_pending' THEN NULL");
+      expect(statement?.bindings).toEqual([
+        "user-1",
+        "starter",
+        null,
+        "prod_starter_annual",
+        "sub_123",
+        "cus_123",
+        "2027-06-04T12:00:00.000Z",
+        null,
+        "active",
+        "2026-06-04T12:00:00.000Z",
+        0,
+        0,
+      ]);
+    });
 
   it("keeps the pending plan checkout lock for the full Dodo checkout window", async () => {
     const mock = createMockDb();
@@ -1386,6 +1410,118 @@ describe("Dodo billing persistence", () => {
       "2026-06-15T12:00:00.000Z",
       "2026-06-14T12:00:00.000Z",
     ]);
+  });
+
+  it("claims subscription plan changes with a local duplicate-submit guard", async () => {
+    const mock = createMockDb();
+
+        await claimDodoSubscriptionPlanChange(
+          { DB: mock.db } as never,
+          {
+            userId: "user-1",
+            status: DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
+            providerProductId: "prod_starter_annual",
+            currentSubscriptionId: "sub_123",
+            currentProductId: "prod_scout_monthly",
+            currentStatus: "subscription.active",
+            currentPlanUpdatedAt: "2026-06-04T12:00:00.000Z",
+          },
+        );
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "dodo_subscription_id = ?");
+        expect(statement?.sql).toContain("dodo_subscription_id = ?");
+        expect(statement?.sql).toContain("dodo_product_id = ?");
+        expect(statement?.sql).toContain("dodo_status = ?");
+        expect(statement?.sql).toContain("plan_updated_at = ?");
+        expect(statement?.sql).toContain("dodo_plan_change_product_id = ?");
+      expect(statement?.sql).toContain("'plan_change_pending'");
+      expect(statement?.sql).toContain("'plan_change_scheduled'");
+      expect(statement?.sql).toContain("'payment.failed'");
+      expect(statement?.sql).toContain("'subscription.failed'");
+      expect(statement?.sql).not.toContain("julianday(plan_updated_at) <= julianday(?)");
+        expect(statement?.bindings[0]).toBe(DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS);
+        expect(Number.isFinite(Date.parse(String(statement?.bindings[1])))).toBe(true);
+        expect(statement?.bindings[2]).toBe("prod_starter_annual");
+        expect(statement?.bindings[3]).toBe("user-1");
+        expect(statement?.bindings.slice(4)).toEqual([
+          "sub_123",
+          "prod_scout_monthly",
+          "prod_scout_monthly",
+          "subscription.active",
+          "subscription.active",
+          "2026-06-04T12:00:00.000Z",
+          "2026-06-04T12:00:00.000Z",
+        ]);
+      });
+
+    it("blocks immediate subscription plan-change locks until webhook or support resolution", () => {
+      expect(
+        isBlockingDodoSubscriptionPlanChangeStatus(
+          DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
+          new Date().toISOString(),
+        ),
+      ).toBe(true);
+      expect(
+        isBlockingDodoSubscriptionPlanChangeStatus(
+          DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
+          new Date(Date.now() - (DODO_SUBSCRIPTION_PLAN_CHANGE_LOCK_MINUTES + 1) * 60 * 1000)
+            .toISOString(),
+        ),
+      ).toBe(true);
+      expect(isBlockingDodoSubscriptionPlanChangeStatus(DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS, null)).toBe(true);
+      expect(isBlockingDodoSubscriptionPlanChangeStatus("plan_change_scheduled", null)).toBe(true);
+      expect(isBlockingDodoSubscriptionPlanChangeStatus("succeeded", null, "prod_starter_monthly")).toBe(true);
+    });
+
+  it("clears a claimed subscription plan change after a definite provider rejection", async () => {
+    const mock = createMockDb();
+
+    await clearDodoSubscriptionPlanChangeClaim(
+      { DB: mock.db } as never,
+      {
+        userId: "user-1",
+          claimedStatus: DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
+          previousStatus: "subscription.active",
+          previousPlanUpdatedAt: "2026-06-04T12:00:00.000Z",
+          providerProductId: "prod_starter_annual",
+          subscriptionId: "sub_123",
+          claimedAt: "2026-06-04T12:01:00.000Z",
+        },
+      );
+
+      const statement = findStatement(mock.statements, "UPDATE user_plan", "AND dodo_status = ?");
+      expect(statement?.sql).toContain("SET dodo_status = ?");
+        expect(statement?.sql).toContain("plan_updated_at = COALESCE(?, plan_updated_at)");
+        expect(statement?.sql).toContain("dodo_plan_change_product_id = NULL");
+        expect(statement?.sql).toContain("AND dodo_status = ?");
+        expect(statement?.sql).toContain("AND dodo_plan_change_product_id = ?");
+        expect(statement?.sql).toContain("AND dodo_subscription_id = ?");
+        expect(statement?.sql).toContain("AND plan_updated_at = ?");
+      expect(statement?.bindings).toEqual([
+        "subscription.active",
+        "2026-06-04T12:00:00.000Z",
+        "user-1",
+        DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
+        "prod_starter_annual",
+        "sub_123",
+        "2026-06-04T12:01:00.000Z",
+      ]);
+  });
+
+  it("marks an accepted scheduled subscription plan change after provider success", async () => {
+    const mock = createMockDb();
+
+    await markDodoSubscriptionPlanChangeScheduled({ DB: mock.db } as never, {
+      userId: "user-1",
+    });
+
+    const statement = findStatement(mock.statements, "UPDATE user_plan", "plan_updated_at = ?");
+    expect(statement?.sql).toContain("SET dodo_status = ?");
+    expect(statement?.sql).toContain("AND dodo_status = ?");
+    expect(statement?.bindings[0]).toBe("plan_change_scheduled");
+    expect(Number.isFinite(Date.parse(String(statement?.bindings[1])))).toBe(true);
+    expect(statement?.bindings[2]).toBe("user-1");
+    expect(statement?.bindings[3]).toBe(DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS);
   });
 
   it("guards webhook checkout cleanup against newer pending checkout locks", async () => {

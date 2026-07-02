@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  changeDodo0509SubscriptionPlan,
+  createDodoSubscriptionPlanChangePreviewToken,
   createDodo0509CheckoutSession,
   createDodoCustomerPortalSession,
   extractDodoPlanGrant,
   extractDodoProofCreditGrant,
+  extractDodoSubscriptionGrant,
+  getDodo0509SubscriptionCurrency,
   isDodoHostedCheckoutUrl,
   isDodoHostedCustomerPortalUrl,
+  summarizeDodoSubscriptionPlanChangePreview,
+  verifyDodoSubscriptionPlanChangePreviewToken,
 } from "~/lib/dodo-billing.server";
+import * as fetchTimeout from "~/lib/fetch-timeout.server";
 
 const session = {
   user: {
@@ -126,6 +133,199 @@ describe("Dodo billing", () => {
         plan: "scout",
         cycle: "monthly",
       },
+    });
+  });
+
+  it("summarizes plan-change preview charges only when Dodo proves the currency", () => {
+    expect(
+      summarizeDodoSubscriptionPlanChangePreview(
+        {
+          immediate_charge: {
+            summary: { settlement_amount: 9999, total_amount: 1234 },
+          },
+        },
+        "INR",
+      ),
+    ).toMatchObject({ amount: 1234, currency: "INR", display: expect.stringContaining("12.34") });
+
+    expect(
+      summarizeDodoSubscriptionPlanChangePreview(
+        {
+          immediate_charge: {
+            summary: { total_amount: 1234 },
+          },
+        },
+        "",
+      ),
+    ).toBeNull();
+  });
+
+  it("reads the subscription currency from Dodo subscription detail", async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ currency: "GBP" }));
+
+    await expect(
+      getDodo0509SubscriptionCurrency({
+        env: { DODO_0509_API_KEY: "secret" },
+        subscriptionId: "sub_123",
+        fetcher: fetcher as never,
+      }),
+    ).resolves.toBe("GBP");
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://live.dodopayments.com/subscriptions/sub_123",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer secret",
+        }),
+      }),
+    );
+  });
+
+  it("releases timed responses when Dodo rejects a subscription plan change", async () => {
+    const response = jsonResponse({ error: "invalid" }, { status: 400 });
+    const fetcher = vi.fn().mockResolvedValue(response);
+    const releaseSpy = vi.spyOn(fetchTimeout, "releaseFetchTimeout");
+
+    await expect(
+      changeDodo0509SubscriptionPlan({
+        env: {
+          DODO_0509_API_KEY: "secret",
+          DODO_0509_PRODUCT_STARTER_MONTHLY_ID: "prod_starter_monthly",
+        },
+        subscriptionId: "sub_123",
+        target: {
+          kind: "plan",
+          sku: "starter_monthly_v1",
+          planFamily: "starter",
+          cycle: "monthly",
+        },
+        userId: "user-1",
+        effectiveAt: "immediately",
+        prorationBillingMode: "prorated_immediately",
+        fetcher: fetcher as never,
+      }),
+    ).rejects.toMatchObject({ kind: "provider_rejected" });
+
+    expect(releaseSpy).toHaveBeenCalledWith(response);
+  });
+
+  it("binds subscription plan-change confirmation tokens to the previewed amount", async () => {
+    const env = { BETTER_AUTH_SECRET: "signing-secret" };
+    const target = {
+      kind: "plan",
+      sku: "starter_monthly_v1",
+      planFamily: "starter",
+      cycle: "monthly",
+    } as const;
+    const preview = {
+      subscriptionId: "sub_123",
+      userId: "user-1",
+      target,
+      effectiveAt: "immediately" as const,
+      prorationBillingMode: "prorated_immediately" as const,
+      amount: 1234,
+      currency: "INR",
+    };
+
+	    const token = await createDodoSubscriptionPlanChangePreviewToken(env as never, preview);
+	    const [encodedPayload] = token.split(".");
+	    const tokenPayload = JSON.parse(
+	      Buffer.from(encodedPayload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"),
+	    ) as Record<string, unknown>;
+
+	    await expect(
+	      verifyDodoSubscriptionPlanChangePreviewToken(env as never, token, preview),
+	    ).resolves.toBe(true);
+	    expect(tokenPayload.ctx).toEqual(expect.any(String));
+	    expect(tokenPayload.sub).toBeUndefined();
+	    expect(tokenPayload.user).toBeUndefined();
+	    expect(JSON.stringify(tokenPayload)).not.toContain("sub_123");
+	    expect(JSON.stringify(tokenPayload)).not.toContain("user-1");
+	    await expect(
+	      verifyDodoSubscriptionPlanChangePreviewToken(env as never, token, {
+	        ...preview,
+        amount: 1235,
+      }),
+    ).resolves.toBe(false);
+	  });
+
+	  it("does not treat subscription created_at as a plan-change grant timestamp", () => {
+	    const grant = extractDodoSubscriptionGrant(
+	      {
+	        DODO_0509_BRAND_ID: "brand_0509",
+	        DODO_0509_PRODUCT_STARTER_YEARLY_ID: "prod_starter_yearly",
+	      },
+	      {
+	        type: "subscription.plan_changed",
+	        data: {
+	          brand_id: "brand_0509",
+	          subscription_id: "sub_123",
+	          product_id: "prod_starter_yearly",
+	          is_subscription: true,
+	          is_recurring: true,
+	          previous_billing_date: "2026-07-02T00:00:00.000Z",
+	          next_billing_date: "2027-07-02T00:00:00.000Z",
+	          created_at: "2026-06-02T00:00:00.000Z",
+	          customer: { customer_id: "cus_123" },
+	          metadata: {
+	            app: "0509",
+	            user_id: "user-1",
+	            target_kind: "plan",
+	            plan: "starter",
+	            cycle: "yearly",
+	          },
+	        },
+	      },
+	    );
+
+	    expect(grant).toMatchObject({
+	      eventType: "subscription.plan_changed",
+	      grantedAt: null,
+	      hasProviderGrantTimestamp: false,
+	    });
+	  });
+
+	  it("extracts subscription plan changes as plan grants from Dodo lifecycle webhooks", () => {
+    const grant = extractDodoSubscriptionGrant(
+      {
+        DODO_0509_BRAND_ID: "brand_0509",
+        DODO_0509_PRODUCT_STARTER_YEARLY_ID: "prod_starter_yearly",
+      },
+      {
+        type: "subscription.plan_changed",
+        data: {
+          brand_id: "brand_0509",
+          subscription_id: "sub_123",
+          product_id: "prod_starter_yearly",
+          is_subscription: true,
+          is_recurring: true,
+          previous_billing_date: "2026-07-02T00:00:00.000Z",
+          next_billing_date: "2027-07-02T00:00:00.000Z",
+          updated_at: "2026-07-02T00:01:00.000Z",
+          customer: { customer_id: "cus_123" },
+          metadata: {
+            app: "0509",
+            user_id: "user-1",
+            target_kind: "plan",
+            plan: "starter",
+            cycle: "yearly",
+          },
+        },
+      },
+    );
+
+    expect(grant).toMatchObject({
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      subscriptionId: "sub_123",
+      customerId: "cus_123",
+      productId: "prod_starter_yearly",
+      plan: "starter",
+      cycle: "yearly",
+      status: "active",
+      grantedAt: "2026-07-02T00:01:00.000Z",
+      nextBillingAt: "2027-07-02T00:00:00.000Z",
     });
   });
 

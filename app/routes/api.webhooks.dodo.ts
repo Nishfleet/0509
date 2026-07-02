@@ -9,6 +9,12 @@ export function loader(_args: LoaderFunctionArgs) {
   );
 }
 
+function webhookTimestampIso(value: string | null) {
+  const timestampSeconds = Number(value);
+  if (!Number.isFinite(timestampSeconds) || timestampSeconds <= 0) return undefined;
+  return new Date(timestampSeconds * 1000).toISOString();
+}
+
 export async function action({ context, request }: ActionFunctionArgs) {
   const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
   const { getEnv } = await import("~/lib/context.server");
@@ -56,6 +62,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
   const payloadTimestamp =
     request.headers.get("webhook-timestamp") ?? request.headers.get("svix-timestamp");
+  const verifiedWebhookTimestamp = webhookTimestampIso(payloadTimestamp);
 
   const claim = await beginDodoWebhookEventProcessing(env, {
     eventId,
@@ -175,6 +182,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);
     if (subscriptionGrant) {
+      const planChangedWithoutProviderTimestamp =
+        subscriptionGrant.eventType === "subscription.plan_changed" &&
+        !subscriptionGrant.hasProviderGrantTimestamp;
+      const fallbackGrantAt = planChangedWithoutProviderTimestamp ? verifiedWebhookTimestamp : undefined;
+      const requiresPendingPlanChange =
+        planChangedWithoutProviderTimestamp;
+      const allowsPendingPlanChangeTarget =
+        planChangedWithoutProviderTimestamp;
       await applyDodoPlanGrantWithWatchlistReconcile(
         env,
         {
@@ -186,8 +201,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
           providerCustomerId: subscriptionGrant.customerId,
           nextBillingAt: subscriptionGrant.nextBillingAt,
           status: subscriptionGrant.status,
-          grantedAt: subscriptionGrant.grantedAt,
+          grantedAt: subscriptionGrant.grantedAt ?? fallbackGrantAt,
           metadata: subscriptionGrant.metadata,
+          forcePlanChangePending: allowsPendingPlanChangeTarget,
+          requirePlanChangePending: requiresPendingPlanChange,
         },
         getPlanLimit(subscriptionGrant.plan, "watchlists"),
         {

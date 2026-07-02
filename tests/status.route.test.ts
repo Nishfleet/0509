@@ -100,9 +100,9 @@ describe("status route", () => {
     expect(markup).not.toContain("GA launch gate");
     expect(markup).not.toContain("GA launch proof");
     expect(markup).not.toContain("broad launch still needs fresh Slack proof");
-    expect(markup).toContain("Dodo customer portal subscription changes still need dashboard confirmation");
+    expect(markup).toContain("Dodo-backed plan switching is repo-configured");
     expect(markup).not.toContain("WhatsApp delivery is not launch-scoped yet");
-    expect(markup).toContain("portal changes are confirmed");
+    expect(markup).toContain("Cancellation, deletion, and sensitive account changes");
     expect(markup).not.toContain("Recent Slack delivery proof is visible");
     expect(markup).not.toContain("Last proof");
     expect(markup).not.toContain("launch-readiness canary");
