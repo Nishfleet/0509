@@ -365,13 +365,13 @@ export default function MarketingRoute() {
 
       <section className="ld-hero">
         <Link className="f9-announcement" to={publicSearchTrialPath}>
-          <strong>Live search</strong>
-          <span>Preview live search before creating an account</span>
+          <strong>Free live search</strong>
+          <span>See what changed before you sign up</span>
         </Link>
 
         <p className="ld-case">
-          <span className="ld-rec">Recording</span>
-          <span>Sample case file № 59 — birchandstone.example — last night</span>
+          <span className="ld-rec">Overnight catch</span>
+          <span>A rival page changed while your team was offline</span>
         </p>
 
         <div className="ld-hero-grid">
@@ -459,13 +459,13 @@ export default function MarketingRoute() {
             </div>
 
             <aside className="ld-brief-strip" aria-label="Sample brief">
-              <b>Sample brief — 3 changes to review</b>
+              <b>Morning brief — 3 moves to beat</b>
               <ul>
-                <li>Visible offer text changed</li>
-                <li>CTA changed on the destination page</li>
-                <li>A lead form appeared</li>
+                <li>Price drop spotted before breakfast</li>
+                <li>New CTA pushing buyers to book</li>
+                <li>Lead form added overnight</li>
               </ul>
-              <small>Evidence on file. No screenshots, no claim.</small>
+              <small>Screenshots saved. Next move ready by 05:09.</small>
             </aside>
           </div>
         </div>
@@ -490,10 +490,9 @@ export default function MarketingRoute() {
         </div>
 
         <p className="ld-honest" role="note">
-          <strong>Honest by design.</strong> The preview is an example. Your live search is clearly
-          labeled by freshness, and Meta ads tracking stays marked beta until it is reliable for
-          your competitors. Live search is free, no account. Why
-          &ldquo;0509&rdquo;? Five to Nine — we work while you sleep.
+          <strong>Built for the morning meeting.</strong> Try a live search now, then wake up to the
+          brief your team can act on. If something is fresh, recent, or only a sample, we say so
+          plainly. Why &ldquo;0509&rdquo;? Five to Nine — we work while you sleep.
         </p>
       </section>
 

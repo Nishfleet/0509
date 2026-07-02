@@ -55,10 +55,10 @@ describe("marketing rebuild", () => {
   it("labels live search and keeps preview read-only before account", () => {
     expect(marketingRoute).toContain("Live search");
     expect(marketingRoute).not.toContain("Early access");
-    expect(marketingRoute).toContain("Honest by design.");
+    expect(marketingRoute).toContain("Built for the morning meeting.");
     expect(marketingRoute).not.toContain("provider canaries");
     expect(marketingRoute).not.toContain("Readiness-gated");
-    expect(marketingRoute).toContain("Preview live search before creating an account");
+    expect(marketingRoute).toContain("See what changed before you sign up");
     expect(marketingRoute).toContain("Try live search");
     expect(marketingRoute).toContain("/search?website=https%3A%2F%2Fnykaa.com");
     expect(marketingRoute).toContain('id="demo"');
@@ -129,8 +129,13 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Source status");
     expect(marketingRoute).toContain("Freshness");
     expect(marketingRoute).toContain("Next action");
-    expect(marketingRoute).toContain("Visible offer text changed");
-    expect(marketingRoute).toContain("CTA changed on the destination page");
+    expect(marketingRoute).toContain("Morning brief — 3 moves to beat");
+    expect(marketingRoute).toContain("Price drop spotted before breakfast");
+    expect(marketingRoute).toContain("New CTA pushing buyers to book");
+    expect(marketingRoute).toContain("Screenshots saved. Next move ready by 05:09.");
+    expect(marketingRoute).not.toContain("Visible offer text changed");
+    expect(marketingRoute).not.toContain("CTA changed on the destination page");
+    expect(marketingRoute).not.toContain("Evidence on file. No screenshots, no claim.");
     expect(marketingRoute).toContain("Recommended launch plan");
     expect(marketingRoute).toContain("Start with Starter");
     expect(marketingRoute).toContain("Daily competitor monitoring");
@@ -185,7 +190,8 @@ describe("marketing rebuild", () => {
     expect(rootRoute).toContain("IBM+Plex+Mono");
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
-    expect(marketingRoute).toContain("Sample case file");
+    expect(marketingRoute).toContain("Overnight catch");
+    expect(marketingRoute).toContain("A rival page changed while your team was offline");
     expect(marketingRoute).toContain('action="/search"');
     expect(marketingRoute).toContain("Catch them in the act");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');
