@@ -293,18 +293,18 @@ export const TOP_UP_PACK_DISPLAY: Record<
 > = {
   burst_500_v1: {
     name: "Burst Pack",
-    creditLabel: "500 extra evidence checks",
-    detail: "For campaign spikes that should not force a plan jump.",
+    creditLabel: "500 extra proof captures",
+    detail: "For sale-week spikes when material landing-page changes need extra proof.",
   },
   campaign_2000_v1: {
     name: "Campaign Pack",
-    creditLabel: "2,000 extra evidence checks",
-    detail: "The sensible overflow pack for active launches and sale weeks.",
+    creditLabel: "2,000 extra proof captures",
+    detail: "Overflow proof capacity for active launches and promo weeks.",
   },
   scale_7500_v1: {
     name: "Scale Pack",
-    creditLabel: "7,500 extra evidence checks",
-    detail: "Bulk evidence-check capacity for agencies tracking heavy categories.",
+    creditLabel: "7,500 extra proof captures",
+    detail: "Bulk proof-capture capacity for agencies tracking heavy categories.",
   },
 };
 

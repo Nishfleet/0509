@@ -96,16 +96,34 @@ const backboneStats = [
   { value: "05:09", label: "morning brief", detail: "what changed and why it matters" },
 ] as const;
 
-interface LocalPricingPreview {
+type LocalDisplayPrice = {
+  amount?: number | null;
+  currency?: string | null;
+  display?: string | null;
+  validationAmount?: number | null;
+};
+
+type LocalAnnualValidation = {
+  annualAmount?: number | null;
+  billingCountry?: string | null;
+  currency?: string | null;
+  expectedAnnualAmount?: number | null;
+  monthlyAmount?: number | null;
+  planId?: PricingPlanSlug | null;
+  reason?: string | null;
+  valid?: boolean | null;
+};
+
+export interface LocalPricingPreview {
   available?: boolean;
   prices?: Partial<
     Record<
       PricingPlanSlug,
-      Partial<Record<PricingBillingCycle, { display?: string }>>
+      Partial<Record<PricingBillingCycle, LocalDisplayPrice>>
     >
   >;
-  annualValidation?: Partial<Record<PricingPlanSlug, { valid?: boolean; reason?: string }>>;
-  usageBundles?: Partial<Record<UsageBundleSlug, { display?: string }>>;
+  annualValidation?: Partial<Record<PricingPlanSlug, LocalAnnualValidation>>;
+  usageBundles?: Partial<Record<UsageBundleSlug, LocalDisplayPrice>>;
 }
 
 function priceLabel(
@@ -131,6 +149,90 @@ function bundlePriceLabel(
   fallback: string,
 ) {
   return preview?.usageBundles?.[bundleId]?.display || fallback;
+}
+
+function formatMinorCurrency(
+  amount: number | null | undefined,
+  currency: string | null | undefined,
+  options: { roundWhole?: boolean } = {},
+) {
+  if (!Number.isFinite(amount) || !currency) return "";
+  try {
+    const decimals =
+      new Intl.NumberFormat("en", {
+        style: "currency",
+        currency,
+      }).resolvedOptions().maximumFractionDigits ?? 2;
+    const majorAmount = Number(amount) / 10 ** decimals;
+    const displayAmount = options.roundWhole === false ? majorAmount : Math.ceil(majorAmount);
+    const fractionDigits = options.roundWhole === false && Math.abs(displayAmount) < 10 ? 2 : 0;
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+      maximumFractionDigits: fractionDigits,
+      minimumFractionDigits: 0,
+    }).format(displayAmount);
+  } catch {
+    return `${currency} ${Math.ceil(Number(amount) / 100)}`;
+  }
+}
+
+export function valueMathLabel(
+  preview: LocalPricingPreview | null,
+  planId: PricingPlanSlug,
+  cycle: PricingBillingCycle,
+  annualIsValid: boolean,
+) {
+  const monthlyPrice = preview?.prices?.[planId]?.monthly;
+  if (cycle === "yearly" && annualIsValid) {
+    const yearlyPrice = preview?.prices?.[planId]?.yearly;
+    const monthlyAmount = monthlyPrice?.amount;
+    const annualAmount = yearlyPrice?.amount;
+    const monthlyCurrency = monthlyPrice?.currency;
+    const annualCurrency = yearlyPrice?.currency;
+    const savingsAmount =
+      Number.isFinite(monthlyAmount) &&
+      Number.isFinite(annualAmount) &&
+      monthlyCurrency &&
+      annualCurrency &&
+      monthlyCurrency === annualCurrency
+        ? Number(monthlyAmount) * 12 - Number(annualAmount)
+        : null;
+    const savings = savingsAmount && savingsAmount > 0
+      ? formatMinorCurrency(savingsAmount, monthlyCurrency)
+      : "";
+    return savings ? `Save ${savings} vs monthly` : DODO_ANNUAL_SAVINGS_LABEL;
+  }
+
+  const perDay = formatMinorCurrency(
+    Number.isFinite(monthlyPrice?.amount) ? Number(monthlyPrice?.amount) / 30 : null,
+    monthlyPrice?.currency,
+  );
+  return perDay ? `About ${perDay}/day` : "Simple monthly start";
+}
+
+function planValueSummary(planId: PricingPlanSlug) {
+  if (planId === "starter") return "10 competitors checked daily";
+  if (planId === "agency") return "75 competitors with client-ready proof";
+  return "3 competitors watched with proof";
+}
+
+function bundleValueLabel(
+  preview: LocalPricingPreview | null,
+  bundleId: UsageBundleSlug,
+  creditQuantity: number | null | undefined,
+) {
+  const price = preview?.usageBundles?.[bundleId];
+  if (!Number.isFinite(price?.amount) || !Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
+    return "Proof packs never expire";
+  }
+  const unit = formatMinorCurrency(
+    Number(price?.amount) / Number(creditQuantity),
+    price?.currency,
+    { roundWhole: false },
+  );
+  return unit ? `${unit} per proof capture` : "Proof packs never expire";
 }
 
 function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBundleSlug) {
@@ -561,15 +663,15 @@ export default function MarketingRoute() {
       <section className="f9-growth-pricing" id="pricing">
         <div className="ld-section-head">
           <span className="ld-kicker">Plans</span>
-          <h2>Choose the watch depth your team needs.</h2>
+          <h2>Daily competitor proof, priced to start now.</h2>
           <div className="ld-plan-summary" aria-label="Pricing summary">
             <span>Recommended launch plan</span>
             <strong>Start with Starter</strong>
-            <p>Daily and weekly digests, 10 watchlists, and enough checks for a real sales team.</p>
+            <p>Daily proof-backed competitor monitoring for 10 competitors, plus daily and weekly digests.</p>
           </div>
           <p className="ld-pricing-note">
             Review live search and the sample proof loop first. Paid plans add account-gated
-            competitor research, watchlists, page checks, saved collections, and clear caps. Save
+            competitor research, watchlists, proof captures, saved collections, and clear caps. Save
             winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
           </p>
@@ -606,6 +708,12 @@ export default function MarketingRoute() {
             const planSaleOpen = isPlanSaleOpen(plan.slug);
             const selectedAnnualBlocked =
               billingCycle === "yearly" && planSaleOpen && yearlyReady && !annualIsValid;
+            const valueLabel = valueMathLabel(
+              localPricing,
+              plan.slug,
+              billingCycle,
+              annualIsValid,
+            );
             const annualStatusCopy = !planSaleOpen
               ? "Checkout temporarily unavailable"
               : annualIsValid
@@ -635,8 +743,12 @@ export default function MarketingRoute() {
                         </span>
                       )
                       : annualStatusCopy
-                    : `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`}
+                      : `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`}
                 </small>
+                <div className="f9-plan-value" aria-label={`${plan.name} value summary`}>
+                  <strong>{planValueSummary(plan.slug)}</strong>
+                  <span>{valueLabel}</span>
+                </div>
                 <p>{plan.detail}</p>
                 <ul className="f9-plan-feature-list">
                   {plan.features?.map((feature) => (
@@ -688,11 +800,12 @@ export default function MarketingRoute() {
           and we&rsquo;ll help you move.
         </p>
 
-        <div className="ld-bundles" aria-label="Extra check packs">
+        <div className="ld-bundles" aria-label="Proof packs">
           <div className="ld-bundles-head">
-            <span className="ld-kicker">Extra check capacity</span>
+            <span className="ld-kicker">Proof packs</span>
+            <h3>Extra proof when campaigns move fast.</h3>
             <p>
-              Add page checks for busy weeks or big campaigns without changing the team&rsquo;s
+              Add proof captures for busy weeks or big campaigns without changing the team&rsquo;s
               plan.
             </p>
           </div>
@@ -702,6 +815,9 @@ export default function MarketingRoute() {
                 <span className="ld-kicker">{bundle.creditLabel}</span>
                 <h3>{bundle.name}</h3>
                 <strong>{bundlePriceLabel(localPricing, bundle.slug, bundle.priceLabel)}</strong>
+                <span className="ld-bundle-value">
+                  {bundleValueLabel(localPricing, bundle.slug, bundle.creditQuantity)}
+                </span>
                 <p>{bundle.detail}</p>
                 {rootData.session && hasBundlePrice(localPricing, bundle.slug) ? (
                   <Link to="/app/billing?source=top-up#top-ups">Manage packs</Link>
@@ -716,24 +832,23 @@ export default function MarketingRoute() {
           <h3>Common billing questions</h3>
           <dl className="proof-trail-list">
             <div>
-              <dt>What is an evidence check?</dt>
+              <dt>What is a proof capture?</dt>
               <dd>
-                Scheduled monitoring is included. A check is consumed when we capture a new
-                landing-page proof for a material change — not for routine scans that find nothing
-                new.
+                Scheduled monitoring is included. A proof capture is used when we save a new
+                landing-page proof record with screenshot, page text, and the original link.
               </dd>
             </div>
             <div>
-              <dt>Do unused checks roll over?</dt>
+              <dt>Do unused proof captures roll over?</dt>
               <dd>
-                Included monthly checks reset on your subscription anniversary and do not roll over.
-                Top-up packs never expire.
+                Included monthly proof captures reset on your subscription anniversary and do not
+                roll over. Proof packs never expire.
               </dd>
             </div>
             <div>
               <dt>What changes on Agency?</dt>
               <dd>
-                Agency includes 75 watchlists with daily scans, priority monitoring capacity,
+                Agency includes 75 watchlists with daily scans, priority monitoring coverage,
                 client-ready reports, shared report branding, developer access, and three team
                 seats. We keep monitoring coverage visible as account volume grows.
               </dd>

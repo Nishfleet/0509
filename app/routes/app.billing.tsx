@@ -662,14 +662,14 @@ export default function BillingRoute() {
             </span>
           </div>
           <div className="f9-work-row">
-            <strong>Evidence checks (this month)</strong>
+            <strong>Proof captures (this month)</strong>
             <span>
               {data.proofUsage.limit > 0 ? (
                 <>
                   {data.proofUsage.includedUsed ?? data.proofUsage.used} of{" "}
                   {data.proofUsage.baseLimit} included used
                   {data.proofUsage.topUpRemaining && data.proofUsage.topUpRemaining > 0
-                    ? ` · ${data.proofUsage.topUpRemaining} purchased checks remaining`
+                    ? ` · ${data.proofUsage.topUpRemaining} purchased proof captures remaining`
                     : ""}
                   {data.proofUsage.periodStart && data.proofUsage.periodEnd ? (
                     <>
@@ -697,7 +697,7 @@ export default function BillingRoute() {
             <div className="f9-work-row" key={`${grant.skuSlug ?? "grant"}-${grant.grantedAt}`}>
               <strong>Purchased pack</strong>
               <span>
-                {grant.credits} evidence checks from {topUpPackName(grant.skuSlug, grant.credits)} — never expire
+                {grant.credits} proof captures from {topUpPackName(grant.skuSlug, grant.credits)} — never expire
               </span>
             </div>
           ))}
@@ -711,10 +711,10 @@ export default function BillingRoute() {
       <article className="f9-app-panel" id="top-ups">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Extra check capacity</span>
+            <span className="f9-app-kicker">Proof packs</span>
             <h2>Top up busy weeks without changing plans</h2>
             <p className="f9-muted-copy">
-              Purchased checks never expire. They add evidence-check capacity only; they do not
+              Purchased proof packs never expire. They add proof-capture capacity only; they do not
               change watchlist limits, cadence, or plan features.
             </p>
           </div>

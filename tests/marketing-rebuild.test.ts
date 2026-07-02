@@ -127,12 +127,15 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("CTA changed on the destination page");
     expect(marketingRoute).toContain("Recommended launch plan");
     expect(marketingRoute).toContain("Start with Starter");
-    expect(marketingRoute).toContain("Daily and weekly digests");
+    expect(marketingRoute).toContain("Daily proof-backed competitor monitoring");
+    expect(marketingRoute).toContain("valueMathLabel");
+    expect(marketingRoute).toContain("Proof packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");
     expect(marketingRoute).not.toContain("Start with Scout");
     expect(marketingRoute).not.toContain("Dodo price syncing");
+    expect(marketingRoute).not.toContain("Extra check capacity");
     expect(marketingRoute).not.toContain("No unlimited claims");
     expect(marketingRoute).not.toContain("3 offer changes ready");
     expect(marketingRoute).not.toContain("Nykaa changed onboarding bundle");
