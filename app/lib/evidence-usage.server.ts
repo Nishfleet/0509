@@ -135,6 +135,21 @@ async function listActiveTopUpGrants(env: AppEnv, workspaceUserId: string) {
   }
 }
 
+async function getTopUpGrantByProviderPaymentId(env: AppEnv, providerPaymentId: string) {
+  return ensureDb(env)
+    .prepare(
+      `
+        SELECT id, workspace_user_id, sku_slug, provider_payment_id, provider_product_id,
+               quantity_granted, quantity_remaining, granted_at, status, catalog_version
+        FROM evidence_top_up_grant
+        WHERE provider_payment_id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(providerPaymentId)
+    .first<TopUpGrantRow>();
+}
+
 async function deriveTopUpRemainingForGrant(env: AppEnv, grant: TopUpGrantRow) {
   const rebuilt = await rebuildTopUpGrantBalance(env, grant.id);
   if (rebuilt === null) {
@@ -192,23 +207,6 @@ export async function migrateLegacyTopUpCreditsIfNeeded(env: AppEnv, workspaceUs
     const grantId = createId();
     const grantedAt = row.granted_at || now;
 
-    const migrationInsert = await ensureDb(env)
-      .prepare(
-        `
-          INSERT INTO proof_usage_credit_migration (
-            legacy_credit_id, grant_id, workspace_user_id, migrated_at, idempotency_key
-          )
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(legacy_credit_id) DO NOTHING
-        `,
-      )
-      .bind(row.id, grantId, workspaceUserId, now, idempotencyKey)
-      .run();
-
-    if ((migrationInsert.meta?.changes ?? 0) === 0) {
-      continue;
-    }
-
     await ensureDb(env)
       .prepare(
         `
@@ -230,6 +228,28 @@ export async function migrateLegacyTopUpCreditsIfNeeded(env: AppEnv, workspaceUs
         JSON.stringify({ legacyCreditId: row.id }),
       )
       .run();
+
+    const grant = await getTopUpGrantByProviderPaymentId(env, paymentId);
+    if (!grant) {
+      continue;
+    }
+
+    const migrationInsert = await ensureDb(env)
+      .prepare(
+        `
+          INSERT INTO proof_usage_credit_migration (
+            legacy_credit_id, grant_id, workspace_user_id, migrated_at, idempotency_key
+          )
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(legacy_credit_id) DO NOTHING
+        `,
+      )
+      .bind(row.id, grant.id, workspaceUserId, now, idempotencyKey)
+      .run();
+
+    if ((migrationInsert.meta?.changes ?? 0) === 0) {
+      continue;
+    }
 
     migrated += 1;
   }
