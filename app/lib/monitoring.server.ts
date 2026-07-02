@@ -59,6 +59,7 @@ import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import { planAllowsDigestCadence } from "~/lib/plan-entitlements";
 import {
   getEvidenceUsageSummary,
+  isEvidenceUsageStorageUnavailableError,
   tryFinalizeEvidenceForProofCapture,
   tryReserveEvidenceForProofCapture,
 } from "~/lib/evidence-usage.server";
@@ -1731,7 +1732,7 @@ async function resolveWorkspaceEvidenceCapacity(env: AppEnv, workspaceUserId: st
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!/evidence_usage_period|no such table/i.test(message)) {
+    if (!isEvidenceUsageStorageUnavailableError(message)) {
       throw error;
     }
 
@@ -1834,14 +1835,15 @@ async function evaluateSelectiveProofCandidates(
       (await getLastSuccessfulProofForAd(env, input.watchlist.id, observation.ad_id));
     const primaryTriggerEventType =
       eventTypesByAd.get(observation.ad_id)?.[0] ?? "landing_page_headline_changed";
-    const proofRequestKey = buildProofCaptureRequestIdempotencyKey({
+    const proofRequestKeyBase = buildProofCaptureRequestIdempotencyKey({
       watchlistId: input.watchlist.id,
       adId: observation.ad_id,
       landingPageUrl: observation.landing_page_url,
       eventType: primaryTriggerEventType,
     });
+    const proofRequestKey = [proofRequestKeyBase, input.runId].join(":");
     const proofRequestDuplicate = targetCaptures.some((capture) => {
-      if (!capture.idempotencyKey || capture.idempotencyKey !== proofRequestKey) {
+      if (!matchesProofRequestKey(capture.idempotencyKey, proofRequestKeyBase)) {
         return false;
       }
 
@@ -2153,7 +2155,7 @@ async function evaluateDirectWebsiteProofCandidate(
   });
   const proofRequestKey = [proofRequestKeyBase, input.runId].join(":");
   const proofRequestDuplicate = targetCaptures.some((capture) => {
-    if (!capture.idempotencyKey || !capture.idempotencyKey.startsWith(proofRequestKeyBase)) {
+    if (!matchesProofRequestKey(capture.idempotencyKey, proofRequestKeyBase)) {
       return false;
     }
 
@@ -2480,6 +2482,13 @@ export function buildProofCaptureRequestIdempotencyKey(input: {
     normalizeIdempotencySegment(input.adId ?? "none"),
     normalizeIdempotencySegment(normalizeIdempotencyUrl(input.landingPageUrl) ?? "none"),
   ].join(":");
+}
+
+function matchesProofRequestKey(idempotencyKey: string | null | undefined, requestKeyBase: string) {
+  return Boolean(
+    idempotencyKey &&
+      (idempotencyKey === requestKeyBase || idempotencyKey.startsWith(`${requestKeyBase}:`)),
+  );
 }
 
 function normalizeIdempotencyUrl(value: string | null) {
