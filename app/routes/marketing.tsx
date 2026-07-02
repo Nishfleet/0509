@@ -381,18 +381,29 @@ export default function MarketingRoute() {
         </Link>
 
         <p className="ld-case">
-          <span className="ld-rec">Proof-backed brief</span>
-          <span>Competitor moves, source trail, next action</span>
+          <span className="ld-rec">Sample proof-backed brief</span>
+          <span>A rival page changed while your team was offline</span>
         </p>
 
         <div className="ld-hero-grid">
           <div className="ld-hero-copy">
             <h1 className="ld-wall">
-              <span className="ld-row">Paste your competitors. Wake up to the proof-backed counter-move brief.</span>
+              <span className="ld-row">They cut</span>
+              <span className="ld-row">
+                the price <s className="ld-del">₹2,400</s>
+              </span>
+              <span className="ld-row ld-row-indent">
+                <ins className="ld-ins">
+                  ₹1,999<i className="ld-flag">03:47 AM</i>
+                </ins>{" "}
+                last
+              </span>
+              <span className="ld-row">night.</span>
             </h1>
 
             <p className="ld-deck-copy">
-              Five to Nine watches competitor ads, pages, and public website moves, then shows the proof and next action.
+              Your sales team would&rsquo;ve walked in blind. Five to Nine catches the change,
+              saves the screenshots, and files the brief — <b>before your alarm goes off.</b>
             </p>
           </div>
 
