@@ -61,9 +61,8 @@ export const demoProof = {
   insightPreview: {
     topHooks: ["Routine-first bundle", "Dermat approved", "Sale ending soon"],
     mediaMix: [
-      { channel: "Meta", share: "70%", status: "live in current product" },
-      { channel: "Landing page", share: "30%", status: "live in current product" },
-      { channel: "TikTok / Google / LinkedIn", share: "planned", status: "not live yet" },
+      { channel: "Website page", share: "70%", status: "live in current product" },
+      { channel: "Public ad library", share: "30%", status: "live in current product" },
     ],
     creativeTimeline: [
       "Hook repeated across sample creatives",

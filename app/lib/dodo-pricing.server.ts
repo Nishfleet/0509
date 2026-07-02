@@ -270,6 +270,7 @@ export async function previewDodo0509PlanPrices({
             cycle,
             expectedProductId: productId,
             expectedIsSubscription: true,
+            requireExpectedProduct: true,
           }),
         ] as const;
       } catch {
@@ -288,6 +289,7 @@ export async function previewDodo0509PlanPrices({
             bundleId,
             expectedProductId: productId,
             expectedIsSubscription: false,
+            requireExpectedProduct: true,
           }),
         ] as const;
       } catch {

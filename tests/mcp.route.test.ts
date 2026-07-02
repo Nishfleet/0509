@@ -353,12 +353,12 @@ describe("MCP route", () => {
     expect(body.result.tools[0]?.annotations.readOnlyHint).toBe(true);
     expect(body.result.tools[0]).toMatchObject({
       requiresWriteEnabled: false,
-      credentialRequirement: "Works with any active customer API key.",
+      credentialRequirement: "Requires an active Agency customer API key.",
     });
     expect(body.result.tools.find((tool) => tool.name === "create_watchlist")).toMatchObject({
       annotations: { readOnlyHint: false },
       requiresWriteEnabled: true,
-      credentialRequirement: "Requires a write-enabled customer API key.",
+      credentialRequirement: "Requires a write-enabled Agency customer API key.",
     });
     const updateWatchlistSchema = body.result.tools.find((tool) => tool.name === "update_watchlist")?.inputSchema;
     expect(updateWatchlistSchema).toMatchObject({
@@ -456,7 +456,7 @@ describe("MCP route", () => {
       "get_digest_export",
     ]);
     expect(body.result.tools.every((tool) => !tool.requiresWriteEnabled)).toBe(true);
-    expect(body.result.tools.every((tool) => tool.credentialRequirement === "Works with any active customer API key.")).toBe(true);
+    expect(body.result.tools.every((tool) => tool.credentialRequirement === "Requires an active Agency customer API key.")).toBe(true);
   });
 
   it("returns workspace readiness through tools/call", async () => {

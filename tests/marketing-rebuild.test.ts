@@ -8,6 +8,7 @@ const appCss = readFileSync("app/app.css", "utf8");
 const rootRoute = readFileSync("app/root.tsx", "utf8");
 const routes = readFileSync("app/routes.ts", "utf8");
 const publicMarkdown = readFileSync("app/lib/public-markdown.ts", "utf8");
+const demoProofSource = readFileSync("app/lib/demo-proof.ts", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const publicHomeSource = [marketingRoute, brandWordmark, appCss, rootRoute, routes, publicMarkdown].join("\n");
 const marketingClasses = Array.from(marketingRoute.matchAll(/className="([^"]+)"/g)).flatMap((match) =>
@@ -78,6 +79,17 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain('className="f9-announcement" to="/search"');
   });
 
+  it("leads with the counter-move outcome instead of clever price-drop copy", () => {
+    expect(marketingRoute).toContain("Paste your competitors. Wake up to the counter-move brief.");
+    expect(marketingRoute).toContain(
+      "Five to Nine watches competitor ads, pages, and public website moves, then shows the proof and next action.",
+    );
+    expect(marketingRoute).not.toContain("They cut");
+    expect(marketingRoute).not.toContain("₹2,400");
+    expect(marketingRoute).not.toContain("₹1,999");
+    expect(marketingRoute).not.toContain("Diff: −₹401");
+  });
+
   it("keeps README route truth aligned with public read-only search", () => {
     expect(readme).toContain("/api/demo-proof");
     expect(readme).toContain("/search` public read-only live search trial");
@@ -122,11 +134,12 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Know when competitors change the offer.");
     expect(marketingRoute).toContain("Stop finding out after the sales call.");
     expect(marketingRoute).toContain("Sample brief");
+    expect(marketingRoute).toContain("Sample Market Desk Brief");
     expect(marketingRoute).toContain("Decision summary");
     expect(marketingRoute).toContain("Client-ready view");
     expect(marketingRoute).toContain("What changed");
     expect(marketingRoute).toContain("Why it matters");
-    expect(marketingRoute).toContain("Source status");
+    expect(marketingRoute).toContain("Proof status");
     expect(marketingRoute).toContain("Freshness");
     expect(marketingRoute).toContain("Next action");
     expect(marketingRoute).toContain("Morning brief — 3 moves to beat");
@@ -141,7 +154,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Start with Starter");
     expect(marketingRoute).toContain("Daily competitor monitoring");
     expect(marketingRoute).toContain("valueMathLabel");
-    expect(marketingRoute).toContain("Record packs");
+    expect(marketingRoute).toContain("Check packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');
     expect(marketingRoute).toContain('className="f9-plan-badge">Recommended</em>');
     expect(marketingRoute).not.toContain("Proof-first monitoring");
@@ -164,15 +177,45 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Brief export");
   });
 
-  it("keeps Agency checkout live without the stale held-language", () => {
-    expect(marketingRoute).toContain("summarizeCommercialLaunch");
-    expect(marketingRoute).toContain("Checkout temporarily unavailable");
-    expect(marketingRoute).not.toContain("Held for capacity proof");
+  it("keeps unsupported social and internal implementation claims out of homepage copy", () => {
+    for (const unsupported of ["Slack", "WhatsApp", "Reddit", "LinkedIn", "Twitter"]) {
+      expect(marketingRoute).not.toContain(unsupported);
+    }
+    for (const internalTerm of ["GA gate", "fan-out", "D1", "canary", "internal workspace", "workspace-approved"]) {
+      expect(marketingRoute).not.toContain(internalTerm);
+    }
+  });
+
+  it("keeps the rendered sample artifact to supported channel labels", () => {
+    expect(demoProofSource).toContain('channel: "Website page"');
+    expect(demoProofSource).toContain('channel: "Public ad library"');
+    for (const unsupported of ["TikTok", "Google / YouTube", "LinkedIn", "Pinterest", "Reddit", "X/Twitter"]) {
+      expect(demoProofSource).not.toContain(unsupported);
+    }
+  });
+
+  it("keeps Agency checkout held unless the commercial capacity proof opens it", () => {
+    expect(marketingRoute).toContain("Account review");
+    expect(marketingRoute).toContain("Agency is available by account review");
     expect(marketingRoute).toContain("Common billing questions");
     expect(marketingRoute).toContain("What changes on Agency?");
-    expect(marketingRoute).not.toContain("Why is Agency held?");
+    expect(marketingRoute).toContain("Why is Agency held?");
+    expect(marketingRoute).not.toContain("capacity review");
+    expect(marketingRoute).not.toContain("higher-volume monitoring coverage");
     expect(marketingRoute).not.toContain("fan-out workflow path");
     expect(marketingRoute).not.toContain("highest queue priority");
+  });
+
+  it("uses customer-facing check language for top-ups and included usage", () => {
+    expect(marketingRoute).toContain("Purchased checks never expire");
+    expect(marketingRoute).toContain("Included checks reset every month");
+    expect(marketingRoute).toContain("Scheduled scans are included with your plan");
+    expect(marketingRoute).toContain("proof-backed capture");
+    expect(marketingRoute).toContain("500 extra checks");
+    expect(marketingRoute).not.toContain("Record packs");
+    expect(marketingRoute).not.toContain("record packs");
+    expect(marketingRoute).not.toContain("saved change records");
+    expect(marketingRoute).not.toContain("per saved record");
   });
 
   it("has incinerated the stale lower-page system", () => {
@@ -191,8 +234,8 @@ describe("marketing rebuild", () => {
     expect(rootRoute).toContain("IBM+Plex+Mono");
     expect(marketingRoute).toContain('className="ld-ticker"');
     expect(marketingRoute).toContain('className="ld-wall"');
-    expect(marketingRoute).toContain("Overnight catch");
-    expect(marketingRoute).toContain("A rival page changed while your team was offline");
+    expect(marketingRoute).toContain("Proof-backed brief");
+    expect(marketingRoute).toContain("Competitor moves, source trail, next action");
     expect(marketingRoute).toContain('action="/search"');
     expect(marketingRoute).toContain("Catch them in the act");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');

@@ -1,4 +1,8 @@
-import { listSkusMissingProviderConfiguration } from "~/lib/billing-sku-catalog";
+import {
+  listSkusMissingProviderConfiguration,
+  readProviderProductId,
+  resolveBillingSku,
+} from "~/lib/billing-sku-catalog";
 import type { AppEnv } from "~/lib/env.server";
 import {
   isMonitoringWorkflowBindingAvailable,
@@ -27,10 +31,46 @@ export interface CommercialLaunchSummary {
   missingCheckoutSkus: ReturnType<typeof listSkusMissingProviderConfiguration>;
 }
 
+export type PublicCommercialLaunchSummary = Pick<
+  CommercialLaunchSummary,
+  "scoutSaleOpen" | "starterSaleOpen" | "agencySaleOpen"
+>;
+
 const PAID_PLAN_SLUGS: PricingPlanSlug[] = ["scout", "starter", "agency"];
 
 export function monitoringFanoutInternalWorkspaceUserId(env: AppEnv) {
   return env.MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID?.trim() ?? "";
+}
+
+function isAgencySaleOpen(env: AppEnv) {
+  const mode = resolveMonitoringFanoutMode(env);
+  const workflowBindingAvailable = isMonitoringWorkflowBindingAvailable(env);
+  const globalEnabled = env.MONITORING_FANOUT_GLOBAL === "1";
+  const allowlist = env.MONITORING_FANOUT_ALLOWLIST?.trim() ?? "";
+  const allowlistConfigured = allowlist.length > 0 && allowlist !== "*";
+  const internalWorkspaceDocumented = Boolean(monitoringFanoutInternalWorkspaceUserId(env));
+
+  return (
+    workflowBindingAvailable &&
+    mode === "fanout" &&
+    internalWorkspaceDocumented &&
+    (globalEnabled || allowlistConfigured)
+  );
+}
+
+function hasDodoCheckoutBaseConfiguration(env: AppEnv) {
+  const apiKey =
+    env.DODO_0509_API_KEY?.trim() ||
+    env.DODO_PAYMENTS_API_KEY?.trim() ||
+    env.DODO_API_KEY?.trim() ||
+    "";
+  return Boolean(apiKey && env.DODO_0509_BRAND_ID?.trim());
+}
+
+function hasMonthlyPlanCheckoutConfiguration(env: AppEnv, plan: PricingPlanSlug) {
+  if (!hasDodoCheckoutBaseConfiguration(env)) return false;
+  const sku = resolveBillingSku(`${plan}_monthly_v1`);
+  return Boolean(sku && readProviderProductId(env, sku));
 }
 
 export function summarizeMonitoringFanoutProof(env: AppEnv): MonitoringFanoutProofSummary {
@@ -55,7 +95,7 @@ export function summarizeMonitoringFanoutProof(env: AppEnv): MonitoringFanoutPro
   } else if (!globalEnabled && !allowlistConfigured) {
     blocker = "fanout_not_proven";
   } else {
-    agencySaleOpen = true;
+    agencySaleOpen = isAgencySaleOpen(env);
   }
 
   return {
@@ -70,7 +110,7 @@ export function summarizeMonitoringFanoutProof(env: AppEnv): MonitoringFanoutPro
 }
 
 export function planSaleState(env: AppEnv, plan: PricingPlanSlug): PlanSaleState {
-  if (plan === "agency" && !summarizeMonitoringFanoutProof(env).agencySaleOpen) {
+  if (plan === "agency" && !isAgencySaleOpen(env)) {
     return "held_fanout";
   }
 
@@ -81,16 +121,27 @@ export function isPlanCheckoutAllowed(env: AppEnv, plan: PricingPlanSlug | PlanF
   return planSaleState(env, plan as PricingPlanSlug) === "open";
 }
 
+function planSaleOpenSummary(env: AppEnv): PublicCommercialLaunchSummary {
+  const agencyOpen =
+    hasMonthlyPlanCheckoutConfiguration(env, "agency") && planSaleState(env, "agency") === "open";
+  return {
+    scoutSaleOpen: hasMonthlyPlanCheckoutConfiguration(env, "scout"),
+    starterSaleOpen: hasMonthlyPlanCheckoutConfiguration(env, "starter"),
+    agencySaleOpen: agencyOpen,
+  };
+}
+
 export function summarizeCommercialLaunch(env: AppEnv): CommercialLaunchSummary {
   const fanout = summarizeMonitoringFanoutProof(env);
-  const agencyOpen = fanout.agencySaleOpen;
   return {
-    scoutSaleOpen: true,
-    starterSaleOpen: true,
-    agencySaleOpen: agencyOpen,
+    ...planSaleOpenSummary(env),
     fanout,
     missingCheckoutSkus: listSkusMissingProviderConfiguration(env),
   };
+}
+
+export function publicCommercialLaunchSummary(env: AppEnv): PublicCommercialLaunchSummary {
+  return planSaleOpenSummary(env);
 }
 
 import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";

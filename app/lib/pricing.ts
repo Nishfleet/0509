@@ -19,50 +19,40 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   }
 
   features.push(`${entitlements.watchlists} active watchlists`);
+  features.push(`${entitlements.collections} Collections`);
 
   if (entitlements.scheduledScanCadence === "weekly_monday") {
-    features.push("Weekly competitor review (every Monday) + on-demand fresh evidence");
+    features.push("Monday scan");
   } else if (entitlements.scheduledScanCadence === "daily") {
-    features.push("Daily competitor reviews + on-demand fresh evidence");
-    if (plan === "agency") {
-      features.push("Priority nightly review coverage");
-    }
+    features.push("Daily scans");
   }
-
-  features.push(`${entitlements.collections} saved collections`);
 
   if (entitlements.digestCadence === "weekly") {
-    features.push("Weekly change brief with screenshots and links");
+    features.push("Weekly Digest");
   } else if (entitlements.digestCadence === "daily_and_weekly") {
-    features.push("Daily and weekly change briefs with screenshots and links");
-  }
-
-  if (plan !== "scout") {
-    features.push("High-priority change alerts");
+    features.push("Daily + weekly Digests");
   }
 
   features.push(
-    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} saved change records per month`,
+    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} checks/month`,
   );
 
   if (plan === "scout") {
     features.push("Saved competitor research", "Email digest delivery");
   }
   if (plan === "starter" || plan === "agency") {
+    features.push("Email Notifications");
+    features.push("Exports");
     features.push("Landing-page change history with screenshots");
-    features.push("Email delivery");
     features.push(
       "Reads ad text in 30+ languages and scripts — auto-translated into English",
     );
-    features.push("CSV and JSON exports");
   }
   if (plan === "agency") {
-    features.push("Client-ready change reports (share link + PDF print)");
-    features.push("Your agency name on shared reports");
-    features.push("Developer exports and workspace-approved workflow actions");
-    features.push(
-      `${entitlements.workspaceSeats} team seats — teammates share watchlists, collections, and digests`,
-    );
+    features.push("Team workspace");
+    features.push("API + MCP access");
+    features.push("Client reports");
+    features.push("Shared report branding");
   }
 
   return features;
@@ -121,10 +111,10 @@ const USAGE_BUNDLES: UsageBundle[] = [
 ];
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
-  "Scheduled monitoring is included with your plan. Saved change records are used when Five to Nine stores a landing-page record with screenshots, page text, and the original link. Included records refresh every month and do not roll over. Purchased record packs never expire.";
+  "Scheduled scans are included with your plan. A check is used when Five to Nine saves a proof-backed capture with screenshots, page text, and the original link. Included checks reset every month and do not roll over. Purchased checks never expire.";
 
 export const TOP_UP_INACTIVE_PLAN_COPY =
-  "Your purchased record packs are saved and will be available when a paid plan is active.";
+  "Your purchased checks are saved and will be available when a paid plan is active.";
 
 export function pricingPlans(): PricingPlan[] {
   return PLANS.map((plan) => ({ ...plan, features: [...plan.features] }));

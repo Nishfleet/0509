@@ -32,7 +32,7 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
-  const { summarizeCommercialLaunch } = await import("~/lib/commercial-launch-gate.server");
+  const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const env = getEnv(context);
 
   return {
@@ -40,7 +40,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       env,
       request,
     }),
-    commercialLaunch: summarizeCommercialLaunch(env),
+    commercialLaunch: publicCommercialLaunchSummary(env),
   };
 }
 
@@ -225,14 +225,14 @@ function bundleValueLabel(
 ) {
   const price = preview?.usageBundles?.[bundleId];
   if (!Number.isFinite(price?.amount) || !Number.isFinite(creditQuantity) || Number(creditQuantity) <= 0) {
-    return "Record packs never expire";
+    return "Purchased checks never expire";
   }
   const unit = formatMinorCurrency(
     Number(price?.amount) / Number(creditQuantity),
     price?.currency,
     { roundWhole: false },
   );
-  return unit ? `${unit} per saved record` : "Record packs never expire";
+  return unit ? `${unit} per check` : "Purchased checks never expire";
 }
 
 function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBundleSlug) {
@@ -270,11 +270,22 @@ export default function MarketingRoute() {
         ? commercialLaunch.starterSaleOpen
         : commercialLaunch.agencySaleOpen;
   const saleOpenPricingPlans = rootData.pricingPlans.filter((plan) => isPlanSaleOpen(plan.slug));
+  const annualCycleAvailable =
+    saleOpenPricingPlans.length > 0 &&
+    saleOpenPricingPlans.some((plan) =>
+      dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
+    );
   const annualSavingsValidated =
     saleOpenPricingPlans.length > 0 &&
     saleOpenPricingPlans.every((plan) =>
       dodoAnnualSavingsIsValid(localPricing?.annualValidation?.[plan.slug]),
     );
+
+  useEffect(() => {
+    if (billingCycle === "yearly" && !annualCycleAvailable) {
+      setBillingCycle("monthly");
+    }
+  }, [annualCycleAvailable, billingCycle]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -370,29 +381,18 @@ export default function MarketingRoute() {
         </Link>
 
         <p className="ld-case">
-          <span className="ld-rec">Overnight catch</span>
-          <span>A rival page changed while your team was offline</span>
+          <span className="ld-rec">Proof-backed brief</span>
+          <span>Competitor moves, source trail, next action</span>
         </p>
 
         <div className="ld-hero-grid">
           <div className="ld-hero-copy">
             <h1 className="ld-wall">
-              <span className="ld-row">They cut</span>
-              <span className="ld-row">
-                the price <s className="ld-del">₹2,400</s>
-              </span>
-              <span className="ld-row ld-row-indent">
-                <ins className="ld-ins">
-                  ₹1,999<i className="ld-flag">03:47 AM</i>
-                </ins>{" "}
-                last
-              </span>
-              <span className="ld-row">night.</span>
+              <span className="ld-row">Paste your competitors. Wake up to the counter-move brief.</span>
             </h1>
 
             <p className="ld-deck-copy">
-              Your sales team would&rsquo;ve walked in blind. Five to Nine catches the change,
-              saves the screenshots, and files the brief — <b>before your alarm goes off.</b>
+              Five to Nine watches competitor ads, pages, and public website moves, then shows the proof and next action.
             </p>
           </div>
 
@@ -419,7 +419,7 @@ export default function MarketingRoute() {
                   <div className="ld-sk ld-sk-h" />
                   <div className="ld-sk" />
                   <div className="ld-sk ld-sk-s" />
-                  <p className="ld-shot-price ld-price-old">₹2,400/mo</p>
+                  <p className="ld-shot-price ld-price-old">Offer page</p>
                   <div className="ld-sk ld-sk-s" />
                 </div>
               </div>
@@ -436,7 +436,7 @@ export default function MarketingRoute() {
                   <div className="ld-sk" />
                   <div className="ld-sk ld-sk-s" />
                   <p className="ld-shot-price">
-                    <em>₹1,999/mo</em>
+                    <em>Bundle angle</em>
                   </p>
                   <div className="ld-sk ld-sk-s" />
                 </div>
@@ -455,7 +455,7 @@ export default function MarketingRoute() {
                   <p className="ld-form-row">+ lead form appeared here</p>
                 </div>
               </div>
-              <span className="ld-diff-clip">Diff: −₹401</span>
+              <span className="ld-diff-clip">Proof saved</span>
             </div>
 
             <aside className="ld-brief-strip" aria-label="Sample brief">
@@ -496,26 +496,13 @@ export default function MarketingRoute() {
         </p>
       </section>
 
-      <section className="ld-how" id="platform">
-        <h2>Know when competitors change the offer.</h2>
-        <div className="ld-how-grid ld-reveal">
-          {howSteps.map((item) => (
-            <article key={item.step}>
-              <span className="ld-step">{item.step}</span>
-              <h3>{item.title}</h3>
-              <p>{item.detail}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <section className="ld-proof" id="demo">
         <div className="ld-section-head">
           <span className="ld-kicker">Sample brief</span>
-          <h2>Preview the morning brief before creating an account.</h2>
+          <h2>Sample Market Desk Brief</h2>
           <p>
-            See how Five to Nine turns one competitor change into a clear summary, saved
-            evidence, recommended next step, and shareable report.
+            Preview the morning brief before creating an account. See how Five to Nine turns one competitor move into a clear summary, proof status,
+            source, and next action before creating an account.
           </p>
           <div className="ld-proof-actions">
             <Link to={publicSearchTrialPath}>Try live search</Link>
@@ -548,7 +535,7 @@ export default function MarketingRoute() {
                 <dd>{demoProof.digestPreview.priority}</dd>
               </div>
               <div>
-                <dt>Source status</dt>
+                <dt>Proof status</dt>
                 <dd>{demoProof.digestPreview.proofStatus}</dd>
               </div>
               <div>
@@ -625,6 +612,19 @@ export default function MarketingRoute() {
         </div>
       </section>
 
+      <section className="ld-how" id="platform">
+        <h2>Know when competitors change the offer.</h2>
+        <div className="ld-how-grid ld-reveal">
+          {howSteps.map((item) => (
+            <article key={item.step}>
+              <span className="ld-step">{item.step}</span>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="ld-quiet" id="signal">
         <div className="ld-section-head">
           <span className="ld-kicker">Zero-noise monitoring</span>
@@ -668,7 +668,7 @@ export default function MarketingRoute() {
           </div>
           <p className="ld-pricing-note">
             Review live search and the sample brief first. Paid plans add saved competitor
-            research, watchlists, saved change records, saved collections, and clear caps. Save
+            research, watchlists, Collections, and clear check caps. Save
             winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
           </p>
@@ -683,8 +683,12 @@ export default function MarketingRoute() {
             </button>
             <button
               aria-pressed={billingCycle === "yearly"}
+              aria-disabled={!annualCycleAvailable}
               className={billingCycle === "yearly" ? "is-active" : ""}
-              onClick={() => setBillingCycle("yearly")}
+              disabled={!annualCycleAvailable}
+              onClick={() => {
+                if (annualCycleAvailable) setBillingCycle("yearly");
+              }}
               type="button"
             >
               <span>Annual</span>
@@ -727,7 +731,7 @@ export default function MarketingRoute() {
                 <span>{plan.name}</span>
                 {plan.slug === "starter" ? <em className="f9-plan-badge">Recommended</em> : null}
                 {plan.slug === "agency" && !planSaleOpen ? (
-                  <em className="f9-plan-badge">Contact us</em>
+                  <em className="f9-plan-badge">Account review</em>
                 ) : null}
                 <h3>{priceLabel(localPricing, plan.slug, billingCycle, billingCycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel)}</h3>
                 <small>
@@ -761,8 +765,8 @@ export default function MarketingRoute() {
                     </div>
                   ) : plan.slug === "agency" && !planSaleOpen ? (
                     <p className="f9-price-sync">
-                      Agency checkout is temporarily unavailable. Email{" "}
-                      <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will help.
+                      Agency is available by account review. Email{" "}
+                      <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will confirm fit directly.
                     </p>
                   ) : selectedAnnualBlocked && yearlyReady ? (
                     <span className="f9-price-sync">
@@ -772,14 +776,21 @@ export default function MarketingRoute() {
                     <span className="f9-price-sync">Prices loading</span>
                   )
                 ) : (
-                  <Link to={planSaleOpen && selectedReady && !selectedAnnualBlocked
-                    ? planIntentPath(false, plan.slug, billingCycle)
-                    : primaryCta}
-                  >
-                    {planSaleOpen && selectedReady && !selectedAnnualBlocked
-                      ? `Choose ${billingCycle === "yearly" ? "annual" : "monthly"}`
-                      : primaryLabel}
-                  </Link>
+                  plan.slug === "agency" && !planSaleOpen ? (
+                    <p className="f9-price-sync">
+                      Agency is available by account review. Email{" "}
+                      <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
+                    </p>
+                  ) : (
+                    <Link to={planSaleOpen && selectedReady && !selectedAnnualBlocked
+                      ? planIntentPath(false, plan.slug, billingCycle)
+                      : primaryCta}
+                    >
+                      {planSaleOpen && selectedReady && !selectedAnnualBlocked
+                        ? `Choose ${billingCycle === "yearly" ? "annual" : "monthly"}`
+                        : primaryLabel}
+                    </Link>
+                  )
                 )}
               </article>
             );
@@ -797,13 +808,16 @@ export default function MarketingRoute() {
           and we&rsquo;ll help you move.
         </p>
 
-        <div className="ld-bundles" aria-label="Record packs">
+        <div className="ld-bundles" aria-label="Check packs">
           <div className="ld-bundles-head">
-            <span className="ld-kicker">Record packs</span>
-            <h3>Extra records when campaigns move fast.</h3>
+            <span className="ld-kicker">Check packs</span>
+            <h3>Extra checks when campaigns move fast.</h3>
             <p>
-              Add saved change records for busy weeks or big campaigns without changing the team&rsquo;s
-              plan.
+              Add purchased checks for busy weeks or big campaigns without changing the team&rsquo;s
+              plan. Purchased checks never expire.
+            </p>
+            <p className="ld-check-pack-note">
+              Packs: 500 extra checks, 2,000 extra checks, or 7,500 extra checks.
             </p>
           </div>
           <div className="ld-bundle-grid ld-reveal">
@@ -829,25 +843,41 @@ export default function MarketingRoute() {
           <h3>Common billing questions</h3>
           <dl className="proof-trail-list">
             <div>
-              <dt>What is a saved change record?</dt>
+              <dt>What uses checks?</dt>
               <dd>
-                Scheduled monitoring is included. A saved change record is used when we store
-                screenshots, page text, and the original link for a landing-page update.
+                Scheduled scans are included with your plan. A check is used when Five to Nine saves
+                a proof-backed capture with screenshots, page text, and the original link.
               </dd>
             </div>
             <div>
-              <dt>Do unused records roll over?</dt>
+              <dt>Do unused checks roll over?</dt>
               <dd>
-                Included monthly records reset on your subscription anniversary and do not roll
-                over. Record packs never expire.
+                Included checks reset every month and do not roll over. Purchased checks never
+                expire.
               </dd>
             </div>
             <div>
               <dt>What changes on Agency?</dt>
               <dd>
-                Agency includes 75 watchlists with daily reviews, priority monitoring coverage,
-                client-ready reports, shared report branding, developer access, and three team
-                seats. We keep monitoring coverage visible as account volume grows.
+                Agency includes 75 watchlists, 250 Collections, 2,500 checks/month, team seats,
+                API/MCP access, client reports, and shared report branding.
+              </dd>
+            </div>
+            <div>
+              <dt>{commercialLaunch.agencySaleOpen ? "How does Agency checkout work?" : "Why is Agency held?"}</dt>
+              <dd>
+                {commercialLaunch.agencySaleOpen ? (
+                  <>
+                    Agency checkout is available when pricing loads in your region. Email{" "}
+                    <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you want an account review before
+                    buying.
+                  </>
+                ) : (
+                  <>
+                    Agency is available by account review. Email{" "}
+                    <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we will confirm fit directly.
+                  </>
+                )}
               </dd>
             </div>
             <div>

@@ -36,7 +36,7 @@ export default function TrustRoute() {
       <PublicDocBlock title="Data handled">
         <p>
           Five to Nine stores account records, saved searches, watchlists, collections, notes, reports,
-          share links, delivery settings, API keys, saved change records, landing-page snapshots,
+          share links, delivery settings, API keys, proof-backed changes, landing-page snapshots,
           source URLs, delivery attempts, and service logs needed to run the product.
         </p>
       </PublicDocBlock>

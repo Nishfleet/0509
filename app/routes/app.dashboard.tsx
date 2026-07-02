@@ -509,13 +509,13 @@ export default function AppDashboardRoute() {
             </h2>
           </div>
           <p>
-            {proofUsage.used} of {proofUsage.limit} saved change records used in the current billing period.
+            {proofUsage.used} of {proofUsage.limit} checks used in the current billing period.
             {proofUsage.upgradeTarget
               ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
               : " Add an overflow pack before the next busy campaign."}
           </p>
           <Link className="f9-secondary-button" to="/app/billing?source=evidence#top-ups">
-            Review record packs
+            Review check packs
           </Link>
         </article>
       ) : null}

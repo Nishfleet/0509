@@ -1078,7 +1078,7 @@ export default function WatchlistsRoute() {
                           </div>
                         ))}
                         {data.recentProofCaptures.length === 0 ? (
-                          <p className="f9-muted-copy">Evidence checks will appear here after the next saved record.</p>
+                          <p className="f9-muted-copy">Evidence checks will appear here after the next proof-backed check.</p>
                         ) : null}
                       </div>
                     </article>

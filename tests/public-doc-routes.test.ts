@@ -30,11 +30,14 @@ describe("public documentation routes", () => {
 
     expect(markup).toContain("Account actions");
     expect(markup).toContain("Developer access");
+    expect(markup).toContain("Developer API and connected-tool access require Agency");
     expect(markup).toContain("Connected tools");
+    expect(markup).toContain("same bearer token on Agency");
     expect(markup).toContain("POST /api/mcp");
     expect(markup).toContain("tools/list");
     expect(markup).toContain("Use a write-enabled key only when the tool should run approved account actions.");
-    expect(markup).toContain("Requires a write-enabled customer API key");
+    expect(markup).toContain("Requires a write-enabled Agency customer API key");
+    expect(markup).not.toContain("any active customer API key");
     expect(markup).toContain("Restricted actions still require signed-in owner review");
     expect(markup).toContain("customer API key creation, rotation, and revocation");
     expect(markup).toContain("Not live yet: automated X, Reddit, LinkedIn, YouTube, TikTok, Google, or Pinterest ingestion.");

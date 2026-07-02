@@ -134,7 +134,7 @@ describe("marketing route", () => {
             {
               slug: "proof_500",
               name: "Burst Pack",
-              creditLabel: "500 extra change records",
+              creditLabel: "500 extra checks",
               priceLabel: "$25",
               detail: "For a busy week.",
               creditQuantity: 500,
@@ -185,9 +185,9 @@ describe("marketing route", () => {
     expect(markup).not.toContain("INR");
     expect(markup).toContain("Recommended launch plan");
     expect(markup).toContain("Start with Starter");
-    expect(markup).toContain("Record packs");
-    expect(markup).toContain("500 extra change records");
-    expect(markup).toContain("$0.05 per saved record");
+    expect(markup).toContain("Check packs");
+    expect(markup).toContain("500 extra checks");
+    expect(markup).toContain("$0.05 per check");
     expect(markup).not.toContain("500 extra proof captures");
     expect(markup).not.toContain("Dodo preview");
     expect(markup).not.toContain("Buyer currency");
@@ -201,7 +201,7 @@ describe("marketing route", () => {
     expect(markup).not.toContain("/api/checkout");
   });
 
-  it("does not advertise annual savings in the toggle until every open displayed annual plan validates", async () => {
+  it("keeps annual selectable when one open displayed annual plan validates", async () => {
     vi.doMock("react-router", async () => {
       const actual = await vi.importActual<typeof import("react-router")>("react-router");
       const React = await import("react");
@@ -275,6 +275,10 @@ describe("marketing route", () => {
 
     expect(markup).not.toContain("f9-toggle-savings");
     expect(markup).not.toContain("4 months free");
+    expect(markup).toMatch(/<button[^>]*aria-disabled="false"[^>]*><span>Annual/);
+    expect(markup).not.toMatch(/<button[^>]*disabled=""[^>]*><span>Annual/);
+    expect(markup).not.toContain("cycle%3Dyearly");
+    expect(markup).not.toContain("cycle=yearly");
   });
 
   it("preserves plan intent through signup for signed-out users", async () => {
@@ -433,9 +437,12 @@ describe("marketing route", () => {
     const { default: MarketingRoute } = await import("~/routes/marketing");
     const markup = renderToStaticMarkup(createElement(MarketingRoute));
 
-    expect(markup).toContain("Contact us");
+    expect(markup).toContain("Account review");
+    expect(markup).toContain("Agency is available by account review");
     expect(markup).toContain('href="/auth/signup"');
     expect(markup).not.toContain("plan=agency");
+    expect(markup).not.toContain("capacity review");
+    expect(markup).not.toContain("higher-volume monitoring coverage");
   });
 });
 
@@ -450,7 +457,9 @@ describe("pricing preview route", () => {
       context: createContext(),
       request: new Request("https://0509.io/api/pricing-preview"),
     } as never);
-    const payload = await response.json();
+    const payload = await response.json() as {
+      commercialLaunch: Record<string, unknown>;
+    } & Record<string, unknown>;
 
     expect(response.status).toBe(200);
     expect(payload).toMatchObject({
@@ -459,6 +468,19 @@ describe("pricing preview route", () => {
       source: "dodo_checkout_preview",
       reason: "missing_api_key",
       prices: {},
+      commercialLaunch: {
+        scoutSaleOpen: false,
+        starterSaleOpen: false,
+        agencySaleOpen: false,
+      },
     });
+    expect(Object.keys(payload.commercialLaunch).sort()).toEqual([
+      "agencySaleOpen",
+      "scoutSaleOpen",
+      "starterSaleOpen",
+    ]);
+    expect(JSON.stringify(payload)).not.toContain("fanout");
+    expect(JSON.stringify(payload)).not.toContain("missingCheckoutSkus");
+    expect(JSON.stringify(payload)).not.toContain("internalWorkspace");
   });
 });

@@ -725,7 +725,14 @@ describe("Dodo 0509 checkout pricing validation", () => {
         currency: "USD",
         billing_country: "US",
         current_breakup: { total_amount: 1900 },
-        product_cart: [{ discounted_price: 1900, tax_inclusive: false }],
+        product_cart: [
+          {
+            product_id: productId,
+            is_subscription: true,
+            discounted_price: 1900,
+            tax_inclusive: false,
+          },
+        ],
         total_tax: 0,
       });
     });
