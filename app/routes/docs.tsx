@@ -37,7 +37,7 @@ export default function DocsRoute() {
         <ul className="f9-doc-list">
           <li>Public competitor ad search from a website.</li>
           <li>Saved watchlists, collections, digests, reports, share links, and exports.</li>
-          <li>Checkout, receipts, record packs, and billing support.</li>
+          <li>Checkout, receipts, check packs, and billing support.</li>
           <li>Email delivery for digests and high-priority change alerts.</li>
           <li>Rate limits, plan caps, evidence-usage warnings, and service status.</li>
         </ul>
@@ -45,7 +45,7 @@ export default function DocsRoute() {
 
       <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
-          <li>TikTok, Google, YouTube, LinkedIn, and Pinterest ingestion are not included yet.</li>
+          <li>Social connectors are disabled.</li>
           <li>Spend, reach, and impression benchmarks are not included yet.</li>
           <li>SOC 2, HIPAA, GDPR compliance, zero-retention, or no-training guarantees.</li>
         </ul>

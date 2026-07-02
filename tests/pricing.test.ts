@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { dodoAnnualUnavailableCopy } from "~/lib/dodo-pricing-display";
 import {
+  EVIDENCE_USAGE_CUSTOMER_COPY,
   pricingPlans,
   pricingPlansForRegion,
   usageBundles,
@@ -30,41 +31,59 @@ describe("pricingPlans", () => {
     const [scout, starter, agency] = pricingPlans();
 
     expect(scout.features).toContain("3 active watchlists");
-    expect(scout.features).toContain("Weekly change brief with screenshots and links");
-    expect(scout.features).toContain("Email digest delivery");
+    expect(scout.features).toContain("10 Collections");
+    expect(scout.features).toContain("Monday scan");
+    expect(scout.features).toContain("Weekly Digest");
     expect(scout.features).not.toContain("Slack");
-    expect(scout.features).toContain("50 saved change records per month");
+    expect(scout.features).toContain("50 checks/month");
     expect(starter.features).toContain("10 active watchlists");
-    expect(starter.features).toContain("Email delivery");
+    expect(starter.features).toContain("25 Collections");
+    expect(starter.features).toContain("Daily scans");
+    expect(starter.features).toContain("Daily + weekly Digests");
+    expect(starter.features).toContain("Email Notifications");
+    expect(starter.features).toContain("Exports");
     expect(starter.features).not.toContain("Slack");
-    expect(starter.features).toContain("250 saved change records per month");
+    expect(starter.features).toContain("250 checks/month");
     expect(agency.features).toContain("75 active watchlists");
+    expect(agency.features).toContain("250 Collections");
     expect(agency.features).not.toContain("Slack");
-    expect(agency.features).toContain("2,500 saved change records per month");
-    expect(agency.features).toContain("Priority nightly review coverage");
-    expect(agency.features).toContain("Developer exports and workspace-approved workflow actions");
-    expect(agency.features.filter((feature) => feature === "Daily and weekly change briefs with screenshots and links")).toHaveLength(1);
+    expect(agency.features).toContain("2,500 checks/month");
+    expect(agency.features).toContain("Team workspace");
+    expect(agency.features).toContain("API + MCP access");
+    expect(agency.features).toContain("Client reports");
+    expect(agency.features).toContain("Shared report branding");
+    expect(agency.features.filter((feature) => feature === "Daily + weekly Digests")).toHaveLength(1);
+    expect(agency.features.join("\n")).not.toContain("workspace-approved");
     expect(agency.features.join("\n")).not.toContain("nightly queue");
   });
 
-  it("offers paid record packs for temporary spikes", () => {
+  it("offers paid check packs for temporary spikes", () => {
     expect(usageBundles()).toEqual([
       expect.objectContaining({
         slug: "proof_500",
         priceLabel: "Pack price loading",
-        creditLabel: "500 extra change records",
+        creditLabel: "500 extra checks",
       }),
       expect.objectContaining({
         slug: "proof_2000",
         priceLabel: "Pack price loading",
-        creditLabel: "2,000 extra change records",
+        creditLabel: "2,000 extra checks",
       }),
       expect.objectContaining({
         slug: "proof_7500",
         priceLabel: "Pack price loading",
-        creditLabel: "7,500 extra change records",
+        creditLabel: "7,500 extra checks",
       }),
     ]);
+  });
+
+  it("states the customer-facing check accounting contract", () => {
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Scheduled scans are included with your plan");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("proof-backed capture");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Included checks reset every month");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).toContain("Purchased checks never expire");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).not.toContain("saved change records");
+    expect(EVIDENCE_USAGE_CUSTOMER_COPY).not.toContain("record packs");
   });
 
   it("does not branch copy by India versus rest of world anymore", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isPlanCheckoutAllowed,
+  publicCommercialLaunchSummary,
   summarizeCommercialLaunch,
   summarizeMonitoringFanoutProof,
 } from "~/lib/commercial-launch-gate.server";
@@ -14,6 +15,8 @@ const workflowBinding = {
 } as unknown as AppEnv["MONITORING_WORKFLOW"];
 
 const baseFanoutEnv = {
+  DODO_0509_API_KEY: "secret",
+  DODO_0509_BRAND_ID: "brand_0509",
   MONITORING_FANOUT_MODE: "fanout",
   MONITORING_FANOUT_GLOBAL: "1",
   MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID: "user_internal",
@@ -84,12 +87,12 @@ describe("commercial launch gate", () => {
     expect(proof.blocker).toBe("internal_workspace_undocumented");
   });
 
-  it("opens Scout and Starter regardless of SKU env in the commercial gate", () => {
+  it("keeps Scout and Starter checkout permission independent of SKU env for server validation", () => {
     expect(isPlanCheckoutAllowed({}, "scout")).toBe(true);
     expect(isPlanCheckoutAllowed({}, "starter")).toBe(true);
   });
 
-  it("opens Agency only when fan-out is proven and SKUs are configured", () => {
+  it("opens public sale flags when checkout config and fan-out proof are present", () => {
     const summary = summarizeCommercialLaunch(baseFanoutEnv);
 
     expect(summary.agencySaleOpen).toBe(true);
@@ -98,10 +101,24 @@ describe("commercial launch gate", () => {
     expect(isPlanCheckoutAllowed(baseFanoutEnv, "agency")).toBe(true);
   });
 
-  it("reports missing checkout SKUs without blocking Scout or Starter sale flags", () => {
+  it("reports missing checkout SKUs and fails public sale flags closed", () => {
     const summary = summarizeCommercialLaunch({});
-    expect(summary.scoutSaleOpen).toBe(true);
-    expect(summary.starterSaleOpen).toBe(true);
+    expect(summary.scoutSaleOpen).toBe(false);
+    expect(summary.starterSaleOpen).toBe(false);
+    expect(summary.agencySaleOpen).toBe(false);
     expect(summary.missingCheckoutSkus.length).toBeGreaterThan(0);
+  });
+
+  it("keeps the public launch summary to sale flags only", () => {
+    expect(publicCommercialLaunchSummary({})).toEqual({
+      scoutSaleOpen: false,
+      starterSaleOpen: false,
+      agencySaleOpen: false,
+    });
+    expect(Object.keys(publicCommercialLaunchSummary(baseFanoutEnv)).sort()).toEqual([
+      "agencySaleOpen",
+      "scoutSaleOpen",
+      "starterSaleOpen",
+    ]);
   });
 });

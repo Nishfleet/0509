@@ -1235,9 +1235,11 @@ describe("billing page", () => {
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
-    expect(markup).toContain("Agency checkout is not available from that checkout link");
-    expect(markup).toContain("current plan availability");
-    expect(markup).not.toContain("Agency checkout is available from the pricing page");
+    expect(markup).toContain("Agency is available by account review");
+    expect(markup).toContain("confirm fit directly");
+    expect(markup).not.toContain("capacity review");
+    expect(markup).not.toContain("higher-volume monitoring coverage");
+    expect(markup).not.toContain("Agency checkout is not available from that checkout link");
     expect(markup).not.toContain("Scout and Starter are available now");
     expect(markup).not.toContain("need Agency capacity before then");
   });
@@ -1288,8 +1290,9 @@ describe("billing page", () => {
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup).toContain("200 of 250 included used");
-    expect(markup).toContain("500 purchased records remaining");
+    expect(markup).toContain("500 purchased checks remaining");
     expect(markup).toContain("Burst Pack");
+    expect(markup).toContain("500 checks from Burst Pack — never expire");
     expect(markup).not.toContain("burst_500_v1");
     expect(markup).toContain("never expire");
   });

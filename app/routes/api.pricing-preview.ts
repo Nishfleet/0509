@@ -2,7 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
-  const { summarizeCommercialLaunch } = await import("~/lib/commercial-launch-gate.server");
+  const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
   const env = getEnv(context);
   const preview = await previewDodo0509PlanPrices({
@@ -13,7 +13,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   return Response.json(
     {
       ...preview,
-      commercialLaunch: summarizeCommercialLaunch(env),
+      commercialLaunch: publicCommercialLaunchSummary(env),
     },
     {
       headers: {

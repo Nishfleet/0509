@@ -4302,6 +4302,16 @@ one signal-green accent.
   line-height: 1;
 }
 
+.f9-home .f9-cycle-toggle button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.f9-home :is(a, button, input):focus-visible {
+  outline: 3px solid var(--ld-green);
+  outline-offset: 3px;
+}
+
 .f9-home .f9-commerce-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -4489,6 +4499,16 @@ one signal-green accent.
   margin: 6px 0 16px;
 }
 
+.ld-bundles-head .ld-check-pack-note {
+  color: var(--ld-green-ink);
+  font-family: var(--ld-mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-top: -8px;
+  text-transform: uppercase;
+}
+
 .ld-bundles-head h3 {
   font-family: var(--ld-display);
   font-size: 1.35rem;
@@ -4659,6 +4679,32 @@ one signal-green accent.
   .f9-home .ld-command button { justify-content: center; }
 
   .ld-caseboard { grid-template-columns: 1fr; }
+
+  .ld-how,
+  .ld-proof,
+  .ld-quiet,
+  .ld-stats,
+  .f9-home .f9-growth-pricing,
+  .ld-final {
+    padding: 36px 18px;
+  }
+
+  .ld-case-lead,
+  .ld-case-card,
+  .ld-intel article,
+  .ld-bundle-card,
+  .f9-home .f9-commerce-card {
+    padding: 16px;
+  }
+
+  .ld-intel {
+    display: none;
+  }
+
+  .f9-home .f9-commerce-grid,
+  .ld-bundle-grid {
+    grid-template-columns: 1fr;
+  }
 
   .ld-stats-belt article {
     border-right: 0;
@@ -6742,7 +6788,7 @@ one signal-green accent.
   border: 2px solid var(--ld-ink);
   width: 72%;
   box-shadow: 6px 6px 0 rgba(14, 13, 10, 0.12);
-  opacity: 0;
+  opacity: 1;
   animation: ld-cycle-card 9s ease-in-out infinite;
 }
 
@@ -6774,18 +6820,14 @@ one signal-green accent.
 
 @keyframes ld-cycle-card {
   0% {
-    opacity: 0;
     transform: rotate(var(--tilt)) translateY(18px);
   }
   4% {
-    opacity: 1;
     transform: rotate(var(--tilt)) translateY(0);
   }
   45% { transform: rotate(var(--tilt)) translateY(-6px); }
   80% { transform: rotate(var(--tilt)) translateY(0); }
-  90% { opacity: 1; }
   95%, 100% {
-    opacity: 0;
     transform: rotate(var(--tilt)) translateY(18px);
   }
 }
@@ -6873,7 +6915,7 @@ one signal-green accent.
   background: var(--ld-card);
   font-weight: 600;
   z-index: 2;
-  opacity: 0;
+  opacity: 1;
   animation: ld-cycle-stamp 9s ease-out infinite;
 }
 
@@ -6882,10 +6924,10 @@ one signal-green accent.
 .ld-shot-form .ld-stamp { top: -10px; left: 14px; transform: rotate(-1.5deg); animation-delay: 1.2s; }
 
 @keyframes ld-cycle-stamp {
-  0% { opacity: 0; scale: 1.6; }
-  2.5% { opacity: 1; scale: 1; }
-  90% { opacity: 1; scale: 1; }
-  95%, 100% { opacity: 0; scale: 1; }
+  0% { scale: 1.08; }
+  2.5% { scale: 1; }
+  90% { scale: 1; }
+  95%, 100% { scale: 1.08; }
 }
 
 .ld-stamp-red { border: 1.5px solid var(--ld-red); color: var(--ld-red); }
@@ -6904,7 +6946,7 @@ one signal-green accent.
   color: var(--ld-green);
   padding: 6px 12px;
   transform: rotate(3deg);
-  opacity: 0;
+  opacity: 1;
   animation: ld-cycle-stamp 9s ease-out 0.85s infinite;
 }
 
@@ -6960,8 +7002,6 @@ one signal-green accent.
 }
 
 /* "Alive" pass — fluid motion across the landing (2026-06-12) */
-
-.ld-motion .ld-reveal:not(.is-seen) > * { opacity: 0; }
 
 .ld-motion .ld-reveal.is-seen > * {
   animation: ld-reveal-in 0.65s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;

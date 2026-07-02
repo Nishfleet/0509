@@ -66,9 +66,9 @@ describe("status route", () => {
 
     expect(result).toMatchObject({
       appServed: true,
-      evidence: null,
-      evidenceUnavailableReason: "private_canary_only",
     });
+    expect(JSON.stringify(result)).not.toContain("canary");
+    expect(JSON.stringify(result)).not.toContain("Slack");
     expect(getLaunchReadinessSignals).not.toHaveBeenCalled();
   });
 
@@ -97,7 +97,8 @@ describe("status route", () => {
     expect(markup).toContain("Public search");
     expect(markup).toContain("Email delivery is available for eligible accounts");
     expect(markup).toContain("Recurring uptime checks are configured");
-    expect(markup).toContain("Held while larger-account monitoring capacity is verified");
+    expect(markup).toContain("Available by account review");
+    expect(markup).not.toContain("larger-account monitoring capacity");
     expect(markup).not.toContain("GA launch gate");
     expect(markup).not.toContain("GA launch proof");
     expect(markup).not.toContain("broad launch still needs fresh Slack proof");

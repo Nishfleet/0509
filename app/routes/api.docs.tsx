@@ -29,7 +29,8 @@ export default function ApiDocsRoute() {
     >
       <PublicDocBlock title="Authentication">
         <p>
-          Create a customer API key inside <Link to="/app/sources">Notifications</Link>.
+          Developer API and connected-tool access require Agency. Create a customer API key inside{" "}
+          <Link to="/app/sources">Notifications</Link>.
           Send it as a bearer token:
         </p>
         <pre className="f9-code-block">
@@ -39,9 +40,9 @@ export default function ApiDocsRoute() {
 
       <PublicDocBlock title="Connected tools">
         <p>
-          Compatible tools can connect with the same bearer token. Use an active customer API key
-          for readiness and exports. Use a write-enabled key only when the tool should run approved
-          account actions.
+          Compatible tools can connect with the same bearer token on Agency. Use an active customer
+          API key for readiness and exports. Use a write-enabled key only when the tool should run
+          approved account actions.
         </p>
         <pre className="f9-code-block">
           <code>{`POST /api/mcp

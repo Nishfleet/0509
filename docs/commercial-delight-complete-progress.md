@@ -44,7 +44,7 @@ Track the customer-facing commercial-delight release from staged implementation 
 - Matched top-up return confirmation by provider payment id when present, instead of accepting older same-SKU grants.
 - Moved the checkout return notice into a small component for route size and reuse.
 - Added structured billing and proof-usage state to workspace readiness so API and MCP consumers can read the same billing state the UI uses.
-- Kept workspace readiness available to any active customer API key as a read-only diagnostic endpoint, while export/action endpoints still require their paid feature gates.
+- Kept workspace readiness available to active Agency customer API keys as a read-only diagnostic endpoint, while export/action endpoints still require their paid feature gates.
 - Added redacted top-up grant rows and member/owner billing context to workspace readiness without provider payment ids or customer ids.
 - Matched checkout-session creation to the same Dodo adaptive-currency fees-inclusive setting used by preview validation.
 - Disabled plan checkout CTAs from billing state while a pending Dodo checkout lock exists, not only after an `already-started` redirect.

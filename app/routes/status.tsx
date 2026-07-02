@@ -19,16 +19,14 @@ export const meta: MetaFunction = () =>
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
-  const { summarizeCommercialLaunch } = await import("~/lib/commercial-launch-gate.server");
+  const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const cloudflare = context.cloudflare as { env?: unknown } | undefined;
   const env = cloudflare?.env as import("~/lib/env.server").AppEnv | undefined;
 
   return {
     generatedAt: new Date().toISOString(),
     appServed: Boolean(cloudflare?.env),
-    commercialLaunch: env ? summarizeCommercialLaunch(env) : null,
-    evidence: null,
-    evidenceUnavailableReason: "private_canary_only",
+    commercialLaunch: env ? publicCommercialLaunchSummary(env) : null,
   };
 }
 
@@ -74,7 +72,7 @@ export default function StatusRoute() {
           </div>
           <div>
             <dt>Agency</dt>
-            <dd>{data.commercialLaunch?.agencySaleOpen ? "Available for checkout" : "Held while larger-account monitoring capacity is verified"}</dd>
+            <dd>{data.commercialLaunch?.agencySaleOpen ? "Available for checkout" : "Available by account review"}</dd>
           </div>
         </dl>
       </PublicDocBlock>
@@ -91,8 +89,8 @@ export default function StatusRoute() {
       <PublicDocBlock title="Safety controls">
         <ul className="f9-doc-list">
           <li>Sign-in, saved account data, search, and public pages are rate limited.</li>
-          <li>Plans have watchlist, collection, digest, saved-record, and team-seat caps.</li>
-          <li>Saved-record usage warns after 80% and hard-stops when paid volume is exhausted.</li>
+          <li>Plans have watchlist, collection, digest, check, and team-seat caps.</li>
+          <li>Check usage warns after 80% and hard-stops when paid volume is exhausted.</li>
           <li>Support can review delivery failures, stale tracking, and account-volume risk when something needs attention.</li>
         </ul>
       </PublicDocBlock>

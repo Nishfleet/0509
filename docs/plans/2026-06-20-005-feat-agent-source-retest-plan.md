@@ -9,7 +9,7 @@ status: "implemented"
 
 ## Goal
 
-Let a write-enabled customer API key ask Five to Nine to retest the account's saved Meta source connection without exposing, accepting, or mutating the secret token itself.
+Let a write-enabled Agency customer API key ask Five to Nine to retest the account's saved Meta source connection without exposing, accepting, or mutating the secret token itself.
 
 ## Scope
 

@@ -38,8 +38,8 @@ const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
   "delivery_target.update",
   "web_mentions.list",
 ] as const;
-const READ_ONLY_API_KEY_REQUIREMENT = "Works with any active customer API key.";
-const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled customer API key.";
+const READ_ONLY_API_KEY_REQUIREMENT = "Requires an active Agency customer API key.";
+const WRITE_ENABLED_API_KEY_REQUIREMENT = "Requires a write-enabled Agency customer API key.";
 
 const apiKey = {
   id: "api-key-1",
@@ -331,10 +331,12 @@ describe("customer API v1", () => {
       request: new Request("https://0509.io/api/v1"),
     } as never);
     const body = await response.json() as {
+      planRequirement: string;
       endpoints: Array<{
         path: string;
         formats: string[];
         actions?: string[];
+        planRequirement: string;
         requiresWriteEnabled: boolean;
         credentialRequirement: string;
       }>;
@@ -365,6 +367,7 @@ describe("customer API v1", () => {
       notLiveYet: string[];
     };
 
+    expect(body.planRequirement).toBe("Agency");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/mcp");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/actions");
@@ -373,8 +376,13 @@ describe("customer API v1", () => {
     const actionsEndpoint = body.endpoints.find((endpoint) => endpoint.path === "/api/v1/actions");
     expect(actionsEndpoint?.actions).toEqual(EXPECTED_CUSTOMER_AGENT_ACTION_NAMES);
     expect(actionsEndpoint).toMatchObject({
+      planRequirement: "Agency",
       requiresWriteEnabled: true,
       credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
+    });
+    body.endpoints.forEach((endpoint) => {
+      expect(endpoint.planRequirement).toBe("Agency");
+      expect(endpoint.credentialRequirement).not.toContain("any active customer API key");
     });
     body.endpoints
       .filter((endpoint) => endpoint.path !== "/api/v1/actions" && endpoint.path !== "/api/mcp")
@@ -433,6 +441,43 @@ describe("customer API v1", () => {
       billingOwnerName: null,
       canManageBilling: true,
     });
+  });
+
+  it("gates workspace readiness to Agency API access", async () => {
+    setupMocks();
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      getEffectiveWorkspacePlan: vi.fn().mockResolvedValue("starter"),
+      getUserPlanForActor: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 10, current: 1 }),
+      PLAN_LIMITS: {
+        starter: { digests: true },
+      },
+    }));
+    const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
+    vi.doMock("~/lib/workspace-readiness.server", () => ({
+      getWorkspaceReadiness,
+    }));
+
+    const { loader } = await import("~/routes/api.v1.workspace-readiness");
+    const response = await loader({
+      context: { cloudflare: { env: { DB: {} } } },
+      request: new Request("https://0509.io/api/v1/workspace-readiness", {
+        headers: {
+          Authorization: `Bearer ${fakeApiKey("test")}`,
+        },
+      }),
+    } as never);
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body).toMatchObject({
+      error: "plan_gated",
+      feature: "api_access",
+      plan: "starter",
+    });
+    expect(getWorkspaceReadiness).not.toHaveBeenCalled();
   });
 
   it("returns workspace-owner readiness for a member API key", async () => {
