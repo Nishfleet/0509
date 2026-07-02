@@ -4214,8 +4214,10 @@ one signal-green accent.
   border: 2px solid var(--ld-ink);
   background: var(--ld-green);
   padding: 16px 20px;
-  margin: 0 0 16px;
-  max-width: 480px;
+  margin: 0 auto 16px;
+  max-width: 620px;
+  text-align: center;
+  box-shadow: 6px 6px 0 var(--ld-ink);
 }
 
 .ld-plan-summary span {
@@ -4360,6 +4362,41 @@ one signal-green accent.
   font-size: 0.74rem;
 }
 
+.f9-home .f9-plan-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 48px;
+  padding: 9px 10px;
+  border: 2px solid rgba(23, 22, 17, 0.16);
+  background: rgba(33, 196, 132, 0.1);
+}
+
+.f9-home .f9-commerce-card.is-recommended .f9-plan-value {
+  border-color: var(--ld-green);
+  background: rgba(33, 196, 132, 0.18);
+}
+
+.f9-home .f9-plan-value strong,
+.f9-home .f9-plan-value span {
+  line-height: 1.25;
+}
+
+.f9-home .f9-plan-value strong {
+  color: var(--ld-ink);
+  font-size: 0.86rem;
+}
+
+.f9-home .f9-plan-value span {
+  font-family: var(--ld-mono);
+  color: var(--ld-green-ink);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .f9-home .f9-annual-status {
   display: inline-flex;
   align-items: center;
@@ -4452,6 +4489,15 @@ one signal-green accent.
   margin: 6px 0 16px;
 }
 
+.ld-bundles-head h3 {
+  font-family: var(--ld-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin: 6px 0 0;
+  text-transform: uppercase;
+  color: var(--ld-ink);
+}
+
 .ld-bundle-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -4473,12 +4519,25 @@ one signal-green accent.
   font-size: 1.1rem;
   text-transform: uppercase;
   margin: 0;
+  color: var(--ld-ink);
+}
+
+.f9-home .ld-pricing-faq h3 {
+  color: var(--ld-ink);
 }
 
 .ld-bundle-card strong {
   font-family: var(--ld-mono);
   font-size: 1rem;
   color: var(--ld-green-ink);
+}
+
+.ld-bundle-value {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ld-ink-faint);
+  text-transform: uppercase;
 }
 
 .ld-bundle-card p {
@@ -4488,6 +4547,7 @@ one signal-green accent.
   line-height: 1.5;
 }
 
+.f9-home .ld-bundle-card a,
 .f9-home .ld-bundle-card button {
   background: var(--ld-ink);
   color: var(--ld-bone);
@@ -4496,6 +4556,13 @@ one signal-green accent.
   font-weight: 600;
   cursor: pointer;
   margin-top: auto;
+  text-align: center;
+  text-decoration: none;
+}
+
+.f9-home .ld-bundle-card a:hover,
+.f9-home .ld-bundle-card button:hover {
+  background: #2a2820;
 }
 
 .ld-final {

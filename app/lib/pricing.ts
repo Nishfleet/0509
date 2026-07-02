@@ -21,11 +21,11 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   features.push(`${entitlements.watchlists} active watchlists`);
 
   if (entitlements.scheduledScanCadence === "weekly_monday") {
-    features.push("Weekly competitor scan (every Monday) + on-demand fresh checks");
+    features.push("Weekly competitor scan (every Monday) + on-demand fresh proof");
   } else if (entitlements.scheduledScanCadence === "daily") {
-    features.push("Daily competitor scans + on-demand fresh checks");
+    features.push("Daily competitor scans + on-demand fresh proof");
     if (plan === "agency") {
-      features.push("Priority nightly monitoring capacity");
+      features.push("Priority nightly monitoring coverage");
     }
   }
 
@@ -42,7 +42,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   }
 
   features.push(
-    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} evidence checks per month`,
+    `${entitlements.includedEvidenceChecksPerMonth.toLocaleString("en-US")} proof captures per month`,
   );
 
   if (plan === "scout") {
@@ -59,7 +59,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   if (plan === "agency") {
     features.push("Client-ready proof reports (share link + PDF print)");
     features.push("Your agency name on shared reports");
-    features.push("API + MCP exports and approved account actions");
+    features.push("Read-only API + MCP exports; owner-approved workflow actions");
     features.push(
       `${entitlements.workspaceSeats} team seats — teammates share watchlists, collections, and digests`,
     );
@@ -77,10 +77,10 @@ const PLANS: PricingPlan[] = PLAN_FAMILIES.filter((plan) => plan !== "free").map
     yearlyLabel: "Annual price loading",
     detail:
       slug === "scout"
-        ? "For founders and sellers who want proof first, then a focused competitor set."
+        ? "Proof-backed monitoring for a focused competitor set."
         : slug === "starter"
-          ? "For teams that need daily competitor checks plus daily and weekly evidence digests."
-          : "For agencies and growth teams watching crowded categories.",
+          ? "Daily proof-backed competitor monitoring for one brand's core competitor set."
+          : "Client-ready competitor proof for agencies and crowded categories.",
     features: planMarketingFeatures(slug),
     monthlySku: `${slug}_monthly_v1`,
     yearlySku: `${slug}_annual_v1`,
@@ -121,10 +121,10 @@ const USAGE_BUNDLES: UsageBundle[] = [
 ];
 
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
-  "Scheduled monitoring is included with your plan. Evidence checks are used when Five to Nine creates a new landing-page proof capture. Included evidence checks refresh every month and do not roll over. Purchased extra checks never expire.";
+  "Scheduled monitoring is included with your plan. Proof captures are used when Five to Nine saves a new landing-page proof capture. Included proof captures refresh every month and do not roll over. Purchased proof packs never expire.";
 
 export const TOP_UP_INACTIVE_PLAN_COPY =
-  "Your purchased checks are saved and will be available when a paid plan is active.";
+  "Your purchased proof packs are saved and will be available when a paid plan is active.";
 
 export function pricingPlans(): PricingPlan[] {
   return PLANS.map((plan) => ({ ...plan, features: [...plan.features] }));

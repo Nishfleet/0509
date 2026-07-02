@@ -133,10 +133,11 @@ describe("marketing route", () => {
           usageBundles: [
             {
               slug: "proof_500",
-              name: "500 checks",
-              creditLabel: "500 checks",
+              name: "Burst Pack",
+              creditLabel: "500 extra proof captures",
               priceLabel: "$25",
               detail: "For a busy week.",
+              creditQuantity: 500,
             },
           ],
           session,
@@ -146,18 +147,22 @@ describe("marketing route", () => {
             available: true,
             prices: {
               starter: {
-                monthly: { display: "$59" },
-                yearly: { display: "$499" },
+                monthly: { display: "$59", amount: 5900, currency: "USD" },
+                yearly: { display: "$499", amount: 49900, currency: "USD" },
               },
             },
             annualValidation: {
               starter: {
                 valid: true,
                 reason: "valid_4_months_free",
+                monthlyAmount: 5900,
+                annualAmount: 47200,
+                expectedAnnualAmount: 47200,
+                currency: "USD",
               },
             },
             usageBundles: {
-              proof_500: { display: "$25" },
+              proof_500: { display: "$25", amount: 2500, currency: "USD" },
             },
           },
           commercialLaunch: {
@@ -176,9 +181,12 @@ describe("marketing route", () => {
     expect(markup).toContain("$499");
     expect(markup).toContain("f9-toggle-savings");
     expect(markup).toContain("4 months free");
+    expect(markup).toContain("About $2/day");
     expect(markup).not.toContain("INR");
     expect(markup).toContain("Recommended launch plan");
     expect(markup).toContain("Start with Starter");
+    expect(markup).toContain("Proof packs");
+    expect(markup).toContain("$0.05 per proof capture");
     expect(markup).not.toContain("Dodo preview");
     expect(markup).not.toContain("Buyer currency");
     expect(markup).toContain("Choose monthly");
@@ -334,6 +342,38 @@ describe("marketing route", () => {
     expect(planIntentPath(false, "starter", "yearly")).toBe(
       "/auth/signup?redirectTo=%2Fapp%2Fbilling%3Fplan%3Dstarter%26cycle%3Dyearly%26source%3Dpricing%23plans",
     );
+  });
+
+  it("derives annual savings from visible Dodo totals", async () => {
+    const { valueMathLabel } = await import("~/routes/marketing");
+
+    expect(
+      valueMathLabel(
+        {
+          available: true,
+          prices: {
+            starter: {
+              monthly: { display: "$59", amount: 5900, currency: "USD" },
+              yearly: { display: "$499", amount: 49900, currency: "USD" },
+            },
+          },
+          annualValidation: {
+            starter: {
+              valid: true,
+              reason: "valid_4_months_free",
+              monthlyAmount: 5900,
+              annualAmount: 47200,
+              expectedAnnualAmount: 47200,
+              currency: "USD",
+            },
+          },
+          usageBundles: {},
+        },
+        "starter",
+        "yearly",
+        true,
+      ),
+    ).toBe("Save $209 vs monthly");
   });
 
   it("does not send signed-out users to held Agency checkout", async () => {
