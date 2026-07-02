@@ -573,6 +573,21 @@ export function createId() {
   return crypto.randomUUID();
 }
 
+async function createStableId(prefix: string, parts: unknown[]) {
+  const payload = JSON.stringify(parts);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+  const hash = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `${prefix}_${hash.slice(0, 32)}`;
+}
+
+function isUniqueConstraintError(message: string) {
+  return /UNIQUE constraint failed|SQLITE_CONSTRAINT_UNIQUE|SQLITE_CONSTRAINT_PRIMARYKEY/i.test(
+    message,
+  );
+}
+
 export { listAdsByIds, replaceAnalysisFields } from "~/lib/ad-persistence.server";
 
 export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecord[]) {
@@ -5692,6 +5707,43 @@ export async function listWatchEventsBetween(
   return rows.map(toWatchEventRecord);
 }
 
+async function getExistingProofBackedWatchEvent(
+  env: AppEnv,
+  input: {
+    watchlistId: string;
+    runId: string;
+    eventType: WatchEventType;
+    proofCaptureId: string | null | undefined;
+    title: string;
+    summary: string;
+  },
+) {
+  if (!input.proofCaptureId) return null;
+  const row = await one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM watch_event
+      WHERE watchlist_id = ?
+        AND run_id = ?
+        AND event_type = ?
+        AND proof_capture_id = ?
+        AND title = ?
+        AND summary = ?
+      ORDER BY created_at ASC
+      LIMIT 1
+    `,
+    input.watchlistId,
+    input.runId,
+    input.eventType,
+    input.proofCaptureId,
+    input.title,
+    input.summary,
+  );
+
+  return row?.id ?? null;
+}
+
 export async function createWatchEvent(
   env: AppEnv,
   input: {
@@ -5713,55 +5765,132 @@ export async function createWatchEvent(
     lastEvaluatedAt?: string | null;
   },
 ) {
-  const id = createId();
+  const existingProofBackedEventId = await getExistingProofBackedWatchEvent(env, {
+    watchlistId: input.watchlistId,
+    runId: input.runId,
+    eventType: input.eventType,
+    proofCaptureId: input.proofCaptureId,
+    title: input.title,
+    summary: input.summary,
+  });
+  if (existingProofBackedEventId) {
+    return existingProofBackedEventId;
+  }
+
+  const id = input.proofCaptureId
+    ? await createStableId("watch_event", [
+        input.watchlistId,
+        input.runId,
+        input.eventType,
+        input.proofCaptureId,
+        input.title,
+        input.summary,
+      ])
+    : createId();
   const timestamp = nowIso();
   const status = input.status ?? "confirmed";
-  await run(
+  try {
+    await run(
+      env,
+      `
+        INSERT INTO watch_event (
+          id,
+          watchlist_id,
+          run_id,
+          event_type,
+          status,
+          importance_score,
+          ad_id,
+          baseline_from_run_id,
+          candidate_id,
+          proof_capture_id,
+          title,
+          summary,
+          metadata_json,
+          confirmed_at,
+          suppressed_at,
+          invalidated_at,
+          last_evaluated_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      id,
+      input.watchlistId,
+      input.runId,
+      input.eventType,
+      status,
+      input.importanceScore ?? 0,
+      input.adId,
+      input.baselineFromRunId,
+      input.candidateId ?? null,
+      input.proofCaptureId ?? null,
+      input.title,
+      input.summary,
+      jsonValue(input.metadata),
+      input.confirmedAt ?? (status === "confirmed" ? timestamp : null),
+      input.suppressedAt ?? null,
+      input.invalidatedAt ?? null,
+      input.lastEvaluatedAt ?? timestamp,
+      timestamp,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!input.proofCaptureId || !isUniqueConstraintError(message)) {
+      throw error;
+    }
+    const existingId = await getExistingProofBackedWatchEvent(env, {
+      watchlistId: input.watchlistId,
+      runId: input.runId,
+      eventType: input.eventType,
+      proofCaptureId: input.proofCaptureId,
+      title: input.title,
+      summary: input.summary,
+    });
+    if (!existingId) {
+      throw error;
+    }
+    return existingId;
+  }
+
+  return id;
+}
+
+async function getExistingProofBackedEventCandidate(
+  env: AppEnv,
+  input: {
+    watchlistId: string;
+    runId: string;
+    eventType: WatchEventType;
+    proofTargetId: string | null | undefined;
+    title: string;
+    summary: string;
+  },
+) {
+  if (!input.proofTargetId) return null;
+  const row = await one<{ id: string }>(
     env,
     `
-      INSERT INTO watch_event (
-        id,
-        watchlist_id,
-        run_id,
-        event_type,
-        status,
-        importance_score,
-        ad_id,
-        baseline_from_run_id,
-        candidate_id,
-        proof_capture_id,
-        title,
-        summary,
-        metadata_json,
-        confirmed_at,
-        suppressed_at,
-        invalidated_at,
-        last_evaluated_at,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      SELECT id
+      FROM event_candidate
+      WHERE watchlist_id = ?
+        AND run_id = ?
+        AND event_type = ?
+        AND proof_target_id = ?
+        AND title = ?
+        AND summary = ?
+      ORDER BY created_at ASC
+      LIMIT 1
     `,
-    id,
     input.watchlistId,
     input.runId,
     input.eventType,
-    status,
-    input.importanceScore ?? 0,
-    input.adId,
-    input.baselineFromRunId,
-    input.candidateId ?? null,
-    input.proofCaptureId ?? null,
+    input.proofTargetId,
     input.title,
     input.summary,
-    jsonValue(input.metadata),
-    input.confirmedAt ?? (status === "confirmed" ? timestamp : null),
-    input.suppressedAt ?? null,
-    input.invalidatedAt ?? null,
-    input.lastEvaluatedAt ?? timestamp,
-    timestamp,
   );
 
-  return id;
+  return row?.id ?? null;
 }
 
 export async function createEventCandidate(
@@ -5784,52 +5913,92 @@ export async function createEventCandidate(
     lastEvaluatedAt?: string | null;
   },
 ) {
-  const id = createId();
+  const existingProofBackedCandidateId = await getExistingProofBackedEventCandidate(env, {
+    watchlistId: input.watchlistId,
+    runId: input.runId,
+    eventType: input.eventType,
+    proofTargetId: input.proofTargetId,
+    title: input.title,
+    summary: input.summary,
+  });
+  if (existingProofBackedCandidateId) {
+    return existingProofBackedCandidateId;
+  }
+
+  const id = input.proofTargetId
+    ? await createStableId("event_candidate", [
+        input.watchlistId,
+        input.runId,
+        input.eventType,
+        input.proofTargetId,
+        input.title,
+        input.summary,
+      ])
+    : createId();
   const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO event_candidate (
-        id,
-        watchlist_id,
-        run_id,
-        event_type,
-        status,
-        importance_score,
-        ad_id,
-        proof_target_id,
-        title,
-        summary,
-        metadata_json,
-        proof_required,
-        skip_reason,
-        dedupe_reason,
-        detected_at,
-        last_evaluated_at,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    id,
-    input.watchlistId,
-    input.runId,
-    input.eventType,
-    input.status ?? "detected",
-    input.importanceScore ?? 0,
-    input.adId,
-    input.proofTargetId ?? null,
-    input.title,
-    input.summary,
-    jsonValue(input.metadata ?? {}),
-    boolToInt(input.proofRequired ?? false),
-    input.skipReason ?? null,
-    input.dedupeReason ?? null,
-    input.detectedAt ?? timestamp,
-    input.lastEvaluatedAt ?? null,
-    timestamp,
-    timestamp,
-  );
+  try {
+    await run(
+      env,
+      `
+        INSERT INTO event_candidate (
+          id,
+          watchlist_id,
+          run_id,
+          event_type,
+          status,
+          importance_score,
+          ad_id,
+          proof_target_id,
+          title,
+          summary,
+          metadata_json,
+          proof_required,
+          skip_reason,
+          dedupe_reason,
+          detected_at,
+          last_evaluated_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      id,
+      input.watchlistId,
+      input.runId,
+      input.eventType,
+      input.status ?? "detected",
+      input.importanceScore ?? 0,
+      input.adId,
+      input.proofTargetId ?? null,
+      input.title,
+      input.summary,
+      jsonValue(input.metadata ?? {}),
+      boolToInt(input.proofRequired ?? false),
+      input.skipReason ?? null,
+      input.dedupeReason ?? null,
+      input.detectedAt ?? timestamp,
+      input.lastEvaluatedAt ?? null,
+      timestamp,
+      timestamp,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!input.proofTargetId || !isUniqueConstraintError(message)) {
+      throw error;
+    }
+    const existingId = await getExistingProofBackedEventCandidate(env, {
+      watchlistId: input.watchlistId,
+      runId: input.runId,
+      eventType: input.eventType,
+      proofTargetId: input.proofTargetId,
+      title: input.title,
+      summary: input.summary,
+    });
+    if (!existingId) {
+      throw error;
+    }
+    return existingId;
+  }
 
   return id;
 }
@@ -5929,6 +6098,80 @@ export async function listProofCapturesForTarget(
   );
 
   return rows.map(toProofCaptureRecord);
+}
+
+async function getProofCaptureByIdempotencyKey(
+  env: AppEnv,
+  idempotencyKey: string,
+) {
+  const row = await one<ProofCaptureRow>(
+    env,
+    `
+      SELECT *
+      FROM proof_capture
+      WHERE idempotency_key = ?
+      LIMIT 1
+    `,
+    idempotencyKey,
+  );
+
+  return row ? toProofCaptureRecord(row) : null;
+}
+
+type CreateProofCaptureInput = {
+  proofTargetId: string;
+  status: ProofStatus;
+  skipReason?: ProofSkipReason | null;
+  failureCode?: string | null;
+  failureReason?: string | null;
+  screenshotArtifactKey?: string | null;
+  htmlArtifactKey?: string | null;
+  extractedFields?: JsonRecord;
+  fieldConfidence?: Record<string, number>;
+  extractionWarnings?: string[];
+  captureMetadata?: JsonRecord;
+  renderMode?: ProofRenderMode;
+  deviceProfile?: ProofDeviceProfile;
+  extractorVersion: string;
+  idempotencyKey?: string | null;
+  attemptedAt?: string;
+  succeededAt?: string | null;
+};
+
+function getReusableProofCaptureId(existing: ProofCaptureRecord, input: CreateProofCaptureInput) {
+  if (existing.proofTargetId !== input.proofTargetId) {
+    throw new Error("Existing proof capture request belongs to a different proof target.");
+  }
+  if (existing.status !== input.status) {
+    throw new Error("Existing proof capture request has an incompatible status.");
+  }
+  if (input.status === "succeeded" && !matchesSuccessfulProofCapturePayload(existing, input)) {
+    throw new Error("Existing proof capture request has an incompatible proof payload.");
+  }
+  return existing.id;
+}
+
+function matchesSuccessfulProofCapturePayload(
+  existing: ProofCaptureRecord,
+  input: CreateProofCaptureInput,
+) {
+  return (
+    Boolean(existing.succeededAt) &&
+    existing.succeededAt === (input.succeededAt ?? null) &&
+    existing.screenshotArtifactKey === (input.screenshotArtifactKey ?? null) &&
+    existing.htmlArtifactKey === (input.htmlArtifactKey ?? null) &&
+    existing.extractorVersion === input.extractorVersion &&
+    existing.renderMode === (input.renderMode ?? "mobile") &&
+    existing.deviceProfile === (input.deviceProfile ?? "mobile_default") &&
+    jsonEquivalent(existing.extractedFields, input.extractedFields ?? {}) &&
+    jsonEquivalent(existing.fieldConfidence, input.fieldConfidence ?? {}) &&
+    jsonEquivalent(existing.extractionWarnings, input.extractionWarnings ?? []) &&
+    jsonEquivalent(existing.captureMetadata, input.captureMetadata ?? {})
+  );
+}
+
+function jsonEquivalent(left: unknown, right: unknown) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
 export async function listSuccessfulProofCapturesForAd(
@@ -6072,76 +6315,78 @@ export async function listRecentWorkspaceProofCaptures(
 
 export async function createProofCapture(
   env: AppEnv,
-  input: {
-    proofTargetId: string;
-    status: ProofStatus;
-    skipReason?: ProofSkipReason | null;
-    failureCode?: string | null;
-    failureReason?: string | null;
-    screenshotArtifactKey?: string | null;
-    htmlArtifactKey?: string | null;
-    extractedFields?: JsonRecord;
-    fieldConfidence?: Record<string, number>;
-    extractionWarnings?: string[];
-    captureMetadata?: JsonRecord;
-    renderMode?: ProofRenderMode;
-    deviceProfile?: ProofDeviceProfile;
-    extractorVersion: string;
-    idempotencyKey?: string | null;
-    attemptedAt?: string;
-    succeededAt?: string | null;
-  },
+  input: CreateProofCaptureInput,
 ) {
+  const idempotencyKey = input.idempotencyKey?.trim() || null;
+  if (idempotencyKey) {
+    const existing = await getProofCaptureByIdempotencyKey(env, idempotencyKey);
+    if (existing) {
+      return getReusableProofCaptureId(existing, input);
+    }
+  }
+
   const id = createId();
   const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO proof_capture (
-        id,
-        proof_target_id,
-        status,
-        skip_reason,
-        failure_code,
-        failure_reason,
-        screenshot_artifact_key,
-        html_artifact_key,
-        extracted_fields_json,
-        field_confidence_json,
-        extraction_warnings_json,
-        capture_metadata_json,
-        render_mode,
-        device_profile,
-        extractor_version,
-        idempotency_key,
-        attempted_at,
-        succeeded_at,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    id,
-    input.proofTargetId,
-    input.status,
-    input.skipReason ?? null,
-    input.failureCode ?? null,
-    input.failureReason ?? null,
-    input.screenshotArtifactKey ?? null,
-    input.htmlArtifactKey ?? null,
-    jsonValue(input.extractedFields ?? {}),
-    jsonValue(input.fieldConfidence ?? {}),
-    jsonValue(input.extractionWarnings ?? []),
-    jsonValue(input.captureMetadata ?? {}),
-    input.renderMode ?? "mobile",
-    input.deviceProfile ?? "mobile_default",
-    input.extractorVersion,
-    input.idempotencyKey ?? null,
-    input.attemptedAt ?? timestamp,
-    input.succeededAt ?? null,
-    timestamp,
-    timestamp,
-  );
+  try {
+    await run(
+      env,
+      `
+        INSERT INTO proof_capture (
+          id,
+          proof_target_id,
+          status,
+          skip_reason,
+          failure_code,
+          failure_reason,
+          screenshot_artifact_key,
+          html_artifact_key,
+          extracted_fields_json,
+          field_confidence_json,
+          extraction_warnings_json,
+          capture_metadata_json,
+          render_mode,
+          device_profile,
+          extractor_version,
+          idempotency_key,
+          attempted_at,
+          succeeded_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      id,
+      input.proofTargetId,
+      input.status,
+      input.skipReason ?? null,
+      input.failureCode ?? null,
+      input.failureReason ?? null,
+      input.screenshotArtifactKey ?? null,
+      input.htmlArtifactKey ?? null,
+      jsonValue(input.extractedFields ?? {}),
+      jsonValue(input.fieldConfidence ?? {}),
+      jsonValue(input.extractionWarnings ?? []),
+      jsonValue(input.captureMetadata ?? {}),
+      input.renderMode ?? "mobile",
+      input.deviceProfile ?? "mobile_default",
+      input.extractorVersion,
+      idempotencyKey,
+      input.attemptedAt ?? timestamp,
+      input.succeededAt ?? null,
+      timestamp,
+      timestamp,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!idempotencyKey || !/proof_capture\.idempotency_key|SQLITE_CONSTRAINT_UNIQUE/i.test(message)) {
+      throw error;
+    }
+    const existing = await getProofCaptureByIdempotencyKey(env, idempotencyKey);
+    if (!existing) {
+      throw error;
+    }
+    return getReusableProofCaptureId(existing, input);
+  }
 
   return id;
 }

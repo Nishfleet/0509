@@ -911,6 +911,36 @@ describe("runWatchlistManual cheap scan path", () => {
           createdAt: "2026-04-10T00:00:01.000Z",
           updatedAt: "2026-04-10T00:00:01.000Z",
         },
+        {
+          id: "proof-prefix-collision",
+          proofTargetId: "target-1",
+          status: "failed",
+          skipReason: null,
+          failureCode: "proof_capture_failed",
+          failureReason: "Landing page proof capture failed.",
+          screenshotArtifactKey: null,
+          htmlArtifactKey: null,
+          extractedFields: {
+            rawHeadline: "Glow serum sale",
+            normalizedHeadline: "glow serum sale",
+            normalizedHeadlineHash: "hash-a",
+            ctaText: "Shop now",
+            priceText: "Starting at ₹499",
+            formPresent: true,
+          },
+          fieldConfidence: {},
+          extractionWarnings: [],
+          captureMetadata: {},
+          renderMode: "mobile",
+          deviceProfile: "mobile_default",
+          extractorVersion: "lp-signals-v1",
+          idempotencyKey:
+            "proof-request:watch-1:landing-page-headline-changed:meta-nykaa-1:https-example-com-new-url-extra:run-0",
+          attemptedAt: new Date().toISOString(),
+          succeededAt: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       ]),
       listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
       listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
@@ -977,6 +1007,8 @@ describe("runWatchlistManual cheap scan path", () => {
       expect.objectContaining({
         status: "succeeded",
         proofTargetId: "target-1",
+        idempotencyKey:
+          "proof-request:watch-1:landing-page-headline-changed:meta-nykaa-1:https-example-com-new-url:run-1",
       }),
     );
     expect(createEventCandidate).toHaveBeenCalledWith(
@@ -1002,6 +1034,11 @@ describe("runWatchlistManual cheap scan path", () => {
     const createProofCapture = vi.fn().mockResolvedValue("proof-direct-1");
     const createWatchEvent = vi.fn().mockResolvedValue("event-direct-1");
     const finishWatchlistRun = vi.fn();
+    const evidenceUsageStorageError = new Error(
+      "D1_ERROR: no such table: evidence_usage_period: SQLITE_ERROR",
+    );
+    const getEvidenceUsageSummary = vi.fn().mockRejectedValue(evidenceUsageStorageError);
+    const tryReserveEvidenceForProofCapture = vi.fn().mockResolvedValue(null);
     const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
@@ -1118,6 +1155,29 @@ describe("runWatchlistManual cheap scan path", () => {
           createdAt: "2026-04-10T00:00:01.000Z",
           updatedAt: "2026-04-10T00:00:01.000Z",
         },
+        {
+          id: "proof-direct-prefix-collision",
+          proofTargetId: "target-direct-1",
+          status: "failed",
+          skipReason: null,
+          failureCode: "direct_website_proof_capture_failed",
+          failureReason: "Direct website proof capture failed.",
+          screenshotArtifactKey: null,
+          htmlArtifactKey: null,
+          extractedFields: {},
+          fieldConfidence: {},
+          extractionWarnings: [],
+          captureMetadata: {},
+          renderMode: "mobile",
+          deviceProfile: "mobile_default",
+          extractorVersion: "lp-signals-v1",
+          idempotencyKey:
+            "proof-request:watch-1:landing-page-offer-changed:none:https-competitor-example-onboarding-extra:run-0",
+          attemptedAt: new Date().toISOString(),
+          succeededAt: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       ]),
       listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
       listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
@@ -1148,8 +1208,15 @@ describe("runWatchlistManual cheap scan path", () => {
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWatchlistAlerts,
     }));
+    vi.doMock("~/lib/evidence-usage.server", () => ({
+      getEvidenceUsageSummary,
+      isEvidenceUsageStorageUnavailableError: (message: string) =>
+        /evidence_usage|evidence_top_up|no such table|D1 binding/i.test(message),
+      tryFinalizeEvidenceForProofCapture: vi.fn(),
+      tryReserveEvidenceForProofCapture,
+    }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn(),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
         free: { digests: false, digestCadence: "none" },
         starter: { digests: true, digestCadence: "weekly" },
@@ -1159,8 +1226,19 @@ describe("runWatchlistManual cheap scan path", () => {
 
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
 
+    const env = {
+      ALLOW_PLATFORM_META_API_FALLBACK: "true",
+      META_AD_LIBRARY_TOKEN: "token",
+      DB: {
+        prepare: vi.fn(() => ({
+          bind: vi.fn(() => ({
+            all: vi.fn().mockResolvedValue({ results: [{ total: 0 }] }),
+          })),
+        })),
+      },
+    };
     const result = await runWatchlistManual(
-      { ALLOW_PLATFORM_META_API_FALLBACK: "true", META_AD_LIBRARY_TOKEN: "token" } as never,
+      env as never,
       websiteWatchlist,
     );
 
@@ -1175,6 +1253,8 @@ describe("runWatchlistManual cheap scan path", () => {
       expect.objectContaining({
         status: "succeeded",
         proofTargetId: "target-direct-1",
+        idempotencyKey:
+          "proof-request:watch-1:landing-page-offer-changed:none:https-competitor-example-onboarding:run-1",
         captureMetadata: expect.objectContaining({
           source: "direct_competitor_website",
           watchlistTargetId: "https://competitor.example/onboarding",
@@ -1201,6 +1281,18 @@ describe("runWatchlistManual cheap scan path", () => {
         eventType: "landing_page_offer_changed",
         proofCaptureId: "proof-direct-1",
         candidateId: "candidate-direct-1",
+      }),
+    );
+    expect(getEvidenceUsageSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
+      "user-1",
+    );
+    expect(tryReserveEvidenceForProofCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
+      expect.objectContaining({
+        workspaceUserId: "user-1",
+        proofTargetId: "target-direct-1",
+        source: "monitoring.direct_website",
       }),
     );
     expect(deliverWatchlistAlerts).toHaveBeenCalledWith(

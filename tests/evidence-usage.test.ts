@@ -5,11 +5,13 @@ import {
   ensureWorkspaceEntitlementAnchor,
   getEvidenceUsageSummary,
   grantEvidenceTopUp,
+  isEvidenceUsageStorageUnavailableError,
   migrateLegacyTopUpCreditsIfNeeded,
   rebuildTopUpGrantBalance,
   rebuildWorkspaceTopUpBalance,
   reserveEvidenceCheck,
   settleEvidenceReservation,
+  tryReserveEvidenceForProofCapture,
 } from "~/lib/evidence-usage.server";
 import type { AppEnv } from "~/lib/env.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
@@ -227,6 +229,55 @@ describe("evidence usage periods", () => {
     const workspaceTotal = await rebuildWorkspaceTopUpBalance(env, "user-1");
     expect(rebuilt).toBe(1);
     expect(workspaceTotal).toBe(1);
+  });
+});
+
+describe("evidence usage storage failures", () => {
+  it("does not treat D1 foreign-key failures as unavailable sidecar storage", async () => {
+    const error = new Error(
+      "D1_ERROR: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)",
+    );
+    const env = {
+      DB: {
+        prepare() {
+          return {
+            bind() {
+              return {
+                async first() {
+                  throw error;
+                },
+                async all() {
+                  throw error;
+                },
+                async run() {
+                  throw error;
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    expect(isEvidenceUsageStorageUnavailableError(error.message)).toBe(false);
+    expect(
+      isEvidenceUsageStorageUnavailableError(
+        "D1_ERROR: no such column: evidence_usage_period.included_consumed: SQLITE_ERROR",
+      ),
+    ).toBe(false);
+    expect(
+      isEvidenceUsageStorageUnavailableError(
+        "D1_ERROR: no such table: evidence_usage_period: SQLITE_ERROR",
+      ),
+    ).toBe(true);
+    await expect(
+      tryReserveEvidenceForProofCapture(env as never, {
+        workspaceUserId: "user-1",
+        proofTargetId: "target-1",
+        idempotencyKey: "proof-request-1",
+        source: "monitoring.scan",
+      }),
+    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
   });
 });
 
