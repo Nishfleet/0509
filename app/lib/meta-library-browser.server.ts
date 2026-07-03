@@ -132,7 +132,7 @@ export async function searchMetaLibraryByBrowser(
     }
 
     try {
-      return await searchMetaLibraryViaSessions(browserBinding, query);
+      return await searchMetaLibraryViaSessions(env, browserBinding, query);
     } catch (error) {
       const normalizedError = normalizeCommercialDiscoveryError(error);
       if (!shouldUseQuickActionsFallback(env, normalizedError)) {
@@ -152,15 +152,17 @@ export async function searchMetaLibraryByBrowser(
 }
 
 async function searchMetaLibraryViaSessions(
+  env: AppEnv,
   browserBinding: BrowserBinding,
   query: NormalizedSavedQuery,
 ): Promise<SearchResponse> {
   let browser: BrowserInstance | null = null;
   let browserContext: BrowserContext | null = null;
   let page: BrowserPage | null = null;
+  const reuseSession = browserSessionReuseEnabled(env);
 
   try {
-    browser = await acquireBrowser(browserBinding);
+    browser = await acquireBrowser(browserBinding, { reuseSession });
     browserContext = await browser.createBrowserContext();
     page = await browserContext.newPage();
     await page.setUserAgent(MOBILE_USER_AGENT);
@@ -331,7 +333,11 @@ async function searchMetaLibraryViaSessions(
   } finally {
     await page?.close().catch(() => undefined);
     await browserContext?.close().catch(() => undefined);
-    await browser?.disconnect().catch(() => undefined);
+    if (reuseSession) {
+      await browser?.disconnect().catch(() => undefined);
+    } else {
+      await browser?.close().catch(() => undefined);
+    }
   }
 }
 
@@ -434,10 +440,19 @@ async function extractMetaLibraryByQuickActions(
   }
 }
 
-async function acquireBrowser(browserBinding: BrowserBinding) {
-  const reusableBrowser = await connectToReusableBrowser(browserBinding);
-  if (reusableBrowser) {
-    return reusableBrowser;
+function browserSessionReuseEnabled(env: AppEnv) {
+  return env.BROWSER_RUN_SESSION_REUSE?.trim() === "1";
+}
+
+async function acquireBrowser(
+  browserBinding: BrowserBinding,
+  options: { reuseSession: boolean },
+) {
+  if (options.reuseSession) {
+    const reusableBrowser = await connectToReusableBrowser(browserBinding);
+    if (reusableBrowser) {
+      return reusableBrowser;
+    }
   }
 
   const limits = await readBrowserLimits(browserBinding);
@@ -454,10 +469,14 @@ async function acquireBrowser(browserBinding: BrowserBinding) {
     );
   }
 
+  const launchPromise = options.reuseSession
+    ? puppeteer.launch(browserBinding, {
+        keep_alive: BROWSER_SESSION_KEEP_ALIVE_MS,
+      })
+    : puppeteer.launch(browserBinding);
+
   return promiseWithTimeout(
-    puppeteer.launch(browserBinding, {
-      keep_alive: BROWSER_SESSION_KEEP_ALIVE_MS,
-    }),
+    launchPromise,
     BROWSER_RUN_ACQUIRE_TIMEOUT_MS,
     "Browser Run launch timed out.",
     (lateBrowser) => lateBrowser.close(),

@@ -46,7 +46,14 @@ async function seedSlotSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"
     );
     CREATE TABLE user_plan (
       user_id TEXT PRIMARY KEY,
-      plan TEXT NOT NULL
+      plan TEXT NOT NULL,
+      dodo_status TEXT,
+      dodo_product_id TEXT,
+      dodo_subscription_id TEXT,
+      dodo_customer_id TEXT,
+      dodo_next_billing_at TEXT,
+      dodo_plan_change_product_id TEXT,
+      plan_updated_at TEXT
     );
     CREATE TABLE monitoring_concurrency_slot (
       slot_index INTEGER PRIMARY KEY,
@@ -117,7 +124,11 @@ describe("monitoring fan-out release safeguards", () => {
   it("never allows more than the effective maximum held slots under parallel pressure", async () => {
     const { db, sqlite } = createSqliteD1();
     await seedSlotSchema(sqlite);
-    const env = { DB: db, MONITORING_FANOUT_MAX_INFLIGHT: "65" } as never;
+    const env = {
+      DB: db,
+      MONITORING_FANOUT_MAX_INFLIGHT: "65",
+      MONITORING_SCHEDULED_BROWSER_MODE: "all",
+    } as never;
     const effective = resolveEffectiveMonitoringFanoutMaxInflight(env);
     for (let index = 0; index < effective; index += 1) {
       seedPendingOrchestratedRun(sqlite, `run-${index}`, {
@@ -149,7 +160,11 @@ describe("monitoring fan-out release safeguards", () => {
     const { db, sqlite } = createSqliteD1();
     await seedSlotSchema(sqlite);
     seedPendingOrchestratedRun(sqlite, "run-1");
-    const env = { DB: db, MONITORING_FANOUT_MAX_INFLIGHT: "1" } as never;
+    const env = {
+      DB: db,
+      MONITORING_FANOUT_MAX_INFLIGHT: "1",
+      MONITORING_SCHEDULED_BROWSER_MODE: "all",
+    } as never;
     const claim = await claimMonitoringConcurrencySlot(env, { runId: "run-1", leaseMs: 60_000 });
     expect(claim.claimed).toBe(true);
     const token = claim.token!;
@@ -263,6 +278,7 @@ describe("monitoring fan-out release safeguards", () => {
         DB: db,
         MONITORING_FANOUT_MODE: "fanout",
         MONITORING_FANOUT_ALLOWLIST: "agency-owner",
+        MONITORING_SCHEDULED_BROWSER_MODE: "all",
       } as never,
       {
         watchlists: [
