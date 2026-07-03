@@ -113,6 +113,7 @@ Important bindings and secrets:
 ## Operations
 
 - Run `npm run backup:d1` before risky migrations or data-shape changes. It exports the remote Cloudflare D1 database into `backups/d1/`, which is intentionally gitignored.
+- Every push to `main` must run `.github/workflows/deploy-production.yml`. That workflow uses the repo's production deploy script, then runs the public production smoke. If `CLOUDFLARE_ACCOUNT_ID` or `CLOUDFLARE_API_TOKEN` is missing from GitHub repository or `production` environment secrets, the workflow fails loudly instead of letting merged code look shipped.
 - Apply pending D1 migrations before deploying code that reads new tables. Destructive cleanup migrations that remove schema only after code stops reading it must run after the compatible Worker is deployed, with a fresh backup plus pre/post SQL evidence. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys; `migrations/0019_slack_delivery.sql` backs dormant Slack delivery storage that is hidden from the GA offer; `migrations/0035_agent_action_audit.sql`, `0036_agent_memory.sql`, and `0037_client_rooms.sql` back audited agent actions, agent memory, and client rooms; `migrations/0042_better_auth_passkey.sql` backs Better Auth passkeys on databases that already ran the baseline auth migration.
 
 ## Notes
