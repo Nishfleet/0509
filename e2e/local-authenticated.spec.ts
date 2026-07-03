@@ -303,6 +303,11 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page).toHaveURL(/\/app\/notifications/);
     await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
 
+    await page.goto("/app/team");
+    await expectAppPage(page);
+    await expect(page.getByRole("heading", { name: "Team", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Team seats come with Agency" })).toBeVisible();
+
     await page.goto("/app/sources");
     await expect(page).toHaveURL(/\/app\/sources/);
     await expect(page.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
