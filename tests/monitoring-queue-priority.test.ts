@@ -28,7 +28,14 @@ async function seedMixedFleetSchema(sqlite: ReturnType<typeof createSqliteD1>["s
     );
     CREATE TABLE user_plan (
       user_id TEXT PRIMARY KEY,
-      plan TEXT NOT NULL
+      plan TEXT NOT NULL,
+      dodo_status TEXT,
+      dodo_product_id TEXT,
+      dodo_subscription_id TEXT,
+      dodo_customer_id TEXT,
+      dodo_next_billing_at TEXT,
+      dodo_plan_change_product_id TEXT,
+      plan_updated_at TEXT
     );
     CREATE TABLE watchlist_run (
       id TEXT PRIMARY KEY,
@@ -142,7 +149,7 @@ describe("monitoring queue priority", () => {
     }
 
     const ranked = await selectRankedEligibleOrchestratedRuns(
-      { DB: db } as never,
+      { DB: db, MONITORING_SCHEDULED_BROWSER_MODE: "all" } as never,
       monday,
     );
     expect(ranked).toHaveLength(88);
@@ -150,7 +157,11 @@ describe("monitoring queue priority", () => {
     expect(ranked[75]?.plan).toBe("starter");
     expect(ranked[85]?.plan).toBe("scout");
 
-    const env = { DB: db, MONITORING_FANOUT_MAX_INFLIGHT: "8" } as never;
+    const env = {
+      DB: db,
+      MONITORING_FANOUT_MAX_INFLIGHT: "8",
+      MONITORING_SCHEDULED_BROWSER_MODE: "all",
+    } as never;
     const claims = await Promise.all(
       ranked.slice(0, 8).map((row) =>
         claimMonitoringConcurrencySlot(env, {
@@ -174,7 +185,7 @@ describe("monitoring queue priority", () => {
     });
 
     const ranked = await selectRankedEligibleOrchestratedRuns(
-      { DB: db } as never,
+      { DB: db, MONITORING_SCHEDULED_BROWSER_MODE: "all" } as never,
       "2026-06-23T06:00:00.000Z",
     );
 

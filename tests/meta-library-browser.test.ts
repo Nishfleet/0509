@@ -45,6 +45,7 @@ function createBrowserHarness() {
     newPage: vi.fn().mockResolvedValue(page),
   };
   const browser = {
+    close: vi.fn().mockResolvedValue(undefined),
     createBrowserContext: vi.fn().mockResolvedValue(browserContext),
     disconnect: vi.fn().mockResolvedValue(undefined),
   };
@@ -135,7 +136,7 @@ afterEach(() => {
 });
 
 describe("searchMetaLibraryByBrowser", () => {
-  it("launches Browser Run with keep-alive and normalizes Ad Library results", async () => {
+  it("launches Browser Run without session reuse and normalizes Ad Library results", async () => {
     const { browser, browserContext, page } = createBrowserHarness();
     const launch = vi.fn().mockResolvedValue(browser);
     const sessions = vi.fn().mockResolvedValue([]);
@@ -160,14 +161,9 @@ describe("searchMetaLibraryByBrowser", () => {
       buildQuery(),
     );
 
-    expect(sessions).toHaveBeenCalledWith({} as Fetcher);
+    expect(sessions).not.toHaveBeenCalled();
     expect(limits).toHaveBeenCalledWith({} as Fetcher);
-    expect(launch).toHaveBeenCalledWith(
-      {} as Fetcher,
-      expect.objectContaining({
-        keep_alive: 180000,
-      }),
-    );
+    expect(launch).toHaveBeenCalledWith({} as Fetcher);
     expect(page.goto).toHaveBeenCalledWith(
       expect.stringContaining("country=IN"),
       expect.objectContaining({
@@ -215,12 +211,13 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(browser.createBrowserContext).toHaveBeenCalled();
     expect(browserContext.close).toHaveBeenCalled();
     expect(page.close).toHaveBeenCalled();
-    expect(browser.disconnect).toHaveBeenCalled();
+    expect(browser.close).toHaveBeenCalled();
+    expect(browser.disconnect).not.toHaveBeenCalled();
   });
 
-  it("reuses an idle Browser Run session before launching a new browser", async () => {
+  it("does not reuse idle Browser Run sessions unless explicitly enabled", async () => {
     const { browser, page } = createBrowserHarness();
-    const launch = vi.fn();
+    const launch = vi.fn().mockResolvedValue(browser);
     const sessions = vi.fn().mockResolvedValue([
       {
         sessionId: "session-1",
@@ -243,11 +240,49 @@ describe("searchMetaLibraryByBrowser", () => {
       buildQuery(),
     );
 
+    expect(sessions).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+    expect(launch).toHaveBeenCalledWith({} as Fetcher);
+    expect(limits).toHaveBeenCalled();
+    expect(page.waitForFunction).toHaveBeenCalled();
+    expect(result.ads).toHaveLength(1);
+    expect(browser.close).toHaveBeenCalled();
+    expect(browser.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("can reuse an idle Browser Run session behind the explicit reuse flag", async () => {
+    const { browser, page } = createBrowserHarness();
+    const launch = vi.fn();
+    const sessions = vi.fn().mockResolvedValue([
+      {
+        sessionId: "session-1",
+        startTime: 1000,
+      },
+    ]);
+    const limits = vi.fn();
+    const connect = vi.fn().mockResolvedValue(browser);
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+        BROWSER_RUN_SESSION_REUSE: "1",
+      },
+      buildQuery(),
+    );
+
     expect(connect).toHaveBeenCalledWith({} as Fetcher, "session-1");
     expect(launch).not.toHaveBeenCalled();
     expect(limits).not.toHaveBeenCalled();
     expect(page.waitForFunction).toHaveBeenCalled();
     expect(result.ads).toHaveLength(1);
+    expect(browser.disconnect).toHaveBeenCalled();
+    expect(browser.close).not.toHaveBeenCalled();
   });
 
   it("fails honestly when Browser Run is unavailable", async () => {

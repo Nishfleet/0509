@@ -10,6 +10,7 @@ import {
   countHeldMonitoringConcurrencySlots,
   dispatchOrchestratedWatchlistJobsBatch,
   ensureOrchestratedWatchlistRun,
+  evaluateScheduledBrowserAccess,
   finishOrchestratedWatchlistRun,
   isFanoutEnabledForWorkspace,
   reconcileOrchestratedWatchlistRuns,
@@ -66,7 +67,14 @@ async function seedFanoutSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlit
     );
     CREATE TABLE user_plan (
       user_id TEXT PRIMARY KEY,
-      plan TEXT NOT NULL
+      plan TEXT NOT NULL,
+      dodo_status TEXT,
+      dodo_product_id TEXT,
+      dodo_subscription_id TEXT,
+      dodo_customer_id TEXT,
+      dodo_next_billing_at TEXT,
+      dodo_plan_change_product_id TEXT,
+      plan_updated_at TEXT
     );
     CREATE TABLE watchlist_run (
       id TEXT PRIMARY KEY,
@@ -120,6 +128,7 @@ function workflowEnv(
     MONITORING_WORKFLOW: { createBatch, create: vi.fn() },
     MONITORING_FANOUT_MODE: "fanout",
     MONITORING_FANOUT_GLOBAL: "1",
+    MONITORING_SCHEDULED_BROWSER_MODE: "all",
     ...overrides,
   } as never;
 }
@@ -187,6 +196,84 @@ describe("monitoring fan-out rollout gating", () => {
     expect(
       isFanoutEnabledForWorkspace({ ...baseEnv, MONITORING_FANOUT_GLOBAL: "1" } as never, "anyone"),
     ).toBe(true);
+  });
+});
+
+describe("scheduled Browser Run billing access", () => {
+  it("allows successful Dodo payment rows only when they are backed by a subscription SKU", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    sqlite
+      .prepare(
+        `INSERT INTO user_plan (
+          user_id,
+          plan,
+          dodo_status,
+          dodo_product_id,
+          dodo_subscription_id,
+          dodo_customer_id,
+          dodo_next_billing_at,
+          plan_updated_at
+        ) VALUES
+          ('subscription-owner', 'starter', 'payment.succeeded', 'pdt_starter_monthly', 'sub_123', 'cus_123', '2026-08-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z'),
+          ('dunning-owner', 'starter', 'subscription.on_hold', 'pdt_starter_monthly', 'sub_456', 'cus_456', '2026-08-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z'),
+          ('plan-change-pending-owner', 'starter', 'plan_change_pending', 'pdt_starter_monthly', 'sub_567', 'cus_567', '2026-08-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z'),
+          ('plan-change-scheduled-owner', 'starter', 'plan_change_scheduled', 'pdt_starter_monthly', 'sub_568', 'cus_568', '2026-08-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z'),
+          ('cancel-missing-date-owner', 'starter', 'cancellation_scheduled', 'pdt_starter_monthly', 'sub_789', 'cus_789', NULL, '2026-07-01T00:00:00.000Z'),
+          ('cancel-malformed-date-owner', 'starter', 'cancellation_scheduled', 'pdt_starter_monthly', 'sub_790', 'cus_790', 'not-a-date', '2026-07-01T00:00:00.000Z'),
+          ('cancel-past-date-owner', 'starter', 'cancellation_scheduled', 'pdt_starter_monthly', 'sub_791', 'cus_791', '2020-01-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z'),
+          ('one-time-owner', 'starter', 'payment.succeeded', 'pdt_starter_monthly', NULL, NULL, NULL, '2026-07-01T00:00:00.000Z')`,
+      )
+      .run();
+
+    const env = {
+      DB: db,
+      MONITORING_SCHEDULED_BROWSER_MODE: "billing",
+      DODO_0509_PRODUCT_STARTER_MONTHLY_ID: "pdt_starter_monthly",
+    } as never;
+
+    await expect(evaluateScheduledBrowserAccess(env, "subscription-owner")).resolves.toMatchObject({
+      eligible: true,
+      reason: "active_subscription",
+      plan: "starter",
+    });
+    await expect(evaluateScheduledBrowserAccess(env, "dunning-owner")).resolves.toMatchObject({
+      eligible: true,
+      reason: "active_subscription",
+      plan: "starter",
+    });
+    await expect(evaluateScheduledBrowserAccess(env, "plan-change-pending-owner")).resolves.toMatchObject({
+      eligible: true,
+      reason: "active_subscription",
+      plan: "starter",
+    });
+    await expect(evaluateScheduledBrowserAccess(env, "plan-change-scheduled-owner")).resolves.toMatchObject({
+      eligible: true,
+      reason: "active_subscription",
+      plan: "starter",
+    });
+    await expect(evaluateScheduledBrowserAccess(env, "cancel-missing-date-owner")).resolves.toMatchObject({
+      eligible: true,
+      reason: "active_subscription",
+      plan: "starter",
+    });
+    await expect(evaluateScheduledBrowserAccess(env, "cancel-malformed-date-owner")).resolves.toMatchObject({
+      eligible: true,
+      reason: "active_subscription",
+      plan: "starter",
+    });
+    await expect(evaluateScheduledBrowserAccess(env, "cancel-past-date-owner")).resolves.toMatchObject({
+      eligible: false,
+      reason: "subscription_required",
+      plan: "starter",
+      hasSubscriptionId: true,
+    });
+    await expect(evaluateScheduledBrowserAccess(env, "one-time-owner")).resolves.toMatchObject({
+      eligible: false,
+      reason: "subscription_required",
+      plan: "starter",
+      hasSubscriptionId: false,
+    });
   });
 });
 
@@ -660,7 +747,11 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
   it("enforces atomic concurrency slots under parallel claim pressure", async () => {
     const { db, sqlite } = createSqliteD1();
     await seedFanoutSchema(sqlite);
-    const env = { DB: db, MONITORING_FANOUT_MAX_INFLIGHT: "8" } as never;
+    const env = {
+      DB: db,
+      MONITORING_FANOUT_MAX_INFLIGHT: "8",
+      MONITORING_SCHEDULED_BROWSER_MODE: "all",
+    } as never;
     expect(resolveMonitoringFanoutMaxInflight(env)).toBe(8);
 
     for (let index = 0; index < 8; index += 1) {
@@ -724,13 +815,88 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     expect(row.status).toBe("skipped");
     expect(row.error_code).toBe("fanout_disabled");
   });
+
+  it("does not cancel old pending backlog during fanout reconciliation", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    seedPendingOrchestratedRun(sqlite, "run-old-pending", {
+      queuedAt: "2026-06-23T04:00:00.000Z",
+    });
+
+    const result = await reconcileOrchestratedWatchlistRuns(
+      {
+        DB: db,
+        MONITORING_WORKFLOW: {
+          create: vi.fn(),
+          createBatch: vi.fn(async (batch: Array<{ id: string }>) => batch.map((item) => ({ id: item.id }))),
+        },
+        MONITORING_FANOUT_MODE: "fanout",
+        MONITORING_FANOUT_GLOBAL: "1",
+        MONITORING_SCHEDULED_BROWSER_MODE: "all",
+        MONITORING_ORCHESTRATION_MAX_AGE_MS: "1",
+      } as never,
+      {
+        mode: "fanout",
+        leaseMs: 1,
+      },
+    );
+
+    const row = sqlite
+      .prepare("SELECT status, error_code FROM watchlist_run WHERE id = 'run-old-pending'")
+      .get() as { status: string; error_code: string | null };
+    expect(row).toEqual({ status: "pending", error_code: null });
+    expect(result.cancelled).toBe(0);
+    expect(result.redispatched).toBe(1);
+  });
+
+  it("still cancels old running jobs during fanout reconciliation", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    seedPendingOrchestratedRun(sqlite, "run-old-running", {
+      queuedAt: "2026-06-23T04:00:00.000Z",
+    });
+    sqlite
+      .prepare(
+        `UPDATE watchlist_run
+         SET status = 'running',
+             processing_token = 'token-old',
+             processing_started_at = '2026-06-23T04:00:00.000Z'
+         WHERE id = 'run-old-running'`,
+      )
+      .run();
+
+    const result = await reconcileOrchestratedWatchlistRuns(
+      {
+        DB: db,
+        MONITORING_FANOUT_MODE: "fanout",
+        MONITORING_FANOUT_GLOBAL: "1",
+        MONITORING_SCHEDULED_BROWSER_MODE: "all",
+        MONITORING_ORCHESTRATION_MAX_AGE_MS: "1",
+      } as never,
+      {
+        mode: "fanout",
+        leaseMs: 1,
+      },
+    );
+
+    expect(result.cancelled).toBe(1);
+    const row = sqlite
+      .prepare("SELECT status, error_code FROM watchlist_run WHERE id = 'run-old-running'")
+      .get() as { status: string; error_code: string | null };
+    expect(row.status).toBe("skipped");
+    expect(row.error_code).toBe("orchestration_stale");
+  });
 });
 
 describe("monitoring fan-out drain simulation", () => {
   it("drains 75 jobs through a limit of 8 without exceeding held permits", async () => {
     const { db, sqlite } = createSqliteD1();
     await seedFanoutSchema(sqlite);
-    const env = { DB: db, MONITORING_FANOUT_MAX_INFLIGHT: "8" } as never;
+    const env = {
+      DB: db,
+      MONITORING_FANOUT_MAX_INFLIGHT: "8",
+      MONITORING_SCHEDULED_BROWSER_MODE: "all",
+    } as never;
     let maxHeld = 0;
 
     for (let index = 0; index < 75; index += 1) {

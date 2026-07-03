@@ -16,7 +16,7 @@ import {
   resolveMonitoringFanoutMode,
   type MonitoringWorkflowParams,
 } from "../app/lib/monitoring-fanout.server";
-import { runWatchlistWorkflowJob } from "../app/lib/monitoring.server";
+import { preflightWatchlistWorkflowJob, runWatchlistWorkflowJob } from "../app/lib/monitoring.server";
 
 class NonRetryableError extends Error {
   name = "NonRetryableError";
@@ -41,6 +41,13 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
         watchlistId: event.payload.watchlistId,
         runId: event.payload.runId,
       };
+    }
+
+    const preflight = await step.do("preflight-watchlist-monitoring", async () =>
+      preflightWatchlistWorkflowJob(this.env, event.payload),
+    );
+    if (preflight.status !== "ready") {
+      return preflight;
     }
 
     let permitToken: string | undefined;

@@ -134,6 +134,7 @@ import {
   finishOrchestratedWatchlistRun,
   hasOrchestratedRunBlockingInlineScan,
   isFanoutEnabledForWorkspace,
+  isWatchlistEligibleForScheduledScan,
   markOrchestratedRunCancelled,
   markOrchestratedDispatchFailure,
   reconcileOrchestratedWatchlistRuns,
@@ -175,6 +176,7 @@ export async function runScheduledMonitoring(
       inlineRuns: 0,
       inlineFailures: 0,
       skippedForBudget: 0,
+      skippedForBilling: 0,
       dispatchFailures: 0,
       digests: 0,
     };
@@ -199,12 +201,16 @@ export async function runScheduledMonitoring(
   let inlineRuns = 0;
   let inlineFailures = 0;
   let skippedForBudget = 0;
+  let skippedForBilling = 0;
   let dispatchFailures = 0;
 
   if (options.includeScans !== false) {
-    const watchlists = await listActiveWatchlists(env, {
+    const listedWatchlists = await listActiveWatchlists(env, {
       includeScout: shouldIncludeScoutInScheduledMonitoring(options),
     });
+    const browserAccess = await filterScheduledBrowserWatchlists(env, listedWatchlists);
+    const watchlists = browserAccess.watchlists;
+    skippedForBilling = browserAccess.skipped;
 
     const fanoutMode = resolveMonitoringFanoutMode(env);
     const scheduledTime = options.scheduledTime ?? Date.now();
@@ -232,12 +238,21 @@ export async function runScheduledMonitoring(
         (watchlist) => !isFanoutEnabledForWorkspace(env, watchlist.userId),
       );
 
-      const fanoutResult = await scheduleWatchlistFanout(env, {
-        watchlists: fanoutWatchlists,
-        scheduledTime,
-        cron: options.cron,
-        mode: fanoutMode,
-      });
+      const fanoutResult = fanoutWatchlists.length > 0
+        ? await scheduleWatchlistFanout(env, {
+            watchlists: fanoutWatchlists,
+            scheduledTime,
+            cron: options.cron,
+            mode: fanoutMode,
+          })
+        : {
+            eligible: 0,
+            queued: 0,
+            duplicates: 0,
+            dispatchFailures: 0,
+            shadowOnly: 0,
+            inlineFallback: false,
+          };
       queued = fanoutResult.queued;
       duplicates = fanoutResult.duplicates;
       dispatchFailures = fanoutResult.dispatchFailures;
@@ -267,6 +282,7 @@ export async function runScheduledMonitoring(
         queued: fanoutResult.queued,
         duplicates: fanoutResult.duplicates,
         dispatchFailures: fanoutResult.dispatchFailures,
+        skippedForBilling,
         shadowOnly: fanoutResult.shadowOnly,
         running: metrics.running,
         oldestQueuedAgeMs: metrics.oldestQueuedAgeMs,
@@ -293,9 +309,26 @@ export async function runScheduledMonitoring(
     inlineRuns,
     inlineFailures,
     skippedForBudget,
+    skippedForBilling,
     dispatchFailures,
     digests,
   };
+}
+
+async function filterScheduledBrowserWatchlists(env: AppEnv, watchlists: WatchlistRecord[]) {
+  const eligible: WatchlistRecord[] = [];
+  let skipped = 0;
+
+  for (const watchlist of watchlists) {
+    const access = await isWatchlistEligibleForScheduledScan(env, watchlist);
+    if (access.eligible) {
+      eligible.push(watchlist);
+    } else {
+      skipped += 1;
+    }
+  }
+
+  return { watchlists: eligible, skipped };
 }
 
 const INSTANT_ALERT_FLUSH_LOOKBACK_HOURS = 48;
@@ -491,6 +524,12 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
   });
 
   for (const watchlist of sortedWatchlists) {
+    const access = await isWatchlistEligibleForScheduledScan(env, watchlist);
+    if (!access.eligible) {
+      skipped += 1;
+      continue;
+    }
+
     if (warmupTargets.length >= DISCOVERY_WARMUP_QUERY_LIMIT) {
       skipped += 1;
       continue;
@@ -607,6 +646,24 @@ export async function runWatchlistWorkflowJob(
     concurrencyPermitToken?: string;
   } = {},
 ) {
+  const preflight = await preflightWatchlistWorkflowJob(env, params);
+  if (preflight.status !== "ready") {
+    return preflight;
+  }
+
+  const claim = await claimOrchestratedWatchlistRun(env, {
+    runId: params.runId,
+    leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
+  });
+  if (!claim.claimed) {
+    return {
+      status: "duplicate" as const,
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+      runId: params.runId,
+    };
+  }
+
   const fanoutMode = resolveMonitoringFanoutMode(env);
   if (fanoutMode === "inline") {
     await markOrchestratedRunCancelled(env, {
@@ -623,21 +680,14 @@ export async function runWatchlistWorkflowJob(
     };
   }
   if (fanoutMode === "shadow") {
-    return {
-      status: "shadow" as const,
-      watchlistId: params.watchlistId,
-      executionKey: params.executionKey,
+    await markOrchestratedRunCancelled(env, {
       runId: params.runId,
-    };
-  }
-
-  const claim = await claimOrchestratedWatchlistRun(env, {
-    runId: params.runId,
-    leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
-  });
-  if (!claim.claimed) {
+      reason: "fanout_disabled",
+      message: "Scheduled fan-out was disabled before this scan could run.",
+    });
     return {
-      status: "duplicate" as const,
+      status: "cancelled" as const,
+      reason: "fanout_disabled",
       watchlistId: params.watchlistId,
       executionKey: params.executionKey,
       runId: params.runId,
@@ -673,16 +723,16 @@ export async function runWatchlistWorkflowJob(
     };
   }
 
-  const plan = await getUserPlan(env, watchlist.userId);
-  if (plan === "free") {
+  const access = await isWatchlistEligibleForScheduledScan(env, watchlist);
+  if (!access.eligible) {
     await markOrchestratedRunCancelled(env, {
       runId: params.runId,
-      reason: "plan_ineligible",
+      reason: access.reason,
       message: "Scheduled scans paused for this workspace.",
     });
     return {
       status: "skipped" as const,
-      reason: "plan_ineligible",
+      reason: access.reason,
       watchlistId: params.watchlistId,
       executionKey: params.executionKey,
     };
@@ -749,6 +799,83 @@ export async function runWatchlistWorkflowJob(
     }
     throw error;
   }
+}
+
+export async function preflightWatchlistWorkflowJob(env: AppEnv, params: MonitoringWorkflowParams) {
+  const fanoutMode = resolveMonitoringFanoutMode(env);
+  if (fanoutMode === "inline") {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: "fanout_disabled",
+      message: "Scheduled fan-out was disabled before this scan could run.",
+    });
+    return {
+      status: "cancelled" as const,
+      reason: "fanout_disabled",
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+      runId: params.runId,
+    };
+  }
+  if (fanoutMode === "shadow") {
+    return {
+      status: "shadow" as const,
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+      runId: params.runId,
+    };
+  }
+
+  const watchlist = await getWatchlist(env, params.watchlistId);
+  if (!watchlist || !watchlist.isActive) {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: "watchlist_unavailable",
+      message: "This competitor is no longer being tracked.",
+    });
+    return {
+      status: "skipped" as const,
+      reason: "watchlist_unavailable",
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+    };
+  }
+
+  if (!isFanoutEnabledForWorkspace(env, watchlist.userId)) {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: "workspace_not_allowlisted",
+      message: "Scheduled fan-out is not enabled for this workspace.",
+    });
+    return {
+      status: "skipped" as const,
+      reason: "workspace_not_allowlisted",
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+    };
+  }
+
+  const access = await isWatchlistEligibleForScheduledScan(env, watchlist);
+  if (!access.eligible) {
+    await markOrchestratedRunCancelled(env, {
+      runId: params.runId,
+      reason: access.reason,
+      message: "Scheduled scans paused for this workspace.",
+    });
+    return {
+      status: "skipped" as const,
+      reason: access.reason,
+      watchlistId: params.watchlistId,
+      executionKey: params.executionKey,
+    };
+  }
+
+  return {
+    status: "ready" as const,
+    watchlistId: params.watchlistId,
+    executionKey: params.executionKey,
+    runId: params.runId,
+  };
 }
 
 async function completeWatchlistRun(

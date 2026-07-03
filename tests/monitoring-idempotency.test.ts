@@ -33,6 +33,18 @@ const activeWatchlists: WatchlistRecord[] = [
   },
 ];
 
+const activeBillingInfo = {
+  plan: "starter",
+  dodoStatus: "active",
+  dodoProductId: "prod-starter",
+  dodoPlanChangeProductId: null,
+  billingInterval: "monthly",
+  dodoSubscriptionId: "sub-starter",
+  dodoCustomerId: "cus-starter",
+  dodoNextBillingAt: "2026-08-01T00:00:00.000Z",
+  planUpdatedAt: "2026-07-01T00:00:00.000Z",
+};
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -87,6 +99,8 @@ describe("runScheduledMonitoring workflow idempotency", () => {
         reconcileOrchestratedWatchlistRuns,
         collectMonitoringOrchestrationMetrics,
         resolveMonitoringFanoutMode: vi.fn(() => "fanout" as const),
+        isFanoutEnabledForWorkspace: vi.fn(() => true),
+        hasOrchestratedRunBlockingInlineScan: vi.fn().mockResolvedValue(false),
       };
     });
 
@@ -109,6 +123,7 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue(activeBillingInfo),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
       hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
       getRecentSuccessfulRuns: vi.fn(),
@@ -226,6 +241,8 @@ describe("runScheduledMonitoring workflow idempotency", () => {
           oldestQueuedAgeMs: null,
         }),
         resolveMonitoringFanoutMode: vi.fn(() => "fanout" as const),
+        isFanoutEnabledForWorkspace: vi.fn(() => true),
+        hasOrchestratedRunBlockingInlineScan: vi.fn().mockResolvedValue(false),
       };
     });
 
@@ -248,6 +265,7 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue(activeBillingInfo),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
       hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
       getRecentSuccessfulRuns: vi.fn(),
@@ -332,6 +350,7 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       finishWatchlistRun: vi.fn(),
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue(activeBillingInfo),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
       hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
       getRecentSuccessfulRuns: vi.fn(),

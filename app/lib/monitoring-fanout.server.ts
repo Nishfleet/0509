@@ -2,7 +2,6 @@ import type { AppEnv } from "~/lib/env.server";
 import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
-import { getUserPlan } from "~/lib/plan.server";
 import type { WatchlistRecord, WatchlistRunRecord } from "~/lib/types";
 
 export interface MonitoringWorkflowParams {
@@ -70,6 +69,7 @@ export type MonitoringFanoutMode = "inline" | "fanout" | "shadow";
 export const MONITORING_CONCURRENCY_SLOT_CAPACITY = 64;
 export const MONITORING_WORKFLOW_SCAN_TIMEOUT_MS = 30 * 60 * 1000;
 export const MONITORING_LEASE_SAFETY_MARGIN_MS = 15 * 60 * 1000;
+export const DEFAULT_MONITORING_ORCHESTRATION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 export const DEFAULT_MONITORING_FANOUT_MAX_INFLIGHT = 8;
 export const DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS =
   MONITORING_WORKFLOW_SCAN_TIMEOUT_MS + MONITORING_LEASE_SAFETY_MARGIN_MS;
@@ -79,6 +79,24 @@ export const MONITORING_RECONCILIATION_LIMIT = 40;
 export const MONITORING_CONCURRENCY_WAIT_MAX_ROUNDS = 240;
 export const MONITORING_QUEUE_AGING_INTERVAL_MS = 30 * 60 * 1000;
 export const MONITORING_QUEUE_AGING_MAX_BOOST = 2;
+
+export type ScheduledBrowserAccessMode = "off" | "billing" | "allowlist" | "all";
+
+const ACTIVE_SCHEDULED_BROWSER_BILLING_STATUSES = new Set([
+  "active",
+  "subscription.active",
+  "subscription.renewed",
+  "subscription.plan_changed",
+  "plan_change_pending",
+  "plan_change_scheduled",
+]);
+const SUCCESSFUL_SUBSCRIPTION_PAYMENT_STATUSES = new Set(["succeeded", "payment.succeeded"]);
+const RETRYING_SUBSCRIPTION_BILLING_STATUSES = new Set([
+  "payment.failed",
+  "subscription.failed",
+  "subscription.on_hold",
+]);
+const CANCELLATION_SCHEDULED_STATUS = "cancellation_scheduled";
 
 interface PendingRunQueueRow {
   id: string;
@@ -146,7 +164,15 @@ export async function selectRankedEligibleOrchestratedRuns(env: AppEnv, now = no
     .all<PendingRunQueueRow>();
 
   const nowMs = Date.parse(now);
-  return (result.results ?? [])
+  const eligibleRows: PendingRunQueueRow[] = [];
+  for (const row of result.results ?? []) {
+    const access = await evaluateScheduledBrowserAccess(env, row.user_id);
+    if (access.eligible) {
+      eligibleRows.push(row);
+    }
+  }
+
+  return eligibleRows
     .map((row) => ({
       ...row,
       effectivePriority: computeEffectiveQueuePriority(row.queue_priority, row.queued_at, nowMs),
@@ -231,6 +257,126 @@ function parsePositiveInt(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseIdSet(value: string | undefined) {
+  const raw = value?.trim();
+  if (!raw) return new Set<string>();
+  return new Set(
+    raw
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+}
+
+export function resolveScheduledBrowserAccessMode(env: AppEnv): ScheduledBrowserAccessMode {
+  const configured = (env.MONITORING_SCHEDULED_BROWSER_MODE ?? "billing").trim().toLowerCase();
+  if (configured === "off" || configured === "false" || configured === "0" || configured === "disabled") {
+    return "off";
+  }
+  if (configured === "billing" || configured === "paid" || configured === "subscription") {
+    return "billing";
+  }
+  if (configured === "allowlist" || configured === "internal") {
+    return "allowlist";
+  }
+  if (configured === "all" || configured === "true" || configured === "1" || configured === "enabled") {
+    return "all";
+  }
+
+  logAppEvent("warn", "scheduled_browser_invalid_mode", "Invalid MONITORING_SCHEDULED_BROWSER_MODE; using billing", {
+    details: { configured },
+  });
+  return "billing";
+}
+
+export function isScheduledBrowserAllowlisted(env: AppEnv, userId: string) {
+  const allowlist = parseIdSet(env.MONITORING_SCHEDULED_BROWSER_ALLOWLIST);
+  const internalWorkspaceUserId = env.MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID?.trim();
+  if (internalWorkspaceUserId) {
+    allowlist.add(internalWorkspaceUserId);
+  }
+  return allowlist.has("*") || allowlist.has(userId);
+}
+
+function hasActiveScheduledBrowserSubscription(input: {
+  dodoStatus: string | null;
+  dodoSubscriptionId: string | null;
+  dodoNextBillingAt: string | null;
+  billingInterval: "monthly" | "annual" | null;
+}) {
+  if (!input.dodoSubscriptionId) {
+    return false;
+  }
+
+  const status = input.dodoStatus?.trim().toLowerCase() ?? "";
+  if (ACTIVE_SCHEDULED_BROWSER_BILLING_STATUSES.has(status)) {
+    return true;
+  }
+
+  if (RETRYING_SUBSCRIPTION_BILLING_STATUSES.has(status)) {
+    return true;
+  }
+
+  if (SUCCESSFUL_SUBSCRIPTION_PAYMENT_STATUSES.has(status) && input.billingInterval) {
+    return true;
+  }
+
+  if (status === CANCELLATION_SCHEDULED_STATUS) {
+    if (!input.dodoNextBillingAt) {
+      return true;
+    }
+    const nextBillingAt = Date.parse(input.dodoNextBillingAt);
+    return !Number.isFinite(nextBillingAt) || nextBillingAt > Date.now();
+  }
+
+  return false;
+}
+
+export async function evaluateScheduledBrowserAccess(env: AppEnv, userId: string) {
+  const mode = resolveScheduledBrowserAccessMode(env);
+  const allowlisted = isScheduledBrowserAllowlisted(env, userId);
+
+  if (mode === "off") {
+    return { eligible: false as const, reason: "scheduled_browser_disabled", mode, allowlisted };
+  }
+
+  const { getUserPlanBillingInfo } = await import("~/lib/data.server");
+  const billing = await getUserPlanBillingInfo(env, userId);
+  const hasActiveSubscription = hasActiveScheduledBrowserSubscription(billing);
+
+  if (mode === "allowlist") {
+    return allowlisted
+      ? { eligible: true as const, reason: "allowlisted", mode, allowlisted, plan: billing.plan }
+      : { eligible: false as const, reason: "workspace_not_allowlisted", mode, allowlisted, plan: billing.plan };
+  }
+
+  if (allowlisted) {
+    return { eligible: true as const, reason: "allowlisted", mode, allowlisted, plan: billing.plan };
+  }
+
+  if (billing.plan === "free") {
+    return { eligible: false as const, reason: "plan_ineligible", mode, allowlisted, plan: billing.plan };
+  }
+
+  if (mode === "all") {
+    return { eligible: true as const, reason: "all_enabled", mode, allowlisted, plan: billing.plan };
+  }
+
+  if (hasActiveSubscription) {
+    return { eligible: true as const, reason: "active_subscription", mode, allowlisted, plan: billing.plan };
+  }
+
+  return {
+    eligible: false as const,
+    reason: "subscription_required",
+    mode,
+    allowlisted,
+    plan: billing.plan,
+    dodoStatus: billing.dodoStatus,
+    hasSubscriptionId: Boolean(billing.dodoSubscriptionId),
+  };
+}
+
 export function resolveMonitoringFanoutMode(env: AppEnv): MonitoringFanoutMode {
   const configured = (env.MONITORING_FANOUT_MODE ?? "inline").trim().toLowerCase();
   if (configured === "inline" || configured === "shadow" || configured === "fanout") {
@@ -307,6 +453,13 @@ export function resolveMonitoringOrchestrationLeaseMs(env: AppEnv) {
   );
 }
 
+export function resolveMonitoringOrchestrationMaxAgeMs(env: AppEnv) {
+  return parsePositiveInt(
+    env.MONITORING_ORCHESTRATION_MAX_AGE_MS,
+    DEFAULT_MONITORING_ORCHESTRATION_MAX_AGE_MS,
+  );
+}
+
 export function resolveMonitoringConcurrencySlotLeaseMs(env: AppEnv) {
   return resolveEffectiveLeaseMs(
     env,
@@ -376,6 +529,9 @@ interface OrchestratedRunRow {
   workflow_instance_id: string | null;
   processing_token: string | null;
   attempt_count: number;
+  queued_at: string | null;
+  started_at: string | null;
+  created_at: string | null;
 }
 
 async function one<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
@@ -901,7 +1057,10 @@ export async function listOrchestratedRunsForReconciliation(
           idempotency_key,
           workflow_instance_id,
           processing_token,
-          attempt_count
+          attempt_count,
+          queued_at,
+          started_at,
+          created_at
         FROM watchlist_run
         WHERE trigger_type = 'scheduled'
           AND idempotency_key IS NOT NULL
@@ -925,11 +1084,11 @@ export async function isWatchlistEligibleForScheduledScan(
   if (!watchlist.isActive) {
     return { eligible: false as const, reason: "watchlist_inactive" };
   }
-  const plan = await getUserPlan(env, watchlist.userId);
-  if (plan === "free") {
-    return { eligible: false as const, reason: "plan_ineligible" };
+  const access = await evaluateScheduledBrowserAccess(env, watchlist.userId);
+  if (!access.eligible) {
+    return { eligible: false as const, reason: access.reason };
   }
-  return { eligible: true as const, plan };
+  return { eligible: true as const, plan: access.plan };
 }
 
 type WorkflowBinding = Workflow<MonitoringWorkflowParams> & {
@@ -1157,9 +1316,7 @@ export async function scheduleWatchlistFanout(
         executionKey,
         pageBudget,
         scheduledTime: input.scheduledTime,
-        queuePriority: getScheduledMonitoringPolicy(
-          await getUserPlan(env, watchlist.userId),
-        ).monitoringQueuePriority,
+        queuePriority: getScheduledMonitoringPolicy(eligibility.plan).monitoringQueuePriority,
       });
       if (!ensured.created) {
         duplicates += 1;
@@ -1255,6 +1412,7 @@ export async function reconcileOrchestratedWatchlistRuns(
   }
 
   const leaseMs = input.leaseMs ?? resolveMonitoringOrchestrationLeaseMs(env);
+  const maxAgeMs = resolveMonitoringOrchestrationMaxAgeMs(env);
   const shadowOnly = input.mode === "shadow";
   const staleRuns = await listOrchestratedRunsForReconciliation(env, { leaseMs });
   let recovered = 0;
@@ -1277,12 +1435,23 @@ export async function reconcileOrchestratedWatchlistRuns(
       continue;
     }
 
-    const plan = await getUserPlan(env, watchlist.user_id);
-    if (plan === "free") {
+    const access = await evaluateScheduledBrowserAccess(env, watchlist.user_id);
+    if (!access.eligible) {
       await markOrchestratedRunCancelled(env, {
         runId: row.id,
-        reason: "plan_ineligible",
+        reason: access.reason,
         message: "Scheduled scans paused for this workspace.",
+      });
+      cancelled += 1;
+      continue;
+    }
+
+    const runCreatedAt = Date.parse(row.queued_at ?? row.started_at ?? row.created_at ?? "");
+    if (row.status === "running" && Number.isFinite(runCreatedAt) && Date.now() - runCreatedAt > maxAgeMs) {
+      await markOrchestratedRunCancelled(env, {
+        runId: row.id,
+        reason: "orchestration_stale",
+        message: "Scheduled scan was older than the orchestration recovery window.",
       });
       cancelled += 1;
       continue;
