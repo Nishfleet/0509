@@ -14,7 +14,7 @@ import { mapCustomerRouteError } from "~/lib/customer-route-error";
 const appLayout = readFileSync("app/routes/app-layout.tsx", "utf8");
 const routeConfig = readFileSync("app/routes.ts", "utf8");
 const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
-const sourcesRoute = readFileSync("app/routes/app.sources.tsx", "utf8");
+const notificationsUiRoute = readFileSync("app/routes/app.notifications.ui.tsx", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
 const shellSource = readFileSync("app/components/dashboard-shell.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
@@ -40,6 +40,8 @@ describe("dashboard v2 navigation", () => {
     expect(labels).toContain("Digests");
     expect(labels).toContain("Reports");
     expect(labels).toContain("Notifications");
+    expect(labels).toContain("Source access");
+    expect(labels).toContain("Developer access");
     expect(labels).not.toContain("Boards");
     expect(labels).not.toContain("Briefs");
   });
@@ -82,8 +84,13 @@ describe("dashboard v2 shell", () => {
   });
 
   it("wraps primary app routes in DashboardPage except staff ops", () => {
+    const wrapperRoutes = new Set([
+      "app.developer-access.tsx",
+      "app.source-access.tsx",
+    ]);
     const missing = PRIMARY_APP_ROUTE_FILES.filter((file) => {
       if (file === "app.ops.tsx") return false;
+      if (wrapperRoutes.has(file)) return false;
       const source = readFileSync(join("app/routes", file), "utf8");
       return !source.includes("DashboardPage");
     });
@@ -98,15 +105,17 @@ describe("dashboard v2 shell", () => {
 
   it("keeps intuitive app aliases away from the 404 route", () => {
     expect(routeConfig).toContain('route("notifications", "routes/app.notifications.ts")');
+    expect(routeConfig).toContain('route("source-access", "routes/app.source-access.tsx")');
+    expect(routeConfig).toContain('route("developer-access", "routes/app.developer-access.tsx")');
     expect(routeConfig).toContain('route("reports", "routes/app.reports.index.ts")');
   });
 });
 
 describe("dashboard v2 leakage guards", () => {
   it("removes agent action catalog from notifications page", () => {
-    expect(sourcesRoute).not.toContain("auditedAgentActionGroups");
-    expect(sourcesRoute).not.toContain("AGENT_BLOCKED_CAPABILITIES");
-    expect(sourcesRoute).toContain("Notifications");
+    expect(notificationsUiRoute).not.toContain("auditedAgentActionGroups");
+    expect(notificationsUiRoute).not.toContain("AGENT_BLOCKED_CAPABILITIES");
+    expect(notificationsUiRoute).toContain("Notifications");
   });
 
   it("keeps overview customer-oriented", () => {

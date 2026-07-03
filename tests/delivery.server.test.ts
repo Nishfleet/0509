@@ -159,7 +159,7 @@ describe("deliverWeeklyDigest", () => {
     expect(emailSendPayload(sendMock).text).toContain(
       "View full digest: https://app.0509.test/app/digests?digest=digest-1",
     );
-    expect(emailSendPayload(sendMock).text).toContain("Manage frequency: https://app.0509.test/app/sources");
+    expect(emailSendPayload(sendMock).text).toContain("Manage frequency: https://app.0509.test/app/notifications");
     expect(emailSendPayload(sendMock).text).toContain("Unsubscribe: https://app.0509.test/unsubscribe");
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),

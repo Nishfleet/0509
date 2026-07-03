@@ -63,7 +63,7 @@ const readinessPayload = {
       label: "Delivery proof",
       status: "needs_proof",
       detail: "A delivery target exists but needs successful delivery proof.",
-      action: { label: "Open sources", href: "/app/sources" },
+      action: { label: "Open notifications", href: "/app/notifications" },
     },
   ],
   counts: {

@@ -5,32 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
-const discoveryStatus = {
-  status: "cache_only",
-  provider: "meta_library_browser",
-  mode: "cache",
-  summary: "Cached live results are available, but fresh discovery is degraded.",
-  lastCheckedAt: "2026-05-15T00:00:00.000Z",
-  lastErrorCode: "login_wall",
-  lastErrorMessage: "Meta returned a login wall.",
-} as const;
-
-const betaReadiness = {
-  ok: false,
-  label: "Beta: needs validation",
-  windowDays: 7,
-  sampleTarget: 20,
-  samples: 6,
-  successes: 0,
-  failures: 6,
-  recentFailures: 6,
-  successRate: 0,
-  latestSuccessAt: null,
-  latestFailureAt: "2026-05-15T00:00:00.000Z",
-  blockers: ["not_enough_live_samples", "no_recent_live_success"],
-  providerBreakdown: [],
-};
-
 async function mockRouter(loaderData: unknown) {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
@@ -58,27 +32,14 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("sources route API-key readiness", () => {
+describe("developer access route API-key readiness", () => {
   it("renders missing write-key state and blocked credential lifecycle", async () => {
     await mockRouter({
-      connection: null,
-      discoveryStatus,
-      betaReadiness,
       apiKeys: [],
-      slackTargets: [],
-      whatsappTargets: [],
-      whatsappDelivery: {
-        providerConfigured: false,
-        customerReady: false,
-        webhookConfigured: false,
-        configuredTargets: 0,
-        usableTargets: 0,
-        lastSuccessfulDeliveryAt: null,
-      },
     });
 
-    const { default: AppSourcesRoute } = await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(createElement(AppSourcesRoute));
+    const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
+    const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toMatch(/Active keys[\s\S]*?<strong>0<\/strong>/);
     expect(markup).toContain("Needs write key");
@@ -88,9 +49,6 @@ describe("sources route API-key readiness", () => {
 
   it("counts active keys and write-enabled keys separately", async () => {
     await mockRouter({
-      connection: null,
-      discoveryStatus,
-      betaReadiness,
       apiKeys: [
         {
           id: "api-key-read",
@@ -120,20 +78,10 @@ describe("sources route API-key readiness", () => {
           createdAt: "2026-06-03T00:00:00.000Z",
         },
       ],
-      slackTargets: [],
-      whatsappTargets: [],
-      whatsappDelivery: {
-        providerConfigured: false,
-        customerReady: false,
-        webhookConfigured: false,
-        configuredTargets: 0,
-        usableTargets: 0,
-        lastSuccessfulDeliveryAt: null,
-      },
     });
 
-    const { default: AppSourcesRoute } = await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(createElement(AppSourcesRoute));
+    const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
+    const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toMatch(/Active keys[\s\S]*?<strong>2<\/strong>/);
     expect(markup).toContain("1 enabled");

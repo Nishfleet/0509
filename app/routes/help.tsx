@@ -38,7 +38,7 @@ export default function HelpRoute() {
         <p>
           Email delivery is available for paid plans. Run a watchlist refresh or wait for the
           first digest after a monitored change to confirm delivery. Open{" "}
-          <Link to="/app/sources">Notifications</Link> when you want digests and high-priority
+          <Link to="/app/notifications">Notifications</Link> when you want digests and high-priority
           alerts in the inbox.
         </p>
       </PublicDocBlock>

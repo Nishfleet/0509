@@ -76,7 +76,7 @@ describe("buildLifecycleNudges", () => {
       expect.objectContaining({
         id: "delivery_proof",
         title: "Delivery check is missing",
-        href: "/app/sources",
+        href: "/app/notifications",
         priority: "high",
       }),
     ]);
@@ -103,6 +103,7 @@ describe("buildLifecycleNudges", () => {
       expect.objectContaining({
         id: "agent_setup",
         title: "Developer access is missing",
+        href: "/app/developer-access",
         priority: "low",
       }),
     ]);

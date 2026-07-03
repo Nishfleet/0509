@@ -20,7 +20,9 @@ Locked IA, navigation, tokens, and state policy for the Five to Nine workspace.
 
 | Label | Route | Job |
 |-------|-------|-----|
-| Notifications | `/app/sources` | Delivery channels, backup Meta token, API keys |
+| Notifications | `/app/notifications` | Email digests and alert delivery channels |
+| Source access | `/app/source-access` | Backup Meta token and tracking reliability |
+| Developer access | `/app/developer-access` | API keys, exports, and approved account actions |
 | Team | `/app/team` | Members + invites |
 | Client rooms | `/app/clients` | Agency client context |
 | Billing & usage | `/app/billing` | Plan + Dodo portal |
@@ -34,7 +36,7 @@ Staff-only: **Ops** → `/app/ops`.
 1. **One config** — `app/lib/dashboard-navigation.ts`; filter with `filterDashboardNav`.
 2. **No route-level sidebars** — layout owns the rail.
 3. **Search is first-class** — lives in PRIMARY nav, uses same shell when authenticated.
-4. **URL stability** — `/app/sources` stays; customer-facing title is Notifications.
+4. **URL stability** — `/app/sources` stays as a compatibility hub for legacy links and POSTs.
 
 ## Copy conventions
 
@@ -42,7 +44,7 @@ Staff-only: **Ops** → `/app/ops`.
 |--------|-----|
 | Boards | Collections |
 | Briefs (as nav noun) | Digests |
-| Integrations (page title) | Notifications |
+| Integrations (page title) | Notifications, Source access, or Developer access by job |
 | Agent / workflow / audit internals | Customer outcomes (follow-ups, delivery, proof) |
 | Counter-move brief | Response brief / competitive response |
 
