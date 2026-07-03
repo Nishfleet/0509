@@ -1,8 +1,14 @@
-import { Link } from "react-router";
+import { Link, useActionData } from "react-router";
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import type { RouteActionData } from "~/routes/workspace-settings.shared";
+
+type SourcesCompatibilityActionData = RouteActionData & {
+  apiKeySecret?: string;
+  apiKeyPrefix?: string;
+};
 
 export const meta: MetaFunction = () => [
   { title: "Workspace settings | Five to Nine" },
@@ -28,12 +34,31 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 export default function SourcesCompatibilityRoute() {
+  const actionData = useActionData<SourcesCompatibilityActionData>();
+  const hasNewApiKeySecret = Boolean(actionData && "apiKeySecret" in actionData && actionData.apiKeySecret);
+
   return (
     <DashboardPage>
       <DashboardPageHeader
         lead="Source setup, API keys, and delivery settings now live on focused pages."
         title="Workspace settings"
       />
+      {actionData?.message && !hasNewApiKeySecret ? (
+        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
+          <p>{actionData.message}</p>
+        </div>
+      ) : null}
+
+      {hasNewApiKeySecret && actionData && "apiKeySecret" in actionData ? (
+        <div className="f9-message is-success">
+          <p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
+          <label className="f9-field">
+            <span>{actionData.apiKeyPrefix}</span>
+            <textarea readOnly rows={3} value={actionData.apiKeySecret} />
+          </label>
+        </div>
+      ) : null}
+
       <section className="f9-dashboard-grid">
         <article className="f9-app-panel f9-source-guide">
           <span className="f9-app-kicker">Delivery</span>
