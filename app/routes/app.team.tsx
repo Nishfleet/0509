@@ -20,7 +20,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlan } = await import("~/lib/plan.server");
-  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const { listWorkspaceMembers, resolveWorkspace, AGENCY_SEAT_LIMIT } = await import(
     "~/lib/workspace.server"
   );
@@ -36,11 +35,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       seatLimit: AGENCY_SEAT_LIMIT,
       members: [],
     };
-  }
-
-  const teamGate = await requireWorkspacePlanFeature(env, session.user.id, "team_workspace");
-  if (!teamGate.ok) {
-    throw teamGate.response;
   }
 
   const plan = await getUserPlan(env, session.user.id);

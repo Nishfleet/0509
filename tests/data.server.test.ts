@@ -41,6 +41,7 @@ import {
   getSuccessfulRunStatsForUserBetween,
   getOperatorRiskSummary,
   getOperatorSnapshot,
+  getOldestUserId,
   getWeeklyBusinessSummary,
   findAgentActionAuditByIdempotencyKey,
   finishAgentActionAudit,
@@ -2198,6 +2199,16 @@ describe("scheduled watchlist selection", () => {
 });
 
 describe("weekly business summary", () => {
+  it("uses Better Auth user.createdAt for signup counts", async () => {
+    const mock = createMockDb();
+
+    await getWeeklyBusinessSummary({ DB: mock.db } as never);
+
+    const statement = findStatement(mock.statements, "FROM user", "createdAt >= ?");
+    expect(statement?.sql).toContain("createdAt >= ?");
+    expect(statement?.sql).not.toContain("created_at >= ?");
+  });
+
   it("does not count pending Dodo checkouts as dropped-to-free customers", async () => {
     const mock = createMockDb();
 
@@ -2210,6 +2221,17 @@ describe("weekly business summary", () => {
       "plan_updated_at >= ?",
     );
     expect(statement?.sql).toContain("dodo_status != 'checkout_pending'");
+  });
+});
+
+describe("user lookup helpers", () => {
+  it("uses Better Auth user.createdAt when finding the oldest user", async () => {
+    const mock = createMockDb();
+
+    await getOldestUserId({ DB: mock.db } as never);
+
+    expect(mock.statements[0]?.sql).toContain("ORDER BY createdAt ASC");
+    expect(mock.statements[0]?.sql).not.toContain("created_at");
   });
 });
 
