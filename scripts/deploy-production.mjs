@@ -6,17 +6,39 @@ import { spawnSync } from "node:child_process";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const localEnvFilePattern = /^(?:\.dev\.vars(?:\..+)?|\.env(?:\..+)?)$/;
+const cloudflareCredentialEnvNames = [
+  "CF_ACCOUNT_ID",
+  "CF_API_KEY",
+  "CF_API_TOKEN",
+  "CF_EMAIL",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_API_KEY",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_EMAIL",
+];
 
 const movedLocalEnvFiles = [];
 let exitCode = 0;
 
-function run(command, args) {
+function commandEnv({ includeCloudflareCredentials = false } = {}) {
+  const env = {
+    ...process.env,
+    CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false",
+  };
+
+  if (!includeCloudflareCredentials) {
+    for (const name of cloudflareCredentialEnvNames) {
+      delete env[name];
+    }
+  }
+
+  return env;
+}
+
+function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: root,
-    env: {
-      ...process.env,
-      CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false",
-    },
+    env: commandEnv(options),
     stdio: "inherit",
   });
 
@@ -48,10 +70,10 @@ try {
   }
 
   run("node", ["scripts/check-public-home-current.mjs", "--source-only"]);
-  run("node", ["scripts/check-d1-migrations-synced.mjs"]);
+  run("node", ["scripts/check-d1-migrations-synced.mjs"], { includeCloudflareCredentials: true });
   run("npm", ["run", "build"]);
   run("node", ["scripts/check-public-home-current.mjs"]);
-  run("wrangler", ["deploy"]);
+  run("wrangler", ["deploy"], { includeCloudflareCredentials: true });
   run("node", ["scripts/check-live-public-home.mjs"]);
   run("node", ["scripts/check-google-oauth-branding.mjs"]);
 } catch (error) {
