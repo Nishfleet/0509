@@ -67,10 +67,10 @@ const PLANS: PricingPlan[] = PLAN_FAMILIES.filter((plan) => plan !== "free").map
     yearlyLabel: "Annual price loading",
     detail:
       slug === "scout"
-        ? "Focused competitor monitoring for a small watchlist."
+        ? "6-hour competitor monitoring for a small watchlist."
         : slug === "starter"
           ? "3-hour competitor monitoring for one brand's core market."
-          : "Client-ready competitor reports for agencies and crowded categories.",
+          : "3-hour competitor monitoring with client-ready reports for crowded categories.",
     features: planMarketingFeatures(slug),
     monthlySku: `${slug}_monthly_v1`,
     yearlySku: `${slug}_annual_v1`,
