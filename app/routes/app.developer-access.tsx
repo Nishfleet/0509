@@ -21,11 +21,22 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { listCustomerApiKeys } = await import("~/lib/data.server");
+  const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
-  const { workspaceUserId } = await requireWorkspaceSession(env, request);
-  const apiKeys = await listCustomerApiKeys(env, workspaceUserId);
+  const { workspaceUserId, isMember, ownerName } = await requireWorkspaceSession(env, request);
+  const [apiKeys, apiGate] = await Promise.all([
+    listCustomerApiKeys(env, workspaceUserId),
+    requireWorkspacePlanFeature(env, workspaceUserId, "api_access"),
+  ]);
+  const createDisabledReason = developerAccessDisabledReason({
+    hasApiAccess: apiGate.ok,
+    isMember,
+    ownerName,
+  });
 
   return {
+    canCreateApiKeys: !createDisabledReason,
+    createDisabledReason,
     apiKeys: apiKeys.map((apiKey) => ({
       id: apiKey.id,
       name: apiKey.name,
@@ -57,7 +68,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const apiGate = await requireWorkspacePlanFeature(env, workspaceUserId, "api_access");
     if (!apiGate.ok) {
-      return { ok: false, message: "Developer access is included in the Agency plan." };
+      return {
+        ok: false,
+        message: developerAccessDisabledReason({
+          hasApiAccess: false,
+          isMember: false,
+          ownerName: null,
+        })!,
+      };
     }
     const { createCustomerApiKey } = await import("~/lib/api-keys.server");
     const name = String(formData.get("apiKeyName") ?? "");
@@ -91,4 +109,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
     ok: false,
     message: "Unknown developer access action.",
   };
+}
+
+function developerAccessDisabledReason(input: {
+  hasApiAccess: boolean;
+  isMember: boolean;
+  ownerName: string | null;
+}) {
+  if (input.isMember) {
+    return input.ownerName
+      ? `Only ${input.ownerName} can create or revoke API keys for this workspace.`
+      : "Only the account owner can create or revoke API keys for this workspace.";
+  }
+
+  if (!input.hasApiAccess) {
+    return "Developer access is included in the Agency plan. Upgrade to Agency to create API keys.";
+  }
+
+  return null;
 }

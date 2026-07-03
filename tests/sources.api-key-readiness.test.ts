@@ -35,6 +35,8 @@ afterEach(() => {
 describe("developer access route API-key readiness", () => {
   it("renders missing write-key state and blocked credential lifecycle", async () => {
     await mockRouter({
+      canCreateApiKeys: true,
+      createDisabledReason: null,
       apiKeys: [],
     });
 
@@ -47,8 +49,26 @@ describe("developer access route API-key readiness", () => {
     expect(markup).toContain("API documentation");
   });
 
+  it("explains plan-gated API keys before submit", async () => {
+    await mockRouter({
+      canCreateApiKeys: false,
+      createDisabledReason: "Developer access is included in the Agency plan. Upgrade to Agency to create API keys.",
+      apiKeys: [],
+    });
+
+    const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
+    const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
+
+    expect(markup).toContain("Developer access is included in the Agency plan. Upgrade to Agency to create API keys.");
+    expect(markup).toContain("API keys unavailable");
+    expect(markup).toContain("disabled");
+    expect(markup).not.toContain(">Create API key</button>");
+  });
+
   it("counts active keys and write-enabled keys separately", async () => {
     await mockRouter({
+      canCreateApiKeys: true,
+      createDisabledReason: null,
       apiKeys: [
         {
           id: "api-key-read",

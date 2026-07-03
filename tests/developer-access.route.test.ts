@@ -40,6 +40,70 @@ afterEach(() => {
 
 
 describe("developer access route action", () => {
+  it("loads a clear Agency-plan lock reason before API-key submit", async () => {
+    const { getUserPlan } = await import("~/lib/plan.server");
+    vi.mocked(getUserPlan).mockResolvedValue("starter");
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCustomerApiKeys: vi.fn().mockResolvedValue([]),
+    }));
+
+    const { loader } = await import("~/routes/app.developer-access");
+    const result = await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/developer-access"),
+    } as never);
+
+    expect(result).toMatchObject({
+      canCreateApiKeys: false,
+      createDisabledReason: "Developer access is included in the Agency plan. Upgrade to Agency to create API keys.",
+      apiKeys: [],
+    });
+  });
+
+  it("loads a clear owner-only lock reason for workspace members", async () => {
+    const { getUserPlan } = await import("~/lib/plan.server");
+    vi.mocked(getUserPlan).mockResolvedValue("agency");
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCustomerApiKeys: vi.fn().mockResolvedValue([]),
+    }));
+
+    const { loader } = await import("~/routes/app.developer-access");
+    const result = await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/developer-access"),
+    } as never);
+
+    expect(result).toMatchObject({
+      canCreateApiKeys: false,
+      createDisabledReason: "Only Owner can create or revoke API keys for this workspace.",
+      apiKeys: [],
+    });
+  });
+
   it("creates a customer API key and returns the one-time secret", async () => {
     const createCustomerApiKey = vi.fn().mockResolvedValue({
       secret: "example-full-secret",

@@ -47,7 +47,7 @@ test.describe("production authenticated smoke with owner-captured auth state", (
     for (const route of [
       { path: "/app/billing", heading: "Billing & usage" },
       { path: "/app/watchlists", heading: "Watchlists" },
-      { path: "/app/presence", heading: "Website and content presence" },
+      { path: "/app/presence", heading: "Proof-backed entity tracking" },
       { path: "/app/notifications", heading: "Notifications" },
       { path: "/app/source-access", heading: "Source access" },
       { path: "/app/developer-access", heading: "Developer access" },

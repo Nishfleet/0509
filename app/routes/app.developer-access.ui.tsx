@@ -25,6 +25,8 @@ type CustomerApiKeyView = {
 };
 
 export type DeveloperAccessLoaderData = {
+  canCreateApiKeys?: boolean;
+  createDisabledReason?: NullableString;
   apiKeys: CustomerApiKeyView[];
 };
 
@@ -39,6 +41,8 @@ export function DeveloperAccessRoute() {
   const activeApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt).length;
   const writeEnabledApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt && apiKey.actionsWriteEnabled).length;
   const hasNewApiKeySecret = Boolean(actionData && "apiKeySecret" in actionData && actionData.apiKeySecret);
+  const canCreateApiKeys = data.canCreateApiKeys !== false && !data.createDisabledReason;
+  const createDisabledReason = data.createDisabledReason ?? null;
 
   return (
     <DashboardPage>
@@ -144,23 +148,34 @@ export function DeveloperAccessRoute() {
             <section className="f9-app-panel f9-source-guide">
               <span className="f9-app-kicker">Create API key</span>
               <h3>Exports and approved actions</h3>
+              {createDisabledReason ? (
+                <div className="f9-message is-error">
+                  <p>{createDisabledReason}</p>
+                </div>
+              ) : null}
               <Form className="f9-auth-form" method="post">
                 <input name="intent" type="hidden" value="create-api-key" />
                 <label className="f9-field">
                   <span>Key name</span>
                   <input
                     autoComplete="off"
+                    disabled={!canCreateApiKeys}
                     name="apiKeyName"
                     placeholder="Zapier, workflow script, assistant..."
                     type="text"
                   />
                 </label>
                 <label className="f9-checkbox-row">
-                  <input name="actionsWriteEnabled" type="checkbox" value="1" />
+                  <input disabled={!canCreateApiKeys} name="actionsWriteEnabled" type="checkbox" value="1" />
                   <span>Allow approved account actions</span>
                 </label>
-                <SubmitButton className="f9-primary-button" intent="create-api-key" pendingLabel="Creating…">
-                  Create API key
+                <SubmitButton
+                  className="f9-primary-button"
+                  disabled={!canCreateApiKeys}
+                  intent="create-api-key"
+                  pendingLabel="Creating…"
+                >
+                  {canCreateApiKeys ? "Create API key" : "API keys unavailable"}
                 </SubmitButton>
               </Form>
             </section>

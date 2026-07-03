@@ -259,7 +259,7 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app/presence");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Website and content presence" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Proof-backed entity tracking" })).toBeVisible();
     await expect(page.getByText("Okara")).toBeVisible();
 
     await page.goto("/app/digests");
@@ -282,9 +282,11 @@ test.describe("local authenticated E2E harness", () => {
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Developer access" })).toBeVisible();
     await expect(page.getByText("Connect exports and approved actions")).toBeVisible();
-    await page.getByLabel("Key name").fill("Starter denied key");
-    await page.getByRole("button", { name: "Create API key" }).click();
-    await expect(page.getByText("Developer access is included in the Agency plan.")).toBeVisible();
+    await expect(
+      page.getByText("Developer access is included in the Agency plan. Upgrade to Agency to create API keys."),
+    ).toBeVisible();
+    await expect(page.getByLabel("Key name")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "API keys unavailable" })).toBeDisabled();
 
     await page.goto("/app/support");
     await expectAppPage(page);
@@ -324,9 +326,11 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
 
     await page.goto("/app/developer-access");
-    await page.getByLabel("Key name").fill("Scout denied key");
-    await page.getByRole("button", { name: "Create API key" }).click();
-    await expect(page.getByText("Developer access is included in the Agency plan.")).toBeVisible();
+    await expect(
+      page.getByText("Developer access is included in the Agency plan. Upgrade to Agency to create API keys."),
+    ).toBeVisible();
+    await expect(page.getByLabel("Key name")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "API keys unavailable" })).toBeDisabled();
   });
 
   test("agency fixture exposes developer controls without enabling unavailable social delivery", async ({ page, context, baseURL }) => {
@@ -344,6 +348,119 @@ test.describe("local authenticated E2E harness", () => {
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Client-ready report" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
+  });
+
+  test("agency sidebar navigation reaches every customer-facing section in screenshot order", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await signInAs(context, baseURL!, "e2e-agency");
+
+    const routes = [
+      { label: "Overview", path: "/app", heading: "Overview", copy: ["Market Desk"] },
+      { label: "Search", path: "/search", heading: "Find competitor ads", copy: ["Competitor website", "See ads"] },
+      {
+        label: "Watchlists",
+        path: "/app/watchlists",
+        heading: "Watchlists",
+        copy: ["Monitor competitor ads over time", "Tracking desk"],
+      },
+      {
+        label: "Collections",
+        path: "/app/collections",
+        heading: "Collections",
+        copy: ["Save the best competitor examples", "Create collection"],
+      },
+      { label: "Digests", path: "/app/digests", heading: "Digests", copy: ["Digest history"] },
+      {
+        label: "Reports",
+        path: "/app/shares",
+        heading: "Reports",
+        copy: ["Revoke snapshot and live-view links", "Anyone with a link can open"],
+      },
+      {
+        label: "Notifications",
+        path: "/app/notifications",
+        heading: "Notifications",
+        copy: ["Digest and alert delivery"],
+      },
+      {
+        label: "Source access",
+        path: "/app/source-access",
+        heading: "Source access",
+        copy: ["Backup Meta ad checks"],
+      },
+      {
+        label: "Developer access",
+        path: "/app/developer-access",
+        heading: "Developer access",
+        copy: ["Connect exports and approved actions"],
+      },
+      { label: "Team", path: "/app/team", heading: "Team", copy: ["Agency"] },
+      {
+        label: "Client rooms",
+        path: "/app/clients",
+        heading: "Client rooms",
+        copy: ["Package evidence and reports"],
+      },
+      {
+        label: "Billing & usage",
+        path: "/app/billing",
+        heading: "Billing & usage",
+        copy: ["Current plan"],
+      },
+      {
+        label: "Account & security",
+        path: "/app/account",
+        heading: "Account & security",
+        copy: ["Signed in as"],
+      },
+      {
+        label: "Help & support",
+        path: "/app/support",
+        heading: "Help & support",
+        copy: ["Tell us what needs attention"],
+      },
+    ];
+    const bannedCustomerCopy = [
+      /Something went wrong/i,
+      /Application Error/i,
+      /stack trace/i,
+      /SQLITE_/i,
+      /D1_ERROR/i,
+      /Cannot read properties/i,
+      /undefined is not/i,
+      /\bStripe\b/i,
+      /0509\.in(?!valid)/i,
+      /Stytch/i,
+    ];
+
+    await page.goto("/app");
+    for (const route of routes) {
+      const link = page.locator(".f9-cursor-rail").getByRole("link", { name: route.label, exact: true }).first();
+      await expect(link, `${route.label} sidebar link should be visible`).toBeVisible();
+
+      if (new URL(page.url()).pathname !== route.path) {
+        await Promise.all([
+          page.waitForURL((url) => url.pathname === route.path),
+          link.click(),
+        ]);
+      }
+
+      await expect(page).toHaveURL((url) => url.pathname === route.path);
+      await expectAppPage(page);
+      await expect(page.getByRole("heading", { name: route.heading, exact: true })).toBeVisible();
+      for (const text of route.copy) {
+        await expect(page.locator("body")).toContainText(text);
+      }
+
+      const bodyText = await page.locator("body").innerText();
+      for (const pattern of bannedCustomerCopy) {
+        expect(bodyText, `${route.label} should not expose stale/error copy matching ${pattern}`).not.toMatch(pattern);
+      }
+      await expectAppActionControlsWired(page);
+    }
   });
 
   test("authenticated buttons and links are wired to real destinations or form actions", async ({ page, context, baseURL }) => {
@@ -419,7 +536,7 @@ test.describe("local authenticated E2E harness", () => {
         await expectAppPage(page);
         await expect(page.getByRole("link", { name: "Watchlists" }).first()).toBeVisible();
         await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
-        await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
         await expectNoFixedAppChrome(page);
         await expectCompactHeaderActions(page);
         if (viewport.width <= 640) {
