@@ -293,6 +293,93 @@ describe("source access route action", () => {
     });
   });
 
+  it("keeps legacy sources Meta-token posts action-compatible", async () => {
+    const saveCustomerMetaToken = vi.fn().mockResolvedValue({
+      ok: true,
+      testResult: {
+        summary: "Connected from old route.",
+      },
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ BETTER_AUTH_SECRET: "secret" })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "connect-meta-token");
+    formData.set("metaToken", "EAABlegacytoken");
+
+    const result = await action({
+      context: createContext({ BETTER_AUTH_SECRET: "secret" }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(saveCustomerMetaToken).toHaveBeenCalledWith(expect.anything(), "user-1", "EAABlegacytoken");
+    expect(result).toEqual({
+      ok: true,
+      message: "Connected from old route.",
+    });
+  });
+
+  it("blocks workspace members from managing source access", async () => {
+    const saveCustomerMetaToken = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ BETTER_AUTH_SECRET: "secret" })),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken,
+    }));
+
+    const { action } = await import("~/routes/app.source-access");
+    const formData = new FormData();
+    formData.set("intent", "connect-meta-token");
+    formData.set("metaToken", "EAABmembertoken");
+
+    const result = await action({
+      context: createContext({ BETTER_AUTH_SECRET: "secret" }),
+      request: new Request("http://localhost/app/source-access", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(saveCustomerMetaToken).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      message: "Only the account owner can manage source access.",
+    });
+  });
+
   it("creates a customer API key and returns the one-time secret", async () => {
     const createCustomerApiKey = vi.fn().mockResolvedValue({
       secret: ["f9", "live", "full_secret"].join("_"),
@@ -343,6 +430,53 @@ describe("source access route action", () => {
       ok: true,
       apiKeySecret: ["f9", "live", "full_secret"].join("_"),
       apiKeyPrefix: ["f9", "live", "full"].join("_"),
+    });
+  });
+
+  it("keeps legacy sources API-key posts action-compatible", async () => {
+    const createCustomerApiKey = vi.fn().mockResolvedValue({
+      secret: ["f9", "live", "legacy_secret"].join("_"),
+      apiKey: {
+        keyPrefix: ["f9", "live", "legacy"].join("_"),
+      },
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/api-keys.server", () => ({
+      createCustomerApiKey,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const formData = new FormData();
+    formData.set("intent", "create-api-key");
+    formData.set("apiKeyName", "Legacy workflow");
+    formData.set("actionsWriteEnabled", "1");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(createCustomerApiKey).toHaveBeenCalledWith(expect.anything(), "user-1", "Legacy workflow", {
+      actionsWriteEnabled: true,
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      apiKeySecret: ["f9", "live", "legacy_secret"].join("_"),
     });
   });
 
@@ -467,6 +601,205 @@ describe("source access route action", () => {
       ok: false,
       message: "Slack delivery is not available at general availability yet. Use email delivery.",
     });
+  });
+
+  it("returns only safe delivery target fields from the notifications loader", async () => {
+    const { isSlackDeliveryCustomerFacing, isWhatsAppDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
+    vi.mocked(isWhatsAppDeliveryCustomerFacing).mockReturnValue(true);
+
+    const listDeliveryTargets = vi.fn(async (_env: unknown, _userId: string, options: { channel: string }) => {
+      if (options.channel === "slack") {
+        return [
+          {
+            id: "slack-target-1",
+            channel: "slack",
+            targetValue: "https://hooks.slack.com/services/T/B/SECRET",
+            validationStatus: "validated",
+            isValidated: true,
+            isOptedIn: true,
+            isPaused: false,
+            optedOutAt: null,
+            templateEligible: true,
+            lastSuccessfulDeliveryAt: "2026-06-06T00:00:00.000Z",
+            providerIdentifier: "SECRET",
+            metadata: { displayName: "Growth alerts" },
+            createdAt: "2026-06-01T00:00:00.000Z",
+          },
+        ];
+      }
+
+      return [
+        {
+          id: "whatsapp-target-1",
+          channel: "whatsapp",
+          targetValue: "+919999999999",
+          validationStatus: "validated",
+          isValidated: true,
+          isOptedIn: true,
+          isPaused: false,
+          optedOutAt: null,
+          templateEligible: true,
+          lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
+          providerIdentifier: "whatsapp-secret",
+          metadata: { displayName: "Founder phone" },
+          createdAt: "2026-06-02T00:00:00.000Z",
+        },
+      ];
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listDeliveryTargets,
+    }));
+    vi.doMock("~/lib/env.server", () => ({
+      isCustomerWhatsAppReady: vi.fn().mockReturnValue(true),
+      isWhatsAppProviderConfigured: vi.fn().mockReturnValue(true),
+      isWhatsAppWebhookConfigured: vi.fn().mockReturnValue(true),
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      slackTargetDisplayName: vi.fn((target) => target.metadata.displayName),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      whatsappTargetDisplayName: vi.fn((target) => target.metadata.displayName),
+    }));
+
+    const { loader } = await import("~/routes/app.notifications");
+    const result = await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/notifications"),
+    } as never);
+
+    expect(result).toMatchObject({
+      emailDeliveryReady: true,
+      showSlackDelivery: true,
+      canManageWhatsAppDelivery: true,
+      slackTargets: [{ id: "slack-target-1", displayName: "Growth alerts" }],
+      whatsappTargets: [{ id: "whatsapp-target-1", displayName: "Founder phone" }],
+      whatsappDelivery: {
+        configuredTargets: 1,
+        usableTargets: 1,
+        lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("hooks.slack.com");
+    expect(JSON.stringify(result)).not.toContain("+919999999999");
+    expect(JSON.stringify(result)).not.toContain("whatsapp-secret");
+  });
+
+  it("blocks workspace members from managing notification delivery targets", async () => {
+    const saveSlackWebhookTarget = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      saveSlackWebhookTarget,
+    }));
+
+    const { action } = await import("~/routes/app.notifications");
+    const formData = new FormData();
+    formData.set("intent", "save-slack-webhook");
+    formData.set("slackWebhookUrl", fakeSlackWebhookUrl());
+    formData.set("slackDestinationName", "Sales");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/notifications", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(saveSlackWebhookTarget).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      message: "Only the account owner can manage notification delivery targets.",
+    });
+  });
+
+  it("keeps legacy sources notification posts action-compatible", async () => {
+    const { isSlackDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(true);
+
+    const saveSlackWebhookTarget = vi.fn().mockResolvedValue({
+      id: "slack-target-1",
+    });
+    const upsertWorkspaceDeliveryConfig = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DB: {} })),
+    }));
+    vi.doMock("~/lib/slack.server", () => ({
+      saveSlackWebhookTarget,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
+      legacyWorkspaceDeliveryDefaults: vi.fn().mockReturnValue({
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+      }),
+      upsertWorkspaceDeliveryConfig,
+    }));
+
+    const { action } = await import("~/routes/app.sources");
+    const webhookUrl = fakeSlackWebhookUrl();
+    const formData = new FormData();
+    formData.set("intent", "save-slack-webhook");
+    formData.set("slackWebhookUrl", webhookUrl);
+    formData.set("slackDestinationName", "Legacy alerts");
+
+    const result = await action({
+      context: createContext({ DB: {} }),
+      request: new Request("http://localhost/app/sources", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(saveSlackWebhookTarget).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      webhookUrl,
+      name: "Legacy alerts",
+    });
+    expect(upsertWorkspaceDeliveryConfig).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      userId: "user-1",
+      slackEnabled: true,
+    }));
+    expect(result).toMatchObject({ ok: true });
   });
 
   it("saves a Slack webhook target", async () => {
@@ -835,6 +1168,18 @@ describe("source access route action", () => {
 });
 
 describe("workspace settings route components", () => {
+  it("renders the legacy sources compatibility hub", async () => {
+    await mockRouter(null);
+
+    const { default: SourcesCompatibilityRoute } = await import("~/routes/app.sources");
+    const markup = renderToStaticMarkup(createElement(SourcesCompatibilityRoute));
+
+    expect(markup).toContain("Workspace settings");
+    expect(markup).toContain("Open notifications");
+    expect(markup).toContain("Open source access");
+    expect(markup).toContain("Open developer access");
+  });
+
   it("renders source access without developer or notification setup", async () => {
     await mockRouter({
       connection: null,
@@ -884,6 +1229,8 @@ describe("workspace settings route components", () => {
   it("renders notifications without source-token or API-key setup", async () => {
     await mockRouter({
       emailDeliveryReady: true,
+      showSlackDelivery: false,
+      canManageWhatsAppDelivery: false,
       slackTargets: [],
       whatsappTargets: [],
       whatsappDelivery: {

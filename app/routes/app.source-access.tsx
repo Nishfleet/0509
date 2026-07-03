@@ -1,9 +1,11 @@
 export {
-  WorkspaceSettingsErrorBoundary as ErrorBoundary,
-  SourceAccessHydrateFallback as HydrateFallback,
-  sourceAccessMeta as meta,
   SourceAccessRoute as default,
-} from "~/routes/app.workspace-settings";
+  sourceAccessMeta as meta,
+} from "~/routes/app.source-access.ui";
+export {
+  SourceAccessHydrateFallback as HydrateFallback,
+  WorkspaceSettingsErrorBoundary as ErrorBoundary,
+} from "~/routes/workspace-settings.shared";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 const ownerOnlySourceIntents = new Set([

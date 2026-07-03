@@ -1,9 +1,11 @@
 export {
   NotificationsRoute as default,
-  WorkspaceSettingsErrorBoundary as ErrorBoundary,
-  NotificationsHydrateFallback as HydrateFallback,
   notificationsMeta as meta,
-} from "~/routes/app.workspace-settings";
+} from "~/routes/app.notifications.ui";
+export {
+  NotificationsHydrateFallback as HydrateFallback,
+  WorkspaceSettingsErrorBoundary as ErrorBoundary,
+} from "~/routes/workspace-settings.shared";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
@@ -35,6 +37,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const showWhatsAppDelivery = isWhatsAppDeliveryCustomerFacing();
+  const whatsappProviderConfigured = showWhatsAppDelivery && isWhatsAppProviderConfigured(env);
+  const whatsappCustomerReady = showWhatsAppDelivery && isCustomerWhatsAppReady(env);
+  const whatsappWebhookConfigured = showWhatsAppDelivery && isWhatsAppWebhookConfigured(env);
   const [slackTargets, whatsappTargets] = await Promise.all([
     showSlackDelivery
       ? listDeliveryTargets(env, workspaceUserId, {
@@ -67,6 +72,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     emailDeliveryReady: Boolean(session.user.email),
+    showSlackDelivery,
+    canManageWhatsAppDelivery:
+      whatsappProviderConfigured && whatsappCustomerReady && whatsappWebhookConfigured,
     slackTargets: slackTargets.map((target) => ({
       id: target.id,
       displayName: slackTargetDisplayName(target),
@@ -84,9 +92,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       createdAt: target.createdAt,
     })),
     whatsappDelivery: {
-      providerConfigured: showWhatsAppDelivery && isWhatsAppProviderConfigured(env),
-      customerReady: showWhatsAppDelivery && isCustomerWhatsAppReady(env),
-      webhookConfigured: showWhatsAppDelivery && isWhatsAppWebhookConfigured(env),
+      providerConfigured: whatsappProviderConfigured,
+      customerReady: whatsappCustomerReady,
+      webhookConfigured: whatsappWebhookConfigured,
       configuredTargets: whatsappTargets.length,
       usableTargets: usableWhatsAppTargets.length,
       lastSuccessfulDeliveryAt: lastWhatsAppSuccessAt,

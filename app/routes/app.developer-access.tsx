@@ -1,9 +1,11 @@
 export {
   DeveloperAccessRoute as default,
-  WorkspaceSettingsErrorBoundary as ErrorBoundary,
-  DeveloperAccessHydrateFallback as HydrateFallback,
   developerAccessMeta as meta,
-} from "~/routes/app.workspace-settings";
+} from "~/routes/app.developer-access.ui";
+export {
+  DeveloperAccessHydrateFallback as HydrateFallback,
+  WorkspaceSettingsErrorBoundary as ErrorBoundary,
+} from "~/routes/workspace-settings.shared";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 const ownerOnlyDeveloperAccessIntents = new Set([

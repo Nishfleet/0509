@@ -302,8 +302,11 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
 
     await page.goto("/app/sources");
-    await expect(page).toHaveURL(/\/app\/source-access/);
-    await expect(page.getByRole("heading", { name: "Source access" })).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/sources/);
+    await expect(page.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open notifications" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open source access" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open developer access" })).toBeVisible();
 
     await page.goto("/app/reports");
     await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
@@ -393,7 +396,6 @@ test.describe("local authenticated E2E harness", () => {
       { width: 1024, height: 768 },
     ];
     const expectedRedirects: Record<string, RegExp> = {
-      "/app/sources": /\/app\/source-access/,
       "/app/reports": /\/app\/shares/,
     };
     const routes = [
@@ -421,6 +423,7 @@ test.describe("local authenticated E2E harness", () => {
         await expectNoFixedAppChrome(page);
         await expectCompactHeaderActions(page);
         if (viewport.width <= 640) {
+          await expect(page.getByRole("link", { name: "Developer access" }).first()).toBeVisible();
           await expectMobileNavLinksInContainer(page);
           await expectMobileUtilityInViewport(page);
         }

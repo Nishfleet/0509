@@ -34,6 +34,7 @@ describe("dashboard v2 production hotfix", () => {
       "Digests",
       "Notifications",
       "Source access",
+      "Developer access",
       "Account",
     ]);
   });

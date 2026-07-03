@@ -14,7 +14,7 @@ import { mapCustomerRouteError } from "~/lib/customer-route-error";
 const appLayout = readFileSync("app/routes/app-layout.tsx", "utf8");
 const routeConfig = readFileSync("app/routes.ts", "utf8");
 const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
-const workspaceSettingsRoute = readFileSync("app/routes/app.workspace-settings.tsx", "utf8");
+const notificationsUiRoute = readFileSync("app/routes/app.notifications.ui.tsx", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
 const shellSource = readFileSync("app/components/dashboard-shell.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
@@ -84,10 +84,15 @@ describe("dashboard v2 shell", () => {
   });
 
   it("wraps primary app routes in DashboardPage except staff ops", () => {
+    const wrapperRoutes = new Set([
+      "app.developer-access.tsx",
+      "app.source-access.tsx",
+    ]);
     const missing = PRIMARY_APP_ROUTE_FILES.filter((file) => {
       if (file === "app.ops.tsx") return false;
+      if (wrapperRoutes.has(file)) return false;
       const source = readFileSync(join("app/routes", file), "utf8");
-      return !source.includes("DashboardPage") && !source.includes("app.workspace-settings");
+      return !source.includes("DashboardPage");
     });
 
     expect(missing).toEqual([]);
@@ -108,9 +113,9 @@ describe("dashboard v2 shell", () => {
 
 describe("dashboard v2 leakage guards", () => {
   it("removes agent action catalog from notifications page", () => {
-    expect(workspaceSettingsRoute).not.toContain("auditedAgentActionGroups");
-    expect(workspaceSettingsRoute).not.toContain("AGENT_BLOCKED_CAPABILITIES");
-    expect(workspaceSettingsRoute).toContain("Notifications");
+    expect(notificationsUiRoute).not.toContain("auditedAgentActionGroups");
+    expect(notificationsUiRoute).not.toContain("AGENT_BLOCKED_CAPABILITIES");
+    expect(notificationsUiRoute).toContain("Notifications");
   });
 
   it("keeps overview customer-oriented", () => {

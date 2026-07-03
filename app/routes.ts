@@ -63,7 +63,7 @@ export default [
     route("notifications", "routes/app.notifications.ts"),
     route("source-access", "routes/app.source-access.tsx"),
     route("developer-access", "routes/app.developer-access.tsx"),
-    route("sources", "routes/app.sources.ts"),
+    route("sources", "routes/app.sources.tsx"),
     route("presence", "routes/app.presence.tsx"),
     route("presence/:entityId", "routes/app.presence.$entityId.tsx"),
     route("ops", "routes/app.ops.tsx"),
