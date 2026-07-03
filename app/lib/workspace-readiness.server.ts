@@ -233,7 +233,7 @@ export async function getWorkspaceReadiness(
       action:
         deliveryProofCount > 0
           ? null
-          : { label: "Open notifications", href: "/app/sources" },
+          : { label: "Open notifications", href: "/app/notifications" },
     },
     {
       id: "billing",
@@ -270,7 +270,7 @@ export async function getWorkspaceReadiness(
     },
     {
       id: "source",
-      label: "Notifications",
+      label: "Source access",
       status:
         sourceStatus.status === "healthy"
           ? "ready"
@@ -278,7 +278,7 @@ export async function getWorkspaceReadiness(
             ? "attention"
             : "needs_setup",
       detail: sourceStatus.summary,
-      action: sourceStatus.status === "healthy" ? null : { label: "Open notifications", href: "/app/sources" },
+      action: sourceStatus.status === "healthy" ? null : { label: "Open source access", href: "/app/source-access" },
     },
     {
       id: "api",
@@ -288,7 +288,7 @@ export async function getWorkspaceReadiness(
         activeApiKeys > 0
           ? `${activeApiKeys} active API key${activeApiKeys === 1 ? "" : "s"} for exports and automation.`
           : "Create an API key when you need exports, webhooks, or developer connections.",
-      action: activeApiKeys > 0 ? null : { label: "Set up developer access", href: "/app/sources" },
+      action: activeApiKeys > 0 ? null : { label: "Set up developer access", href: "/app/developer-access" },
     },
   ];
 

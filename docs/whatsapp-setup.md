@@ -43,7 +43,7 @@ npx wrangler secret put WHATSAPP_DELIVERY_ENABLED   # value: true
 
 ## Verification
 
-- `/app/sources` → WhatsApp section shows "Provider: configured"; add a
+- `/app/notifications` → WhatsApp section shows "Provider: configured"; add a
   target — it sends a real `proof_digest_customer_v1` test template and
   only saves on success.
 - `npm run canary:prod` — once WhatsApp is deliberately configured, the

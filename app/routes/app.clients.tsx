@@ -210,7 +210,7 @@ export default function ClientsRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          action={{ label: "Notifications", to: "/app/sources" }}
+          action={{ label: "Notifications", to: "/app/notifications" }}
           lead="Package evidence and reports around each client."
           title="Client rooms"
         />

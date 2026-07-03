@@ -48,7 +48,9 @@ test.describe("production authenticated smoke with owner-captured auth state", (
       { path: "/app/billing", heading: "Billing & usage" },
       { path: "/app/watchlists", heading: "Watchlists" },
       { path: "/app/presence", heading: "Website and content presence" },
-      { path: "/app/sources", heading: "Notifications" },
+      { path: "/app/notifications", heading: "Notifications" },
+      { path: "/app/source-access", heading: "Source access" },
+      { path: "/app/developer-access", heading: "Developer access" },
       { path: "/app/support", heading: "Help & support" },
     ]) {
       await expectAuthenticatedRoute(page, route.path, route.heading);

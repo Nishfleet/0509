@@ -25,7 +25,10 @@
 | `/app/support` | `app.support.tsx` | Dash | Help & support | Uses layout shell |
 | `/app/account` | `app.account.tsx` | Dash | Account & security | Uses layout shell |
 | `/app/team` | `app.team.tsx` | Dash | Team | Uses layout shell |
-| `/app/sources` | `app.sources.tsx` | Dash | **Notifications** | Renamed; agent catalog removed from UI |
+| `/app/notifications` | `app.notifications.ts` | Dash | Notifications | Delivery-only settings |
+| `/app/source-access` | `app.source-access.tsx` | Dash | Source access | Backup Meta token and tracking reliability |
+| `/app/developer-access` | `app.developer-access.tsx` | Dash | Developer access | API keys and approved actions |
+| `/app/sources` | `app.sources.tsx` | Dash | — | Compatibility hub for legacy links and POSTs |
 | `/app/presence` | `app.presence.tsx` | Dash | Presence | Migrated to `f9-app-stack` panels |
 | `/app/presence/:entityId` | `app.presence.$entityId.tsx` | Dash | Presence detail | Migrated to `f9-app-stack` panels |
 | `/app/ops` | `app.ops.tsx` | Dash | Ops (staff) | Staff-only; unchanged surface |
@@ -59,5 +62,5 @@
 
 1. **Single shell** — `app-layout.tsx` owns sidebar; child routes must not render `f9-app-shell` / duplicate nav.
 2. **`/app/onboard`** correctly bypasses layout until onboarding completes.
-3. **`/app/sources`** route path unchanged (URL stability); customer label is **Notifications**.
+3. **`/app/sources`** remains as URL compatibility, but the visible customer pages are split by job.
 4. **Presence** previously used unstyled `f9-page` / `f9-card` classes; migrated to workspace panel tokens.

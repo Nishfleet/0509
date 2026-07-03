@@ -82,7 +82,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       </p>
       <p style="margin: 0; color: #5b6577; font-size: 13px;">
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
-        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Sources</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
     </div>
   `;
@@ -137,7 +137,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
       </p>
       <p style="margin: 0; color: #5b6577; font-size: 13px;">
-        Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Sources</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+        Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
     </div>
   `;

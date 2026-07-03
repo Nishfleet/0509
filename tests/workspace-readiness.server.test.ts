@@ -261,7 +261,7 @@ describe("getWorkspaceReadiness", () => {
     expect(delivery).toMatchObject({
       status: "needs_proof",
       detail: "A delivery target exists but needs a successful delivery check.",
-      action: { href: "/app/sources" },
+      action: { href: "/app/notifications" },
     });
   });
 
@@ -310,7 +310,7 @@ describe("getWorkspaceReadiness", () => {
     expect(delivery).toMatchObject({
       status: "needs_setup",
       detail: "Digest history exists, but no active delivery target is configured.",
-      action: { href: "/app/sources" },
+      action: { href: "/app/notifications" },
     });
     expect(readiness.counts).toMatchObject({
       sentDigests: 1,
@@ -451,7 +451,7 @@ describe("getWorkspaceReadiness", () => {
     });
     expect(items.api).toMatchObject({
       status: "needs_setup",
-      action: { href: "/app/sources" },
+      action: { href: "/app/developer-access" },
     });
     expect(readiness.nudges[0]).toMatchObject({
       id: "first_competitor",

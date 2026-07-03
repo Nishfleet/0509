@@ -97,7 +97,7 @@ export function buildLifecycleNudges(input: {
       id: "delivery_proof",
       title: "Delivery check is missing",
       detail: "A destination exists but has no successful delivery yet.",
-      href: "/app/sources",
+      href: "/app/notifications",
       priority: "high",
     });
   } else if (counts.sentDigests > 0 && counts.deliveryTargets === 0) {
@@ -105,7 +105,7 @@ export function buildLifecycleNudges(input: {
       id: "delivery_proof",
       title: "Delivery setup is missing",
       detail: "Digest history exists, but no active delivery target is configured.",
-      href: "/app/sources",
+      href: "/app/notifications",
       priority: "medium",
     });
   }
@@ -115,7 +115,7 @@ export function buildLifecycleNudges(input: {
       id: "agent_setup",
       title: "Developer access is missing",
       detail: "Create a read key for exports; enable approved actions only for trusted workflows.",
-      href: "/app/sources",
+      href: "/app/developer-access",
       priority: hasFirstValue ? "low" : "medium",
     });
   }

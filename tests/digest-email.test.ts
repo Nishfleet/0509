@@ -11,7 +11,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "Asia/Kolkata",
       fullDigestUrl: "https://0509.io/app/digests",
-      manageFrequencyUrl: "https://0509.io/app/sources",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
       unsubscribeUrl: "https://0509.io/unsubscribe?sig=test",
@@ -33,7 +33,7 @@ describe("buildDigestEmail", () => {
     expect(email.html).toContain("Verified evidence");
     expect(email.html).toContain("Check-spotted");
     expect(email.text).toContain("View full digest: https://0509.io/app/digests");
-    expect(email.text).toContain("Manage frequency: https://0509.io/app/sources");
+    expect(email.text).toContain("Manage frequency: https://0509.io/app/notifications");
     expect(email.text).toContain("Unsubscribe: https://0509.io/unsubscribe?sig=test");
   });
 
@@ -47,7 +47,7 @@ describe("buildDigestEmail", () => {
       items: [],
       heartbeat: { runs: 3, watchlistsChecked: 2, adsSeen: 42 },
       fullDigestUrl: "https://0509.io/app/digests",
-      manageFrequencyUrl: "https://0509.io/app/sources",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
       unsubscribeUrl: null,
@@ -67,7 +67,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
-      manageFrequencyUrl: "https://0509.io/app/sources",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
       unsubscribeUrl: null,
@@ -96,7 +96,7 @@ describe("buildDigestEmail", () => {
       items: [],
       heartbeat: { runs: 7, watchlistsChecked: 4, adsSeen: 128 },
       fullDigestUrl: "https://0509.io/app/digests",
-      manageFrequencyUrl: "https://0509.io/app/sources",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
       unsubscribeUrl: null,
@@ -116,7 +116,7 @@ describe("buildDigestEmail", () => {
       cadence: "weekly",
       timeZone: "UTC",
       fullDigestUrl: "https://0509.io/app/digests",
-      manageFrequencyUrl: "https://0509.io/app/sources",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
       unsubscribeUrl: null,

@@ -1731,7 +1731,7 @@ function renderDigestEmail(
     cadence: input.cadence,
     timeZone: input.timeZone ?? null,
     fullDigestUrl: `${baseUrl}/app/digests?digest=${encodeURIComponent(input.digestRunId)}`,
-    manageFrequencyUrl: `${baseUrl}/app/sources`,
+    manageFrequencyUrl: `${baseUrl}/app/notifications`,
     supportEmail: SUPPORT_EMAIL,
     supportMailto: SUPPORT_MAILTO,
     unsubscribeUrl: input.unsubscribeUrl,

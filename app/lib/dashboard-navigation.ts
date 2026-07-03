@@ -48,7 +48,9 @@ export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
   {
     title: "Workspace",
     items: [
-      { label: "Notifications", to: "/app/sources" },
+      { label: "Notifications", to: "/app/notifications" },
+      { label: "Source access", to: "/app/source-access" },
+      { label: "Developer access", to: "/app/developer-access" },
       { label: "Team", to: "/app/team" },
       { label: "Client rooms", to: "/app/clients" },
     ],
@@ -105,7 +107,9 @@ export function buildDashboardMobileNav(options: { showPresence: boolean }) {
   items.push(
     { label: "Collections", to: "/app/collections" },
     { label: "Digests", to: "/app/digests" },
-    { label: "Notifications", to: "/app/sources" },
+    { label: "Notifications", to: "/app/notifications" },
+    { label: "Source access", to: "/app/source-access" },
+    { label: "Developer access", to: "/app/developer-access" },
     { label: "Account", to: "/app/account" },
   );
 
