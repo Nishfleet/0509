@@ -169,7 +169,15 @@ export async function runScheduledMonitoring(
   options: RunScheduledMonitoringOptions = {},
 ) {
   if (!env.DB) {
-    return { queued: 0, duplicates: 0, inlineRuns: 0, inlineFailures: 0, skippedForBudget: 0, digests: 0 };
+    return {
+      queued: 0,
+      duplicates: 0,
+      inlineRuns: 0,
+      inlineFailures: 0,
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      digests: 0,
+    };
   }
 
   const deadlineAt = Date.now() + SCHEDULED_MONITORING_TIME_BUDGET_MS;
@@ -191,6 +199,7 @@ export async function runScheduledMonitoring(
   let inlineRuns = 0;
   let inlineFailures = 0;
   let skippedForBudget = 0;
+  let dispatchFailures = 0;
 
   if (options.includeScans !== false) {
     const watchlists = await listActiveWatchlists(env, {
@@ -231,7 +240,7 @@ export async function runScheduledMonitoring(
       });
       queued = fanoutResult.queued;
       duplicates = fanoutResult.duplicates;
-      skippedForBudget = fanoutResult.dispatchFailures;
+      dispatchFailures = fanoutResult.dispatchFailures;
 
       if (inlineFallbackWatchlists.length > 0) {
         const inlineResult = await runScheduledMonitoringInline(
@@ -284,6 +293,7 @@ export async function runScheduledMonitoring(
     inlineRuns,
     inlineFailures,
     skippedForBudget,
+    dispatchFailures,
     digests,
   };
 }
@@ -404,7 +414,7 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
 
 export async function sendCustomerAtRiskAlert(
   env: AppEnv,
-  options: { skippedForBudget?: number; idempotencyKey?: string } = {},
+  options: { skippedForBudget?: number; dispatchFailures?: number; idempotencyKey?: string } = {},
 ) {
   if (!env.DB) {
     return { sent: false, reason: "no_db" };
@@ -416,6 +426,11 @@ export async function sendCustomerAtRiskAlert(
   if ((options.skippedForBudget ?? 0) > 0) {
     lines.push(
       `${options.skippedForBudget} watchlist(s) were SKIPPED in a recent scheduled scan window because the check window filled — review volume must be expanded before adding more watchlists (revive the Workflow path).`,
+    );
+  }
+  if ((options.dispatchFailures ?? 0) > 0) {
+    lines.push(
+      `${options.dispatchFailures} watchlist fan-out job(s) failed to dispatch in a recent scheduled scan window; reconciliation will retry, but the Workflow dispatch path needs attention.`,
     );
   }
 

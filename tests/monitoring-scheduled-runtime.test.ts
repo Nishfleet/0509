@@ -432,7 +432,8 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       queued: 2,
       duplicates: 0,
       inlineRuns: 0,
-      skippedForBudget: 1,
+      skippedForBudget: 0,
+      dispatchFailures: 1,
       digests: 0,
     });
     expect(scheduleWatchlistFanoutMock).toHaveBeenCalledTimes(1);

@@ -365,6 +365,35 @@ describe("customer-at-risk operator alert", () => {
     const quiet = await fresh.sendCustomerAtRiskAlert({ DB: {} } as never);
     expect(quiet).toMatchObject({ sent: false, reason: "all_clear" });
   });
+
+  it("reports fan-out dispatch failures separately from scan-budget skips", async () => {
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+    vi.doMock("~/lib/data.server", () => ({
+      getOperatorRiskSummary: vi.fn().mockResolvedValue({
+        troubleWatchlists: [],
+        staleWatchlists: [],
+        deliveryFailures24h: 0,
+        stuckRuns: 0,
+      }),
+    }));
+
+    const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
+    const result = await sendCustomerAtRiskAlert({ DB: {} } as never, {
+      dispatchFailures: 2,
+      idempotencyKey: "operator-alert:fanout-dispatch:2026-07-03",
+    });
+
+    expect(result.sent).toBe(true);
+    const call = sendOperatorAlertEmail.mock.calls[0]?.[1] as {
+      lines: string[];
+      idempotencyKey?: string;
+    };
+    expect(call.idempotencyKey).toBe("operator-alert:fanout-dispatch:2026-07-03");
+    expect(call.lines).toHaveLength(1);
+    expect(call.lines[0]).toContain("fan-out job(s) failed to dispatch");
+    expect(call.lines[0]).not.toContain("check window filled");
+  });
 });
 
 describe("account deletion billing guard", () => {

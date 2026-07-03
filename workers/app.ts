@@ -217,14 +217,23 @@ export default {
             cron: controller.cron,
             ...result,
           });
-          if (scheduledTask.includeRiskAlert || result.skippedForBudget > 0) {
+          if (
+            scheduledTask.includeRiskAlert ||
+            result.skippedForBudget > 0 ||
+            result.dispatchFailures > 0
+          ) {
             const scheduledDay = new Date(controller.scheduledTime).toISOString().slice(0, 10);
+            const operationalIdempotencyKey =
+              result.skippedForBudget > 0
+                ? `operator-alert:scan-budget:${scheduledDay}`
+                : `operator-alert:fanout-dispatch:${scheduledDay}`;
             try {
               const alert = await sendCustomerAtRiskAlert(env, {
                 skippedForBudget: result.skippedForBudget,
+                dispatchFailures: result.dispatchFailures,
                 idempotencyKey: scheduledTask.includeRiskAlert
                   ? undefined
-                  : `operator-alert:scan-budget:${scheduledDay}`,
+                  : operationalIdempotencyKey,
               });
               if (alert.sent) {
                 console.log("customer-at-risk alert sent", alert);
