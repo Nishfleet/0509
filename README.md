@@ -6,10 +6,10 @@
 
 ## North Star
 
-- Promise: `See what changed, with sources attached.`
+- Promise: `Track your brand and competitors today. See what changed, with proof. Know what to do next.`
 - Story: `Five to Nine` closes the gap between when a team stops checking and when the next decision gets made.
-- Positioning: lead with source-backed competitor monitoring, not a generic competitor-analysis workspace.
-- Product shape: the public hook is read-only live search plus a sample watch; signed-in save and track starts the real monitoring product, and workspace memory is the compounding layer.
+- Positioning: lead with proof-backed competitor monitoring (Market Desk) and entity tracking across declared sources (Presence Desk), not a generic internet scanner.
+- Product shape: the public hook is read-only live search plus a sample watch; signed-in save and track starts the real monitoring product; workspace memory is the compounding layer.
 
 Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-north-star.md`
 
@@ -18,6 +18,7 @@ Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-nor
 - `Public trial` is the public hook: logged-out buyers can run read-only live search and inspect a sample tracked competitor, source trail, and digest preview before creating an account.
 - `Analysis` is available after the preview: signed-in users save searches, track competitors, inspect deeper evidence, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, insight-depth summaries, observed campaign duration, daily and weekly digests.
+- `Presence Desk` tracks your brand and competitors across declared sources with proof-backed entity briefs. Website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval. Additional entity kinds such as clients, products, and creators require the planned entity-kind metadata slice.
 - `Workspace memory` is the compounding layer: collections, notes, tags, manual external evidence links, visible metric evidence fields, CSV/API JSON exports, customer API keys, narrow audited agent actions, agent memory, client rooms, email delivery, and share links.
 
 ## Current stack
@@ -58,6 +59,7 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/auth/logout`
 - `/app/onboard`
 - `/app` workspace dashboard
+- `/app/presence` Presence Desk — proof-backed entity tracking
 - `/app/collections`
 - `/app/watchlists`
 - `/app/digests`
