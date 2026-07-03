@@ -147,6 +147,17 @@ function mockReliabilityDependencies(input: {
       .fn()
       .mockResolvedValue(input.runStats ?? { runs: 0, watchlistsChecked: 0, adsSeen: 0 }),
     getUserDeliveryProfile: vi.fn().mockResolvedValue({ name: "Owner", email: "owner@example.com" }),
+    getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+      plan: "starter",
+      dodoStatus: "active",
+      dodoProductId: "prod-starter",
+      dodoPlanChangeProductId: null,
+      billingInterval: "monthly",
+      dodoSubscriptionId: "sub-starter",
+      dodoCustomerId: "cus-starter",
+      dodoNextBillingAt: "2026-08-01T00:00:00.000Z",
+      planUpdatedAt: "2026-07-01T00:00:00.000Z",
+    }),
     getWatchlist: vi.fn(async (_env: unknown, watchlistId: string) =>
       input.watchlists.find((candidate) => candidate.id === watchlistId) ?? null,
     ),
