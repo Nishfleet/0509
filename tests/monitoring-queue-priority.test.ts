@@ -111,7 +111,7 @@ describe("monitoring queue priority", () => {
   it("ranks a mixed 75/10/3 fleet with agency ahead under concurrency pressure", async () => {
     const { db, sqlite } = createSqliteD1();
     await seedMixedFleetSchema(sqlite);
-    const monday = "2026-06-22T04:00:00.000Z";
+    const monday = "2026-06-22T06:00:00.000Z";
 
     for (let index = 0; index < 75; index += 1) {
       seedPendingOrchestratedRun(sqlite, `agency-${index}`, {
@@ -160,5 +160,25 @@ describe("monitoring queue priority", () => {
       ),
     );
     expect(claims.every((claim) => claim.claimed)).toBe(true);
+  });
+
+  it("keeps already queued Scout rows eligible even when the stored slot predates six-hour cadence", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedMixedFleetSchema(sqlite);
+    seedPendingOrchestratedRun(sqlite, "scout-old-slot", {
+      watchlistId: "watch-scout-old-slot",
+      userId: "scout-owner",
+      plan: "scout",
+      queuePriority: 2,
+      queuedAt: "2026-06-23T04:00:00.000Z",
+    });
+
+    const ranked = await selectRankedEligibleOrchestratedRuns(
+      { DB: db } as never,
+      "2026-06-23T06:00:00.000Z",
+    );
+
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0]).toMatchObject({ id: "scout-old-slot", plan: "scout" });
   });
 });

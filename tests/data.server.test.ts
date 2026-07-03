@@ -38,6 +38,8 @@ import {
   getDiscoveryProviderState,
   getLaunchReadinessSignals,
   getSuccessfulProofCaptureStatsForUser,
+  getSuccessfulRunStatsForUserBetween,
+  getOperatorRiskSummary,
   getOperatorSnapshot,
   getWeeklyBusinessSummary,
   findAgentActionAuditByIdempotencyKey,
@@ -3068,6 +3070,62 @@ describe("getOperatorSnapshot", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("getOperatorRiskSummary", () => {
+  it("uses cadence-aware stale-scan cutoffs for Scout, Starter, and Agency watchlists", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-03T12:00:00.000Z"));
+
+    try {
+      const mock = createMockDb();
+
+      await getOperatorRiskSummary({ DB: mock.db } as never);
+
+      const staleWatchlists = findStatement(
+        mock.statements,
+        "FROM watchlist",
+        "watchlist.last_scanned_at",
+        "user_plan.plan = 'scout'",
+        "user_plan.plan = 'starter'",
+        "user_plan.plan = 'agency'",
+      );
+      expect(staleWatchlists?.sql).not.toContain("user_plan.plan IN ('starter', 'agency')");
+      expect(staleWatchlists?.bindings).toEqual([
+        "2026-07-02T23:00:00.000Z",
+        "2026-07-02T23:00:00.000Z",
+        "2026-07-03T05:00:00.000Z",
+        "2026-07-03T05:00:00.000Z",
+        "2026-07-03T05:00:00.000Z",
+        "2026-07-03T05:00:00.000Z",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("getSuccessfulRunStatsForUserBetween", () => {
+  it("counts heartbeat scans by completion time rather than scheduled slot time", async () => {
+    const mock = createMockDb();
+
+    await getSuccessfulRunStatsForUserBetween(
+      { DB: mock.db } as never,
+      "user-1",
+      "2026-07-03T04:00:00.000Z",
+      "2026-07-04T04:00:00.000Z",
+    );
+
+    const statsQuery = findStatement(
+      mock.statements,
+      "FROM watchlist_run",
+      "COUNT(DISTINCT watchlist_run.watchlist_id)",
+    );
+
+    expect(statsQuery?.sql).toContain("watchlist_run.finished_at >= ?");
+    expect(statsQuery?.sql).toContain("watchlist_run.finished_at < ?");
+    expect(statsQuery?.sql).not.toContain("watchlist_run.started_at >= ?");
   });
 });
 

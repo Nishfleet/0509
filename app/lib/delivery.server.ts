@@ -1333,7 +1333,7 @@ function isUsableWhatsAppTarget(target: DeliveryTargetRecord) {
   );
 }
 
-// One nightly "customer-at-risk" email to the operator when monitoring or
+// One daily "customer-at-risk" email to the operator when monitoring or
 // delivery is degrading for paying customers — the ops dashboard is
 // pull-only and nobody is paged to it. Day-keyed idempotency: max one/day.
 export async function sendOperatorAlertEmail(
@@ -1361,7 +1361,7 @@ export async function sendOperatorAlertEmail(
     subject: input.subject,
     html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 14px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;"><strong>Customer-at-risk signals from last night's run:</strong></p>
+        <p style="margin: 0 0 12px;"><strong>Customer-at-risk signals from recent monitoring:</strong></p>
         <ul style="margin: 0 0 12px; padding-left: 18px;">
           ${input.lines.map((line) => `<li style="margin: 0 0 6px;">${escapeHtml(line)}</li>`).join("")}
         </ul>
@@ -1391,7 +1391,7 @@ export async function sendOperatorAlertEmail(
   // delivery_attempt.user_id carries a foreign key to user(id), so the
   // attempt must be attributed to a REAL user row: the operator's own account
   // when it exists, else the oldest account (the founder's). Without this the
-  // nightly insert violated the FK — the email sent but the dedupe row never
+  // operator-alert insert violated the FK — the email sent but the dedupe row never
   // persisted and the logs claimed failure.
   const attemptUserId =
     (await getUserIdByEmail(env, recipient)) ?? (await getOldestUserId(env));

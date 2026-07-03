@@ -213,7 +213,7 @@ export function valueMathLabel(
 }
 
 function planValueSummary(planId: PricingPlanSlug) {
-  if (planId === "starter") return "10 competitors checked daily";
+  if (planId === "starter") return "10 competitors checked every 3 hours";
   if (planId === "agency") return "75 competitors with client-ready reports";
   return "3 competitors watched with source history";
 }
@@ -672,11 +672,11 @@ export default function MarketingRoute() {
       <section className="f9-growth-pricing" id="pricing">
         <div className="ld-section-head">
           <span className="ld-kicker">Plans</span>
-          <h2>Daily competitor change alerts, priced to start now.</h2>
+          <h2>Competitor change alerts, priced to start now.</h2>
           <div className="ld-plan-summary" aria-label="Pricing summary">
             <span>Recommended launch plan</span>
             <strong>Start with Starter</strong>
-            <p>Daily competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
+            <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
             Review live search and the sample brief first. Paid plans add saved competitor

@@ -381,6 +381,10 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(scheduleWatchlistFanoutMock).not.toHaveBeenCalled();
     expect(workflowCreate).not.toHaveBeenCalled();
     expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(2);
+    expect(mocks.searchAdsViaSourceResolver.mock.calls[0]?.[3]).toMatchObject({
+      purpose: "watchlist_scan",
+      forceLive: true,
+    });
     expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(2);
     expect(mocks.finishWatchlistRun).toHaveBeenCalledTimes(2);
     expect(mocks.createWatchlistRun.mock.calls[0]?.[2]).toBe("scheduled");

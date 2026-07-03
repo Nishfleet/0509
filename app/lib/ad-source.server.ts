@@ -39,6 +39,7 @@ const DISCOVERY_QUERY_LEASE_TTL_MS = 30 * 1000;
 const PUBLIC_SEARCH_LEASE_WAIT_MS = 12 * 1000;
 const BACKGROUND_LEASE_WAIT_MS = 25 * 1000;
 const DISCOVERY_QUERY_LEASE_POLL_MS = 250;
+const DISCOVERY_QUERY_LEASE_FRESHNESS_SKEW_MS = 2 * 1000;
 const PUBLIC_SEARCH_BROWSER_FAILURE_FALLBACK_WINDOW_MS = 6 * 60 * 60 * 1000;
 const META_API_FALLBACK_SUMMARY =
   "Browser capture is unavailable right now; showing API fallback results.";
@@ -299,7 +300,7 @@ export async function searchAdsViaSourceResolver(
     customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
   });
   const routeContext = options.purpose ?? "public_search";
-  const forceLive = options.forceLive === true && provider === "meta_library_browser";
+  const forceLive = options.forceLive === true && provider !== "demo";
   const providerState =
     provider !== "demo" &&
     effectiveEnv.DB &&
@@ -421,8 +422,11 @@ export async function searchAdsViaSourceResolver(
     };
   }
 
+  const leaseFreshAfterMs = forceLive
+    ? Date.now() - DISCOVERY_QUERY_LEASE_FRESHNESS_SKEW_MS
+    : null;
   const discoveryLease =
-    !forceLive && canUseDistributedDiscoveryLease(effectiveEnv.DB)
+    canUseDistributedDiscoveryLease(effectiveEnv.DB)
       ? await acquireDiscoveryQueryLease(effectiveEnv, {
           cacheKey,
           provider,
@@ -436,6 +440,7 @@ export async function searchAdsViaSourceResolver(
       provider,
       routeContext,
       waitMs: resolveDiscoveryLeaseWaitMs(routeContext),
+      minFetchedAtMs: leaseFreshAfterMs,
     });
 
     if (settledResponse) {
@@ -926,6 +931,7 @@ async function waitForDiscoveryLeaseResolution(
     provider: AdDiscoveryProvider;
     routeContext: DiscoveryRouteContext;
     waitMs: number;
+    minFetchedAtMs?: number | null;
   },
 ): Promise<SearchResponse | null> {
   const deadline = Date.now() + input.waitMs;
@@ -933,7 +939,11 @@ async function waitForDiscoveryLeaseResolution(
   while (Date.now() < deadline) {
     const cached = await getDiscoveryCacheEntry(env, input.cacheKey);
     const usableCached = isUsableDiscoveryCache(input.provider, cached) ? cached : null;
-    if (usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
+    if (
+      usableCached &&
+      new Date(usableCached.expiresAt).getTime() > Date.now() &&
+      isDiscoveryLeaseCacheFreshEnough(usableCached.fetchedAt, input.minFetchedAtMs)
+    ) {
       return {
         ...usableCached.payload,
         source: input.provider,
@@ -947,7 +957,10 @@ async function waitForDiscoveryLeaseResolution(
 
     const providerState = await getDiscoveryProviderState(env, input.provider);
     if (providerState && shouldUseProviderCooldown(providerState)) {
-      if (usableCached) {
+      if (
+        usableCached &&
+        isDiscoveryLeaseCacheFreshEnough(usableCached.fetchedAt, input.minFetchedAtMs)
+      ) {
         return {
           ...usableCached.payload,
           source: input.provider,
@@ -982,6 +995,18 @@ async function waitForDiscoveryLeaseResolution(
   }
 
   return null;
+}
+
+function isDiscoveryLeaseCacheFreshEnough(
+  fetchedAt: string,
+  minFetchedAtMs: number | null | undefined,
+) {
+  if (!minFetchedAtMs) {
+    return true;
+  }
+
+  const fetchedAtMs = Date.parse(fetchedAt);
+  return Number.isFinite(fetchedAtMs) && fetchedAtMs >= minFetchedAtMs;
 }
 
 function resolveDiscoveryLeaseWaitMs(routeContext: DiscoveryRouteContext) {
