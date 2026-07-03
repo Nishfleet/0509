@@ -317,7 +317,7 @@ export async function searchAdsViaSourceResolver(
     };
   }
 
-  const cacheKey =
+  const baseCacheKey =
     options.cacheKeyOverride ??
     buildDiscoveryCacheKey({
       provider,
@@ -325,10 +325,13 @@ export async function searchAdsViaSourceResolver(
       country: query.filters.country || "all",
       cursor,
     });
-  const customerFallbackCacheKey = await scopeDiscoveryCacheKeyForCustomerToken(cacheKey, {
-    customerMetaAdLibraryToken: forceLive ? options.customerMetaAdLibraryToken : null,
+  const customerScopedCacheKey = await scopeDiscoveryCacheKeyForCustomerToken(baseCacheKey, {
+    customerMetaAdLibraryToken: hasCustomerMetaToken ? options.customerMetaAdLibraryToken : null,
   });
-  const leaseKey = customerFallbackCacheKey ?? cacheKey;
+  const cacheKey =
+    provider === "meta_api" && customerScopedCacheKey ? customerScopedCacheKey : baseCacheKey;
+  const customerFallbackCacheKey =
+    provider === "meta_library_browser" ? customerScopedCacheKey : null;
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
   if (!forceLive && usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
@@ -432,7 +435,7 @@ export async function searchAdsViaSourceResolver(
   const discoveryLease =
     canUseDistributedDiscoveryLease(effectiveEnv.DB)
       ? await acquireDiscoveryQueryLease(effectiveEnv, {
-          cacheKey: leaseKey,
+          cacheKey,
           provider,
           routeContext,
         })
@@ -447,10 +450,36 @@ export async function searchAdsViaSourceResolver(
       waitMs: resolveDiscoveryLeaseWaitMs(routeContext),
       minFetchedAtMs: leaseFreshAfterMs,
       ignoreProviderCooldown: forceLive,
+      stopOnProviderCooldown: Boolean(
+        forceLive && provider === "meta_library_browser" && options.customerMetaAdLibraryToken?.trim(),
+      ),
+      stopOnProviderCooldownAfterMs: leaseFreshAfterMs,
     });
 
     if (settledResponse) {
       return settledResponse;
+    }
+
+    if (forceLive && provider === "meta_library_browser" && options.customerMetaAdLibraryToken?.trim()) {
+      const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
+        browserFailureClass: "timeout",
+        browserSummary:
+          "Commercial discovery is already warming this query; using customer Meta API fallback after waiting.",
+        routeContext,
+        customerMetaAdLibraryToken: options.customerMetaAdLibraryToken,
+      });
+      if (apiFallback) {
+        if (effectiveEnv.DB && customerFallbackCacheKey) {
+          await publishDiscoveryLeaseFallbackResult(effectiveEnv, {
+            cacheKey: customerFallbackCacheKey,
+            routeContext,
+            query,
+            cursor,
+            fallback: apiFallback,
+          }).catch(() => undefined);
+        }
+        return apiFallback;
+      }
     }
 
     if (routeContext === "public_search") {
@@ -474,7 +503,7 @@ export async function searchAdsViaSourceResolver(
   }
 
   try {
-    const result = await runWithSharedDiscoveryRequest(leaseKey, async () => {
+    const result = await runWithSharedDiscoveryRequest(cacheKey, async () => {
       const startedAt = Date.now();
       const liveResult =
         provider === "meta_library_browser"
@@ -657,7 +686,7 @@ export async function searchAdsViaSourceResolver(
   } finally {
     if (discoveryLease?.acquired) {
       await releaseDiscoveryQueryLease(effectiveEnv, {
-        cacheKey: leaseKey,
+        cacheKey,
         holderId: discoveryLease.holderId,
       }).catch(() => undefined);
     }
@@ -949,6 +978,8 @@ async function waitForDiscoveryLeaseResolution(
     waitMs: number;
     minFetchedAtMs?: number | null;
     ignoreProviderCooldown?: boolean;
+    stopOnProviderCooldown?: boolean;
+    stopOnProviderCooldownAfterMs?: number | null;
   },
 ): Promise<SearchResponse | null> {
   const deadline = Date.now() + input.waitMs;
@@ -973,6 +1004,14 @@ async function waitForDiscoveryLeaseResolution(
     }
 
     const providerState = await getDiscoveryProviderState(env, input.provider);
+    if (
+      input.stopOnProviderCooldown &&
+      providerState?.updatedAt &&
+      shouldUseProviderCooldown(providerState) &&
+      isDiscoveryLeaseCacheFreshEnough(providerState.updatedAt, input.stopOnProviderCooldownAfterMs)
+    ) {
+      return null;
+    }
     if (
       !input.ignoreProviderCooldown &&
       providerState &&
