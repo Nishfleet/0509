@@ -11,7 +11,7 @@ const collectionsRoute = readFileSync("app/routes/app.collections.tsx", "utf8");
 const clientsRoute = readFileSync("app/routes/app.clients.tsx", "utf8");
 const digestsRoute = readFileSync("app/routes/app.digests.tsx", "utf8");
 const watchlistsRoute = readFileSync("app/routes/app.watchlists.tsx", "utf8");
-const sourcesRoute = readFileSync("app/routes/app.sources.tsx", "utf8");
+const workspaceSettingsRoute = readFileSync("app/routes/app.workspace-settings.tsx", "utf8");
 const reportsRoute = readFileSync("app/routes/app.reports.tsx", "utf8");
 const opsRoute = readFileSync("app/routes/app.ops.tsx", "utf8");
 const digestIntelligence = readFileSync("app/components/digest-intelligence.tsx", "utf8");
@@ -19,7 +19,7 @@ const insightDepthPanel = readFileSync("app/components/insight-depth-panel.tsx",
 const reportView = readFileSync("app/components/report-view.tsx", "utf8");
 const signOutButton = readFileSync("app/components/sign-out-button.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
-const appSurface = `${appLayout}\n${shellComponent}\n${dashboardRoute}\n${onboardRoute}\n${collectionsRoute}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${sourcesRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${insightDepthPanel}\n${reportView}\n${signOutButton}`;
+const appSurface = `${appLayout}\n${shellComponent}\n${dashboardRoute}\n${onboardRoute}\n${collectionsRoute}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${workspaceSettingsRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${insightDepthPanel}\n${reportView}\n${signOutButton}`;
 const appClasses = Array.from(appSurface.matchAll(/className=(?:"([^"]+)"|{`([^`]+)`})/g)).flatMap((match) =>
   (match[1] ?? match[2])
     .split(/\s+/)
@@ -99,7 +99,7 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("Media mix");
     expect(appSurface).toContain("Observed campaign duration");
     expect(appSurface).toContain("Landing-page history");
-    expect(appSurface).toContain("Advanced: developer access");
+    expect(appSurface).toContain("Developer access");
     expect(appSurface).toContain("approved actions");
     expect(appSurface).toContain("Create API key");
     expect(appSurface).toContain("/api/v1");

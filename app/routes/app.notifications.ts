@@ -1,5 +1,268 @@
-import { redirect } from "react-router";
+export {
+  NotificationsRoute as default,
+  WorkspaceSettingsErrorBoundary as ErrorBoundary,
+  NotificationsHydrateFallback as HydrateFallback,
+  notificationsMeta as meta,
+} from "~/routes/app.workspace-settings";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-export function loader() {
-  return redirect("/app/sources");
+import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
+import {
+  isSlackDeliveryCustomerFacing,
+  isWhatsAppDeliveryCustomerFacing,
+  whatsappDeliveryUnavailableMessage,
+} from "~/lib/ga-customer-surface";
+
+const ownerOnlyNotificationIntents = new Set([
+  "save-slack-webhook",
+  "save-whatsapp-target",
+  "pause-slack-webhook",
+  "resume-slack-webhook",
+]);
+
+export async function loader({ context, request }: LoaderFunctionArgs) {
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const { listDeliveryTargets } = await import("~/lib/data.server");
+  const {
+    isCustomerWhatsAppReady,
+    isWhatsAppProviderConfigured,
+    isWhatsAppWebhookConfigured,
+  } = await import("~/lib/env.server");
+  const { slackTargetDisplayName } = await import("~/lib/slack.server");
+  const { whatsappTargetDisplayName } = await import("~/lib/whatsapp.server");
+  const env = getEnv(context);
+  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const showSlackDelivery = isSlackDeliveryCustomerFacing();
+  const showWhatsAppDelivery = isWhatsAppDeliveryCustomerFacing();
+  const [slackTargets, whatsappTargets] = await Promise.all([
+    showSlackDelivery
+      ? listDeliveryTargets(env, workspaceUserId, {
+          watchlistId: null,
+          channel: "slack",
+          limit: 10,
+        })
+      : Promise.resolve([]),
+    showWhatsAppDelivery
+      ? listDeliveryTargets(env, workspaceUserId, {
+          channel: "whatsapp",
+          limit: 100,
+        })
+      : Promise.resolve([]),
+  ]);
+  const usableWhatsAppTargets = whatsappTargets.filter(
+    (target) =>
+      target.isOptedIn &&
+      target.isValidated &&
+      target.validationStatus === "validated" &&
+      target.templateEligible &&
+      !target.isPaused &&
+      !target.optedOutAt,
+  );
+  const lastWhatsAppSuccessAt = whatsappTargets
+    .map((target) => target.lastSuccessfulDeliveryAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? null;
+
+  return {
+    emailDeliveryReady: Boolean(session.user.email),
+    slackTargets: slackTargets.map((target) => ({
+      id: target.id,
+      displayName: slackTargetDisplayName(target),
+      isPaused: target.isPaused,
+      lastSuccessfulDeliveryAt: target.lastSuccessfulDeliveryAt,
+      createdAt: target.createdAt,
+    })),
+    whatsappTargets: whatsappTargets.map((target) => ({
+      id: target.id,
+      displayName: whatsappTargetDisplayName(target),
+      isPaused: target.isPaused,
+      validationStatus: target.validationStatus,
+      templateEligible: target.templateEligible,
+      lastSuccessfulDeliveryAt: target.lastSuccessfulDeliveryAt,
+      createdAt: target.createdAt,
+    })),
+    whatsappDelivery: {
+      providerConfigured: showWhatsAppDelivery && isWhatsAppProviderConfigured(env),
+      customerReady: showWhatsAppDelivery && isCustomerWhatsAppReady(env),
+      webhookConfigured: showWhatsAppDelivery && isWhatsAppWebhookConfigured(env),
+      configuredTargets: whatsappTargets.length,
+      usableTargets: usableWhatsAppTargets.length,
+      lastSuccessfulDeliveryAt: lastWhatsAppSuccessAt,
+    },
+  };
+}
+
+export async function action({ context, request }: ActionFunctionArgs) {
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const env = getEnv(context);
+  const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "");
+
+  if (isMember && ownerOnlyNotificationIntents.has(intent)) {
+    return {
+      ok: false,
+      message: "Only the account owner can manage notification delivery targets.",
+    };
+  }
+
+  if (intent === "save-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
+    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const slackGate = await requireWorkspacePlanFeature(env, workspaceUserId, "slack_delivery");
+    if (!slackGate.ok) {
+      return { ok: false, message: "Slack delivery is included in Starter and Agency plans." };
+    }
+    const { saveSlackWebhookTarget } = await import("~/lib/slack.server");
+    const {
+      getWorkspaceDeliveryConfig,
+      legacyWorkspaceDeliveryDefaults,
+      upsertWorkspaceDeliveryConfig,
+    } = await import("~/lib/data.server");
+    const webhookUrl = String(formData.get("slackWebhookUrl") ?? "");
+    const name = String(formData.get("slackDestinationName") ?? "");
+    try {
+      await saveSlackWebhookTarget(env, {
+        userId: workspaceUserId,
+        webhookUrl,
+        name,
+      });
+    } catch (error) {
+      if (error instanceof Response && error.status >= 400 && error.status < 500) {
+        return {
+          ok: false,
+          message: sanitizeCustomerFacingMessage((await error.text()) || "Slack delivery could not be connected."),
+        };
+      }
+
+      throw error;
+    }
+    const existingConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
+    const defaults = legacyWorkspaceDeliveryDefaults({
+      hasEmail: Boolean(session.user.email),
+    });
+    await upsertWorkspaceDeliveryConfig(env, {
+      userId: workspaceUserId,
+      sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
+      instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
+      digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
+      emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
+      whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
+      slackEnabled: true,
+      quietHours: existingConfig?.quietHours ?? null,
+      timezone: existingConfig?.timezone ?? null,
+    });
+
+    return {
+      ok: true,
+      message:
+        "Slack delivery connected. Slack accepted the setup test, and future eligible digests can post to that channel.",
+    };
+  }
+
+  if (intent === "save-whatsapp-target") {
+    if (!isWhatsAppDeliveryCustomerFacing()) {
+      return { ok: false, message: whatsappDeliveryUnavailableMessage() };
+    }
+    const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
+    const {
+      getWorkspaceDeliveryConfig,
+      legacyWorkspaceDeliveryDefaults,
+      upsertWorkspaceDeliveryConfig,
+    } = await import("~/lib/data.server");
+    const targetValue = String(formData.get("whatsappTargetValue") ?? "");
+    const name = String(formData.get("whatsappDestinationName") ?? "");
+    const explicitOptIn = formData.has("whatsappExplicitOptIn");
+    try {
+      await saveWhatsAppDeliveryTarget(env, {
+        userId: workspaceUserId,
+        targetValue,
+        name,
+        explicitOptIn,
+      });
+    } catch (error) {
+      if (error instanceof Response && error.status >= 400 && error.status < 500) {
+        return {
+          ok: false,
+          message: sanitizeCustomerFacingMessage((await error.text()) || "WhatsApp delivery could not be connected."),
+        };
+      }
+
+      throw error;
+    }
+    const existingConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
+    const defaults = legacyWorkspaceDeliveryDefaults({
+      hasEmail: Boolean(session.user.email),
+    });
+    await upsertWorkspaceDeliveryConfig(env, {
+      userId: workspaceUserId,
+      sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
+      instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
+      digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
+      emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
+      whatsappEnabled: true,
+      slackEnabled: existingConfig?.slackEnabled ?? defaults.slackEnabled,
+      quietHours: existingConfig?.quietHours ?? null,
+      timezone: existingConfig?.timezone ?? null,
+    });
+
+    return {
+      ok: true,
+      message:
+        "WhatsApp setup sent. Delivery turns on after Meta confirms the setup template was delivered.",
+    };
+  }
+
+  if (intent === "pause-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
+    const { pauseSlackWebhookTarget } = await import("~/lib/slack.server");
+    const targetId = String(formData.get("slackTargetId") ?? "");
+    const paused = await pauseSlackWebhookTarget(env, {
+      userId: workspaceUserId,
+      targetId,
+    });
+
+    return {
+      ok: paused,
+      message: paused ? "Slack delivery paused." : "Slack delivery target was not found.",
+    };
+  }
+
+  if (intent === "resume-slack-webhook") {
+    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
+      "~/lib/ga-customer-surface"
+    );
+    if (!isSlackDeliveryCustomerFacing()) {
+      return { ok: false, message: slackDeliveryUnavailableMessage() };
+    }
+    const { resumeSlackWebhookTarget } = await import("~/lib/slack.server");
+    const targetId = String(formData.get("slackTargetId") ?? "");
+    const resumed = await resumeSlackWebhookTarget(env, {
+      userId: workspaceUserId,
+      targetId,
+    });
+
+    return {
+      ok: resumed,
+      message: resumed ? "Slack delivery resumed." : "Slack delivery target was not found.",
+    };
+  }
+
+  return {
+    ok: false,
+    message: "Unknown notification action.",
+  };
 }

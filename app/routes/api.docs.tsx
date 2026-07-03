@@ -30,7 +30,7 @@ export default function ApiDocsRoute() {
       <PublicDocBlock title="Authentication">
         <p>
           Developer API and connected-tool access require Agency. Create a customer API key inside{" "}
-          <Link to="/app/sources">Notifications</Link>.
+          <Link to="/app/developer-access">Developer access</Link>.
           Send it as a bearer token:
         </p>
         <pre className="f9-code-block">
@@ -106,7 +106,7 @@ Authorization: Bearer f9_live_...
         <ul className="f9-doc-list">
           <li>API reads are account-scoped and rate limited.</li>
           <li>Approved account actions are limited to documented safe operations and store an action log.</li>
-          <li>Keys are shown once, stored hashed, and can be revoked from Notifications.</li>
+          <li>Keys are shown once, stored hashed, and can be revoked from Developer access.</li>
           <li>Restricted actions still require signed-in owner review: {AGENT_BLOCKED_CAPABILITIES.join(", ")}.</li>
           <li>Not live yet: automated X, Reddit, LinkedIn, YouTube, TikTok, Google, or Pinterest ingestion.</li>
         </ul>

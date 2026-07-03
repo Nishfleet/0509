@@ -273,10 +273,14 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByText("Starter plan")).toBeVisible();
     await expect(page.getByText("purchased checks remaining")).toBeVisible();
 
-    await page.goto("/app/sources");
+    await page.goto("/app/source-access");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
-    await page.getByText("Advanced: developer access").click();
+    await expect(page.getByRole("heading", { name: "Source access" })).toBeVisible();
+    await expect(page.getByText("Backup Meta ad checks")).toBeVisible();
+
+    await page.goto("/app/developer-access");
+    await expectAppPage(page);
+    await expect(page.getByRole("heading", { name: "Developer access" })).toBeVisible();
     await expect(page.getByText("Connect exports and approved actions")).toBeVisible();
     await page.getByLabel("Key name").fill("Starter denied key");
     await page.getByRole("button", { name: "Create API key" }).click();
@@ -294,8 +298,12 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByLabel("My brand website")).toHaveValue("https://starter.example.invalid");
 
     await page.goto("/app/notifications");
-    await expect(page).toHaveURL(/\/app\/sources/);
+    await expect(page).toHaveURL(/\/app\/notifications/);
     await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
+
+    await page.goto("/app/sources");
+    await expect(page).toHaveURL(/\/app\/source-access/);
+    await expect(page.getByRole("heading", { name: "Source access" })).toBeVisible();
 
     await page.goto("/app/reports");
     await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
@@ -312,8 +320,7 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/digests");
     await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
 
-    await page.goto("/app/sources");
-    await page.getByText("Advanced: developer access").click();
+    await page.goto("/app/developer-access");
     await page.getByLabel("Key name").fill("Scout denied key");
     await page.getByRole("button", { name: "Create API key" }).click();
     await expect(page.getByText("Developer access is included in the Agency plan.")).toBeVisible();
@@ -322,10 +329,9 @@ test.describe("local authenticated E2E harness", () => {
   test("agency fixture exposes developer controls without enabling unavailable social delivery", async ({ page, context, baseURL }) => {
     await signInAs(context, baseURL!, "e2e-agency");
 
-    await page.goto("/app/sources");
+    await page.goto("/app/developer-access");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
-    await page.getByText("Advanced: developer access").click();
+    await expect(page.getByRole("heading", { name: "Developer access" })).toBeVisible();
     await expect(page.getByText("Fixture read-only key")).toBeVisible();
     await expect(
       page.getByText("this does not add automated TikTok, Google, LinkedIn, or Pinterest ingestion"),
@@ -343,7 +349,9 @@ test.describe("local authenticated E2E harness", () => {
     for (const route of [
       "/app",
       "/app/watchlists",
-      "/app/sources",
+      "/app/notifications",
+      "/app/source-access",
+      "/app/developer-access",
       "/app/billing",
       "/app/digests",
       "/app/reports/watchlist:e2e-watchlist-agency-1",
@@ -385,7 +393,7 @@ test.describe("local authenticated E2E harness", () => {
       { width: 1024, height: 768 },
     ];
     const expectedRedirects: Record<string, RegExp> = {
-      "/app/notifications": /\/app\/sources/,
+      "/app/sources": /\/app\/source-access/,
       "/app/reports": /\/app\/shares/,
     };
     const routes = [
@@ -393,6 +401,8 @@ test.describe("local authenticated E2E harness", () => {
       "/app/watchlists",
       "/app/sources",
       "/app/notifications",
+      "/app/source-access",
+      "/app/developer-access",
       "/app/billing",
       "/app/reports",
     ];

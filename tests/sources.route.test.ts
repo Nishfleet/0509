@@ -105,7 +105,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("sources route loader", () => {
+describe("source access route loader", () => {
   it("returns only safe customer Meta connection fields", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
@@ -222,10 +222,10 @@ describe("sources route loader", () => {
       getMetaAdsBetaReadiness: vi.fn().mockResolvedValue(betaReadiness),
     }));
 
-    const { loader } = await import("~/routes/app.sources");
+    const { loader } = await import("~/routes/app.source-access");
     const result = await loader({
       context: createContext(),
-      request: new Request("http://localhost/app/sources"),
+      request: new Request("http://localhost/app/source-access"),
     } as never);
 
     expect(JSON.stringify(result)).not.toContain("v1:secret");
@@ -235,35 +235,14 @@ describe("sources route loader", () => {
         tokenLastFour: "1234",
       },
       discoveryStatus,
-      betaReadiness,
-      apiKeys: [
-        {
-          id: "api-key-1",
-          name: "Claude workflow",
-          keyPrefix: ["f9", "live", "abcd1234"].join("_"),
-          actionsWriteEnabled: true,
-          lastUsedAt: null,
-          revokedAt: null,
-          createdAt: "2026-06-06T00:00:00.000Z",
-        },
-      ],
-      slackTargets: [],
-      whatsappTargets: [],
-      whatsappDelivery: {
-        providerConfigured: false,
-        customerReady: false,
-        webhookConfigured: false,
-        configuredTargets: 0,
-        usableTargets: 0,
-        lastSuccessfulDeliveryAt: null,
-      },
     });
     expect(JSON.stringify(result)).not.toContain("+919999999999");
+    expect(JSON.stringify(result)).not.toContain("f9_live_abcd1234");
     expect(listDeliveryTargets).not.toHaveBeenCalled();
   });
 });
 
-describe("sources route action", () => {
+describe("source access route action", () => {
   it("tests and saves a customer Meta token", async () => {
     const saveCustomerMetaToken = vi.fn().mockResolvedValue({
       ok: true,
@@ -290,14 +269,14 @@ describe("sources route action", () => {
       saveCustomerMetaToken,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.source-access");
     const formData = new FormData();
     formData.set("intent", "connect-meta-token");
     formData.set("metaToken", "EAABabcdefghijklmnopqrstuvwxyz");
 
     const result = await action({
       context: createContext({ BETTER_AUTH_SECRET: "secret" }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/source-access", {
         method: "POST",
         body: formData,
       }),
@@ -343,7 +322,7 @@ describe("sources route action", () => {
       createCustomerApiKey,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.developer-access");
     const formData = new FormData();
     formData.set("intent", "create-api-key");
     formData.set("apiKeyName", "Claude workflow");
@@ -351,7 +330,7 @@ describe("sources route action", () => {
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/developer-access", {
         method: "POST",
         body: formData,
       }),
@@ -391,14 +370,14 @@ describe("sources route action", () => {
       createCustomerApiKey,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.developer-access");
     const formData = new FormData();
     formData.set("intent", "create-api-key");
     formData.set("apiKeyName", "Member-created key");
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/developer-access", {
         method: "POST",
         body: formData,
       }),
@@ -407,7 +386,7 @@ describe("sources route action", () => {
     expect(createCustomerApiKey).not.toHaveBeenCalled();
     expect(result).toEqual({
       ok: false,
-      message: "Only the account owner can manage notifications, delivery targets, and API keys.",
+      message: "Only the account owner can manage developer access and API keys.",
     });
   });
 
@@ -435,14 +414,14 @@ describe("sources route action", () => {
       revokeCustomerApiKey,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.developer-access");
     const formData = new FormData();
     formData.set("intent", "revoke-api-key");
     formData.set("apiKeyId", "api-key-1");
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/developer-access", {
         method: "POST",
         body: formData,
       }),
@@ -478,10 +457,10 @@ describe("sources route action", () => {
     formData.set("slackWebhookUrl", fakeSlackWebhookUrl());
     formData.set("slackDestinationName", "Sales");
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.notifications");
     const result = await action({
       context: {},
-      request: new Request("https://0509.io/app/sources", { method: "POST", body: formData }),
+      request: new Request("https://0509.io/app/notifications", { method: "POST", body: formData }),
     } as never);
 
     expect(result).toEqual({
@@ -545,7 +524,7 @@ describe("sources route action", () => {
       upsertWorkspaceDeliveryConfig,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.notifications");
     const webhookUrl = fakeSlackWebhookUrl();
     const formData = new FormData();
     formData.set("intent", "save-slack-webhook");
@@ -554,7 +533,7 @@ describe("sources route action", () => {
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/notifications", {
         method: "POST",
         body: formData,
       }),
@@ -612,7 +591,7 @@ describe("sources route action", () => {
       saveSlackWebhookTarget,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.notifications");
     const formData = new FormData();
     formData.set("intent", "save-slack-webhook");
     formData.set("slackWebhookUrl", "https://hooks.slack.com/services/T/B/C");
@@ -620,7 +599,7 @@ describe("sources route action", () => {
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/notifications", {
         method: "POST",
         body: formData,
       }),
@@ -684,7 +663,7 @@ describe("sources route action", () => {
       upsertWorkspaceDeliveryConfig,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.notifications");
     const formData = new FormData();
     formData.set("intent", "save-whatsapp-target");
     formData.set("whatsappTargetValue", "+919876543210");
@@ -693,7 +672,7 @@ describe("sources route action", () => {
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/notifications", {
         method: "POST",
         body: formData,
       }),
@@ -733,7 +712,7 @@ describe("sources route action", () => {
       saveWhatsAppDeliveryTarget,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.notifications");
     const formData = new FormData();
     formData.set("intent", "save-whatsapp-target");
     formData.set("whatsappTargetValue", "+919876543210");
@@ -741,7 +720,7 @@ describe("sources route action", () => {
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/notifications", {
         method: "POST",
         body: formData,
       }),
@@ -781,14 +760,14 @@ describe("sources route action", () => {
       pauseSlackWebhookTarget,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.notifications");
     const formData = new FormData();
     formData.set("intent", "pause-slack-webhook");
     formData.set("slackTargetId", "slack-target-1");
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/notifications", {
         method: "POST",
         body: formData,
       }),
@@ -831,14 +810,14 @@ describe("sources route action", () => {
       resumeSlackWebhookTarget,
     }));
 
-    const { action } = await import("~/routes/app.sources");
+    const { action } = await import("~/routes/app.notifications");
     const formData = new FormData();
     formData.set("intent", "resume-slack-webhook");
     formData.set("slackTargetId", "slack-target-1");
 
     const result = await action({
       context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/sources", {
+      request: new Request("http://localhost/app/notifications", {
         method: "POST",
         body: formData,
       }),
@@ -855,13 +834,56 @@ describe("sources route action", () => {
   });
 });
 
-describe("sources route component", () => {
-  it("renders tracking reliability setup with customer-facing copy", async () => {
+describe("workspace settings route components", () => {
+  it("renders source access without developer or notification setup", async () => {
     await mockRouter({
       connection: null,
       discoveryStatus,
-      betaReadiness,
+    });
+
+    const { default: SourceAccessRoute } = await import("~/routes/app.source-access");
+    const markup = renderToStaticMarkup(createElement(SourceAccessRoute));
+
+    expect(markup).toContain("Source access");
+    expect(markup).toContain("Backup Meta access and tracking reliability");
+    expect(markup).toContain("Tracking status");
+    expect(markup).not.toContain("Meta coverage is beta");
+    expect(markup).not.toContain("f9-beta-pill");
+    expect(markup).toContain("Test and save access");
+    expect(markup).toContain("Ad Library API page");
+    expect(markup).not.toContain("Recent tracking health");
+    expect(markup).not.toContain("Create API key");
+    expect(markup).not.toContain("Slack delivery");
+    expect(markup).toContain("recent results are available");
+    expect(markup).not.toContain("Cached live results");
+  });
+
+  it("renders developer access without source-token or delivery setup", async () => {
+    await mockRouter({
       apiKeys: [],
+    });
+
+    const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
+    const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
+
+    expect(markup).toContain("Developer access");
+    expect(markup).toContain("Connect exports and approved actions");
+    expect(markup).toContain("Tool setup");
+    expect(markup).toContain("Create a read key");
+    expect(markup).toContain("Enable write access only when needed");
+    expect(markup).toContain("Review and revoke keys");
+    expect(markup).toContain("Create API key");
+    expect(markup).toContain("Allow approved account actions");
+    expect(markup).toContain("/api/v1/watchlists/");
+    expect(markup).not.toContain("Ad Library API page");
+    expect(markup).not.toContain("Slack delivery");
+    expect(markup).not.toContain("Sensitive changes");
+    expect(markup).not.toContain("POST /api/mcp");
+  });
+
+  it("renders notifications without source-token or API-key setup", async () => {
+    await mockRouter({
+      emailDeliveryReady: true,
       slackTargets: [],
       whatsappTargets: [],
       whatsappDelivery: {
@@ -874,32 +896,16 @@ describe("sources route component", () => {
       },
     });
 
-    const { default: AppSourcesRoute } = await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(createElement(AppSourcesRoute));
+    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const markup = renderToStaticMarkup(createElement(NotificationsRoute));
 
     expect(markup).toContain("Notifications");
-    expect(markup).toContain("Email delivery, backup Meta access");
-    expect(markup).toContain("Tracking status");
-    expect(markup).not.toContain("Meta coverage is beta");
-    expect(markup).not.toContain("f9-beta-pill");
-    expect(markup).toContain("Test and save access");
-    expect(markup).toContain("Ad Library API page");
-    expect(markup).not.toContain("Recent tracking health");
-    expect(markup).toContain("Advanced: developer access");
-    expect(markup).toContain("Developer access");
-    expect(markup).toContain("Connect exports and approved actions");
-    expect(markup).toContain("Tool setup");
-    expect(markup).toContain("Create a read key");
-    expect(markup).toContain("Enable write access only when needed");
-    expect(markup).toContain("Review and revoke keys");
-    expect(markup).toContain("API documentation");
-    expect(markup).toContain("Sensitive changes");
-    expect(markup).toContain("billing changes");
-    expect(markup).toContain("Billing changes and cancellation");
-    expect(markup).toContain("Migration and setup help");
-    expect(markup).toContain("Create API key");
-    expect(markup).toContain("Allow approved account actions");
-    expect(markup).not.toContain("Slack delivery");
+    expect(markup).toContain("Email digest delivery and alert channels");
+    expect(markup).toContain("Digest and alert delivery");
+    expect(markup).toContain("Open watchlists");
+    expect(markup).not.toContain("Ad Library API page");
+    expect(markup).not.toContain("Test and save access");
+    expect(markup).not.toContain("Create API key");
     expect(markup).not.toContain("Save Slack delivery");
     expect(markup).not.toContain("WhatsApp delivery");
     expect(markup).not.toContain("WhatsApp delivery is enabled for this account");
@@ -908,11 +914,5 @@ describe("sources route component", () => {
     expect(markup).not.toContain("Delivery confirmation");
     expect(markup).not.toContain("0/3 usable");
     expect(markup).not.toContain("No successful send yet");
-    expect(markup).toContain("/api/v1/watchlists/");
-    expect(markup).not.toContain("POST /api/mcp");
-    expect(markup).not.toContain("MCP yet");
-    expect(markup).not.toContain("Successful test send");
-    expect(markup).toContain("recent results are available");
-    expect(markup).not.toContain("Cached live results");
   });
 });

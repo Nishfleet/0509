@@ -27,7 +27,7 @@ Branch: `cursor/plan-entitlements-topups-no-prices-20260623` (PR #234).
 | `export_csv/json/slack_ready` | — | ✓ | ✓ | `/export/*`, `/api/v1/*`, MCP read exports |
 | `share_links` | — | — | ✓ | watchlists/collections/digests/reports + agent |
 | `client_reports` / `pdf_reports` | — | — | ✓ | `/app/reports` |
-| `slack_delivery` | — | ✓ | ✓ | `app.sources` save-slack-webhook, watchlists save-delivery-config/add-target, agent delivery actions |
+| `slack_delivery` | — | ✓ | ✓ | `app.notifications` save-slack-webhook, watchlists save-delivery-config/add-target, agent delivery actions |
 | `high_priority_alerts` | — | ✓ | ✓ | watchlists save-delivery-config, agent delivery_settings.update when enabling instant |
 | `email_delivery` | ✓ | ✓ | ✓ | watchlists send-test-email, delivery execution (save + send) |
 | `agency_branding` | — | — | ✓ | `app.account` save-report-branding; render-time on `share.$token`, `app.reports` preparedBy |

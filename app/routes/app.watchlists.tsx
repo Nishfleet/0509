@@ -954,7 +954,7 @@ export default function WatchlistsRoute() {
                           </p>
                         </div>
                       </div>
-                      <Link className="f9-secondary-button" to="/app/sources">
+                      <Link className="f9-secondary-button" to="/app/source-access">
                         Review tracking access
                       </Link>
                     </article>
