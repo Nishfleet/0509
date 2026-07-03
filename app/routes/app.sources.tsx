@@ -1,4 +1,4 @@
-import { Link, redirect } from "react-router";
+import { Link } from "react-router";
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
@@ -12,24 +12,6 @@ export const meta: MetaFunction = () => [
   },
 ];
 
-const sourceAccessIntents = new Set([
-  "connect-meta-token",
-  "retest-meta-token",
-  "disconnect-meta-token",
-]);
-
-const developerAccessIntents = new Set([
-  "create-api-key",
-  "revoke-api-key",
-]);
-
-const notificationIntents = new Set([
-  "save-slack-webhook",
-  "save-whatsapp-target",
-  "pause-slack-webhook",
-  "resume-slack-webhook",
-]);
-
 export function HydrateFallback() {
   return <DashboardRouteLoading title="Workspace settings" />;
 }
@@ -39,25 +21,10 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 }
 
 export async function action(args: ActionFunctionArgs) {
-  const formData = await args.request.clone().formData();
-  const intent = String(formData.get("intent") ?? "");
-
-  if (sourceAccessIntents.has(intent)) {
-    const { action: sourceAccessAction } = await import("~/routes/app.source-access");
-    return sourceAccessAction(args);
-  }
-
-  if (developerAccessIntents.has(intent)) {
-    const { action: developerAccessAction } = await import("~/routes/app.developer-access");
-    return developerAccessAction(args);
-  }
-
-  if (notificationIntents.has(intent)) {
-    const { action: notificationsAction } = await import("~/routes/app.notifications");
-    return notificationsAction(args);
-  }
-
-  return redirect("/app/notifications");
+  const { dispatchLegacySourcesAction } = await import(
+    "~/routes/workspace-settings-actions.server"
+  );
+  return dispatchLegacySourcesAction(args);
 }
 
 export default function SourcesCompatibilityRoute() {

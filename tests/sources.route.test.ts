@@ -339,46 +339,53 @@ describe("source access route action", () => {
     });
   });
 
-  it("blocks workspace members from managing source access", async () => {
-    const saveCustomerMetaToken = vi.fn();
+  it.each(["connect-meta-token", "retest-meta-token", "disconnect-meta-token"])(
+    "blocks workspace members from managing source access intent %s",
+    async (intent) => {
+      const disconnectCustomerMetaToken = vi.fn();
+      const retestSavedCustomerMetaToken = vi.fn();
+      const saveCustomerMetaToken = vi.fn();
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(session),
-      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-        session,
-        workspaceUserId: "owner-1",
-        isMember: true,
-        ownerName: "Owner",
-      })),
-    }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({ BETTER_AUTH_SECRET: "secret" })),
-    }));
-    vi.doMock("~/lib/customer-meta.server", () => ({
-      disconnectCustomerMetaToken: vi.fn(),
-      retestSavedCustomerMetaToken: vi.fn(),
-      saveCustomerMetaToken,
-    }));
+      vi.doMock("~/lib/auth.server", () => ({
+        requireSession: vi.fn().mockResolvedValue(session),
+        requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+          session,
+          workspaceUserId: "owner-1",
+          isMember: true,
+          ownerName: "Owner",
+        })),
+      }));
+      vi.doMock("~/lib/context.server", () => ({
+        getEnv: vi.fn(() => ({ BETTER_AUTH_SECRET: "secret" })),
+      }));
+      vi.doMock("~/lib/customer-meta.server", () => ({
+        disconnectCustomerMetaToken,
+        retestSavedCustomerMetaToken,
+        saveCustomerMetaToken,
+      }));
 
-    const { action } = await import("~/routes/app.source-access");
-    const formData = new FormData();
-    formData.set("intent", "connect-meta-token");
-    formData.set("metaToken", "EAABmembertoken");
+      const { action } = await import("~/routes/app.source-access");
+      const formData = new FormData();
+      formData.set("intent", intent);
+      formData.set("metaToken", "EAABmembertoken");
 
-    const result = await action({
-      context: createContext({ BETTER_AUTH_SECRET: "secret" }),
-      request: new Request("http://localhost/app/source-access", {
-        method: "POST",
-        body: formData,
-      }),
-    } as never);
+      const result = await action({
+        context: createContext({ BETTER_AUTH_SECRET: "secret" }),
+        request: new Request("http://localhost/app/source-access", {
+          method: "POST",
+          body: formData,
+        }),
+      } as never);
 
-    expect(saveCustomerMetaToken).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      ok: false,
-      message: "Only the account owner can manage source access.",
-    });
-  });
+      expect(disconnectCustomerMetaToken).not.toHaveBeenCalled();
+      expect(retestSavedCustomerMetaToken).not.toHaveBeenCalled();
+      expect(saveCustomerMetaToken).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        ok: false,
+        message: "Only the account owner can manage source access.",
+      });
+    },
+  );
 
   it("creates a customer API key and returns the one-time secret", async () => {
     const createCustomerApiKey = vi.fn().mockResolvedValue({
@@ -480,49 +487,58 @@ describe("source access route action", () => {
     });
   });
 
-  it("blocks workspace members from creating owner-owned API keys", async () => {
-    const createCustomerApiKey = vi.fn();
+  it.each(["create-api-key", "revoke-api-key"])(
+    "blocks workspace members from managing developer access intent %s",
+    async (intent) => {
+      const createCustomerApiKey = vi.fn();
+      const revokeCustomerApiKey = vi.fn();
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(session),
-      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-        session,
-        workspaceUserId: "owner-1",
-        isMember: true,
-        ownerName: "Owner",
-      })),
-    }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({ DB: {} })),
-    }));
-    vi.doMock("~/lib/customer-meta.server", () => ({
-      disconnectCustomerMetaToken: vi.fn(),
-      retestSavedCustomerMetaToken: vi.fn(),
-      saveCustomerMetaToken: vi.fn(),
-    }));
-    vi.doMock("~/lib/api-keys.server", () => ({
-      createCustomerApiKey,
-    }));
+      vi.doMock("~/lib/auth.server", () => ({
+        requireSession: vi.fn().mockResolvedValue(session),
+        requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+          session,
+          workspaceUserId: "owner-1",
+          isMember: true,
+          ownerName: "Owner",
+        })),
+      }));
+      vi.doMock("~/lib/context.server", () => ({
+        getEnv: vi.fn(() => ({ DB: {} })),
+      }));
+      vi.doMock("~/lib/customer-meta.server", () => ({
+        disconnectCustomerMetaToken: vi.fn(),
+        retestSavedCustomerMetaToken: vi.fn(),
+        saveCustomerMetaToken: vi.fn(),
+      }));
+      vi.doMock("~/lib/api-keys.server", () => ({
+        createCustomerApiKey,
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        revokeCustomerApiKey,
+      }));
 
-    const { action } = await import("~/routes/app.developer-access");
-    const formData = new FormData();
-    formData.set("intent", "create-api-key");
-    formData.set("apiKeyName", "Member-created key");
+      const { action } = await import("~/routes/app.developer-access");
+      const formData = new FormData();
+      formData.set("intent", intent);
+      formData.set("apiKeyName", "Member-created key");
+      formData.set("apiKeyId", "api-key-member");
 
-    const result = await action({
-      context: createContext({ DB: {} }),
-      request: new Request("http://localhost/app/developer-access", {
-        method: "POST",
-        body: formData,
-      }),
-    } as never);
+      const result = await action({
+        context: createContext({ DB: {} }),
+        request: new Request("http://localhost/app/developer-access", {
+          method: "POST",
+          body: formData,
+        }),
+      } as never);
 
-    expect(createCustomerApiKey).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      ok: false,
-      message: "Only the account owner can manage developer access and API keys.",
-    });
-  });
+      expect(createCustomerApiKey).not.toHaveBeenCalled();
+      expect(revokeCustomerApiKey).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        ok: false,
+        message: "Only the account owner can manage developer access and API keys.",
+      });
+    },
+  );
 
   it("revokes a customer API key", async () => {
     const revokeCustomerApiKey = vi.fn();
@@ -681,13 +697,34 @@ describe("source access route action", () => {
       request: new Request("http://localhost/app/notifications"),
     } as never);
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       emailDeliveryReady: true,
       showSlackDelivery: true,
       canManageWhatsAppDelivery: true,
-      slackTargets: [{ id: "slack-target-1", displayName: "Growth alerts" }],
-      whatsappTargets: [{ id: "whatsapp-target-1", displayName: "Founder phone" }],
+      slackTargets: [
+        {
+          id: "slack-target-1",
+          displayName: "Growth alerts",
+          isPaused: false,
+          lastSuccessfulDeliveryAt: "2026-06-06T00:00:00.000Z",
+          createdAt: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+      whatsappTargets: [
+        {
+          id: "whatsapp-target-1",
+          displayName: "Founder phone",
+          isPaused: false,
+          validationStatus: "validated",
+          templateEligible: true,
+          lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
+          createdAt: "2026-06-02T00:00:00.000Z",
+        },
+      ],
       whatsappDelivery: {
+        providerConfigured: true,
+        customerReady: true,
+        webhookConfigured: true,
         configuredTargets: 1,
         usableTargets: 1,
         lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
@@ -698,8 +735,16 @@ describe("source access route action", () => {
     expect(JSON.stringify(result)).not.toContain("whatsapp-secret");
   });
 
-  it("blocks workspace members from managing notification delivery targets", async () => {
+  it.each([
+    "save-slack-webhook",
+    "save-whatsapp-target",
+    "pause-slack-webhook",
+    "resume-slack-webhook",
+  ])("blocks workspace members from managing notification intent %s", async (intent) => {
+    const pauseSlackWebhookTarget = vi.fn();
+    const resumeSlackWebhookTarget = vi.fn();
     const saveSlackWebhookTarget = vi.fn();
+    const saveWhatsAppDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
@@ -714,14 +759,22 @@ describe("source access route action", () => {
       getEnv: vi.fn(() => ({ DB: {} })),
     }));
     vi.doMock("~/lib/slack.server", () => ({
+      pauseSlackWebhookTarget,
+      resumeSlackWebhookTarget,
       saveSlackWebhookTarget,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      saveWhatsAppDeliveryTarget,
     }));
 
     const { action } = await import("~/routes/app.notifications");
     const formData = new FormData();
-    formData.set("intent", "save-slack-webhook");
+    formData.set("intent", intent);
     formData.set("slackWebhookUrl", fakeSlackWebhookUrl());
     formData.set("slackDestinationName", "Sales");
+    formData.set("whatsappTargetValue", "+919999999999");
+    formData.set("whatsappDestinationName", "Sales");
+    formData.set("slackTargetId", "slack-target-1");
 
     const result = await action({
       context: createContext({ DB: {} }),
@@ -731,7 +784,10 @@ describe("source access route action", () => {
       }),
     } as never);
 
+    expect(pauseSlackWebhookTarget).not.toHaveBeenCalled();
+    expect(resumeSlackWebhookTarget).not.toHaveBeenCalled();
     expect(saveSlackWebhookTarget).not.toHaveBeenCalled();
+    expect(saveWhatsAppDeliveryTarget).not.toHaveBeenCalled();
     expect(result).toEqual({
       ok: false,
       message: "Only the account owner can manage notification delivery targets.",

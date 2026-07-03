@@ -15,12 +15,16 @@ import {
   whatsappDeliveryUnavailableMessage,
 } from "~/lib/ga-customer-surface";
 
-const ownerOnlyNotificationIntents = new Set([
+const notificationActionIntents = new Set([
   "save-slack-webhook",
   "save-whatsapp-target",
   "pause-slack-webhook",
   "resume-slack-webhook",
 ]);
+
+export function handlesNotificationIntent(intent: string) {
+  return notificationActionIntents.has(intent);
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -110,7 +114,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
-  if (isMember && ownerOnlyNotificationIntents.has(intent)) {
+  if (isMember && handlesNotificationIntent(intent)) {
     return {
       ok: false,
       message: "Only the account owner can manage notification delivery targets.",

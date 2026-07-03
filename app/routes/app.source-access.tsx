@@ -8,11 +8,15 @@ export {
 } from "~/routes/workspace-settings.shared";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-const ownerOnlySourceIntents = new Set([
+const sourceAccessActionIntents = new Set([
   "connect-meta-token",
   "retest-meta-token",
   "disconnect-meta-token",
 ]);
+
+export function handlesSourceAccessIntent(intent: string) {
+  return sourceAccessActionIntents.has(intent);
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -55,7 +59,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
-  if (isMember && ownerOnlySourceIntents.has(intent)) {
+  if (isMember && handlesSourceAccessIntent(intent)) {
     return {
       ok: false,
       message: "Only the account owner can manage source access.",

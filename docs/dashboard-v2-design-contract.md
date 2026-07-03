@@ -36,7 +36,7 @@ Staff-only: **Ops** → `/app/ops`.
 1. **One config** — `app/lib/dashboard-navigation.ts`; filter with `filterDashboardNav`.
 2. **No route-level sidebars** — layout owns the rail.
 3. **Search is first-class** — lives in PRIMARY nav, uses same shell when authenticated.
-4. **URL stability** — `/app/sources` stays as a compatibility redirect to Source access.
+4. **URL stability** — `/app/sources` stays as a compatibility hub for legacy links and POSTs.
 
 ## Copy conventions
 

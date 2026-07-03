@@ -8,10 +8,14 @@ export {
 } from "~/routes/workspace-settings.shared";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-const ownerOnlyDeveloperAccessIntents = new Set([
+const developerAccessActionIntents = new Set([
   "create-api-key",
   "revoke-api-key",
 ]);
+
+export function handlesDeveloperAccessIntent(intent: string) {
+  return developerAccessActionIntents.has(intent);
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -42,7 +46,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
-  if (isMember && ownerOnlyDeveloperAccessIntents.has(intent)) {
+  if (isMember && handlesDeveloperAccessIntent(intent)) {
     return {
       ok: false,
       message: "Only the account owner can manage developer access and API keys.",

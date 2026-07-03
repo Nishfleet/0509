@@ -1,5 +1,4 @@
 import { createRequire } from "node:module";
-import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -22,10 +21,9 @@ describe("Vite dev-server fs allowlist", () => {
         : viteConfig;
     const allow = config.server?.fs?.allow ?? [];
     const reactRouterDevRoot = path.dirname(require.resolve("@react-router/dev/package.json"));
+    const expectedAllow = [searchForWorkspaceRoot(process.cwd()), reactRouterDevRoot];
 
-    expect(allow).toContain(searchForWorkspaceRoot(process.cwd()));
-    expect(allow).toContain(reactRouterDevRoot);
-    expect(allow).not.toContain(os.homedir());
-    expect(allow).not.toContain(path.join(os.homedir(), "Vibecoded projects"));
+    expect(new Set(allow)).toEqual(new Set(expectedAllow));
+    expect(allow).toHaveLength(expectedAllow.length);
   });
 });

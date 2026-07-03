@@ -28,7 +28,7 @@
 | `/app/notifications` | `app.notifications.ts` | Dash | Notifications | Delivery-only settings |
 | `/app/source-access` | `app.source-access.tsx` | Dash | Source access | Backup Meta token and tracking reliability |
 | `/app/developer-access` | `app.developer-access.tsx` | Dash | Developer access | API keys and approved actions |
-| `/app/sources` | `app.sources.ts` | Dash | — | Compatibility redirect to Source access |
+| `/app/sources` | `app.sources.tsx` | Dash | — | Compatibility hub for legacy links and POSTs |
 | `/app/presence` | `app.presence.tsx` | Dash | Presence | Migrated to `f9-app-stack` panels |
 | `/app/presence/:entityId` | `app.presence.$entityId.tsx` | Dash | Presence detail | Migrated to `f9-app-stack` panels |
 | `/app/ops` | `app.ops.tsx` | Dash | Ops (staff) | Staff-only; unchanged surface |
