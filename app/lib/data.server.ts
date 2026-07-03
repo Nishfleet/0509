@@ -3761,7 +3761,7 @@ export async function hasInFlightWatchlistRun(
 export async function getOldestUserId(env: AppEnv) {
   const row = await one<{ id: string }>(
     env,
-    "SELECT id FROM user ORDER BY created_at ASC LIMIT 1",
+    "SELECT id FROM user ORDER BY createdAt ASC LIMIT 1",
   );
   return row?.id ?? null;
 }
@@ -5405,7 +5405,7 @@ export async function getWeeklyBusinessSummary(env: AppEnv): Promise<WeeklyBusin
 
   const [signupRow, activatedRow, payingRows, dunningRow, revokedRow, digestRows, staleRow] =
     await Promise.all([
-      one<{ count: number }>(env, `SELECT COUNT(*) AS count FROM user WHERE created_at >= ?`, weekAgo),
+      one<{ count: number }>(env, `SELECT COUNT(*) AS count FROM user WHERE createdAt >= ?`, weekAgo),
       one<{ count: number }>(
         env,
         `SELECT COUNT(*) AS count FROM user WHERE onboardedAt IS NOT NULL AND onboardedAt >= ?`,

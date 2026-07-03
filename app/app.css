@@ -2813,6 +2813,12 @@ button[aria-busy="true"] {
   justify-content: flex-end;
 }
 
+.f9-client-room-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
 .f9-plan-picker-panel {
   border-radius: 8px;
 }

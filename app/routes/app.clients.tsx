@@ -437,7 +437,7 @@ function ClientRoomCard({
   const handoff = summarizeClientRoomHandoff(room, memories);
 
   return (
-    <article className="f9-work-row">
+    <article className="f9-work-row f9-client-room-card">
       <div className="f9-panel-toolbar">
         <div>
           <h3>{room.name}</h3>
