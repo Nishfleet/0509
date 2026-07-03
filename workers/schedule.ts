@@ -63,3 +63,22 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
     includeRiskAlert: false,
   };
 }
+
+export function resolveOperationalRiskAlertIdempotencyKey(
+  dayKey: string,
+  input: { skippedForBudget: number; dispatchFailures: number },
+) {
+  if (input.skippedForBudget > 0 && input.dispatchFailures > 0) {
+    return `operator-alert:scan-budget-and-fanout-dispatch:${dayKey}`;
+  }
+
+  if (input.skippedForBudget > 0) {
+    return `operator-alert:scan-budget:${dayKey}`;
+  }
+
+  if (input.dispatchFailures > 0) {
+    return `operator-alert:fanout-dispatch:${dayKey}`;
+  }
+
+  return null;
+}

@@ -19,7 +19,11 @@ import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
 import { primaryDomainRedirect } from "./primary-domain";
-import { resolveScheduledTask, WEEKLY_DIGEST_CRON } from "./schedule";
+import {
+  resolveOperationalRiskAlertIdempotencyKey,
+  resolveScheduledTask,
+  WEEKLY_DIGEST_CRON,
+} from "./schedule";
 import { withSecurityHeaders } from "./security-headers";
 export { MonitoringWorkflow } from "./monitoring-workflow";
 
@@ -223,17 +227,20 @@ export default {
             result.dispatchFailures > 0
           ) {
             const scheduledDay = new Date(controller.scheduledTime).toISOString().slice(0, 10);
-            const operationalIdempotencyKey =
-              result.skippedForBudget > 0
-                ? `operator-alert:scan-budget:${scheduledDay}`
-                : `operator-alert:fanout-dispatch:${scheduledDay}`;
+            const operationalIdempotencyKey = resolveOperationalRiskAlertIdempotencyKey(
+              scheduledDay,
+              {
+                skippedForBudget: result.skippedForBudget,
+                dispatchFailures: result.dispatchFailures,
+              },
+            );
             try {
               const alert = await sendCustomerAtRiskAlert(env, {
                 skippedForBudget: result.skippedForBudget,
                 dispatchFailures: result.dispatchFailures,
                 idempotencyKey: scheduledTask.includeRiskAlert
                   ? undefined
-                  : operationalIdempotencyKey,
+                  : operationalIdempotencyKey ?? undefined,
               });
               if (alert.sent) {
                 console.log("customer-at-risk alert sent", alert);
