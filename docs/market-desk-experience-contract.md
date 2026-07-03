@@ -1,10 +1,12 @@
 # Market Desk Experience Contract
 
-Date: 2026-06-30
+Date: 2026-06-30 (updated 2026-07-02 for Presence Desk pivot)
 
 ## Product Promise
 
 Track competitor moves. See proof. Know what to do next.
+
+Market Desk is the competitor-focused workflow inside Five to Nine. The broader product also includes **Presence Desk** — proof-backed tracking for supported market entities across declared sources (today: your brand and competitors; see `docs/presence-desk-experience-contract.md`). Competitors remain a first-class entity type in both flows.
 
 The product should feel like:
 
@@ -193,6 +195,8 @@ Use:
 
 - Competitor
 - Market Desk
+- Presence Desk
+- Tracked entity
 - Counter-move
 - Proof
 - Source

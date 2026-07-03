@@ -10,17 +10,17 @@ import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { PartialDataNotice } from "~/components/partial-data-notice";
 import { SubmitButton } from "~/components/submit-button";
-import { formatCoverageLabel, formatRolloutState } from "~/lib/presence-display";
+import { formatCoverageLabel, formatSourceCoverageStatus, formatTrackingMode } from "~/lib/presence-display";
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
 
-export const meta = () => [{ title: "Presence | Five to Nine" }];
+export const meta = () => [{ title: "Presence Desk | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlan } = await import("~/lib/plan.server");
-  const { getPresenceLimits, presenceModeAllowed } = await import("~/lib/presence-entitlements");
+  const { canUsePresenceFeature, getPresenceLimits, presenceModeAllowed } = await import("~/lib/presence-entitlements");
   const { getPresenceWorkspaceSnapshot, requirePresenceWorkspaceAccess } = await import(
     "~/lib/presence-service.server"
   );
@@ -29,6 +29,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     connectorRolloutState,
     listPresenceConnectors,
   } = await import("~/lib/presence-connector-registry.server");
+  const { applyPresenceSourcePlanGates, listPresenceSourceCoverage } = await import(
+    "~/lib/presence-source-coverage.server"
+  );
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   await requirePresenceWorkspaceAccess(env, workspaceUserId);
@@ -37,6 +40,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const snapshot = await getPresenceWorkspaceSnapshot(env, workspaceUserId);
   const limits = getPresenceLimits(plan);
   const connectors = listPresenceConnectors();
+  const selfAllowed = presenceModeAllowed(plan, "self");
+  const competitorAllowed = presenceModeAllowed(plan, "competitor");
+  const sourcePlanGates = {
+    websiteSourcesAllowed: canUsePresenceFeature(plan, "presence_website_sources"),
+    socialConnectAllowed: canUsePresenceFeature(plan, "presence_social_connect"),
+  };
+  const [selfCoverage, competitorCoverage] = await Promise.all([
+    listPresenceSourceCoverage(env, "self", workspaceUserId),
+    listPresenceSourceCoverage(env, "competitor", workspaceUserId),
+  ]);
   const connectorResults = await Promise.allSettled(
     connectors.map(async (connector) => ({
       id: connector.id,
@@ -71,9 +84,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     plan,
     limits,
     access,
-    selfAllowed: presenceModeAllowed(plan, "self"),
-    competitorAllowed: presenceModeAllowed(plan, "competitor"),
+    selfAllowed,
+    competitorAllowed,
     connectors: resolvedConnectors,
+    sourceCoverage: {
+      self: applyPresenceSourcePlanGates(selfCoverage, {
+        modeAllowed: selfAllowed,
+        ...sourcePlanGates,
+      }),
+      competitor: applyPresenceSourcePlanGates(competitorCoverage, {
+        modeAllowed: competitorAllowed,
+        ...sourcePlanGates,
+      }),
+    },
     partialDataNotice,
     userEmail: session.user.email,
   };
@@ -126,9 +149,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (intent === "poll-source") {
       const targetId = String(form.get("targetId") ?? "");
       const result = await pollPresenceSourceTarget(env, workspaceUserId, targetId);
+      if (!result.pollResult.ok) {
+        return {
+          ok: false,
+          message: sanitizeCustomerFacingMessage(result.pollResult.errorMessage ?? "Source check failed."),
+        };
+      }
       return {
         ok: true,
-        message: `Checked ${result.target.connectorId}: ${result.upsertStats.inserted} new, ${result.upsertStats.updated} updated.`,
+        message: `Checked ${result.target.connectorId}: ${result.upsertStats.inserted} new, ${result.upsertStats.updated} updated, ${result.reconcileStats.tombstoned} removed.`,
       };
     }
 
@@ -150,14 +179,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function PresenceIndexRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const coverageRows = data.sourceCoverage.competitor.map((competitorEntry) => ({
+    competitorEntry,
+    selfEntry: data.sourceCoverage.self.find((entry) => entry.sourceId === competitorEntry.sourceId) ?? null,
+  }));
 
   return (
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          kicker="Presence"
-          lead="Track public websites and blogs for your brand and competitors. Social connectors roll out as platform access is approved."
-          title="Website and content presence"
+          kicker="Presence Desk"
+          lead="Track market entities across declared sources. See proof-backed changes from website and open-web coverage first — social and marketplace sources roll out only when platform access is approved."
+          title="Proof-backed entity tracking"
         />
 
         {actionData?.message ? (
@@ -179,14 +212,14 @@ export default function PresenceIndexRoute() {
             <Form className="f9-auth-form" method="post">
               <input name="intent" type="hidden" value="create-entity" />
               <label className="f9-field">
-                <span>Label</span>
+                <span>Entity label</span>
                 <input name="label" placeholder="Acme Corp" required />
               </label>
               <label className="f9-field">
-                <span>Mode</span>
+                <span>Entity type</span>
                 <select defaultValue="competitor" name="trackingMode">
-                  {data.competitorAllowed ? <option value="competitor">Competitor (public)</option> : null}
-                  {data.selfAllowed ? <option value="self">Self (your brand)</option> : null}
+                  {data.competitorAllowed ? <option value="competitor">Competitor</option> : null}
+                  {data.selfAllowed ? <option value="self">Your brand</option> : null}
                 </select>
               </label>
               <label className="f9-field">
@@ -208,17 +241,24 @@ export default function PresenceIndexRoute() {
           </article>
 
           <article className="f9-app-panel">
-            <span className="f9-app-kicker">Connectors</span>
-            <h2>Platform availability</h2>
+            <span className="f9-app-kicker">Source coverage</span>
+            <h2>Declared sources</h2>
+            <p className="f9-muted-copy">
+              Coverage is honest by source. Website/open-web is the active GA path; other sources stay gated,
+              planned, or manual-only until provider gates pass.
+            </p>
             <div className="f9-work-list is-compact">
-              {data.connectors.map((connector) => (
-                <div className="f9-work-row" key={connector.id}>
+              {coverageRows.map(({ competitorEntry, selfEntry }) => (
+                <div className="f9-work-row" key={competitorEntry.sourceId}>
                   <div>
-                    <strong>{connector.id}</strong>
+                    <strong>{competitorEntry.label}</strong>
                     <p className="f9-muted-copy">
-                      Your brand: {formatRolloutState(connector.rolloutSelf)} · Competitors:{" "}
-                      {formatRolloutState(connector.rolloutCompetitor)}
+                      Your brand: {selfEntry ? formatSourceCoverageStatus(selfEntry.status) : "Unavailable"} ·
+                      Competitors: {formatSourceCoverageStatus(competitorEntry.status)}
                     </p>
+                    {competitorEntry.reasonMessage ? (
+                      <p className="f9-muted-copy">{competitorEntry.reasonMessage}</p>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -230,37 +270,42 @@ export default function PresenceIndexRoute() {
           <div className="f9-panel-toolbar">
             <div>
               <span className="f9-app-kicker">Tracked entities</span>
-              <h2>Brands and competitors</h2>
+              <h2>Market entities</h2>
             </div>
           </div>
           {data.snapshot.entities.length === 0 ? (
             <EmptyState
               action={{ label: "Add from search", to: "/search" }}
-              description="Add your brand or a competitor website to start collecting public content updates."
+              description="Add your brand or a competitor with a website source to start collecting proof-backed updates."
               title="No entities yet"
             />
           ) : (
             <div className="f9-work-list is-compact">
-              {data.snapshot.entities.map(({ entity, sources }) => (
-                <div className="f9-work-row" key={entity.id}>
-                  <div>
-                    <h3>
-                      <Link to={`/app/presence/${entity.id}`}>{entity.label}</Link>
-                    </h3>
-                    <p className="f9-muted-copy">
-                      {entity.trackingMode} ·{" "}
-                      {sources.map((source) => (
-                        <span key={source.id}>
-                          {source.connectorId}: {formatCoverageLabel(source.coverageLabel)}{" "}
-                        </span>
-                      ))}
-                    </p>
+              {data.snapshot.entities.map(({ entity, sources }) => {
+                const pollableSources = sources.filter((source) => source.connectorId === "website");
+                return (
+                  <div className="f9-work-row" key={entity.id}>
+                    <div>
+                      <h3>
+                        <Link to={`/app/presence/${entity.id}`}>{entity.label}</Link>
+                      </h3>
+                      <p className="f9-muted-copy">
+                        {formatTrackingMode(entity.trackingMode)} ·{" "}
+                        {pollableSources.length > 0
+                          ? pollableSources.map((source) => (
+                              <span key={source.id}>
+                                {formatCoverageLabel(source.connectorId)}: {formatCoverageLabel(source.coverageLabel)}{" "}
+                              </span>
+                            ))
+                          : "Website source not configured"}
+                      </p>
+                    </div>
+                    <small>
+                      Updated <LocalTime iso={entity.updatedAt} />
+                    </small>
                   </div>
-                  <small>
-                    Updated <LocalTime iso={entity.updatedAt} />
-                  </small>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </article>

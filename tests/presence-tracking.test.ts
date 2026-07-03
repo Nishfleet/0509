@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
+import {
+  connectorOperationalForPolling,
+  evaluateConnectorAccessGate,
+} from "~/lib/presence-access-gates.server";
 import { evaluatePresenceWorkspaceAccess } from "~/lib/presence-internal-access.server";
 import { websiteConnector } from "~/lib/presence-connectors/website.server";
 import { xConnector } from "~/lib/presence-connectors/x.server";
@@ -87,6 +90,20 @@ describe("presence access gates", () => {
     expect(gate.reasonCode).toBe("credentials_missing");
   });
 
+  it("keeps mock-only social connectors out of customer-facing polling", async () => {
+    const operational = await connectorOperationalForPolling(
+      {
+        ...baseEnv,
+        PRESENCE_X_ROLLOUT: "ga",
+        X_API_BEARER_TOKEN: "token",
+        PRESENCE_X_MOCK: "1",
+      },
+      "x",
+      "competitor",
+    );
+    expect(operational).toBe(false);
+  });
+
   it("blocks Reddit without commercial access approval", async () => {
     const gate = await evaluateConnectorAccessGate(
       {
@@ -129,7 +146,7 @@ describe("website connector", () => {
   });
 
   it("parses RSS feed items from mock fetch", async () => {
-    const rss = `<?xml version="1.0"?><rss><channel><item><title>Launch post</title><link>https://example.com/post</link><pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate><description>Hello</description></item></channel></rss>`;
+    const rss = `<?xml version="1.0"?><rss><channel><item><title>Launch post</title><link>https://1.1.1.1/post</link><pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate><description>Hello</description></item></channel></rss>`;
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith("/robots.txt")) {
         return new Response("User-agent: FiveToNinePresenceBot\nAllow: /", { status: 200 });
@@ -146,19 +163,67 @@ describe("website connector", () => {
       });
     });
 
-    const validated = await websiteConnector.validateTarget({
-      trackingMode: "competitor",
-      targetUrl: "https://example.com",
-    });
-    expect(validated.ok).toBe(true);
-
     const poll = await websiteConnector.poll(
       { env: baseEnv, userId: "u1", trackingMode: "competitor", fetchImpl: fetchImpl as typeof fetch },
-      { targetUrl: "https://example.com", metadata: {} },
+      { targetUrl: "https://1.1.1.1", metadata: {} },
     );
     expect(poll.ok).toBe(true);
     expect(poll.items.length).toBe(1);
     expect(poll.items[0]?.title).toBe("Launch post");
+  });
+
+  it("does not treat an HTML feed response as an authoritative empty snapshot", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: FiveToNinePresenceBot\nAllow: /", { status: 200 });
+      }
+      if (url.includes("/feed")) {
+        return new Response("<html><body>temporarily unavailable</body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }
+      return new Response("<html><head><title>Fallback page</title><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feed\"/></head></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    const poll = await websiteConnector.poll(
+      { env: baseEnv, userId: "u1", trackingMode: "competitor", fetchImpl: fetchImpl as typeof fetch },
+      { targetUrl: "https://1.0.0.1", metadata: {} },
+    );
+
+    expect(poll.ok).toBe(true);
+    expect(poll.items[0]?.title).toBe("Fallback page");
+    expect(poll.cursor).not.toMatchObject({ completeSnapshot: true });
+  });
+
+  it("allows a valid empty RSS feed without treating it as a deletion snapshot", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: FiveToNinePresenceBot\nAllow: /", { status: 200 });
+      }
+      if (url.includes("/feed")) {
+        return new Response("<?xml version=\"1.0\"?><rss><channel></channel></rss>", {
+          status: 200,
+          headers: { "content-type": "application/rss+xml" },
+        });
+      }
+      return new Response("<html><head><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feed\"/></head></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    const poll = await websiteConnector.poll(
+      { env: baseEnv, userId: "u1", trackingMode: "competitor", fetchImpl: fetchImpl as typeof fetch },
+      { targetUrl: "https://8.8.8.8", metadata: {} },
+    );
+
+    expect(poll.ok).toBe(true);
+    expect(poll.items).toHaveLength(0);
+    expect(poll.cursor).toMatchObject({ completeSnapshot: false, feedUrl: "https://8.8.8.8/feed" });
   });
 });
 

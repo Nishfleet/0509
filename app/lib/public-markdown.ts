@@ -26,11 +26,11 @@ description: Market intelligence for revenue teams.
 
 # Five to Nine
 
-Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence.
+Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence. Presence Desk adds proof-backed tracking for your brand and competitors across declared sources — website/open-web is active; social and marketplace sources are gated or planned.
 
 ## Product
 
-- Competitor monitoring for growth teams.
+- Competitor monitoring for growth teams (Market Desk) plus proof-backed entity tracking (Presence Desk).
 - Public read-only search and a sample brief are available before signup.
 - Accounts unlock saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
@@ -48,6 +48,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history from saved evidence, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily and weekly digests should show priority, recommended next move, source status, freshness, and source trail.
+- Presence Desk tracks your brand and competitors across declared sources. Website/open-web is the active GA source. X, Reddit, LinkedIn, YouTube, Amazon marketplace, and Context.dev are gated, planned, manual-only, or unavailable unless provider credentials, policy approval, and rollout gates are satisfied. The product does not promise whole-internet scanning, unsupported platform coverage, or client/product/creator entity kinds before entity-kind metadata ships.
 
 ## Current product truth
 
@@ -83,10 +84,11 @@ Use the visible product and founder contact paths on the site.
 
 export const LLMS_TEXT = `# Five to Nine
 
-Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence.
+Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence. Presence Desk tracks your brand and competitors across declared sources with proof-backed briefs.
 
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
+- Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.
 - Public read-only search is available for buyer evaluation, and sample brief previews are sample-only before signup.
 - Account access uses verified access paths.
 - Checkout, plan access, and check limits follow the configured billing provider and visible plan caps.

@@ -21,14 +21,22 @@ import {
   listTrackedEntities,
   reconcilePresenceItemsAfterPoll,
   softDeleteTrackedEntity,
+  updateSourceTargetCoverageLabel,
   upsertPollCursor,
   upsertPresenceItems,
   upsertSourceTarget,
 } from "~/lib/presence-data.server";
 import { presenceUrlHash } from "~/lib/presence-hash";
-import { connectorOperationalForPolling } from "~/lib/presence-access-gates.server";
+import {
+  connectorHasCustomerPollPath,
+  connectorOperationalForPolling,
+} from "~/lib/presence-access-gates.server";
 import { getUserPlan } from "~/lib/plan.server";
-import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
+import type {
+  PresenceConnectorId,
+  PresenceTrackingMode,
+  SourceTargetRecord,
+} from "~/lib/presence-types";
 
 export class PresenceServiceError extends Error {
   code: string;
@@ -72,6 +80,18 @@ export async function requirePresencePlanAccess(
     );
   }
   return { plan, limits: getPresenceLimits(plan) };
+}
+
+function requireConnectorCustomerPollPath(connectorId: PresenceConnectorId) {
+  if (connectorHasCustomerPollPath(connectorId)) {
+    return;
+  }
+
+  throw new PresenceServiceError(
+    "poll_not_implemented",
+    `${connectorId} presence polling is not active for customer-facing coverage yet.`,
+    403,
+  );
 }
 
 export async function createPresenceEntity(
@@ -130,6 +150,7 @@ export async function addPresenceSourceTarget(
   if (connectorId !== "website" && !canUsePresenceFeature(plan, "presence_social_connect")) {
     throw new PresenceServiceError("feature_gated", "Social presence connections require Starter or Agency.", 403);
   }
+  requireConnectorCustomerPollPath(connectorId);
 
   const perEntityLimit =
     connectorId === "website" ? limits.maxWebsiteSourcesPerEntity : limits.maxSocialSourcesPerEntity;
@@ -187,10 +208,21 @@ export async function pollPresenceSourceTarget(
   if (!target) {
     throw new PresenceServiceError("not_found", "Source target not found.", 404);
   }
+  if (!target.isActive) {
+    throw new PresenceServiceError("source_inactive", "Source target is not active.", 404);
+  }
   const entity = await getTrackedEntity(env, userId, target.trackedEntityId);
   if (!entity) {
     throw new PresenceServiceError("not_found", "Tracked entity not found.", 404);
   }
+  const { plan } = await requirePresencePlanAccess(env, userId, entity.trackingMode);
+  if (target.connectorId === "website" && !canUsePresenceFeature(plan, "presence_website_sources")) {
+    throw new PresenceServiceError("feature_gated", "Website presence sources are not on your plan.", 403);
+  }
+  if (target.connectorId !== "website" && !canUsePresenceFeature(plan, "presence_social_connect")) {
+    throw new PresenceServiceError("feature_gated", "Social presence connections require Starter or Agency.", 403);
+  }
+  requireConnectorCustomerPollPath(target.connectorId);
 
   const cursor = await getPollCursor(env, target.id);
   const connection = target.connectorId !== "website"
@@ -208,10 +240,24 @@ export async function pollPresenceSourceTarget(
   const now = new Date().toISOString();
   const priorCursor = cursor?.cursor ?? {};
 
-  let upsertStats = { inserted: 0, updated: 0 };
-  let reconcileStats = { tombstoned: 0 };
-  if (pollResult.ok && pollResult.items.length > 0) {
-    upsertStats = await upsertPresenceItems(env, { sourceTarget: target, items: pollResult.items });
+  let upsertStats = { inserted: 0, updated: 0, changedUrlHashes: [] as string[] };
+  let reconcileStats = { tombstoned: 0, tombstonedUrlHashes: [] as string[] };
+  let resultTarget: SourceTargetRecord = target;
+  if (pollResult.ok) {
+    if (pollResult.items.length > 0) {
+      upsertStats = await upsertPresenceItems(env, { sourceTarget: target, items: pollResult.items });
+    }
+    if (
+      pollResult.coverageLabel &&
+      pollResult.coverageLabel !== target.coverageLabel
+    ) {
+      resultTarget =
+        (await updateSourceTargetCoverageLabel(env, userId, target.id, pollResult.coverageLabel)) ?? {
+          ...target,
+          coverageLabel: pollResult.coverageLabel,
+        };
+    }
+
     const completeSnapshot = Boolean(pollResult.cursor?.completeSnapshot);
     if (completeSnapshot) {
       const observedUrlHashes = await Promise.all(
@@ -226,8 +272,25 @@ export async function pollPresenceSourceTarget(
   }
 
   const syncCycleCount = Number(priorCursor.syncCycleCount ?? 0) + (pollResult.ok ? 1 : 0);
+  const changedCount = upsertStats.inserted + upsertStats.updated + reconcileStats.tombstoned;
+  const lastChangedUrlHashes =
+    pollResult.ok && changedCount > 0
+      ? Array.from(new Set([...upsertStats.changedUrlHashes, ...reconcileStats.tombstonedUrlHashes]))
+      : [];
+  const lastChangedAt =
+    pollResult.ok && changedCount > 0
+      ? now
+      : typeof priorCursor.lastChangedAt === "string"
+        ? priorCursor.lastChangedAt
+        : null;
   await upsertPollCursor(env, target.id, {
-    cursor: { ...(pollResult.cursor ?? priorCursor), syncCycleCount },
+    cursor: {
+      ...(pollResult.cursor ?? priorCursor),
+      syncCycleCount,
+      lastChangedAt,
+      lastChangeCount: pollResult.ok ? changedCount : Number(priorCursor.lastChangeCount ?? 0),
+      lastChangedUrlHashes,
+    },
     etag: pollResult.etag ?? cursor?.etag ?? null,
     lastModified: pollResult.lastModified ?? cursor?.lastModified ?? null,
     lastPolledAt: now,
@@ -236,10 +299,11 @@ export async function pollPresenceSourceTarget(
     lastErrorMessage: pollResult.ok ? null : pollResult.errorMessage ?? null,
   });
 
-  return { pollResult, upsertStats, reconcileStats, target, entity };
+  return { pollResult, upsertStats, reconcileStats, target: resultTarget, entity };
 }
 
 const PRESENCE_POLL_BUDGET_UNITS = 40;
+const POLLING_SKIP_CURSOR_ERROR_CODES = new Set(["feature_gated", "mode_gated", "plan_gated"]);
 
 export async function runPresencePollingBatch(env: AppEnv, options: { limit?: number } = {}) {
   const { listActiveSourceTargetsForPolling } = await import("~/lib/presence-data.server");
@@ -254,6 +318,11 @@ export async function runPresencePollingBatch(env: AppEnv, options: { limit?: nu
     const entity = await getTrackedEntity(env, target.userId, target.trackedEntityId);
     if (!entity) continue;
     if (!(await connectorOperationalForPolling(env, target.connectorId, entity.trackingMode, target.userId))) {
+      await upsertPollCursor(env, target.id, {
+        lastPolledAt: new Date().toISOString(),
+        lastErrorCode: "connector_not_operational",
+        lastErrorMessage: `${target.connectorId} is not operational for polling.`,
+      });
       skippedRollout += 1;
       continue;
     }
@@ -268,6 +337,13 @@ export async function runPresencePollingBatch(env: AppEnv, options: { limit?: nu
         syncCycleCount: typeof cursor?.syncCycleCount === "number" ? cursor.syncCycleCount : undefined,
       });
     } catch (error) {
+      if (error instanceof PresenceServiceError && POLLING_SKIP_CURSOR_ERROR_CODES.has(error.code)) {
+        await upsertPollCursor(env, target.id, {
+          lastPolledAt: new Date().toISOString(),
+          lastErrorCode: error.code,
+          lastErrorMessage: error.message,
+        });
+      }
       results.push({
         targetId: target.id,
         ok: false,
@@ -281,12 +357,15 @@ export async function runPresencePollingBatch(env: AppEnv, options: { limit?: nu
 
 export async function getPresenceWorkspaceSnapshot(env: AppEnv, userId: string) {
   const entities = await listTrackedEntities(env, userId);
-  const items = await listPresenceItems(env, userId, { limit: 30 });
+  const items = await listPresenceItems(env, userId, { connectorId: "website", limit: 30 });
   const enriched = await Promise.all(
-    entities.map(async (entity) => ({
-      entity,
-      sources: await listSourceTargetsForEntity(env, userId, entity.id),
-    })),
+    entities.map(async (entity) => {
+      const sources = await listSourceTargetsForEntity(env, userId, entity.id);
+      return {
+        entity,
+        sources: sources.filter((source) => connectorHasCustomerPollPath(source.connectorId)),
+      };
+    }),
   );
   return { entities: enriched, recentItems: items };
 }

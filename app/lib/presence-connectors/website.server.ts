@@ -223,6 +223,7 @@ async function fetchFeed(
       items: [],
       etag: response.etag,
       lastModified: response.lastModified,
+      coverageLabel: "VERIFIED_PUBLIC_FEED",
       costUnits: 0,
     };
   }
@@ -237,6 +238,17 @@ async function fetchFeed(
   }
 
   const items = parseFeedItems(response.body, feedUrl);
+  if (items.length === 0 && !looksLikeFeedDocument(response.body)) {
+    return {
+      ok: false,
+      items: [],
+      errorCode: "feed_parse_failed",
+      errorMessage: "Website feed did not contain valid RSS or Atom entries.",
+      etag: response.etag,
+      lastModified: response.lastModified,
+    };
+  }
+
   return {
     ok: true,
     items,
@@ -244,8 +256,8 @@ async function fetchFeed(
     lastModified: response.lastModified,
     coverageLabel: "VERIFIED_PUBLIC_FEED",
     costUnits: 1,
-    cursor: { completeSnapshot: true, feedUrl },
-  } as PollResult & { coverageLabel?: string };
+    cursor: { completeSnapshot: items.length > 0, feedUrl },
+  };
 }
 
 async function fetchPageChange(
@@ -267,7 +279,14 @@ async function fetchPageChange(
   }
 
   if (response.notModified) {
-    return { ok: true, items: [], etag: response.etag, lastModified: response.lastModified, costUnits: 0 };
+    return {
+      ok: true,
+      items: [],
+      etag: response.etag,
+      lastModified: response.lastModified,
+      coverageLabel: "PUBLIC_WEB_BEST_EFFORT",
+      costUnits: 0,
+    };
   }
 
   if (!response.ok || !response.body) {
@@ -299,6 +318,7 @@ async function fetchPageChange(
     items: [item],
     etag: response.etag,
     lastModified: response.lastModified,
+    coverageLabel: "PUBLIC_WEB_BEST_EFFORT",
     costUnits: 1,
   };
 }
@@ -340,6 +360,10 @@ function parseFeedItems(xml: string, feedUrl: string): NormalizedPresenceItem[] 
   }
 
   return entries;
+}
+
+function looksLikeFeedDocument(xml: string) {
+  return /<(rss|feed)\b/i.test(xml) || /<rdf:RDF\b/i.test(xml);
 }
 
 async function fetchPublicResource(

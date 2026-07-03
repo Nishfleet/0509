@@ -203,7 +203,7 @@ export async function listSourceTargetsForEntity(env: AppEnv, userId: string, en
   const result = await db
     .prepare(
       `SELECT * FROM source_target
-       WHERE tracked_entity_id = ? AND user_id = ? AND deleted_at IS NULL
+       WHERE tracked_entity_id = ? AND user_id = ? AND deleted_at IS NULL AND is_active = 1
        ORDER BY connector_id ASC, created_at ASC`,
     )
     .bind(entityId, userId)
@@ -291,6 +291,25 @@ export async function upsertSourceTarget(
   return (await getSourceTarget(env, input.userId, id))!;
 }
 
+export async function updateSourceTargetCoverageLabel(
+  env: AppEnv,
+  userId: string,
+  targetId: string,
+  coverageLabel: PresenceCoverageLabel,
+) {
+  const db = requireDb(env);
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE source_target
+       SET coverage_label = ?, updated_at = ?
+       WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+    )
+    .bind(coverageLabel, now, targetId, userId)
+    .run();
+  return getSourceTarget(env, userId, targetId);
+}
+
 export async function getPollCursor(env: AppEnv, sourceTargetId: string) {
   const db = requireDb(env);
   const row = await db
@@ -319,6 +338,8 @@ export async function upsertPollCursor(
   const db = requireDb(env);
   const now = new Date().toISOString();
   const existing = await getPollCursor(env, sourceTargetId);
+  const hasLastErrorCode = Object.prototype.hasOwnProperty.call(input, "lastErrorCode");
+  const hasLastErrorMessage = Object.prototype.hasOwnProperty.call(input, "lastErrorMessage");
   await db
     .prepare(
       existing
@@ -339,8 +360,8 @@ export async function upsertPollCursor(
             input.lastModified ?? existing.lastModified,
             input.lastPolledAt ?? existing.lastPolledAt,
             input.lastSuccessAt ?? existing.lastSuccessAt,
-            input.lastErrorCode ?? existing.lastErrorCode,
-            input.lastErrorMessage ?? existing.lastErrorMessage,
+            hasLastErrorCode ? input.lastErrorCode ?? null : existing.lastErrorCode,
+            hasLastErrorMessage ? input.lastErrorMessage ?? null : existing.lastErrorMessage,
             now,
             sourceTargetId,
           ]
@@ -370,6 +391,7 @@ export async function upsertPresenceItems(
   const now = new Date().toISOString();
   let inserted = 0;
   let updated = 0;
+  const changedUrlHashes: string[] = [];
 
   for (const item of input.items) {
     const urlHash = await presenceUrlHash(item.canonicalUrl);
@@ -423,10 +445,12 @@ export async function upsertPresenceItems(
           )
           .run();
         updated += 1;
+        changedUrlHashes.push(urlHash);
       }
       continue;
     }
 
+    const id = newPresenceId("pitem");
     await db
       .prepare(
         `INSERT INTO presence_item (
@@ -436,7 +460,7 @@ export async function upsertPresenceItems(
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
-        newPresenceId("pitem"),
+        id,
         input.sourceTarget.id,
         input.sourceTarget.trackedEntityId,
         input.sourceTarget.userId,
@@ -457,9 +481,10 @@ export async function upsertPresenceItems(
       )
       .run();
     inserted += 1;
+    changedUrlHashes.push(urlHash);
   }
 
-  return { inserted, updated };
+  return { inserted, updated, changedUrlHashes };
 }
 
 export async function reconcilePresenceItemsAfterPoll(
@@ -470,25 +495,40 @@ export async function reconcilePresenceItemsAfterPoll(
     completeSnapshot: boolean;
   },
 ) {
+  // Empty public feeds can be transient, so never mass-tombstone without at least
+  // one observed item anchoring the authoritative snapshot.
   if (!input.completeSnapshot || input.observedUrlHashes.length === 0) {
-    return { tombstoned: 0 };
+    return { tombstoned: 0, tombstonedUrlHashes: [] };
   }
 
   const db = requireDb(env);
   const now = new Date().toISOString();
   const placeholders = input.observedUrlHashes.map(() => "?").join(", ");
+  const unseenClause = placeholders.length > 0 ? `AND url_hash NOT IN (${placeholders})` : "";
+  const tombstoneRows = await db
+    .prepare(
+      `SELECT url_hash FROM presence_item
+       WHERE source_target_id = ?
+         AND is_tombstone = 0
+         ${unseenClause}`,
+    )
+    .bind(input.sourceTarget.id, ...input.observedUrlHashes)
+    .all<{ url_hash: string }>();
   const result = await db
     .prepare(
       `UPDATE presence_item
        SET is_tombstone = 1, observed_at = ?, revision = revision + 1
        WHERE source_target_id = ?
          AND is_tombstone = 0
-         AND url_hash NOT IN (${placeholders})`,
+         ${unseenClause}`,
     )
     .bind(now, input.sourceTarget.id, ...input.observedUrlHashes)
     .run();
 
-  return { tombstoned: result.meta.changes ?? 0 };
+  return {
+    tombstoned: result.meta.changes ?? 0,
+    tombstonedUrlHashes: (tombstoneRows.results ?? []).map((row) => String(row.url_hash)),
+  };
 }
 
 export async function listPresenceItems(
@@ -502,26 +542,35 @@ export async function listPresenceItems(
   } = {},
 ) {
   const db = requireDb(env);
-  const clauses = ["user_id = ?", "is_tombstone = 0"];
+  const clauses = [
+    "presence_item.user_id = ?",
+    "presence_item.is_tombstone = 0",
+    "source_target.is_active = 1",
+    "source_target.deleted_at IS NULL",
+    "tracked_entity.is_active = 1",
+    "tracked_entity.deleted_at IS NULL",
+  ];
   const binds: unknown[] = [userId];
   if (options.trackedEntityId) {
-    clauses.push("tracked_entity_id = ?");
+    clauses.push("presence_item.tracked_entity_id = ?");
     binds.push(options.trackedEntityId);
   }
   if (options.connectorId) {
-    clauses.push("connector_id = ?");
+    clauses.push("presence_item.connector_id = ?");
     binds.push(options.connectorId);
   }
   if (options.since) {
-    clauses.push("observed_at > ?");
+    clauses.push("presence_item.observed_at > ?");
     binds.push(options.since);
   }
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
   const result = await db
     .prepare(
-      `SELECT * FROM presence_item
+      `SELECT presence_item.* FROM presence_item
+       INNER JOIN source_target ON source_target.id = presence_item.source_target_id
+       INNER JOIN tracked_entity ON tracked_entity.id = presence_item.tracked_entity_id
        WHERE ${clauses.join(" AND ")}
-       ORDER BY observed_at DESC
+       ORDER BY presence_item.observed_at DESC
        LIMIT ?`,
     )
     .bind(...binds, limit)
@@ -537,6 +586,7 @@ export async function listActiveSourceTargetsForPolling(env: AppEnv, limit = 40)
        INNER JOIN tracked_entity ON tracked_entity.id = source_target.tracked_entity_id
        WHERE source_target.is_active = 1
          AND source_target.deleted_at IS NULL
+         AND source_target.connector_id = 'website'
          AND tracked_entity.is_active = 1
          AND tracked_entity.deleted_at IS NULL
        ORDER BY COALESCE(
