@@ -2021,6 +2021,93 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
+  it("keeps customer-owned Meta API fallback available during forceLive browser failures", async () => {
+    class CommercialDiscoveryError extends Error {
+      failureClass: string;
+
+      constructor(message: string, failureClass: string) {
+        super(message);
+        this.failureClass = failureClass;
+      }
+    }
+    const browserSearch = vi
+      .fn<(...args: unknown[]) => Promise<SearchResponse>>()
+      .mockRejectedValue(new CommercialDiscoveryError("Browser capture timed out.", "timeout"));
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ...buildLiveBrowserResult({
+        source: "meta_api",
+        provider: "meta_api",
+      }),
+      ads: [
+        {
+          ...buildLiveBrowserResult().ads[0],
+          metaAdId: "meta-api-fallback-1",
+        },
+      ],
+    });
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError,
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        forceLive: true,
+        customerMetaAdLibraryToken: "customer-token",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(metaApiSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        META_AD_LIBRARY_TOKEN: "customer-token",
+      }),
+      expect.anything(),
+      null,
+      expect.objectContaining({
+        allowDemoFallback: false,
+      }),
+    );
+    expect(result).toMatchObject({
+      provider: "meta_api",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+  });
+
   it("keeps the distributed discovery lease when forceLive bypasses a warm cache", async () => {
     const browserSearch = vi.fn();
     const future = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -2097,11 +2184,12 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
-  it("does not satisfy a forceLive lease wait with the previous warm cache", async () => {
+  it("waits through stale provider cooldown for a fresh forceLive lease result", async () => {
     const browserSearch = vi.fn();
     const future = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     const oldFetchedAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+    const freshFetchedAt = new Date().toISOString();
+    const staleCache = {
       cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
       provider: "meta_library_browser",
       routeContext: "watchlist_scan",
@@ -2114,7 +2202,16 @@ describe("searchAdsViaSourceResolver", () => {
       browserMsUsed: 2500,
       createdAt: oldFetchedAt,
       updatedAt: oldFetchedAt,
-    });
+    };
+    const freshCache = {
+      ...staleCache,
+      fetchedAt: freshFetchedAt,
+      createdAt: freshFetchedAt,
+      updatedAt: freshFetchedAt,
+    };
+    const getDiscoveryCacheEntry = vi.fn()
+      .mockResolvedValueOnce(staleCache)
+      .mockResolvedValue(freshCache);
     const db = {
       prepare: vi.fn(() => ({
         bind: vi.fn(() => ({
@@ -2160,34 +2257,37 @@ describe("searchAdsViaSourceResolver", () => {
 
     const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
 
-    await expect(
-      searchAdsViaSourceResolver(
-        {
-          BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
-          DB: db,
-        } as never,
-        {
-          mode: "keyword",
-          filters: {
-            query: "nykaa",
-            country: "India",
-            platform: "all",
-            creativeType: "all",
-            status: "all",
-            firstSeenFrom: "",
-            lastSeenFrom: "",
-          },
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
         },
-        null,
-        {
-          purpose: "watchlist_scan",
-          forceLive: true,
-        },
-      ),
-    ).rejects.toThrow("Commercial discovery degraded; serving cached results.");
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        forceLive: true,
+      },
+    );
 
     expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("discovery_query_lease"));
+    expect(getDiscoveryCacheEntry).toHaveBeenCalledTimes(2);
     expect(browserSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      cacheStatus: "hit",
+      discoveryStatus: "healthy",
+    });
   });
 
   it("serves stale cached results without a fresh browser fetch during public-search cooldown", async () => {

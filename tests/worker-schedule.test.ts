@@ -28,11 +28,13 @@ describe("worker schedule", () => {
       kind: "monitoring",
       includeScans: true,
       includeDigests: false,
+      includeRiskAlert: false,
     });
     expect(resolveScheduledTask(DAILY_DIGEST_CRON)).toEqual({
       kind: "monitoring",
       includeScans: false,
       includeDigests: true,
+      includeRiskAlert: true,
       digestCadence: "daily",
       digestLookbackDays: 1,
     });
@@ -41,6 +43,7 @@ describe("worker schedule", () => {
       kind: "monitoring",
       includeScans: true,
       includeDigests: false,
+      includeRiskAlert: false,
     });
   });
 
@@ -49,6 +52,7 @@ describe("worker schedule", () => {
       kind: "monitoring",
       includeScans: false,
       includeDigests: true,
+      includeRiskAlert: false,
       digestCadence: "weekly",
       digestLookbackDays: 7,
     });

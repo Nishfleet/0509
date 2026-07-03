@@ -13,6 +13,7 @@ export type ScheduledTask =
       kind: "monitoring";
       includeScans: boolean;
       includeDigests: boolean;
+      includeRiskAlert: boolean;
       digestCadence?: "daily" | "weekly";
       digestLookbackDays?: number;
     };
@@ -29,6 +30,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       kind: "monitoring",
       includeScans: false,
       includeDigests: true,
+      includeRiskAlert: false,
       digestCadence: "weekly",
       digestLookbackDays: 7,
     };
@@ -39,6 +41,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       kind: "monitoring",
       includeScans: false,
       includeDigests: true,
+      includeRiskAlert: true,
       digestCadence: "daily",
       digestLookbackDays: 1,
     };
@@ -49,6 +52,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       kind: "monitoring",
       includeScans: true,
       includeDigests: false,
+      includeRiskAlert: false,
     };
   }
 
@@ -56,5 +60,6 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
     kind: "monitoring",
     includeScans: true,
     includeDigests: false,
+    includeRiskAlert: false,
   };
 }

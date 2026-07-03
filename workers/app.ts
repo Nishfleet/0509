@@ -217,17 +217,19 @@ export default {
             cron: controller.cron,
             ...result,
           });
-          try {
-            const alert = await sendCustomerAtRiskAlert(env, {
-              skippedForBudget: result.skippedForBudget,
-            });
-            if (alert.sent) {
-              console.log("customer-at-risk alert sent", alert);
+          if (scheduledTask.includeRiskAlert) {
+            try {
+              const alert = await sendCustomerAtRiskAlert(env, {
+                skippedForBudget: result.skippedForBudget,
+              });
+              if (alert.sent) {
+                console.log("customer-at-risk alert sent", alert);
+              }
+            } catch (error) {
+              console.error("customer-at-risk alert failed", {
+                error: error instanceof Error ? error.message : String(error),
+              });
             }
-          } catch (error) {
-            console.error("customer-at-risk alert failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
           }
         },
         (error) => {

@@ -441,6 +441,7 @@ export async function searchAdsViaSourceResolver(
       routeContext,
       waitMs: resolveDiscoveryLeaseWaitMs(routeContext),
       minFetchedAtMs: leaseFreshAfterMs,
+      ignoreProviderCooldown: forceLive,
     });
 
     if (settledResponse) {
@@ -601,7 +602,7 @@ export async function searchAdsViaSourceResolver(
       });
     }
 
-    if (!forceLive) {
+    if (!forceLive || options.customerMetaAdLibraryToken?.trim()) {
       const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
         browserFailureClass: failureClass,
         browserSummary: summary,
@@ -932,6 +933,7 @@ async function waitForDiscoveryLeaseResolution(
     routeContext: DiscoveryRouteContext;
     waitMs: number;
     minFetchedAtMs?: number | null;
+    ignoreProviderCooldown?: boolean;
   },
 ): Promise<SearchResponse | null> {
   const deadline = Date.now() + input.waitMs;
@@ -956,7 +958,11 @@ async function waitForDiscoveryLeaseResolution(
     }
 
     const providerState = await getDiscoveryProviderState(env, input.provider);
-    if (providerState && shouldUseProviderCooldown(providerState)) {
+    if (
+      !input.ignoreProviderCooldown &&
+      providerState &&
+      shouldUseProviderCooldown(providerState)
+    ) {
       if (
         usableCached &&
         isDiscoveryLeaseCacheFreshEnough(usableCached.fetchedAt, input.minFetchedAtMs)
