@@ -32,13 +32,13 @@ describe("pricingPlans", () => {
 
     expect(scout.features).toContain("3 active watchlists");
     expect(scout.features).toContain("10 Collections");
-    expect(scout.features).toContain("Monday scan");
+    expect(scout.features).toContain("6-hour scans");
     expect(scout.features).toContain("Weekly Digest");
     expect(scout.features).not.toContain("Slack");
     expect(scout.features).toContain("50 checks/month");
     expect(starter.features).toContain("10 active watchlists");
     expect(starter.features).toContain("25 Collections");
-    expect(starter.features).toContain("Daily scans");
+    expect(starter.features).toContain("3-hour scans");
     expect(starter.features).toContain("Daily + weekly Digests");
     expect(starter.features).toContain("Email Notifications");
     expect(starter.features).toContain("Exports");
@@ -46,6 +46,7 @@ describe("pricingPlans", () => {
     expect(starter.features).toContain("250 checks/month");
     expect(agency.features).toContain("75 active watchlists");
     expect(agency.features).toContain("250 Collections");
+    expect(agency.features).toContain("3-hour scans");
     expect(agency.features).not.toContain("Slack");
     expect(agency.features).toContain("2,500 checks/month");
     expect(agency.features).toContain("Team workspace");

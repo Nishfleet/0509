@@ -1,5 +1,8 @@
 export const DISCOVERY_WARMUP_CRON = "17 */6 * * *";
-export const DAILY_MONITORING_CRON = "0 4 * * *";
+export const REGULAR_MONITORING_CRON = "0 */3 * * *";
+export const DAILY_DIGEST_CRON = "0 4 * * *";
+/** @deprecated The 04:00 cron now sends daily digests only. */
+export const DAILY_MONITORING_CRON = DAILY_DIGEST_CRON;
 export const WEEKLY_DIGEST_CRON = "0 5 * * MON";
 
 export type ScheduledTask =
@@ -10,6 +13,7 @@ export type ScheduledTask =
       kind: "monitoring";
       includeScans: boolean;
       includeDigests: boolean;
+      includeRiskAlert: boolean;
       digestCadence?: "daily" | "weekly";
       digestLookbackDays?: number;
     };
@@ -20,24 +24,61 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
   }
 
   if (cron === WEEKLY_DIGEST_CRON) {
-    // The Monday 05:00 cron fires one hour after the daily 04:00 scan, which
-    // already covers every watchlist (including scout on Mondays). Re-scanning
-    // here would double Browser Rendering cost and burn each watchlist's daily
-    // proof budget twice, so this run only assembles the weekly digests.
+    // The Monday 05:00 cron only assembles the weekly digests. Regular scans
+    // run on the three-hour cron, so this path must not double-scan.
     return {
       kind: "monitoring",
       includeScans: false,
       includeDigests: true,
+      includeRiskAlert: false,
       digestCadence: "weekly",
       digestLookbackDays: 7,
+    };
+  }
+
+  if (cron === DAILY_DIGEST_CRON) {
+    return {
+      kind: "monitoring",
+      includeScans: false,
+      includeDigests: true,
+      includeRiskAlert: true,
+      digestCadence: "daily",
+      digestLookbackDays: 1,
+    };
+  }
+
+  if (cron === REGULAR_MONITORING_CRON) {
+    return {
+      kind: "monitoring",
+      includeScans: true,
+      includeDigests: false,
+      includeRiskAlert: false,
     };
   }
 
   return {
     kind: "monitoring",
     includeScans: true,
-    includeDigests: cron === DAILY_MONITORING_CRON,
-    digestCadence: cron === DAILY_MONITORING_CRON ? "daily" : "weekly",
-    digestLookbackDays: cron === DAILY_MONITORING_CRON ? 1 : 7,
+    includeDigests: false,
+    includeRiskAlert: false,
   };
+}
+
+export function resolveOperationalRiskAlertIdempotencyKey(
+  dayKey: string,
+  input: { skippedForBudget: number; dispatchFailures: number },
+) {
+  if (input.skippedForBudget > 0 && input.dispatchFailures > 0) {
+    return `operator-alert:scan-budget-and-fanout-dispatch:${dayKey}`;
+  }
+
+  if (input.skippedForBudget > 0) {
+    return `operator-alert:scan-budget:${dayKey}`;
+  }
+
+  if (input.dispatchFailures > 0) {
+    return `operator-alert:fanout-dispatch:${dayKey}`;
+  }
+
+  return null;
 }

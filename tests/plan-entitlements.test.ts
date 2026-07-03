@@ -11,13 +11,14 @@ import {
   getWorkspaceSeatLimit,
   PLAN_FAMILIES,
   planAllowsDigestCadence,
+  shouldSchedulePlanInRegularScan,
 } from "~/lib/plan-entitlements";
 
 describe("plan entitlements catalog", () => {
   it.each([
-    ["scout", 3, 10, 50, 1, "weekly_monday", 2],
-    ["starter", 10, 25, 250, 1, "daily", 1],
-    ["agency", 75, 250, 2500, 3, "daily", 0],
+    ["scout", 3, 10, 50, 1, "every_6h", 2],
+    ["starter", 10, 25, 250, 1, "every_3h", 1],
+    ["agency", 75, 250, 2500, 3, "every_3h", 0],
   ] as const)(
     "defines %s limits and monitoring policy",
   (plan, watchlists, boards, checks, seats, cadence, priority) => {
@@ -37,6 +38,13 @@ describe("plan entitlements catalog", () => {
     expect(planAllowsDigestCadence("starter", "weekly")).toBe(true);
     expect(planAllowsDigestCadence("scout", "daily")).toBe(false);
     expect(planAllowsDigestCadence("agency", "daily")).toBe(true);
+  });
+
+  it("includes Scout only on the six-hour regular scan slots", () => {
+    expect(shouldSchedulePlanInRegularScan("scout", new Date("2026-07-03T00:00:00.000Z"))).toBe(true);
+    expect(shouldSchedulePlanInRegularScan("scout", new Date("2026-07-03T03:00:00.000Z"))).toBe(false);
+    expect(shouldSchedulePlanInRegularScan("starter", new Date("2026-07-03T03:00:00.000Z"))).toBe(true);
+    expect(shouldSchedulePlanInRegularScan("agency", new Date("2026-07-03T03:00:00.000Z"))).toBe(true);
   });
 
   it("gates agency-only capabilities", () => {

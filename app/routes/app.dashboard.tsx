@@ -321,7 +321,7 @@ export default function AppDashboardRoute() {
             <span className="f9-app-kicker">Plan required for monitoring</span>
             <h2>Search is free. Retained tracking starts on a paid plan.</h2>
             <p>
-              Upgrade to Starter or above to keep nightly competitor checks, change digests, and saved
+              Upgrade to Starter or above to keep regular competitor checks, change digests, and saved
               evidence on a watchlist.
             </p>
           </div>

@@ -194,7 +194,7 @@ describe("runScheduledMonitoring workflow idempotency", () => {
     expect(listActiveWatchlists).toHaveBeenNthCalledWith(2, expect.anything(), { includeScout: false });
   });
 
-  it("includes Scout watchlists only for the Monday pre-digest scheduled scan", async () => {
+  it("includes Scout watchlists only on six-hour regular scan slots", async () => {
     const scheduleWatchlistFanout = vi.fn().mockResolvedValue({
       eligible: 0,
       queued: 0,
@@ -294,19 +294,19 @@ describe("runScheduledMonitoring workflow idempotency", () => {
     const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
 
     await runScheduledMonitoring(env as never, {
-      includeDigests: true,
-      digestCadence: "daily",
-      scheduledTime: Date.parse("2026-04-21T04:00:00.000Z"),
+      includeDigests: false,
+      cron: "0 */3 * * *",
+      scheduledTime: Date.parse("2026-04-20T03:00:00.000Z"),
     });
     await runScheduledMonitoring(env as never, {
-      includeDigests: true,
-      digestCadence: "daily",
-      scheduledTime: Date.parse("2026-04-20T04:00:00.000Z"),
+      includeDigests: false,
+      cron: "0 */3 * * *",
+      scheduledTime: Date.parse("2026-04-20T06:00:00.000Z"),
     });
     await runScheduledMonitoring(env as never, {
-      includeDigests: true,
-      digestCadence: "weekly",
-      scheduledTime: Date.parse("2026-04-20T05:00:00.000Z"),
+      includeDigests: false,
+      cron: "0 */3 * * *",
+      scheduledTime: Date.parse("2026-04-20T09:00:00.000Z"),
     });
 
     expect(listActiveWatchlists).toHaveBeenNthCalledWith(1, expect.anything(), { includeScout: false });
