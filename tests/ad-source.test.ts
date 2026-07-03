@@ -2108,6 +2108,54 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
+  it("does not retry a forceLive customer Meta API failure as its own fallback", async () => {
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>()
+      .mockRejectedValue(new Error("Meta API unavailable."));
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    await expect(
+      searchAdsViaSourceResolver(
+        {
+          DB: {} as D1Database,
+        } as never,
+        {
+          mode: "keyword",
+          filters: {
+            query: "nykaa",
+            country: "India",
+            platform: "all",
+            creativeType: "all",
+            status: "all",
+            firstSeenFrom: "",
+            lastSeenFrom: "",
+          },
+        },
+        null,
+        {
+          purpose: "watchlist_scan",
+          forceLive: true,
+          customerMetaAdLibraryToken: "customer-token",
+        },
+      ),
+    ).rejects.toThrow("Meta API unavailable.");
+
+    expect(metaApiSearch).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the distributed discovery lease when forceLive bypasses a warm cache", async () => {
     const browserSearch = vi.fn();
     const future = new Date(Date.now() + 30 * 60 * 1000).toISOString();

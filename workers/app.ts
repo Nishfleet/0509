@@ -217,10 +217,14 @@ export default {
             cron: controller.cron,
             ...result,
           });
-          if (scheduledTask.includeRiskAlert) {
+          if (scheduledTask.includeRiskAlert || result.skippedForBudget > 0) {
+            const scheduledDay = new Date(controller.scheduledTime).toISOString().slice(0, 10);
             try {
               const alert = await sendCustomerAtRiskAlert(env, {
                 skippedForBudget: result.skippedForBudget,
+                idempotencyKey: scheduledTask.includeRiskAlert
+                  ? undefined
+                  : `operator-alert:scan-budget:${scheduledDay}`,
               });
               if (alert.sent) {
                 console.log("customer-at-risk alert sent", alert);

@@ -332,10 +332,18 @@ describe("customer-at-risk operator alert", () => {
     }));
 
     const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
-    const result = await sendCustomerAtRiskAlert({ DB: {} } as never, { skippedForBudget: 3 });
+    const result = await sendCustomerAtRiskAlert({ DB: {} } as never, {
+      skippedForBudget: 3,
+      idempotencyKey: "operator-alert:scan-budget:2026-07-03",
+    });
 
     expect(result.sent).toBe(true);
-    const call = sendOperatorAlertEmail.mock.calls[0]?.[1] as { subject: string; lines: string[] };
+    const call = sendOperatorAlertEmail.mock.calls[0]?.[1] as {
+      subject: string;
+      lines: string[];
+      idempotencyKey?: string;
+    };
+    expect(call.idempotencyKey).toBe("operator-alert:scan-budget:2026-07-03");
     expect(call.lines).toHaveLength(4);
     expect(call.lines[0]).toContain("3 watchlist(s) were SKIPPED");
     expect(call.lines[1]).toContain("Mamaearth watch");

@@ -602,7 +602,7 @@ export async function searchAdsViaSourceResolver(
       });
     }
 
-    if (!forceLive || options.customerMetaAdLibraryToken?.trim()) {
+    if (provider === "meta_library_browser" && (!forceLive || options.customerMetaAdLibraryToken?.trim())) {
       const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
         browserFailureClass: failureClass,
         browserSummary: summary,

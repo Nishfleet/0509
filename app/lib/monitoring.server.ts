@@ -404,7 +404,7 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
 
 export async function sendCustomerAtRiskAlert(
   env: AppEnv,
-  options: { skippedForBudget?: number } = {},
+  options: { skippedForBudget?: number; idempotencyKey?: string } = {},
 ) {
   if (!env.DB) {
     return { sent: false, reason: "no_db" };
@@ -445,6 +445,7 @@ export async function sendCustomerAtRiskAlert(
   const sent = await sendOperatorAlertEmail(env, {
     subject: `0509 customer-at-risk: ${lines.length} signal${lines.length === 1 ? "" : "s"}`,
     lines,
+    idempotencyKey: options.idempotencyKey,
   });
 
   return { sent, signals: lines.length };
