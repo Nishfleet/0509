@@ -528,6 +528,84 @@ describe("searchAdsViaSourceResolver", () => {
     expect(upsertDiscoveryCacheEntry.mock.calls[0]?.[1].cacheKey).not.toContain(":customer_meta:");
   });
 
+  it("scopes customer-owned Meta API provider cache keys by token", async () => {
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ...buildLiveBrowserResult({
+        source: "meta_api",
+        provider: "meta_api",
+      }),
+      ads: [
+        {
+          ...buildLiveBrowserResult().ads[0],
+          metaAdId: "customer-meta-api-1",
+        },
+      ],
+    });
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(null);
+    const upsertDiscoveryCacheEntry = vi.fn();
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        forceLive: true,
+        customerMetaAdLibraryToken: "customer-token",
+        cacheKeyOverride: "meta_api:fp-nykaa:india:page-1",
+      },
+    );
+
+    expect(metaApiSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        META_AD_LIBRARY_TOKEN: "customer-token",
+      }),
+      expect.anything(),
+      null,
+      expect.objectContaining({
+        allowDemoFallback: false,
+      }),
+    );
+    expect(result).toMatchObject({
+      provider: "meta_api",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    const readCacheKey = getDiscoveryCacheEntry.mock.calls[0]?.[1] as string;
+    const published = upsertDiscoveryCacheEntry.mock.calls[0]?.[1] as { cacheKey: string };
+    expect(readCacheKey).toContain("meta_api:fp-nykaa:india:page-1:customer_meta:");
+    expect(readCacheKey).not.toContain("customer-token");
+    expect(published.cacheKey).toBe(readCacheKey);
+  });
+
   it("routes through the browser-backed provider when Quick Actions are configured", async () => {
     const browserSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
       ads: [],
@@ -2474,6 +2552,116 @@ describe("searchAdsViaSourceResolver", () => {
       provider: "meta_api",
       source: "meta_api",
       cacheStatus: "hit",
+      discoveryStatus: "healthy",
+    });
+  });
+
+  it("runs the waiting customer's Meta API fallback when the shared browser lease does not resolve", async () => {
+    const browserSearch = vi.fn();
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ...buildLiveBrowserResult({
+        source: "meta_api",
+        provider: "meta_api",
+      }),
+      ads: [
+        {
+          ...buildLiveBrowserResult().ads[0],
+          metaAdId: "customer-b-fallback-1",
+        },
+      ],
+    });
+    const future = new Date(Date.now() + 30 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(null);
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          run: vi.fn().mockResolvedValue({ success: true }),
+          first: vi.fn().mockResolvedValue({
+            holder_id: "other-holder",
+            lease_expires_at: future,
+          }),
+        })),
+      })),
+    } as unknown as D1Database;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockImplementation(() => {
+        const timestamp = new Date().toISOString();
+        return Promise.resolve({
+          provider: "meta_library_browser",
+          status: "degraded",
+          failureClass: "timeout",
+          summary: "Commercial discovery timed out while another scan held the lease.",
+          lastSuccessAt: null,
+          lastFailureAt: timestamp,
+          metadata: {},
+          updatedAt: timestamp,
+        });
+      }),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        forceLive: true,
+        customerMetaAdLibraryToken: "customer-b-token",
+      },
+    );
+
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(metaApiSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        META_AD_LIBRARY_TOKEN: "customer-b-token",
+      }),
+      expect.anything(),
+      null,
+      expect.objectContaining({
+        allowDemoFallback: false,
+      }),
+    );
+    expect(upsertDiscoveryCacheEntry.mock.calls.at(-1)?.[1]).toMatchObject({
+      cacheKey: expect.stringContaining(":customer_meta:"),
+      payload: expect.objectContaining({
+        provider: "meta_api",
+      }),
+    });
+    expect(result).toMatchObject({
+      provider: "meta_api",
+      source: "meta_api",
+      cacheStatus: "miss",
       discoveryStatus: "healthy",
     });
   });
