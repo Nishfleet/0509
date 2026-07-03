@@ -29,7 +29,7 @@ export async function deliverPresenceDigestForUser(
 
   const lookbackHours = options.lookbackHours ?? 168;
   const since = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-  const items = await listPresenceItems(env, userId, { since, limit: 25 });
+  const items = await listPresenceItems(env, userId, { connectorId: "website", since, limit: 25 });
   if (items.length === 0) {
     return { delivered: false, reason: "no_items" as const };
   }

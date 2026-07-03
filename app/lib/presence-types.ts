@@ -1,6 +1,42 @@
 export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin"] as const;
 export type PresenceConnectorId = (typeof PRESENCE_CONNECTOR_IDS)[number];
 
+/** Catalog sources include live connectors plus planned/manual-only entries. */
+export const PRESENCE_SOURCE_IDS = [
+  "website",
+  "x",
+  "reddit",
+  "linkedin",
+  "youtube",
+  "amazon",
+  "context_dev",
+] as const;
+export type PresenceSourceId = (typeof PRESENCE_SOURCE_IDS)[number];
+
+export const PRESENCE_SOURCE_COVERAGE_STATUSES = [
+  "active",
+  "available",
+  "connected",
+  "gated",
+  "planned",
+  "manual_only",
+  "limited",
+  "unavailable",
+  "degraded",
+] as const;
+export type PresenceSourceCoverageStatus = (typeof PRESENCE_SOURCE_COVERAGE_STATUSES)[number];
+
+export interface PresenceSourceCoverageEntry {
+  sourceId: PresenceSourceId;
+  label: string;
+  status: PresenceSourceCoverageStatus;
+  coverageLabel: PresenceCoverageLabel | null;
+  reasonCode: string | null;
+  reasonMessage: string | null;
+  actionNeeded: string | null;
+  connectorId: PresenceConnectorId | null;
+}
+
 export const PRESENCE_TRACKING_MODES = ["self", "competitor"] as const;
 export type PresenceTrackingMode = (typeof PRESENCE_TRACKING_MODES)[number];
 
@@ -136,6 +172,7 @@ export interface PollResult {
   ok: boolean;
   items: NormalizedPresenceItem[];
   cursor?: Record<string, unknown>;
+  coverageLabel?: PresenceCoverageLabel;
   etag?: string | null;
   lastModified?: string | null;
   errorCode?: string;

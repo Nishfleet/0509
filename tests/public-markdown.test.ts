@@ -38,6 +38,10 @@ describe("public markdown", () => {
   });
 
   it("keeps agent-readable content aligned with launch truth", () => {
+    expect(PUBLIC_MARKDOWN).toContain("Presence Desk tracks your brand and competitors across declared sources");
+    expect(PUBLIC_MARKDOWN).toContain("Website/open-web is the active GA source");
+    expect(PUBLIC_MARKDOWN).toContain("does not promise whole-internet scanning");
+    expect(LLMS_TEXT).toContain("Presence Desk: website/open-web is the active GA source");
     expect(PUBLIC_MARKDOWN).toContain("verified access paths");
     expect(PUBLIC_MARKDOWN).toContain("visible plan caps");
     expect(PUBLIC_MARKDOWN).toContain("Public read-only search and a sample brief");

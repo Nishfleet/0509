@@ -53,6 +53,10 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
   }
 }
 
+export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
+  return connectorId === "website";
+}
+
 export async function evaluateConnectorAccessGate(
   env: AppEnv,
   connectorId: PresenceConnectorId,
@@ -125,6 +129,9 @@ export async function connectorOperationalForPolling(
 ): Promise<boolean> {
   const gate = await evaluateConnectorAccessGate(env, connectorId, trackingMode, workspaceUserId);
   if (!gate.allowed) {
+    return false;
+  }
+  if (!connectorHasCustomerPollPath(connectorId)) {
     return false;
   }
   return gate.rolloutState === "internal" || gate.rolloutState === "pilot" || gate.rolloutState === "ga";

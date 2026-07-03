@@ -1,10 +1,17 @@
 # Presence Tracking Architecture (v1)
 
-Last updated: 2026-06-27
+Last updated: 2026-07-02
 
 ## Goal
 
-Track **self** (customer-owned, OAuth where applicable) and **competitor** (public-only) entities across website/blog and social surfaces with honest coverage labels.
+Track **market entities** — self (customer-owned), competitors, and future kinds (client, product, creator, campaign) — across declared sources with honest coverage labels. Presence Desk is the customer-facing embodiment; Market Desk remains the competitor ad-monitoring workflow.
+
+## Product positioning
+
+- **Presence Desk**: proof-backed entity tracking across website/open-web (GA) and gated social sources.
+- **Market Desk**: competitor ad monitoring, watchlists, and counter-move briefs.
+- Source coverage is centralized in `app/lib/presence-source-coverage.server.ts` and must not be hand-written in UI, docs, or API copy.
+- Entity briefs are built in `app/lib/presence-entity-brief.server.ts` from real poll results and `presence_item` records — never fabricated on failure.
 
 ## Coverage labels
 
@@ -102,9 +109,12 @@ Presence digests use `sendPresenceDigestEmail` in `delivery.server.ts` with idem
 
 ## Product UX
 
-- `/app/presence` — setup, entity list, unified feed (nav hidden unless workspace allowed)
-- `/app/presence/:entityId` — sources, poll, compare view, feed
+- `/app/presence` — Presence Desk: tracked entities, source coverage matrix, entity brief summaries, unified feed (nav hidden unless workspace allowed)
+- `/app/presence/:entityId` — entity detail: sources, entity brief, poll, compare view, feed
 - Social Connect UI hidden while X/Reddit/LinkedIn rollout = `disabled`
+- YouTube, Amazon, and Context.dev appear in coverage as planned/manual-only — not active scan sources until provider gates pass
+
+Experience contracts: `docs/presence-desk-experience-contract.md`, `docs/market-desk-experience-contract.md`
 
 ## Reuse
 
