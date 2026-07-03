@@ -364,10 +364,139 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
       scheduledTime,
     });
 
-    const row = sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist_run").get() as { count: number };
+    const row = sqlite.prepare("SELECT COUNT(*) AS count, started_at FROM watchlist_run").get() as {
+      count: number;
+      started_at: string;
+    };
     expect(first.created).toBe(true);
     expect(second.created).toBe(false);
     expect(row.count).toBe(1);
+    expect(row.started_at).toBe(new Date(scheduledTime).toISOString());
+  });
+
+  it("coalesces later scheduled windows while a watchlist still has active scheduled work", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    const watchlist = buildWatchlist(1);
+    const firstSlot = Date.parse("2026-06-23T03:00:00.000Z");
+    const secondSlot = Date.parse("2026-06-23T06:00:00.000Z");
+    const thirdSlot = Date.parse("2026-06-23T09:00:00.000Z");
+
+    const firstKey = buildWatchlistExecutionIdempotencyKey({
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      scheduledTime: firstSlot,
+      cron: "0 */3 * * *",
+    });
+    const secondKey = buildWatchlistExecutionIdempotencyKey({
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      scheduledTime: secondSlot,
+      cron: "0 */3 * * *",
+    });
+    const thirdKey = buildWatchlistExecutionIdempotencyKey({
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      scheduledTime: thirdSlot,
+      cron: "0 */3 * * *",
+    });
+
+    const first = await ensureOrchestratedWatchlistRun({ DB: db } as never, {
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      executionKey: firstKey,
+      pageBudget: 2,
+      scheduledTime: firstSlot,
+    });
+    const second = await ensureOrchestratedWatchlistRun({ DB: db } as never, {
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      executionKey: secondKey,
+      pageBudget: 2,
+      scheduledTime: secondSlot,
+    });
+
+    expect(second).toEqual({ runId: first.runId, created: false });
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist_run").get()).toEqual({ count: 1 });
+
+    sqlite.prepare("UPDATE watchlist_run SET status = 'succeeded' WHERE id = ?").run(first.runId);
+    const third = await ensureOrchestratedWatchlistRun({ DB: db } as never, {
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      executionKey: thirdKey,
+      pageBudget: 2,
+      scheduledTime: thirdSlot,
+    });
+
+    expect(third.created).toBe(true);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist_run").get()).toEqual({ count: 2 });
+  });
+
+  it("does not let stale legacy inline scheduled rows suppress fan-out insertion", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    const watchlist = buildWatchlist(1);
+    sqlite
+      .prepare(
+        `INSERT INTO watchlist_run (id, watchlist_id, trigger_type, status, page_budget, pages_scanned, summary_json, started_at, created_at, updated_at, queued_at, attempt_count)
+         VALUES ('legacy-inline', ?, 'scheduled', 'running', 2, 0, '{}', '2026-06-23T00:00:00.000Z', '2026-06-23T00:00:00.000Z', '2026-06-23T00:00:00.000Z', NULL, 1)`,
+      )
+      .run(watchlist.id);
+
+    const scheduledTime = Date.parse("2026-06-23T03:00:00.000Z");
+    const created = await ensureOrchestratedWatchlistRun({ DB: db } as never, {
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      executionKey: buildWatchlistExecutionIdempotencyKey({
+        watchlistId: watchlist.id,
+        triggerType: "scheduled",
+        scheduledTime,
+        cron: "0 */3 * * *",
+      }),
+      pageBudget: 2,
+      scheduledTime,
+    });
+
+    expect(created.created).toBe(true);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist_run").get()).toEqual({ count: 2 });
+  });
+
+  it("retries insertion when an active coalescing row finishes before fallback lookup", async () => {
+    let insertAttempts = 0;
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind() {
+            return {
+              async run() {
+                if (sql.includes("INSERT OR IGNORE INTO watchlist_run")) {
+                  insertAttempts += 1;
+                  return { meta: { changes: insertAttempts === 2 ? 1 : 0 } };
+                }
+                return { meta: { changes: 0 } };
+              },
+              async first<T>() {
+                return null as T | null;
+              },
+              async all<T>() {
+                return { results: [] as T[] };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const result = await ensureOrchestratedWatchlistRun({ DB: db } as never, {
+      watchlistId: "watch-race",
+      triggerType: "scheduled",
+      executionKey: "watchlist-run:scheduled:watch-race:0-3:2026-06-23T03-00-00-000Z",
+      pageBudget: 2,
+      scheduledTime: Date.parse("2026-06-23T03:00:00.000Z"),
+    });
+
+    expect(result.created).toBe(true);
+    expect(insertAttempts).toBe(2);
   });
 
   it("treats createBatch skipped IDs as duplicates, not dispatch failures", async () => {

@@ -19,7 +19,11 @@ import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
 import { primaryDomainRedirect } from "./primary-domain";
-import { resolveScheduledTask, WEEKLY_DIGEST_CRON } from "./schedule";
+import {
+  resolveOperationalRiskAlertIdempotencyKey,
+  resolveScheduledTask,
+  WEEKLY_DIGEST_CRON,
+} from "./schedule";
 import { withSecurityHeaders } from "./security-headers";
 export { MonitoringWorkflow } from "./monitoring-workflow";
 
@@ -217,17 +221,35 @@ export default {
             cron: controller.cron,
             ...result,
           });
-          try {
-            const alert = await sendCustomerAtRiskAlert(env, {
-              skippedForBudget: result.skippedForBudget,
-            });
-            if (alert.sent) {
-              console.log("customer-at-risk alert sent", alert);
+          if (
+            scheduledTask.includeRiskAlert ||
+            result.skippedForBudget > 0 ||
+            result.dispatchFailures > 0
+          ) {
+            const scheduledDay = new Date(controller.scheduledTime).toISOString().slice(0, 10);
+            const operationalIdempotencyKey = resolveOperationalRiskAlertIdempotencyKey(
+              scheduledDay,
+              {
+                skippedForBudget: result.skippedForBudget,
+                dispatchFailures: result.dispatchFailures,
+              },
+            );
+            try {
+              const alert = await sendCustomerAtRiskAlert(env, {
+                skippedForBudget: result.skippedForBudget,
+                dispatchFailures: result.dispatchFailures,
+                idempotencyKey: scheduledTask.includeRiskAlert
+                  ? undefined
+                  : operationalIdempotencyKey ?? undefined,
+              });
+              if (alert.sent) {
+                console.log("customer-at-risk alert sent", alert);
+              }
+            } catch (error) {
+              console.error("customer-at-risk alert failed", {
+                error: error instanceof Error ? error.message : String(error),
+              });
             }
-          } catch (error) {
-            console.error("customer-at-risk alert failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
           }
         },
         (error) => {

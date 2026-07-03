@@ -56,7 +56,7 @@ import {
 } from "~/lib/ad-source.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
-import { planAllowsDigestCadence } from "~/lib/plan-entitlements";
+import { planAllowsDigestCadence, shouldSchedulePlanInRegularScan } from "~/lib/plan-entitlements";
 import {
   getEvidenceUsageSummary,
   isEvidenceUsageStorageUnavailableError,
@@ -92,7 +92,6 @@ const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
 const DIGEST_RETRY_WINDOW_DAYS = 7;
 const DIGEST_RETRY_SWEEP_LIMIT = 25;
-const WEEKLY_DIGEST_UTC_DAY = 1;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 const DIRECT_WEBSITE_PROOF_INTERVAL_MS = 20 * 60 * 60 * 1000;
 
@@ -118,6 +117,7 @@ interface ScanOptions {
   orchestrationToken?: string;
   concurrencyPermitToken?: string;
   orchestrationRunId?: string;
+  forceLive?: boolean;
 }
 
 export type {
@@ -169,7 +169,15 @@ export async function runScheduledMonitoring(
   options: RunScheduledMonitoringOptions = {},
 ) {
   if (!env.DB) {
-    return { queued: 0, duplicates: 0, inlineRuns: 0, inlineFailures: 0, skippedForBudget: 0, digests: 0 };
+    return {
+      queued: 0,
+      duplicates: 0,
+      inlineRuns: 0,
+      inlineFailures: 0,
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      digests: 0,
+    };
   }
 
   const deadlineAt = Date.now() + SCHEDULED_MONITORING_TIME_BUDGET_MS;
@@ -191,6 +199,7 @@ export async function runScheduledMonitoring(
   let inlineRuns = 0;
   let inlineFailures = 0;
   let skippedForBudget = 0;
+  let dispatchFailures = 0;
 
   if (options.includeScans !== false) {
     const watchlists = await listActiveWatchlists(env, {
@@ -231,7 +240,7 @@ export async function runScheduledMonitoring(
       });
       queued = fanoutResult.queued;
       duplicates = fanoutResult.duplicates;
-      skippedForBudget = fanoutResult.dispatchFailures;
+      dispatchFailures = fanoutResult.dispatchFailures;
 
       if (inlineFallbackWatchlists.length > 0) {
         const inlineResult = await runScheduledMonitoringInline(
@@ -284,6 +293,7 @@ export async function runScheduledMonitoring(
     inlineRuns,
     inlineFailures,
     skippedForBudget,
+    dispatchFailures,
     digests,
   };
 }
@@ -360,7 +370,7 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
   return { groups: flushedGroups, attempts };
 }
 
-// Runs after the nightly monitoring cron: when paying customers' scans or
+// Runs after scheduled monitoring: when paying customers' scans or
 // deliveries are degrading, the operator hears about it instead of finding
 // out from a churn email.
 export function buildWeeklyBusinessLines(
@@ -404,7 +414,7 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
 
 export async function sendCustomerAtRiskAlert(
   env: AppEnv,
-  options: { skippedForBudget?: number } = {},
+  options: { skippedForBudget?: number; dispatchFailures?: number; idempotencyKey?: string } = {},
 ) {
   if (!env.DB) {
     return { sent: false, reason: "no_db" };
@@ -415,7 +425,12 @@ export async function sendCustomerAtRiskAlert(
 
   if ((options.skippedForBudget ?? 0) > 0) {
     lines.push(
-      `${options.skippedForBudget} watchlist(s) were SKIPPED last night because the check window filled — review volume must be expanded before adding more watchlists (revive the Workflow path).`,
+      `${options.skippedForBudget} watchlist(s) were SKIPPED in a recent scheduled scan window because the check window filled — review volume must be expanded before adding more watchlists (revive the Workflow path).`,
+    );
+  }
+  if ((options.dispatchFailures ?? 0) > 0) {
+    lines.push(
+      `${options.dispatchFailures} watchlist fan-out job(s) failed to dispatch in a recent scheduled scan window; reconciliation will retry, but the Workflow dispatch path needs attention.`,
     );
   }
 
@@ -445,6 +460,7 @@ export async function sendCustomerAtRiskAlert(
   const sent = await sendOperatorAlertEmail(env, {
     subject: `0509 customer-at-risk: ${lines.length} signal${lines.length === 1 ? "" : "s"}`,
     lines,
+    idempotencyKey: options.idempotencyKey,
   });
 
   return { sent, signals: lines.length };
@@ -532,9 +548,8 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
 }
 
 // First scan on creation: a new watchlist must show value within minutes,
-// not after the next nightly cron (which can be up to a day away — or six
-// for scout). Runs in the background; a failure is non-fatal because the
-// scheduled scan still covers the watchlist.
+// not after the next scheduled cron. Runs in the background; a failure is
+// non-fatal because the scheduled scan still covers the watchlist.
 export function queueFirstWatchlistScan(
   env: AppEnv,
   ctx: ExecutionContext | undefined,
@@ -707,6 +722,7 @@ export async function runWatchlistWorkflowJob(
           orchestrationRunId: params.runId,
           orchestrationToken: claim.processingToken,
           concurrencyPermitToken: options.concurrencyPermitToken,
+          forceLive: true,
         }),
       {
         customerMetaAdLibraryToken,
@@ -786,7 +802,7 @@ export async function runWatchlist(
   options: ScanOptions = {},
 ) {
   // One scan at a time per watchlist: the first-scan waitUntil, an eager
-  // "Refresh now" click, and the nightly cron can otherwise overlap — double
+  // "Refresh now" click, and the regular cron can otherwise overlap — double
   // Browser Rendering spend and duplicate baseline events.
   if (!options.existingRunId) {
     const inFlightCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -1099,7 +1115,7 @@ export function diffWatchlistObservations(
       baselineObservation.landing_page_url &&
       // Compare canonical page identities, not raw strings: rotating
       // utm_/fbclid tracking params made the highest-severity event in the
-      // system fire nightly on two visually identical URLs.
+      // system fire repeatedly on two visually identical URLs.
       (buildCanonicalPageIdentity(observation.landing_page_url) ??
         observation.landing_page_url) !==
         (buildCanonicalPageIdentity(baselineObservation.landing_page_url) ??
@@ -1398,15 +1414,11 @@ function digestCadenceForPeriod(periodStart: string, periodEnd: string): DigestC
 }
 
 function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoringOptions) {
-  if (!options.includeDigests || options.digestCadence !== "daily") {
-    return false;
-  }
-
   const scheduledAt = options.scheduledTime === undefined
     ? new Date()
     : new Date(options.scheduledTime);
 
-  return scheduledAt.getUTCDay() === WEEKLY_DIGEST_UTC_DAY;
+  return shouldSchedulePlanInRegularScan("scout", scheduledAt);
 }
 
 async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {
@@ -1455,7 +1467,7 @@ async function runScheduledMonitoringInline(
       const ranInline = await runScheduledWatchlistInline(env, watchlist, scanCache, options);
       inlineRuns += ranInline ? 1 : 0;
     } catch (error) {
-      // One watchlist failure must never abort the rest of the nightly run
+      // One watchlist failure must never abort the rest of the scheduled run
       // (or the digests that precede it). The run itself is already recorded
       // as failed by runWatchlist before it rethrows.
       inlineFailures += 1;
@@ -1506,6 +1518,7 @@ async function runScheduledWatchlistInline(
           scanCacheKey,
           performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
             customerMetaAdLibraryToken,
+            forceLive: true,
           }),
         );
       }
@@ -1537,6 +1550,7 @@ async function performBoundedScan(
       {
         purpose: "watchlist_scan",
         customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+        forceLive: options.forceLive === true,
       },
     );
     ads.push(...response.ads);

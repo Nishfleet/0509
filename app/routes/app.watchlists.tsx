@@ -1696,7 +1696,7 @@ function FirstScanBanner(props: { watchlistId: string }) {
         </h2>
         <p>
           {pollCount >= FIRST_SCAN_POLL_LIMIT
-            ? "The first scan is taking longer than usual — it's still queued, and the nightly scan covers it either way. Check back in a bit."
+            ? "The first scan is taking longer than usual — it's still queued, and the next scheduled scan covers it either way. Check back in a bit."
             : "First results usually land within a couple of minutes. This page updates by itself — no need to refresh."}
         </p>
       </div>
@@ -1733,7 +1733,7 @@ function formatRunStatusLabel(status: string, errorCode?: string | null) {
 
 function formatRunTriggerLabel(triggerType: string) {
   if (triggerType === "manual") return "Manual refresh";
-  if (triggerType === "scheduled") return "Nightly scan";
+  if (triggerType === "scheduled") return "Scheduled scan";
   if (triggerType === "workflow") return "Background scan";
   return triggerType;
 }

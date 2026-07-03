@@ -6,8 +6,8 @@ import type {
   WatchEventType,
 } from "~/lib/types";
 
-// Must exceed the 24h scan cadence: with a 6h window every nightly repeat
-// of the same change (A/B tests, countdown headlines) re-alerted forever.
+// Must exceed the regular scan cadence: without a wider window, repeated
+// variants of the same change (A/B tests, countdown headlines) re-alert forever.
 const SUPPRESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {

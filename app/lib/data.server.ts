@@ -19,6 +19,7 @@ import {
 } from "~/lib/ga-customer-surface";
 import { resolveBillingSkuFromProviderProductId } from "~/lib/billing-sku-catalog";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
+import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
 import { normalizeSupportCaseInput, SupportCaseInputError } from "~/lib/support";
 import { SUPPORT_CASE_EVENT_TYPES } from "~/lib/types";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
@@ -5130,7 +5131,7 @@ export async function recordWatchlistCapacitySkip(
   const summary = {
     reason: input.reason ?? "capacity_budget",
     message:
-      "Last night's scan window filled before this watchlist was reached. It stays queued for the next run.",
+      "The scheduled scan window filled before this watchlist was reached. It stays queued for the next run.",
   };
 
   const db = ensureDb(env);
@@ -5374,7 +5375,7 @@ export interface OperatorRiskSummary {
   stuckRuns: number;
 }
 
-// Targeted "customer-at-risk" signals for the nightly operator alert —
+// Targeted "customer-at-risk" signals for the daily operator alert —
 // deliberately cheaper than the full operator snapshot.
 export interface WeeklyBusinessSummary {
   signups7d: number;
@@ -5385,6 +5386,16 @@ export interface WeeklyBusinessSummary {
   digestAttempts7d: number;
   digestSent7d: number;
   oldestActivePaidScanAt: string | null;
+}
+
+function resolvePaidScanStaleCutoffIso(
+  plan: "scout" | "starter" | "agency",
+  nowMs: number,
+) {
+  const cadence = getScheduledMonitoringPolicy(plan).scheduledScanCadence;
+  const staleAfterHours =
+    cadence === "every_3h" ? 7 : cadence === "every_6h" ? 13 : 36;
+  return new Date(nowMs - staleAfterHours * 60 * 60 * 1000).toISOString();
 }
 
 // Monday operator email: the handful of numbers that say whether the
@@ -5443,7 +5454,7 @@ export async function getWeeklyBusinessSummary(env: AppEnv): Promise<WeeklyBusin
           FROM watchlist
           INNER JOIN user_plan ON user_plan.user_id = watchlist.user_id
           WHERE watchlist.is_active = 1
-            AND user_plan.plan IN ('starter', 'agency')
+            AND user_plan.plan != 'free'
             AND watchlist.last_scanned_at IS NOT NULL
         `,
       ),
@@ -5517,10 +5528,13 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
   }
 
   // Budget-skipped watchlists never create a run row, so failure counting
-  // can't see them — staleness can: an active paid watchlist that hasn't
-  // been scanned in 36h means the nightly window is overflowing (or the
-  // cron is broken). This is the capacity canary.
-  const staleCutoff = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+  // can't see them — staleness can: an active paid watchlist that has missed
+  // multiple regular scan windows means capacity is overflowing or the cron is
+  // broken. This is the cadence-aware capacity canary.
+  const nowMs = Date.now();
+  const scoutStaleCutoff = resolvePaidScanStaleCutoffIso("scout", nowMs);
+  const starterStaleCutoff = resolvePaidScanStaleCutoffIso("starter", nowMs);
+  const agencyStaleCutoff = resolvePaidScanStaleCutoffIso("agency", nowMs);
   const staleRows = await many<{
     id: string;
     name: string;
@@ -5535,14 +5549,26 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
       INNER JOIN user_plan ON user_plan.user_id = watchlist.user_id
       INNER JOIN user ON user.id = watchlist.user_id
       WHERE watchlist.is_active = 1
-        AND user_plan.plan IN ('starter', 'agency')
-        AND watchlist.created_at < ?
-        AND (watchlist.last_scanned_at IS NULL OR watchlist.last_scanned_at < ?)
+        AND (
+          (user_plan.plan = 'scout'
+            AND watchlist.created_at < ?
+            AND (watchlist.last_scanned_at IS NULL OR watchlist.last_scanned_at < ?))
+          OR (user_plan.plan = 'starter'
+            AND watchlist.created_at < ?
+            AND (watchlist.last_scanned_at IS NULL OR watchlist.last_scanned_at < ?))
+          OR (user_plan.plan = 'agency'
+            AND watchlist.created_at < ?
+            AND (watchlist.last_scanned_at IS NULL OR watchlist.last_scanned_at < ?))
+        )
       ORDER BY watchlist.last_scanned_at ASC
       LIMIT 10
     `,
-    staleCutoff,
-    staleCutoff,
+    scoutStaleCutoff,
+    scoutStaleCutoff,
+    starterStaleCutoff,
+    starterStaleCutoff,
+    agencyStaleCutoff,
+    agencyStaleCutoff,
   );
 
   const [deliveryRow, stuckRow] = await Promise.all([
@@ -5617,8 +5643,8 @@ export async function getSuccessfulRunStatsForUserBetween(
       WHERE watchlist.user_id = ?
         AND watchlist_run.status = 'succeeded'
         AND COALESCE(json_extract(watchlist_run.summary_json, '$.scanStatus'), '') != 'degraded'
-        AND watchlist_run.started_at >= ?
-        AND watchlist_run.started_at < ?
+        AND watchlist_run.finished_at >= ?
+        AND watchlist_run.finished_at < ?
     `,
     userId,
     startIso,

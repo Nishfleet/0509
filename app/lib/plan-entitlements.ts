@@ -15,7 +15,7 @@ export type PlanResource = "watchlists" | "collections";
 
 export type DigestCadencePolicy = "none" | "weekly" | "daily_and_weekly";
 
-export type ScheduledScanCadence = "none" | "weekly_monday" | "daily";
+export type ScheduledScanCadence = "none" | "every_6h" | "every_3h";
 
 export type MonitoringQueuePriority = 0 | 1 | 2;
 
@@ -125,7 +125,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     includedEvidenceChecksPerMonth: 50,
     workspaceSeats: 1,
     digestCadence: "weekly",
-    scheduledScanCadence: "weekly_monday",
+    scheduledScanCadence: "every_6h",
     monitoringQueuePriority: 2,
     metaSourceStatus: "beta_limited",
     features: new Set(SCOUT_FEATURES),
@@ -137,7 +137,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     includedEvidenceChecksPerMonth: 250,
     workspaceSeats: 1,
     digestCadence: "daily_and_weekly",
-    scheduledScanCadence: "daily",
+    scheduledScanCadence: "every_3h",
     monitoringQueuePriority: 1,
     metaSourceStatus: "beta_limited",
     features: new Set(STARTER_FEATURES),
@@ -149,7 +149,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     includedEvidenceChecksPerMonth: 2500,
     workspaceSeats: 3,
     digestCadence: "daily_and_weekly",
-    scheduledScanCadence: "daily",
+    scheduledScanCadence: "every_3h",
     monitoringQueuePriority: 0,
     metaSourceStatus: "beta_priority",
     features: new Set(AGENCY_FEATURES),
@@ -200,11 +200,16 @@ export function planAllowsDigestCadence(planFamily: PlanFamily, cadence: "daily"
   return policy === "weekly" || policy === "daily_and_weekly";
 }
 
+export function shouldSchedulePlanInRegularScan(planFamily: PlanFamily, scheduledAt: Date): boolean {
+  const cadence = getPlanEntitlements(planFamily).scheduledScanCadence;
+  if (cadence === "none") return false;
+  if (cadence === "every_6h") return scheduledAt.getUTCHours() % 6 === 0;
+  return true;
+}
+
+/** @deprecated Use shouldSchedulePlanInRegularScan for all plan families. */
 export function shouldScheduleScoutOnDate(planFamily: PlanFamily, scheduledAt: Date): boolean {
-  if (getPlanEntitlements(planFamily).scheduledScanCadence !== "weekly_monday") {
-    return true;
-  }
-  return scheduledAt.getUTCDay() === 1;
+  return shouldSchedulePlanInRegularScan(planFamily, scheduledAt);
 }
 
 /** @deprecated Import from plan-entitlements; kept for transitional imports. */

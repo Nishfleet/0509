@@ -1,28 +1,44 @@
 import { safeTimeZone } from "~/lib/safe-timezone";
 
-// Customer-facing scan-schedule expectations. The nightly scan cron is
-// 0 4 * * * UTC; scout watchlists only join the Monday run. Labels default
-// to UTC (the product is global-first) and accept a workspace timezone so
-// "when will this update?" always has an answer in the customer's terms.
+// Customer-facing scan-schedule expectations. Regular scans run every three
+// hours; Scout joins the six-hour slots. Labels default to UTC (the product is
+// global-first) and accept a workspace timezone so "when will this update?"
+// always has an answer in the customer's terms.
 
-const DAILY_SCAN_UTC_HOUR = 4;
+const THREE_HOUR_SCAN_UTC_HOURS = [0, 3, 6, 9, 12, 15, 18, 21] as const;
+const SIX_HOUR_SCAN_UTC_HOURS = [0, 6, 12, 18] as const;
 
 export function nextScheduledScanAt(plan: string, now: Date = new Date()): Date {
-  const next = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), DAILY_SCAN_UTC_HOUR, 0, 0),
-  );
+  const scanHours = plan === "scout" ? SIX_HOUR_SCAN_UTC_HOURS : THREE_HOUR_SCAN_UTC_HOURS;
 
-  if (next.getTime() <= now.getTime()) {
-    next.setUTCDate(next.getUTCDate() + 1);
-  }
-
-  if (plan === "scout") {
-    while (next.getUTCDay() !== 1) {
-      next.setUTCDate(next.getUTCDate() + 1);
+  for (let dayOffset = 0; dayOffset <= 1; dayOffset += 1) {
+    for (const hour of scanHours) {
+      const candidate = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate() + dayOffset,
+          hour,
+          0,
+          0,
+        ),
+      );
+      if (candidate.getTime() > now.getTime()) {
+        return candidate;
+      }
     }
   }
 
-  return next;
+  return new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      scanHours[0],
+      0,
+      0,
+    ),
+  );
 }
 
 export function formatNextScanLabel(

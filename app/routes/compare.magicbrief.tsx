@@ -24,7 +24,7 @@ const transfers = [
   },
   {
     theirs: "Brand tracking",
-    ours: "Watchlists — nightly checks with screenshots, page text, and links saved as evidence",
+    ours: "Watchlists — regular checks with screenshots, page text, and links saved as evidence",
   },
   {
     theirs: "Creative inspiration browsing",

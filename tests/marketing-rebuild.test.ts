@@ -162,7 +162,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("evidence on file");
     expect(marketingRoute).toContain("Recommended launch plan");
     expect(marketingRoute).toContain("Start with Starter");
-    expect(marketingRoute).toContain("Daily competitor monitoring");
+    expect(marketingRoute).toContain("3-hour competitor monitoring");
     expect(marketingRoute).toContain("valueMathLabel");
     expect(marketingRoute).toContain("Check packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');

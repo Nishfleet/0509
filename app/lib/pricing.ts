@@ -21,10 +21,10 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   features.push(`${entitlements.watchlists} active watchlists`);
   features.push(`${entitlements.collections} Collections`);
 
-  if (entitlements.scheduledScanCadence === "weekly_monday") {
-    features.push("Monday scan");
-  } else if (entitlements.scheduledScanCadence === "daily") {
-    features.push("Daily scans");
+  if (entitlements.scheduledScanCadence === "every_6h") {
+    features.push("6-hour scans");
+  } else if (entitlements.scheduledScanCadence === "every_3h") {
+    features.push("3-hour scans");
   }
 
   if (entitlements.digestCadence === "weekly") {
@@ -69,7 +69,7 @@ const PLANS: PricingPlan[] = PLAN_FAMILIES.filter((plan) => plan !== "free").map
       slug === "scout"
         ? "Focused competitor monitoring for a small watchlist."
         : slug === "starter"
-          ? "Daily competitor monitoring for one brand's core market."
+          ? "3-hour competitor monitoring for one brand's core market."
           : "Client-ready competitor reports for agencies and crowded categories.",
     features: planMarketingFeatures(slug),
     monthlySku: `${slug}_monthly_v1`,

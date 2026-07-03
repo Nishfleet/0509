@@ -795,7 +795,7 @@ describe("capacity skip idempotency (sqlite)", () => {
     return { DB: harness.db } as never;
   }
 
-  it("records only one capacity skip per nightly window", async () => {
+  it("records only one capacity skip per scheduled window", async () => {
     const env = openEnv();
     const scheduledTime = Date.parse("2026-06-23T04:00:00.000Z");
     const input = {
@@ -813,7 +813,7 @@ describe("capacity skip idempotency (sqlite)", () => {
     expect(count.count).toBe(1);
   });
 
-  it("allows a new skip on the next nightly window", async () => {
+  it("allows a new skip on the next scheduled window", async () => {
     const env = openEnv();
     await recordWatchlistCapacitySkip(env, "wl-1", {
       scheduledTime: Date.parse("2026-06-23T04:00:00.000Z"),

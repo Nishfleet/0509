@@ -1,7 +1,7 @@
 import type { AppEnv } from "~/lib/env.server";
 import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
-import { getScheduledMonitoringPolicy, shouldScheduleScoutOnDate } from "~/lib/plan-entitlements";
+import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
 import { getUserPlan } from "~/lib/plan.server";
 import type { WatchlistRecord, WatchlistRunRecord } from "~/lib/types";
 
@@ -136,6 +136,7 @@ export async function selectRankedEligibleOrchestratedRuns(env: AppEnv, now = no
         INNER JOIN user_plan up ON up.user_id = w.user_id
         WHERE wr.status = 'pending'
           AND wr.trigger_type = 'scheduled'
+          AND wr.idempotency_key IS NOT NULL
           AND (wr.retry_after IS NULL OR wr.retry_after <= ?)
           AND w.is_active = 1
           AND up.plan != 'free'
@@ -146,14 +147,6 @@ export async function selectRankedEligibleOrchestratedRuns(env: AppEnv, now = no
 
   const nowMs = Date.parse(now);
   return (result.results ?? [])
-    .filter((row) => {
-      const plan =
-        row.plan === "scout" || row.plan === "starter" || row.plan === "agency" ? row.plan : "free";
-      if (plan === "scout" && !shouldScheduleScoutOnDate(plan, new Date(nowMs))) {
-        return false;
-      }
-      return true;
-    })
     .map((row) => ({
       ...row,
       effectivePriority: computeEffectiveQueuePriority(row.queue_priority, row.queued_at, nowMs),
@@ -407,50 +400,61 @@ export async function ensureOrchestratedWatchlistRun(
     queuePriority?: number;
   },
 ) {
-  const timestamp = nowIso();
-  const id = createId();
-  const result = await runStatement(
-    env,
-    `
-      INSERT OR IGNORE INTO watchlist_run (
-        id,
-        watchlist_id,
-        trigger_type,
-        status,
-        page_budget,
-        pages_scanned,
-        baseline_from_run_id,
-        summary_json,
-        started_at,
-        finished_at,
-        error_code,
-        error_message,
-        created_at,
-        updated_at,
-        idempotency_key,
-        queued_at,
-        attempt_count,
-        queue_priority
-      )
-      VALUES (?, ?, ?, 'pending', ?, 0, NULL, '{}', ?, NULL, NULL, NULL, ?, ?, ?, ?, 0, ?)
-    `,
-    id,
-    input.watchlistId,
-    input.triggerType,
-    input.pageBudget,
-    timestamp,
-    timestamp,
-    timestamp,
-    input.executionKey,
-    timestamp,
-    input.queuePriority ?? 2,
-  );
+  const scheduledSlot = new Date(input.scheduledTime).toISOString();
+  const insertPendingRun = async () => {
+    const timestamp = nowIso();
+    const id = createId();
+    const result = await runStatement(
+      env,
+      `
+        INSERT OR IGNORE INTO watchlist_run (
+          id,
+          watchlist_id,
+          trigger_type,
+          status,
+          page_budget,
+          pages_scanned,
+          baseline_from_run_id,
+          summary_json,
+          started_at,
+          finished_at,
+          error_code,
+          error_message,
+          created_at,
+          updated_at,
+          idempotency_key,
+          queued_at,
+          attempt_count,
+          queue_priority
+        )
+        SELECT ?, ?, ?, 'pending', ?, 0, NULL, '{}', ?, NULL, NULL, NULL, ?, ?, ?, ?, 0, ?
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM watchlist_run
+          WHERE watchlist_id = ?
+            AND trigger_type = ?
+            AND idempotency_key IS NOT NULL
+            AND status IN ('pending', 'running')
+          LIMIT 1
+        )
+      `,
+      id,
+      input.watchlistId,
+      input.triggerType,
+      input.pageBudget,
+      scheduledSlot,
+      timestamp,
+      timestamp,
+      input.executionKey,
+      timestamp,
+      input.queuePriority ?? 2,
+      input.watchlistId,
+      input.triggerType,
+    );
+    return Number(result.meta?.changes ?? 0) > 0 ? id : null;
+  };
 
-  if (Number(result.meta?.changes ?? 0) > 0) {
-    return { runId: id, created: true as const };
-  }
-
-  const existing = await one<{ id: string }>(
+  const findExistingByExecutionKey = () => one<{ id: string }>(
     env,
     `
       SELECT id
@@ -460,10 +464,54 @@ export async function ensureOrchestratedWatchlistRun(
     `,
     input.executionKey,
   );
-  if (!existing?.id) {
-    throw new Error("Failed to create or locate orchestrated watchlist run.");
+
+  const findActiveRun = () => one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM watchlist_run
+      WHERE watchlist_id = ?
+        AND trigger_type = ?
+        AND idempotency_key IS NOT NULL
+        AND status IN ('pending', 'running')
+      ORDER BY queued_at ASC, started_at ASC, id ASC
+      LIMIT 1
+    `,
+    input.watchlistId,
+    input.triggerType,
+  );
+
+  const insertedRunId = await insertPendingRun();
+  if (insertedRunId) {
+    return { runId: insertedRunId, created: true as const };
   }
-  return { runId: existing.id, created: false as const };
+
+  const existing = await findExistingByExecutionKey();
+  if (existing?.id) {
+    return { runId: existing.id, created: false as const };
+  }
+
+  const active = await findActiveRun();
+  if (active?.id) {
+    return { runId: active.id, created: false as const };
+  }
+
+  const retriedRunId = await insertPendingRun();
+  if (retriedRunId) {
+    return { runId: retriedRunId, created: true as const };
+  }
+
+  const retryExisting = await findExistingByExecutionKey();
+  if (retryExisting?.id) {
+    return { runId: retryExisting.id, created: false as const };
+  }
+
+  const retryActive = await findActiveRun();
+  if (retryActive?.id) {
+    return { runId: retryActive.id, created: false as const };
+  }
+
+  throw new Error("Failed to create or locate orchestrated watchlist run.");
 }
 
 export async function markOrchestratedRunDispatched(
@@ -856,6 +904,7 @@ export async function listOrchestratedRunsForReconciliation(
           attempt_count
         FROM watchlist_run
         WHERE trigger_type = 'scheduled'
+          AND idempotency_key IS NOT NULL
           AND (
             (status = 'pending' AND (retry_after IS NULL OR retry_after <= ?))
             OR (status = 'running' AND processing_started_at IS NOT NULL AND processing_started_at < ?)
@@ -1299,6 +1348,7 @@ export async function collectMonitoringOrchestrationMetrics(
         SELECT status, error_code, queued_at
         FROM watchlist_run
         WHERE trigger_type = 'scheduled'
+          AND idempotency_key IS NOT NULL
           AND started_at >= datetime('now', '-2 days')
       `,
     )

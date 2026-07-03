@@ -16,6 +16,7 @@ export function seedPendingOrchestratedRun(
   const queuedAt = options.queuedAt ?? "2026-06-23T04:00:00.000Z";
   const queuePriority = options.queuePriority ?? 0;
   const plan = options.plan ?? "agency";
+  const idempotencyKey = `watchlist-run:scheduled:${watchlistId}:test:${queuedAt.replace(/[^0-9a-z]/gi, "-")}`;
 
   sqlite.exec(`
     INSERT OR IGNORE INTO watchlist (
@@ -28,10 +29,10 @@ export function seedPendingOrchestratedRun(
     INSERT OR IGNORE INTO user_plan (user_id, plan) VALUES ('${userId}', '${plan}');
     INSERT OR REPLACE INTO watchlist_run (
       id, watchlist_id, trigger_type, status, page_budget, pages_scanned, summary_json,
-      started_at, created_at, updated_at, queued_at, attempt_count, queue_priority
+      started_at, created_at, updated_at, idempotency_key, queued_at, attempt_count, queue_priority
     ) VALUES (
       '${runId}', '${watchlistId}', 'scheduled', 'pending', 2, 0, '{}',
-      '${queuedAt}', '${queuedAt}', '${queuedAt}', '${queuedAt}', 0, ${queuePriority}
+      '${queuedAt}', '${queuedAt}', '${queuedAt}', '${idempotencyKey}', '${queuedAt}', 0, ${queuePriority}
     );
   `);
 }

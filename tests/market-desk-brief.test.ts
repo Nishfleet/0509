@@ -74,7 +74,7 @@ function baseInput(overrides: Partial<Parameters<typeof buildMarketDeskBrief>[0]
     proofUsage: { used: 0, limit: 0, remaining: 0 },
     overnightStats: { runs: 0, watchlistsChecked: 0, adsSeen: 0 },
     successfulProofCount: 0,
-    nextScanLabel: "nightly",
+    nextScanLabel: "regular",
     ...overrides,
   };
 }

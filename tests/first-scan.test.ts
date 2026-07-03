@@ -12,26 +12,26 @@ afterEach(() => {
 });
 
 describe("nextScheduledScanAt", () => {
-  it("targets tonight's 04:00 UTC scan when it hasn't run yet", () => {
-    const now = new Date("2026-06-10T01:00:00.000Z"); // Wednesday, before 04:00
-    expect(nextScheduledScanAt("starter", now).toISOString()).toBe("2026-06-10T04:00:00.000Z");
+  it("targets the next three-hour scan slot for Starter", () => {
+    const now = new Date("2026-06-10T01:00:00.000Z");
+    expect(nextScheduledScanAt("starter", now).toISOString()).toBe("2026-06-10T03:00:00.000Z");
   });
 
-  it("rolls to tomorrow once today's scan has passed", () => {
+  it("rolls to the next three-hour slot once the current slot has passed", () => {
     const now = new Date("2026-06-10T09:00:00.000Z");
-    expect(nextScheduledScanAt("starter", now).toISOString()).toBe("2026-06-11T04:00:00.000Z");
+    expect(nextScheduledScanAt("starter", now).toISOString()).toBe("2026-06-10T12:00:00.000Z");
   });
 
-  it("targets the next Monday for scout plans", () => {
-    const now = new Date("2026-06-10T09:00:00.000Z"); // Wednesday
+  it("targets the next six-hour slot for Scout plans", () => {
+    const now = new Date("2026-06-10T09:00:00.000Z");
     const next = nextScheduledScanAt("scout", now);
-    expect(next.toISOString()).toBe("2026-06-15T04:00:00.000Z");
-    expect(next.getUTCDay()).toBe(1);
+    expect(next.toISOString()).toBe("2026-06-10T12:00:00.000Z");
+    expect(next.getUTCHours() % 6).toBe(0);
   });
 
   it("formats the label in UTC by default", () => {
     const label = formatNextScanLabel("starter", new Date("2026-06-10T01:00:00.000Z"));
-    expect(label).toContain("4:00");
+    expect(label).toContain("3:00");
     expect(label).toContain("UTC");
   });
 
@@ -41,7 +41,7 @@ describe("nextScheduledScanAt", () => {
       new Date("2026-06-10T01:00:00.000Z"),
       "America/New_York",
     );
-    expect(label).toContain("12:00");
+    expect(label).toContain("11:00");
     expect(label).toMatch(/EDT|GMT-4/);
   });
 });
