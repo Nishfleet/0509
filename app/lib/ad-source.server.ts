@@ -10,7 +10,7 @@ import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discov
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
 import { searchMetaLibraryByBrowser, CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 import { demoSearch, MetaApiError, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
-import { fingerprintSavedQuery } from "~/lib/normalize";
+import { fingerprintSavedQuery, hashString } from "~/lib/normalize";
 import type {
   AdDiscoveryProvider,
   DiscoveryFailureClass,
@@ -325,6 +325,10 @@ export async function searchAdsViaSourceResolver(
       country: query.filters.country || "all",
       cursor,
     });
+  const customerFallbackCacheKey = await scopeDiscoveryCacheKeyForCustomerToken(cacheKey, {
+    customerMetaAdLibraryToken: forceLive ? options.customerMetaAdLibraryToken : null,
+  });
+  const leaseKey = customerFallbackCacheKey ?? cacheKey;
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
   if (!forceLive && usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
@@ -428,7 +432,7 @@ export async function searchAdsViaSourceResolver(
   const discoveryLease =
     canUseDistributedDiscoveryLease(effectiveEnv.DB)
       ? await acquireDiscoveryQueryLease(effectiveEnv, {
-          cacheKey,
+          cacheKey: leaseKey,
           provider,
           routeContext,
         })
@@ -437,6 +441,7 @@ export async function searchAdsViaSourceResolver(
   if (discoveryLease && !discoveryLease.acquired) {
     const settledResponse = await waitForDiscoveryLeaseResolution(effectiveEnv, {
       cacheKey,
+      fallbackCacheKey: customerFallbackCacheKey,
       provider,
       routeContext,
       waitMs: resolveDiscoveryLeaseWaitMs(routeContext),
@@ -469,7 +474,7 @@ export async function searchAdsViaSourceResolver(
   }
 
   try {
-    const result = await runWithSharedDiscoveryRequest(cacheKey, async () => {
+    const result = await runWithSharedDiscoveryRequest(leaseKey, async () => {
       const startedAt = Date.now();
       const liveResult =
         provider === "meta_library_browser"
@@ -610,6 +615,15 @@ export async function searchAdsViaSourceResolver(
         customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
       });
       if (apiFallback) {
+        if (forceLive && effectiveEnv.DB) {
+          await publishDiscoveryLeaseFallbackResult(effectiveEnv, {
+            cacheKey: customerFallbackCacheKey ?? cacheKey,
+            routeContext,
+            query,
+            cursor,
+            fallback: apiFallback,
+          }).catch(() => undefined);
+        }
         return apiFallback;
       }
     }
@@ -643,7 +657,7 @@ export async function searchAdsViaSourceResolver(
   } finally {
     if (discoveryLease?.acquired) {
       await releaseDiscoveryQueryLease(effectiveEnv, {
-        cacheKey,
+        cacheKey: leaseKey,
         holderId: discoveryLease.holderId,
       }).catch(() => undefined);
     }
@@ -929,6 +943,7 @@ async function waitForDiscoveryLeaseResolution(
   env: AppEnv,
   input: {
     cacheKey: string;
+    fallbackCacheKey?: string | null;
     provider: AdDiscoveryProvider;
     routeContext: DiscoveryRouteContext;
     waitMs: number;
@@ -939,17 +954,17 @@ async function waitForDiscoveryLeaseResolution(
   const deadline = Date.now() + input.waitMs;
 
   while (Date.now() < deadline) {
-    const cached = await getDiscoveryCacheEntry(env, input.cacheKey);
-    const usableCached = isUsableDiscoveryCache(input.provider, cached) ? cached : null;
-    if (
-      usableCached &&
-      new Date(usableCached.expiresAt).getTime() > Date.now() &&
-      isDiscoveryLeaseCacheFreshEnough(usableCached.fetchedAt, input.minFetchedAtMs)
-    ) {
+    const usableCachedEntries = await getUsableDiscoveryLeaseCacheEntries(env, input);
+    const freshCached = usableCachedEntries.find(
+      (entry) =>
+        new Date(entry.expiresAt).getTime() > Date.now() &&
+        isDiscoveryLeaseCacheFreshEnough(entry.fetchedAt, input.minFetchedAtMs),
+    );
+    if (freshCached) {
       return {
-        ...usableCached.payload,
-        source: input.provider,
-        provider: input.provider,
+        ...freshCached.payload,
+        source: freshCached.payload.source,
+        provider: freshCached.payload.provider,
         cacheStatus: "hit",
         discoveryStatus: "healthy",
         discoverySummary: null,
@@ -963,14 +978,14 @@ async function waitForDiscoveryLeaseResolution(
       providerState &&
       shouldUseProviderCooldown(providerState)
     ) {
-      if (
-        usableCached &&
-        isDiscoveryLeaseCacheFreshEnough(usableCached.fetchedAt, input.minFetchedAtMs)
-      ) {
+      const staleCached = usableCachedEntries.find((entry) =>
+        isDiscoveryLeaseCacheFreshEnough(entry.fetchedAt, input.minFetchedAtMs),
+      );
+      if (staleCached) {
         return {
-          ...usableCached.payload,
-          source: input.provider,
-          provider: input.provider,
+          ...staleCached.payload,
+          source: staleCached.payload.source,
+          provider: staleCached.payload.provider,
           cacheStatus: "stale",
           discoveryStatus: "cache_only",
           discoverySummary: providerState.summary,
@@ -1001,6 +1016,94 @@ async function waitForDiscoveryLeaseResolution(
   }
 
   return null;
+}
+
+type DiscoveryCacheEntry = NonNullable<Awaited<ReturnType<typeof getDiscoveryCacheEntry>>>;
+
+async function getUsableDiscoveryLeaseCacheEntries(
+  env: AppEnv,
+  input: {
+    cacheKey: string;
+    fallbackCacheKey?: string | null;
+    provider: AdDiscoveryProvider;
+  },
+): Promise<DiscoveryCacheEntry[]> {
+  const cacheKeys =
+    input.fallbackCacheKey && input.fallbackCacheKey !== input.cacheKey
+      ? [input.cacheKey, input.fallbackCacheKey]
+      : [input.cacheKey];
+  const entries = await Promise.all(
+    cacheKeys.map((cacheKey) => getDiscoveryCacheEntry(env, cacheKey)),
+  );
+
+  return entries
+    .filter(
+      (cached): cached is DiscoveryCacheEntry =>
+        Boolean(cached) && isUsableDiscoveryCache(input.provider, cached),
+    )
+    .sort(
+      (left, right) => new Date(right.fetchedAt).getTime() - new Date(left.fetchedAt).getTime(),
+    );
+}
+
+async function publishDiscoveryLeaseFallbackResult(
+  env: AppEnv,
+  input: {
+    cacheKey: string;
+    routeContext: DiscoveryRouteContext;
+    query: NormalizedSavedQuery;
+    cursor: string | null | undefined;
+    fallback: SearchResponse;
+  },
+) {
+  const timestamp = new Date().toISOString();
+  const payload =
+    input.fallback.ads.length === 0 && !input.fallback.discoveryEmptyReason
+      ? {
+          ...input.fallback,
+          discoveryEmptyReason: "no_results" as const,
+        }
+      : input.fallback;
+
+  await upsertDiscoveryCacheEntry(env, {
+    cacheKey: input.cacheKey,
+    provider: "meta_library_browser",
+    routeContext: input.routeContext,
+    queryFingerprint: fingerprintSavedQuery(input.query),
+    country: input.query.filters.country || "all",
+    cursor: input.cursor ?? null,
+    payload,
+    fetchedAt: timestamp,
+    expiresAt: new Date(Date.now() + DISCOVERY_QUERY_LEASE_TTL_MS).toISOString(),
+    browserMsUsed: null,
+  });
+}
+
+async function scopeDiscoveryCacheKeyForCustomerToken(
+  cacheKey: string,
+  options: { customerMetaAdLibraryToken?: string | null },
+): Promise<string | null> {
+  const token = options.customerMetaAdLibraryToken?.trim();
+  if (!token) {
+    return null;
+  }
+
+  return `${cacheKey}:customer_meta:${await fingerprintCustomerMetaToken(token)}`;
+}
+
+async function fingerprintCustomerMetaToken(token: string) {
+  if (!globalThis.crypto?.subtle) {
+    return hashString(token);
+  }
+
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(token),
+  );
+  return Array.from(new Uint8Array(digest))
+    .slice(0, 16)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function isDiscoveryLeaseCacheFreshEnough(
