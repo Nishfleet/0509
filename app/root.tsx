@@ -1,5 +1,6 @@
 import {
   isRouteErrorResponse,
+  Link,
   Links,
   type LinksFunction,
   Meta,
@@ -243,7 +244,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
           <h1>{message}</h1>
           <p>{details}</p>
           <p>
-            <a href="/app">Back to your workspace</a> · If this keeps happening, email{" "}
+            <Link to="/app">Back to your workspace</Link> · If this keeps happening, email{" "}
             <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll fix it.
           </p>
         </section>

@@ -3,6 +3,7 @@ import {
   Link,
   useActionData,
   useLoaderData,
+  useNavigation,
   useSearchParams,
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
@@ -53,11 +54,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
-  const digests = await listDigests(env, workspaceUserId);
-  const recentDeliveryAttempts = await listDeliveryAttempts(env, {
-    userId: workspaceUserId,
-    limit: 80,
-  });
+  const [digests, recentDeliveryAttempts] = await Promise.all([
+    listDigests(env, workspaceUserId),
+    listDeliveryAttempts(env, {
+      userId: workspaceUserId,
+      limit: 80,
+    }),
+  ]);
   const url = new URL(request.url);
   const selectedDigestId = url.searchParams.get("digest") ?? digests[0]?.id ?? null;
   const selectedDigestCandidate = selectedDigestId ? await getDigest(env, selectedDigestId) : null;
@@ -146,6 +149,11 @@ export default function DigestsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [searchParams] = useSearchParams();
+  const navigation = useNavigation();
+  const pendingDigestId =
+    navigation.location?.pathname === "/app/digests"
+      ? new URLSearchParams(navigation.location.search).get("digest")
+      : null;
   const digestAttemptsByDigestId: Record<
     string,
     Array<{
@@ -224,26 +232,34 @@ export default function DigestsRoute() {
             </div>
 
             <div className="f9-work-list is-compact">
-              {data.digests.map((digest) => (
-                <a
-                  className={`f9-work-row ${searchParams.get("digest") === digest.id || (!searchParams.get("digest") && data.selectedDigest?.id === digest.id) ? "is-active" : ""}`}
-                  href={`/app/digests?digest=${digest.id}`}
-                  key={digest.id}
-                >
-                  <div>
-                    <h3><LocalTime iso={digest.periodEnd} mode="date" /></h3>
-                    <p className="f9-muted-copy">
-                      {formatDigestSidebarMovement(digest.items)}
-                    </p>
-                    <p className="f9-muted-copy">
-                      {formatDigestSidebarStatus(
-                        digestAttemptsByDigestId[digest.id] ?? [],
-                        digest.delivery?.status ?? null,
-                      )}
-                    </p>
-                  </div>
-                </a>
-              ))}
+              {data.digests.map((digest) => {
+                const isActive =
+                  searchParams.get("digest") === digest.id ||
+                  (!searchParams.get("digest") && data.selectedDigest?.id === digest.id);
+                const isPending = pendingDigestId === digest.id;
+
+                return (
+                  <Link
+                    className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
+                    key={digest.id}
+                    preventScrollReset
+                    to={`/app/digests?digest=${digest.id}`}
+                  >
+                    <div>
+                      <h3><LocalTime iso={digest.periodEnd} mode="date" /></h3>
+                      <p className="f9-muted-copy">
+                        {formatDigestSidebarMovement(digest.items)}
+                      </p>
+                      <p className="f9-muted-copy">
+                        {formatDigestSidebarStatus(
+                          digestAttemptsByDigestId[digest.id] ?? [],
+                          digest.delivery?.status ?? null,
+                        )}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
               {data.digests.length === 0 ? (
                 <div className="f9-empty-panel">
                   <h3>Your first digest appears after monitoring runs</h3>

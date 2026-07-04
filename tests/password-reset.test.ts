@@ -127,6 +127,8 @@ describe("account page", () => {
       const React = await import("react");
       return {
         ...actual,
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
         Form: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
           React.createElement("form", props, children),
         useActionData: vi.fn().mockReturnValue(undefined),
