@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
 import { Outlet, redirect, useLoaderData } from "react-router";
 
 import { DashboardShell } from "~/components/dashboard-shell";
@@ -29,6 +29,23 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   };
 }
 
+export function shouldRevalidate({
+  currentUrl,
+  defaultShouldRevalidate,
+  formMethod,
+  nextUrl,
+}: ShouldRevalidateFunctionArgs) {
+  if (
+    currentUrl.pathname === nextUrl.pathname &&
+    currentUrl.search !== nextUrl.search &&
+    (!formMethod || formMethod.toLowerCase() === "get")
+  ) {
+    return false;
+  }
+
+  return defaultShouldRevalidate;
+}
+
 export default function AppLayoutRoute() {
   const { session, showOpsNav, showPresenceNav } = useLoaderData<typeof loader>();
 
@@ -39,10 +56,10 @@ export default function AppLayoutRoute() {
       accountTitle="Five to Nine"
       headerActions={
         <>
-          <Link className="f9-secondary-button" to="/app">
+          <Link className="f9-secondary-button" prefetch="intent" to="/app">
             Overview
           </Link>
-          <Link className="f9-primary-button" to="/search">
+          <Link className="f9-primary-button" prefetch="intent" to="/search">
             Add competitor
           </Link>
         </>

@@ -75,6 +75,19 @@ describe("app rebuild", () => {
     expect(appLayout).toContain('accountTitle="Five to Nine"');
   });
 
+  it("keeps internal app navigation on React Router transitions", () => {
+    expect(shellComponent).toContain("useNavigation");
+    expect(shellComponent).toContain('prefetch="intent"');
+    expect(appLayout).toContain("shouldRevalidate");
+    expect(appLayout).toContain("currentUrl.pathname === nextUrl.pathname");
+    expect(watchlistsRoute).toContain("to={`/app/watchlists?watchlist=${watchlist.id}`}");
+    expect(watchlistsRoute).toContain("preventScrollReset");
+    expect(watchlistsRoute).not.toContain("href={`/app/watchlists?watchlist=${watchlist.id}`}");
+    expect(digestsRoute).toContain("to={`/app/digests?digest=${digest.id}`}");
+    expect(digestsRoute).toContain("preventScrollReset");
+    expect(digestsRoute).not.toContain("href={`/app/digests?digest=${digest.id}`}");
+  });
+
   it("matches the advertised competitor-ad dashboard surface", () => {
     expect(appLayout).toContain("Add competitor");
     expect(appLayout).toContain("Overview");
