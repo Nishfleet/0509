@@ -5,6 +5,7 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useNavigation,
   useRevalidator,
   useSearchParams,
 } from "react-router";
@@ -98,11 +99,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const whatsappAvailable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
-  const showPresenceNav = await presenceNavVisible(env, workspaceUserId);
-  const [watchlists, discoveryStatus, plan] = await Promise.all([
+  const [watchlists, discoveryStatus, plan, showPresenceNav] = await Promise.all([
     listWatchlists(env, workspaceUserId, { includeInactive: true }),
     resolveCommercialAdSourceStatus(env),
     getUserPlan(env, workspaceUserId),
+    presenceNavVisible(env, workspaceUserId),
   ]);
   const url = new URL(request.url);
   const selectedWatchlistId = url.searchParams.get("watchlist") ?? watchlists[0]?.id ?? null;
@@ -664,6 +665,11 @@ export default function WatchlistsRoute() {
   const actionData = useActionData<typeof action>();
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const [searchParams] = useSearchParams();
+  const navigation = useNavigation();
+  const pendingWatchlistId =
+    navigation.location?.pathname === "/app/watchlists"
+      ? new URLSearchParams(navigation.location.search).get("watchlist")
+      : null;
   const proofCapturesById = new Map(
     data.recentProofCaptures.map((capture) => [capture.id, capture]),
   );
@@ -717,37 +723,40 @@ export default function WatchlistsRoute() {
           </p>
 
           <div className="f9-work-list is-compact">
-            {data.watchlists.map((watchlist) => (
-              <a
-                className={`f9-work-row ${
-                  searchParams.get("watchlist") === watchlist.id ||
-                  (!searchParams.get("watchlist") && data.selectedWatchlist?.id === watchlist.id)
-                    ? "is-active"
-                    : ""
-                }`}
-                href={`/app/watchlists?watchlist=${watchlist.id}`}
-                key={watchlist.id}
-              >
-                <div>
-                  <h3>{watchlist.name}</h3>
-                  <p className="f9-muted-copy">
-                    {formatWatchlistTrackingRole(watchlist.trackingRole)} · {watchlist.targetLabel}
-                    {watchlist.isActive ? "" : " · Paused"}
-                  </p>
-                  <p className="f9-muted-copy">
-                    {watchlist.lastScannedAt ? (
-                      <>
-                        Last scanned <LocalTime iso={watchlist.lastScannedAt} />
-                      </>
-                    ) : watchlist.isActive ? (
-                      "First scan in progress — results land in a few minutes"
-                    ) : (
-                      "Paused before its first scan"
-                    )}
-                  </p>
-                </div>
-              </a>
-            ))}
+            {data.watchlists.map((watchlist) => {
+              const isActive =
+                searchParams.get("watchlist") === watchlist.id ||
+                (!searchParams.get("watchlist") && data.selectedWatchlist?.id === watchlist.id);
+              const isPending = pendingWatchlistId === watchlist.id;
+
+              return (
+                <Link
+                  className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
+                  key={watchlist.id}
+                  preventScrollReset
+                  to={`/app/watchlists?watchlist=${watchlist.id}`}
+                >
+                  <div>
+                    <h3>{watchlist.name}</h3>
+                    <p className="f9-muted-copy">
+                      {formatWatchlistTrackingRole(watchlist.trackingRole)} · {watchlist.targetLabel}
+                      {watchlist.isActive ? "" : " · Paused"}
+                    </p>
+                    <p className="f9-muted-copy">
+                      {watchlist.lastScannedAt ? (
+                        <>
+                          Last scanned <LocalTime iso={watchlist.lastScannedAt} />
+                        </>
+                      ) : watchlist.isActive ? (
+                        "First scan in progress — results land in a few minutes"
+                      ) : (
+                        "Paused before its first scan"
+                      )}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
             {data.watchlists.length === 0 ? (
               <div className="f9-empty-panel">
                 <h3>Add your first competitor</h3>

@@ -1,4 +1,4 @@
-import { Form, useActionData, useLoaderData } from "react-router";
+import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useState } from "react";
 
@@ -300,9 +300,9 @@ export default function AccountRoute() {
             <span className="f9-app-kicker">Setup</span>
             <h2>Resume account setup</h2>
           </div>
-          <a className="f9-secondary-button" href="/app/onboard?resume=1">
+          <Link className="f9-secondary-button" to="/app/onboard?resume=1">
             Resume setup
-          </a>
+          </Link>
         </div>
         <p className="f9-muted-copy">
           Add another competitor watch or update your own brand website without resetting the account.
@@ -445,7 +445,10 @@ export default function AccountRoute() {
           </Form>
         ) : (
           <p className="f9-muted-copy">
-            Branded reports are part of Agency. <a href="/app/billing?source=branding#plans">See plans</a>
+            Branded reports are part of Agency.{" "}
+            <Link prefetch="intent" to="/app/billing?source=branding#plans">
+              See plans
+            </Link>
           </p>
         )}
       </article>
@@ -528,9 +531,11 @@ export default function AccountRoute() {
           Permanently removes your account, watchlists, history, and evidence. We email a
           confirmation first; nothing is deleted until the request is verified. Deletion is blocked
           while a subscription is active - cancel first from{" "}
-          <a href="/app/billing">Plan &amp; billing</a> (you keep access until the end of the
-          period you've paid for), or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
-          we'll handle both.
+          <Link prefetch="intent" to="/app/billing">
+            Plan &amp; billing
+          </Link>{" "}
+          (you keep access until the end of the period you've paid for), or email{" "}
+          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll handle both.
         </p>
         <Form className="f9-auth-form" method="post">
           <input name="intent" type="hidden" value="request-account-deletion" />

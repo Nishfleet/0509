@@ -1,4 +1,4 @@
-import { Link, NavLink } from "react-router";
+import { Link, NavLink, useNavigation } from "react-router";
 
 import { SignOutButton } from "~/components/sign-out-button";
 import {
@@ -29,6 +29,12 @@ export interface DashboardShellProps {
   children: React.ReactNode;
 }
 
+function navLinkClassName({ isActive, isPending }: { isActive: boolean; isPending: boolean }) {
+  return [isActive ? "is-active" : null, isPending ? "is-pending" : null]
+    .filter(Boolean)
+    .join(" ") || undefined;
+}
+
 function NavSections({ sections }: { sections: DashboardNavSection[] }) {
   return (
     <>
@@ -38,9 +44,10 @@ function NavSections({ sections }: { sections: DashboardNavSection[] }) {
           <nav aria-label={section.title ?? "Application"}>
             {section.items.map((item) => (
               <NavLink
-                className={({ isActive }) => (isActive ? "is-active" : undefined)}
+                className={navLinkClassName}
                 end={item.end}
                 key={item.to}
+                prefetch="intent"
                 to={item.to}
               >
                 {item.label}
@@ -77,12 +84,15 @@ export function DashboardShell({
   });
   const staff = DASHBOARD_STAFF_NAV.filter((item) => !item.requiresOps || showOpsNav);
   const mobileNav = isPublic ? [] : buildDashboardMobileNav({ showPresence: showPresenceNav });
+  const navigation = useNavigation();
+  const isNavigating = Boolean(navigation.location);
   const pageClasses = ["f9-dash-page", isPublic ? "f9-dash-page-public" : "f9-dash-page-app", pageClassName]
     .filter(Boolean)
     .join(" ");
 
   return (
     <main className={pageClasses}>
+      <div className={`f9-route-progress ${isNavigating ? "is-visible" : ""}`} aria-hidden="true" />
       <div className="f9-cursor-shell">
         <aside className="f9-cursor-rail f9-cursor-rail-desktop" aria-label="Application">
           <div className="f9-cursor-account">
@@ -101,9 +111,10 @@ export function DashboardShell({
             <nav aria-label="Search">
               {PUBLIC_SEARCH_NAV.map((item) => (
                 <NavLink
-                  className={({ isActive }) => (isActive ? "is-active" : undefined)}
+                  className={navLinkClassName}
                   end={item.end}
                   key={item.to}
+                  prefetch="intent"
                   to={item.to}
                 >
                   {item.label}
@@ -119,9 +130,10 @@ export function DashboardShell({
                 <nav aria-label="Staff">
                   {staff.map((item) => (
                     <NavLink
-                      className={({ isActive }) => (isActive ? "is-active" : undefined)}
+                      className={navLinkClassName}
                       end={item.end}
                       key={item.to}
+                      prefetch="intent"
                       to={item.to}
                     >
                       {item.label}
@@ -135,10 +147,16 @@ export function DashboardShell({
           {railNote}
 
           <div className="f9-dash-rail-footer">
-            <Link to="/help">Help</Link>
-            <Link to="/docs">Docs</Link>
+            <Link prefetch="intent" to="/help">
+              Help
+            </Link>
+            <Link prefetch="intent" to="/docs">
+              Docs
+            </Link>
             {isPublic ? (
-              <Link to="/auth/login">Sign in</Link>
+              <Link prefetch="intent" to="/auth/login">
+                Sign in
+              </Link>
             ) : (
               <>
                 <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
@@ -153,9 +171,10 @@ export function DashboardShell({
             <nav aria-label="Primary" className="f9-dash-mobile-nav">
               {mobileNav.map((item) => (
                 <NavLink
-                  className={({ isActive }) => (isActive ? "is-active" : undefined)}
+                  className={navLinkClassName}
                   end={item.end}
                   key={item.to}
+                  prefetch="intent"
                   to={item.to}
                 >
                   {item.label}
@@ -163,10 +182,18 @@ export function DashboardShell({
               ))}
             </nav>
             <div className="f9-dash-mobile-utility">
-              <Link to="/app/team">Team</Link>
-              <Link to="/app/clients">Client rooms</Link>
-              <Link to="/help">Help</Link>
-              <Link to="/app/billing">Billing</Link>
+              <Link prefetch="intent" to="/app/team">
+                Team
+              </Link>
+              <Link prefetch="intent" to="/app/clients">
+                Client rooms
+              </Link>
+              <Link prefetch="intent" to="/help">
+                Help
+              </Link>
+              <Link prefetch="intent" to="/app/billing">
+                Billing
+              </Link>
               <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
               <SignOutButton />
             </div>
