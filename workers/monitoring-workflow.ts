@@ -18,6 +18,10 @@ import {
 } from "../app/lib/monitoring-fanout.server";
 import { preflightWatchlistWorkflowJob, runWatchlistWorkflowJob } from "../app/lib/monitoring.server";
 
+// LIVE in production when wrangler.jsonc sets MONITORING_FANOUT_MODE=fanout
+// (with MONITORING_FANOUT_GLOBAL=1). Do not delete this as "dead code" — the
+// inline path is only the unset-var fallback in resolveMonitoringFanoutMode().
+
 class NonRetryableError extends Error {
   name = "NonRetryableError";
 }

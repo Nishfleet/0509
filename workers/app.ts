@@ -2,6 +2,7 @@
 
 import { createRequestHandler } from "react-router";
 
+import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
   flushDeferredInstantAlerts,
   runScheduledDiscoveryWarmup,
@@ -124,17 +125,18 @@ export default {
               console.log("weekly business numbers sent");
             }
           },
-          (error) => {
-            console.error("weekly business numbers failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          },
+          (error) => reportScheduledTaskFailure(env, "weekly_business_numbers", error),
         ),
       );
     }
 
     if (scheduledTask.kind === "discovery_warmup") {
-      ctx.waitUntil(runScheduledDiscoveryWarmup(env));
+      ctx.waitUntil(
+        runScheduledDiscoveryWarmup(env).then(
+          undefined,
+          (error) => reportScheduledTaskFailure(env, "discovery_warmup", error),
+        ),
+      );
       ctx.waitUntil(
         import("../app/lib/monitoring-fanout.server").then(({ reconcileOrchestratedWatchlistRuns, resolveMonitoringFanoutMode, resolveMonitoringOrchestrationLeaseMs }) =>
           reconcileOrchestratedWatchlistRuns(env, {
@@ -147,11 +149,7 @@ export default {
               console.log("monitoring fanout reconciliation completed", result);
             }
           },
-          (error) => {
-            console.error("monitoring fanout reconciliation failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          },
+          (error) => reportScheduledTaskFailure(env, "monitoring_fanout_reconciliation", error),
         ),
       );
       // The six-hourly warmup also hosts the instant-alert flush: alerts
@@ -164,11 +162,7 @@ export default {
               console.log("instant alert flush completed", result);
             }
           },
-          (error) => {
-            console.error("instant alert flush failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          },
+          (error) => reportScheduledTaskFailure(env, "instant_alert_flush", error),
         ),
       );
       // ...and the bounded retention sweep that keeps D1 tables from
@@ -181,11 +175,7 @@ export default {
               console.log("retention sweep completed", result.deleted);
             }
           },
-          (error) => {
-            console.error("retention sweep failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          },
+          (error) => reportScheduledTaskFailure(env, "retention_sweep", error),
         ),
       );
       ctx.waitUntil(
@@ -197,11 +187,7 @@ export default {
               console.log("presence polling batch completed", result);
             }
           },
-          (error) => {
-            console.error("presence polling batch failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          },
+          (error) => reportScheduledTaskFailure(env, "presence_polling_batch", error),
         ),
       );
       return;
@@ -246,18 +232,16 @@ export default {
                 console.log("customer-at-risk alert sent", alert);
               }
             } catch (error) {
-              console.error("customer-at-risk alert failed", {
-                error: error instanceof Error ? error.message : String(error),
+              await reportScheduledTaskFailure(env, "customer_at_risk_alert", error, {
+                cron: controller.cron,
               });
             }
           }
         },
-        (error) => {
-          console.error("scheduled monitoring run failed", {
+        (error) =>
+          reportScheduledTaskFailure(env, "scheduled_monitoring", error, {
             cron: controller.cron,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        },
+          }),
       ),
     );
   },
