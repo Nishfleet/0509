@@ -415,6 +415,18 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     checkPlanLimit: mocks.checkPlanLimit,
     getUserPlan: mocks.getUserPlan,
   }));
+  vi.doMock("~/lib/email-verification.server", () => ({
+    isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    requireVerifiedEmailForRetention: vi.fn().mockResolvedValue({ ok: true }),
+    emailUnverifiedActionResult: () => ({
+      ok: false,
+      error: "email_unverified",
+      message: "Verify your email",
+    }),
+    requestEmailVerification: vi.fn().mockResolvedValue({ ok: true }),
+    EMAIL_UNVERIFIED_ERROR: "email_unverified",
+    EMAIL_UNVERIFIED_MESSAGE: "Verify your email",
+  }));
   vi.doMock("~/lib/data.server", () => ({
     addExternalProofToCollection: mocks.addExternalProofToCollection,
     createCollection: mocks.createCollection,

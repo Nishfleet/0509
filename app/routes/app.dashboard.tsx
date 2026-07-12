@@ -191,6 +191,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
+    const { requireVerifiedEmailForRetention, emailUnverifiedActionResult } = await import(
+      "~/lib/email-verification.server"
+    );
+    const verification = await requireVerifiedEmailForRetention(env, workspaceUserId);
+    if (!verification.ok) {
+      return emailUnverifiedActionResult();
+    }
+
     const result = await createWatchlistWithinLimit(env, workspaceUserId, {
       name: `${savedQuery.name} watch`,
       targetType: "saved_query",
@@ -206,7 +214,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: result.limit,
         current: result.current,
-        message: "You have reached your competitor tracking limit.",
+        message:
+          result.limit <= 1
+            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            : "You have reached your competitor tracking limit.",
       };
     }
 

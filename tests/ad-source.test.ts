@@ -226,6 +226,7 @@ describe("searchAdsViaSourceResolver", () => {
       }),
     );
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch,
     }));
@@ -274,6 +275,7 @@ describe("searchAdsViaSourceResolver", () => {
       }),
     );
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
     }));
@@ -371,6 +373,7 @@ describe("searchAdsViaSourceResolver", () => {
     });
 
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -430,6 +433,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -476,6 +480,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -545,6 +550,7 @@ describe("searchAdsViaSourceResolver", () => {
     const upsertDiscoveryCacheEntry = vi.fn();
 
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -620,6 +626,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -685,6 +692,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: MockCommercialDiscoveryError,
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -782,6 +790,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: MockCommercialDiscoveryError,
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
       demoSearch: vi.fn(),
       MetaApiError: MockMetaApiError,
@@ -872,6 +881,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -959,6 +969,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -1034,6 +1045,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -1121,6 +1133,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: apiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -1192,6 +1205,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -1241,6 +1255,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: vi.fn(),
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -2192,6 +2207,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError,
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -2285,6 +2301,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError,
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -2342,6 +2359,7 @@ describe("searchAdsViaSourceResolver", () => {
       .mockRejectedValue(new Error("Meta API unavailable."));
 
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},
@@ -2590,6 +2608,7 @@ describe("searchAdsViaSourceResolver", () => {
       CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
       MetaApiError: class MetaApiError extends Error {},

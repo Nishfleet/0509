@@ -129,8 +129,34 @@ export function getBetterAuth(env: AppEnv, request: Request) {
     basePath: BETTER_AUTH_BASE_PATH,
     baseURL,
     database: env.DB,
+    // Email/password sign-in stays disabled (magic link + OAuth). We still wire
+    // Better Auth's emailVerification sender per official docs so OAuth/signup
+    // paths that leave emailVerified=false can confirm the address. Login is
+    // intentionally NOT blocked via requireEmailVerification — unverified users
+    // may browse; watchlist creation and digests are gated in-app instead.
     emailAndPassword: {
       enabled: false,
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: false,
+      autoSignInAfterVerification: true,
+      sendVerificationEmail: async ({ user, url }) => {
+        if (!isEmailSendingConfigured(env)) {
+          throw new Error("Cloudflare Email is not configured for Better Auth verification.");
+        }
+        const { sendEmailVerificationEmail } = await import("~/lib/delivery.server");
+        await promiseWithTimeout(
+          sendEmailVerificationEmail(env, {
+            userId: user.id,
+            email: user.email,
+            name: user.name ?? null,
+            verifyUrl: url,
+          }),
+          BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS,
+          "Better Auth verification email timed out.",
+        );
+      },
     },
     account: {
       encryptOAuthTokens: true,
