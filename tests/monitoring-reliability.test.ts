@@ -167,6 +167,8 @@ function mockReliabilityDependencies(input: {
       runId.startsWith("run-") ? (input.observationsForRun ?? []) : [],
     ),
     listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
+    listProofCapturesForTargets: vi.fn().mockResolvedValue(new Map()),
+    listLastSuccessfulProofCapturesForAds: vi.fn().mockResolvedValue(new Map()),
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listRetryableDigestRuns,
     listRetryableInstantAttempts: vi.fn().mockResolvedValue(input.retryableInstantAttempts ?? []),

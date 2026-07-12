@@ -31,10 +31,11 @@ import {
   hydrateAdsWithPersistedCreatives,
   listActiveWatchlists,
   listProofCapturesForTarget,
+  listProofCapturesForTargets,
   listRecentWorkspaceProofCaptures,
   listRetryableDigestRuns,
   listRetryableInstantAttempts,
-  listSuccessfulProofCapturesForAd,
+  listLastSuccessfulProofCapturesForAds,
   listObservationsForRun,
   listWatchEvents,
   listAdsByIds,
@@ -1963,6 +1964,14 @@ async function evaluateSelectiveProofCandidates(
   let proofAttemptCount = 0;
   let confirmedEventCount = 0;
 
+  type ProofCandidate = {
+    observation: (typeof input.currentObservations)[number];
+    canonicalPageIdentity: string;
+    proofTargetIdentity: string;
+    proofTarget: NonNullable<Awaited<ReturnType<typeof upsertProofTarget>>>;
+  };
+
+  const proofCandidates: ProofCandidate[] = [];
   for (const observation of input.currentObservations) {
     if (!observation.landing_page_url || !observation.ad_id) {
       continue;
@@ -1990,16 +1999,43 @@ async function evaluateSelectiveProofCandidates(
       continue;
     }
 
-    const targetCaptures = await listProofCapturesForTarget(env, proofTarget.id, 20);
+    proofCandidates.push({
+      observation,
+      canonicalPageIdentity,
+      proofTargetIdentity,
+      proofTarget,
+    });
+  }
+
+  // Batch-load proof history for all candidates before the capture loop so
+  // each ad only pays for serial Browser Rendering, not serial D1 reads.
+  const capturesByTargetId = await listProofCapturesForTargets(
+    env,
+    proofCandidates.map((candidate) => candidate.proofTarget.id),
+    20,
+  );
+  const successfulCapturesByAdId = await listLastSuccessfulProofCapturesForAds(
+    env,
+    input.watchlist.id,
+    proofCandidates.map((candidate) => candidate.observation.ad_id).filter(Boolean),
+    5,
+  );
+
+  for (const candidate of proofCandidates) {
+    const { observation, canonicalPageIdentity, proofTargetIdentity, proofTarget } = candidate;
+
+    const targetCaptures = capturesByTargetId.get(proofTarget.id) ?? [];
     const lastSuccessfulProof =
       selectLastSuccessfulProofCapture(targetCaptures) ??
-      (await getLastSuccessfulProofForAd(env, input.watchlist.id, observation.ad_id));
+      selectLastSuccessfulProofCapture(
+        successfulCapturesByAdId.get(observation.ad_id) ?? [],
+      );
     const primaryTriggerEventType =
       eventTypesByAd.get(observation.ad_id)?.[0] ?? "landing_page_headline_changed";
     const proofRequestKeyBase = buildProofCaptureRequestIdempotencyKey({
       watchlistId: input.watchlist.id,
       adId: observation.ad_id,
-      landingPageUrl: observation.landing_page_url,
+      landingPageUrl: observation.landing_page_url!,
       eventType: primaryTriggerEventType,
     });
     const proofRequestKey = [proofRequestKeyBase, input.runId].join(":");
@@ -2078,7 +2114,7 @@ async function evaluateSelectiveProofCandidates(
     }
 
     const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
-    const snapshot = await captureLandingPageSnapshot(env, observation.landing_page_url);
+    const snapshot = await captureLandingPageSnapshot(env, observation.landing_page_url!);
 
     if (!snapshot) {
       if (evidenceOperationKey) {
@@ -2095,7 +2131,7 @@ async function evaluateSelectiveProofCandidates(
       await upsertProofTarget(env, {
         watchlistId: input.watchlist.id,
         adId: observation.ad_id,
-        landingPageUrl: observation.landing_page_url,
+        landingPageUrl: observation.landing_page_url!,
         canonicalPageIdentity,
         proofTargetIdentity,
         lastCaptureAttemptAt: new Date().toISOString(),
@@ -2770,15 +2806,6 @@ function getScanNativeImportanceScore(eventType: WatchEventType) {
     default:
       return 50;
   }
-}
-
-async function getLastSuccessfulProofForAd(
-  env: AppEnv,
-  watchlistId: string,
-  adId: string,
-): Promise<ProofCaptureRecord | null> {
-  const captures = await listSuccessfulProofCapturesForAd(env, watchlistId, adId, 5);
-  return selectLastSuccessfulProofCapture(captures);
 }
 
 function startOfUtcDayIso() {
