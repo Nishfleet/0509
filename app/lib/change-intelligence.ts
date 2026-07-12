@@ -1,5 +1,5 @@
 import { safeTimeZone } from "~/lib/safe-timezone";
-import type { WatchEventRecord, WatchEventType } from "~/lib/types";
+import type { AdRecord, AnalysisFieldInput, WatchEventRecord, WatchEventType } from "~/lib/types";
 
 export type DigestCadence = "daily" | "weekly";
 
@@ -9,6 +9,8 @@ export interface ChangeIntelligenceSummary {
   recommendedAction: string;
   proofTrail: string;
 }
+
+type DigestAdEnrichment = Pick<AdRecord, "creativeImageUrl" | "analysisFields">;
 
 export function digestCadenceLabel(cadence: DigestCadence | undefined) {
   return cadence === "daily" ? "daily brief" : "weekly digest";
@@ -42,15 +44,23 @@ export function buildChangeIntelligenceSummary(
   };
 }
 
-export function digestMetadataForEvent(event: WatchEventRecord, timeZone?: string | null) {
+export function digestMetadataForEvent(
+  event: WatchEventRecord,
+  timeZone?: string | null,
+  ad?: DigestAdEnrichment | null,
+) {
   return {
     ...buildChangeIntelligenceSummary(event, timeZone),
     ...digestSourceMetadata(event.metadata),
+    ...digestDiffMetadata(event.metadata),
+    ...digestCreativeMetadata(event.metadata, ad),
+    ...digestMetricMetadata(event.metadata, ad),
     proofCaptureId: event.proofCaptureId,
     confirmedAt: event.confirmedAt,
     createdAt: event.createdAt,
     eventStatus: event.status,
     sourceStatus: event.proofCaptureId ? "proof_backed" : "scan_backed",
+    ...(event.adId ? { adId: event.adId } : {}),
   };
 }
 
@@ -96,6 +106,97 @@ function digestSourceMetadata(metadata: Record<string, unknown> | undefined) {
     }
   }
   return result;
+}
+
+function digestDiffMetadata(metadata: Record<string, unknown> | undefined) {
+  const result: Record<string, string> = {};
+  const from = stringOr(metadata?.from, null);
+  const to = stringOr(metadata?.to, null);
+  if (from) result.from = from;
+  if (to) result.to = to;
+  return result;
+}
+
+function digestCreativeMetadata(
+  metadata: Record<string, unknown> | undefined,
+  ad?: DigestAdEnrichment | null,
+) {
+  const result: Record<string, string> = {};
+  const creativeImageUrl =
+    safeHttpsImageUrl(ad?.creativeImageUrl) ??
+    safeHttpsImageUrl(metadata?.creativeImageUrl);
+  const beforeCreativeImageUrl =
+    safeHttpsImageUrl(metadata?.beforeCreativeImageUrl) ??
+    safeHttpsImageUrl(metadata?.fromCreativeImageUrl);
+  const afterCreativeImageUrl =
+    safeHttpsImageUrl(metadata?.afterCreativeImageUrl) ??
+    safeHttpsImageUrl(metadata?.toCreativeImageUrl) ??
+    (beforeCreativeImageUrl ? creativeImageUrl : null);
+
+  if (creativeImageUrl) result.creativeImageUrl = creativeImageUrl;
+  if (beforeCreativeImageUrl) result.beforeCreativeImageUrl = beforeCreativeImageUrl;
+  if (afterCreativeImageUrl) result.afterCreativeImageUrl = afterCreativeImageUrl;
+  return result;
+}
+
+function digestMetricMetadata(
+  metadata: Record<string, unknown> | undefined,
+  ad?: DigestAdEnrichment | null,
+) {
+  const fromAd = readObservedMetricsFromAd(ad);
+  const result: Record<string, string> = {};
+  const spend =
+    stringOr(metadata?.observedSpend, null) ??
+    stringOr(metadata?.spend, null) ??
+    fromAd.spend;
+  const impressions =
+    stringOr(metadata?.observedImpressions, null) ??
+    stringOr(metadata?.impressions, null) ??
+    fromAd.impressions;
+  const reach =
+    stringOr(metadata?.observedReach, null) ??
+    stringOr(metadata?.reach, null) ??
+    fromAd.reach;
+
+  if (spend) result.observedSpend = spend;
+  if (impressions) result.observedImpressions = impressions;
+  if (reach) result.observedReach = reach;
+  return result;
+}
+
+function readObservedMetricsFromAd(ad?: DigestAdEnrichment | null) {
+  const metrics = { spend: null as string | null, impressions: null as string | null, reach: null as string | null };
+  for (const field of normalizeAnalysisFields(ad?.analysisFields)) {
+    if (!field.fieldValue.trim()) continue;
+    if (field.fieldKey === "observed_spend") metrics.spend = field.fieldValue.trim();
+    if (field.fieldKey === "observed_impressions") metrics.impressions = field.fieldValue.trim();
+    if (field.fieldKey === "observed_reach") metrics.reach = field.fieldValue.trim();
+  }
+  return metrics;
+}
+
+function normalizeAnalysisFields(value: unknown): AnalysisFieldInput[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is AnalysisFieldInput =>
+          Boolean(item) &&
+          typeof item === "object" &&
+          typeof (item as AnalysisFieldInput).fieldKey === "string" &&
+          typeof (item as AnalysisFieldInput).fieldValue === "string",
+      )
+    : [];
+}
+
+export function safeHttpsImageUrl(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || !/^https:\/\//i.test(trimmed)) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" ? trimmed : null;
+  } catch {
+    return null;
+  }
 }
 
 function formatPriorityBand(score: number | null) {

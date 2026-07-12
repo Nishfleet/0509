@@ -170,6 +170,198 @@ describe("buildDigestEmail", () => {
     expect(email.html).toContain("1 evidence unavailable");
     expect(email.html).not.toContain("1 proof failed");
   });
+
+  it("renders creative thumbnails and before/after pairs when https urls are sourced", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed"),
+          metadata: {
+            ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed").metadata,
+            beforeCreativeImageUrl: "https://cdn.example.com/before.jpg",
+            afterCreativeImageUrl: "https://cdn.example.com/after.jpg?sig=\"x\"",
+          },
+        },
+        {
+          ...digestItem("boAt", "New ad detected", 85, "scan_backed"),
+          metadata: {
+            ...digestItem("boAt", "New ad detected", 85, "scan_backed").metadata,
+            creativeImageUrl: "https://cdn.example.com/single.jpg",
+          },
+        },
+        {
+          ...digestItem("Mamaearth", "CTA changed", 70, "scan_backed"),
+          metadata: {
+            ...digestItem("Mamaearth", "CTA changed", 70, "scan_backed").metadata,
+            creativeImageUrl: "http://insecure.example.com/skip.jpg",
+          },
+        },
+      ],
+    });
+
+    expect(email.html).toContain('src="https://cdn.example.com/before.jpg"');
+    expect(email.html).toContain("Before");
+    expect(email.html).toContain("Now");
+    expect(email.html).toContain('src="https://cdn.example.com/after.jpg?sig=&quot;x&quot;"');
+    expect(email.html).toContain('src="https://cdn.example.com/single.jpg"');
+    expect(email.html).not.toContain("http://insecure.example.com/skip.jpg");
+    expect(email.html).not.toContain("image unavailable");
+    expect(email.html).not.toContain("No creative");
+    expect(email.text).toContain("Creative: before/after thumbnails attached in the HTML email.");
+    expect(email.text).toContain("Creative thumbnail attached in the HTML email.");
+    // Mamaearth item has only an insecure URL — text must omit creative notes for that item.
+    expect(email.text).not.toMatch(/Mamaearth[\s\S]*Creative thumbnail/);
+  });
+
+  it("omits thumbnail markup entirely when no https creative url is present", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "daily",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
+    });
+
+    expect(email.html).not.toContain("<img");
+    expect(email.html).not.toContain("Before");
+    expect(email.html).not.toContain("Trends this period");
+    expect(email.text).not.toContain("Creative thumbnail");
+    expect(email.text).not.toContain("Trends this period");
+    expect(email.html).not.toContain("unavailable");
+  });
+
+  it("surfaces sourced spend/reach bands and omits inventing metrics", () => {
+    const withMetrics = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+          metadata: {
+            ...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed").metadata,
+            observedSpend: "₹50k–₹100k",
+            observedReach: "80k",
+            observedImpressions: "100k to 150k",
+          },
+        },
+      ],
+    });
+
+    expect(withMetrics.html).toContain("Spending in the ₹50k–₹100k band");
+    expect(withMetrics.html).toContain("Impressions in the 100k–150k band");
+    expect(withMetrics.html).toContain("Observed reach: 80k");
+    expect(withMetrics.text).toContain("Spending in the ₹50k–₹100k band");
+
+    const withoutMetrics = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
+    });
+
+    expect(withoutMetrics.html).not.toContain("Spending in the");
+    expect(withoutMetrics.html).not.toContain("Observed spend");
+    expect(withoutMetrics.html).not.toContain("Observed reach");
+    expect(withoutMetrics.html).not.toContain("Observed impressions");
+    expect(withoutMetrics.html).not.toContain("unavailable");
+    expect(withoutMetrics.text).not.toContain("Spending in the");
+    expect(withoutMetrics.text).not.toContain("Observed spend");
+  });
+
+  it("folds trend rollups into weekly digests only", () => {
+    const items = [
+      digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+      {
+        ...digestItem("Nykaa", "Offer changed again", 90, "proof_backed"),
+        eventType: "landing_page_offer_changed",
+        metadata: {
+          ...digestItem("Nykaa", "Offer changed again", 90, "proof_backed").metadata,
+          hook: "Routine-first bundle",
+        },
+      },
+      {
+        ...digestItem("boAt", "CTA changed", 80, "scan_backed"),
+        eventType: "landing_page_cta_changed",
+      },
+      {
+        ...digestItem("Mamaearth", "Another CTA", 75, "scan_backed"),
+        eventType: "landing_page_cta_changed",
+      },
+      {
+        ...digestItem("Plum", "CTA three", 70, "scan_backed"),
+        eventType: "landing_page_cta_changed",
+      },
+    ];
+
+    const weekly = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items,
+    });
+
+    expect(weekly.html).toContain("Trends this period");
+    expect(weekly.html).toContain("Changed CTAs 3× this period");
+    expect(weekly.html).toContain("Changed pricing 2× this period");
+    expect(weekly.text).toContain("Trends this period:");
+    expect(weekly.text).toContain("- Changed CTAs 3× this period");
+
+    const daily = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-07T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "daily",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items,
+    });
+
+    expect(daily.html).not.toContain("Trends this period");
+    expect(daily.text).not.toContain("Trends this period");
+    expect(daily.html).not.toContain("<img");
+  });
 });
 
 function digestItem(
@@ -180,7 +372,11 @@ function digestItem(
 ) {
   return {
     watchlistName,
-    eventType: "ad_new",
+    eventType: title.includes("offer")
+      ? "landing_page_offer_changed"
+      : title.includes("CTA")
+        ? "landing_page_cta_changed"
+        : "ad_new",
     title,
     summary: `${title} summary with enough detail for review.`,
     createdAt: "2026-06-08T00:00:00.000Z",

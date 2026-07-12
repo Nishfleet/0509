@@ -144,6 +144,124 @@ export function formatInsightDepthMarkdown(summary: InsightDepthSummary) {
   ].join("\n\n");
 }
 
+export interface DigestTrendLine {
+  text: string;
+}
+
+/**
+ * Compact weekly-digest trend lines from sourced digest items only.
+ * Returns [] when there is nothing honest to summarize.
+ */
+export function buildDigestTrendRollups(
+  items: Array<{
+    eventType?: string;
+    title?: string;
+    summary?: string;
+    metadata?: Record<string, unknown>;
+    createdAt?: string;
+  }>,
+): DigestTrendLine[] {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const lines: DigestTrendLine[] = [];
+  const typeCounts = new Map<string, number>();
+
+  for (const item of items) {
+    const key = trendBucketForEventType(item.eventType);
+    if (!key) continue;
+    typeCounts.set(key, (typeCounts.get(key) ?? 0) + 1);
+  }
+
+  for (const [bucket, count] of [...typeCounts.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  )) {
+    lines.push({ text: formatTrendCountLine(bucket, count) });
+  }
+
+  const depth = buildDigestInsightDepth(
+    items.map((item, index) => ({
+      id: `trend-${index}`,
+      digestRunId: "trend",
+      watchlistId: "trend",
+      watchlistName: "trend",
+      eventType: (item.eventType ?? "ad_new") as DigestItemRecord["eventType"],
+      title: item.title ?? "Change",
+      summary: item.summary ?? "",
+      metadata: item.metadata ?? {},
+      createdAt: item.createdAt ?? new Date(0).toISOString(),
+    })),
+  );
+
+  const topHook = depth.topHooks[0];
+  if (topHook && topHook.count > 0 && topHook.label !== "Pending") {
+    lines.push({
+      text:
+        topHook.count === 1
+          ? `Top hook: ${topHook.label}`
+          : `Top hook (${topHook.count}×): ${topHook.label}`,
+    });
+  }
+
+  const topChannel = depth.mediaMix[0];
+  if (topChannel && topChannel.count > 0 && topChannel.label !== "Pending") {
+    lines.push({
+      text:
+        topChannel.count === 1
+          ? `Most common channel: ${topChannel.label}`
+          : `Most common channel: ${topChannel.label} (${topChannel.count})`,
+    });
+  }
+
+  return lines.slice(0, 5);
+}
+
+function trendBucketForEventType(eventType: string | undefined) {
+  switch (eventType) {
+    case "landing_page_offer_changed":
+      return "pricing";
+    case "landing_page_cta_changed":
+      return "cta";
+    case "landing_page_headline_changed":
+      return "headline";
+    case "landing_page_url_changed":
+      return "destination";
+    case "landing_page_form_changed":
+      return "form";
+    case "ad_new":
+      return "new_ad";
+    case "ad_inactive":
+      return "inactive_ad";
+    default:
+      return null;
+  }
+}
+
+function formatTrendCountLine(bucket: string, count: number) {
+  const times = `${count}×`;
+  switch (bucket) {
+    case "pricing":
+      return `Changed pricing ${times} this period`;
+    case "cta":
+      return `Changed CTAs ${times} this period`;
+    case "headline":
+      return `Changed headlines ${times} this period`;
+    case "destination":
+      return `Changed destinations ${times} this period`;
+    case "form":
+      return `Changed forms ${times} this period`;
+    case "new_ad":
+      return count === 1 ? "1 new ad spotted this period" : `${count} new ads spotted this period`;
+    case "inactive_ad":
+      return count === 1
+        ? "1 ad went inactive this period"
+        : `${count} ads went inactive this period`;
+    default:
+      return `${count} changes this period`;
+  }
+}
+
 function buildInsightDepth(sources: InsightSource[]): InsightDepthSummary {
   return {
     topHooks: summarizeCounts(readHookLabels(sources), "No repeated hooks yet."),

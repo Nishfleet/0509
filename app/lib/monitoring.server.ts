@@ -37,6 +37,7 @@ import {
   listSuccessfulProofCapturesForAd,
   listObservationsForRun,
   listWatchEvents,
+  listAdsByIds,
   listWatchEventsBetween,
   listWatchEventsByIds,
   listWatchlists,
@@ -1364,6 +1365,11 @@ async function runDigests(
         metadata: Record<string, unknown>;
       }> = [];
 
+      const eligibleByWatchlist: Array<{
+        watchlist: WatchlistRecord;
+        events: WatchEventRecord[];
+      }> = [];
+
       for (const watchlist of watchlists) {
         const events = await listWatchEventsBetween(
           env,
@@ -1371,8 +1377,22 @@ async function runDigests(
           periodStartIso,
           periodEndIso,
         );
+        eligibleByWatchlist.push({
+          watchlist,
+          events: events.filter(isCustomerDigestEligibleEvent),
+        });
+      }
 
-        for (const event of events.filter(isCustomerDigestEligibleEvent)) {
+      const adIds = eligibleByWatchlist.flatMap(({ events }) =>
+        events.map((event) => event.adId).filter((adId): adId is string => Boolean(adId)),
+      );
+      const adsById = new Map(
+        (await listAdsByIds(env, adIds)).map((ad) => [ad.metaAdId, ad]),
+      );
+
+      for (const { watchlist, events } of eligibleByWatchlist) {
+        for (const event of events) {
+          const ad = event.adId ? adsById.get(event.adId) ?? null : null;
           digestItems.push({
             eventId: event.id,
             watchlistId: watchlist.id,
@@ -1380,7 +1400,7 @@ async function runDigests(
             eventType: event.eventType,
             title: event.title,
             summary: event.summary,
-            metadata: digestMetadataForEvent(event),
+            metadata: digestMetadataForEvent(event, undefined, ad),
           });
         }
       }
