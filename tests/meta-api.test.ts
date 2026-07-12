@@ -21,6 +21,30 @@ describe("searchAds", () => {
     expect(result.source).toBe("demo");
   });
 
+  it("defaults allowDemoFallback to false and throws on live Meta errors", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 190,
+            message: "Bad token",
+          },
+        }),
+        {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    // No options argument — default must not silently fall back to demo.
+    await expect(
+      searchAds({ META_AD_LIBRARY_TOKEN: "token" } as never, query, null),
+    ).rejects.toBeInstanceOf(MetaApiError);
+  });
+
   it("throws the live Meta error when fallback is disabled", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
