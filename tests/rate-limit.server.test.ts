@@ -28,6 +28,30 @@ describe("rateLimitPolicyFor", () => {
     });
   });
 
+  it("gives provider webhooks a dedicated higher write ceiling before generic writes", () => {
+    expect(
+      rateLimitPolicyFor(new Request("https://0509.io/api/webhooks/dodo", { method: "POST" })),
+    ).toMatchObject({
+      scope: "webhook",
+      limit: 300,
+      windowSeconds: 60,
+      failClosed: false,
+    });
+    expect(
+      rateLimitPolicyFor(new Request("https://0509.io/api/webhooks/other", { method: "POST" })),
+    ).toMatchObject({
+      scope: "webhook",
+      limit: 300,
+    });
+    // Generic app writes stay on the tighter bucket.
+    expect(
+      rateLimitPolicyFor(new Request("https://0509.io/api/watchlists", { method: "POST" })),
+    ).toMatchObject({
+      scope: "write",
+      limit: 60,
+    });
+  });
+
   it("leaves search queries to the route-level anonymous limiter", () => {
     expect(rateLimitPolicyFor(new Request("https://0509.io/search"))).toBeNull();
     expect(rateLimitPolicyFor(new Request("https://0509.io/search?website=https%3A%2F%2Fnykaa.com"))).toBeNull();

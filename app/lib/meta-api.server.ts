@@ -68,7 +68,9 @@ export async function searchAds(
   try {
     return await liveSearch(env, query, cursor);
   } catch (error) {
-    if (options.allowDemoFallback === false) {
+    // Default is false: live failures must not silently degrade into demo.
+    // Callers that intentionally want demo on failure pass allowDemoFallback: true.
+    if (options.allowDemoFallback !== true) {
       throw error;
     }
     return demoSearch(query, cursor);

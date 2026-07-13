@@ -137,6 +137,12 @@ export function rateLimitPolicyFor(request: Request): RateLimitPolicy | null {
     return { scope: "delivery-webhook", limit: 180, windowSeconds: 60, failClosed: false };
   }
 
+  // Provider webhooks (Dodo, etc.): higher ceiling than generic writes.
+  // Signature verification remains the real auth gate for these routes.
+  if (pathname.startsWith("/api/webhooks/")) {
+    return { scope: "webhook", limit: 300, windowSeconds: 60, failClosed: false };
+  }
+
   if (method !== "GET" && method !== "HEAD") {
     return { scope: "write", limit: 60, windowSeconds: 60, failClosed: true };
   }
