@@ -71,15 +71,20 @@ describe("listCreativeWallAds", () => {
     harness.close();
   });
 
-  function seedRun(id: string, startedAt: string, status = "succeeded") {
+  function seedRun(
+    id: string,
+    startedAt: string,
+    status = "succeeded",
+    summary: Record<string, unknown> = {},
+  ) {
     harness.sqlite
       .prepare(
         `INSERT INTO watchlist_run (
            id, watchlist_id, trigger_type, status, summary_json,
            started_at, finished_at, created_at, updated_at
-         ) VALUES (?, 'watch-1', 'scheduled', ?, '{}', ?, ?, ?, ?)`,
+         ) VALUES (?, 'watch-1', 'scheduled', ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, status, startedAt, startedAt, startedAt, startedAt);
+      .run(id, status, JSON.stringify(summary), startedAt, startedAt, startedAt, startedAt);
   }
 
   function seedObservation(id: string, adId: string, runId: string, seenAt: string, isActive: number) {
@@ -131,6 +136,29 @@ describe("listCreativeWallAds", () => {
     expect(a.ad.advertiser).toBe("Advertiser ad-a");
   });
 
+  it("keeps the latest healthy creative snapshot when a newer succeeded run was degraded", async () => {
+    await upsertAd(env, buildAd("ad-healthy"));
+    seedRun("run-healthy", "2026-07-12T04:00:00.000Z");
+    seedObservation(
+      "obs-healthy",
+      "ad-healthy",
+      "run-healthy",
+      "2026-07-12T04:00:00.000Z",
+      1,
+    );
+    seedRun(
+      "run-direct-website-only",
+      "2026-07-13T04:00:00.000Z",
+      "succeeded",
+      { adsSeen: 0, scanStatus: "degraded" },
+    );
+
+    const items = await listCreativeWallAds(env, "watch-1");
+
+    expect(items.map((item) => item.ad.metaAdId)).toEqual(["ad-healthy"]);
+    expect(items[0]).toMatchObject({ isActive: true, observedRunCount: 1 });
+  });
+
   it("caps the wall at the requested limit", async () => {
     seedRun("run-1", "2026-07-12T04:00:00.000Z");
     for (let index = 0; index < 5; index += 1) {
@@ -144,6 +172,29 @@ describe("listCreativeWallAds", () => {
     expect(items).toHaveLength(3);
     // Newest-first means the highest seen_at values survive the cap.
     expect(items.map((item) => item.ad.metaAdId)).toEqual(["ad-4", "ad-3", "ad-2"]);
+  });
+
+  it("returns every latest-scan creative by default so analytics are not preview-capped", async () => {
+    seedRun("run-1", "2026-07-12T04:00:00.000Z");
+    for (let index = 0; index < 20; index += 1) {
+      const suffix = String(index).padStart(2, "0");
+      const adId = `ad-${suffix}`;
+      await upsertAd(env, buildAd(adId, { firstSeenAt: `2026-06-${String(index + 1).padStart(2, "0")}` }));
+      seedObservation(
+        `obs-${suffix}`,
+        adId,
+        "run-1",
+        `2026-07-12T04:${suffix}:00.000Z`,
+        1,
+      );
+    }
+
+    const items = await listCreativeWallAds(env, "watch-1");
+
+    expect(items).toHaveLength(20);
+    expect(items.map((item) => item.ad.metaAdId)).toEqual(
+      Array.from({ length: 20 }, (_, index) => `ad-${String(19 - index).padStart(2, "0")}`),
+    );
   });
 
   it("returns an empty wall when the watchlist has no succeeded runs", async () => {

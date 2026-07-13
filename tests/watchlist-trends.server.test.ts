@@ -97,6 +97,28 @@ describe("listWatchlistDailyActivity", () => {
     ]);
   });
 
+  it("does not turn repeated degraded successes into zero-ad scan days", async () => {
+    seedRun("2026-07-10T03:00:00.000Z", { adsSeen: 8, eventsConfirmed: 1 });
+    seedRun("2026-07-11T03:00:00.000Z", {
+      adsSeen: 0,
+      eventsConfirmed: 1,
+      scanStatus: "degraded",
+    });
+    seedRun("2026-07-12T03:00:00.000Z", {
+      adsSeen: 0,
+      eventsConfirmed: 2,
+      scanStatus: "degraded",
+    });
+    seedRun("2026-07-13T03:00:00.000Z", { adsSeen: 11, eventsConfirmed: 3 });
+
+    const activity = await listWatchlistDailyActivity(env, "watch-1", { now: NOW });
+
+    expect(activity).toEqual([
+      { date: "2026-07-10", runs: 1, adsSeenPeak: 8, eventsConfirmed: 1 },
+      { date: "2026-07-13", runs: 1, adsSeenPeak: 11, eventsConfirmed: 3 },
+    ]);
+  });
+
   it("treats missing summary counters as zero instead of failing", async () => {
     seedRun("2026-07-12T03:00:00.000Z", {});
     seedRun("2026-07-12T09:00:00.000Z", { adsSeen: 6 });

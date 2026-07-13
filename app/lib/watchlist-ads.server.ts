@@ -4,15 +4,13 @@ import type { AppEnv } from "~/lib/env.server";
 import type { CreativeWallItem } from "~/lib/trend-chart-data";
 
 /**
- * Creative-wall data for a watchlist: the ads observed by the latest
- * succeeded scan, hydrated from persisted raw_json, each carrying this
- * watchlist's own observation window (first/last tracked, distinct scans).
+ * Creative-wall and trend data for a watchlist: every ad observed by the
+ * latest healthy succeeded scan, hydrated from persisted raw_json, each
+ * carrying this watchlist's own healthy observation window.
  *
  * Retention truth: watchlist_run rows older than 90 days are swept (newest 5
  * kept), so tracked windows never claim more than the retained history.
  */
-
-export const CREATIVE_WALL_DEFAULT_LIMIT = 18;
 
 interface LatestRunRow {
   id: string;
@@ -33,7 +31,7 @@ interface TrackingWindowRow {
 export async function listCreativeWallAds(
   env: AppEnv,
   watchlistId: string,
-  limit: number = CREATIVE_WALL_DEFAULT_LIMIT,
+  limit?: number,
 ): Promise<CreativeWallItem[]> {
   if (!env.DB) {
     return [];
@@ -44,7 +42,9 @@ export async function listCreativeWallAds(
     `
       SELECT id
       FROM watchlist_run
-      WHERE watchlist_id = ? AND status = 'succeeded'
+      WHERE watchlist_id = ?
+        AND status = 'succeeded'
+        AND COALESCE(json_extract(summary_json, '$.scanStatus'), '') != 'degraded'
       ORDER BY started_at DESC
       LIMIT 1
     `,
@@ -88,7 +88,10 @@ export async function listCreativeWallAds(
              COUNT(DISTINCT o.watchlist_run_id) AS observed_run_count
       FROM ad_observation o
       JOIN watchlist_run r ON r.id = o.watchlist_run_id
-      WHERE r.watchlist_id = ? AND o.ad_id IN (${placeholders})
+      WHERE r.watchlist_id = ?
+        AND r.status = 'succeeded'
+        AND COALESCE(json_extract(r.summary_json, '$.scanStatus'), '') != 'degraded'
+        AND o.ad_id IN (${placeholders})
       GROUP BY o.ad_id
     `,
     prefix: [watchlistId],
@@ -115,13 +118,15 @@ export async function listCreativeWallAds(
   }
 
   // Newest additions first: ads this watchlist started tracking most recently.
-  return [...items]
-    .sort(
-      (left, right) =>
-        compareIsoDesc(left.firstTrackedAt, right.firstTrackedAt) ||
-        left.ad.metaAdId.localeCompare(right.ad.metaAdId),
-    )
-    .slice(0, Math.max(0, limit));
+  const sortedItems = [...items].sort(
+    (left, right) =>
+      compareIsoDesc(left.firstTrackedAt, right.firstTrackedAt) ||
+      left.ad.metaAdId.localeCompare(right.ad.metaAdId),
+  );
+
+  return limit === undefined
+    ? sortedItems
+    : sortedItems.slice(0, Math.max(0, Math.floor(limit)));
 }
 
 function compareIsoDesc(left: string, right: string): number {

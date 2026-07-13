@@ -19,8 +19,27 @@ function weeklyEvent() {
     eventType: "landing_page_offer_changed",
     status: "confirmed",
     importanceScore: 79,
+    proofCaptureId: "proof-1",
     title: "Landing page offer changed",
     summary: "Offer changed on the landing page.",
+    confirmedAt: "2026-07-12T05:00:00.000Z",
+    createdAt: "2026-07-12T05:00:00.000Z",
+    metadata: {},
+  };
+}
+
+function provisionalEvent() {
+  return {
+    id: "event-provisional",
+    eventType: "landing_page_cta_changed",
+    status: "proof_pending",
+    importanceScore: 95,
+    proofCaptureId: null,
+    title: "Possible CTA change",
+    summary: "A high-priority CTA change is still waiting on proof.",
+    confirmedAt: null,
+    createdAt: "2026-07-12T06:00:00.000Z",
+    metadata: {},
   };
 }
 
@@ -165,6 +184,103 @@ describe("weekly digest strategy paragraph flow", () => {
       expect.objectContaining({
         digestRunId: "digest-1",
         strategyParagraph: GOOD_PARAGRAPH,
+      }),
+    );
+  });
+
+  it("keeps provisional items in the digest but excludes them from mixed AI strategy input", async () => {
+    const data = dataServerMock({
+      listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent(), provisionalEvent()]),
+    });
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+    const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => data);
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+    await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+
+    const request = aiRun.mock.calls[0]?.[1] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const userPrompt = request.messages.find((message) => message.role === "user")?.content ?? "";
+    expect(userPrompt).toContain("Landing page offer changed");
+    expect(userPrompt).not.toContain("Possible CTA change");
+
+    expect(data.createDigestRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({
+        totalEvents: 2,
+        strategyParagraph: GOOD_PARAGRAPH,
+        strategyWatchlistIds: ["watch-1"],
+      }),
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            title: "Landing page offer changed",
+            metadata: expect.objectContaining({ eventStatus: "confirmed" }),
+          }),
+          expect.objectContaining({
+            title: "Possible CTA change",
+            metadata: expect.objectContaining({ eventStatus: "proof_pending" }),
+          }),
+        ],
+      }),
+    );
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        strategyParagraph: GOOD_PARAGRAPH,
+        items: [
+          expect.objectContaining({ title: "Landing page offer changed" }),
+          expect.objectContaining({ title: "Possible CTA change" }),
+        ],
+      }),
+    );
+  });
+
+  it("persists and delivers provisional-only digest items without an AI strategy summary", async () => {
+    const data = dataServerMock({
+      listWatchEventsBetween: vi.fn().mockResolvedValue([provisionalEvent()]),
+    });
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+    const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => data);
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+    await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+
+    expect(aiRun).not.toHaveBeenCalled();
+    expect(data.createDigestRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.any(String),
+      expect.any(String),
+      expect.not.objectContaining({ strategyParagraph: expect.anything() }),
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            title: "Possible CTA change",
+            metadata: expect.objectContaining({ eventStatus: "proof_pending" }),
+          }),
+        ],
+      }),
+    );
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        strategyParagraph: null,
+        items: [expect.objectContaining({ title: "Possible CTA change" })],
       }),
     );
   });

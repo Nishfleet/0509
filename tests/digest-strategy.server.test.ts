@@ -129,6 +129,77 @@ describe("buildWeeklyStrategyParagraph", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  it("uses only verified report evidence when verified and provisional items are mixed", async () => {
+    const run = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+
+    await expect(
+      buildWeeklyStrategyParagraph(
+        { AI: { run } } as never,
+        baseInput({
+          items: [
+            strategyItem({
+              watchlistId: "watch-verified",
+              watchlistName: "Verified watch",
+              title: "Verified offer change",
+              metadata: {
+                eventStatus: "confirmed",
+                proofCaptureId: "proof-1",
+                sourceStatus: "proof_backed",
+                priorityScore: 70,
+              },
+            }),
+            strategyItem({
+              watchlistId: "watch-provisional",
+              watchlistName: "Provisional watch",
+              title: "Possible CTA change",
+              metadata: {
+                eventStatus: "proof_pending",
+                sourceStatus: "scan_backed",
+                priorityScore: 99,
+              },
+            }),
+          ],
+        }),
+      ),
+    ).resolves.toEqual({
+      paragraph: GOOD_PARAGRAPH,
+      watchlistIds: ["watch-verified"],
+    });
+
+    const request = run.mock.calls[0]?.[1] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const user = request.messages.find((message) => message.role === "user")?.content ?? "";
+    expect(user).toContain("Verified watch: Verified offer change");
+    expect(user).not.toContain("Provisional watch");
+    expect(user).not.toContain("Possible CTA change");
+  });
+
+  it("silently omits strategy generation when every digest item is provisional", async () => {
+    const run = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+
+    await expect(
+      buildWeeklyStrategyParagraph(
+        { AI: { run } } as never,
+        baseInput({
+          items: [
+            strategyItem({
+              watchlistId: "watch-provisional",
+              watchlistName: "Provisional watch",
+              title: "Possible CTA change",
+              metadata: {
+                eventStatus: "proof_pending",
+                sourceStatus: "scan_backed",
+                priorityScore: 99,
+              },
+            }),
+          ],
+        }),
+      ),
+    ).resolves.toBeNull();
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["empty output", ""],
     ["whitespace output", "   \n  "],
@@ -160,6 +231,34 @@ describe("buildWeeklyStrategyParagraph", () => {
 });
 
 describe("buildStrategyInputLines", () => {
+  it("excludes provisional items even when they have the highest priority", () => {
+    const lines = buildStrategyInputLines([
+      strategyItem({
+        watchlistName: "Verified watch",
+        title: "Verified offer change",
+        metadata: {
+          eventStatus: "confirmed",
+          proofCaptureId: "proof-1",
+          sourceStatus: "proof_backed",
+          priorityScore: 60,
+        },
+      }),
+      strategyItem({
+        watchlistName: "Provisional watch",
+        title: "Possible CTA change",
+        metadata: {
+          eventStatus: "proof_pending",
+          sourceStatus: "scan_backed",
+          priorityScore: 100,
+        },
+      }),
+    ]);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("Verified watch");
+    expect(lines[0]).not.toContain("Provisional watch");
+  });
+
   it("ranks by priority score and caps the item count", () => {
     const items = Array.from({ length: 10 }, (_, index) =>
       strategyItem({

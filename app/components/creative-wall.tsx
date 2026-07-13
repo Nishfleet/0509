@@ -8,13 +8,19 @@ import {
   type CreativeWallItem,
 } from "~/lib/trend-chart-data";
 
+const CREATIVE_WALL_PREVIEW_LIMIT = 18;
+
 /**
- * Creative wall: every ad the latest succeeded scan saw for this watchlist,
- * as a compact tile grid. Longevity provenance stays split — a green
+ * Creative wall: a bounded preview of the latest healthy scan's ads. The
+ * full input remains available to sibling analytics; this component labels
+ * the preview against that true total. Longevity provenance stays split — a green
  * "Running N days" pill means Meta published the start date; a gray
  * "Tracked N days" pill means we only know our own observation window.
  */
 export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan: string }) {
+  const previewItems = items.slice(0, CREATIVE_WALL_PREVIEW_LIMIT);
+  const isCapped = previewItems.length < items.length;
+
   return (
     <section aria-label="Creative wall">
       <div className="f9-panel-toolbar">
@@ -24,7 +30,9 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
         </div>
         {items.length > 0 ? (
           <span className="f9-status-pill">
-            {items.length} creative{items.length === 1 ? "" : "s"}
+            {isCapped
+              ? `Showing ${previewItems.length} of ${items.length} creatives`
+              : `${items.length} creative${items.length === 1 ? "" : "s"}`}
           </span>
         ) : null}
       </div>
@@ -37,7 +45,7 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
         </p>
       ) : (
         <ul className="f9-creative-wall">
-          {items.map((item) => (
+          {previewItems.map((item) => (
             <li
               className={`f9-creative-tile${item.isActive ? "" : " is-inactive"}`}
               key={item.ad.metaAdId}

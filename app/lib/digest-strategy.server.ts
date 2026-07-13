@@ -10,7 +10,10 @@
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
-import { isDigestDecisionCandidate } from "~/lib/proof-classification";
+import {
+  classifyDigestItemSource,
+  isDigestDecisionCandidate,
+} from "~/lib/proof-classification";
 
 export interface DigestStrategyItemInput {
   watchlistId: string;
@@ -111,9 +114,10 @@ export async function buildWeeklyStrategyParagraph(
 }
 
 /**
- * Ranks digest items with the same priority signals the digest email uses
- * (decision candidates first, then priority score), takes the top few, and
- * renders one compact line per item capped to a total input budget.
+ * Restricts factual AI input to the same verified-proof classification used
+ * for client report rows. Provisional items remain labeled digest items but
+ * never become model claims. The verified set is then ranked with the same
+ * priority signals the digest email uses and capped to a small input budget.
  */
 export function buildStrategyInputLines(items: DigestStrategyItemInput[]) {
   return buildStrategyInput(items).lines;
@@ -121,6 +125,7 @@ export function buildStrategyInputLines(items: DigestStrategyItemInput[]) {
 
 function buildStrategyInput(items: DigestStrategyItemInput[]) {
   const ranked = items
+    .filter((item) => classifyDigestItemSource(item).status === "verified_proof")
     .map((item, index) => ({
       item,
       index,

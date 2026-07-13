@@ -3,7 +3,7 @@ import type { AppEnv } from "~/lib/env.server";
 import type { WatchlistDailyActivity } from "~/lib/trend-chart-data";
 
 /**
- * Daily scan-activity rollup for a watchlist, read from succeeded
+ * Daily scan-activity rollup for a watchlist, read from healthy succeeded
  * watchlist_run summary_json counters (written by completeWatchlistRun).
  *
  * The window is hard-capped at 90 days because run retention deletes older
@@ -46,7 +46,10 @@ export async function listWatchlistDailyActivity(
              MAX(COALESCE(json_extract(summary_json, '$.adsSeen'), 0)) AS ads_seen_peak,
              SUM(COALESCE(json_extract(summary_json, '$.eventsConfirmed'), 0)) AS events_confirmed
       FROM watchlist_run
-      WHERE watchlist_id = ? AND status = 'succeeded' AND started_at >= ?
+      WHERE watchlist_id = ?
+        AND status = 'succeeded'
+        AND COALESCE(json_extract(summary_json, '$.scanStatus'), '') != 'degraded'
+        AND started_at >= ?
       GROUP BY date(started_at)
       ORDER BY day ASC
     `,
