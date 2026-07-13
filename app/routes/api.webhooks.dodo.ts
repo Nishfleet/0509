@@ -196,10 +196,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
         subscriptionGrant.eventType === "subscription.plan_changed" &&
         !subscriptionGrant.hasProviderGrantTimestamp;
       const fallbackGrantAt = planChangedWithoutProviderTimestamp ? verifiedWebhookTimestamp : undefined;
+      // Live Dodo subscription payloads carry no updated_at (verified against
+      // the live subscriptions API, 2026-07-13), so real plan_changed events
+      // arrive without a provider grant timestamp. A pure scheduled
+      // cancellation has no pending plan-change row — routing it through the
+      // plan-change-pending guard would match zero rows, finalize the ledger
+      // as ignored, and silently drop the cancellation status + email. Let it
+      // take the normal grant path instead; the signature-verified webhook
+      // envelope timestamp (fallbackGrantAt) preserves monotonic ordering.
       const requiresPendingPlanChange =
-        planChangedWithoutProviderTimestamp;
+        planChangedWithoutProviderTimestamp && !cancellationScheduled;
       const allowsPendingPlanChangeTarget =
-        planChangedWithoutProviderTimestamp;
+        planChangedWithoutProviderTimestamp && !cancellationScheduled;
       const grantApplied = await applyDodoPlanGrantWithWatchlistReconcile(
         env,
         {

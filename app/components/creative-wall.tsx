@@ -40,7 +40,7 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
         <p className="f9-muted-copy">
           No creatives captured yet — the wall fills in after the first successful scan.
           {plan === "free"
-            ? " The free plan takes one snapshot when a watchlist is created; paid plans check every 3 hours."
+            ? " The free plan takes one snapshot when a watchlist is created; paid plans check every 3–6 hours."
             : ""}
         </p>
       ) : (
