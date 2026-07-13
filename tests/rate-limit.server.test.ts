@@ -9,8 +9,16 @@ import {
 import type { AppEnv } from "~/lib/env.server";
 
 describe("rateLimitPolicyFor", () => {
-  it("skips the health check", () => {
+  it("skips the cheap edge health check", () => {
     expect(rateLimitPolicyFor(new Request("https://0509.io/api/health"))).toBeNull();
+  });
+
+  it("rate-limits the deep health probe under the public api-read bucket", () => {
+    expect(rateLimitPolicyFor(new Request("https://0509.io/api/health/deep"))).toMatchObject({
+      scope: "api-read",
+      limit: 240,
+      failClosed: false,
+    });
   });
 
   it("protects auth routes with a stricter bucket", () => {

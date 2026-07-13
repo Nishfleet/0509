@@ -4,6 +4,8 @@ import type { LoaderFunctionArgs } from "react-router";
 // Does NOT touch D1 — must stay a pure edge check so a DB blip doesn't
 // make the worker look unhealthy to the monitor.
 //
+// For a D1 dependency check, use `/api/health/deep` (rate-limited).
+//
 // Resource route pattern (React Router v7): only a loader, no default
 // export. Without a component export, RR v7 returns the loader's Response
 // directly instead of wrapping it in the root HTML layout. See
