@@ -213,7 +213,7 @@ describe("createLandingPageSnapshot", () => {
     expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v1"))).toBe(true);
   });
 
-  it("updates the digest delivery provider when rerunning an existing digest", async () => {
+  it("keeps an accepted digest immutable when a stale retry result arrives", async () => {
     const mock = createMockDb();
 
     await upsertDigestDelivery({ DB: mock.db } as never, "digest-1", {
@@ -226,7 +226,9 @@ describe("createLandingPageSnapshot", () => {
     });
 
     const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
-    expect(statement?.sql).toContain("provider = excluded.provider");
+    expect(statement?.sql).toContain("WHEN digest_delivery.status = 'sent'");
+    expect(statement?.sql).toContain("THEN digest_delivery.provider");
+    expect(statement?.sql).toContain("THEN 'sent'");
   });
 });
 

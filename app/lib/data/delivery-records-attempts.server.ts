@@ -264,6 +264,7 @@ export async function updateDeliveryAttemptResult(
     webhookStatus: WebhookReconciliationStatus;
     providerMessageId?: string | null;
     providerStatusLastSeenAt?: string | null;
+    templateName?: string | null;
     errorMessage?: string | null;
     sentAt?: string | null;
     failedAt?: string | null;
@@ -279,6 +280,7 @@ export async function updateDeliveryAttemptResult(
           webhook_status = ?,
           provider_message_id = ?,
           provider_status_last_seen_at = ?,
+          template_name = COALESCE(?, template_name),
           error_message = ?,
           sent_at = ?,
           failed_at = ?,
@@ -291,6 +293,7 @@ export async function updateDeliveryAttemptResult(
     input.webhookStatus,
     input.providerMessageId ?? null,
     input.providerStatusLastSeenAt ?? null,
+    input.templateName ?? null,
     input.errorMessage ?? null,
     input.sentAt ?? null,
     input.failedAt ?? null,

@@ -17,6 +17,7 @@ import {
   countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
   recordWatchlistCapacitySkip,
+  repairIncompleteDigestRun,
   getDigest,
   getDigestByPeriod,
   getRecentSuccessfulRuns,
@@ -1490,11 +1491,41 @@ async function runDigests(
             }
           : {}),
       };
+      const candidateItems = digestItems.map((item) => ({
+        watchlistId: item.watchlistId,
+        watchlistName: item.watchlistName,
+        eventType: item.eventType,
+        title: item.title,
+        summary: item.summary,
+        metadata: item.metadata,
+      }));
 
       let digestRunId: string;
       let canonicalDigest = existingDigest;
       if (existingDigest) {
         digestRunId = existingDigest.id;
+        if (!hasCompleteDigestItemSet(existingDigest)) {
+          const expectedItemCount = readDigestExpectedItemCount(existingDigest.summary);
+          if (expectedItemCount === null || digestItems.length !== expectedItemCount) {
+            throw new Error(
+              "Digest run is incomplete and its original candidate cannot be reconstructed exactly.",
+            );
+          }
+          await repairIncompleteDigestRun(env, digestRunId, {
+            summary: existingDigest.summary ?? {},
+            items: candidateItems,
+          });
+          canonicalDigest = await getDigest(env, digestRunId);
+          if (!canonicalDigest) {
+            throw new Error("Digest run disappeared during incomplete-row repair.");
+          }
+          if (canonicalDigest.delivery?.status === "sent") {
+            continue;
+          }
+          if (!hasCompleteDigestItemSet(canonicalDigest)) {
+            throw new Error("Digest run remains incomplete after atomic repair.");
+          }
+        }
       } else {
         const claim = await createDigestRun(
           env,
@@ -1504,27 +1535,17 @@ async function runDigests(
           digestSummary,
           {
             returnClaim: true,
-            items: digestItems.map((item) => ({
-              watchlistId: item.watchlistId,
-              watchlistName: item.watchlistName,
-              eventType: item.eventType,
-              title: item.title,
-              summary: item.summary,
-              metadata: item.metadata,
-            })),
+            items: candidateItems,
           },
         );
         digestRunId = claim.digestRunId;
 
         if (!claim.created) {
-          // Another execution won this period after our initial read. Its
-          // stored paragraph is canonical; never deliver our losing model
-          // output or mutate the winner's persisted run-owned state.
-          const winningDigest = await getDigest(env, digestRunId);
-          if (!winningDigest) {
-            throw new Error("Winning digest run disappeared after period claim.");
-          }
-          canonicalDigest = winningDigest;
+          // Another execution owns both this period's persisted candidate and
+          // its first dispatch. The losing execution must not call providers;
+          // a later retry sweep can safely replay the stored winner if needed.
+          handledDigestRunIds.add(digestRunId);
+          continue;
         }
       }
       handledDigestRunIds.add(digestRunId);
@@ -1614,30 +1635,30 @@ async function retryFailedDigests(
         continue;
       }
 
-	      const digest = await getDigest(env, candidate.id);
-	      if (!digest) {
-	        continue;
-	      }
-	      let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
-	      if (digest.items.length === 0) {
-	        const runStats = await getSuccessfulRunStatsForUserBetween(
-	          env,
-	          candidate.userId,
-	          candidate.periodStart,
-	          candidate.periodEnd,
-	        );
-	        if (runStats.runs === 0) {
-	          continue;
-	        }
-	        heartbeat = runStats;
-	      }
+      const digest = await getDigest(env, candidate.id);
+      if (!digest || !hasCompleteDigestItemSet(digest)) {
+        continue;
+      }
+      let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
+      if (digest.items.length === 0) {
+        const runStats = await getSuccessfulRunStatsForUserBetween(
+          env,
+          candidate.userId,
+          candidate.periodStart,
+          candidate.periodEnd,
+        );
+        if (runStats.runs === 0) {
+          continue;
+        }
+        heartbeat = runStats;
+      }
 
-	      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-	      const delivery = await deliverWeeklyDigest(env, {
-	        heartbeat,
-	        userId: candidate.userId,
-	        userName: candidate.userName,
-	        accountEmail: candidate.userEmail,
+      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+      const delivery = await deliverWeeklyDigest(env, {
+        heartbeat,
+        userId: candidate.userId,
+        userName: candidate.userName,
+        accountEmail: candidate.userEmail,
         digestRunId: candidate.id,
         periodStart: candidate.periodStart,
         periodEnd: candidate.periodEnd,
@@ -1672,6 +1693,21 @@ async function retryFailedDigests(
 function digestCadenceForPeriod(periodStart: string, periodEnd: string): DigestCadence {
   const spanMs = new Date(periodEnd).getTime() - new Date(periodStart).getTime();
   return spanMs <= 36 * 60 * 60 * 1000 ? "daily" : "weekly";
+}
+
+function hasCompleteDigestItemSet(digest: {
+  summary?: Record<string, unknown>;
+  items: readonly unknown[];
+}) {
+  const expectedItemCount = readDigestExpectedItemCount(digest.summary);
+  return expectedItemCount !== null && digest.items.length === expectedItemCount;
+}
+
+function readDigestExpectedItemCount(summary?: Record<string, unknown>) {
+  const expectedItemCount = summary?.totalEvents;
+  return Number.isSafeInteger(expectedItemCount) && Number(expectedItemCount) >= 0
+    ? Number(expectedItemCount)
+    : null;
 }
 
 function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoringOptions) {

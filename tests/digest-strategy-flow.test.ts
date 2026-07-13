@@ -83,6 +83,7 @@ function dataServerMock(overrides: Record<string, unknown> = {}) {
     listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent()]),
     listWatchlists: vi.fn().mockResolvedValue([{ id: "watch-1", name: "boAt watch" }]),
     logMetaIntegrationStatus: vi.fn(),
+    repairIncompleteDigestRun: vi.fn().mockResolvedValue(true),
     touchWatchlistScanned: vi.fn(),
     updateDigestRunSummary: vi.fn(),
     upsertProofTarget: vi.fn(),
@@ -441,6 +442,129 @@ describe("weekly digest strategy paragraph flow", () => {
         strategyParagraph: STORED_PARAGRAPH,
       }),
     );
+  });
+
+  it("atomically repairs a legacy partial run before delivering its full stored strategy", async () => {
+    const secondEvent = {
+      ...weeklyEvent(),
+      id: "event-2",
+      eventType: "landing_page_cta_changed",
+      title: "Landing page CTA changed",
+      summary: "CTA changed on the landing page.",
+    };
+    const partialDigest = {
+      id: "digest-partial",
+      userId: "user-1",
+      periodStart: "2026-07-06T05:00:00.000Z",
+      periodEnd: "2026-07-13T05:00:00.000Z",
+      summary: {
+        totalEvents: 2,
+        watchlists: 1,
+        strategyParagraph: STORED_PARAGRAPH,
+        strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
+      },
+      createdAt: "2026-07-13T05:01:00.000Z",
+      items: [
+        {
+          id: "digest-item-1",
+          digestRunId: "digest-partial",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Only the first item survived",
+          summary: "The legacy worker stopped before item two.",
+          metadata: {},
+          createdAt: "2026-07-13T05:01:00.000Z",
+        },
+      ],
+      delivery: null,
+    };
+    const repairedDigest = {
+      ...partialDigest,
+      items: [
+        {
+          ...partialDigest.items[0],
+          title: "Landing page offer changed",
+          summary: "Offer changed on the landing page.",
+        },
+        {
+          ...partialDigest.items[0],
+          id: "digest-item-2",
+          eventType: "landing_page_cta_changed",
+          title: "Landing page CTA changed",
+          summary: "CTA changed on the landing page.",
+        },
+      ],
+    };
+    const data = dataServerMock({
+      getDigestByPeriod: vi.fn().mockResolvedValue(partialDigest),
+      getDigest: vi.fn().mockResolvedValue(repairedDigest),
+      listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent(), secondEvent]),
+    });
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+    const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => data);
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+    await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+
+    expect(aiRun).not.toHaveBeenCalled();
+    expect(data.repairIncompleteDigestRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-partial",
+      expect.objectContaining({
+        summary: partialDigest.summary,
+        items: expect.arrayContaining([
+          expect.objectContaining({ title: "Landing page offer changed" }),
+          expect.objectContaining({ title: "Landing page CTA changed" }),
+        ]),
+      }),
+    );
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        digestRunId: "digest-partial",
+        heartbeat: null,
+        strategyParagraph: STORED_PARAGRAPH,
+        items: [
+          expect.objectContaining({ title: "Landing page offer changed" }),
+          expect.objectContaining({ title: "Landing page CTA changed" }),
+        ],
+      }),
+    );
+  });
+
+  it("fails closed when an incomplete legacy run cannot be reconstructed exactly", async () => {
+    const data = dataServerMock({
+      getDigestByPeriod: vi.fn().mockResolvedValue({
+        id: "digest-unreconstructable",
+        userId: "user-1",
+        periodStart: "2026-07-06T05:00:00.000Z",
+        periodEnd: "2026-07-13T05:00:00.000Z",
+        summary: { totalEvents: 2, watchlists: 1 },
+        createdAt: "2026-07-13T05:01:00.000Z",
+        items: [],
+        delivery: null,
+      }),
+    });
+    const deliverWeeklyDigest = vi.fn();
+    const aiRun = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => data);
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+    await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(0);
+
+    expect(data.repairIncompleteDigestRun).not.toHaveBeenCalled();
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   });
 
   it("replays the persisted paragraph in the retry sweep without a second AI call", async () => {

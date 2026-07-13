@@ -255,6 +255,136 @@ export async function updateDigestRunSummary(
   );
 }
 
+/**
+ * Repairs rows left behind by the legacy create-then-add-items flow. The
+ * temporary token makes every statement in the D1 batch conditional on this
+ * caller winning the repair claim, so overlapping repairers cannot interleave
+ * deletes and inserts. Sent digests are immutable.
+ */
+export async function repairIncompleteDigestRun(
+  env: AppEnv,
+  digestRunId: string,
+  input: {
+    summary: JsonRecord;
+    items: readonly DigestRunItemInput[];
+  },
+) {
+  const db = ensureDb(env);
+  const repairToken = createId();
+  const repairSummaryJson = jsonValue({
+    ...input.summary,
+    __digestItemRepairToken: repairToken,
+  });
+  const finalSummaryJson = jsonValue(input.summary);
+  const createdAt = nowIso();
+
+  const claim = db
+    .prepare(
+      `
+        UPDATE digest_run
+        SET summary_json = ?
+        WHERE id = ?
+          AND summary_json = ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM digest_delivery
+            WHERE digest_delivery.digest_run_id = digest_run.id
+              AND digest_delivery.status = 'sent'
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM delivery_attempt
+            WHERE delivery_attempt.digest_run_id = digest_run.id
+              AND delivery_attempt.status IN ('pending', 'sent')
+          )
+          AND (
+            CASE
+              WHEN json_valid(summary_json) = 0 THEN 0
+              WHEN json_type(summary_json, '$.totalEvents') IS NULL THEN 0
+              WHEN json_type(summary_json, '$.totalEvents') != 'integer' THEN 0
+              WHEN CAST(json_extract(summary_json, '$.totalEvents') AS INTEGER) < 0 THEN 0
+              WHEN CAST(json_extract(summary_json, '$.totalEvents') AS INTEGER) != ? THEN 0
+              ELSE CAST(json_extract(summary_json, '$.totalEvents') AS INTEGER) != (
+                SELECT COUNT(*)
+                FROM digest_item
+                WHERE digest_item.digest_run_id = digest_run.id
+              )
+            END
+          ) = 1
+      `,
+    )
+    .bind(repairSummaryJson, digestRunId, finalSummaryJson, input.items.length);
+
+  const tokenGuard = `
+    EXISTS (
+      SELECT 1
+      FROM digest_run
+      WHERE digest_run.id = ?
+        AND digest_run.summary_json = ?
+    )
+  `;
+  const statements = [
+    claim,
+    db
+      .prepare(
+        `
+          DELETE FROM digest_item
+          WHERE digest_run_id = ?
+            AND ${tokenGuard}
+        `,
+      )
+      .bind(digestRunId, digestRunId, repairSummaryJson),
+    ...input.items.map((item) =>
+      db
+        .prepare(
+          `
+            INSERT INTO digest_item (
+              id,
+              digest_run_id,
+              watchlist_id,
+              watchlist_name,
+              event_type,
+              title,
+              summary,
+              metadata_json,
+              created_at
+            )
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+            FROM digest_run
+            WHERE id = ?
+              AND summary_json = ?
+          `,
+        )
+        .bind(
+          createId(),
+          digestRunId,
+          item.watchlistId,
+          item.watchlistName,
+          item.eventType,
+          item.title,
+          item.summary,
+          jsonValue(item.metadata ?? {}),
+          createdAt,
+          digestRunId,
+          repairSummaryJson,
+        ),
+    ),
+    db
+      .prepare(
+        `
+          UPDATE digest_run
+          SET summary_json = ?
+          WHERE id = ?
+            AND summary_json = ?
+        `,
+      )
+      .bind(finalSummaryJson, digestRunId, repairSummaryJson),
+  ];
+
+  const results = await db.batch(statements);
+  return Number(results[0]?.meta?.changes ?? 0) > 0;
+}
+
 const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;
 
 /**
@@ -357,12 +487,35 @@ export async function upsertDigestDelivery(
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(digest_run_id)
-      DO UPDATE SET provider = excluded.provider,
-                    status = excluded.status,
-                    recipient_email = excluded.recipient_email,
-                    external_message_id = excluded.external_message_id,
-                    error_message = excluded.error_message,
-                    delivered_at = excluded.delivered_at,
+      DO UPDATE SET provider = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.provider
+                      ELSE excluded.provider
+                    END,
+                    status = CASE
+                      WHEN digest_delivery.status = 'sent' THEN 'sent'
+                      ELSE excluded.status
+                    END,
+                    recipient_email = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.recipient_email
+                      ELSE excluded.recipient_email
+                    END,
+                    external_message_id = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.external_message_id
+                      ELSE excluded.external_message_id
+                    END,
+                    error_message = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.error_message
+                      ELSE excluded.error_message
+                    END,
+                    delivered_at = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.delivered_at
+                      ELSE excluded.delivered_at
+                    END,
                     updated_at = excluded.updated_at
     `,
     createId(),
