@@ -127,10 +127,25 @@ async function sendBillingLifecycleEmail(
     duplicate?.status === "pending" &&
     duplicate.webhookStatus === "pending" &&
     duplicate.payloadSnapshot?.["outboxPendingDispatch"] === true;
+  // A row the recovery sweep refused to replay because the account state had
+  // moved past it. The skip is intentional for the sweep's stale content, but
+  // the idempotency slot must stay claimable: for day-keyed dunning a
+  // terminal skip would suppress every later same-day payment event, and this
+  // status (unlike 'failed') is excluded from operator failure counts.
+  const supersededOutbox =
+    duplicate?.status === "skipped_due_to_dedupe" &&
+    duplicate.webhookStatus === "provider_unknown";
   // Sent rows and provider-unknown timeouts are terminal for automatic
-  // retries. Only an explicit failure, an abandoned pre-dispatch lease, or a
-  // freshly-enqueued outbox row can call the provider.
-  if (duplicate && duplicate.status !== "failed" && !stalePreDispatch && !pendingOutboxDispatch) {
+  // retries. Only an explicit failure, an abandoned pre-dispatch lease, a
+  // freshly-enqueued outbox row, or a recovery-superseded slot can call the
+  // provider (always with content rebuilt from the CURRENT event).
+  if (
+    duplicate &&
+    duplicate.status !== "failed" &&
+    !stalePreDispatch &&
+    !pendingOutboxDispatch &&
+    !supersededOutbox
+  ) {
     return false;
   }
   const claimFromPending = stalePreDispatch || pendingOutboxDispatch;
@@ -165,8 +180,16 @@ async function sendBillingLifecycleEmail(
       // replay would keep pointing at the address the failed attempt used.
       targetValue: input.email,
       updatedAt: claimUpdatedAt,
-      expectedStatus: claimFromPending ? "pending" : "failed",
-      expectedWebhookStatus: claimFromPending ? "pending" : undefined,
+      expectedStatus: claimFromPending
+        ? "pending"
+        : supersededOutbox
+          ? "skipped_due_to_dedupe"
+          : "failed",
+      expectedWebhookStatus: claimFromPending
+        ? "pending"
+        : supersededOutbox
+          ? "provider_unknown"
+          : undefined,
       expectedUpdatedAt: claimFromPending ? duplicate.updatedAt : undefined,
     });
     // Older/mocked data adapters returned void; only an explicit false means
@@ -362,6 +385,14 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
   const result = { ...emptyResult, scanned: attempts.length };
 
   for (const attempt of attempts) {
+    const payload = readBillingLifecycleRecoveryPayload(attempt);
+    const [currentBillingInfo, currentProfile] = payload
+      ? await Promise.all([
+          getUserPlanBillingInfo(env, attempt.userId),
+          getUserDeliveryProfile(env, attempt.userId),
+        ])
+      : [null, null];
+
     const claimUpdatedAt = new Date().toISOString();
     const claimed = await updateDeliveryAttemptResult(env, attempt.id, {
       provider: EMAIL_PROVIDER,
@@ -373,6 +404,23 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
       errorMessage: null,
       sentAt: null,
       failedAt: null,
+      // The claim rewrites the payload exactly like the live claim does:
+      // marker cleared, current fingerprint recorded. Without this, a
+      // recovery-claimed row still looks like a never-dispatched outbox row,
+      // and a same-day sibling webhook could seize it mid-provider-call for
+      // a double send. Incomplete payloads keep their snapshot (COALESCE)
+      // and finalize as failed right below.
+      payloadSnapshot:
+        payload && currentBillingInfo
+          ? {
+              kind: attempt.templateName,
+              subject: payload.subject,
+              bodyHtml: payload.bodyHtml,
+              tag: payload.tag,
+              billingStateFingerprint:
+                billingLifecycleStateFingerprint(currentBillingInfo),
+            }
+          : undefined,
       updatedAt: claimUpdatedAt,
       expectedStatus: "pending",
       expectedWebhookStatus: "pending",
@@ -384,7 +432,6 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
     }
     result.claimed += 1;
 
-    const payload = readBillingLifecycleRecoveryPayload(attempt);
     if (!payload) {
       const failedAt = new Date().toISOString();
       const finalized = await updateDeliveryAttemptResult(env, attempt.id, {
@@ -409,37 +456,32 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
       continue;
     }
 
-    const [currentBillingInfo, currentProfile] = await Promise.all([
-      getUserPlanBillingInfo(env, attempt.userId),
-      getUserDeliveryProfile(env, attempt.userId),
-    ]);
     const currentEmail = readString(currentProfile?.email)?.toLowerCase() ?? null;
     const stateStillCurrent =
+      currentBillingInfo !== null &&
       (payload.pendingDispatch
         ? billingLifecycleOutboxStateStillApplies(attempt.templateName, currentBillingInfo)
         : billingLifecycleStateFingerprint(currentBillingInfo) ===
           payload.billingStateFingerprint) &&
       currentEmail === payload.targetValue.toLowerCase();
     if (!stateStillCurrent) {
-      // Finalize as a retryable 'failed', NOT a terminal skip: for day-keyed
-      // dunning, a terminal skip would permanently consume the day's
-      // idempotency slot — a later same-day payment.failed webhook would see
-      // the terminal row, back off, and the customer would never hear about
-      // the ongoing payment problem. 'failed' lets the next real event claim
-      // the row in place and send fresh content, while recovery itself still
-      // refuses to replay stale content (this branch).
-      const failedAt = new Date().toISOString();
+      // Intentional non-send, NOT a failure: the account state moved past
+      // this email, so replaying its stale content would mislead. The
+      // skipped status keeps operator failure counts honest, while
+      // sendBillingLifecycleEmail treats skipped+provider_unknown rows as
+      // claimable — a later same-day dunning event can still take the
+      // idempotency slot and send content rebuilt from the current event.
       const finalized = await updateDeliveryAttemptResult(env, attempt.id, {
         provider: EMAIL_PROVIDER,
-        status: "failed",
-        webhookStatus: "failed",
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
         providerMessageId: null,
         providerStatusLastSeenAt: null,
         templateName: attempt.templateName,
         errorMessage:
           "Billing lifecycle recovery was superseded by newer account state.",
         sentAt: null,
-        failedAt,
+        failedAt: null,
         expectedStatus: "pending",
         expectedWebhookStatus: "pending",
         expectedUpdatedAt: claimUpdatedAt,

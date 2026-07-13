@@ -194,6 +194,49 @@ describe("digest_run summary persistence", () => {
     }
   });
 
+  it("lets a claim-winning retry move a failed aggregate back to pending", async () => {
+    // A claim-WINNING retry may honestly move failed → pending (e.g. its
+    // provider call ended provider-unknown): without this escape hatch the
+    // aggregate would stay 'failed' forever while the attempt row is
+    // terminal, pinning the run in the retry sweep and mislabeling an
+    // unknown outcome as a failure in /app/digests.
+    const harness = setup();
+    try {
+      const env = { DB: harness.db } as never;
+      const digestRunId = await createDigestRun(
+        env,
+        "user-1",
+        "2026-07-06T05:00:00.000Z",
+        "2026-07-13T05:00:00.000Z",
+        { totalEvents: 0, watchlists: 1 },
+      );
+      await upsertDigestDelivery(env, digestRunId, {
+        provider: "cloudflare_email",
+        status: "failed",
+        recipientEmail: "owner@example.com",
+        externalMessageId: null,
+        errorMessage: "Cloudflare Email send failed: rejected.",
+        deliveredAt: null,
+      });
+      await upsertDigestDelivery(env, digestRunId, {
+        provider: "cloudflare_email",
+        status: "pending",
+        recipientEmail: "owner@example.com",
+        externalMessageId: null,
+        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+        deliveredAt: null,
+        allowPendingOverwriteOfFailed: true,
+      });
+
+      expect((await getDigest(env, digestRunId))?.delivery).toMatchObject({
+        status: "pending",
+        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+      });
+    } finally {
+      harness.close();
+    }
+  });
+
   it("stores the strategy summary on create and reads it back via getDigest and listDigests", async () => {
     const harness = setup();
     try {

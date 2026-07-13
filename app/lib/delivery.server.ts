@@ -91,6 +91,11 @@ interface DigestAttemptSummary {
   providerMessageId: string | null;
   errorMessage: string | null;
   deliveredAt: string | null;
+  // True only when THIS execution won the delivery-attempt claim and owns
+  // the outcome; mirrors of another writer's in-flight attempt leave it
+  // unset. Gates the failed→pending aggregate overwrite in
+  // upsertDigestDelivery.
+  claimedByThisRun?: boolean;
 }
 
 
@@ -212,6 +217,7 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
       externalMessageId: digestStatusAttempt.providerMessageId,
       errorMessage: digestStatusAttempt.errorMessage,
       deliveredAt: digestStatusAttempt.deliveredAt,
+      allowPendingOverwriteOfFailed: digestStatusAttempt.claimedByThisRun === true,
     });
   }
 
@@ -727,6 +733,7 @@ async function deliverDigestToEmailTarget(
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: null,
+    claimedByThisRun: true,
   };
   if (finalized === false) {
     return readFinalizedDigestAttempt(env, {
@@ -1198,6 +1205,7 @@ async function deliverDigestToWhatsAppTarget(
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt,
+    claimedByThisRun: true,
   };
   if (finalized === false) {
     return readFinalizedDigestAttempt(env, {
@@ -1286,6 +1294,7 @@ async function deliverDigestToSlackTarget(
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: providerResult.deliveredAt,
+    claimedByThisRun: true,
   };
   if (finalized === false) {
     return readFinalizedDigestAttempt(env, {

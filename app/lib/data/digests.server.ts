@@ -337,9 +337,20 @@ export async function addDigestItem(
 export async function upsertDigestDelivery(
   env: AppEnv,
   digestRunId: string,
-  input: Omit<DigestDeliveryRecord, "id" | "digestRunId">,
+  input: Omit<DigestDeliveryRecord, "id" | "digestRunId"> & {
+    /**
+     * Set ONLY by the writer that won the delivery-attempt claim for this
+     * run. A claim winner may honestly move a 'failed' aggregate back to
+     * 'pending' (e.g. its retry ended provider-unknown); mirror writers that
+     * merely observed someone else's in-flight attempt may not — under a
+     * duplicate cron fire their late 'pending' would bury the failure and
+     * hide the run from the failed-digest retry sweep forever.
+     */
+    allowPendingOverwriteOfFailed?: boolean;
+  },
 ) {
   const timestamp = nowIso();
+  const allowPendingOverFailed = input.allowPendingOverwriteOfFailed === true ? 1 : 0;
   await run(
     env,
     `
@@ -359,44 +370,37 @@ export async function upsertDigestDelivery(
       ON CONFLICT(digest_run_id)
       DO UPDATE SET provider = CASE
                       WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
                         THEN digest_delivery.provider
                       ELSE excluded.provider
                     END,
                     status = CASE
                       WHEN digest_delivery.status = 'sent' THEN 'sent'
-                      -- 'failed' must never regress to 'pending': under a
-                      -- duplicate cron fire, the losing writer mirrors the
-                      -- winner's in-flight pending attempt and could land
-                      -- AFTER the winner recorded a failure, permanently
-                      -- hiding the run from the failed-digest retry sweep.
-                      -- A claim-winning retry finishes by writing a terminal
-                      -- 'sent' or 'failed', which still overwrites 'failed'.
-                      WHEN digest_delivery.status = 'failed' AND excluded.status = 'pending'
+                      WHEN digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0
                         THEN 'failed'
                       ELSE excluded.status
                     END,
                     recipient_email = CASE
                       WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
                         THEN digest_delivery.recipient_email
                       ELSE excluded.recipient_email
                     END,
                     external_message_id = CASE
                       WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
                         THEN digest_delivery.external_message_id
                       ELSE excluded.external_message_id
                     END,
                     error_message = CASE
                       WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
                         THEN digest_delivery.error_message
                       ELSE excluded.error_message
                     END,
                     delivered_at = CASE
                       WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
                         THEN digest_delivery.delivered_at
                       ELSE excluded.delivered_at
                     END,
@@ -412,6 +416,12 @@ export async function upsertDigestDelivery(
     input.deliveredAt,
     timestamp,
     timestamp,
+    allowPendingOverFailed,
+    allowPendingOverFailed,
+    allowPendingOverFailed,
+    allowPendingOverFailed,
+    allowPendingOverFailed,
+    allowPendingOverFailed,
   );
 }
 

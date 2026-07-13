@@ -2900,6 +2900,15 @@ describe("billing lifecycle emails", () => {
 
     expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 1, superseded: 0 });
     expect(sendMock).toHaveBeenCalledTimes(1);
+    // The recovery claim must clear the outbox marker and record a current
+    // fingerprint — a recovery-claimed row that still looks never-dispatched
+    // could be seized by a live sibling webhook mid-provider-call (double
+    // send).
+    const claimCall = updateDeliveryAttemptResult.mock.calls[0]!;
+    expect(claimCall[1]).toBe(markerAttempt.id);
+    expect(claimCall[2].payloadSnapshot).toBeDefined();
+    expect(claimCall[2].payloadSnapshot.outboxPendingDispatch).toBeUndefined();
+    expect(typeof claimCall[2].payloadSnapshot.billingStateFingerprint).toBe("string");
   });
 
   it("supersedes a marker outbox row when the billing state moved past its kind", async () => {
@@ -2945,7 +2954,10 @@ describe("billing lifecycle emails", () => {
     expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
       expect.anything(),
       markerAttempt.id,
-      expect.objectContaining({ status: "failed", webhookStatus: "failed" }),
+      expect.objectContaining({
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
+      }),
     );
   });
 
@@ -3067,17 +3079,63 @@ describe("billing lifecycle emails", () => {
       conflicts: 0,
     });
     expect(sendMock).not.toHaveBeenCalled();
-    // Superseded rows finalize as retryable 'failed', not a terminal skip:
-    // a terminal skip would permanently consume the day-keyed dunning slot,
-    // so a later same-day payment.failed webhook could never send at all.
+    // Superseded rows finalize as skipped (an intentional non-send that must
+    // not inflate operator failure counts) — but the slot stays claimable:
+    // sendBillingLifecycleEmail retries skipped+provider_unknown rows in
+    // place, so a later same-day payment.failed webhook can still send.
     expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
       expect.anything(),
       staleAttempt.id,
       expect.objectContaining({
-        status: "failed",
-        webhookStatus: "failed",
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
         errorMessage:
           "Billing lifecycle recovery was superseded by newer account state.",
+      }),
+    );
+  });
+
+  it("claims a recovery-superseded slot in place and sends fresh content", async () => {
+    // The recovery sweep refused to replay stale content and skipped the
+    // row; a NEW same-day payment event must still be able to take the
+    // day-keyed slot and email content built from the current event.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_superseded_reclaim");
+    const supersededAttempt = {
+      id: "attempt-superseded-slot",
+      provider: "cloudflare_email",
+      status: "skipped_due_to_dedupe",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+      targetValue: "owner@example.com",
+      updatedAt: "2026-07-13T08:30:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const mocks = mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(supersededAttempt),
+      updateDeliveryAttemptResult,
+    });
+
+    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
+    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      occurredAt: "2026-07-13T09:00:00.000Z",
+    });
+
+    expect(sent).toBe(true);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      supersededAttempt.id,
+      expect.objectContaining({
+        status: "pending",
+        expectedStatus: "skipped_due_to_dedupe",
+        expectedWebhookStatus: "provider_unknown",
       }),
     );
   });
