@@ -178,7 +178,7 @@ export default function ReportsRoute() {
         <div className="f9-panel-toolbar f9-report-toolbar">
           <div>
             <p className="f9-app-kicker">Evidence report</p>
-            <h2>Client-ready report</h2>
+            <p className="f9-panel-toolbar-heading">Client-ready report</p>
           </div>
 
           <div className="f9-action-row">

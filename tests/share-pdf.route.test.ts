@@ -190,7 +190,7 @@ describe("GET /share/:token/pdf", () => {
   });
 
   it("returns 503 with Retry-After when browser capacity is exhausted", async () => {
-    mockCollaborators({});
+    const mocks = mockCollaborators({});
     const { launch } = makePuppeteerMocks({
       limits: { allowedBrowserAcquisitions: 0, timeUntilNextAllowedBrowserAcquisition: 12_000 },
     });
@@ -200,23 +200,26 @@ describe("GET /share/:token/pdf", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("retry-after")).toBe("12");
     expect(await response.json()).toMatchObject({ error: "capacity_exhausted" });
+    expect(mocks.enforceSharePdfDailyCap).not.toHaveBeenCalled();
     expect(launch).not.toHaveBeenCalled();
   });
 
   it("returns 503 unconfigured when no server origin or BROWSER binding exists", async () => {
-    mockCollaborators({});
+    const noOriginMocks = mockCollaborators({});
     makePuppeteerMocks();
 
     const noOrigin = await runPdfRequest(makeEnv({ APP_ORIGIN: undefined, BETTER_AUTH_URL: undefined }));
     expect(noOrigin.status).toBe(503);
     expect(await noOrigin.json()).toMatchObject({ error: "pdf_unconfigured" });
+    expect(noOriginMocks.enforceSharePdfDailyCap).not.toHaveBeenCalled();
 
     vi.resetModules();
-    mockCollaborators({});
+    const noBrowserMocks = mockCollaborators({});
     makePuppeteerMocks();
     const noBrowser = await runPdfRequest(makeEnv({ BROWSER: undefined }));
     expect(noBrowser.status).toBe(503);
     expect(await noBrowser.json()).toMatchObject({ error: "pdf_unconfigured" });
+    expect(noBrowserMocks.enforceSharePdfDailyCap).not.toHaveBeenCalled();
   });
 
   it("renders the ?pdf=1 variant from the configured origin and returns an attachment", async () => {
@@ -301,7 +304,7 @@ describe("GET /share/:token/pdf", () => {
   });
 
   it("returns an honest retryable 502 when rendering fails", async () => {
-    mockCollaborators({});
+    const mocks = mockCollaborators({});
     const { browser } = makePuppeteerMocks({
       goto: async () => {
         throw new Error("net::ERR_FAILED");
@@ -313,6 +316,9 @@ describe("GET /share/:token/pdf", () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toMatchObject({ error: "pdf_render_failed" });
+    // The reservation is intentionally not refunded: a Browser Run launch was
+    // attempted and may already have consumed usage-billed capacity.
+    expect(mocks.enforceSharePdfDailyCap).toHaveBeenCalledTimes(1);
     expect(browser.close).toHaveBeenCalled();
   });
 

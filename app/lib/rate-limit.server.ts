@@ -13,6 +13,10 @@ type RateLimitPolicy = {
   // pathname embeds a bearer credential (e.g. share tokens) so the token
   // never lands in the rate_limit_events table.
   routeOverride?: string;
+  // Cost-bearing routes must reserve capacity synchronously in one SQL
+  // statement. This prevents concurrent requests from all observing the same
+  // stale COUNT before any event is recorded.
+  atomicClaim?: boolean;
 };
 
 const CLEANUP_WINDOW_SECONDS = 2 * 60 * 60;
@@ -114,6 +118,7 @@ export async function enforceSharePdfRateLimit(
       failClosed: true,
       keyByIpOnly: true,
       routeOverride: "/share/:token/pdf",
+      atomicClaim: true,
     },
     ctx,
   );
@@ -138,6 +143,7 @@ export async function enforceSharePdfDailyCap(
       failClosed: true,
       keySeed: sharerUserId,
       routeOverride: "/share/:token/pdf",
+      atomicClaim: true,
     },
     ctx,
   );
@@ -160,6 +166,57 @@ async function enforceRateLimitPolicy(
     const now = new Date();
     const since = new Date(now.getTime() - policy.windowSeconds * 1000).toISOString();
     const keyHash = await requestKeyHash(request, policy);
+
+    if (policy.atomicClaim) {
+      // A single conditional INSERT is the reservation and the limit check.
+      // D1/SQLite serializes the statement atomically, so concurrent callers
+      // cannot all pass on a stale pre-insert count. The claim is synchronous;
+      // only opportunistic cleanup may be deferred through waitUntil.
+      const eventId = crypto.randomUUID();
+      const createdAt = now.toISOString();
+      const claim = await env.DB.prepare(
+        `INSERT INTO rate_limit_events (id, scope, key_hash, route, created_at)
+         SELECT ?, ?, ?, ?, ?
+          WHERE (
+            SELECT COUNT(*)
+              FROM rate_limit_events
+             WHERE scope = ?
+               AND key_hash = ?
+               AND route = ?
+               AND created_at >= ?
+          ) < ?`,
+      )
+        .bind(
+          eventId,
+          policy.scope,
+          keyHash,
+          route,
+          createdAt,
+          policy.scope,
+          keyHash,
+          route,
+          since,
+          policy.limit,
+        )
+        .run();
+
+      if (Number(claim.meta?.changes ?? 0) < 1) {
+        return tooManyRequestsResponse(policy.windowSeconds);
+      }
+
+      if (Math.random() < 0.02) {
+        const cleanup = cleanupRateLimitEvents(env).catch((error) => {
+          console.error("[rate-limit] deferred cleanup failed", error);
+        });
+        if (ctx) {
+          ctx.waitUntil(cleanup);
+        } else {
+          await cleanup;
+        }
+      }
+
+      return null;
+    }
 
     // Gate on the windowed COUNT alone so the request path does not wait on
     // the INSERT. Auth/write scopes stay fail-closed when D1 is unavailable.

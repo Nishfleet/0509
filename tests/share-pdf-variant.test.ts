@@ -39,6 +39,44 @@ const REPORT_SHARE = {
   revokedAt: null,
 };
 
+function withSynchronizedStaleCountReads(
+  baseDb: ReturnType<typeof createSqliteD1>["db"],
+  participants: number,
+) {
+  let reads = 0;
+  let releaseReads: (() => void) | null = null;
+  const allReadsStarted = new Promise<void>((resolve) => {
+    releaseReads = resolve;
+  });
+
+  return {
+    ...baseDb,
+    prepare(sql: string) {
+      const statement = baseDb.prepare(sql);
+      if (!sql.includes("SELECT COUNT(*) AS count")) {
+        return statement;
+      }
+
+      return {
+        bind(...bindings: unknown[]) {
+          const bound = statement.bind(...bindings);
+          return {
+            ...bound,
+            async first<T>() {
+              reads += 1;
+              if (reads === participants) {
+                releaseReads?.();
+              }
+              await allReadsStarted;
+              return { count: 0 } as T;
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
 function mockShareLoaderCollaborators(input: {
   share?: typeof REPORT_SHARE;
   plan?: string;
@@ -183,6 +221,8 @@ describe("/share/:token PDF variant markup", () => {
     expect(markup).not.toContain("Download PDF");
     expect(markup).not.toContain("Print report");
     expect(markup).not.toContain("<button");
+    expect(markup.indexOf("<h1")).toBeGreaterThan(-1);
+    expect(markup.indexOf("<h1")).toBeLessThan(markup.indexOf("<h2"));
   });
 
   it("keeps the Five to Nine wordmark headline when the sharer has no branding", async () => {
@@ -433,6 +473,50 @@ describe("share-pdf rate limit policies", () => {
     expect(dailyBlocked?.status).toBe(429);
     // A different sharer's budget is untouched.
     expect(await enforceSharePdfDailyCap(request, env, "sharer-2")).toBeNull();
+    harness.close();
+  });
+
+  it("atomically admits only five concurrent requests from one viewer IP", async () => {
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
+    const env = { DB: withSynchronizedStaleCountReads(harness.db, 12) } as never;
+    const { enforceSharePdfRateLimit } = await import("~/lib/rate-limit.server");
+    const request = new Request("https://0509.io/share/token-x/pdf", {
+      headers: { "cf-connecting-ip": "203.0.113.7" },
+    });
+
+    const outcomes = await Promise.all(
+      Array.from({ length: 12 }, () => enforceSharePdfRateLimit(request, env)),
+    );
+
+    expect(outcomes.filter((outcome) => outcome === null)).toHaveLength(5);
+    expect(outcomes.filter((outcome) => outcome?.status === 429)).toHaveLength(7);
+    const row = harness.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM rate_limit_events WHERE scope = 'share-pdf'")
+      .get() as { count: number };
+    expect(Number(row.count)).toBe(5);
+    harness.close();
+  });
+
+  it("atomically admits only forty concurrent render reservations per sharer", async () => {
+    const harness = createSqliteD1();
+    applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
+    const env = { DB: withSynchronizedStaleCountReads(harness.db, 50) } as never;
+    const { enforceSharePdfDailyCap } = await import("~/lib/rate-limit.server");
+    const request = new Request("https://0509.io/share/token-x/pdf", {
+      headers: { "cf-connecting-ip": "203.0.113.7" },
+    });
+
+    const outcomes = await Promise.all(
+      Array.from({ length: 50 }, () => enforceSharePdfDailyCap(request, env, "sharer-1")),
+    );
+
+    expect(outcomes.filter((outcome) => outcome === null)).toHaveLength(40);
+    expect(outcomes.filter((outcome) => outcome?.status === 429)).toHaveLength(10);
+    const row = harness.sqlite
+      .prepare("SELECT COUNT(*) AS count FROM rate_limit_events WHERE scope = 'share-pdf-daily'")
+      .get() as { count: number };
+    expect(Number(row.count)).toBe(40);
     harness.close();
   });
 

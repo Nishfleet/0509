@@ -179,7 +179,7 @@ export default function ShareRoute() {
             <div className="f9-panel-toolbar f9-report-toolbar">
               <div>
                 <p className="f9-app-kicker">Shared report snapshot</p>
-                <h2>{reportSnapshot.title}</h2>
+                <p className="f9-panel-toolbar-heading">{reportSnapshot.title}</p>
               </div>
               {pdfVariant ? null : pdfPath ? (
                 <a className="f9-secondary-button" href={pdfPath}>
