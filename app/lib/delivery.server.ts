@@ -47,6 +47,7 @@ import {
   SLACK_PROVIDER,
 } from "~/lib/slack-webhook.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { renderEmailShell } from "~/lib/email-template.server";
 import { PromiseTimeoutError, promiseWithTimeout } from "~/lib/fetch-timeout.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
@@ -1893,7 +1894,10 @@ async function sendCloudflareEmail(
   }
 
   const statusSeenAt = new Date().toISOString();
-  const html = appendEmailFooter(input.html, input.unsubscribeUrl);
+  const html = renderEmailShell({
+    bodyHtml: input.html,
+    unsubscribeUrl: input.unsubscribeUrl,
+  });
   const headers: Record<string, string> = {
     "X-0509-Tag": input.tag,
   };
@@ -1957,19 +1961,6 @@ function appBaseUrl(env: AppEnv) {
 
 function providerAcceptedAt(result: EmailProviderResult) {
   return result.status === "sent" ? result.providerStatusLastSeenAt : null;
-}
-
-function appendEmailFooter(html: string, unsubscribeUrl: string | null) {
-  const unsubscribeLink = unsubscribeUrl
-    ? ` · <a href="${unsubscribeUrl}" style="color: #5b6577; text-decoration: underline;">Unsubscribe</a>`
-    : "";
-
-  return `${html}
-    <hr style="margin: 28px 0 14px; border: none; border-top: 1px solid #e4e7ec;" />
-    <p style="font-family: Inter, system-ui, sans-serif; margin: 0; background-color: #ffffff; color: #98a2b3; font-size: 12px; line-height: 1.5;">
-      Five to Nine · <a href="https://0509.io" style="color: #5b6577; text-decoration: underline;">0509.io</a> · Questions? <a href="${SUPPORT_MAILTO}" style="color: #5b6577; text-decoration: underline;">${SUPPORT_EMAIL}</a> · You're receiving this because email delivery is configured for your workspace${unsubscribeLink}
-    </p>
-  `;
 }
 
 async function persistDeliveryTargetSuccess(
