@@ -16,21 +16,21 @@ export async function isUserEmailVerified(env: AppEnv, userId: string): Promise<
     return false;
   }
 
-  try {
-    const row = await env.DB.prepare(
-      "SELECT emailVerified FROM user WHERE id = ? LIMIT 1",
-    )
-      .bind(userId)
-      .first<{ emailVerified: number | boolean | null }>();
+  // DB errors intentionally propagate: a transient D1 failure must surface as
+  // a failed delivery attempt (retryable) or a failed action, never be
+  // silently treated as "unverified" — that shape drops paid digests with no
+  // retry signal.
+  const row = await env.DB.prepare(
+    "SELECT emailVerified FROM user WHERE id = ? LIMIT 1",
+  )
+    .bind(userId)
+    .first<{ emailVerified: number | boolean | null }>();
 
-    if (!row) {
-      return false;
-    }
-
-    return row.emailVerified === 1 || row.emailVerified === true;
-  } catch {
+  if (!row) {
     return false;
   }
+
+  return row.emailVerified === 1 || row.emailVerified === true;
 }
 
 export async function requireVerifiedEmailForRetention(

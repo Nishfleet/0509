@@ -1365,6 +1365,7 @@ export async function sendOperatorAlertEmail(
     subject: string;
     lines: string[];
     idempotencyKey?: string;
+    intro?: string;
   },
 ) {
   const recipient = env.LAUNCH_CANARY_EMAIL?.trim();
@@ -1384,7 +1385,7 @@ export async function sendOperatorAlertEmail(
     subject: input.subject,
     html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 14px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;"><strong>Customer-at-risk signals from recent monitoring:</strong></p>
+        <p style="margin: 0 0 12px;"><strong>${escapeHtml(input.intro ?? "Customer-at-risk signals from recent monitoring:")}</strong></p>
         <ul style="margin: 0 0 12px; padding-left: 18px;">
           ${input.lines.map((line) => `<li style="margin: 0 0 6px;">${escapeHtml(line)}</li>`).join("")}
         </ul>
