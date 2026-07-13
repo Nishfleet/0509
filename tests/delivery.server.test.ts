@@ -2956,6 +2956,115 @@ describe("billing lifecycle emails", () => {
     expect(attempt.idempotencyKey).toBe("billing-refund:user-1:evt-refund-1");
   });
 
+  it("turns an explicit rejection into one durable retry without duplicate successful mail", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
+    emailSend = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("smtp down"))
+      .mockResolvedValueOnce({ messageId: "msg_retry_succeeded" });
+
+    let attemptStatus: "missing" | "pending" | "failed" | "sent" = "missing";
+    const createDeliveryAttempt = vi.fn().mockImplementation(async () => {
+      attemptStatus = "pending";
+      return "attempt-retry";
+    });
+    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockImplementation(async () => {
+      if (attemptStatus === "missing") {
+        return null;
+      }
+      return {
+        id: "attempt-retry",
+        provider: "cloudflare_email",
+        status: attemptStatus,
+        webhookStatus: attemptStatus === "failed" ? "failed" : "provider_unknown",
+        providerMessageId: null,
+      };
+    });
+    const updateDeliveryAttemptResult = vi.fn(
+      async (
+        _env: unknown,
+        _attemptId: string,
+        input: { expectedStatus?: string; status: "pending" | "failed" | "sent" },
+      ) => {
+        if (input.expectedStatus && attemptStatus !== input.expectedStatus) {
+          return false;
+        }
+        attemptStatus = input.status;
+        return true;
+      },
+    );
+    mockBillingDataServer({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey,
+      updateDeliveryAttemptResult,
+    });
+
+    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
+    const input = {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      occurredAt: "2026-07-01T08:00:00.000Z",
+      retryWebhookOnExplicitFailure: true,
+    };
+
+    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).rejects.toMatchObject({
+      code: "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE",
+      idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
+    });
+    expect(attemptStatus).toBe("failed");
+
+    // Dodo can redeliver on a later date; the provider event time keeps the
+    // retry on the same durable attempt instead of creating a second key.
+    vi.setSystemTime(new Date("2026-07-14T09:00:00.000Z"));
+    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).resolves.toBe(true);
+    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).resolves.toBe(false);
+
+    expect(attemptStatus).toBe("sent");
+    expect(emailSend).toHaveBeenCalledTimes(2);
+    expect(createDeliveryAttempt).toHaveBeenCalledTimes(1);
+    expect(createDeliveryAttempt.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
+      }),
+    );
+  });
+
+  it.each([
+    ["sent", "delivered"],
+    ["pending", "provider_unknown"],
+  ] as const)(
+    "never auto-resends a durable %s/%s lifecycle attempt",
+    async (status, webhookStatus) => {
+      const sendMock = mockEmailSend("msg_must_not_send");
+      const mocks = mockBillingDataServer({
+        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+          id: "attempt-terminal-or-unknown",
+          provider: "cloudflare_email",
+          status,
+          webhookStatus,
+          providerMessageId: status === "sent" ? "msg_existing" : null,
+        }),
+      });
+
+      const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
+      await expect(
+        sendBillingRefundEmail(emailEnv as never, {
+          userId: "user-1",
+          email: "owner@example.com",
+          name: null,
+          eventId: "evt-suppressed-redelivery",
+          retryWebhookOnExplicitFailure: true,
+        }),
+      ).resolves.toBe(false);
+
+      expect(sendMock).not.toHaveBeenCalled();
+      expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
+      expect(mocks.updateDeliveryAttemptResult).not.toHaveBeenCalled();
+    },
+  );
+
   it("records a failed attempt without throwing when the provider rejects a billing send", async () => {
     emailSend = vi.fn().mockRejectedValue(new Error("smtp down"));
     const mocks = mockBillingDataServer();

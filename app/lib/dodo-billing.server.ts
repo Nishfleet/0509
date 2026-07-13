@@ -825,6 +825,7 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
     readString(root, "updated_at") ||
     readString(root, "cancelled_at") ||
     readString(root, "created_at") ||
+    readString(envelope, "timestamp") ||
     new Date().toISOString();
 
   return {

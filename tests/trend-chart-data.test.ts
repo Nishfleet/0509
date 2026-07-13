@@ -199,6 +199,36 @@ describe("buildLongevityLeaderboard", () => {
     expect(observed).toMatchObject({ kind: "tracked", days: 5, label: "Tracked 5 days" });
   });
 
+  it("never lets an inactive creative with no published end keep accruing running days", () => {
+    const inactive = buildItem(
+      {
+        firstTrackedAt: "2026-05-01T00:00:00.000Z",
+        lastTrackedAt: "2026-05-10T00:00:00.000Z",
+        isActive: false,
+      },
+      {
+        metaAdId: "inactive",
+        firstSeenAt: "2026-01-01T00:00:00.000Z",
+        lastSeenAt: null,
+        active: false,
+      },
+    );
+
+    const july = buildLongevityLeaderboard([inactive], NOW);
+    const august = buildLongevityLeaderboard(
+      [inactive],
+      new Date("2026-08-13T12:00:00.000Z"),
+    );
+
+    expect(july.entries[0]).toMatchObject({
+      kind: "tracked",
+      days: 9,
+      label: "Tracked 9 days",
+    });
+    expect(august.entries[0]).toEqual(july.entries[0]);
+    expect(august.maxDays).toBe(9);
+  });
+
   it("skips ads with no usable window at all and flags sparse below two entries", () => {
     const items = [
       buildItem(

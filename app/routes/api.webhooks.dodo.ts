@@ -1,6 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 const DODO_WEBHOOK_MAX_BODY_BYTES = 256_000;
+type BillingLifecycleEmailKind =
+  | "payment_issue"
+  | "cancellation_scheduled"
+  | "revoke"
+  | "refund";
 
 export function loader(_args: LoaderFunctionArgs) {
   return Response.json(
@@ -36,10 +41,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
     beginDodoWebhookEventProcessing,
     clearDodoPlanCheckout,
     failDodoWebhookEventProcessing,
+    failDodoWebhookEventForLifecycleEmailRetry,
     finalizeDodoWebhookLedgerOnly,
     getUserDeliveryProfile,
     getUserIdForDodoPayment,
     getUserIdForDodoLifecycle,
+    getUserPlanBillingInfo,
   } = await import("~/lib/data.server");
   const { getPlanLimit } = await import("~/lib/plan.server");
   const env = getEnv(context);
@@ -77,6 +84,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (claim.status === "in_progress") {
     return Response.json({ ok: true, duplicate: true, inProgress: true });
   }
+  const lifecycleEmailRetry = claim.lifecycleEmailRetry ?? null;
 
   try {
     const result = await processDodoEvent();
@@ -220,7 +228,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
           },
         },
       );
-      if (cancellationScheduled && grantApplied?.changed !== false) {
+      const matchesScheduledCancellationRetry =
+        lifecycleEmailRetry?.kind === "cancellation_scheduled" &&
+        lifecycleEmailRetry.userId === subscriptionGrant.userId;
+      const currentScheduledCancellationState =
+        matchesScheduledCancellationRetry &&
+        cancellationScheduled &&
+        grantApplied?.changed === false
+          ? await getUserPlanBillingInfo(env, subscriptionGrant.userId)
+          : null;
+      const shouldRetryScheduledCancellationEmail =
+        currentScheduledCancellationState?.dodoStatus === "cancellation_scheduled" &&
+        currentScheduledCancellationState.dodoSubscriptionId ===
+          subscriptionGrant.subscriptionId;
+      if (
+        cancellationScheduled &&
+        (grantApplied?.changed !== false || shouldRetryScheduledCancellationEmail)
+      ) {
         await sendBillingLifecycleEmailSafely("cancellation_scheduled", subscriptionGrant.userId, (delivery, profile) =>
           delivery.sendBillingCancellationEmail(env, {
             userId: subscriptionGrant.userId,
@@ -229,6 +253,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             kind: "scheduled",
             effectiveAt: subscriptionGrant.nextBillingAt,
             eventId,
+            retryWebhookOnExplicitFailure: true,
           }),
         );
       }
@@ -246,8 +271,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const revocation = extractDodoPlanRevocation(env, payload);
     if (revocation) {
+      const revocationRetryKind: BillingLifecycleEmailKind =
+        revocation.action === "payment_issue" ? "payment_issue" : "revoke";
+      const retryResolvedUserId =
+        lifecycleEmailRetry?.kind === revocationRetryKind
+          ? lifecycleEmailRetry.userId
+          : null;
       const userId =
         revocation.userId ??
+        retryResolvedUserId ??
         (await getUserIdForDodoLifecycle(env, {
           subscriptionId: revocation.subscriptionId,
           customerId: revocation.customerId,
@@ -316,12 +348,25 @@ export async function action({ context, request }: ActionFunctionArgs) {
         );
         // Skip the email when the monotonic guard rejected a stale event —
         // the plan already moved past this state (e.g. payment recovered).
-        if (paymentIssueApplied?.changed !== false) {
+        const matchesPaymentIssueRetry =
+          lifecycleEmailRetry?.kind === "payment_issue" &&
+          lifecycleEmailRetry.userId === userId;
+        const currentPaymentIssueState =
+          matchesPaymentIssueRetry && paymentIssueApplied?.changed === false
+            ? await getUserPlanBillingInfo(env, userId)
+            : null;
+        const shouldRetryPaymentIssueEmail =
+          currentPaymentIssueState?.dodoStatus === revocation.eventType &&
+          (revocation.subscriptionId === revocation.eventType ||
+            currentPaymentIssueState.dodoSubscriptionId === revocation.subscriptionId);
+        if (paymentIssueApplied?.changed !== false || shouldRetryPaymentIssueEmail) {
           await sendBillingLifecycleEmailSafely("payment_issue", userId, (delivery, profile) =>
             delivery.sendBillingPaymentIssueEmail(env, {
               userId,
               email: profile.email,
               name: profile.name,
+              occurredAt: revocation.revokedAt,
+              retryWebhookOnExplicitFailure: true,
             }),
           );
         }
@@ -347,7 +392,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: { action: "revoke", userId, eventType: revocation.eventType },
         },
       );
-      if (revokeApplied?.changed !== false) {
+      const matchesRevokeRetry =
+        lifecycleEmailRetry?.kind === "revoke" && lifecycleEmailRetry.userId === userId;
+      const currentRevokeState =
+        matchesRevokeRetry && revokeApplied?.changed === false
+          ? await getUserPlanBillingInfo(env, userId)
+          : null;
+      const shouldRetryRevokeEmail =
+        currentRevokeState?.plan === "free" &&
+        currentRevokeState.dodoStatus === revocation.eventType &&
+        (revocation.subscriptionId === revocation.eventType ||
+          currentRevokeState.dodoSubscriptionId === revocation.subscriptionId);
+      if (revokeApplied?.changed !== false || shouldRetryRevokeEmail) {
         await sendBillingLifecycleEmailSafely("revoke", userId, (delivery, profile) =>
           delivery.sendBillingCancellationEmail(env, {
             userId,
@@ -355,6 +411,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             name: profile.name,
             kind: "ended",
             eventId,
+            retryWebhookOnExplicitFailure: true,
           }),
         );
       }
@@ -367,7 +424,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const refund = extractDodoRefund(env, payload);
     if (refund) {
-      const refundedUserId = await getUserIdForDodoPayment(env, refund.paymentId);
+      const retryResolvedUserId =
+        lifecycleEmailRetry?.kind === "refund" ? lifecycleEmailRetry.userId : null;
+      const refundedUserId =
+        retryResolvedUserId ?? (await getUserIdForDodoPayment(env, refund.paymentId));
       const refundApplied = await applyDodoRefundWithWatchlistReconcile(
         env,
         {
@@ -382,13 +442,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: { action: "refund", paymentId: refund.paymentId },
         },
       );
-      if (refundedUserId && refundApplied?.changed === true) {
+      const matchesRefundRetry =
+        lifecycleEmailRetry?.kind === "refund" &&
+        lifecycleEmailRetry.userId === refundedUserId;
+      const currentRefundState =
+        matchesRefundRetry && refundedUserId && refundApplied?.changed !== true
+          ? await getUserPlanBillingInfo(env, refundedUserId)
+          : null;
+      const shouldRetryRefundEmail =
+        currentRefundState?.plan === "free" && currentRefundState.dodoStatus === "refunded";
+      if (
+        refundedUserId &&
+        (refundApplied?.changed === true || shouldRetryRefundEmail)
+      ) {
         await sendBillingLifecycleEmailSafely("refund", refundedUserId, (delivery, profile) =>
           delivery.sendBillingRefundEmail(env, {
             userId: refundedUserId,
             email: profile.email,
             name: profile.name,
             eventId,
+            retryWebhookOnExplicitFailure: true,
           }),
         );
       }
@@ -440,26 +513,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
-  // Lifecycle emails are best-effort side effects: by the time we email, the
-  // plan change is committed and the ledger row is already 'processed'. A
-  // send failure must never 500 the webhook — Dodo would redeliver, the
-  // dedupe ledger would short-circuit the retry, and the email would be lost
-  // with retry noise on top. Log and move on. Skips silently when the user
-  // has no delivery profile (deleted account, no email on file).
+  // Lifecycle emails remain best-effort for unexpected application errors.
+  // An explicit provider rejection is different: the delivery attempt is
+  // durably `failed`, so reopen this processed webhook and return non-2xx.
+  // Dodo redelivery may then retry that failed attempt only. Sent and
+  // provider-unknown attempts remain terminal/suppressed in delivery.server.
   async function sendBillingLifecycleEmailSafely(
-    kind: string,
+    kind: BillingLifecycleEmailKind,
     lifecycleUserId: string,
     send: (
       delivery: typeof import("~/lib/delivery.server"),
       profile: { email: string; name: string | null },
     ) => Promise<unknown>,
   ) {
+    let delivery: typeof import("~/lib/delivery.server") | null = null;
     try {
       const profile = await getUserDeliveryProfile(env, lifecycleUserId);
       if (!profile?.email) {
         return;
       }
-      const delivery = await import("~/lib/delivery.server");
+      delivery = await import("~/lib/delivery.server");
       await send(delivery, { email: profile.email, name: profile.name });
     } catch (error) {
       const { logBillingEvent } = await import("~/lib/log.server");
@@ -471,6 +544,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
           error: error instanceof Error ? error.message : String(error),
         },
       });
+      if (delivery?.isBillingLifecycleEmailExplicitFailure(error)) {
+        const retryArmed = await failDodoWebhookEventForLifecycleEmailRetry(env, eventId, {
+          kind,
+          userId: lifecycleUserId,
+          idempotencyKey: error.idempotencyKey,
+          error: error.message,
+        });
+        if (retryArmed) {
+          throw error;
+        }
+      }
     }
   }
 }

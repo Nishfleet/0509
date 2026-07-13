@@ -14,6 +14,11 @@ const REPORT_SNAPSHOT_PAYLOAD = {
   subtitle: "Latest saved evidence",
   summary: "One saved item.",
   generatedAt: "2026-07-01T00:00:00.000Z",
+  aiWeeklySummary: {
+    paragraph: "Competitors concentrated this week's movement on promotional offers.",
+    generatedAt: "2026-07-01T00:05:00.000Z",
+    periodEnd: "2026-07-01T00:00:00.000Z",
+  },
   stats: [],
   insightDepth: {
     topHooks: [],
@@ -149,6 +154,13 @@ describe("/share/:token loader PDF affordances", () => {
 
     expect(result.pdfPath).toBe("/share/token-1/pdf");
     expect(result.pdfVariant).toBe(false);
+    expect(result.payload).toMatchObject({
+      aiWeeklySummary: {
+        paragraph: "Competitors concentrated this week's movement on promotional offers.",
+        generatedAt: "2026-07-01T00:05:00.000Z",
+        periodEnd: "2026-07-01T00:00:00.000Z",
+      },
+    });
     expect(JSON.stringify(result)).not.toContain("agency");
   });
 
@@ -218,6 +230,7 @@ describe("/share/:token PDF variant markup", () => {
     expect(markup).toContain("Northlight Media");
     expect(markup).toContain("https://northlight.example");
     expect(markup).toContain("Prepared with Five to Nine");
+    expect(markup).toContain("Competitors concentrated this week&#x27;s movement");
     expect(markup).not.toContain("Download PDF");
     expect(markup).not.toContain("Print report");
     expect(markup).not.toContain("<button");

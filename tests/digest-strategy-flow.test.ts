@@ -29,7 +29,7 @@ function dataServerMock(overrides: Record<string, unknown> = {}) {
     addDigestItem: vi.fn(),
     clearDigestItems: vi.fn(),
     createAdObservation: vi.fn(),
-    createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+    createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
     createEventCandidate: vi.fn(),
     createLandingPageSnapshot: vi.fn(),
     createProofCapture: vi.fn(),
@@ -146,18 +146,18 @@ describe("weekly digest strategy paragraph flow", () => {
         strategyGeneratedAt: expect.any(String),
         strategyWatchlistIds: ["watch-1"],
       }),
-    );
-    // createDigestRun is INSERT OR IGNORE — the summary must be re-persisted
-    // explicitly, and it must land BEFORE the delivery attempt.
-    expect(data.updateDigestRunSummary).toHaveBeenCalledWith(
-      expect.anything(),
-      "digest-1",
       expect.objectContaining({
-        strategyParagraph: GOOD_PARAGRAPH,
-        strategyWatchlistIds: ["watch-1"],
+        returnClaim: true,
+        items: [
+          expect.objectContaining({
+            watchlistId: "watch-1",
+            eventType: "landing_page_offer_changed",
+          }),
+        ],
       }),
     );
-    expect(data.updateDigestRunSummary.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
+    expect(data.createDigestRun.mock.invocationCallOrder[0]).toBeLessThan(
       deliverWeeklyDigest.mock.invocationCallOrder[0]!,
     );
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
@@ -191,6 +191,10 @@ describe("weekly digest strategy paragraph flow", () => {
       expect.any(String),
       expect.any(String),
       expect.not.objectContaining({ strategyParagraph: expect.anything() }),
+      expect.objectContaining({
+        returnClaim: true,
+        items: [expect.objectContaining({ watchlistId: "watch-1" })],
+      }),
     );
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
@@ -273,7 +277,19 @@ describe("weekly digest strategy paragraph flow", () => {
         strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
       },
       createdAt: "2026-04-20T05:01:00.000Z",
-      items: [],
+      items: [
+        {
+          id: "digest-item-1",
+          digestRunId: "digest-existing",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Stored offer change",
+          summary: "The original digest item.",
+          metadata: {},
+          createdAt: "2026-04-20T05:01:00.000Z",
+        },
+      ],
       delivery: {
         id: "delivery-1",
         digestRunId: "digest-existing",
@@ -374,4 +390,5 @@ describe("weekly digest strategy paragraph flow", () => {
       }),
     );
   });
+
 });

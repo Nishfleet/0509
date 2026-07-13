@@ -55,6 +55,22 @@ describe("Dodo subscription lifecycle", () => {
     });
   });
 
+  it("uses the stable envelope event timestamp when lifecycle data has no provider timestamps", () => {
+    const payload = {
+      ...subscriptionEnvelope("subscription.on_hold", {
+        updated_at: "",
+        cancelled_at: "",
+        created_at: "",
+      }),
+      timestamp: "2026-07-01T08:00:00.000Z",
+    };
+
+    expect(extractDodoPlanRevocation(lifecycleEnv, payload)).toMatchObject({
+      action: "payment_issue",
+      revokedAt: "2026-07-01T08:00:00.000Z",
+    });
+  });
+
   it("extracts trusted lifecycle events without a metadata user id for database resolution", () => {
     const revocation = extractDodoPlanRevocation(
       lifecycleEnv,

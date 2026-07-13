@@ -221,7 +221,7 @@ function installSharedMocks(input: {
     countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
     countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
     createAdObservation: vi.fn(),
-    createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+    createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
     createEventCandidate,
     createLandingPageSnapshot: vi.fn(),
     createProofCapture,

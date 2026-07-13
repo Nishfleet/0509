@@ -7,8 +7,9 @@ import type { AdRecord } from "~/lib/types";
  * datasets so the numbers stay unit-testable.
  *
  * Honesty rules baked in:
- * - "Running N days" only ever comes from Meta's published start date
- *   (firstSeenAt); "Tracked N days" only from our own observation window.
+ * - "Running N days" only ever comes from an active ad with Meta's published
+ *   start date (firstSeenAt); inactive ads use our closed tracking window.
+ *   "Tracked N days" only comes from our own observation window.
  *   The two are never conflated.
  * - Charts flag themselves sparse below TREND_SPARSE_MIN_POINTS instead of
  *   pretending a lone point is a trend.
@@ -192,9 +193,10 @@ export function formatTrackedDaysLabel(days: number): string {
 }
 
 /**
- * Top ads by days on air. Uses Meta's published start date when present
- * ("Running N days"), otherwise falls back to our own observation window
- * ("Tracked N days") — labeled differently so the two are never conflated.
+ * Top ads by days on air. Active ads use Meta's published start date when
+ * present ("Running N days"). Inactive or undated ads use the closed local
+ * observation window ("Tracked N days"), so they never keep accruing after
+ * their last observation and the two sources are never conflated.
  */
 export function buildLongevityLeaderboard(
   items: readonly CreativeWallItem[],
@@ -204,6 +206,20 @@ export function buildLongevityLeaderboard(
   const entries: LongevityLeaderboardEntry[] = [];
 
   for (const item of items) {
+    if (!item.isActive) {
+      const trackedDays = trackedDaysBetween(item.firstTrackedAt, item.lastTrackedAt);
+      if (trackedDays !== null) {
+        entries.push({
+          adId: item.ad.metaAdId,
+          advertiser: item.ad.advertiser,
+          days: trackedDays,
+          kind: "tracked",
+          label: formatTrackedDaysLabel(trackedDays),
+        });
+      }
+      continue;
+    }
+
     const runningDays = adLongevityDays(item.ad, now);
     const runningLabel = formatAdLongevityLabel(item.ad, now);
 

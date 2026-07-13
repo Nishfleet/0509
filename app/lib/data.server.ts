@@ -103,6 +103,7 @@ export {
   beginDodoWebhookEventProcessing,
   claimDodoWebhookEvent,
   failDodoWebhookEventProcessing,
+  failDodoWebhookEventForLifecycleEmailRetry,
   markDodoWebhookEventFinished,
   markDodoPlanPaymentIssue,
   revokeDodoAccessForRefundedPayment,

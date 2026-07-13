@@ -247,6 +247,7 @@ export default function BillingRoute() {
   const plans = data.plans ?? pricingPlans();
   const bundles = data.usageBundles ?? usageBundles();
   const pricingPreview = data.pricingPreview as AppPricingPreview | null | undefined;
+  const pricingPreviewResolved = pricingPreview != null;
   const pricingUnavailable = pricingPreview?.available === false;
   const commercialLaunch = data.commercialLaunch ?? {
     scoutSaleOpen: true,
@@ -468,6 +469,7 @@ export default function BillingRoute() {
             const annualIsValid = dodoAnnualSavingsIsValid(annualValidation);
             const annualBlocked = selectedCycle === "yearly" && !annualIsValid;
             const priceReady = Boolean(planCyclePrice);
+            const planPriceUnavailable = pricingPreviewResolved && !priceReady;
             const planSaleOpen = planSaleIsOpen(commercialLaunch, plan.slug);
             const planCanUseInAppChange = plan.slug === "scout" || plan.slug === "starter";
             const isCurrentPlan = billing.plan === plan.slug;
@@ -509,7 +511,7 @@ export default function BillingRoute() {
                     <span className="f9-app-kicker">{plan.name}</span>
                     {planCyclePrice ? (
                       <strong>{planCyclePrice}</strong>
-                    ) : pricingUnavailable ? (
+                    ) : planPriceUnavailable ? (
                       <strong>Price unavailable</strong>
                     ) : (
                       <PriceLoadingSkeleton />
@@ -552,7 +554,7 @@ export default function BillingRoute() {
                     <button className="f9-secondary-button" disabled type="button">
                       Current plan
                     </button>
-                  ) : pricingUnavailable && planCanUseInAppChange ? (
+                  ) : planPriceUnavailable && planCanUseInAppChange ? (
                     <button className="f9-secondary-button" disabled type="button">
                       Price unavailable
                     </button>
@@ -763,13 +765,14 @@ export default function BillingRoute() {
             const previewPrice = bundlePrice(pricingPreview, bundle.slug);
             const sku = bundle.sku ?? "";
             const ready = Boolean(previewPrice && sku);
+            const bundlePriceUnavailable = pricingPreviewResolved && !previewPrice;
             return (
               <section className="f9-topup-card" key={bundle.slug}>
                 <span className="f9-app-kicker">{bundle.creditLabel}</span>
                 <h3>{bundle.name}</h3>
                 {previewPrice ? (
                   <strong>{previewPrice}</strong>
-                ) : pricingUnavailable ? (
+                ) : bundlePriceUnavailable ? (
                   <strong>Price unavailable</strong>
                 ) : (
                   <PriceLoadingSkeleton />
@@ -779,7 +782,7 @@ export default function BillingRoute() {
                   <button className="f9-secondary-button" disabled type="button">
                     Owner managed
                   </button>
-                ) : pricingUnavailable && isPaid ? (
+                ) : bundlePriceUnavailable && isPaid ? (
                   <button className="f9-secondary-button" disabled type="button">
                     Price unavailable
                   </button>
