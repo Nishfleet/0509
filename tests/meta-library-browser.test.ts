@@ -390,6 +390,48 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.discoveryEmptyReason).toBeUndefined();
   });
 
+  it("keeps rendered fallback dates attached to adjacent Library ID cards", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: `
+                  <html><body>
+                    <div class="card">
+                      <a href="/ads/library/?id=1111111111">View ad details</a>
+                      <div>Active</div>
+                      <div>Started running on 14 Jul 2025</div>
+                      <div>Sponsored</div>
+                      <strong>First advertiser</strong>
+                    </div>
+                    <div class="card">
+                      <a href="/ads/library/?id=2222222222">View ad details</a>
+                      <div>Active</div>
+                      <div>Started running on 3 Aug 2025</div>
+                      <div>Sponsored</div>
+                      <strong>Second advertiser</strong>
+                    </div>
+                  </body></html>
+                `,
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ) as never,
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    const result = await searchMetaLibraryByBrowser({ BROWSERLESS_TOKEN: "browserless-token" }, buildQuery());
+
+    expect(result.ads).toEqual([
+      expect.objectContaining({ metaAdId: "1111111111", firstSeenAt: "2025-07-14" }),
+      expect.objectContaining({ metaAdId: "2222222222", firstSeenAt: "2025-08-03" }),
+    ]);
+  });
+
   it("classifies Browserless fetch aborts as timeouts", async () => {
     mockFetchWithDns(
       vi.fn(async () => {

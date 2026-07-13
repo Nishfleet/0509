@@ -41,6 +41,29 @@ describe("creative wall + trend cards rendering", () => {
     expect(trends).not.toContain("Infinity");
   });
 
+  it("uses the closed tracked window for an inactive ad with a published start date", () => {
+    const inactiveItem: CreativeWallItem = {
+      ad: {
+        ...baseAd,
+        metaAdId: "ad-inactive-dated",
+        active: false,
+        firstSeenAt: "2025-01-01",
+      },
+      firstTrackedAt: "2026-07-01T04:00:00.000Z",
+      lastTrackedAt: "2026-07-13T04:00:00.000Z",
+      observedRunCount: 8,
+      isActive: false,
+    };
+
+    const wall = renderToStaticMarkup(
+      createElement(CreativeWall, { items: [inactiveItem], plan: "starter" }),
+    );
+
+    expect(wall).toContain("Tracked 12 days");
+    expect(wall).toContain("Inactive");
+    expect(wall).not.toContain("Running ");
+  });
+
   it("renders free-plan sparse states without chart areas", () => {
     const trends = renderToStaticMarkup(createElement(WatchlistTrends, { items: [], dailyActivity: [], plan: "free" }));
     expect(trends).toContain("free plan takes one snapshot");

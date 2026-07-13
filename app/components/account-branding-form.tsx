@@ -34,7 +34,8 @@ export function AccountBrandingForm({
           type="file"
         />
         <small id="brand-logo-help">
-          Optional. Upload one PNG, JPEG, or WebP logo up to 48 KB. SVG files are not accepted.
+          Optional. Upload one static PNG, JPEG, or WebP logo up to 48 KB. Animated WebP and SVG
+          files are not accepted.
         </small>
       </label>
       {brandLogo ? (
