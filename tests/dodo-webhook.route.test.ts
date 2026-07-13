@@ -157,7 +157,7 @@ describe("Dodo webhook route", () => {
         status: "subscription.cancelled",
         revokedAt: "2026-07-01T00:00:00.000Z",
       }),
-      0,
+      1,
       expect.objectContaining({ eventId: "evt-cancel", outcome: "processed" }),
     );
     expect(data.getUserIdForDodoLifecycle).not.toHaveBeenCalled();
@@ -800,7 +800,7 @@ describe("Dodo webhook route", () => {
         refundedAt: "2026-07-05T00:00:00.000Z",
         userId: "user-refund",
       }),
-      0,
+      1,
       expect.objectContaining({ eventId: "evt-refund", outcome: "processed" }),
     );
   });
@@ -848,7 +848,7 @@ describe("Dodo webhook route", () => {
         providerSubscriptionId: "sub_456",
         status: "subscription.expired",
       }),
-      0,
+      1,
       expect.objectContaining({ eventId: "evt-expire", outcome: "processed" }),
     );
   });

@@ -32,12 +32,25 @@ async function expectRedirect(
 beforeEach(() => {
   vi.resetModules();
   vi.doUnmock("~/lib/auth.server");
+  vi.doMock("~/lib/email-verification.server", () => ({
+    isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    requireVerifiedEmailForRetention: vi.fn().mockResolvedValue({ ok: true }),
+    emailUnverifiedActionResult: () => ({
+      ok: false,
+      error: "email_unverified",
+      message: "Verify your email",
+    }),
+    requestEmailVerification: vi.fn().mockResolvedValue({ ok: true }),
+    EMAIL_UNVERIFIED_ERROR: "email_unverified",
+    EMAIL_UNVERIFIED_MESSAGE: "Verify your email",
+  }));
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/context.server");
+  vi.doUnmock("~/lib/email-verification.server");
   vi.doUnmock("~/lib/env.server");
   vi.doUnmock("~/lib/presence-internal-access.server");
   vi.doUnmock("~/lib/workspace.server");
@@ -1143,7 +1156,7 @@ describe("onboarding route", () => {
           ok: false,
           error: "plan_limit_exceeded",
           message:
-            "Watchlists are available on paid plans. Starter is the recommended plan for monitoring this competitor.",
+            "Free includes 1 watchlist. Upgrade for more competitors, scheduled scans, and digests.",
           upgradePath: "/app/billing?source=onboarding#plans",
         }),
         useLoaderData: vi.fn().mockReturnValue({
@@ -1158,8 +1171,8 @@ describe("onboarding route", () => {
           plan: "free",
           watchlistLimit: {
             allowed: false,
-            current: 0,
-            limit: 0,
+            current: 1,
+            limit: 1,
           },
           brandWebsite: null,
           visitorCountry: "India",
@@ -1171,17 +1184,10 @@ describe("onboarding route", () => {
     const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
     const markup = renderToStaticMarkup(createElement(AppOnboardRoute));
 
-    expect(markup).toContain("Choose a plan to start monitoring");
-    expect(markup).toContain("Watchlists are available on paid plans.");
-    expect(markup).toContain("Starter is the recommended plan");
-    expect(markup).toContain("Search first instead");
-    expect(markup).not.toContain("What happens next");
-    expect(markup).not.toContain("First sweep starts");
-    expect(markup).not.toContain("Quiet still counts");
-    expect(markup).not.toContain("Proof feeds briefs");
-    expect(markup).not.toContain("Choose Scout or higher");
+    expect(markup).toContain("Your free watchlist slot is in use");
+    expect(markup).toContain("Free includes 1 watchlist.");
     expect(markup).toContain("View plans");
-    expect(markup).toContain("href=\"/app/billing?source=onboarding#plans\"");
+    expect(markup).toContain('href="/app/billing?source=onboarding#plans"');
     expect(markup).not.toContain("Create watchlist for");
   });
 });

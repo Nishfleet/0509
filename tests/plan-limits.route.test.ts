@@ -15,11 +15,24 @@ function createContext() {
 
 beforeEach(() => {
   vi.resetModules();
+  vi.doMock("~/lib/email-verification.server", () => ({
+    isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    requireVerifiedEmailForRetention: vi.fn().mockResolvedValue({ ok: true }),
+    emailUnverifiedActionResult: () => ({
+      ok: false,
+      error: "email_unverified",
+      message: "Verify your email",
+    }),
+    requestEmailVerification: vi.fn().mockResolvedValue({ ok: true }),
+    EMAIL_UNVERIFIED_ERROR: "email_unverified",
+    EMAIL_UNVERIFIED_MESSAGE: "Verify your email",
+  }));
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  vi.doUnmock("~/lib/email-verification.server");
 });
 
 const session = {

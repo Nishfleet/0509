@@ -15,6 +15,17 @@ import {
 } from "~/lib/plan-entitlements";
 
 describe("plan entitlements catalog", () => {
+  it("gives free one activation watchlist with no scheduled scans or digests", () => {
+    const entitlements = getPlanEntitlements("free");
+    expect(getPlanLimit("free", "watchlists")).toBe(1);
+    expect(getPlanLimit("free", "collections")).toBe(0);
+    expect(getIncludedEvidenceAllowance("free")).toBe(0);
+    expect(entitlements.scheduledScanCadence).toBe("none");
+    expect(entitlements.digestCadence).toBe("none");
+    expect(planAllowsDigestCadence("free", "weekly")).toBe(false);
+    expect(shouldSchedulePlanInRegularScan("free", new Date("2026-07-03T00:00:00.000Z"))).toBe(false);
+  });
+
   it.each([
     ["scout", 3, 10, 50, 1, "every_6h", 2],
     ["starter", 10, 25, 250, 1, "every_3h", 1],

@@ -27,7 +27,7 @@ import {
   normalizeSavedQuery,
   parseSearchParams,
 } from "~/lib/normalize";
-import { defaultCountryForVisitor } from "~/lib/countries";
+import { defaultCountryForVisitor, ALL_COUNTRIES_VALUE, SUPPORTED_COUNTRIES } from "~/lib/countries";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -279,20 +279,28 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "create-watchlist") {
+    const { requireVerifiedEmailForRetention, emailUnverifiedActionResult } = await import(
+      "~/lib/email-verification.server"
+    );
+    const verification = await requireVerifiedEmailForRetention(env, workspaceUserId!);
+    if (!verification.ok) {
+      return emailUnverifiedActionResult();
+    }
+
     const inferredName = (competitorWebsite.displayName ?? normalizedQuery.filters.query) || "Competitor";
     const queryName = String(formData.get("name") ?? "").trim() || `${inferredName} watch`;
     const shouldUseAdvertiserMode = canCreateAdvertiserWatchlist(normalizedQuery);
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
     if (!watchlistLimit.allowed) {
-      const isZeroLimit = watchlistLimit.limit === 0;
       return {
         ok: false,
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message: isZeroLimit
-          ? "Retained competitor monitoring is available on paid plans. Starter is the recommended plan to track this competitor."
-          : "You have reached your competitor tracking limit.",
+        message:
+          watchlistLimit.limit <= 1
+            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            : "You have reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       };
     }
@@ -332,15 +340,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     if (watchlistResult.status === "over_cap") {
-      const isZeroLimit = watchlistResult.limit === 0;
       return {
         ok: false,
         error: "plan_limit_exceeded",
         limit: watchlistResult.limit,
         current: watchlistResult.current,
-        message: isZeroLimit
-          ? "Retained competitor monitoring is available on paid plans. Starter is the recommended plan to track this competitor."
-          : "You have reached your competitor tracking limit.",
+        message:
+          watchlistResult.limit <= 1
+            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+            : "You have reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       };
     }
@@ -457,10 +465,6 @@ export default function SearchRoute() {
 
             <Form className="f9-search-command-form" method="get">
               <input name="mode" type="hidden" value="advertiser" />
-              <input name="country" type="hidden" value={data.filters.country} />
-              <input name="platform" type="hidden" value="all" />
-              <input name="creativeType" type="hidden" value="all" />
-              <input name="status" type="hidden" value="all" />
               <input name="trackingRole" type="hidden" value="competitor" />
               <label className="f9-search-field">
                 <span>Competitor website</span>
@@ -476,6 +480,46 @@ export default function SearchRoute() {
                   type="text"
                 />
               </label>
+              <div className="f9-search-refine" role="group" aria-label="Search filters">
+                <label className="f9-search-field">
+                  <span>Country</span>
+                  <select defaultValue={data.filters.country} name="country">
+                    <option value={ALL_COUNTRIES_VALUE}>All countries</option>
+                    {SUPPORTED_COUNTRIES.map((country) => (
+                      <option key={country.code} value={country.name}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="f9-search-field">
+                  <span>Platform</span>
+                  <select defaultValue={data.filters.platform} name="platform">
+                    <option value="all">All platforms</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Audience Network">Audience Network</option>
+                    <option value="Messenger">Messenger</option>
+                  </select>
+                </label>
+                <label className="f9-search-field">
+                  <span>Creative</span>
+                  <select defaultValue={data.filters.creativeType} name="creativeType">
+                    <option value="all">All creatives</option>
+                    <option value="image">Image</option>
+                    <option value="video">Video</option>
+                    <option value="carousel">Carousel</option>
+                  </select>
+                </label>
+                <label className="f9-search-field">
+                  <span>Status</span>
+                  <select defaultValue={data.filters.status} name="status">
+                    <option value="all">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+              </div>
               <div className="f9-search-actions">
                 <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
                   See ads
@@ -492,19 +536,43 @@ export default function SearchRoute() {
               ) : null}
             </p>
             {canTrackCurrentCompetitor && rootData.session ? (
-              <Form className="f9-quick-track-form" method="post">
-                <input name="intent" type="hidden" value="create-watchlist" />
-                <SearchStateFields
-                  competitorWebsite={competitorWebsite.raw}
-                  filters={data.filters}
-                  mode={data.mode}
-                  trackingRole={trackingRole}
-                />
-                <input name="name" type="hidden" value={`${inferredWatchlistName} watch`} />
-                <SubmitButton className="f9-secondary-button" intent="create-watchlist" pendingLabel="Creating…">
-                  Track this {targetNoun}
-                </SubmitButton>
-              </Form>
+              <div className="f9-search-retention">
+                <Form className="f9-quick-track-form" method="post">
+                  <input name="intent" type="hidden" value="create-watchlist" />
+                  <SearchStateFields
+                    competitorWebsite={competitorWebsite.raw}
+                    filters={data.filters}
+                    mode={data.mode}
+                    trackingRole={trackingRole}
+                  />
+                  <input name="name" type="hidden" value={`${inferredWatchlistName} watch`} />
+                  <SubmitButton className="f9-secondary-button" intent="create-watchlist" pendingLabel="Creating…">
+                    Track this {targetNoun}
+                  </SubmitButton>
+                </Form>
+                <Form className="f9-save-query-form" method="post">
+                  <input name="intent" type="hidden" value="save-query" />
+                  <SearchStateFields
+                    competitorWebsite={competitorWebsite.raw}
+                    filters={data.filters}
+                    mode={data.mode}
+                    trackingRole={trackingRole}
+                  />
+                  <label className="f9-search-field">
+                    <span>Save search as</span>
+                    <input
+                      autoComplete="off"
+                      defaultValue={inferredWatchlistName}
+                      name="name"
+                      placeholder="Competitor research"
+                      type="text"
+                    />
+                  </label>
+                  <SubmitButton className="f9-secondary-button" intent="save-query" pendingLabel="Saving…">
+                    Save search
+                  </SubmitButton>
+                </Form>
+              </div>
             ) : null}
           </section>
 

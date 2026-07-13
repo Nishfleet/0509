@@ -13,6 +13,7 @@ afterEach(() => {
   vi.resetModules();
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/context.server");
+  vi.doUnmock("~/lib/better-auth.server");
 });
 
 describe("safeRedirectPath", () => {
@@ -29,6 +30,24 @@ describe("safeRedirectPath", () => {
     expect(safeRedirectPath("javascript:alert(1)", "/app")).toBe("/app");
     expect(safeRedirectPath("", "/app")).toBe("/app");
     expect(safeRedirectPath(null, "/app")).toBe("/app");
+  });
+
+  it("is used for email-verification callbackURL sanitization", async () => {
+    const sendVerificationEmail = vi.fn().mockResolvedValue({});
+    vi.doMock("~/lib/better-auth.server", () => ({
+      isBetterAuthConfigured: () => true,
+      getBetterAuth: () => ({
+        api: { sendVerificationEmail },
+      }),
+    }));
+
+    const { requestEmailVerification } = await import("~/lib/email-verification.server");
+    await requestEmailVerification({ DB: {} } as never, new Request("https://0509.io/"), {
+      email: "a@example.com",
+      callbackURL: "//evil.example",
+    });
+
+    expect(sendVerificationEmail.mock.calls[0]?.[0]?.body?.callbackURL).toBe("/app");
   });
 });
 

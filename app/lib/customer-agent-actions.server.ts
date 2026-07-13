@@ -636,6 +636,14 @@ async function createWatchlistFromAgent(
 
   const workspaceUserId = await resolveWorkspaceDataUserId(env, context.userId);
 
+  const { requireVerifiedEmailForRetention } = await import("~/lib/email-verification.server");
+  const verification = await requireVerifiedEmailForRetention(env, workspaceUserId);
+  if (!verification.ok) {
+    throw new CustomerAgentActionError("email_unverified", verification.message, {
+      status: 403,
+    });
+  }
+
   const limit = await checkPlanLimit(env, workspaceUserId, "watchlists");
 
   const country = readString(input, "targetCountry") ?? readString(input, "country") ?? "all";

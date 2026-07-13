@@ -9,7 +9,7 @@ import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discovery-cache.server";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
 import { searchMetaLibraryByBrowser, CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
-import { demoSearch, MetaApiError, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
+import { demoSearch, MetaApiError, filterAdsBySearchFilters, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
 import { fingerprintSavedQuery, hashString } from "~/lib/normalize";
 import type {
   AdDiscoveryProvider,
@@ -505,7 +505,7 @@ export async function searchAdsViaSourceResolver(
   try {
     const result = await runWithSharedDiscoveryRequest(cacheKey, async () => {
       const startedAt = Date.now();
-      const liveResult =
+      const liveResultRaw =
         provider === "meta_library_browser"
           ? await searchMetaLibraryByBrowser(effectiveEnv, query)
           : normalizeSearchResponse(
@@ -522,6 +522,12 @@ export async function searchAdsViaSourceResolver(
               ),
               provider,
             );
+      // Browser scrape only encodes country/query in the Ad Library URL — apply
+      // platform/creative/status filters client-side so exposed UI filters work.
+      const liveResult =
+        provider === "meta_library_browser"
+          ? { ...liveResultRaw, ads: filterAdsBySearchFilters(liveResultRaw.ads, query) }
+          : liveResultRaw;
       if (!isUsableLiveDiscoveryResult(provider, liveResult)) {
         throw new CommercialDiscoveryError(
           "Live commercial discovery returned no extractable ad cards.",

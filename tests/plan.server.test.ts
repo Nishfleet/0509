@@ -135,7 +135,7 @@ describe("getUserPlan", () => {
 });
 
 describe("checkPlanLimit", () => {
-  it("returns not allowed for unpaid users because there is no free workspace tier", async () => {
+  it("allows unpaid users one free activation watchlist", async () => {
     const mock = createMockDb({
       planRow: null,
       watchlistCount: 0,
@@ -145,9 +145,25 @@ describe("checkPlanLimit", () => {
     const result = await checkPlanLimit({ DB: mock.db } as never, "user-1", "watchlists");
 
     expect(result).toEqual({
-      allowed: false,
+      allowed: true,
       current: 0,
-      limit: 0,
+      limit: 1,
+    });
+  });
+
+  it("blocks unpaid users once the free watchlist slot is used", async () => {
+    const mock = createMockDb({
+      planRow: null,
+      watchlistCount: 1,
+    });
+    const { checkPlanLimit } = await import("~/lib/plan.server");
+
+    const result = await checkPlanLimit({ DB: mock.db } as never, "user-1", "watchlists");
+
+    expect(result).toEqual({
+      allowed: false,
+      current: 1,
+      limit: 1,
     });
   });
 
