@@ -2186,7 +2186,9 @@ describe("scheduled watchlist selection", () => {
     expect(mock.statements[0]?.sql).toContain("watchlist.is_active = 1");
     expect(mock.statements[0]?.sql).toContain("user_plan.plan IN ('starter', 'agency')");
     expect(mock.statements[0]?.sql).toContain("user_plan.plan = 'scout'");
-    expect(mock.statements[0]?.bindings).toEqual([0]);
+    expect(mock.statements[0]?.sql).toContain("LIMIT ?");
+    expect(mock.statements[0]?.sql).toContain("OFFSET ?");
+    expect(mock.statements[0]?.bindings).toEqual([0, 100, 0]);
   });
 
   it("can include Scout watchlists for the weekly digest path", async () => {
@@ -2194,7 +2196,7 @@ describe("scheduled watchlist selection", () => {
 
     await listActiveWatchlists({ DB: mock.db } as never, { includeScout: true });
 
-    expect(mock.statements[0]?.bindings).toEqual([1]);
+    expect(mock.statements[0]?.bindings).toEqual([1, 100, 0]);
   });
 });
 

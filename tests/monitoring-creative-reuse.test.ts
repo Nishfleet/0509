@@ -103,6 +103,8 @@ describe("runWatchlistManual OCR reuse", () => {
       hydrateAdsWithPersistedCreatives,
       listActiveWatchlists: vi.fn(),
       listProofCapturesForTarget: vi.fn().mockResolvedValue([]),
+    listProofCapturesForTargets: vi.fn().mockResolvedValue(new Map()),
+    listLastSuccessfulProofCapturesForAds: vi.fn().mockResolvedValue(new Map()),
       listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
       listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
       listObservationsForRun: vi.fn().mockResolvedValue([]),
