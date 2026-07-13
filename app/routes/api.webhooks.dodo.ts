@@ -37,6 +37,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     clearDodoPlanCheckout,
     failDodoWebhookEventProcessing,
     finalizeDodoWebhookLedgerOnly,
+    getUserDeliveryProfile,
     getUserIdForDodoPayment,
     getUserIdForDodoLifecycle,
   } = await import("~/lib/data.server");
@@ -287,7 +288,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           }
         }
 
-        await applyDodoPlanPaymentIssueWithLedger(
+        const paymentIssueApplied = await applyDodoPlanPaymentIssueWithLedger(
           env,
           {
             userId,
@@ -300,6 +301,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
             metadata: { action: "payment_issue", userId, eventType: revocation.eventType },
           },
         );
+        // Skip the email when the monotonic guard rejected a stale event —
+        // the plan already moved past this state (e.g. payment recovered).
+        if (paymentIssueApplied?.changed !== false) {
+          await sendBillingLifecycleEmailSafely("payment_issue", userId, (delivery, profile) =>
+            delivery.sendBillingPaymentIssueEmail(env, {
+              userId,
+              email: profile.email,
+              name: profile.name,
+            }),
+          );
+        }
         return {
           outcome: "processed",
           metadata: { action: "payment_issue", userId, eventType: revocation.eventType },
@@ -313,7 +325,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         Number.isFinite(effectiveAtMs) &&
         effectiveAtMs > Date.now() + 60_000
       ) {
-        await applyDodoPlanPaymentIssueWithLedger(
+        const cancellationApplied = await applyDodoPlanPaymentIssueWithLedger(
           env,
           {
             userId,
@@ -331,6 +343,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
             },
           },
         );
+        if (cancellationApplied?.changed !== false) {
+          await sendBillingLifecycleEmailSafely("cancellation_scheduled", userId, (delivery, profile) =>
+            delivery.sendBillingCancellationEmail(env, {
+              userId,
+              email: profile.email,
+              name: profile.name,
+              kind: "scheduled",
+              effectiveAt: revocation.effectiveAt ?? null,
+              eventId,
+            }),
+          );
+        }
         return {
           outcome: "processed",
           metadata: {
@@ -342,7 +366,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         };
       }
 
-      await applyDodoPlanRevokeWithWatchlistReconcile(
+      const revokeApplied = await applyDodoPlanRevokeWithWatchlistReconcile(
         env,
         {
           userId,
@@ -357,6 +381,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: { action: "revoke", userId, eventType: revocation.eventType },
         },
       );
+      if (revokeApplied?.changed !== false) {
+        await sendBillingLifecycleEmailSafely("revoke", userId, (delivery, profile) =>
+          delivery.sendBillingCancellationEmail(env, {
+            userId,
+            email: profile.email,
+            name: profile.name,
+            kind: "ended",
+            eventId,
+          }),
+        );
+      }
       return {
         outcome: "processed",
         metadata: { action: "revoke", userId, eventType: revocation.eventType },
@@ -381,6 +416,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: { action: "refund", paymentId: refund.paymentId },
         },
       );
+      if (refundedUserId) {
+        await sendBillingLifecycleEmailSafely("refund", refundedUserId, (delivery, profile) =>
+          delivery.sendBillingRefundEmail(env, {
+            userId: refundedUserId,
+            email: profile.email,
+            name: profile.name,
+            eventId,
+          }),
+        );
+      }
       return {
         outcome: "processed",
         metadata: { action: "refund", paymentId: refund.paymentId },
@@ -427,5 +472,39 @@ export async function action({ context, request }: ActionFunctionArgs) {
       metadata: { action: "proof_credit_grant", userId: grant.userId, bundle: grant.bundle },
       body: { ok: true },
     };
+  }
+
+  // Lifecycle emails are best-effort side effects: by the time we email, the
+  // plan change is committed and the ledger row is already 'processed'. A
+  // send failure must never 500 the webhook — Dodo would redeliver, the
+  // dedupe ledger would short-circuit the retry, and the email would be lost
+  // with retry noise on top. Log and move on. Skips silently when the user
+  // has no delivery profile (deleted account, no email on file).
+  async function sendBillingLifecycleEmailSafely(
+    kind: string,
+    lifecycleUserId: string,
+    send: (
+      delivery: typeof import("~/lib/delivery.server"),
+      profile: { email: string; name: string | null },
+    ) => Promise<unknown>,
+  ) {
+    try {
+      const profile = await getUserDeliveryProfile(env, lifecycleUserId);
+      if (!profile?.email) {
+        return;
+      }
+      const delivery = await import("~/lib/delivery.server");
+      await send(delivery, { email: profile.email, name: profile.name });
+    } catch (error) {
+      const { logBillingEvent } = await import("~/lib/log.server");
+      logBillingEvent(env, "error", "dodo.webhook.lifecycle_email", "Billing lifecycle email failed", {
+        eventId,
+        details: {
+          kind,
+          userId: lifecycleUserId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 }
