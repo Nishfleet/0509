@@ -358,31 +358,45 @@ export async function upsertDigestDelivery(
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(digest_run_id)
       DO UPDATE SET provider = CASE
-                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
                         THEN digest_delivery.provider
                       ELSE excluded.provider
                     END,
                     status = CASE
                       WHEN digest_delivery.status = 'sent' THEN 'sent'
+                      -- 'failed' must never regress to 'pending': under a
+                      -- duplicate cron fire, the losing writer mirrors the
+                      -- winner's in-flight pending attempt and could land
+                      -- AFTER the winner recorded a failure, permanently
+                      -- hiding the run from the failed-digest retry sweep.
+                      -- A claim-winning retry finishes by writing a terminal
+                      -- 'sent' or 'failed', which still overwrites 'failed'.
+                      WHEN digest_delivery.status = 'failed' AND excluded.status = 'pending'
+                        THEN 'failed'
                       ELSE excluded.status
                     END,
                     recipient_email = CASE
-                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
                         THEN digest_delivery.recipient_email
                       ELSE excluded.recipient_email
                     END,
                     external_message_id = CASE
-                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
                         THEN digest_delivery.external_message_id
                       ELSE excluded.external_message_id
                     END,
                     error_message = CASE
-                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
                         THEN digest_delivery.error_message
                       ELSE excluded.error_message
                     END,
                     delivered_at = CASE
-                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
+                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending')
                         THEN digest_delivery.delivered_at
                       ELSE excluded.delivered_at
                     END,

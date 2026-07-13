@@ -1805,12 +1805,21 @@ async function sendBillingLifecycleEmail(
 ) {
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
   const stalePreDispatch = duplicate ? isStalePreDispatchAttempt(duplicate) : false;
+  // A row the webhook batch just enqueued atomically with the plan mutation:
+  // pending, never dispatched, still carrying the outbox marker. The live
+  // send path claims it here (clearing the marker via the payload rewrite);
+  // a concurrent recovery sweep loses the compare-and-set on updatedAt.
+  const pendingOutboxDispatch =
+    duplicate?.status === "pending" &&
+    duplicate.webhookStatus === "pending" &&
+    duplicate.payloadSnapshot?.["outboxPendingDispatch"] === true;
   // Sent rows and provider-unknown timeouts are terminal for automatic
-  // retries. Only an explicit failure or an abandoned pre-dispatch lease can
-  // call the provider again.
-  if (duplicate && duplicate.status !== "failed" && !stalePreDispatch) {
+  // retries. Only an explicit failure, an abandoned pre-dispatch lease, or a
+  // freshly-enqueued outbox row can call the provider.
+  if (duplicate && duplicate.status !== "failed" && !stalePreDispatch && !pendingOutboxDispatch) {
     return false;
   }
+  const claimFromPending = stalePreDispatch || pendingOutboxDispatch;
 
   const billingStateFingerprint = billingLifecycleStateFingerprint(
     await getUserPlanBillingInfo(env, input.userId),
@@ -1837,10 +1846,14 @@ async function sendBillingLifecycleEmail(
       sentAt: null,
       failedAt: null,
       payloadSnapshot,
+      // The retry sends to the CURRENT account email; the durable row must
+      // record that recipient too, or the ledger and any later recovery
+      // replay would keep pointing at the address the failed attempt used.
+      targetValue: input.email,
       updatedAt: claimUpdatedAt,
-      expectedStatus: stalePreDispatch ? "pending" : "failed",
-      expectedWebhookStatus: stalePreDispatch ? "pending" : undefined,
-      expectedUpdatedAt: stalePreDispatch ? duplicate.updatedAt : undefined,
+      expectedStatus: claimFromPending ? "pending" : "failed",
+      expectedWebhookStatus: claimFromPending ? "pending" : undefined,
+      expectedUpdatedAt: claimFromPending ? duplicate.updatedAt : undefined,
     });
     // Older/mocked data adapters returned void; only an explicit false means
     // this handler lost the conditional database claim.
@@ -1949,6 +1962,10 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
   const billingStateFingerprint = readString(
     attempt.payloadSnapshot.billingStateFingerprint,
   );
+  // Rows enqueued atomically with the webhook batch are written BEFORE the
+  // plan mutation commits, so they carry no fingerprint — the marker tells
+  // recovery to validate against the current billing state by kind instead.
+  const pendingDispatch = attempt.payloadSnapshot.outboxPendingDispatch === true;
   const targetValue = readString(attempt.targetValue);
 
   if (
@@ -1958,13 +1975,51 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
     !subject ||
     !bodyHtml ||
     !tag ||
-    !billingStateFingerprint ||
+    (!billingStateFingerprint && !pendingDispatch) ||
     !targetValue
   ) {
     return null;
   }
 
-  return { subject, bodyHtml, tag, targetValue, billingStateFingerprint };
+  return {
+    subject,
+    bodyHtml,
+    tag,
+    targetValue,
+    billingStateFingerprint: billingStateFingerprint ?? null,
+    pendingDispatch,
+  };
+}
+
+/**
+ * Kind-aware "does this email still describe reality?" check for outbox rows
+ * that never got a post-mutation fingerprint. dodo_status values mirror what
+ * the webhook route writes for each event family.
+ */
+function billingLifecycleOutboxStateStillApplies(
+  templateName: string | null,
+  info: UserPlanBillingInfo,
+) {
+  switch (templateName) {
+    case "billing_payment_issue":
+      return (
+        info.dodoStatus === "payment.failed" ||
+        info.dodoStatus === "subscription.failed" ||
+        info.dodoStatus === "subscription.on_hold"
+      );
+    case "billing_cancellation_scheduled":
+      return info.dodoStatus === "cancellation_scheduled";
+    case "billing_access_ended":
+      return (
+        info.plan === "free" &&
+        (info.dodoStatus === "subscription.cancelled" ||
+          info.dodoStatus === "subscription.expired")
+      );
+    case "billing_refund_revoked":
+      return info.plan === "free" && info.dodoStatus === "refunded";
+    default:
+      return false;
+  }
 }
 
 /**
@@ -2046,21 +2101,31 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
     ]);
     const currentEmail = readString(currentProfile?.email)?.toLowerCase() ?? null;
     const stateStillCurrent =
-      billingLifecycleStateFingerprint(currentBillingInfo) ===
-        payload.billingStateFingerprint &&
+      (payload.pendingDispatch
+        ? billingLifecycleOutboxStateStillApplies(attempt.templateName, currentBillingInfo)
+        : billingLifecycleStateFingerprint(currentBillingInfo) ===
+          payload.billingStateFingerprint) &&
       currentEmail === payload.targetValue.toLowerCase();
     if (!stateStillCurrent) {
+      // Finalize as a retryable 'failed', NOT a terminal skip: for day-keyed
+      // dunning, a terminal skip would permanently consume the day's
+      // idempotency slot — a later same-day payment.failed webhook would see
+      // the terminal row, back off, and the customer would never hear about
+      // the ongoing payment problem. 'failed' lets the next real event claim
+      // the row in place and send fresh content, while recovery itself still
+      // refuses to replay stale content (this branch).
+      const failedAt = new Date().toISOString();
       const finalized = await updateDeliveryAttemptResult(env, attempt.id, {
         provider: EMAIL_PROVIDER,
-        status: "skipped_due_to_dedupe",
-        webhookStatus: "provider_unknown",
+        status: "failed",
+        webhookStatus: "failed",
         providerMessageId: null,
         providerStatusLastSeenAt: null,
         templateName: attempt.templateName,
         errorMessage:
           "Billing lifecycle recovery was superseded by newer account state.",
         sentAt: null,
-        failedAt: null,
+        failedAt,
         expectedStatus: "pending",
         expectedWebhookStatus: "pending",
         expectedUpdatedAt: claimUpdatedAt,
@@ -2157,32 +2222,31 @@ export async function reconcileBillingLifecycleEmailDelivery(
   return reconciled !== false;
 }
 
+interface BillingLifecycleEmailContent {
+  idempotencyKey: string;
+  subject: string;
+  bodyHtml: string;
+  tag: string;
+  templateName: string;
+}
+
 // Dunning: a subscription payment failed and Dodo is retrying. Dodo emits
 // these events repeatedly across its retry schedule, each with a fresh
 // webhook id, so the key is day-coarse: at most one dunning email per
 // customer per day no matter how the retries land.
-export async function sendBillingPaymentIssueEmail(
+function billingPaymentIssueEmailContent(
   env: AppEnv,
-  input: {
-    userId: string;
-    email: string;
-    name: string | null;
-    occurredAt?: string | null;
-    retryWebhookOnExplicitFailure?: boolean;
-  },
-) {
+  input: { userId: string; name: string | null; occurredAt?: string | null },
+): BillingLifecycleEmailContent {
   const occurredAtMs = Date.parse(input.occurredAt ?? "");
   const dayKey = new Date(
     Number.isFinite(occurredAtMs) ? occurredAtMs : Date.now(),
   ).toISOString().slice(0, 10);
-  return sendBillingLifecycleEmail(env, {
-    userId: input.userId,
-    email: input.email,
+  return {
     idempotencyKey: `billing-payment-issue:${input.userId}:${dayKey}`,
     subject: "Action needed: a Five to Nine payment didn't go through",
     tag: "billing-payment-issue",
     templateName: "billing_payment_issue",
-    retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
     bodyHtml: renderBillingEmailHtml({
       name: input.name,
       paragraphs: [
@@ -2194,41 +2258,34 @@ export async function sendBillingPaymentIssueEmail(
       footnote:
         "If a retry has already succeeded, you can ignore this email — nothing changes.",
     }),
-  });
+  };
 }
 
 // Cancellation, both shapes: "scheduled" (cancelled but paid through a
 // future date) and "ended" (access revoked now — immediate cancellation or
 // expiry). Keyed on the webhook event id: exactly one email per event even
 // when the ledger re-runs the handler.
-export async function sendBillingCancellationEmail(
+function billingCancellationEmailContent(
   env: AppEnv,
   input: {
     userId: string;
-    email: string;
     name: string | null;
     kind: "scheduled" | "ended";
     effectiveAt?: string | null;
     eventId: string;
-    retryWebhookOnExplicitFailure?: boolean;
   },
-) {
+): BillingLifecycleEmailContent {
   const billingUrl = `${appBaseUrl(env)}/app/billing`;
-  const base = {
-    userId: input.userId,
-    email: input.email,
-    idempotencyKey: `billing-cancellation:${input.userId}:${input.eventId}`,
-    tag: "billing-cancellation",
-    retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
-  };
+  const idempotencyKey = `billing-cancellation:${input.userId}:${input.eventId}`;
 
   if (input.kind === "scheduled") {
     const dateLabel = billingDateLabel(input.effectiveAt);
     const activeUntil = dateLabel
       ? `Your plan stays active until <strong>${escapeHtml(dateLabel)}</strong> — watchlists, digests, and alerts keep running until then.`
       : "Your plan stays active until the end of the period you already paid for — watchlists, digests, and alerts keep running until then.";
-    return sendBillingLifecycleEmail(env, {
-      ...base,
+    return {
+      idempotencyKey,
+      tag: "billing-cancellation",
       subject: "Your Five to Nine cancellation is confirmed",
       templateName: "billing_cancellation_scheduled",
       bodyHtml: renderBillingEmailHtml({
@@ -2242,11 +2299,12 @@ export async function sendBillingCancellationEmail(
         footnote:
           "Changed your mind? Once your access ends, resubscribe from your billing page — paused watchlists resume automatically.",
       }),
-    });
+    };
   }
 
-  return sendBillingLifecycleEmail(env, {
-    ...base,
+  return {
+    idempotencyKey,
+    tag: "billing-cancellation",
     subject: "Your Five to Nine plan has ended",
     templateName: "billing_access_ended",
     bodyHtml: renderBillingEmailHtml({
@@ -2260,11 +2318,72 @@ export async function sendBillingCancellationEmail(
       footnote:
         "Resubscribe any time — paused watchlists resume automatically when a plan is active again.",
     }),
-  });
+  };
 }
 
 // Full refund: plan revoked to Free and purchased credits expired. Keyed on
 // the webhook event id.
+function billingRefundEmailContent(
+  env: AppEnv,
+  input: { userId: string; name: string | null; eventId: string },
+): BillingLifecycleEmailContent {
+  return {
+    idempotencyKey: `billing-refund:${input.userId}:${input.eventId}`,
+    subject: "Your Five to Nine refund has been processed",
+    tag: "billing-refund",
+    templateName: "billing_refund_revoked",
+    bodyHtml: renderBillingEmailHtml({
+      name: input.name,
+      paragraphs: [
+        "A full refund for your Five to Nine purchase has been processed. Your workspace has moved to the Free plan, and credits from that purchase have expired.",
+        "Your boards, history, and evidence stay in place on the Free plan.",
+      ],
+      ctaLabel: "View billing",
+      ctaUrl: `${appBaseUrl(env)}/app/billing`,
+      footnote:
+        "If this refund is unexpected, contact support using the address below.",
+    }),
+  };
+}
+
+export async function sendBillingPaymentIssueEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    occurredAt?: string | null;
+    retryWebhookOnExplicitFailure?: boolean;
+  },
+) {
+  return sendBillingLifecycleEmail(env, {
+    userId: input.userId,
+    email: input.email,
+    retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
+    ...billingPaymentIssueEmailContent(env, input),
+  });
+}
+
+export async function sendBillingCancellationEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    kind: "scheduled" | "ended";
+    effectiveAt?: string | null;
+    eventId: string;
+    retryWebhookOnExplicitFailure?: boolean;
+  },
+) {
+  return sendBillingLifecycleEmail(env, {
+    userId: input.userId,
+    email: input.email,
+    retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
+    ...billingCancellationEmailContent(env, input),
+  });
+}
+
 export async function sendBillingRefundEmail(
   env: AppEnv,
   input: {
@@ -2278,23 +2397,52 @@ export async function sendBillingRefundEmail(
   return sendBillingLifecycleEmail(env, {
     userId: input.userId,
     email: input.email,
-    idempotencyKey: `billing-refund:${input.userId}:${input.eventId}`,
-    subject: "Your Five to Nine refund has been processed",
-    tag: "billing-refund",
-    templateName: "billing_refund_revoked",
     retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
-    bodyHtml: renderBillingEmailHtml({
-      name: input.name,
-      paragraphs: [
-        "A full refund for your Five to Nine purchase has been processed. Your workspace has moved to the Free plan, and credits from that purchase have expired.",
-        "Your boards, history, and evidence stay in place on the Free plan.",
-      ],
-      ctaLabel: "View billing",
-      ctaUrl: `${appBaseUrl(env)}/app/billing`,
-      footnote:
-        "If this refund is unexpected, contact support using the address below.",
-    }),
+    ...billingRefundEmailContent(env, input),
   });
+}
+
+export type BillingLifecycleEmailOutboxInput =
+  | { kind: "payment_issue"; userId: string; email: string; name: string | null; occurredAt?: string | null }
+  | { kind: "cancellation_scheduled"; userId: string; email: string; name: string | null; effectiveAt?: string | null; eventId: string }
+  | { kind: "revoke"; userId: string; email: string; name: string | null; eventId: string }
+  | { kind: "refund"; userId: string; email: string; name: string | null; eventId: string };
+
+/**
+ * Freeze a lifecycle email into an outbox row spec the webhook route hands to
+ * the reconcile batch. The row is inserted atomically with the plan mutation
+ * and ledger finalize; `outboxPendingDispatch` marks it un-dispatched so the
+ * live send path (sendBilling*Email right after the batch) claims it, and the
+ * recovery sweep validates it against the CURRENT billing state by kind
+ * (there is no meaningful fingerprint yet — the row is written before the
+ * mutation commits).
+ */
+export function prepareBillingLifecycleEmailOutbox(
+  env: AppEnv,
+  input: BillingLifecycleEmailOutboxInput,
+) {
+  const content =
+    input.kind === "payment_issue"
+      ? billingPaymentIssueEmailContent(env, input)
+      : input.kind === "cancellation_scheduled"
+        ? billingCancellationEmailContent(env, { ...input, kind: "scheduled" })
+        : input.kind === "revoke"
+          ? billingCancellationEmailContent(env, { ...input, kind: "ended" })
+          : billingRefundEmailContent(env, input);
+  return {
+    userId: input.userId,
+    email: input.email,
+    idempotencyKey: content.idempotencyKey,
+    templateName: content.templateName,
+    payloadSnapshot: {
+      kind: content.templateName,
+      subject: content.subject,
+      bodyHtml: content.bodyHtml,
+      tag: content.tag,
+      billingStateFingerprint: null,
+      outboxPendingDispatch: true,
+    },
+  };
 }
 
 export async function sendTeamInviteEmail(
