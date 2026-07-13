@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createDigestRun,
   getDigest,
-  getLatestDigestRunSummaryForUser,
+  getLatestDigestRunSummaryForWatchlist,
   listDigests,
   updateDigestRunSummary,
 } from "~/lib/data.server";
@@ -41,6 +41,7 @@ describe("digest_run summary persistence", () => {
           strategyParagraph: PARAGRAPH,
           strategyModel: "@cf/meta/llama-3.2-3b-instruct",
           strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
+          strategyWatchlistIds: ["watch-1"],
         },
       );
 
@@ -49,6 +50,7 @@ describe("digest_run summary persistence", () => {
         totalEvents: 2,
         strategyParagraph: PARAGRAPH,
         strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
+        strategyWatchlistIds: ["watch-1"],
       });
 
       const listed = await listDigests(env, "user-1");
@@ -124,13 +126,15 @@ describe("digest_run summary persistence", () => {
 
       expect((await getDigest(env, "digest-legacy-invalid"))?.summary).toEqual({});
       expect((await getDigest(env, "digest-legacy-array"))?.summary).toEqual({});
-      await expect(getLatestDigestRunSummaryForUser(env, "user-1")).resolves.toBeNull();
+      await expect(
+        getLatestDigestRunSummaryForWatchlist(env, "user-1", "watch-1"),
+      ).resolves.toBeNull();
     } finally {
       harness.close();
     }
   });
 
-  it("getLatestDigestRunSummaryForUser returns the newest stored paragraph, skipping runs without one", async () => {
+  it("returns only a paragraph proven to belong exclusively to the report watchlist", async () => {
     const harness = setup();
     try {
       const env = { DB: harness.db } as never;
@@ -138,12 +142,14 @@ describe("digest_run summary persistence", () => {
         totalEvents: 1,
         strategyParagraph: `${PARAGRAPH} (older week)`,
         strategyGeneratedAt: "2026-07-06T05:01:00.000Z",
+        strategyWatchlistIds: ["watch-1"],
       });
       // Newer weekly run with a paragraph.
       await createDigestRun(env, "user-1", "2026-07-06T05:00:00.000Z", "2026-07-13T05:00:00.000Z", {
         totalEvents: 2,
         strategyParagraph: PARAGRAPH,
         strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
+        strategyWatchlistIds: ["watch-1"],
       });
       // Newest run (e.g. a daily heartbeat) has no paragraph — must be skipped.
       await createDigestRun(env, "user-1", "2026-07-13T05:00:00.000Z", "2026-07-14T05:00:00.000Z", {
@@ -151,14 +157,45 @@ describe("digest_run summary persistence", () => {
         watchlists: 1,
       });
 
-      await expect(getLatestDigestRunSummaryForUser(env, "user-1")).resolves.toEqual({
+      await expect(
+        getLatestDigestRunSummaryForWatchlist(env, "user-1", "watch-1"),
+      ).resolves.toEqual({
         paragraph: PARAGRAPH,
         generatedAt: "2026-07-13T05:01:00.000Z",
         periodEnd: "2026-07-13T05:00:00.000Z",
       });
 
       // Another user's runs never leak in.
-      await expect(getLatestDigestRunSummaryForUser(env, "user-2")).resolves.toBeNull();
+      await expect(
+        getLatestDigestRunSummaryForWatchlist(env, "user-2", "watch-1"),
+      ).resolves.toBeNull();
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("fails closed for legacy, mismatched, and mixed-watchlist provenance", async () => {
+    const harness = setup();
+    try {
+      const env = { DB: harness.db } as never;
+      await createDigestRun(env, "user-1", "2026-06-15T05:00:00.000Z", "2026-06-22T05:00:00.000Z", {
+        strategyParagraph: PARAGRAPH,
+        strategyGeneratedAt: "2026-06-22T05:01:00.000Z",
+      });
+      await createDigestRun(env, "user-1", "2026-06-22T05:00:00.000Z", "2026-06-29T05:00:00.000Z", {
+        strategyParagraph: PARAGRAPH,
+        strategyGeneratedAt: "2026-06-29T05:01:00.000Z",
+        strategyWatchlistIds: ["watch-2"],
+      });
+      await createDigestRun(env, "user-1", "2026-06-29T05:00:00.000Z", "2026-07-06T05:00:00.000Z", {
+        strategyParagraph: PARAGRAPH,
+        strategyGeneratedAt: "2026-07-06T05:01:00.000Z",
+        strategyWatchlistIds: ["watch-1", "watch-2"],
+      });
+
+      await expect(
+        getLatestDigestRunSummaryForWatchlist(env, "user-1", "watch-1"),
+      ).resolves.toBeNull();
     } finally {
       harness.close();
     }

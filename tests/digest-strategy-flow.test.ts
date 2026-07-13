@@ -144,6 +144,7 @@ describe("weekly digest strategy paragraph flow", () => {
         strategyParagraph: GOOD_PARAGRAPH,
         strategyModel: "@cf/meta/llama-3.2-3b-instruct",
         strategyGeneratedAt: expect.any(String),
+        strategyWatchlistIds: ["watch-1"],
       }),
     );
     // createDigestRun is INSERT OR IGNORE — the summary must be re-persisted
@@ -151,7 +152,10 @@ describe("weekly digest strategy paragraph flow", () => {
     expect(data.updateDigestRunSummary).toHaveBeenCalledWith(
       expect.anything(),
       "digest-1",
-      expect.objectContaining({ strategyParagraph: GOOD_PARAGRAPH }),
+      expect.objectContaining({
+        strategyParagraph: GOOD_PARAGRAPH,
+        strategyWatchlistIds: ["watch-1"],
+      }),
     );
     expect(data.updateDigestRunSummary.mock.invocationCallOrder[0]).toBeLessThan(
       deliverWeeklyDigest.mock.invocationCallOrder[0]!,

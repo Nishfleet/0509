@@ -163,11 +163,15 @@ export async function updateDigestRunSummary(
 const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;
 
 /**
- * Returns the most recent stored AI strategy paragraph for a user, scanning
- * the latest few digest runs (daily runs and heartbeats carry no paragraph).
- * Read-only: never triggers generation.
+ * Returns the most recent stored AI strategy paragraph whose persisted input
+ * provenance belongs exclusively to this watchlist. Legacy, mixed-watchlist,
+ * and mismatched notes fail closed. Read-only: never triggers generation.
  */
-export async function getLatestDigestRunSummaryForUser(env: AppEnv, userId: string) {
+export async function getLatestDigestRunSummaryForWatchlist(
+  env: AppEnv,
+  userId: string,
+  watchlistId: string,
+) {
   const rows = await many<DigestRunRow>(
     env,
     `
@@ -183,7 +187,10 @@ export async function getLatestDigestRunSummaryForUser(env: AppEnv, userId: stri
 
   for (const row of rows) {
     const note = readDigestStrategyNote(toDigestRunSummary(row));
-    if (note) {
+    if (
+      note?.watchlistIds?.length &&
+      note.watchlistIds.every((provenanceId) => provenanceId === watchlistId)
+    ) {
       return {
         paragraph: note.paragraph,
         generatedAt: note.generatedAt,
