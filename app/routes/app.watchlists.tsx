@@ -544,18 +544,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "resume-watchlist") {
     const { setWatchlistActive } = await import("~/lib/data.server");
-    const { checkPlanLimit } = await import("~/lib/plan.server");
+    const { requireWorkspacePlanLimit } = await import("~/lib/with-workspace.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
 
-    const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
-    if (!watchlistLimit.allowed) {
-      return {
-        ok: false,
-        error: "plan_limit_exceeded",
-        limit: watchlistLimit.limit,
-        current: watchlistLimit.current,
-        message: "You have reached your competitor tracking limit — pause another watchlist first.",
-      };
+    const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "watchlists", {
+      limitMessage:
+        "You have reached your competitor tracking limit — pause another watchlist first.",
+    });
+    if (!limitGate.ok) {
+      return limitGate.result;
     }
 
     const resumed = await setWatchlistActive(env, workspaceUserId, watchlistId, true);
