@@ -1355,11 +1355,54 @@ describe("billing page", () => {
 
     expect(markup).toContain("Open billing portal");
     expect(markup).toContain("card and invoice tasks");
-    expect(markup).toContain("Cancel anytime from the billing portal");
+    expect(markup).toContain("Cancel anytime — email");
+    expect(markup).toContain("support@0509.io");
+    expect(markup).toContain("confirm your cancellation request");
+    expect(markup).not.toContain("confirm the same day");
+    expect(markup).not.toContain("Cancel anytime from the billing portal");
     expect(markup).not.toContain("until portal cancellation is fully available");
     expect(markup).toContain("Use the plan cards above to switch plans");
     expect(markup).toContain("/app/support?category=billing");
     expect(markup).not.toContain("cancel — self-serve");
     expect(markup).not.toContain("100% customer satisfaction");
+  });
+
+  it("gives loading price placeholders accessible status text", async () => {
+    mockReactRouterRender(billingRenderData({
+      pricingPreview: {
+        available: true,
+        prices: {},
+        usageBundles: {},
+      },
+    }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain('class="f9-sr-only">Loading price</span>');
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup).toContain('aria-atomic="true"');
+    expect(markup).not.toContain('aria-label="Loading price"');
+  });
+
+  it("shows a terminal pricing error instead of permanent loading placeholders", async () => {
+    mockReactRouterRender(billingRenderData({
+      pricingPreview: {
+        available: false,
+        prices: {},
+        annualValidation: {},
+        usageBundles: {},
+      },
+    }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup.match(/Prices are temporarily unavailable — try again shortly/g)).toHaveLength(1);
+    expect(markup).toContain("Price unavailable");
+    expect(markup).not.toContain("f9-skeleton-price");
+    expect(markup).not.toContain("Loading price");
+    expect(markup).not.toContain('aria-busy="true"');
   });
 });

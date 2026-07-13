@@ -246,6 +246,7 @@ export default function BillingRoute() {
   const plans = data.plans ?? pricingPlans();
   const bundles = data.usageBundles ?? usageBundles();
   const pricingPreview = data.pricingPreview as AppPricingPreview | null | undefined;
+  const pricingUnavailable = pricingPreview?.available === false;
   const commercialLaunch = data.commercialLaunch ?? {
     scoutSaleOpen: true,
     starterSaleOpen: true,
@@ -439,6 +440,12 @@ export default function BillingRoute() {
           </div>
         </div>
 
+        {pricingUnavailable ? (
+          <div className="f9-message is-error" role="status">
+            <p>Prices are temporarily unavailable — try again shortly</p>
+          </div>
+        ) : null}
+
         <div className="f9-app-plan-grid">
           {plans.map((plan) => {
             const planCyclePrice = planPrice(pricingPreview, plan.slug, selectedCycle);
@@ -487,8 +494,10 @@ export default function BillingRoute() {
                     <span className="f9-app-kicker">{plan.name}</span>
                     {planCyclePrice ? (
                       <strong>{planCyclePrice}</strong>
+                    ) : pricingUnavailable ? (
+                      <strong>Price unavailable</strong>
                     ) : (
-                      <strong aria-label="Loading price" className="f9-skeleton-line f9-skeleton-price" />
+                      <PriceLoadingSkeleton />
                     )}
                   </div>
                   {isCurrentBillingChoice ? (
@@ -527,6 +536,10 @@ export default function BillingRoute() {
                   ) : isCurrentBillingChoice ? (
                     <button className="f9-secondary-button" disabled type="button">
                       Current plan
+                    </button>
+                  ) : pricingUnavailable && planCanUseInAppChange ? (
+                    <button className="f9-secondary-button" disabled type="button">
+                      Price unavailable
                     </button>
                   ) : canStartCheckout && checkoutSku ? (
                     <Form action="/api/billing/dodo/checkout" method="post">
@@ -741,13 +754,19 @@ export default function BillingRoute() {
                 <h3>{bundle.name}</h3>
                 {previewPrice ? (
                   <strong>{previewPrice}</strong>
+                ) : pricingUnavailable ? (
+                  <strong>Price unavailable</strong>
                 ) : (
-                  <strong aria-label="Loading price" className="f9-skeleton-line f9-skeleton-price" />
+                  <PriceLoadingSkeleton />
                 )}
                 <p>{bundle.detail}</p>
                 {!canManageBilling ? (
                   <button className="f9-secondary-button" disabled type="button">
                     Owner managed
+                  </button>
+                ) : pricingUnavailable && isPaid ? (
+                  <button className="f9-secondary-button" disabled type="button">
+                    Price unavailable
                   </button>
                 ) : isPaid && ready ? (
                   <Form action="/api/billing/dodo/checkout" method="post">
@@ -795,9 +814,9 @@ export default function BillingRoute() {
             <div className="f9-work-row">
               <strong>Manage subscription</strong>
               <span>
-                  Open the billing portal for card and invoice tasks. Use the plan cards above
-                  to switch plans or billing cycles. Cancel anytime from the billing portal or
-                  by emailing support.{" "}
+                  Cancel anytime — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
+                  confirm your cancellation request. Open the billing portal for card and invoice
+                  tasks. Use the plan cards above to switch plans or billing cycles.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
                   <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
                     Open billing portal
@@ -837,6 +856,19 @@ export default function BillingRoute() {
       </article>
     </section>
     </DashboardPage>
+  );
+}
+
+function PriceLoadingSkeleton() {
+  return (
+    <strong
+      aria-atomic="true"
+      aria-live="polite"
+      className="f9-skeleton-line f9-skeleton-price"
+      role="status"
+    >
+      <span className="f9-sr-only">Loading price</span>
+    </strong>
   );
 }
 

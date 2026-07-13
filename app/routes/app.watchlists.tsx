@@ -37,6 +37,7 @@ import {
   formatWhyAlertedLabel,
 } from "~/lib/landing-page-display";
 import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
+import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
@@ -928,7 +929,8 @@ export default function WatchlistsRoute() {
                   <p className="f9-app-kicker">Tracking status</p>
                   <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
                   <p className="f9-muted-copy">
-                    {formatTrackingStatusSummary(data.discoveryStatus.summary)}
+                    {customerDiscoverySummary(data.discoveryStatus.summary) ??
+                      "Tracking status will appear after the first check."}
                   </p>
                   {data.discoveryStatus.lastErrorCode ? (
                     <p className="f9-muted-copy">
@@ -1588,7 +1590,7 @@ function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
   if (status.status === "disabled") {
     return "Competitor tracking is unavailable";
   }
-  return "Tracking path needs attention";
+  return "Live ad checks are temporarily delayed";
 }
 
 function formatDiscoveryProviderLabel(
@@ -1626,29 +1628,10 @@ function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status"]) {
   return "Needs attention";
 }
 
-function formatTrackingStatusSummary(summary: string | null | undefined) {
-  if (!summary) {
-    return "Tracking status will appear after the first check.";
-  }
-
-  return summary
-    .replace(/Live commercial discovery/gi, "Fresh ad checks")
-    .replace(/commercial discovery/gi, "competitor ad checks")
-    .replace(/Commercial discovery/gi, "Competitor ad checks")
-    .replace(/Browser Run/gi, "visual checks")
-    .replace(/Official Meta API/gi, "alternate Meta ad access")
-    .replace(/API fallback/gi, "alternate Meta ad results")
-    .replace(/workspace Meta access/gi, "alternate Meta ad access")
-    .replace(/fresh discovery/gi, "fresh checks")
-    .replace(/cached live results/gi, "recent results")
-    .replace(/cached results/gi, "recent results")
-    .replace(/demo mode/gi, "sample mode");
-}
-
 function formatDiscoveryIssue(issue: string) {
   const labels: Record<string, string> = {
     browser_unavailable: "The visual ad check is temporarily unavailable.",
-    browser_launch_failed: "The visual ad check could not start.",
+    browser_launch_failed: "The visual ad check is temporarily delayed. We'll retry automatically.",
     timeout: "The ad check took too long.",
     login_wall: "Meta asked for login before showing ads.",
     rate_limited: "Meta is rate limiting checks right now.",
