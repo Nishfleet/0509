@@ -13,7 +13,6 @@ import {
   createProofCapture,
   createWatchEvent,
   createWatchlistRun,
-  clearDigestItems,
   countProofCapturesForWatchlistSince,
   countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
@@ -47,8 +46,6 @@ import {
   touchWatchlistScanned,
   upsertProofTarget,
   upsertAd,
-  addDigestItem,
-  updateDigestRunSummary,
 } from "~/lib/data.server";
 import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
 import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
@@ -1433,11 +1430,21 @@ async function runDigests(
         }
       }
 
+      const existingDigest = await getDigestByPeriod(
+        env,
+        user.id,
+        periodStartIso,
+        periodEndIso,
+      );
+      if (existingDigest?.delivery?.status === "sent") {
+        continue;
+      }
+
       // Zero changes is still a result the customer pays for. If we scanned
       // successfully this period, send an "all quiet" heartbeat instead of
       // going silent — silence is indistinguishable from a dead product.
       let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
-      if (digestItems.length === 0) {
+      if (!existingDigest && digestItems.length === 0) {
         const runStats = await getSuccessfulRunStatsForUserBetween(
           env,
           user.id,
@@ -1451,20 +1458,14 @@ async function runDigests(
         heartbeat = runStats;
       }
 
-      const existingDigest = await getDigestByPeriod(env, user.id, periodStartIso, periodEndIso);
-      if (existingDigest?.delivery?.status === "sent") {
-        continue;
-      }
-
       // AI weekly strategy paragraph: paid weekly digests with movement only.
       // Existing runs reuse the stored paragraph verbatim — regenerating would
       // put nondeterministic content in front of the customer. A null result
       // changes nothing downstream; absence is always silent.
       let strategyParagraph: string | null = null;
       let strategyWatchlistIds: string[] | null = null;
-      if (existingDigest) {
-        strategyParagraph = readDigestStrategyNote(existingDigest.summary)?.paragraph ?? null;
-      } else if (
+      if (
+        !existingDigest &&
         cadence === "weekly" &&
         digestItems.length > 0 &&
         (plan === "starter" || plan === "agency")
@@ -1490,31 +1491,75 @@ async function runDigests(
           : {}),
       };
 
-      const digestRunId =
-        existingDigest?.id ??
-        (await createDigestRun(env, user.id, periodStartIso, periodEndIso, digestSummary));
+      let digestRunId: string;
+      let canonicalDigest = existingDigest;
+      if (existingDigest) {
+        digestRunId = existingDigest.id;
+      } else {
+        const claim = await createDigestRun(
+          env,
+          user.id,
+          periodStartIso,
+          periodEndIso,
+          digestSummary,
+          {
+            returnClaim: true,
+            items: digestItems.map((item) => ({
+              watchlistId: item.watchlistId,
+              watchlistName: item.watchlistName,
+              eventType: item.eventType,
+              title: item.title,
+              summary: item.summary,
+              metadata: item.metadata,
+            })),
+          },
+        );
+        digestRunId = claim.digestRunId;
+
+        if (!claim.created) {
+          // Another execution won this period after our initial read. Its
+          // stored paragraph is canonical; never deliver our losing model
+          // output or mutate the winner's persisted run-owned state.
+          const winningDigest = await getDigest(env, digestRunId);
+          if (!winningDigest) {
+            throw new Error("Winning digest run disappeared after period claim.");
+          }
+          canonicalDigest = winningDigest;
+        }
+      }
       handledDigestRunIds.add(digestRunId);
 
-      if (!existingDigest && strategyParagraph) {
-        // createDigestRun is INSERT OR IGNORE: if a run row already existed,
-        // the summary above was silently dropped. Persist it explicitly BEFORE
-        // delivery so the retry sweep reuses this exact paragraph.
-        await updateDigestRunSummary(env, digestRunId, digestSummary);
-      }
+      // Creators persist the complete candidate atomically with the period
+      // claim. Every non-creator delivers only the stored winner; it never
+      // clears, re-adds, or substitutes locally recomputed run-owned data.
+      const deliveryItems = canonicalDigest
+        ? canonicalDigest.items.map((item) => ({
+            eventId: item.id,
+            watchlistId: item.watchlistId,
+            watchlistName: item.watchlistName,
+            eventType: item.eventType,
+            title: item.title,
+            summary: item.summary,
+            metadata: item.metadata,
+          }))
+        : digestItems;
+      const deliveryStrategyParagraph = canonicalDigest
+        ? readDigestStrategyNote(canonicalDigest.summary)?.paragraph ?? null
+        : strategyParagraph;
 
-      if (existingDigest) {
-        await clearDigestItems(env, digestRunId);
-      }
-
-      for (const item of digestItems) {
-        await addDigestItem(env, digestRunId, {
-          watchlistId: item.watchlistId,
-          watchlistName: item.watchlistName,
-          eventType: item.eventType,
-          title: item.title,
-          summary: item.summary,
-          metadata: item.metadata,
-        });
+      if (deliveryItems.length > 0) {
+        heartbeat = null;
+      } else if (!heartbeat) {
+        const runStats = await getSuccessfulRunStatsForUserBetween(
+          env,
+          user.id,
+          periodStartIso,
+          periodEndIso,
+        );
+        if (runStats.runs === 0) {
+          continue;
+        }
+        heartbeat = runStats;
       }
 
       const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
@@ -1526,8 +1571,8 @@ async function runDigests(
         digestRunId,
         periodStart: periodStartIso,
         periodEnd: periodEndIso,
-        items: digestItems,
-        strategyParagraph,
+        items: deliveryItems,
+        strategyParagraph: deliveryStrategyParagraph,
         cadence,
         lane: "customer",
       });

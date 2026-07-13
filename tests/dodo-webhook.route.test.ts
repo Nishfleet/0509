@@ -27,10 +27,16 @@ function mockWebhookDependencies(overrides: {
     beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue({ status: "claimed" }),
     clearDodoPlanCheckout: vi.fn().mockResolvedValue(true),
     failDodoWebhookEventProcessing: vi.fn().mockResolvedValue(undefined),
+    failDodoWebhookEventForLifecycleEmailRetry: vi.fn().mockResolvedValue(true),
     finalizeDodoWebhookLedgerOnly: vi.fn().mockResolvedValue(undefined),
     getUserDeliveryProfile: vi
       .fn()
       .mockResolvedValue({ id: "user-1", email: "owner@example.com", name: "Owner" }),
+    getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+      plan: "starter",
+      dodoStatus: "subscription.on_hold",
+      dodoSubscriptionId: "sub_123",
+    }),
     getUserIdForDodoPayment: vi.fn().mockResolvedValue(null),
     getUserIdForDodoLifecycle: vi.fn().mockResolvedValue(null),
     ...overrides.data,
@@ -46,6 +52,12 @@ function mockWebhookDependencies(overrides: {
     ...overrides.billing,
   };
   const delivery = {
+    isBillingLifecycleEmailExplicitFailure: vi.fn(
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE",
+    ),
     sendBillingPaymentIssueEmail: vi.fn().mockResolvedValue(true),
     sendBillingCancellationEmail: vi.fn().mockResolvedValue(true),
     sendBillingRefundEmail: vi.fn().mockResolvedValue(true),
@@ -72,6 +84,24 @@ function webhookRequest(eventId: string, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   });
+}
+
+function explicitBillingEmailFailure(idempotencyKey: string) {
+  return Object.assign(new Error("Cloudflare Email explicitly rejected the lifecycle email."), {
+    code: "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE",
+    idempotencyKey,
+  });
+}
+
+function claimedLifecycleEmailRetry(
+  kind: "payment_issue" | "cancellation_scheduled" | "revoke" | "refund",
+  userId: string,
+  idempotencyKey: string,
+) {
+  return {
+    status: "claimed",
+    lifecycleEmailRetry: { kind, userId, idempotencyKey },
+  };
 }
 
 describe("Dodo webhook route", () => {
@@ -1097,7 +1127,13 @@ describe("customer lifecycle billing emails", () => {
     expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(1);
     expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledWith(
       expect.anything(),
-      { userId: "user-1", email: "owner@example.com", name: "Owner" },
+      {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+        occurredAt: "2026-07-01T08:00:00.000Z",
+        retryWebhookOnExplicitFailure: true,
+      },
     );
     expect(delivery.sendBillingCancellationEmail).not.toHaveBeenCalled();
     expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
@@ -1162,6 +1198,253 @@ describe("customer lifecycle billing emails", () => {
     expect(data.failDodoWebhookEventProcessing).not.toHaveBeenCalled();
   });
 
+  it("durably fails an explicitly rejected lifecycle email and retries only that failed attempt on redelivery", async () => {
+    const explicitFailure = explicitBillingEmailFailure(
+      "billing-payment-issue:user-1:2026-07-01",
+    );
+    const beginDodoWebhookEventProcessing = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "claimed" })
+      .mockResolvedValueOnce(
+        claimedLifecycleEmailRetry(
+          "payment_issue",
+          "user-1",
+          "billing-payment-issue:user-1:2026-07-01",
+        ),
+      );
+    const applyDodoPlanPaymentIssueWithLedger = vi
+      .fn()
+      .mockResolvedValueOnce({ changed: true })
+      .mockResolvedValueOnce({ changed: false });
+    const sendBillingPaymentIssueEmail = vi
+      .fn()
+      .mockRejectedValueOnce(explicitFailure)
+      .mockResolvedValueOnce(true);
+    const { data, delivery } = mockWebhookDependencies({
+      billing: { extractDodoPlanRevocation: paymentIssueRevocation() },
+      data: {
+        applyDodoPlanPaymentIssueWithLedger,
+        beginDodoWebhookEventProcessing,
+      },
+      delivery: { sendBillingPaymentIssueEmail },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await expect(
+      action({
+        context: {},
+        request: webhookRequest("evt-on-hold-email-retry", { type: "subscription.on_hold" }),
+        params: {},
+      } as never),
+    ).rejects.toBe(explicitFailure);
+
+    expect(data.failDodoWebhookEventForLifecycleEmailRetry).toHaveBeenCalledWith(
+      expect.anything(),
+      "evt-on-hold-email-retry",
+      expect.objectContaining({
+        idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
+        kind: "payment_issue",
+        userId: "user-1",
+      }),
+    );
+
+    const redelivery = await action({
+      context: {},
+      request: webhookRequest("evt-on-hold-email-retry", { type: "subscription.on_hold" }),
+      params: {},
+    } as never);
+
+    expect(await redelivery.json()).toMatchObject({ ok: true, paymentIssue: true });
+    expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(2);
+    expect(applyDodoPlanPaymentIssueWithLedger).toHaveBeenCalledTimes(2);
+    expect(data.failDodoWebhookEventForLifecycleEmailRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("acknowledges a reclaimed email retry when the delivery attempt is already sent or provider-unknown", async () => {
+    const { data, delivery } = mockWebhookDependencies({
+      billing: { extractDodoPlanRevocation: paymentIssueRevocation() },
+      data: {
+        beginDodoWebhookEventProcessing: vi
+          .fn()
+          .mockResolvedValue(
+            claimedLifecycleEmailRetry(
+              "payment_issue",
+              "user-1",
+              "billing-payment-issue:user-1:2026-07-01",
+            ),
+          ),
+        applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({ changed: false }),
+      },
+      // The real delivery layer returns false without a provider call for
+      // durable sent/pending/provider_unknown attempts.
+      delivery: { sendBillingPaymentIssueEmail: vi.fn().mockResolvedValue(false) },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-on-hold-email-suppressed", { type: "subscription.on_hold" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
+    expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(1);
+    expect(data.failDodoWebhookEventForLifecycleEmailRetry).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a failed dunning email after a newer lifecycle event recovered the plan", async () => {
+    const { delivery } = mockWebhookDependencies({
+      billing: { extractDodoPlanRevocation: paymentIssueRevocation() },
+      data: {
+        beginDodoWebhookEventProcessing: vi
+          .fn()
+          .mockResolvedValue(
+            claimedLifecycleEmailRetry(
+              "payment_issue",
+              "user-1",
+              "billing-payment-issue:user-1:2026-07-01",
+            ),
+          ),
+        applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({ changed: false }),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "starter",
+          dodoStatus: "subscription.renewed",
+        }),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-on-hold-after-recovery", { type: "subscription.on_hold" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
+    expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not apply retry metadata to a different lifecycle branch", async () => {
+    const { data, delivery } = mockWebhookDependencies({
+      billing: { extractDodoPlanRevocation: paymentIssueRevocation() },
+      data: {
+        beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue(
+          claimedLifecycleEmailRetry(
+            "refund",
+            "user-1",
+            "billing-refund:user-1:evt-wrong-retry-kind",
+          ),
+        ),
+        applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({ changed: false }),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-wrong-retry-kind", { type: "subscription.on_hold" }),
+      params: {},
+    } as never);
+
+    expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
+    expect(data.getUserPlanBillingInfo).not.toHaveBeenCalled();
+  });
+
+  it("does not return a retriable failure unless reopening the processed ledger succeeded", async () => {
+    const explicitFailure = explicitBillingEmailFailure(
+      "billing-payment-issue:user-1:2026-07-01",
+    );
+    const { data } = mockWebhookDependencies({
+      billing: { extractDodoPlanRevocation: paymentIssueRevocation() },
+      data: {
+        failDodoWebhookEventForLifecycleEmailRetry: vi.fn().mockResolvedValue(false),
+      },
+      delivery: {
+        sendBillingPaymentIssueEmail: vi.fn().mockRejectedValue(explicitFailure),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-on-hold-retry-not-armed", { type: "subscription.on_hold" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
+    expect(data.failDodoWebhookEventForLifecycleEmailRetry).toHaveBeenCalledTimes(1);
+    expect(data.failDodoWebhookEventProcessing).not.toHaveBeenCalled();
+  });
+
+  it("retries an access-ended email using the ledger identity after revoke removes active linkage", async () => {
+    const explicitFailure = explicitBillingEmailFailure(
+      "billing-cancellation:user-linked:evt-linked-revoke-retry",
+    );
+    const beginDodoWebhookEventProcessing = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "claimed" })
+      .mockResolvedValueOnce(
+        claimedLifecycleEmailRetry(
+          "revoke",
+          "user-linked",
+          "billing-cancellation:user-linked:evt-linked-revoke-retry",
+        ),
+      );
+    const getUserIdForDodoLifecycle = vi.fn().mockResolvedValueOnce("user-linked");
+    const sendBillingCancellationEmail = vi
+      .fn()
+      .mockRejectedValueOnce(explicitFailure)
+      .mockResolvedValueOnce(true);
+    const { data, delivery } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanRevocation: vi.fn(() => ({
+          eventType: "subscription.expired",
+          action: "revoke",
+          userId: null,
+          customerEmail: null,
+          subscriptionId: "sub_linked",
+          customerId: null,
+          status: "subscription.expired",
+          revokedAt: "2026-07-01T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+      data: {
+        beginDodoWebhookEventProcessing,
+        getUserIdForDodoLifecycle,
+        applyDodoPlanRevokeWithWatchlistReconcile: vi
+          .fn()
+          .mockResolvedValueOnce({ changed: true })
+          .mockResolvedValueOnce({ changed: false }),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "free",
+          dodoStatus: "subscription.expired",
+          dodoSubscriptionId: "sub_linked",
+        }),
+      },
+      delivery: { sendBillingCancellationEmail },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await expect(
+      action({
+        context: {},
+        request: webhookRequest("evt-linked-revoke-retry", { type: "subscription.expired" }),
+        params: {},
+      } as never),
+    ).rejects.toBe(explicitFailure);
+
+    const redelivery = await action({
+      context: {},
+      request: webhookRequest("evt-linked-revoke-retry", { type: "subscription.expired" }),
+      params: {},
+    } as never);
+
+    expect(await redelivery.json()).toMatchObject({ ok: true, revoked: true });
+    expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(2);
+    expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledTimes(1);
+  });
+
   it("retains the paid grant and sends one scheduled-cancellation email for plan_changed with the cancel flag", async () => {
     const futureIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
     const { data, delivery } = mockWebhookDependencies({
@@ -1213,6 +1496,7 @@ describe("customer lifecycle billing emails", () => {
         kind: "scheduled",
         effectiveAt: futureIso,
         eventId: "evt-cancel-scheduled-email",
+        retryWebhookOnExplicitFailure: true,
       },
     );
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
@@ -1290,6 +1574,103 @@ describe("customer lifecycle billing emails", () => {
     expect(delivery.sendBillingCancellationEmail).not.toHaveBeenCalled();
   });
 
+  it("does not retry a scheduled-cancellation email after the cancellation was reversed", async () => {
+    const { delivery } = mockWebhookDependencies({
+      billing: {
+        extractDodoSubscriptionGrant: vi.fn(() => ({
+          eventType: "subscription.plan_changed",
+          userId: "user-1",
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+          productId: "pdt_starter_monthly",
+          plan: "starter",
+          cycle: "monthly",
+          status: "active",
+          grantedAt: "2026-07-01T08:00:00.000Z",
+          hasProviderGrantTimestamp: true,
+          nextBillingAt: "2026-08-01T08:00:00.000Z",
+          cancellationScheduled: true,
+          metadata: {},
+        })),
+      },
+      data: {
+        beginDodoWebhookEventProcessing: vi
+          .fn()
+          .mockResolvedValue(
+            claimedLifecycleEmailRetry(
+              "cancellation_scheduled",
+              "user-1",
+              "billing-cancellation:user-1:evt-reversed-scheduled-cancel",
+            ),
+          ),
+        applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: false }),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "starter",
+          dodoStatus: "active",
+        }),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-reversed-scheduled-cancel", {
+        type: "subscription.plan_changed",
+      }),
+      params: {},
+    } as never);
+
+    expect(delivery.sendBillingCancellationEmail).not.toHaveBeenCalled();
+  });
+
+  it("retries a scheduled-cancellation email while the same subscription remains scheduled", async () => {
+    const { delivery } = mockWebhookDependencies({
+      billing: {
+        extractDodoSubscriptionGrant: vi.fn(() => ({
+          eventType: "subscription.plan_changed",
+          userId: "user-1",
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+          productId: "pdt_starter_monthly",
+          plan: "starter",
+          cycle: "monthly",
+          status: "active",
+          grantedAt: "2026-07-01T08:00:00.000Z",
+          hasProviderGrantTimestamp: true,
+          nextBillingAt: "2026-08-01T08:00:00.000Z",
+          cancellationScheduled: true,
+          metadata: {},
+        })),
+      },
+      data: {
+        beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue(
+          claimedLifecycleEmailRetry(
+            "cancellation_scheduled",
+            "user-1",
+            "billing-cancellation:user-1:evt-scheduled-cancel-retry",
+          ),
+        ),
+        applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: false }),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "starter",
+          dodoStatus: "cancellation_scheduled",
+          dodoSubscriptionId: "sub_123",
+        }),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-scheduled-cancel-retry", {
+        type: "subscription.plan_changed",
+      }),
+      params: {},
+    } as never);
+
+    expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
+  });
+
   it("sends the access-ended email when a revoke lands", async () => {
     const { delivery } = mockWebhookDependencies({
       billing: {
@@ -1323,6 +1704,7 @@ describe("customer lifecycle billing emails", () => {
         name: "Owner",
         kind: "ended",
         eventId: "evt-expired-email",
+        retryWebhookOnExplicitFailure: true,
       },
     );
   });
@@ -1350,6 +1732,50 @@ describe("customer lifecycle billing emails", () => {
     await action({
       context: {},
       request: webhookRequest("evt-expired-stale", { type: "subscription.expired" }),
+      params: {},
+    } as never);
+
+    expect(delivery.sendBillingCancellationEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not retry an access-ended email after a newer plan was activated", async () => {
+    const { delivery } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanRevocation: vi.fn(() => ({
+          eventType: "subscription.expired",
+          action: "revoke",
+          userId: "user-1",
+          customerEmail: "owner@example.com",
+          subscriptionId: "sub_123",
+          status: "expired",
+          revokedAt: "2026-07-01T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+      data: {
+        beginDodoWebhookEventProcessing: vi
+          .fn()
+          .mockResolvedValue(
+            claimedLifecycleEmailRetry(
+              "revoke",
+              "user-1",
+              "billing-cancellation:user-1:evt-expired-after-reactivation",
+            ),
+          ),
+        applyDodoPlanRevokeWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: false }),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "agency",
+          dodoStatus: "active",
+        }),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-expired-after-reactivation", {
+        type: "subscription.expired",
+      }),
       params: {},
     } as never);
 
@@ -1391,6 +1817,7 @@ describe("customer lifecycle billing emails", () => {
         email: "refunded@example.com",
         name: null,
         eventId: "evt-refund-email",
+        retryWebhookOnExplicitFailure: true,
       },
     );
   });
@@ -1445,6 +1872,110 @@ describe("customer lifecycle billing emails", () => {
 
     expect(await response.json()).toMatchObject({ ok: true, refunded: true });
     expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a refund email with stale Free-plan copy after a newer purchase", async () => {
+    const { delivery } = mockWebhookDependencies({
+      billing: {
+        extractDodoRefund: vi.fn(() => ({
+          eventType: "refund.succeeded",
+          paymentId: "pay-refunded-before-repurchase",
+          refundId: "ref-before-repurchase",
+          refundedAt: "2026-07-05T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+      data: {
+        beginDodoWebhookEventProcessing: vi
+          .fn()
+          .mockResolvedValue(
+            claimedLifecycleEmailRetry(
+              "refund",
+              "user-refund",
+              "billing-refund:user-refund:evt-refund-after-repurchase",
+            ),
+          ),
+        getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
+        applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: false }),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "starter",
+          dodoStatus: "active",
+        }),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-refund-after-repurchase", { type: "refund.succeeded" }),
+      params: {},
+    } as never);
+
+    expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
+  });
+
+  it("retries a refund email using the ledger identity after the payment link is gone", async () => {
+    const explicitFailure = explicitBillingEmailFailure(
+      "billing-refund:user-refund:evt-linked-refund-retry",
+    );
+    const beginDodoWebhookEventProcessing = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "claimed" })
+      .mockResolvedValueOnce(
+        claimedLifecycleEmailRetry(
+          "refund",
+          "user-refund",
+          "billing-refund:user-refund:evt-linked-refund-retry",
+        ),
+      );
+    const getUserIdForDodoPayment = vi.fn().mockResolvedValueOnce("user-refund");
+    const sendBillingRefundEmail = vi
+      .fn()
+      .mockRejectedValueOnce(explicitFailure)
+      .mockResolvedValueOnce(true);
+    const { data, delivery } = mockWebhookDependencies({
+      billing: {
+        extractDodoRefund: vi.fn(() => ({
+          eventType: "refund.succeeded",
+          paymentId: "pay_linked",
+          refundId: "ref_linked",
+          refundedAt: "2026-07-05T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+      data: {
+        beginDodoWebhookEventProcessing,
+        getUserIdForDodoPayment,
+        applyDodoRefundWithWatchlistReconcile: vi
+          .fn()
+          .mockResolvedValueOnce({ changed: true })
+          .mockResolvedValueOnce({ changed: false }),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "free",
+          dodoStatus: "refunded",
+        }),
+      },
+      delivery: { sendBillingRefundEmail },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await expect(
+      action({
+        context: {},
+        request: webhookRequest("evt-linked-refund-retry", { type: "refund.succeeded" }),
+        params: {},
+      } as never),
+    ).rejects.toBe(explicitFailure);
+
+    const redelivery = await action({
+      context: {},
+      request: webhookRequest("evt-linked-refund-retry", { type: "refund.succeeded" }),
+      params: {},
+    } as never);
+
+    expect(await redelivery.json()).toMatchObject({ ok: true, refunded: true });
+    expect(delivery.sendBillingRefundEmail).toHaveBeenCalledTimes(2);
+    expect(data.getUserIdForDodoPayment).toHaveBeenCalledTimes(1);
   });
 
   it("does not send a merchant receipt for payment grants because Dodo is merchant of record", async () => {

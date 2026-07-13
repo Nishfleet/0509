@@ -5,6 +5,7 @@
  */
 
 import {
+  ensureDb,
   execute as run,
   queryAll as many,
   queryOne as one,
@@ -59,6 +60,29 @@ interface DigestDeliveryRow {
   updated_at: string;
 }
 
+export interface DigestRunClaim {
+  digestRunId: string;
+  created: boolean;
+}
+
+export interface DigestRunItemInput {
+  watchlistId: string;
+  watchlistName: string;
+  eventType: WatchEventType;
+  title: string;
+  summary: string;
+  metadata?: JsonRecord;
+}
+
+interface DigestRunClaimOptions {
+  returnClaim: true;
+  /**
+   * When present, the claim and its complete item set are committed in one D1
+   * batch transaction. A losing claim writes neither the run nor any items.
+   */
+  items?: readonly DigestRunItemInput[];
+}
+
 function toDigestRunSummary(row: DigestRunRow): JsonRecord {
   // summary_json is free-form JSON; legacy rows may hold non-object payloads.
   const parsed = parseJson<unknown>(row.summary_json, {});
@@ -94,18 +118,36 @@ function toDigestDeliveryRecord(row: DigestDeliveryRow): DigestDeliveryRecord {
   };
 }
 
+export function createDigestRun(
+  env: AppEnv,
+  userId: string,
+  periodStart: string,
+  periodEnd: string,
+  summary: JsonRecord,
+): Promise<string>;
+export function createDigestRun(
+  env: AppEnv,
+  userId: string,
+  periodStart: string,
+  periodEnd: string,
+  summary: JsonRecord,
+  options: DigestRunClaimOptions,
+): Promise<DigestRunClaim>;
 export async function createDigestRun(
   env: AppEnv,
   userId: string,
   periodStart: string,
   periodEnd: string,
   summary: JsonRecord,
-) {
+  options?: DigestRunClaimOptions,
+): Promise<string | DigestRunClaim> {
   const id = createId();
-  await run(
-    env,
-    `
-      INSERT OR IGNORE INTO digest_run (
+  const createdAt = nowIso();
+  const db = ensureDb(env);
+  const insertStatement = db
+    .prepare(
+      `
+      INSERT INTO digest_run (
         id,
         user_id,
         period_start,
@@ -114,14 +156,62 @@ export async function createDigestRun(
         created_at
       )
       VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, period_start, period_end) DO NOTHING
     `,
-    id,
-    userId,
-    periodStart,
-    periodEnd,
-    jsonValue(summary),
-    nowIso(),
-  );
+    )
+    .bind(
+      id,
+      userId,
+      periodStart,
+      periodEnd,
+      jsonValue(summary),
+      createdAt,
+    );
+
+  const itemInputs = options?.items;
+  const results = itemInputs === undefined
+    ? [await insertStatement.run()]
+    : await db.batch([
+        insertStatement,
+        ...itemInputs.map((input) =>
+          db
+            .prepare(
+              `
+                INSERT INTO digest_item (
+                  id,
+                  digest_run_id,
+                  watchlist_id,
+                  watchlist_name,
+                  event_type,
+                  title,
+                  summary,
+                  metadata_json,
+                  created_at
+                )
+                SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+                FROM digest_run
+                WHERE id = ?
+              `,
+            )
+            .bind(
+              createId(),
+              id,
+              input.watchlistId,
+              input.watchlistName,
+              input.eventType,
+              input.title,
+              input.summary,
+              jsonValue(input.metadata ?? {}),
+              createdAt,
+              id,
+            ),
+        ),
+      ]);
+
+  const created = Number(results[0]?.meta?.changes ?? 0) > 0;
+  if (created) {
+    return options?.returnClaim ? { digestRunId: id, created: true } : id;
+  }
 
   const row = await one<DigestRunRow>(
     env,
@@ -138,14 +228,19 @@ export async function createDigestRun(
     periodEnd,
   );
 
-  return row?.id ?? id;
+  if (!row) {
+    throw new Error("Digest period claim was not created and no existing run was found.");
+  }
+
+  return options?.returnClaim
+    ? { digestRunId: row.id, created: false }
+    : row.id;
 }
 
 /**
- * Replaces a digest run's summary_json. createDigestRun is INSERT OR IGNORE
- * (no update path), so callers that must guarantee the persisted summary —
- * e.g. the AI strategy paragraph, which has to be stored BEFORE delivery so
- * retries reuse it instead of regenerating — call this after createDigestRun.
+ * Explicitly replaces a digest run's summary_json. Period-claim losers must
+ * never call this: the row creator's summary is the immutable delivery source
+ * for overlapping executions, retries, and reports.
  */
 export async function updateDigestRunSummary(
   env: AppEnv,
@@ -209,14 +304,7 @@ export async function clearDigestItems(env: AppEnv, digestRunId: string) {
 export async function addDigestItem(
   env: AppEnv,
   digestRunId: string,
-  input: {
-    watchlistId: string;
-    watchlistName: string;
-    eventType: WatchEventType;
-    title: string;
-    summary: string;
-    metadata?: JsonRecord;
-  },
+  input: DigestRunItemInput,
 ) {
   await run(
     env,

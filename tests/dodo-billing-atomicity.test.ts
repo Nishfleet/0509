@@ -7,6 +7,8 @@ import {
   beginDodoWebhookEventProcessing,
   buildCapacitySkipIdempotencyKey,
   failDodoWebhookEventProcessing,
+  failDodoWebhookEventForLifecycleEmailRetry,
+  finalizeDodoWebhookLedgerOnly,
   recordWatchlistCapacitySkip,
 } from "~/lib/data.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
@@ -824,6 +826,56 @@ describe("Dodo billing atomicity (sqlite)", () => {
       payloadTimestamp: null,
     });
     expect(second).toEqual({ status: "claimed" });
+  });
+
+  it("reclaims a processed webhook specifically for a failed lifecycle email retry", async () => {
+    const env = openEnv();
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-lifecycle-email-retry",
+      eventType: "subscription.on_hold",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+    await finalizeDodoWebhookLedgerOnly(env, {
+      eventId: "evt-lifecycle-email-retry",
+      outcome: "processed",
+      metadata: { action: "payment_issue" },
+    });
+
+    await expect(
+      failDodoWebhookEventForLifecycleEmailRetry(env, "evt-lifecycle-email-retry", {
+        kind: "payment_issue",
+        userId: "user-1",
+        idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
+        error: "Cloudflare Email send failed: rejected.",
+      }),
+    ).resolves.toBe(true);
+
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT outcome, processed_at, metadata_json FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-lifecycle-email-retry"),
+    ).toMatchObject({
+      outcome: "failed",
+      processed_at: null,
+      metadata_json: expect.stringContaining('"action":"lifecycle_email_retry"'),
+    });
+
+    await expect(
+      beginDodoWebhookEventProcessing(env, {
+        eventId: "evt-lifecycle-email-retry",
+        eventType: "subscription.on_hold",
+        userId: "user-1",
+        payloadTimestamp: null,
+      }),
+    ).resolves.toEqual({
+      status: "claimed",
+      lifecycleEmailRetry: {
+        kind: "payment_issue",
+        userId: "user-1",
+        idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
+      },
+    });
   });
 });
 

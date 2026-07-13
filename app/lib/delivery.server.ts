@@ -75,6 +75,33 @@ type EmailProviderResult = {
   deliveredAt: string | null;
 };
 
+const BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE =
+  "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE" as const;
+
+export class BillingLifecycleEmailExplicitFailure extends Error {
+  readonly code = BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE;
+
+  constructor(
+    readonly idempotencyKey: string,
+    providerMessage: string | null,
+  ) {
+    super(providerMessage ?? "Cloudflare Email explicitly rejected the lifecycle email.");
+    this.name = "BillingLifecycleEmailExplicitFailure";
+  }
+}
+
+export function isBillingLifecycleEmailExplicitFailure(
+  error: unknown,
+): error is BillingLifecycleEmailExplicitFailure {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    error.code === BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE &&
+    "idempotencyKey" in error &&
+    typeof error.idempotencyKey === "string"
+  );
+}
+
 export interface DigestDeliveryItem {
   eventId: string;
   watchlistId: string;
@@ -1670,6 +1697,7 @@ async function sendBillingLifecycleEmail(
     bodyHtml: string;
     tag: string;
     templateName: string;
+    retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
@@ -1763,6 +1791,13 @@ async function sendBillingLifecycleEmail(
     return false;
   }
 
+  if (providerResult.status === "failed" && input.retryWebhookOnExplicitFailure) {
+    throw new BillingLifecycleEmailExplicitFailure(
+      input.idempotencyKey,
+      providerResult.errorMessage,
+    );
+  }
+
   return providerResult.status === "sent";
 }
 
@@ -1825,9 +1860,14 @@ export async function sendBillingPaymentIssueEmail(
     userId: string;
     email: string;
     name: string | null;
+    occurredAt?: string | null;
+    retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
-  const dayKey = new Date().toISOString().slice(0, 10);
+  const occurredAtMs = Date.parse(input.occurredAt ?? "");
+  const dayKey = new Date(
+    Number.isFinite(occurredAtMs) ? occurredAtMs : Date.now(),
+  ).toISOString().slice(0, 10);
   return sendBillingLifecycleEmail(env, {
     userId: input.userId,
     email: input.email,
@@ -1835,6 +1875,7 @@ export async function sendBillingPaymentIssueEmail(
     subject: "Action needed: a Five to Nine payment didn't go through",
     tag: "billing-payment-issue",
     templateName: "billing_payment_issue",
+    retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
     bodyHtml: renderBillingEmailHtml({
       name: input.name,
       paragraphs: [
@@ -1862,6 +1903,7 @@ export async function sendBillingCancellationEmail(
     kind: "scheduled" | "ended";
     effectiveAt?: string | null;
     eventId: string;
+    retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
   const billingUrl = `${appBaseUrl(env)}/app/billing`;
@@ -1870,6 +1912,7 @@ export async function sendBillingCancellationEmail(
     email: input.email,
     idempotencyKey: `billing-cancellation:${input.userId}:${input.eventId}`,
     tag: "billing-cancellation",
+    retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
   };
 
   if (input.kind === "scheduled") {
@@ -1922,6 +1965,7 @@ export async function sendBillingRefundEmail(
     email: string;
     name: string | null;
     eventId: string;
+    retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
   return sendBillingLifecycleEmail(env, {
@@ -1931,6 +1975,7 @@ export async function sendBillingRefundEmail(
     subject: "Your Five to Nine refund has been processed",
     tag: "billing-refund",
     templateName: "billing_refund_revoked",
+    retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
     bodyHtml: renderBillingEmailHtml({
       name: input.name,
       paragraphs: [

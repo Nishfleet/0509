@@ -1400,14 +1400,11 @@ describe("billing page", () => {
     expect(markup).not.toContain("100% customer satisfaction");
   });
 
-  it("gives loading price placeholders accessible status text", async () => {
-    mockReactRouterRender(billingRenderData({
-      pricingPreview: {
-        available: true,
-        prices: {},
-        usageBundles: {},
-      },
-    }));
+  it("gives pre-preview loading placeholders accessible status text", async () => {
+    mockReactRouterRender({
+      ...billingRenderData(),
+      pricingPreview: undefined,
+    });
 
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
@@ -1417,6 +1414,32 @@ describe("billing page", () => {
     expect(markup).toContain('aria-live="polite"');
     expect(markup).toContain('aria-atomic="true"');
     expect(markup).not.toContain('aria-label="Loading price"');
+  });
+
+  it("treats missing SKUs as terminal when only part of the provider preview resolves", async () => {
+    mockReactRouterRender(billingRenderData({
+      pricingPreview: {
+        available: true,
+        prices: {
+          scout: {
+            monthly: { display: "$19" },
+          },
+        },
+        usageBundles: {
+          proof_500: { display: "$25" },
+        },
+      },
+    }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("$19");
+    expect(markup).toContain("$25");
+    expect(markup.match(/Price unavailable/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(markup).not.toContain("f9-skeleton-price");
+    expect(markup).not.toContain("Loading price");
+    expect(markup).not.toContain('aria-busy="true"');
   });
 
   it("shows a terminal pricing error instead of permanent loading placeholders", async () => {

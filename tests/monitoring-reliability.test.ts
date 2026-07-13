@@ -106,7 +106,10 @@ function mockReliabilityDependencies(input: {
     .fn()
     .mockResolvedValue(input.retryableDigestRuns ?? []);
   const createWatchEvent = vi.fn(async () => `event-${Math.floor(1e6 * 0.5)}`);
-  const createDigestRun = vi.fn().mockResolvedValue("digest-run-current");
+  const createDigestRun = vi.fn().mockResolvedValue({
+    digestRunId: "digest-run-current",
+    created: true,
+  });
 
   vi.doMock("~/lib/analysis.server", () => ({
     buildAnalysisFields: vi.fn(() => []),

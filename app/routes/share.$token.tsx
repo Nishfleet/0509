@@ -367,6 +367,7 @@ function sanitizeReportSnapshotPayload(payload: Record<string, unknown>): Report
   const rows = Array.isArray(rawPayload.rows) ? rawPayload.rows : [];
   const safeRows = rows.filter(isPlainRecord);
   const sourceCoverage = sanitizeReportSourceCoverage(rawPayload.sourceCoverage);
+  const aiWeeklySummary = sanitizeReportAiWeeklySummary(rawPayload.aiWeeklySummary);
 
   if (resourceType === "watchlist" && (!sourceCoverage || !safeRows.every(hasVerifiedReportRowProof))) {
     return null;
@@ -384,7 +385,28 @@ function sanitizeReportSnapshotPayload(payload: Record<string, unknown>): Report
     stats: stats.filter(isPlainRecord).map(sanitizeReportStat),
     insightDepth: sanitizeReportInsightDepth(payload.insightDepth),
     sourceCoverage,
+    ...(aiWeeklySummary ? { aiWeeklySummary } : {}),
     rows: safeRows.map(sanitizeReportRow),
+  };
+}
+
+function sanitizeReportAiWeeklySummary(
+  value: unknown,
+): ReportDocument["aiWeeklySummary"] | null {
+  if (!isPlainRecord(value)) {
+    return null;
+  }
+
+  const paragraph = readString(value.paragraph);
+  const periodEnd = readString(value.periodEnd);
+  if (!paragraph || !periodEnd) {
+    return null;
+  }
+
+  return {
+    paragraph,
+    generatedAt: value.generatedAt === null ? null : readString(value.generatedAt),
+    periodEnd,
   };
 }
 

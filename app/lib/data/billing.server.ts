@@ -26,6 +26,7 @@ export {
   beginDodoWebhookEventProcessing,
   claimDodoWebhookEvent,
   failDodoWebhookEventProcessing,
+  failDodoWebhookEventForLifecycleEmailRetry,
   markDodoWebhookEventFinished,
   type DodoWebhookLedgerOutcome,
   type DodoWebhookLedgerFinalize,

@@ -2150,10 +2150,11 @@ describe("Dodo billing persistence", () => {
     );
 
     expect(claimed).toBe(true);
-    expect(statements).toHaveLength(2);
+    expect(statements).toHaveLength(3);
     expect(statements[0]?.sql).toContain("payload_timestamp");
     expect(statements[1]?.sql).not.toContain("payload_timestamp");
     expect(statements[1]?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
+    expect(statements[2]?.sql).toContain("SELECT metadata_json");
   });
 
   it("rejects blank Dodo webhook event ids", async () => {
