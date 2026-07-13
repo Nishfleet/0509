@@ -53,9 +53,10 @@ describe("final launch documentation", () => {
     expect(launchReadiness).toContain("A fresh owner-operated manual backup uploaded to R2 on 2026-07-02");
     expect(launchReadiness).toContain("required Cloudflare repository secrets were absent on 2026-07-02");
     expect(launchReadiness).toContain("repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are still missing");
-    expect(backupUptime).toContain("first scheduled Actions run is still blocked");
+    expect(backupUptime).toContain("scheduled Actions runs remain blocked on secrets");
     expect(backupUptime).toContain("D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2");
     expect(backupUptime).toContain("2026-07-02 owner-operated manual backup");
+    expect(backupUptime).toContain("2026-07-13 operator-run manual backup");
     expect(backupUptime).toContain("post-cleanup backup passed an isolated local SQLite import smoke");
     expect(ownerActions).toContain("INTERNAL SUBSCRIPTION NEEDED");
     expect(launchReadiness).toContain("no linked Scout/Starter subscriptions");
