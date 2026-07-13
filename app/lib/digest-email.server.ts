@@ -15,6 +15,11 @@ import {
   type DigestTrustItem,
 } from "~/lib/proof-classification";
 import { safeTimeZone } from "~/lib/safe-timezone";
+import {
+  EMAIL_SURFACE_BG,
+  EMAIL_TEXT_PRIMARY,
+  renderEmailContentSurface,
+} from "~/lib/email-template.server";
 
 export interface DigestEmailHeartbeat {
   runs: number;
@@ -68,7 +73,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
 
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
-    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
+    ${renderEmailContentSurface(`
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(answer)}</h1>
       <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
@@ -89,7 +94,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
         Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
-    </div>
+    `)}
   `;
 
   const text = [
@@ -131,7 +136,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const preheader = `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors found no action-worthy movement.`;
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
-    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
+    ${renderEmailContentSurface(`
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">All quiet: no competitor moves worth action ${escapeHtml(quietPeriodLabel)}.</h1>
       <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
@@ -145,7 +150,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0; color: #98a2b3; font-size: 13px;">
         Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
-    </div>
+    `)}
   `;
   const text = [
     `Five to Nine ${cadenceLabel}`,
@@ -270,7 +275,7 @@ function renderTrendSectionHtml(lines: Array<{ text: string }>) {
 
   return `
       <h2 style="font-size: 18px; margin: 0 0 12px;">Trends this period</h2>
-      <table style="margin: 0 0 20px; border-collapse: collapse; width: 100%; background-color: #ffffff; color: #0b1220;">
+      <table style="margin: 0 0 20px; border-collapse: collapse; width: 100%; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
         ${lines
           .map(
             (line) => `
@@ -299,15 +304,15 @@ function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefin
 
   if (beforeUrl && afterUrl) {
     return `
-      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: #ffffff; color: #0b1220;">
+      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
         <tr>
-          <td style="padding: 0 10px 0 0; vertical-align: top; background-color: #ffffff;">
+          <td style="padding: 0 10px 0 0; vertical-align: top; background-color: ${EMAIL_SURFACE_BG};">
             <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Before</p>
-            <img src="${escapeHtml(beforeUrl)}" alt="Previous creative" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:#ffffff;">
+            <img src="${escapeHtml(beforeUrl)}" alt="Previous creative" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
           </td>
-          <td style="padding: 0; vertical-align: top; background-color: #ffffff;">
+          <td style="padding: 0; vertical-align: top; background-color: ${EMAIL_SURFACE_BG};">
             <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Now</p>
-            <img src="${escapeHtml(afterUrl)}" alt="Current creative" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:#ffffff;">
+            <img src="${escapeHtml(afterUrl)}" alt="Current creative" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
           </td>
         </tr>
       </table>
@@ -319,10 +324,10 @@ function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefin
   }
 
   return `
-      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: #ffffff; color: #0b1220;">
+      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
         <tr>
-          <td style="padding: 0; background-color: #ffffff;">
-            <img src="${escapeHtml(singleUrl)}" alt="Ad creative" width="200" style="display:block; max-width:200px; width:200px; border-radius:8px; border:1px solid #e4e7ec; background-color:#ffffff;">
+          <td style="padding: 0; background-color: ${EMAIL_SURFACE_BG};">
+            <img src="${escapeHtml(singleUrl)}" alt="Ad creative" width="200" style="display:block; max-width:200px; width:200px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
           </td>
         </tr>
       </table>
