@@ -235,7 +235,7 @@ async function loadReport(input: {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCollection,
-    getLatestDigestRunSummaryForUser,
+    getLatestDigestRunSummaryForWatchlist,
     getWatchlist,
     listAdsByIds,
     listCollectionItems,
@@ -282,7 +282,7 @@ async function loadReport(input: {
         .filter((adId): adId is string => Boolean(adId)),
     ),
     // Latest stored digest paragraph; never a fresh AI call at report time.
-    getLatestDigestRunSummaryForUser(env, workspaceUserId),
+    getLatestDigestRunSummaryForWatchlist(env, workspaceUserId, watchlist.id),
   ]);
 
   return buildWatchlistReport({

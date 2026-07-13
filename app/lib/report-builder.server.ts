@@ -97,7 +97,7 @@ export function buildWatchlistReport(input: {
   watchlist: WatchlistRecord;
   events: WatchEventRecord[];
   adsById: Map<string, AdRecord>;
-  // Latest stored digest-run AI paragraph (see getLatestDigestRunSummaryForUser).
+  // Latest stored digest-run AI paragraph proven exclusive to this watchlist.
   // Never sourced from a fresh AI call; omitted when none is stored.
   aiWeeklySummary?: ReportAiWeeklySummary | null;
   generatedAt?: string;

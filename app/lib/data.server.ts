@@ -143,7 +143,7 @@ export {
   listDigests,
   getDigest,
   getDigestByPeriod,
-  getLatestDigestRunSummaryForUser,
+  getLatestDigestRunSummaryForWatchlist,
   listRetryableDigestRuns,
 } from "~/lib/data/digests.server";
 

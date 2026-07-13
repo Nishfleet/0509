@@ -1461,6 +1461,7 @@ async function runDigests(
       // put nondeterministic content in front of the customer. A null result
       // changes nothing downstream; absence is always silent.
       let strategyParagraph: string | null = null;
+      let strategyWatchlistIds: string[] | null = null;
       if (existingDigest) {
         strategyParagraph = readDigestStrategyNote(existingDigest.summary)?.paragraph ?? null;
       } else if (
@@ -1468,13 +1469,13 @@ async function runDigests(
         digestItems.length > 0 &&
         (plan === "starter" || plan === "agency")
       ) {
-        strategyParagraph = await buildWeeklyStrategyParagraph(env, {
+        const generatedStrategy = await buildWeeklyStrategyParagraph(env, {
           items: digestItems,
-          totalChanges: digestItems.length,
-          watchlistCount: watchlists.length,
           periodStart: periodStartIso,
           periodEnd: periodEndIso,
         });
+        strategyParagraph = generatedStrategy?.paragraph ?? null;
+        strategyWatchlistIds = generatedStrategy?.watchlistIds ?? null;
       }
       const digestSummary: Record<string, unknown> = {
         totalEvents: digestItems.length,
@@ -1484,6 +1485,7 @@ async function runDigests(
               strategyParagraph,
               strategyModel: DIGEST_STRATEGY_MODEL,
               strategyGeneratedAt: new Date().toISOString(),
+              strategyWatchlistIds,
             }
           : {}),
       };

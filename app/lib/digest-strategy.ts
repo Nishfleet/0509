@@ -9,12 +9,13 @@ export const DIGEST_STRATEGY_MODEL = "@cf/meta/llama-3.2-3b-instruct";
 export interface DigestStrategyNote {
   paragraph: string;
   generatedAt: string | null;
+  watchlistIds: string[] | null;
 }
 
 /**
  * Reads a stored strategy paragraph out of a digest_run summary object.
- * Tolerates legacy summary shapes (missing keys, non-object values, arrays)
- * by returning null — absence is always silent.
+ * Tolerates legacy summary shapes: invalid/missing paragraphs return null,
+ * while a valid legacy paragraph stays readable with null provenance.
  */
 export function readDigestStrategyNote(
   summary: Record<string, unknown> | null | undefined,
@@ -39,5 +40,13 @@ export function readDigestStrategyNote(
       ? rawGeneratedAt.trim()
       : null;
 
-  return { paragraph, generatedAt };
+  const rawWatchlistIds = summary.strategyWatchlistIds;
+  const watchlistIds =
+    Array.isArray(rawWatchlistIds) &&
+    rawWatchlistIds.length > 0 &&
+    rawWatchlistIds.every((value) => typeof value === "string" && value.trim())
+      ? [...new Set(rawWatchlistIds.map((value) => (value as string).trim()))]
+      : null;
+
+  return { paragraph, generatedAt, watchlistIds };
 }
