@@ -17,7 +17,6 @@ import {
   countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
   recordWatchlistCapacitySkip,
-  repairIncompleteDigestRun,
   getDigest,
   getDigestByPeriod,
   getRecentSuccessfulRuns,
@@ -50,6 +49,7 @@ import {
 } from "~/lib/data.server";
 import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
 import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
+import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
@@ -1355,6 +1355,7 @@ async function runDigests(
     since: new Date(
       periodEnd.getTime() - DIGEST_RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString(),
+    stalePreDispatchBefore: deliveryPreDispatchStaleBefore(periodEnd.getTime()),
     limit: DIGEST_RETRY_SWEEP_LIMIT,
   });
 
@@ -1505,26 +1506,13 @@ async function runDigests(
       if (existingDigest) {
         digestRunId = existingDigest.id;
         if (!hasCompleteDigestItemSet(existingDigest)) {
-          const expectedItemCount = readDigestExpectedItemCount(existingDigest.summary);
-          if (expectedItemCount === null || digestItems.length !== expectedItemCount) {
-            throw new Error(
-              "Digest run is incomplete and its original candidate cannot be reconstructed exactly.",
-            );
-          }
-          await repairIncompleteDigestRun(env, digestRunId, {
-            summary: existingDigest.summary ?? {},
-            items: candidateItems,
-          });
-          canonicalDigest = await getDigest(env, digestRunId);
-          if (!canonicalDigest) {
-            throw new Error("Digest run disappeared during incomplete-row repair.");
-          }
-          if (canonicalDigest.delivery?.status === "sent") {
-            continue;
-          }
-          if (!hasCompleteDigestItemSet(canonicalDigest)) {
-            throw new Error("Digest run remains incomplete after atomic repair.");
-          }
+          // Legacy rows created before digest items were persisted atomically
+          // carry no event IDs or candidate fingerprint. A count match cannot
+          // prove that today's eligible events are the original snapshot, so
+          // never rewrite or deliver an identity-unprovable digest.
+          throw new Error(
+            "Digest run is incomplete and its original candidate identity cannot be proven.",
+          );
         }
       } else {
         const claim = await createDigestRun(

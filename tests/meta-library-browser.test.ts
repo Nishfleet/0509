@@ -432,6 +432,48 @@ describe("searchMetaLibraryByBrowser", () => {
     ]);
   });
 
+  it("keeps adjacent rendered fallback statuses with their Library ID cards", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: `
+                  <html><body>
+                    <div class="card">
+                      Active
+                      Library ID: 3333333333
+                      <a href="/ads/library/?id=3333333333">View ad details</a>
+                      <div>Sponsored</div>
+                      <strong>First advertiser</strong>
+                    </div>
+                    <div class="card">
+                      Inactive
+                      Library ID: 4444444444
+                      <a href="/ads/library/?id=4444444444">View ad details</a>
+                      <div>Sponsored</div>
+                      <strong>Second advertiser</strong>
+                    </div>
+                  </body></html>
+                `,
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ) as never,
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    const result = await searchMetaLibraryByBrowser({ BROWSERLESS_TOKEN: "browserless-token" }, buildQuery());
+
+    expect(result.ads).toEqual([
+      expect.objectContaining({ metaAdId: "3333333333", active: true }),
+      expect.objectContaining({ metaAdId: "4444444444", active: false }),
+    ]);
+  });
+
   it("classifies Browserless fetch aborts as timeouts", async () => {
     mockFetchWithDns(
       vi.fn(async () => {

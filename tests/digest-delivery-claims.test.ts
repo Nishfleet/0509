@@ -65,10 +65,10 @@ function deliveryAttempt(
     channel,
     provider: channel === "slack" ? "slack_incoming_webhook" : "whatsapp_cloud_api",
     status,
-    webhookStatus: status === "failed" ? "failed" : "provider_unknown",
+    webhookStatus: status === "failed" ? "failed" : status === "pending" ? "pending" : "provider_unknown",
     targetValue: target.targetValue,
     providerMessageId: status === "sent" ? "provider-message-1" : null,
-    providerStatusLastSeenAt: "2026-07-13T05:01:00.000Z",
+    providerStatusLastSeenAt: status === "pending" ? null : "2026-07-13T05:01:00.000Z",
     templateName: channel === "whatsapp" ? "proof_digest_customer_v1" : null,
     eventIds: ["event-1"],
     payloadSnapshot: {},
@@ -140,6 +140,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   vi.resetModules();
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/email-verification.server");
@@ -194,7 +195,12 @@ describe("weekly digest per-target delivery claims", () => {
     expect(createDeliveryAttempt).toHaveBeenCalledTimes(2);
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ channel: "slack", status: "pending" }),
+      expect.objectContaining({
+        channel: "slack",
+        status: "pending",
+        webhookStatus: "pending",
+        timestamp: expect.any(String),
+      }),
     );
     expect(sendSlackWebhookMessage).toHaveBeenCalledTimes(1);
     expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(1);
@@ -264,5 +270,92 @@ describe("weekly digest per-target delivery claims", () => {
       failedAttempt.id,
       expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
     );
+  });
+
+  it("reclaims a stale pre-dispatch Slack lease and calls the provider once", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T05:05:00.000Z"));
+    const staleAttempt = {
+      ...deliveryAttempt("slack", "pending"),
+      updatedAt: "2026-07-13T05:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const { createDeliveryAttempt } = mockDataServer({
+      channel: "slack",
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(staleAttempt),
+      updateDeliveryAttemptResult,
+    });
+    const sendSlackWebhookMessage = vi.fn().mockResolvedValue({
+      provider: "slack_incoming_webhook",
+      status: "sent",
+      webhookStatus: "delivered",
+      providerMessageId: null,
+      providerStatusLastSeenAt: "2026-07-13T05:05:00.000Z",
+      errorMessage: null,
+      deliveredAt: "2026-07-13T05:05:00.000Z",
+    });
+    vi.doMock("~/lib/slack-webhook.server", () => ({
+      SLACK_PROVIDER: "slack_incoming_webhook",
+      sendSlackWebhookMessage,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    await deliverWeeklyDigest({} as never, digestInput());
+
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(sendSlackWebhookMessage).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "pending",
+        webhookStatus: "pending",
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: staleAttempt.updatedAt,
+        updatedAt: "2026-07-13T05:05:00.000Z",
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "sent",
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: "2026-07-13T05:05:00.000Z",
+      }),
+    );
+  });
+
+  it("does not reclaim a provider-unknown digest attempt", async () => {
+    const providerUnknownAttempt = {
+      ...deliveryAttempt("slack", "pending"),
+      webhookStatus: "provider_unknown" as const,
+      providerStatusLastSeenAt: "2026-07-13T05:01:00.000Z",
+      updatedAt: "2026-07-13T05:01:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn();
+    const { createDeliveryAttempt } = mockDataServer({
+      channel: "slack",
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(providerUnknownAttempt),
+      updateDeliveryAttemptResult,
+    });
+    const sendSlackWebhookMessage = vi.fn();
+    vi.doMock("~/lib/slack-webhook.server", () => ({
+      SLACK_PROVIDER: "slack_incoming_webhook",
+      sendSlackWebhookMessage,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    await deliverWeeklyDigest({} as never, digestInput());
+
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).not.toHaveBeenCalled();
+    expect(sendSlackWebhookMessage).not.toHaveBeenCalled();
   });
 });
