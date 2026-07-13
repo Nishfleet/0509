@@ -1502,6 +1502,63 @@ describe("customer lifecycle billing emails", () => {
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
   });
 
+  it("applies a scheduled cancellation without a provider timestamp via the normal grant path", async () => {
+    // Live Dodo subscription payloads carry no updated_at (verified against the
+    // live subscriptions API, 2026-07-13), so plan_changed cancellations arrive
+    // with hasProviderGrantTimestamp=false. They must NOT be routed through the
+    // plan-change-pending guard (a pure cancellation has no pending plan-change
+    // row, so the guarded update would match zero rows and silently drop the
+    // status transition and email).
+    const futureIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const { data, delivery } = mockWebhookDependencies({
+      billing: {
+        extractDodoSubscriptionGrant: vi.fn(() => ({
+          eventType: "subscription.plan_changed",
+          userId: "user-1",
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+          productId: "pdt_starter_monthly",
+          plan: "starter",
+          cycle: "monthly",
+          status: "active",
+          grantedAt: null,
+          hasProviderGrantTimestamp: false,
+          nextBillingAt: futureIso,
+          cancellationScheduled: true,
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-cancel-scheduled-no-ts", { type: "subscription.plan_changed" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toMatchObject({ ok: true, cancellationScheduled: true });
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        plan: "starter",
+        status: "cancellation_scheduled",
+        requirePlanChangePending: false,
+        forcePlanChangePending: false,
+        // Ordering falls back to the signature-verified webhook envelope
+        // timestamp instead of the absent provider updated_at.
+        grantedAt: expect.any(String),
+      }),
+      10,
+      expect.objectContaining({ eventId: "evt-cancel-scheduled-no-ts" }),
+    );
+    expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
+    expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ kind: "scheduled", effectiveAt: futureIso }),
+    );
+  });
+
   it("keeps a normal plan_changed grant active and sends no cancellation email", async () => {
     const { data, delivery } = mockWebhookDependencies({
       billing: {

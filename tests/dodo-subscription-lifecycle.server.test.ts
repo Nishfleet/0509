@@ -262,7 +262,11 @@ describe("extractDodoSubscriptionGrant", () => {
   } as never;
 
   function subscriptionPayload(type: string, overrides: Record<string, unknown> = {}) {
-    // Shape verified against the live Dodo subscriptions API (2026-06-12).
+    // CAUTION: the live Dodo subscriptions API returns NO updated_at field
+    // (re-verified 2026-07-13; the 2026-06-12 "verified" shape was wrong about
+    // it). Extraction may still prefer updated_at if Dodo ever adds it, but
+    // every consumer must also handle its absence — see the plan_changed
+    // scheduled-cancellation tests, which exercise the no-updated_at shape.
     return {
       type,
       data: {

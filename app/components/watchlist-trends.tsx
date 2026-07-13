@@ -48,7 +48,7 @@ export function WatchlistTrends({
 
 function sparseScanCopy(plan: string) {
   return plan === "free"
-    ? "The free plan takes one snapshot when a watchlist is created — paid plans check every 3 hours, and each scan adds to this chart."
+    ? "The free plan takes one snapshot when a watchlist is created — paid plans check every 3–6 hours, and each scan adds to this chart."
     : "Not enough scans yet — this fills in as scheduled checks accumulate over the next few days.";
 }
 
