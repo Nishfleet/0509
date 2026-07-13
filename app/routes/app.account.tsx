@@ -64,8 +64,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
   }
 
+  // Default to verified on a transient DB error so the banner never nags a
+  // verified user; the retention gates re-check on every action anyway.
+  let emailVerified = true;
+  try {
+    const { isUserEmailVerified } = await import("~/lib/email-verification.server");
+    emailVerified = await isUserEmailVerified(env, session.user.id);
+  } catch (error) {
+    console.warn("[account] email verification status unavailable", error);
+  }
+
   return {
     email: session.user.email,
+    emailVerified,
     name: session.user.name,
     sessionExpiresAt: session.session.expiresAt,
     plan,
@@ -137,6 +148,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
       message: result.brandWebsite
         ? "Saved your brand website."
         : "Brand website cleared.",
+    };
+  }
+
+  if (intent === "resend-verification") {
+    const { requestEmailVerification } = await import("~/lib/email-verification.server");
+    await requestEmailVerification(env, request, {
+      email: session.user.email,
+      callbackURL: "/app/account",
+    });
+    return {
+      ok: true,
+      intent,
+      message: "Verification email sent. The link expires after an hour — check your inbox.",
     };
   }
 
@@ -268,6 +292,8 @@ export default function AccountRoute() {
       : null;
   const deletionAction =
     actionData?.intent === "request-account-deletion" ? actionData : null;
+  const resendVerificationAction =
+    actionData?.intent === "resend-verification" ? actionData : null;
   const [passkeyPending, setPasskeyPending] = useState(false);
   const [passkeyMessage, setPasskeyMessage] = useState<string | null>(null);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
@@ -293,6 +319,27 @@ export default function AccountRoute() {
           sign-in options, and sensitive account requests.
         </p>
       </article>
+
+      {!data.emailVerified ? (
+        <article className="f9-app-panel">
+          <div className="f9-panel-toolbar">
+            <div>
+              <span className="f9-app-kicker">Email</span>
+              <h2>Verify your email</h2>
+            </div>
+            <Form method="post">
+              <input name="intent" type="hidden" value="resend-verification" />
+              <SubmitButton className="f9-secondary-button" intent="resend-verification" pendingLabel="Sending…">
+                Resend verification email
+              </SubmitButton>
+            </Form>
+          </div>
+          <p className="f9-muted-copy">
+            {resendVerificationAction?.message ??
+              `Watchlists, digests, and alerts stay locked until ${data.email} is verified.`}
+          </p>
+        </article>
+      ) : null}
 
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">

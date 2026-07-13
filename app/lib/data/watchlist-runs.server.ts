@@ -40,6 +40,25 @@ export async function hasInFlightWatchlistRun(
   );
   return Boolean(row);
 }
+export async function countWatchlistRunsForUserSince(
+  env: AppEnv,
+  userId: string,
+  sinceIso: string,
+) {
+  const row = await one<{ total: number }>(
+    env,
+    `
+      SELECT COUNT(*) AS total
+      FROM watchlist_run
+      INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
+      WHERE watchlist.user_id = ?
+        AND watchlist_run.started_at >= ?
+    `,
+    userId,
+    sinceIso,
+  );
+  return row?.total ?? 0;
+}
 export async function createWatchlistRun(
   env: AppEnv,
   watchlistId: string,

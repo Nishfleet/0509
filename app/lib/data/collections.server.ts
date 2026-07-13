@@ -240,8 +240,25 @@ export async function listCollectionItems(
   collectionId: string,
   options: ListPageOptions = {},
 ) {
-  const page = await listCollectionItemsPage(env, collectionId, options);
-  return page.items;
+  if (options.limit != null || options.cursor != null) {
+    const page = await listCollectionItemsPage(env, collectionId, options);
+    return page.items;
+  }
+
+  // Export/share/report callers need the full board; page through D1 so a
+  // collection past one page size is never silently truncated.
+  const items: CollectionItemRecord[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await listCollectionItemsPage(env, collectionId, {
+      limit: USER_LIST_PAGE_SIZE,
+      cursor,
+    });
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+
+  return items;
 }
 
 export async function updateCollectionItem(
