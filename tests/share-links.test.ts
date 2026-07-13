@@ -524,6 +524,20 @@ describe("deactivateWatchlistsBeyondPlanLimit", () => {
     expect(update?.sql).toContain("LIMIT ?");
     expect(update?.bindings.slice(1)).toEqual(["user-1", "user-1", 3]);
   });
+
+  it("keeps the newest watchlist when downgrading to free's single slot", async () => {
+    const mock = createCapturingDb([], 2);
+
+    const changed = await deactivateWatchlistsBeyondPlanLimit(
+      { DB: mock.db } as never,
+      "user-1",
+      1,
+    );
+
+    expect(changed).toBe(2);
+    const update = mock.statements.find((statement) => statement.sql.includes("UPDATE watchlist"));
+    expect(update?.bindings.slice(1)).toEqual(["user-1", "user-1", 1]);
+  });
 });
 
 describe("/app/shares route", () => {

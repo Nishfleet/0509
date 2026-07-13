@@ -287,6 +287,14 @@ function matchesAd(ad: AdRecord, mode: SearchMode, filters: NormalizedSavedQuery
   );
 }
 
+/** Post-filter for browser (and other) discovery paths that don't apply client filters upstream. */
+export function filterAdsBySearchFilters(
+  ads: AdRecord[],
+  query: Pick<NormalizedSavedQuery, "mode" | "filters">,
+): AdRecord[] {
+  return ads.filter((ad) => matchesAd(ad, query.mode, query.filters));
+}
+
 function extractDestinationUrl(snapshotUrl?: string) {
   if (!snapshotUrl) {
     return null;

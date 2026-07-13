@@ -144,16 +144,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
-    const isZeroLimit = watchlistLimit.limit === 0;
-    if (isZeroLimit) {
+    if (watchlistLimit.limit < 1) {
       return {
         ok: false,
         intent,
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message:
-          "Competitor monitoring is available on paid plans. Starter is the recommended plan for 3-hour tracking and daily/weekly digests.",
+        message: "Competitor monitoring is not available on this plan. Upgrade to create watchlists.",
         upgradePath: "/app/billing?source=onboarding#plans",
         rawText,
         brandWebsiteInput,
@@ -187,6 +185,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
         intent,
         message: importPreviewMessage(preview),
         preview,
+        rawText,
+        brandWebsiteInput,
+      };
+    }
+
+    const { requireVerifiedEmailForRetention, emailUnverifiedActionResult } = await import(
+      "~/lib/email-verification.server"
+    );
+    const verification = await requireVerifiedEmailForRetention(env, workspaceUserId);
+    if (!verification.ok) {
+      return {
+        ...emailUnverifiedActionResult(),
+        intent,
         rawText,
         brandWebsiteInput,
       };
@@ -314,6 +325,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
+    const { requireVerifiedEmailForRetention, emailUnverifiedActionResult } = await import(
+      "~/lib/email-verification.server"
+    );
+    const verification = await requireVerifiedEmailForRetention(env, workspaceUserId);
+    if (!verification.ok) {
+      return emailUnverifiedActionResult();
+    }
+
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
 
     const visitorCountry = defaultCountryForVisitor(
@@ -338,15 +357,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }, watchlistLimit.limit);
 
     if (watchlistResult.status === "over_cap") {
-      const isZeroLimit = watchlistResult.limit === 0;
       return {
         ok: false,
         error: "plan_limit_exceeded",
         limit: watchlistResult.limit,
         current: watchlistResult.current,
-        message: isZeroLimit
-          ? "Competitor monitoring is available on paid plans. Starter is the recommended plan for 3-hour tracking and daily/weekly digests."
-          : "You have reached your competitor monitoring limit.",
+        message:
+          watchlistResult.limit <= 1
+            ? "Free includes 1 watchlist. Upgrade for more competitors, scheduled scans, and digests."
+            : "You have reached your competitor monitoring limit.",
         upgradePath: "/app/billing?source=onboarding#plans",
       };
     }
@@ -548,6 +567,7 @@ export default function AppOnboardRoute() {
   const ownBrandWebsite = normalizeCompetitorWebsiteInput(trimmedBrandWebsite);
   const competitorQuery = competitorWebsite.searchTerm ?? "";
   const canCreateWatchlist = data.watchlistLimit.allowed && data.watchlistLimit.limit > 0;
+  const atWatchlistCap = !data.watchlistLimit.allowed && data.watchlistLimit.limit > 0;
 
   return (
     <DashboardPage>
@@ -642,10 +662,16 @@ export default function AppOnboardRoute() {
             </Form>
           ) : (
             <section className="f9-onboard-step">
-              <span className="f9-app-kicker">Plan required</span>
-              <h2>Choose a plan to start monitoring</h2>
+              <span className="f9-app-kicker">{atWatchlistCap ? "Limit reached" : "Plan required"}</span>
+              <h2>
+                {atWatchlistCap
+                  ? "Your free watchlist slot is in use"
+                  : "Choose a plan to start monitoring"}
+              </h2>
               <p className="f9-muted-copy">
-                Starter is the recommended plan for retained competitor tracking with 3-hour scans and daily/weekly digests.
+                {atWatchlistCap
+                  ? "Free includes 1 watchlist. Upgrade for more competitors, scheduled scans, and digests."
+                  : "Starter is the recommended plan for retained competitor tracking with 3-hour scans and daily/weekly digests."}
               </p>
               <div className="f9-action-row">
                 <Link className="f9-primary-button" to="/app/billing?source=onboarding#plans">

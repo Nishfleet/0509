@@ -49,6 +49,18 @@ function createContext(env = {}) {
 
 beforeEach(() => {
   vi.resetModules();
+  vi.doMock("~/lib/email-verification.server", () => ({
+    isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    requireVerifiedEmailForRetention: vi.fn().mockResolvedValue({ ok: true }),
+    emailUnverifiedActionResult: () => ({
+      ok: false,
+      error: "email_unverified",
+      message: "Verify your email",
+    }),
+    requestEmailVerification: vi.fn().mockResolvedValue({ ok: true }),
+    EMAIL_UNVERIFIED_ERROR: "email_unverified",
+    EMAIL_UNVERIFIED_MESSAGE: "Verify your email",
+  }));
 });
 
 afterEach(() => {
@@ -58,6 +70,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/creative-text.server");
   vi.doUnmock("~/lib/customer-meta.server");
   vi.doUnmock("~/lib/data.server");
+  vi.doUnmock("~/lib/email-verification.server");
   vi.doUnmock("~/lib/landing-pages.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/rate-limit.server");

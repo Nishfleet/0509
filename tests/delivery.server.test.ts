@@ -24,6 +24,18 @@ beforeEach(() => {
   vi.doMock("~/lib/plan.server", () => ({
     getUserPlan: vi.fn().mockResolvedValue("starter"),
   }));
+  vi.doMock("~/lib/email-verification.server", () => ({
+    isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    requireVerifiedEmailForRetention: vi.fn().mockResolvedValue({ ok: true }),
+    emailUnverifiedActionResult: () => ({
+      ok: false,
+      error: "email_unverified",
+      message: "Verify your email",
+    }),
+    requestEmailVerification: vi.fn().mockResolvedValue({ ok: true }),
+    EMAIL_UNVERIFIED_ERROR: "email_unverified",
+    EMAIL_UNVERIFIED_MESSAGE: "Verify your email",
+  }));
 });
 
 afterEach(() => {
@@ -31,6 +43,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.resetModules();
   vi.useRealTimers();
+  vi.doUnmock("~/lib/email-verification.server");
+  vi.doUnmock("~/lib/plan.server");
 });
 
 describe("deliverWeeklyDigest", () => {

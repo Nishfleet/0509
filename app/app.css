@@ -7732,6 +7732,13 @@ one signal-green accent.
   max-width: 760px;
 }
 
+.f9-search-page .f9-search-refine {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .f9-search-page .f9-search-field {
   display: grid;
   gap: 7px;
@@ -7747,7 +7754,8 @@ one signal-green accent.
   text-transform: none;
 }
 
-.f9-search-page .f9-search-field input {
+.f9-search-page .f9-search-field input,
+.f9-search-page .f9-search-field select {
   width: 100%;
   min-width: 0;
   height: 40px;
@@ -7768,13 +7776,28 @@ one signal-green accent.
 }
 
 .f9-search-page .f9-search-field input:focus,
-.f9-search-page .f9-search-field input:focus-visible {
+.f9-search-page .f9-search-field input:focus-visible,
+.f9-search-page .f9-search-field select:focus,
+.f9-search-page .f9-search-field select:focus-visible {
   border-color: #9c9485;
   background: #fff;
 }
 
 .f9-search-page .f9-search-actions {
   display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.f9-search-page .f9-search-retention {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+}
+
+.f9-search-page .f9-save-query-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) max-content;
   align-items: end;
   gap: 8px;
 }
@@ -7846,6 +7869,14 @@ one signal-green accent.
     grid-template-columns: 1fr;
   }
 
+  .f9-search-page .f9-search-refine {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .f9-search-page .f9-save-query-form {
+    grid-template-columns: 1fr;
+  }
+
   .f9-search-page .f9-search-actions {
     justify-content: start;
   }
@@ -7854,6 +7885,10 @@ one signal-green accent.
 @media (max-width: 520px) {
   .f9-search-page .f9-search-command {
     padding-top: 18px;
+  }
+
+  .f9-search-page .f9-search-refine {
+    grid-template-columns: 1fr;
   }
 
   .f9-search-page .f9-search-actions {

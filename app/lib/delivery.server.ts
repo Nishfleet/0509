@@ -115,6 +115,20 @@ export interface DeliverWatchlistAlertsInput {
 }
 
 export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDigestInput) {
+  const lane = input.lane ?? "customer";
+  // Soft product gate: unverified customers don't get digests. Never block
+  // operator/internal lanes or sendOperatorAlertEmail.
+  if (lane === "customer") {
+    const { isUserEmailVerified } = await import("~/lib/email-verification.server");
+    if (!(await isUserEmailVerified(env, input.userId))) {
+      return {
+        attempts: 0,
+        channels: [] as DeliveryChannel[],
+        details: [] as DigestAttemptSummary[],
+      };
+    }
+  }
+
   const workspaceConfigRecord =
     (await getWorkspaceDeliveryConfig(env, input.userId)) ??
     buildLegacyWorkspaceConfig(input.userId, Boolean(input.accountEmail));
@@ -136,8 +150,6 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
       details: [] as DigestAttemptSummary[],
     };
   }
-
-  const lane = input.lane ?? "customer";
   const isHeartbeat = input.items.length === 0 && Boolean(input.heartbeat);
   const emailTargets = config.emailEnabled
     ? await resolveDigestEmailTargets(env, input.userId, input.accountEmail)
@@ -195,6 +207,16 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   }
 
   const lane = input.lane ?? "customer";
+  if (lane === "customer") {
+    const { isUserEmailVerified } = await import("~/lib/email-verification.server");
+    if (!(await isUserEmailVerified(env, input.userId))) {
+      return {
+        attempts: 0,
+        channels: [] as DeliveryChannel[],
+      };
+    }
+  }
+
   const workspaceConfigRecord =
     (await getWorkspaceDeliveryConfig(env, input.userId)) ??
     buildLegacyWorkspaceConfig(input.userId, Boolean(input.accountEmail));
@@ -1685,6 +1707,56 @@ export async function sendPasswordResetEmail(
   }
 }
 
+/**
+ * Better Auth email-verification link delivery.
+ * Transactional (no List-Unsubscribe): the verify URL carries a secret token
+ * and must reach the inbox even if the address later unsubscribes from digests.
+ * Token URLs are never persisted in delivery_attempt payloads.
+ */
+export async function sendEmailVerificationEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    verifyUrl: string;
+  },
+) {
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: "Verify your email for Five to Nine",
+    html: renderEmailVerificationHtml(input),
+    tag: "email-verification",
+    unsubscribeUrl: null,
+  });
+
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "email_verification",
+    eventIds: [],
+    payloadSnapshot: { kind: "email_verification" },
+    idempotencyKey: `email-verification:${input.userId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  if (providerResult.status === "failed") {
+    throw new Error(providerResult.errorMessage ?? "Email verification send failed.");
+  }
+}
+
 function renderPasswordResetHtml(input: { name: string | null; resetUrl: string }) {
   const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
 
@@ -1702,6 +1774,28 @@ function renderPasswordResetHtml(input: { name: string | null; resetUrl: string 
       </p>
       <p style="margin: 0; color: #5b6577; font-size: 13px;">
         If you didn't ask for this, you can ignore this email — your password stays unchanged.
+      </p>
+    </div>
+  `;
+}
+
+function renderEmailVerificationHtml(input: { name: string | null; verifyUrl: string }) {
+  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+
+  return `
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
+      <p style="margin: 0 0 12px;">${greeting}</p>
+      <p style="margin: 0 0 16px;">
+        Confirm this email address to create watchlists and receive competitor digests on Five to Nine.
+        You can keep browsing without verifying.
+      </p>
+      <p style="margin: 0 0 20px;">
+        <a href="${escapeHtml(input.verifyUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+          Verify email
+        </a>
+      </p>
+      <p style="margin: 0; color: #5b6577; font-size: 13px;">
+        If you did not create a Five to Nine account, you can ignore this email.
       </p>
     </div>
   `;

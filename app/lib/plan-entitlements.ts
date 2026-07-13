@@ -108,7 +108,10 @@ const AGENCY_FEATURES: PlanFeature[] = [
 const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
   free: {
     planFamily: "free",
-    watchlists: 0,
+    // Activation rung: one retained watchlist slot. Scan/digest/proof budgets
+    // stay conservative (none/0) via existing plan-gating — paid plans unlock
+    // scheduled scans and digests.
+    watchlists: 1,
     collections: 0,
     includedEvidenceChecksPerMonth: 0,
     workspaceSeats: 1,

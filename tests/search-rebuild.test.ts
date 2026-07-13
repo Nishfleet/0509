@@ -53,6 +53,11 @@ describe("search rebuild", () => {
     expect(searchRoute).not.toContain("Brand or search term");
     expect(searchRoute).not.toContain("My brand");
     expect(searchRoute).not.toContain("f9-search-controls");
+    expect(searchRoute).toContain("f9-search-refine");
+    expect(searchRoute).toContain('name="platform"');
+    expect(searchRoute).toContain('name="creativeType"');
+    expect(searchRoute).toContain('name="status"');
+    expect(searchRoute).toContain('intent="save-query"');
     expect(searchRoute).not.toContain("Example tracked competitor");
     expect(searchRoute).not.toContain("Digest preview");
     expect(searchRoute).not.toContain("/api/demo-proof?format=markdown");
