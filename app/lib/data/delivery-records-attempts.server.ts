@@ -46,6 +46,41 @@ export async function listRetryableInstantAttempts(
   return rows.map(toDeliveryAttemptRecord);
 }
 
+export async function listStaleBillingLifecycleEmailAttempts(
+  env: AppEnv,
+  input: {
+    staleBefore: string;
+    limit: number;
+  },
+) {
+  const rows = await many<DeliveryAttemptRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_attempt
+      WHERE lane = 'customer'
+        AND channel = 'email'
+        AND watchlist_id IS NULL
+        AND digest_run_id IS NULL
+        AND delivery_target_id IS NULL
+        AND (
+          idempotency_key LIKE 'billing-payment-issue:%'
+          OR idempotency_key LIKE 'billing-cancellation:%'
+          OR idempotency_key LIKE 'billing-refund:%'
+        )
+        AND status = 'pending'
+        AND webhook_status = 'pending'
+        AND updated_at <= ?
+      ORDER BY updated_at ASC
+      LIMIT ?
+    `,
+    input.staleBefore,
+    input.limit,
+  );
+
+  return rows.map(toDeliveryAttemptRecord);
+}
+
 export async function listDeliveryAttempts(
   env: AppEnv,
   options: {
@@ -195,10 +230,11 @@ export async function createDeliveryAttempt(
     errorMessage?: string | null;
     sentAt?: string | null;
     failedAt?: string | null;
+    timestamp?: string;
   },
 ) {
   const id = createId();
-  const timestamp = nowIso();
+  const timestamp = input.timestamp ?? nowIso();
   await run(
     env,
     `
@@ -264,12 +300,21 @@ export async function updateDeliveryAttemptResult(
     webhookStatus: WebhookReconciliationStatus;
     providerMessageId?: string | null;
     providerStatusLastSeenAt?: string | null;
+    templateName?: string | null;
     errorMessage?: string | null;
     sentAt?: string | null;
     failedAt?: string | null;
+    expectedStatus?: DeliveryAttemptStatus;
+    expectedWebhookStatus?: WebhookReconciliationStatus;
+    expectedUpdatedAt?: string;
+    payloadSnapshot?: JsonRecord;
+    updatedAt?: string;
   },
 ) {
-  await run(
+  const payloadSnapshot = input.payloadSnapshot
+    ? jsonValue(input.payloadSnapshot)
+    : null;
+  const result = await run(
     env,
     `
       UPDATE delivery_attempt
@@ -278,21 +323,36 @@ export async function updateDeliveryAttemptResult(
           webhook_status = ?,
           provider_message_id = ?,
           provider_status_last_seen_at = ?,
+          template_name = COALESCE(?, template_name),
           error_message = ?,
           sent_at = ?,
           failed_at = ?,
+          payload_snapshot_json = COALESCE(?, payload_snapshot_json),
           updated_at = ?
       WHERE id = ?
+        AND (? IS NULL OR status = ?)
+        AND (? IS NULL OR webhook_status = ?)
+        AND (? IS NULL OR updated_at = ?)
     `,
     input.provider,
     input.status,
     input.webhookStatus,
     input.providerMessageId ?? null,
     input.providerStatusLastSeenAt ?? null,
+    input.templateName ?? null,
     input.errorMessage ?? null,
     input.sentAt ?? null,
     input.failedAt ?? null,
-    nowIso(),
+    payloadSnapshot,
+    input.updatedAt ?? nowIso(),
     attemptId,
+    input.expectedStatus ?? null,
+    input.expectedStatus ?? null,
+    input.expectedWebhookStatus ?? null,
+    input.expectedWebhookStatus ?? null,
+    input.expectedUpdatedAt ?? null,
+    input.expectedUpdatedAt ?? null,
   );
+
+  return Number(result.meta?.changes ?? 0) > 0;
 }

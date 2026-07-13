@@ -40,6 +40,9 @@ export interface DigestEmailInput {
   periodEnd: string;
   items: DigestTrustItem[];
   heartbeat?: DigestEmailHeartbeat | null;
+  // Optional AI weekly summary persisted on the digest run. Absent or empty
+  // renders nothing at all — the email is byte-identical without it.
+  strategyParagraph?: string | null;
   cadence?: DigestCadence;
   timeZone?: string | null;
   fullDigestUrl: string;
@@ -70,13 +73,14 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const omittedCount = Math.max(input.items.length - topItems.length, 0);
   const trendLines =
     input.cadence === "weekly" ? buildDigestTrendRollups(input.items) : [];
+  const strategyParagraph = input.strategyParagraph?.trim() || null;
 
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(answer)}</h1>
-      <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
+      <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>${renderStrategySectionHtml(strategyParagraph)}
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
@@ -102,6 +106,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     answer,
     dateRange,
+    ...(strategyParagraph ? ["", "AI summary of the week:", strategyParagraph] : []),
     "",
     `Priority mix: ${priorityMixLabel(priorityMix)}`,
     `Evidence mix: ${proofMixLabel(proofMix)}`,
@@ -266,6 +271,18 @@ function renderTopMoveText(
     `   Review in Five to Nine: ${fullDigestUrl}`,
     "",
   ].filter((line): line is string => typeof line === "string");
+}
+
+function renderStrategySectionHtml(strategyParagraph: string | null) {
+  if (!strategyParagraph) {
+    return "";
+  }
+
+  return `
+      <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
+        <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">AI summary of the week</p>
+        <p style="margin: 0; color: #475467;">${escapeHtml(strategyParagraph)}</p>
+      </div>`;
 }
 
 function renderTrendSectionHtml(lines: Array<{ text: string }>) {

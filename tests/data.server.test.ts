@@ -58,6 +58,7 @@ import {
   listCollectionItems,
   listDigests,
   listRetryableDigestRuns,
+  listStaleBillingLifecycleEmailAttempts,
   upsertDigestDelivery,
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
@@ -213,7 +214,7 @@ describe("createLandingPageSnapshot", () => {
     expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v1"))).toBe(true);
   });
 
-  it("updates the digest delivery provider when rerunning an existing digest", async () => {
+  it("keeps an accepted digest immutable when a stale retry result arrives", async () => {
     const mock = createMockDb();
 
     await upsertDigestDelivery({ DB: mock.db } as never, "digest-1", {
@@ -226,7 +227,9 @@ describe("createLandingPageSnapshot", () => {
     });
 
     const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
-    expect(statement?.sql).toContain("provider = excluded.provider");
+    expect(statement?.sql).toContain("WHEN digest_delivery.status = 'sent'");
+    expect(statement?.sql).toContain("THEN digest_delivery.provider");
+    expect(statement?.sql).toContain("THEN 'sent'");
   });
 });
 
@@ -1713,6 +1716,7 @@ describe("Dodo billing persistence", () => {
           {
             plan: "starter",
             dodo_status: "subscription.active",
+            dodo_payment_id: "payment-current",
             dodo_product_id: "prod_starter_annual",
             dodo_subscription_id: "sub_123",
             dodo_customer_id: "cus_123",
@@ -1733,6 +1737,7 @@ describe("Dodo billing persistence", () => {
       ),
     ).resolves.toMatchObject({
       plan: "starter",
+      dodoPaymentId: "payment-current",
       dodoProductId: "prod_starter_annual",
       billingInterval: "annual",
     });
@@ -2150,10 +2155,11 @@ describe("Dodo billing persistence", () => {
     );
 
     expect(claimed).toBe(true);
-    expect(statements).toHaveLength(2);
+    expect(statements).toHaveLength(3);
     expect(statements[0]?.sql).toContain("payload_timestamp");
     expect(statements[1]?.sql).not.toContain("payload_timestamp");
     expect(statements[1]?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
+    expect(statements[2]?.sql).toContain("SELECT metadata_json");
   });
 
   it("rejects blank Dodo webhook event ids", async () => {
@@ -3228,6 +3234,7 @@ describe("listRetryableDigestRuns", () => {
       { DB: mock.db } as never,
       {
         since: "2026-06-01T00:00:00.000Z",
+        stalePreDispatchBefore: "2026-07-13T08:59:00.000Z",
         limit: 25,
       },
     );
@@ -3235,13 +3242,43 @@ describe("listRetryableDigestRuns", () => {
     const query = findStatement(mock.statements, "FROM digest_run");
     expect(query?.sql).toContain("digest_delivery.status = 'failed'");
     expect(query?.sql).toContain("digest_delivery.id IS NULL");
-    expect(query?.sql).not.toContain("delivery_attempt.status = 'pending'");
-    expect(query?.sql).not.toContain("delivery_attempt.provider_message_id IS NULL");
-    expect(query?.sql).not.toContain("delivery_attempt.updated_at <= ?");
+    expect(query?.sql).toContain("delivery_attempt.status = 'pending'");
+    expect(query?.sql).toContain("delivery_attempt.webhook_status = 'pending'");
+    expect(query?.sql).toContain("delivery_attempt.updated_at <= ?");
     expect(query?.bindings).toEqual([
       "2026-06-01T00:00:00.000Z",
+      "2026-07-13T08:59:00.000Z",
       25,
     ]);
+  });
+});
+
+describe("listStaleBillingLifecycleEmailAttempts", () => {
+  it("only selects bounded stale pre-dispatch billing email claims", async () => {
+    const mock = createMockDb();
+
+    await listStaleBillingLifecycleEmailAttempts(
+      { DB: mock.db } as never,
+      {
+        staleBefore: "2026-07-13T08:59:00.000Z",
+        limit: 10,
+      },
+    );
+
+    const query = findStatement(mock.statements, "FROM delivery_attempt");
+    expect(query?.sql).toContain("lane = 'customer'");
+    expect(query?.sql).toContain("channel = 'email'");
+    expect(query?.sql).toContain("watchlist_id IS NULL");
+    expect(query?.sql).toContain("digest_run_id IS NULL");
+    expect(query?.sql).toContain("delivery_target_id IS NULL");
+    expect(query?.sql).toContain("idempotency_key LIKE 'billing-payment-issue:%'");
+    expect(query?.sql).toContain("idempotency_key LIKE 'billing-cancellation:%'");
+    expect(query?.sql).toContain("idempotency_key LIKE 'billing-refund:%'");
+    expect(query?.sql).toContain("status = 'pending'");
+    expect(query?.sql).toContain("webhook_status = 'pending'");
+    expect(query?.sql).toContain("updated_at <= ?");
+    expect(query?.sql).toContain("ORDER BY updated_at ASC");
+    expect(query?.bindings).toEqual(["2026-07-13T08:59:00.000Z", 10]);
   });
 });
 

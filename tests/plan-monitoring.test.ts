@@ -171,7 +171,7 @@ describe("runWeeklyDigests", () => {
 
   it("delegates Scout digest delivery to the delivery module after building the digest run", async () => {
     const addDigestItem = vi.fn();
-    const createDigestRun = vi.fn().mockResolvedValue("digest-1");
+    const createDigestRun = vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true });
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
@@ -286,14 +286,23 @@ describe("runWeeklyDigests", () => {
 
     expect(result).toBe(1);
     expect(createDigestRun).toHaveBeenCalled();
-    expect(addDigestItem).toHaveBeenCalledWith(
+    expect(createDigestRun).toHaveBeenCalledWith(
       expect.anything(),
-      "digest-1",
+      "user-1",
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ totalEvents: 1 }),
       expect.objectContaining({
-        watchlistId: "watch-1",
-        eventType: "landing_page_offer_changed",
+        returnClaim: true,
+        items: [
+          expect.objectContaining({
+            watchlistId: "watch-1",
+            eventType: "landing_page_offer_changed",
+          }),
+        ],
       }),
     );
+    expect(addDigestItem).not.toHaveBeenCalled();
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -389,7 +398,7 @@ describe("runWeeklyDigests", () => {
   });
 
   it("passes the scheduled monitoring timestamp into weekly digest generation", async () => {
-    const createDigestRun = vi.fn().mockResolvedValue("digest-1");
+    const createDigestRun = vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true });
     const getDigestByPeriod = vi.fn().mockResolvedValue(null);
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
       attempts: 1,
@@ -522,7 +531,7 @@ describe("runWeeklyDigests", () => {
 
   it("keeps customer digests limited to trusted or exceptional provisional events", async () => {
     const addDigestItem = vi.fn();
-    const createDigestRun = vi.fn().mockResolvedValue("digest-1");
+    const createDigestRun = vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true });
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
@@ -664,11 +673,15 @@ describe("runWeeklyDigests", () => {
       expect.objectContaining({
         totalEvents: 2,
       }),
+      expect.objectContaining({
+        returnClaim: true,
+        items: [
+          expect.objectContaining({ title: "Landing page offer changed" }),
+          expect.objectContaining({ title: "Possible CTA change" }),
+        ],
+      }),
     );
-    expect(addDigestItem.mock.calls.map((call) => call[2].title)).toEqual([
-      "Landing page offer changed",
-      "Possible CTA change",
-    ]);
+    expect(addDigestItem).not.toHaveBeenCalled();
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

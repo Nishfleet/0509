@@ -73,6 +73,68 @@ describe("Worker security headers", () => {
     expect(response.headers.get("expires")).toBe("0");
   });
 
+  it("marks share-link responses noindex for the document and data requests", () => {
+    const documentResponse = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/share/abc"),
+    );
+    const dataResponse = withSecurityHeaders(
+      new Response("{}", { headers: { "content-type": "application/json" } }),
+      new Request("https://0509.io/share/abc.data"),
+    );
+
+    expect(documentResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(dataResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+
+  it("marks case-variant and percent-encoded /share aliases noindex too", () => {
+    // React Router matches routes case-insensitively and after percent
+    // decoding, so these aliases serve the SAME report as /share/<token> and
+    // must carry the same noindex header (Google treats them as distinct URLs).
+    const aliases = [
+      "https://0509.io/SHARE/abc",
+      "https://0509.io/Share/abc",
+      "https://0509.io/%73hare/abc",
+      "https://0509.io/SHARE/abc.data",
+      "https://0509.io/%53hare/abc",
+    ];
+
+    for (const url of aliases) {
+      const response = withSecurityHeaders(
+        new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+        new Request(url),
+      );
+      expect(response.headers.get("x-robots-tag"), url).toBe("noindex, nofollow");
+    }
+  });
+
+  it("survives malformed percent-encoding without throwing", () => {
+    const response = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/share%9/abc"),
+    );
+
+    // decodeURIComponent throws on "%9"; the check must fall back to the raw
+    // pathname instead of crashing the worker response path.
+    expect(response.headers.get("x-robots-tag")).toBeNull();
+  });
+
+  it("does not mark public marketing pages noindex", () => {
+    const homeResponse = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/"),
+    );
+    const helpResponse = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/help"),
+    );
+    const noRequestResponse = withSecurityHeaders(new Response("ok"));
+
+    expect(homeResponse.headers.has("x-robots-tag")).toBe(false);
+    expect(helpResponse.headers.has("x-robots-tag")).toBe(false);
+    expect(noRequestResponse.headers.has("x-robots-tag")).toBe(false);
+  });
+
   it("leaves non-HTML asset caching alone", () => {
     const response = withSecurityHeaders(
       new Response("console.log('asset')", {

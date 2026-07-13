@@ -16,9 +16,9 @@ export interface ReportField {
 }
 
 export interface ReportLandingPage {
-  url: string;
-  headline: string;
-  captureLabel: string;
+  url: string | null;
+  headline: string | null;
+  captureLabel: string | null;
   capturedAt: string | null;
   signals: ReportField[];
 }
@@ -55,22 +55,30 @@ export interface ReportSourceCoverage {
   excludedCounts: Record<string, number>;
 }
 
+// Missing report fields are null, never placeholder prose. The report view
+// omits absent fields entirely — a sparse report shows only what is known.
 export interface ReportRow {
   id: string;
-  advertiser: string;
-  previewHeadline: string;
-  offer: string;
-  cta: string;
+  advertiser: string | null;
+  previewHeadline: string | null;
+  offer: string | null;
+  cta: string | null;
   formatLabel: string;
-  languageLabel: string;
+  languageLabel: string | null;
   previewImageUrl: string | null;
-  creativeText: string;
-  translatedText: string;
+  creativeText: string | null;
+  translatedText: string | null;
   landingPage: ReportLandingPage;
   analysisFields: ReportField[];
   tags: string[];
   note: string | null;
   event?: ReportEventSummary;
+}
+
+export interface ReportAiWeeklySummary {
+  paragraph: string;
+  generatedAt: string | null;
+  periodEnd: string;
 }
 
 export interface ReportDocument {
@@ -85,6 +93,9 @@ export interface ReportDocument {
   stats: ReportStat[];
   insightDepth: InsightDepthSummary;
   sourceCoverage?: ReportSourceCoverage;
+  // AI weekly summary sourced from the latest stored digest run — never a
+  // fresh AI call at report time. Absent renders nothing.
+  aiWeeklySummary?: ReportAiWeeklySummary;
   rows: ReportRow[];
 }
 

@@ -166,6 +166,15 @@ export function emailFromAddress(env: AppEnv) {
   return env.EMAIL_FROM_EMAIL?.trim() || "";
 }
 
+// The one customer-facing sender identity. Configuration detection stays
+// string-based (isEmailSendingConfigured depends on emailFromAddress), so the
+// display name lives in this separate object-returning helper.
+export const EMAIL_FROM_NAME = "Five to Nine";
+
+export function emailFromSender(env: AppEnv): EmailAddress {
+  return { email: emailFromAddress(env), name: EMAIL_FROM_NAME };
+}
+
 export function isEmailSendingConfigured(env: AppEnv) {
   return Boolean(env.EMAIL && emailFromAddress(env));
 }

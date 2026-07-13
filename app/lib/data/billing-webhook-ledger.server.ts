@@ -20,13 +20,61 @@ export interface DodoWebhookLedgerFinalize {
   metadata: JsonRecord;
 }
 
+export type DodoLifecycleEmailRetryKind =
+  | "payment_issue"
+  | "cancellation_scheduled"
+  | "revoke"
+  | "refund";
+
+export interface DodoLifecycleEmailRetryClaim {
+  kind: DodoLifecycleEmailRetryKind;
+  userId: string;
+  idempotencyKey: string;
+}
+
 export type DodoWebhookProcessingClaim =
-  | { status: "claimed" }
+  | { status: "claimed"; lifecycleEmailRetry?: DodoLifecycleEmailRetryClaim }
   | { status: "duplicate"; outcome: "processed" | "ignored" }
   | { status: "in_progress" };
 
 function dodoWebhookProcessingLeaseDays() {
   return DODO_WEBHOOK_PROCESSING_LEASE_MS / (24 * 60 * 60 * 1000);
+}
+
+function lifecycleEmailRetryFromMetadata(
+  value: string | null | undefined,
+): DodoLifecycleEmailRetryClaim | null {
+  if (!value) return null;
+  try {
+    const metadata = JSON.parse(value) as Record<string, unknown>;
+    const kind = metadata.kind;
+    const userId = typeof metadata.userId === "string" ? metadata.userId.trim() : "";
+    const idempotencyKey =
+      typeof metadata.idempotencyKey === "string" ? metadata.idempotencyKey.trim() : "";
+    if (
+      metadata.action !== "lifecycle_email_retry" ||
+      (kind !== "payment_issue" &&
+        kind !== "cancellation_scheduled" &&
+        kind !== "revoke" &&
+        kind !== "refund") ||
+      !userId ||
+      !idempotencyKey
+    ) {
+      return null;
+    }
+
+    const expectedPrefix =
+      kind === "payment_issue"
+        ? `billing-payment-issue:${userId}:`
+        : kind === "refund"
+          ? `billing-refund:${userId}:`
+          : `billing-cancellation:${userId}:`;
+    return idempotencyKey.startsWith(expectedPrefix)
+      ? { kind, userId, idempotencyKey }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function buildDodoWebhookLedgerFinalizeStatement(
@@ -133,7 +181,11 @@ export async function beginDodoWebhookEventProcessing(
         outcome = 'processing',
         processing_started_at = excluded.processing_started_at,
         processed_at = NULL,
-        metadata_json = '{}'
+        metadata_json = CASE
+          WHEN dodo_webhook_event.outcome = 'failed'
+            THEN dodo_webhook_event.metadata_json
+          ELSE '{}'
+        END
       WHERE ${reclaimWhere}
     `).bind(
       eventId,
@@ -167,7 +219,11 @@ export async function beginDodoWebhookEventProcessing(
           received_at = excluded.received_at,
           processed_at = NULL,
           outcome = 'received',
-          metadata_json = '{}'
+          metadata_json = CASE
+            WHEN dodo_webhook_event.outcome = 'failed'
+              THEN dodo_webhook_event.metadata_json
+            ELSE '{}'
+          END
         WHERE dodo_webhook_event.outcome = 'failed'
       `).bind(
         eventId,
@@ -178,7 +234,18 @@ export async function beginDodoWebhookEventProcessing(
   }
 
   if (Number(result.meta?.changes ?? 0) > 0) {
-    return { status: "claimed" };
+    // Failed-row metadata is preserved by the successful compare-and-set
+    // above, so the retry classification is read from the row we actually
+    // claimed rather than from a racy pre-claim snapshot.
+    const claimed = await one<{ metadata_json: string }>(
+      env,
+      "SELECT metadata_json FROM dodo_webhook_event WHERE event_id = ?",
+      eventId,
+    );
+    const lifecycleEmailRetry = lifecycleEmailRetryFromMetadata(claimed?.metadata_json);
+    return lifecycleEmailRetry
+      ? { status: "claimed", lifecycleEmailRetry }
+      : { status: "claimed" };
   }
 
   const row = await one<{ outcome: string }>(
@@ -190,6 +257,34 @@ export async function beginDodoWebhookEventProcessing(
     return { status: "duplicate", outcome: row.outcome };
   }
   return { status: "in_progress" };
+}
+
+export async function failDodoWebhookEventForLifecycleEmailRetry(
+  env: AppEnv,
+  eventId: string,
+  input: {
+    kind: DodoLifecycleEmailRetryKind;
+    userId: string;
+    idempotencyKey: string;
+    error: string;
+  },
+) {
+  const result = await run(
+    env,
+    `
+      UPDATE dodo_webhook_event
+      SET outcome = 'failed',
+          processing_started_at = NULL,
+          processed_at = NULL,
+          metadata_json = ?
+      WHERE event_id = ?
+        AND outcome = 'processed'
+    `,
+    jsonValue({ action: "lifecycle_email_retry", ...input }),
+    eventId.trim(),
+  );
+
+  return Number(result.meta?.changes ?? 0) > 0;
 }
 
 /** @deprecated Use beginDodoWebhookEventProcessing for lease-aware claiming. */

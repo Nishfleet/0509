@@ -208,8 +208,10 @@ describe("buildSearchAnswer", () => {
       state: "degraded",
       title: "Live search is temporarily unavailable",
       summary: "Fresh competitor checks are delayed and no recent results are available for this search.",
-      note: "Commercial discovery degraded; no cached results are available.",
+      // Internal jargon must never leak to the customer-facing note.
+      note: "Live ad checks are temporarily delayed. We'll retry automatically — results refresh as soon as checks recover.",
     });
+    expect(answer.note).not.toMatch(/commercial discovery|degraded|cached/i);
     expect(answer.facts).toContainEqual({
       label: "Fresh ads",
       value: "Delayed",

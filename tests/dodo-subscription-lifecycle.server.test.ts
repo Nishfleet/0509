@@ -55,6 +55,22 @@ describe("Dodo subscription lifecycle", () => {
     });
   });
 
+  it("uses the stable envelope event timestamp when lifecycle data has no provider timestamps", () => {
+    const payload = {
+      ...subscriptionEnvelope("subscription.on_hold", {
+        updated_at: "",
+        cancelled_at: "",
+        created_at: "",
+      }),
+      timestamp: "2026-07-01T08:00:00.000Z",
+    };
+
+    expect(extractDodoPlanRevocation(lifecycleEnv, payload)).toMatchObject({
+      action: "payment_issue",
+      revokedAt: "2026-07-01T08:00:00.000Z",
+    });
+  });
+
   it("extracts trusted lifecycle events without a metadata user id for database resolution", () => {
     const revocation = extractDodoPlanRevocation(
       lifecycleEnv,
@@ -246,7 +262,11 @@ describe("extractDodoSubscriptionGrant", () => {
   } as never;
 
   function subscriptionPayload(type: string, overrides: Record<string, unknown> = {}) {
-    // Shape verified against the live Dodo subscriptions API (2026-06-12).
+    // CAUTION: the live Dodo subscriptions API returns NO updated_at field
+    // (re-verified 2026-07-13; the 2026-06-12 "verified" shape was wrong about
+    // it). Extraction may still prefer updated_at if Dodo ever adds it, but
+    // every consumer must also handle its absence — see the plan_changed
+    // scheduled-cancellation tests, which exercise the no-updated_at shape.
     return {
       type,
       data: {
@@ -300,6 +320,22 @@ describe("extractDodoSubscriptionGrant", () => {
       ),
     ).toMatchObject({
       grantedAt: "2026-07-12T05:30:00.000Z",
+      nextBillingAt: "2026-08-12T05:30:00.000Z",
+    });
+  });
+
+  it("marks a plan-changed webhook as a scheduled cancellation when Dodo sets the cancel flag", () => {
+    expect(
+      extractDodoSubscriptionGrant(
+        env,
+        subscriptionPayload("subscription.plan_changed", {
+          cancel_at_next_billing_date: true,
+        }),
+      ),
+    ).toMatchObject({
+      eventType: "subscription.plan_changed",
+      status: "active",
+      cancellationScheduled: true,
       nextBillingAt: "2026-08-12T05:30:00.000Z",
     });
   });

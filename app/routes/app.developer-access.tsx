@@ -60,6 +60,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (isMember && handlesDeveloperAccessIntent(intent)) {
     return {
       ok: false,
+      intent,
       message: "Only the account owner can manage developer access and API keys.",
     };
   }
@@ -70,6 +71,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (!apiGate.ok) {
       return {
         ok: false,
+        intent,
         message: developerAccessDisabledReason({
           hasApiAccess: false,
           isMember: false,
@@ -85,6 +87,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
+      intent,
       message: "API key created. Copy it now; it will not be shown again.",
       apiKeySecret: result.secret,
       apiKeyPrefix: result.apiKey.keyPrefix,
@@ -101,6 +104,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
+      intent,
+      apiKeyId,
       message: "API key revoked.",
     };
   }

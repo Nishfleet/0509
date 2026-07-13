@@ -67,7 +67,25 @@ ${SITEMAP_PATHS.map((path) => `  <url><loc>${canonicalUrl(path)}</loc></url>`).j
 </urlset>
 `;
 
+// Keep /share/ CRAWLABLE on purpose: shared reports are de-indexed via the
+// `x-robots-tag: noindex, nofollow` header set in workers/security-headers.ts,
+// and crawlers can only see that header if robots.txt allows the fetch.
+// Adding `Disallow: /share/` here would block the crawl and let Google index
+// bare /share URLs from external links anyway ("indexed, though blocked by
+// robots.txt" zombies). Do NOT "fix" this by disallowing /share/.
+// "Disallow: /app/" alone does not cover the bare "/app" dashboard URL
+// (trailing-slash prefix rules require the slash). "/app$" closes that for
+// Google/Bing, which honor the $ end-of-URL anchor; crawlers that don't
+// treat the line as a harmless literal, and "/app/" still covers subpaths.
+// A bare "Disallow: /app" is NOT used because it would also block any future
+// public path starting with "app" (e.g. /apply).
 const ROBOTS_TXT = `User-agent: *
+Allow: /api/docs
+Disallow: /app$
+Disallow: /app/
+Disallow: /export/
+Disallow: /api/
+# /share/ stays crawlable so crawlers can see its noindex header.
 Allow: /
 Sitemap: ${canonicalUrl("/sitemap.xml")}
 `;

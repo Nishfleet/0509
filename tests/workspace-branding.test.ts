@@ -3,7 +3,12 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getWorkspaceBranding, upsertWorkspaceBranding } from "~/lib/data.server";
+import {
+  getWorkspaceBranding,
+  normalizeWorkspaceBrandLogo,
+  upsertWorkspaceBranding,
+  WORKSPACE_BRAND_LOGO_MAX_LENGTH,
+} from "~/lib/data.server";
 
 const session = {
   user: {
@@ -108,7 +113,7 @@ describe("workspace branding persistence", () => {
       brandName: "  Northwind Growth  ",
     });
 
-    expect(result).toEqual({ brandName: "Northwind Growth", brandWebsite: null });
+    expect(result).toEqual({ brandName: "Northwind Growth", brandWebsite: null, brandLogo: null });
 
     const upsert = mock.statements.find((statement) =>
       statement.sql.includes("INSERT INTO workspace_branding"),
@@ -117,7 +122,8 @@ describe("workspace branding persistence", () => {
     expect(upsert?.bindings[0]).toBe("user-1");
     expect(upsert?.bindings[1]).toBe("Northwind Growth");
     expect(upsert?.bindings[2]).toBeNull();
-    expect(typeof upsert?.bindings[3]).toBe("string");
+    expect(upsert?.bindings[3]).toBeNull();
+    expect(typeof upsert?.bindings[4]).toBe("string");
   });
 
   it("caps the brand name at 60 characters", async () => {
@@ -142,7 +148,7 @@ describe("workspace branding persistence", () => {
       brandName: "   ",
     });
 
-    expect(result).toEqual({ brandName: null, brandWebsite: null });
+    expect(result).toEqual({ brandName: null, brandWebsite: null, brandLogo: null });
     const upsert = mock.statements.find((statement) =>
       statement.sql.includes("INSERT INTO workspace_branding"),
     );
@@ -161,6 +167,7 @@ describe("workspace branding persistence", () => {
     expect(await getWorkspaceBranding({ DB: withRow.db } as never, "user-1")).toEqual({
       brandName: "Northwind Growth",
       brandWebsite: "https://northwind.example",
+      brandLogo: null,
     });
 
     const select = withRow.statements.find((statement) =>
@@ -173,6 +180,7 @@ describe("workspace branding persistence", () => {
     expect(await getWorkspaceBranding({ DB: empty.db } as never, "user-1")).toEqual({
       brandName: null,
       brandWebsite: null,
+      brandLogo: null,
     });
   });
 
@@ -193,6 +201,7 @@ describe("workspace branding persistence", () => {
     expect(result).toEqual({
       brandName: "Northwind Growth",
       brandWebsite: "https://northwind.example",
+      brandLogo: null,
     });
     const upsert = mock.statements.find((statement) =>
       statement.sql.includes("INSERT INTO workspace_branding"),
@@ -208,10 +217,12 @@ describe("workspace branding persistence", () => {
       sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
       applyMigration(sqlite.sqlite, "migrations/0026_workspace_branding.sql");
       applyMigration(sqlite.sqlite, "migrations/0043_workspace_brand_website.sql");
+      applyMigration(sqlite.sqlite, "migrations/0066_workspace_brand_logo.sql");
 
       expect(await getWorkspaceBranding({ DB: sqlite.db } as never, "user-1")).toEqual({
         brandName: null,
         brandWebsite: null,
+        brandLogo: null,
       });
 
       expect(await upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
@@ -219,6 +230,7 @@ describe("workspace branding persistence", () => {
       })).toEqual({
         brandName: "Northwind Growth",
         brandWebsite: null,
+        brandLogo: null,
       });
 
       expect(await upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
@@ -226,6 +238,7 @@ describe("workspace branding persistence", () => {
       })).toEqual({
         brandName: "Northwind Growth",
         brandWebsite: "https://northwind.example",
+        brandLogo: null,
       });
 
       expect(await upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
@@ -233,15 +246,119 @@ describe("workspace branding persistence", () => {
       })).toEqual({
         brandName: "Northwind Labs",
         brandWebsite: "https://northwind.example",
+        brandLogo: null,
       });
 
       expect(await getWorkspaceBranding({ DB: sqlite.db } as never, "user-1")).toEqual({
         brandName: "Northwind Labs",
         brandWebsite: "https://northwind.example",
+        brandLogo: null,
       });
     } finally {
       sqlite.close();
     }
+  });
+
+  it("round-trips a brand logo through the migrated workspace branding table", async () => {
+    const sqlite = createSqliteD1();
+    const pngLogo = `data:image/png;base64,${"A".repeat(400)}`;
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+      applyMigration(sqlite.sqlite, "migrations/0026_workspace_branding.sql");
+      applyMigration(sqlite.sqlite, "migrations/0043_workspace_brand_website.sql");
+      applyMigration(sqlite.sqlite, "migrations/0066_workspace_brand_logo.sql");
+
+      expect(await upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
+        brandName: "Northwind Growth",
+        brandLogo: pngLogo,
+      })).toEqual({
+        brandName: "Northwind Growth",
+        brandWebsite: null,
+        brandLogo: pngLogo,
+      });
+
+      // Logo survives an unrelated partial update.
+      expect(await upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
+        brandWebsite: "https://northwind.example",
+      })).toEqual({
+        brandName: "Northwind Growth",
+        brandWebsite: "https://northwind.example",
+        brandLogo: pngLogo,
+      });
+
+      expect(await getWorkspaceBranding({ DB: sqlite.db } as never, "user-1")).toEqual({
+        brandName: "Northwind Growth",
+        brandWebsite: "https://northwind.example",
+        brandLogo: pngLogo,
+      });
+
+      // Explicit null clears the stored logo.
+      expect(await upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
+        brandLogo: null,
+      })).toEqual({
+        brandName: "Northwind Growth",
+        brandWebsite: "https://northwind.example",
+        brandLogo: null,
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+});
+
+describe("workspace brand logo normalizer", () => {
+  it("accepts small PNG, JPEG, and WebP data URLs", () => {
+    const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+    const jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    const webp = "data:image/webp;base64,UklGRhoAAABXRUJQ";
+
+    expect(normalizeWorkspaceBrandLogo(png)).toBe(png);
+    expect(normalizeWorkspaceBrandLogo(jpeg)).toBe(jpeg);
+    expect(normalizeWorkspaceBrandLogo(webp)).toBe(webp);
+    expect(normalizeWorkspaceBrandLogo(`  ${png}  `)).toBe(png);
+  });
+
+  it("rejects SVG data URLs (stored-XSS vector)", () => {
+    expect(
+      normalizeWorkspaceBrandLogo("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cCI+PC9zdmc+"),
+    ).toBeNull();
+    expect(
+      normalizeWorkspaceBrandLogo("data:image/svg+xml,<svg onload=alert(1)></svg>"),
+    ).toBeNull();
+  });
+
+  it("rejects non-data-URL and non-base64 payloads", () => {
+    expect(normalizeWorkspaceBrandLogo("https://cdn.example/logo.png")).toBeNull();
+    expect(normalizeWorkspaceBrandLogo("data:image/png;base64,")).toBeNull();
+    expect(normalizeWorkspaceBrandLogo('data:image/png;base64,abc"><script>')).toBeNull();
+    expect(normalizeWorkspaceBrandLogo("data:text/html;base64,PGh0bWw+")).toBeNull();
+    expect(normalizeWorkspaceBrandLogo("")).toBeNull();
+    expect(normalizeWorkspaceBrandLogo(null)).toBeNull();
+    expect(normalizeWorkspaceBrandLogo(undefined)).toBeNull();
+  });
+
+  it("rejects logos over the encoded size cap", () => {
+    const prefix = "data:image/png;base64,";
+    const oversized = `${prefix}${"A".repeat(WORKSPACE_BRAND_LOGO_MAX_LENGTH - prefix.length + 4)}`;
+    const atCap = `${prefix}${"A".repeat(WORKSPACE_BRAND_LOGO_MAX_LENGTH - prefix.length)}`;
+
+    expect(normalizeWorkspaceBrandLogo(oversized)).toBeNull();
+    expect(normalizeWorkspaceBrandLogo(atCap)).toBe(atCap);
+  });
+
+  it("nulls out an invalid logo on upsert instead of storing it", async () => {
+    const mock = createCapturingDb();
+
+    const result = await upsertWorkspaceBranding({ DB: mock.db } as never, "user-1", {
+      brandLogo: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+    });
+
+    expect(result.brandLogo).toBeNull();
+    const upsert = mock.statements.find((statement) =>
+      statement.sql.includes("INSERT INTO workspace_branding"),
+    );
+    expect(upsert?.bindings[3]).toBeNull();
   });
 });
 

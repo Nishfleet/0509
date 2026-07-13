@@ -68,7 +68,7 @@ describe("dashboard close-counter-move action", () => {
       eventId: "event-1",
     });
 
-    expect(result).toEqual({ ok: true, message: "Marked done." });
+    expect(result).toEqual({ ok: true, intent: "close-counter-move", message: "Marked done." });
     expect(closeCounterMoveFollowUp).toHaveBeenCalledWith(
       {},
       {
@@ -105,7 +105,11 @@ describe("dashboard close-counter-move action", () => {
       eventId: "event-1",
     });
 
-    expect(result).toEqual({ ok: false, message: "Could not mark that follow-up done." });
+    expect(result).toEqual({
+      ok: false,
+      intent: "close-counter-move",
+      message: "Could not mark that follow-up done.",
+    });
   });
 
   it("reports closed or cross-workspace follow-ups as no longer open", async () => {
@@ -118,7 +122,7 @@ describe("dashboard close-counter-move action", () => {
       eventId: "event-1",
     });
 
-    expect(result).toEqual({ ok: false, message: "That follow-up is no longer open." });
+    expect(result).toEqual({ ok: false, intent: "close-counter-move", message: "That follow-up is no longer open." });
   });
 
   it("returns the same closed message when marking an already completed item again", async () => {
@@ -136,7 +140,7 @@ describe("dashboard close-counter-move action", () => {
       eventId: "event-1",
     });
 
-    expect(first).toEqual({ ok: false, message: "That follow-up is no longer open." });
-    expect(second).toEqual({ ok: false, message: "That follow-up is no longer open." });
+    expect(first).toEqual({ ok: false, intent: "close-counter-move", message: "That follow-up is no longer open." });
+    expect(second).toEqual({ ok: false, intent: "close-counter-move", message: "That follow-up is no longer open." });
   });
 });

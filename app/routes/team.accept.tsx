@@ -87,10 +87,16 @@ export default function TeamAcceptRoute() {
                 You&rsquo;ll share their watchlists, collections, and morning digests. Your sign-in
                 stays your own, and the account owner handles billing.
               </p>
-              {actionData && !actionData.ok ? <p role="alert">{actionData.reason}</p> : null}
+              {actionData && !actionData.ok ? (
+                <div className="f9-message is-error" role="alert">
+                  <p>{actionData.reason}</p>
+                </div>
+              ) : null}
               <Form method="post">
                 <input type="hidden" name="token" value={data.token} />
-                <SubmitButton pendingLabel="Joining…">Join the team</SubmitButton>
+                <SubmitButton className="f9-primary-button" pendingLabel="Joining…">
+                  Join the team
+                </SubmitButton>
               </Form>
             </>
           )}

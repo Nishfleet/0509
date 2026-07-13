@@ -1,9 +1,12 @@
 import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { MetaFunction } from "react-router";
 
+import { ConfirmSubmitButton } from "~/components/confirm-button";
+import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { SubmitButton } from "~/components/submit-button";
+import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import type { NullableString, RouteActionData } from "~/routes/workspace-settings.shared";
 
 export const sourceAccessMeta: MetaFunction = () => [
@@ -76,7 +79,7 @@ export function SourceAccessRoute() {
                   )}
                 </p>
               ) : (
-                <p className="f9-muted-copy">No backup Meta access is connected yet.</p>
+                <EmptyState title="No backup Meta access is connected yet." variant="inline" />
               )}
             </div>
             <div>
@@ -149,9 +152,15 @@ export function SourceAccessRoute() {
                   </Form>
                   <Form method="post">
                     <input name="intent" type="hidden" value="disconnect-meta-token" />
-                    <SubmitButton className="f9-secondary-button" intent="disconnect-meta-token" pendingLabel="Removing…">
+                    <ConfirmSubmitButton
+                      className="f9-secondary-button"
+                      confirmLabel="Confirm — disconnect?"
+                      intent="disconnect-meta-token"
+                      pendingLabel="Removing…"
+                      variant="light"
+                    >
                       Disconnect
-                    </SubmitButton>
+                    </ConfirmSubmitButton>
                   </Form>
                 </div>
               ) : null}
@@ -193,20 +202,8 @@ function formatDiscoveryStatus(status: string) {
 }
 
 function formatTrackingStatusSummary(summary: string | null | undefined) {
-  if (!summary) {
-    return "Tracking status will appear after the first check.";
-  }
-
-  return summary
-    .replace(/Live commercial discovery/gi, "Fresh ad checks")
-    .replace(/commercial discovery/gi, "competitor ad checks")
-    .replace(/Commercial discovery/gi, "Competitor ad checks")
-    .replace(/Browser Run/gi, "visual checks")
-    .replace(/Official Meta API/gi, "alternate Meta ad access")
-    .replace(/API fallback/gi, "alternate Meta ad results")
-    .replace(/workspace Meta access/gi, "alternate Meta ad access")
-    .replace(/fresh discovery/gi, "fresh checks")
-    .replace(/cached live results/gi, "recent results")
-    .replace(/cached results/gi, "recent results")
-    .replace(/demo mode/gi, "sample mode");
+  return (
+    customerDiscoverySummary(summary) ??
+    "Tracking status will appear after the first check."
+  );
 }

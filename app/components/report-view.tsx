@@ -1,4 +1,5 @@
 import type { ReportDocument } from "~/lib/report";
+import { EmptyState } from "~/components/empty-state";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { safeInsightDepthSummary } from "~/lib/insight-depth";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
@@ -12,6 +13,31 @@ function legacyReportLabelText(value: string) {
     .replace(/\bProof snapshot\b/g, "Saved evidence")
     .replace(/\bProof capture\b/g, "Evidence capture")
     .replace(/\bproof capture\b/g, "evidence capture");
+}
+
+// Placeholder prose written into report snapshots before missing fields
+// became null. Treat these exactly like absent data so old shared reports
+// stop apologizing too.
+const LEGACY_PLACEHOLDER_VALUES = new Set([
+  "ad context unavailable",
+  "preview unavailable",
+  "offer unavailable",
+  "cta unavailable",
+  "language unavailable",
+  "creative text unavailable",
+  "translation unavailable",
+  "landing page unavailable",
+  "landing page headline unavailable",
+  "not detected",
+  "not checked yet",
+]);
+
+function presentReportValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return LEGACY_PLACEHOLDER_VALUES.has(trimmed.toLowerCase()) ? null : trimmed;
 }
 
 export function ReportView({ report }: { report: ReportDocument }) {
@@ -39,6 +65,20 @@ export function ReportView({ report }: { report: ReportDocument }) {
       <p className="report-summary">{report.summary}</p>
 
       <ReportDecisionSummary report={report} />
+
+      {report.aiWeeklySummary ? (
+        <section className="f9-proof-packet" aria-label="AI weekly summary">
+          <div>
+            <span className="f9-app-kicker">AI weekly summary</span>
+            <h3>What competitors did this week</h3>
+            <p className="f9-muted-copy">
+              Written by AI from the digest for the week ending{" "}
+              <LocalTime iso={report.aiWeeklySummary.periodEnd} mode="date" />. Check the evidence rows below before sharing.
+            </p>
+          </div>
+          <p>{report.aiWeeklySummary.paragraph}</p>
+        </section>
+      ) : null}
 
       {report.sourceCoverage ? (
         <section className="f9-proof-packet" aria-label="Report source coverage">
@@ -83,186 +123,225 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
       <section className="report-list" aria-label="Report rows">
         {report.rows.map((row) => (
-          <article className="report-card" key={row.id}>
-            <div className="report-card-header">
-              <div>
-                <p className="f9-app-kicker">{row.formatLabel}</p>
-                <h2>{formatAdvertiserLabel(row.advertiser)}</h2>
-                <p className="f9-muted-copy">{row.previewHeadline}</p>
-              </div>
-              <div className="report-card-meta">
-                <span className="f9-status-pill">{row.languageLabel}</span>
-                {row.event ? <span className="f9-status-pill">{row.event.typeLabel}</span> : null}
-              </div>
+          <ReportRowCard key={row.id} row={row} />
+        ))}
+      </section>
+      {report.rows.length === 0 ? (
+        <EmptyState
+          description="Only client-ready changes with saved evidence are included in source-backed reports."
+          title="No client-ready evidence in this report"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ReportRowCard({ row }: { row: ReportDocument["rows"][number] }) {
+  const advertiser = presentReportValue(row.advertiser);
+  const previewHeadline = presentReportValue(row.previewHeadline);
+  const languageLabel = presentReportValue(row.languageLabel);
+  const heading = advertiser
+    ? formatAdvertiserLabel(advertiser)
+    : previewHeadline ?? row.event?.title ?? "Saved ad";
+  const subheading = advertiser ? previewHeadline : null;
+
+  const adSummaryFields = [
+    { label: "Offer", value: presentReportValue(row.offer) },
+    { label: "CTA", value: presentReportValue(row.cta) },
+    { label: "Creative text", value: presentReportValue(row.creativeText) },
+    { label: "Translated text", value: presentReportValue(row.translatedText) },
+  ].filter((field): field is { label: string; value: string } => Boolean(field.value));
+  const hasAdSummary = adSummaryFields.length > 0 || row.tags.length > 0 || Boolean(row.note);
+
+  const landingPageUrl = presentReportValue(row.landingPage.url);
+  const landingPageHeadline = presentReportValue(row.landingPage.headline);
+  const captureLabel = presentReportValue(row.landingPage.captureLabel);
+  const landingPageSignals = row.landingPage.signals
+    .map((signal) => ({ label: signal.label, value: presentReportValue(signal.value) }))
+    .filter((signal): signal is { label: string; value: string } => Boolean(signal.value));
+  const hasLandingPage =
+    Boolean(landingPageUrl || landingPageHeadline || captureLabel) ||
+    landingPageSignals.length > 0;
+
+  return (
+    <article className="report-card">
+      <div className="report-card-header">
+        <div>
+          <p className="f9-app-kicker">{row.formatLabel}</p>
+          <h2>{heading}</h2>
+          {subheading ? <p className="f9-muted-copy">{subheading}</p> : null}
+        </div>
+        <div className="report-card-meta">
+          {languageLabel ? <span className="f9-status-pill">{languageLabel}</span> : null}
+          {row.event ? <span className="f9-status-pill">{row.event.typeLabel}</span> : null}
+        </div>
+      </div>
+
+      {row.previewImageUrl ? (
+        <img
+          alt={`${heading} creative preview`}
+          className="report-preview"
+          referrerPolicy="no-referrer"
+          src={row.previewImageUrl}
+        />
+      ) : null}
+
+      {row.event ? (
+        <section className="report-event">
+          <p className="f9-app-kicker">Competitor change</p>
+          <h3>{row.event.title}</h3>
+          <p>{row.event.summary}</p>
+          <dl className="proof-trail-list">
+            <div>
+              <dt>Source status</dt>
+              <dd>{legacyReportLabelText(row.event.proofStatusLabel)}</dd>
             </div>
-
-            {row.previewImageUrl ? (
-              <img
-                alt={`${formatAdvertiserLabel(row.advertiser)} creative preview`}
-                className="report-preview"
-                src={row.previewImageUrl}
-              />
+            <div>
+              <dt>Source type</dt>
+              <dd>{legacyReportLabelText(row.event.sourceTypeLabel)}</dd>
+            </div>
+            <div>
+              <dt>Priority</dt>
+              <dd>
+                {row.event.priorityBand}
+                {row.event.priorityScore === null ? "" : ` · ${row.event.priorityScore}/100`}
+              </dd>
+            </div>
+            <div>
+              <dt>Next move</dt>
+              <dd>{row.event.recommendedAction}</dd>
+            </div>
+            <div>
+              <dt>Source trail</dt>
+              <dd>{legacyReportLabelText(row.event.proofTrail)}</dd>
+            </div>
+            {row.event.sourceUrl && isHttpUrl(row.event.sourceUrl) ? (
+              <div>
+                <dt>Source link</dt>
+                <dd>
+                  <a href={row.event.sourceUrl} rel="noreferrer" target="_blank">
+                    Open source
+                  </a>
+                </dd>
+              </div>
             ) : null}
-
-            {row.event ? (
-              <section className="report-event">
-                <p className="f9-app-kicker">Competitor change</p>
-                <h3>{row.event.title}</h3>
-                <p>{row.event.summary}</p>
-                <dl className="proof-trail-list">
-                  <div>
-                    <dt>Source status</dt>
-                    <dd>{legacyReportLabelText(row.event.proofStatusLabel)}</dd>
-                  </div>
-                  <div>
-                    <dt>Source type</dt>
-                    <dd>{legacyReportLabelText(row.event.sourceTypeLabel)}</dd>
-                  </div>
-                  <div>
-                    <dt>Priority</dt>
-                    <dd>
-                      {row.event.priorityBand}
-                      {row.event.priorityScore === null ? "" : ` · ${row.event.priorityScore}/100`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Next move</dt>
-                    <dd>{row.event.recommendedAction}</dd>
-                  </div>
-                  <div>
-                    <dt>Source trail</dt>
-                    <dd>{legacyReportLabelText(row.event.proofTrail)}</dd>
-                  </div>
-                  {row.event.sourceUrl && isHttpUrl(row.event.sourceUrl) ? (
-                    <div>
-                      <dt>Source link</dt>
-                      <dd>
-                        <a href={row.event.sourceUrl} rel="noreferrer" target="_blank">
-                          Open source
-                        </a>
-                      </dd>
-                    </div>
-                  ) : null}
-                  {row.event.metaAdId ? (
-                    <div>
-                      <dt>Meta ad ID</dt>
-                      <dd>{row.event.metaAdId}</dd>
-                    </div>
-                  ) : null}
-                </dl>
-                <p className="f9-muted-copy">
-                  <LocalTime iso={row.event.createdAt} />
-                </p>
-              </section>
+            {row.event.metaAdId ? (
+              <div>
+                <dt>Meta ad ID</dt>
+                <dd>{row.event.metaAdId}</dd>
+              </div>
             ) : null}
+          </dl>
+          <p className="f9-muted-copy">
+            <LocalTime iso={row.event.createdAt} />
+          </p>
+        </section>
+      ) : null}
 
-            <div className="report-columns">
-              <section className="report-column">
-                <p className="f9-app-kicker">Ad summary</p>
+      {hasAdSummary || hasLandingPage ? (
+        <div className="report-columns">
+          {hasAdSummary ? (
+            <section className="report-column">
+              <p className="f9-app-kicker">Ad summary</p>
+              {adSummaryFields.length > 0 ? (
                 <dl className="report-field-list">
-                  <div className="report-field">
-                    <dt>Offer</dt>
-                    <dd>{row.offer}</dd>
-                  </div>
-                  <div className="report-field">
-                    <dt>CTA</dt>
-                    <dd>{row.cta}</dd>
-                  </div>
-                  <div className="report-field">
-                    <dt>Creative text</dt>
-                    <dd>{row.creativeText}</dd>
-                  </div>
-                  <div className="report-field">
-                    <dt>Translated text</dt>
-                    <dd>{row.translatedText}</dd>
-                  </div>
+                  {adSummaryFields.map((field) => (
+                    <div className="report-field" key={`${row.id}-summary-${field.label}`}>
+                      <dt>{field.label}</dt>
+                      <dd>{field.value}</dd>
+                    </div>
+                  ))}
                 </dl>
+              ) : null}
 
-                {row.tags.length > 0 ? (
-                  <div className="report-tag-list">
-                    {row.tags.map((tag) => (
-                      <span className="f9-status-pill" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
+              {row.tags.length > 0 ? (
+                <div className="report-tag-list">
+                  {row.tags.map((tag) => (
+                    <span className="f9-status-pill" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
 
-                {row.note ? (
-                  <div className="report-note">
-                    <p className="f9-app-kicker">Team note</p>
-                    <p>{row.note}</p>
-                  </div>
-                ) : null}
-              </section>
+              {row.note ? (
+                <div className="report-note">
+                  <p className="f9-app-kicker">Team note</p>
+                  <p>{row.note}</p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
-              <section className="report-column">
-                <p className="f9-app-kicker">Landing page</p>
-                <dl className="report-field-list">
+          {hasLandingPage ? (
+            <section className="report-column">
+              <p className="f9-app-kicker">Landing page</p>
+              <dl className="report-field-list">
+                {landingPageUrl ? (
                   <div className="report-field">
                     <dt>URL</dt>
                     <dd>
-                      {isHttpUrl(row.landingPage.url) ? (
-                        <a href={row.landingPage.url} rel="noreferrer" target="_blank">
-                          {row.landingPage.url}
+                      {isHttpUrl(landingPageUrl) ? (
+                        <a href={landingPageUrl} rel="noreferrer" target="_blank">
+                          {landingPageUrl}
                         </a>
                       ) : (
-                        row.landingPage.url
+                        landingPageUrl
                       )}
                     </dd>
                   </div>
+                ) : null}
+                {landingPageHeadline ? (
                   <div className="report-field">
                     <dt>Headline</dt>
-                    <dd>{row.landingPage.headline}</dd>
+                    <dd>{landingPageHeadline}</dd>
                   </div>
+                ) : null}
+                {captureLabel ? (
                   <div className="report-field">
                     <dt>Capture</dt>
                     <dd>
-                      {row.landingPage.captureLabel}
+                      {captureLabel}
                       {row.landingPage.capturedAt ? (
                         <> · <LocalTime iso={row.landingPage.capturedAt} /></>
                       ) : null}
                     </dd>
                   </div>
-                </dl>
+                ) : null}
+              </dl>
 
+              {landingPageSignals.length > 0 ? (
                 <div className="report-signal-grid">
-                  {row.landingPage.signals.map((signal) => (
+                  {landingPageSignals.map((signal) => (
                     <div className="report-signal-card" key={signal.label}>
                       <p className="f9-app-kicker">{signal.label}</p>
                       <strong>{signal.value}</strong>
                     </div>
                   ))}
                 </div>
-              </section>
-            </div>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
+      ) : null}
 
-            {row.analysisFields.length > 0 ? (
-              <section className="report-analysis">
-                <p className="f9-app-kicker">Evidence fields</p>
-                <dl className="report-field-list">
-                  {row.analysisFields.map((field) => (
-                    <div className="report-field" key={`${row.id}-${field.label}`}>
-                      <dt>{field.label}</dt>
-                      <dd>{field.value}</dd>
-                      {field.sourceLabel ? (
-                        <p className="report-field-meta">{field.sourceLabel}</p>
-                      ) : null}
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            ) : null}
-          </article>
-        ))}
-      </section>
-      {report.rows.length === 0 ? (
-        <section className="f9-empty-panel">
-          <h2>No client-ready evidence in this report</h2>
-          <p>Only client-ready changes with saved evidence are included in source-backed reports.</p>
+      {row.analysisFields.length > 0 ? (
+        <section className="report-analysis">
+          <p className="f9-app-kicker">Evidence fields</p>
+          <dl className="report-field-list">
+            {row.analysisFields.map((field) => (
+              <div className="report-field" key={`${row.id}-${field.label}`}>
+                <dt>{field.label}</dt>
+                <dd>{field.value}</dd>
+                {field.sourceLabel ? (
+                  <p className="report-field-meta">{field.sourceLabel}</p>
+                ) : null}
+              </div>
+            ))}
+          </dl>
         </section>
       ) : null}
-    </div>
+    </article>
   );
 }
 
