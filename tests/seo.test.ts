@@ -20,6 +20,19 @@ describe("public SEO files", () => {
     expect(sitemap?.body).not.toContain("https://0509.io/search");
   });
 
+  it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {
+    const robots = publicSeoFileForPathname("/robots.txt");
+
+    expect(robots?.body).toContain("Disallow: /app/");
+    expect(robots?.body).toContain("Disallow: /export/");
+    expect(robots?.body).toContain("Disallow: /api/");
+    expect(robots?.body).toContain("Allow: /api/docs");
+    // /share is de-indexed via the x-robots-tag header in
+    // workers/security-headers.ts; blocking the crawl here would hide that
+    // header from crawlers and leave bare URLs indexable.
+    expect(robots?.body).not.toContain("Disallow: /share");
+  });
+
   it("keeps security.txt canonical and contact addresses on the io domain", () => {
     const rootSecurity = readFileSync("public/security.txt", "utf8");
     const wellKnownSecurity = readFileSync("public/.well-known/security.txt", "utf8");

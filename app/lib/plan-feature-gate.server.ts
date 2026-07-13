@@ -196,3 +196,32 @@ export async function resolveWorkspacePreparedBy(env: AppEnv, workspaceUserId: s
   const branding = await getWorkspaceBranding(env, workspaceUserId);
   return branding.brandName;
 }
+
+export interface WorkspaceBrandIdentity {
+  brandName: string | null;
+  brandWebsite: string | null;
+  brandLogo: string | null;
+}
+
+/**
+ * Full brand identity for branded shared reports (Agency plan). Sibling of
+ * resolveWorkspacePreparedBy — that function's signature/behavior stays
+ * untouched for its existing consumers; render work adopts this one later.
+ */
+export async function resolveWorkspaceBrandIdentity(
+  env: AppEnv,
+  workspaceUserId: string,
+): Promise<WorkspaceBrandIdentity | null> {
+  const plan = await getUserPlan(env, workspaceUserId);
+  if (!canUsePlanFeature(plan, "agency_branding")) {
+    return null;
+  }
+
+  const { getWorkspaceBranding } = await import("~/lib/data.server");
+  const branding = await getWorkspaceBranding(env, workspaceUserId);
+  return {
+    brandName: branding.brandName,
+    brandWebsite: branding.brandWebsite,
+    brandLogo: branding.brandLogo,
+  };
+}
