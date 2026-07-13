@@ -2553,10 +2553,311 @@ describe("billing lifecycle emails", () => {
     expect(sent).toBe(true);
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(mocks.updateDeliveryAttemptResult).toHaveBeenCalledWith(
+    expect(mocks.updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "attempt-failed",
+      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
+    );
+    expect(mocks.updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
       expect.anything(),
       "attempt-failed",
       expect.objectContaining({ status: "sent" }),
+    );
+  });
+
+  it("atomically reclaims a failed dunning attempt so concurrent retries emit once", async () => {
+    const sendMock = mockEmailSend("msg_failed_retry_once");
+    const updateDeliveryAttemptResult = vi
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        id: "attempt-failed",
+        provider: "cloudflare_email",
+        status: "failed",
+        webhookStatus: "failed",
+        providerMessageId: null,
+      }),
+      updateDeliveryAttemptResult,
+    });
+
+    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
+    const input = {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+    };
+    const results = await Promise.all([
+      sendBillingPaymentIssueEmail(emailEnv as never, input),
+      sendBillingPaymentIssueEmail(emailEnv as never, input),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "attempt-failed",
+      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "attempt-failed",
+      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
+    );
+  });
+
+  it("claims the dunning idempotency key before sending so concurrent handlers emit once", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
+    const sendMock = mockEmailSend("msg_concurrent_1");
+    const getDeliveryAttemptByIdempotencyKey = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: "attempt-claimed", status: "pending" });
+    const createDeliveryAttempt = vi
+      .fn()
+      .mockResolvedValueOnce("attempt-claimed")
+      .mockRejectedValueOnce(new Error("UNIQUE constraint failed: delivery_attempt.idempotency_key"));
+    mockBillingDataServer({ createDeliveryAttempt, getDeliveryAttemptByIdempotencyKey });
+
+    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
+    const results = await Promise.all([
+      sendBillingPaymentIssueEmail(emailEnv as never, {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+      sendBillingPaymentIssueEmail(emailEnv as never, {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(createDeliveryAttempt).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not resend a billing email while a provider-timeout outcome is unknown", async () => {
+    const sendMock = mockEmailSend("msg_should_not_send");
+    const mocks = mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        id: "attempt-pending",
+        provider: "cloudflare_email",
+        status: "pending",
+        webhookStatus: "provider_unknown",
+      }),
+    });
+
+    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
+    const sent = await sendBillingRefundEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      eventId: "evt-refund-pending",
+    });
+
+    expect(sent).toBe(false);
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(mocks.updateDeliveryAttemptResult).not.toHaveBeenCalled();
+  });
+
+  it("reconciles an unknown billing attempt to failed so the same idempotent send can retry", async () => {
+    const sendMock = mockEmailSend("msg_reconciled_retry");
+    const pendingAttempt = {
+      id: "attempt-pending",
+      provider: "cloudflare_email",
+      status: "pending",
+      webhookStatus: "provider_unknown",
+    };
+    const failedAttempt = { ...pendingAttempt, status: "failed", webhookStatus: "failed" };
+    const getDeliveryAttemptByIdempotencyKey = vi
+      .fn()
+      .mockResolvedValueOnce(pendingAttempt)
+      .mockResolvedValueOnce(failedAttempt);
+    const updateDeliveryAttemptResult = vi.fn();
+    mockBillingDataServer({ getDeliveryAttemptByIdempotencyKey, updateDeliveryAttemptResult });
+
+    const { reconcileBillingLifecycleEmailDelivery, sendBillingRefundEmail } = await import(
+      "~/lib/delivery.server"
+    );
+    await expect(
+      reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
+        idempotencyKey: "billing-refund:user-1:evt-refund-retry",
+        outcome: "failed",
+        reconciledAt: "2026-07-13T09:05:00.000Z",
+        errorMessage: "Provider confirmed the timed-out send was not accepted.",
+      }),
+    ).resolves.toBe(true);
+
+    const sent = await sendBillingRefundEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      eventId: "evt-refund-retry",
+    });
+
+    expect(sent).toBe(true);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "attempt-pending",
+      expect.objectContaining({
+        expectedStatus: "pending",
+        status: "failed",
+        webhookStatus: "failed",
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "attempt-pending",
+      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      3,
+      expect.anything(),
+      "attempt-pending",
+      expect.objectContaining({ expectedStatus: "pending", status: "sent" }),
+    );
+  });
+
+  it("allows only the first of two conflicting billing reconciliations to win", async () => {
+    let durableStatus = "pending";
+    const pendingAttempt = {
+      id: "attempt-pending",
+      provider: "cloudflare_email",
+      status: "pending",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+    };
+    const updateDeliveryAttemptResult = vi.fn(
+      async (_env: unknown, _id: string, input: { expectedStatus?: string; status: string }) => {
+        if (input.expectedStatus && durableStatus !== input.expectedStatus) {
+          return false;
+        }
+        durableStatus = input.status;
+        return true;
+      },
+    );
+    mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(pendingAttempt),
+      updateDeliveryAttemptResult,
+    });
+
+    const { reconcileBillingLifecycleEmailDelivery } = await import("~/lib/delivery.server");
+    const [sentResult, failedResult] = await Promise.all([
+      reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
+        idempotencyKey: "billing-refund:user-1:evt-reconcile-race",
+        outcome: "sent",
+        reconciledAt: "2026-07-13T09:05:00.000Z",
+      }),
+      reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
+        idempotencyKey: "billing-refund:user-1:evt-reconcile-race",
+        outcome: "failed",
+        reconciledAt: "2026-07-13T09:05:01.000Z",
+      }),
+    ]);
+
+    expect([sentResult, failedResult].filter(Boolean)).toHaveLength(1);
+    expect(durableStatus).toBe("sent");
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(2);
+    for (const call of updateDeliveryAttemptResult.mock.calls) {
+      expect(call[2]).toEqual(expect.objectContaining({ expectedStatus: "pending" }));
+    }
+  });
+
+  it("does not overwrite reconciliation when provider finalization loses the pending claim", async () => {
+    let releaseProvider: ((value: { messageId: string }) => void) | undefined;
+    let signalProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      signalProviderStarted = resolve;
+    });
+    emailSend = vi.fn().mockImplementation(
+      () =>
+        new Promise<{ messageId: string }>((resolve) => {
+          releaseProvider = resolve;
+          signalProviderStarted?.();
+        }),
+    );
+
+    let durableStatus: string | null = null;
+    let durableWebhookStatus: string | null = null;
+    const createDeliveryAttempt = vi.fn().mockImplementation(async () => {
+      durableStatus = "pending";
+      durableWebhookStatus = "provider_unknown";
+      return "attempt-in-flight";
+    });
+    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockImplementation(async () => {
+      if (!durableStatus) {
+        return null;
+      }
+      return {
+        id: "attempt-in-flight",
+        provider: "cloudflare_email",
+        status: durableStatus,
+        webhookStatus: durableWebhookStatus,
+        providerMessageId: null,
+      };
+    });
+    const updateDeliveryAttemptResult = vi.fn(
+      async (
+        _env: unknown,
+        _id: string,
+        input: { expectedStatus?: string; status: string; webhookStatus: string },
+      ) => {
+        if (input.expectedStatus && durableStatus !== input.expectedStatus) {
+          return false;
+        }
+        durableStatus = input.status;
+        durableWebhookStatus = input.webhookStatus;
+        return true;
+      },
+    );
+    mockBillingDataServer({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey,
+      updateDeliveryAttemptResult,
+    });
+
+    const { reconcileBillingLifecycleEmailDelivery, sendBillingRefundEmail } = await import(
+      "~/lib/delivery.server"
+    );
+    const sendResult = sendBillingRefundEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      eventId: "evt-in-flight-reconcile",
+    });
+    await providerStarted;
+
+    await expect(
+      reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
+        idempotencyKey: "billing-refund:user-1:evt-in-flight-reconcile",
+        outcome: "failed",
+        reconciledAt: "2026-07-13T09:05:00.000Z",
+        errorMessage: "Provider evidence confirmed no acceptance.",
+      }),
+    ).resolves.toBe(true);
+    releaseProvider?.({ messageId: "msg_arrived_after_reconcile" });
+
+    await expect(sendResult).resolves.toBe(false);
+    expect(durableStatus).toBe("failed");
+    expect(durableWebhookStatus).toBe("failed");
+    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "attempt-in-flight",
+      expect.objectContaining({ expectedStatus: "pending", status: "sent" }),
     );
   });
 
@@ -2669,7 +2970,12 @@ describe("billing lifecycle emails", () => {
 
     expect(sent).toBe(false);
     const attempt = mocks.createDeliveryAttempt.mock.calls[0]?.[1];
-    expect(attempt.status).toBe("failed");
+    expect(attempt.status).toBe("pending");
     expect(attempt.idempotencyKey).toBe("billing-refund:user-1:evt-refund-2");
+    expect(mocks.updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-1",
+      expect.objectContaining({ status: "failed", webhookStatus: "failed" }),
+    );
   });
 });

@@ -244,7 +244,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
     await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [2, 3]);
 
-    if (!grantChanged) return;
+    if (!grantChanged) return { changed: false };
 
     try {
       const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
@@ -252,7 +252,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     } catch {
       // Anchor columns may be absent on pre-migration databases during local dev.
     }
-    return;
+    return { changed: true };
   }
 
   const results = await db.batch([
@@ -266,6 +266,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   ]);
 
   await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1, 2]);
+  const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
 
   try {
     const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
@@ -273,6 +274,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   } catch {
     // Anchor columns may be absent on pre-migration databases during local dev.
   }
+  return { changed: grantChanged };
 }
 
 
@@ -302,7 +304,8 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
         plan = 'free',
         dodo_status = excluded.dodo_status,
         plan_updated_at = excluded.plan_updated_at
-      WHERE julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+      WHERE user_plan.plan != 'free'
+        AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
     `).bind(input.userId, input.status, planUpdatedAt),
     buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
       plan: "free",
@@ -315,7 +318,11 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
   await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1]);
 
   // Lets callers skip side effects (e.g. lifecycle emails) when the
-  // monotonic-timestamp guard rejected a stale/out-of-order event.
+  // monotonic-timestamp guard rejected a stale/out-of-order event, or when
+  // the plan was already free (SQLite counts a matched UPDATE row as changed
+  // even when values are identical, so a second terminal event — e.g.
+  // subscription.cancelled after refund.succeeded already revoked — would
+  // otherwise re-trigger the "plan has ended" email).
   return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
 }
 
@@ -343,6 +350,20 @@ export async function applyDodoRefundWithWatchlistReconcile(
           dodo_status = 'refunded',
           plan_updated_at = ?
       WHERE dodo_payment_id = ?
+        AND plan != 'free'
+        AND julianday(?) >= julianday(plan_updated_at)
+    `).bind(refundedAt, input.paymentId, refundedAt),
+    // Preserve the provider audit state when an earlier terminal event
+    // already moved the workspace to Free. This statement follows the plan
+    // transition in the same D1 batch; results[0] remains the only signal for
+    // whether customer-facing access actually changed.
+    db.prepare(`
+      UPDATE user_plan
+      SET dodo_status = 'refunded',
+          plan_updated_at = ?
+      WHERE dodo_payment_id = ?
+        AND plan = 'free'
+        AND dodo_status != 'refunded'
         AND julianday(?) >= julianday(plan_updated_at)
     `).bind(refundedAt, input.paymentId, refundedAt),
     db.prepare(`
@@ -368,6 +389,12 @@ export async function applyDodoRefundWithWatchlistReconcile(
     const watchlistIndex = statements.length - 2;
     await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [watchlistIndex]);
   }
+
+  // Lets callers skip the refund email when the monotonic-timestamp guard
+  // no-oped the plan update (e.g. an out-of-order refund webhook after a
+  // later plan change) — the email asserts "your workspace has moved to the
+  // Free plan", so it must only send when that transition really applied.
+  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
 }
 
 

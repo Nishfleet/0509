@@ -638,6 +638,49 @@ describe("Dodo billing atomicity (sqlite)", () => {
     expect(ledger.outcome).toBe("processed");
   });
 
+  it("reports a second terminal lifecycle event as unchanged once the workspace is already free", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
+      ) VALUES ('user-1', 'free', 'pay-1', 'refunded', '2026-07-01T00:00:00.000Z');
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-terminal-after-refund",
+      eventType: "subscription.cancelled",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        providerSubscriptionId: "sub-1",
+        status: "subscription.cancelled",
+        revokedAt: "2026-07-02T00:00:00.000Z",
+      },
+      0,
+      {
+        eventId: "evt-terminal-after-refund",
+        outcome: "processed",
+        metadata: { action: "revoke" },
+      },
+    );
+
+    expect(result).toEqual({ changed: false });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
+        .get("user-1"),
+    ).toMatchObject({ plan: "free", dodo_status: "refunded" });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-terminal-after-refund"),
+    ).toMatchObject({ outcome: "processed" });
+  });
+
   it("refunds payment access and reconciles watchlists atomically", async () => {
     const env = openEnv();
     fixtures[0]!.sqlite.exec(`
@@ -678,6 +721,48 @@ describe("Dodo billing atomicity (sqlite)", () => {
     expect(plan.plan).toBe("free");
     expect(plan.dodo_status).toBe("refunded");
     expect(activeCount.count).toBe(0);
+  });
+
+  it("reports refund reconciliation unchanged when an earlier terminal event already made the plan free", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
+      ) VALUES ('user-1', 'free', 'pay-refund', 'subscription.cancelled', '2026-07-01T00:00:00.000Z');
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-refund-after-cancel",
+      eventType: "refund.succeeded",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    const result = await applyDodoRefundWithWatchlistReconcile(
+      env,
+      {
+        paymentId: "pay-refund",
+        refundedAt: "2026-07-02T00:00:00.000Z",
+        userId: "user-1",
+      },
+      0,
+      {
+        eventId: "evt-refund-after-cancel",
+        outcome: "processed",
+        metadata: { action: "refund" },
+      },
+    );
+
+    expect(result).toEqual({ changed: false });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
+        .get("user-1"),
+    ).toMatchObject({ plan: "free", dodo_status: "refunded" });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-refund-after-cancel"),
+    ).toMatchObject({ outcome: "processed" });
   });
 
   it("reclaims a stale processing lease after a crash", async () => {
