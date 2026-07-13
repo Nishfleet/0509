@@ -11,6 +11,19 @@ import {
   getDiscoveryProviderState,
 } from "~/lib/data/ads.server";
 import {
+  listCollectionsPage,
+  listCollections,
+  getCollection,
+  createCollection,
+  listCollectionItemsPage,
+  listCollectionItems,
+  updateCollectionItem,
+  addAdToCollection,
+  addExternalProofToCollection,
+  deleteCollection,
+  deleteCollectionItem,
+} from "~/lib/data/collections.server";
+import {
   ensureDb,
   execute as run,
   queryAll as many,
@@ -35,28 +48,17 @@ import {
   isWhatsAppWebhookConfigured,
   type AppEnv,
 } from "~/lib/env.server";
-import { buildExternalProofAd } from "~/lib/external-proof.server";
-import {
-  decodeListCursor,
-  nextListCursorFromPage,
-  resolveListPageLimit,
-  type ListPageOptions,
-  type ListPageResult,
-} from "~/lib/list-pagination";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
 import { normalizeSupportCaseInput, SupportCaseInputError } from "~/lib/support";
 import { SUPPORT_CASE_EVENT_TYPES } from "~/lib/types";
 import type {
-  AdRecord,
   AdDiscoveryProvider,
   AgentActionAuditRecord,
   AgentActionAuditStatus,
   AgentMemoryRecord,
   AgentMemoryScope,
   AppSession,
-  CollectionItemRecord,
-  CollectionRecord,
   ClientRoomRecord,
   ClientRoomResourceRef,
   CustomerMetaConnectionRecord,
@@ -92,25 +94,6 @@ interface SavedQueryRow {
   fingerprint: string;
   run_count: number;
   last_run_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface CollectionRow {
-  id: string;
-  user_id: string;
-  name: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface CollectionItemRow {
-  id: string;
-  collection_id: string;
-  ad_id: string;
-  note: string | null;
-  ad_snapshot_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -384,6 +367,19 @@ export {
   listRetryableDigestRuns,
 } from "~/lib/data/digests.server";
 
+export {
+  listCollectionsPage,
+  listCollections,
+  getCollection,
+  createCollection,
+  listCollectionItemsPage,
+  listCollectionItems,
+  updateCollectionItem,
+  addAdToCollection,
+  addExternalProofToCollection,
+  deleteCollection,
+  deleteCollectionItem,
+};
 
 export async function findAgentActionAuditByIdempotencyKey(
   env: AppEnv,
@@ -1593,17 +1589,6 @@ function toSavedQueryRecord(row: SavedQueryRow): SavedQueryRecord {
   };
 }
 
-function toCollectionRecord(row: CollectionRow): CollectionRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    name: row.name,
-    description: row.description,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
 
 export async function getOldestUserId(env: AppEnv) {
   const row = await one<{ id: string }>(
@@ -1723,388 +1708,6 @@ export async function touchSavedQueryRun(env: AppEnv, savedQueryId: string) {
     timestamp,
     savedQueryId,
   );
-}
-
-
-const COLLECTION_LIST_COLUMNS = `
-  id,
-  user_id,
-  name,
-  description,
-  created_at,
-  updated_at
-`;
-
-const COLLECTION_ITEM_LIST_COLUMNS = `
-  id,
-  collection_id,
-  ad_id,
-  note,
-  ad_snapshot_json,
-  created_at,
-  updated_at
-`;
-
-const USER_LIST_PAGE_SIZE = 500;
-
-export async function listCollectionsPage(
-  env: AppEnv,
-  userId: string,
-  options: ListPageOptions = {},
-): Promise<ListPageResult<CollectionRecord>> {
-  const limit = resolveListPageLimit(options.limit, USER_LIST_PAGE_SIZE);
-  const cursor = decodeListCursor(options.cursor);
-  const rows = await many<CollectionRow>(
-    env,
-    `
-      SELECT ${COLLECTION_LIST_COLUMNS}
-      FROM collection
-      WHERE user_id = ?
-        ${cursor ? "AND (updated_at < ? OR (updated_at = ? AND id < ?))" : ""}
-      ORDER BY updated_at DESC, id DESC
-      LIMIT ?
-    `,
-    ...(cursor
-      ? [userId, cursor.sortValue, cursor.sortValue, cursor.id, limit]
-      : [userId, limit]),
-  );
-  const items = rows.map(toCollectionRecord);
-  return {
-    items,
-    nextCursor: nextListCursorFromPage(
-      items,
-      limit,
-      (item) => item.updatedAt,
-      (item) => item.id,
-    ),
-  };
-}
-
-export async function listCollections(
-  env: AppEnv,
-  userId: string,
-  options: ListPageOptions = {},
-) {
-  const page = await listCollectionsPage(env, userId, options);
-  return page.items;
-}
-
-export async function getCollection(env: AppEnv, collectionId: string, userId?: string) {
-  const row = await one<CollectionRow>(
-    env,
-    `
-      SELECT *
-      FROM collection
-      WHERE id = ? ${userId ? "AND user_id = ?" : ""}
-    `,
-    ...(userId ? [collectionId, userId] : [collectionId]),
-  );
-
-  return row ? toCollectionRecord(row) : null;
-}
-
-export async function createCollection(
-  env: AppEnv,
-  userId: string,
-  input: { name: string; description?: string | null },
-) {
-  const id = createId();
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO collection (id, user_id, name, description, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `,
-    id,
-    userId,
-    input.name.trim(),
-    input.description?.trim() ?? null,
-    timestamp,
-    timestamp,
-  );
-
-  const row = await one<CollectionRow>(env, "SELECT * FROM collection WHERE id = ?", id);
-  return row ? toCollectionRecord(row) : null;
-}
-
-export async function listCollectionItemsPage(
-  env: AppEnv,
-  collectionId: string,
-  options: ListPageOptions = {},
-): Promise<ListPageResult<CollectionItemRecord>> {
-  const limit = resolveListPageLimit(options.limit, USER_LIST_PAGE_SIZE);
-  const cursor = decodeListCursor(options.cursor);
-  const rows = await many<CollectionItemRow>(
-    env,
-    `
-      SELECT ${COLLECTION_ITEM_LIST_COLUMNS}
-      FROM collection_item
-      WHERE collection_id = ?
-        ${cursor ? "AND (created_at < ? OR (created_at = ? AND id < ?))" : ""}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `,
-    ...(cursor
-      ? [collectionId, cursor.sortValue, cursor.sortValue, cursor.id, limit]
-      : [collectionId, limit]),
-  );
-
-  const tagsByItemId = new Map<string, string[]>();
-
-  if (rows.length > 0) {
-    // Join through collection_item instead of expanding item ids into
-    // `IN (?, ...)` — D1 caps bound parameters at 100, so collections with
-    // more than 100 items would otherwise fail to load.
-    const tags = await many<{ collection_item_id: string; label: string }>(
-      env,
-      `
-        SELECT collection_item_tag.collection_item_id, tag.label
-        FROM collection_item_tag
-        INNER JOIN tag ON tag.id = collection_item_tag.tag_id
-        INNER JOIN collection_item ON collection_item.id = collection_item_tag.collection_item_id
-        WHERE collection_item.collection_id = ?
-        ORDER BY tag.label ASC
-      `,
-      collectionId,
-    );
-
-    for (const row of tags) {
-      const next = tagsByItemId.get(row.collection_item_id) ?? [];
-      next.push(row.label);
-      tagsByItemId.set(row.collection_item_id, next);
-    }
-  }
-
-  const items = rows.map<CollectionItemRecord>((row: CollectionItemRow) => ({
-    id: row.id,
-    collectionId: row.collection_id,
-    adId: row.ad_id,
-    note: row.note,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    ad: parseJson<AdRecord>(row.ad_snapshot_json, {} as AdRecord),
-    tags: tagsByItemId.get(row.id) ?? [],
-  }));
-
-  return {
-    items,
-    nextCursor: nextListCursorFromPage(
-      items,
-      limit,
-      (item) => item.createdAt,
-      (item) => item.id,
-    ),
-  };
-}
-
-export async function listCollectionItems(
-  env: AppEnv,
-  collectionId: string,
-  options: ListPageOptions = {},
-) {
-  const page = await listCollectionItemsPage(env, collectionId, options);
-  return page.items;
-}
-
-export async function updateCollectionItem(
-  env: AppEnv,
-  userId: string,
-  itemId: string,
-  input: { note: string | null; tags: string[] },
-) {
-  const owner = await one<{ id: string }>(
-    env,
-    `
-      SELECT collection_item.id
-      FROM collection_item
-      INNER JOIN collection ON collection.id = collection_item.collection_id
-      WHERE collection_item.id = ? AND collection.user_id = ?
-    `,
-    itemId,
-    userId,
-  );
-
-  if (!owner) {
-    throw new Error("Collection item not found.");
-  }
-
-  const timestamp = nowIso();
-  await run(
-    env,
-    "UPDATE collection_item SET note = ?, updated_at = ? WHERE id = ?",
-    input.note?.trim() || null,
-    timestamp,
-    itemId,
-  );
-
-  await run(env, "DELETE FROM collection_item_tag WHERE collection_item_id = ?", itemId);
-  const tagIds = await ensureTags(env, userId, input.tags);
-
-  for (const tagId of tagIds) {
-    await run(
-      env,
-      `
-        INSERT INTO collection_item_tag (collection_item_id, tag_id)
-        VALUES (?, ?)
-      `,
-      itemId,
-      tagId,
-    );
-  }
-}
-
-export async function addAdToCollection(
-  env: AppEnv,
-  userId: string,
-  collectionId: string,
-  ad: AdRecord,
-  note: string | null,
-  tags: string[],
-) {
-  const collection = await one<{ id: string }>(
-    env,
-    "SELECT id FROM collection WHERE id = ? AND user_id = ?",
-    collectionId,
-    userId,
-  );
-
-  if (!collection) {
-    throw new Error("Collection not found.");
-  }
-
-  await upsertAd(env, ad);
-
-  const itemId = createId();
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO collection_item (
-        id,
-        collection_id,
-        ad_id,
-        note,
-        ad_snapshot_json,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(collection_id, ad_id)
-      DO UPDATE SET note = excluded.note,
-                    ad_snapshot_json = excluded.ad_snapshot_json,
-                    updated_at = excluded.updated_at
-    `,
-    itemId,
-    collectionId,
-    ad.metaAdId,
-    note?.trim() || null,
-    jsonValue(ad),
-    timestamp,
-    timestamp,
-  );
-
-  const row = await one<{ id: string }>(
-    env,
-    "SELECT id FROM collection_item WHERE collection_id = ? AND ad_id = ?",
-    collectionId,
-    ad.metaAdId,
-  );
-
-  if (row) {
-    await updateCollectionItem(env, userId, row.id, { note, tags });
-  }
-}
-
-export async function addExternalProofToCollection(
-  env: AppEnv,
-  userId: string,
-  collectionId: string,
-  input: {
-    advertiser: string;
-    proofUrl: string;
-    channel: string;
-    hook: string;
-    offer?: string | null;
-    cta?: string | null;
-    note?: string | null;
-    observedAt?: string | null;
-    spend?: string | null;
-    impressions?: string | null;
-    reach?: string | null;
-    tags?: string[];
-  },
-) {
-  const ad = buildExternalProofAd(input);
-  const tags = [...new Set([...(input.tags ?? []), ...(ad.tags ?? [])])];
-  await addAdToCollection(env, userId, collectionId, ad, input.note ?? null, tags);
-
-  return ad;
-}
-
-async function ensureTags(env: AppEnv, userId: string, labels: string[]) {
-  const uniqueLabels = [...new Set(labels.map((label) => label.trim()).filter(Boolean))];
-  const ids: string[] = [];
-
-  for (const label of uniqueLabels) {
-    const existing = await one<{ id: string }>(
-      env,
-      "SELECT id FROM tag WHERE user_id = ? AND label = ?",
-      userId,
-      label,
-    );
-
-    if (existing) {
-      ids.push(existing.id);
-      continue;
-    }
-
-    const id = createId();
-    const timestamp = nowIso();
-    await run(
-      env,
-      `
-        INSERT INTO tag (id, user_id, label, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-      `,
-      id,
-      userId,
-      label,
-      timestamp,
-      timestamp,
-    );
-    ids.push(id);
-  }
-
-  return ids;
-}
-
-
-export async function deleteCollection(env: AppEnv, userId: string, collectionId: string) {
-  const db = ensureDb(env);
-  // collection_item and collection_item_tag rows cascade.
-  const result = await db
-    .prepare("DELETE FROM collection WHERE id = ? AND user_id = ?")
-    .bind(collectionId, userId)
-    .run();
-
-  return Number(result.meta?.changes ?? 0) > 0;
-}
-
-export async function deleteCollectionItem(env: AppEnv, userId: string, itemId: string) {
-  const db = ensureDb(env);
-  const result = await db
-    .prepare(
-      `
-        DELETE FROM collection_item
-        WHERE id = ?
-          AND collection_id IN (SELECT id FROM collection WHERE user_id = ?)
-      `,
-    )
-    .bind(itemId, userId)
-    .run();
-
-  return Number(result.meta?.changes ?? 0) > 0;
 }
 
 
