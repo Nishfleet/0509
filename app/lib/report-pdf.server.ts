@@ -90,7 +90,16 @@ export async function renderShareReportPdfResponse(
   }
 
   const capacity = await readBrowserLimits(env.BROWSER);
-  if (capacity && capacity.allowedBrowserAcquisitions < 1) {
+  if (!capacity) {
+    return pdfErrorResponse(
+      503,
+      "capacity_unavailable",
+      "PDF rendering capacity could not be verified. Try again shortly.",
+      PDF_CAPACITY_DEFAULT_RETRY_AFTER_SECONDS,
+    );
+  }
+
+  if (capacity.allowedBrowserAcquisitions < 1) {
     const retryAfterSeconds =
       normalizeRetryAfterSeconds(capacity.timeUntilNextAllowedBrowserAcquisition) ??
       PDF_CAPACITY_DEFAULT_RETRY_AFTER_SECONDS;
@@ -207,14 +216,35 @@ function resolveConfiguredOrigin(env: AppEnv) {
 
 async function readBrowserLimits(binding: NonNullable<AppEnv["BROWSER"]>) {
   try {
-    return (await promiseWithTimeout(
+    const limits = (await promiseWithTimeout(
       puppeteer.limits(binding),
       PDF_CAPACITY_LOOKUP_TIMEOUT_MS,
       "Browser Run limits lookup timed out.",
-    )) as BrowserRunLimits;
+    )) as unknown;
+    if (!isBrowserRunLimits(limits)) {
+      return null;
+    }
+
+    return limits;
   } catch {
     return null;
   }
+}
+
+function isBrowserRunLimits(value: unknown): value is BrowserRunLimits {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const limits = value as Partial<BrowserRunLimits>;
+  return (
+    typeof limits.allowedBrowserAcquisitions === "number" &&
+    Number.isInteger(limits.allowedBrowserAcquisitions) &&
+    limits.allowedBrowserAcquisitions >= 0 &&
+    typeof limits.timeUntilNextAllowedBrowserAcquisition === "number" &&
+    Number.isFinite(limits.timeUntilNextAllowedBrowserAcquisition) &&
+    limits.timeUntilNextAllowedBrowserAcquisition >= 0
+  );
 }
 
 function normalizeRetryAfterSeconds(value: number | null | undefined) {

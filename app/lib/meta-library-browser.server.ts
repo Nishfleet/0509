@@ -1068,12 +1068,15 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
   const seen = new Set<string>();
   const anchorRegex = /<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
 
-  for (const match of content.matchAll(anchorRegex)) {
+  const adAnchorMatches = Array.from(content.matchAll(anchorRegex)).filter((match) => {
     const href = decodeHtmlEntity(match[2] ?? "");
-    if (!/\/ads\/library\/\?/.test(href) && !/facebook\.com\/ads\/library\/\?/.test(href)) {
-      continue;
-    }
+    return /\/ads\/library\/\?/.test(href) || /facebook\.com\/ads\/library\/\?/.test(href);
+  });
+  const cardBlockStarts = buildRenderedCardBlockStarts(content, adAnchorMatches);
+  const renderedCardBoundaries = buildRenderedCardBoundaries(content);
 
+  for (const match of adAnchorMatches) {
+    const href = decodeHtmlEntity(match[2] ?? "");
     const idMatch = href.match(/[?&](?:amp;)?id=(\d+)/);
     const libraryId = idMatch?.[1];
     if (!libraryId || seen.has(libraryId)) {
@@ -1081,9 +1084,12 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
     }
     seen.add(libraryId);
 
-    const contextStart = Math.max(0, (match.index ?? 0) - 1200);
-    const contextEnd = Math.min(content.length, (match.index ?? 0) + match[0].length + 1800);
-    const contextHtml = content.slice(contextStart, contextEnd);
+    const anchorStart = match.index ?? 0;
+    const renderedCardBoundary = findRenderedCardBoundary(renderedCardBoundaries, anchorStart);
+    const contextHtml =
+      renderedCardBoundary
+        ? content.slice(renderedCardBoundary.start, renderedCardBoundary.end)
+        : sliceRenderedCardBlock(content, anchorStart, libraryId, cardBlockStarts);
     const contextLineText = stripHtmlPreservingLines(contextHtml);
     const body = stripHtml(contextHtml) || stripHtml(match[3] ?? "");
     const landingPageUrl = extractExternalLink(contextHtml);
@@ -1113,6 +1119,166 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
       text.includes("too many requests") ||
       text.includes("try again later"),
   };
+}
+
+type RenderedCardBlockStart = { libraryId: string; start: number };
+
+/** Keep rendered-HTML fallback extraction inside one deterministic Library ID block. */
+function buildRenderedCardBlockStarts(
+  content: string,
+  adAnchorMatches: RegExpMatchArray[],
+): RenderedCardBlockStart[] {
+  const starts = new Map<string, number>();
+
+  for (const match of adAnchorMatches) {
+    const href = decodeHtmlEntity(match[2] ?? "");
+    const libraryId = href.match(/[?&](?:amp;)?id=(\d+)/)?.[1];
+    if (!libraryId || starts.has(libraryId)) {
+      continue;
+    }
+    starts.set(libraryId, match.index ?? 0);
+  }
+
+  const libraryIdLineRegex = /Library\s+ID:\s*(\d+)/gi;
+  for (const match of content.matchAll(libraryIdLineRegex)) {
+    const libraryId = match[1];
+    if (!libraryId) {
+      continue;
+    }
+    const start = match.index ?? 0;
+    const current = starts.get(libraryId);
+    starts.set(libraryId, current === undefined ? start : Math.min(current, start));
+  }
+
+  return [...starts]
+    .map(([libraryId, start]) => ({ libraryId, start }))
+    .sort((a, b) => a.start - b.start);
+}
+
+function sliceRenderedCardBlock(
+  content: string,
+  anchorStart: number,
+  libraryId: string,
+  cardBlockStarts: RenderedCardBlockStart[],
+) {
+  const current = cardBlockStarts.find((entry) => entry.libraryId === libraryId);
+  const blockStart = current?.start ?? anchorStart;
+  const next = cardBlockStarts.find((entry) => entry.start > blockStart);
+  const blockEnd = next?.start ?? content.length;
+  return content.slice(blockStart, Math.max(blockStart, blockEnd));
+}
+
+type RenderedCardBoundary = { start: number; end: number; libraryIds: Set<string> };
+type RenderedCardStackEntry = {
+  name: string;
+  start: number;
+  boundary: boolean;
+  libraryIds: Set<string>;
+};
+
+/** Scan semantic card boundaries once; selection for each ad is then local. */
+function buildRenderedCardBoundaries(content: string): RenderedCardBoundary[] {
+  const tagRegex = /<!--[\s\S]*?-->|<\/?([a-z][\w:-]*)(?:\s[^>]*?)?>/gi;
+  const stack: RenderedCardStackEntry[] = [];
+  const voidTags = new Set([
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+  ]);
+  let match: RegExpExecArray | null;
+  const boundaries: RenderedCardBoundary[] = [];
+
+  while ((match = tagRegex.exec(content))) {
+    const rawTag = match[0];
+    const name = match[1]?.toLowerCase();
+    if (!name || rawTag.startsWith("<!--")) {
+      continue;
+    }
+    if (rawTag.startsWith("</")) {
+      const popped = popRenderedTag(stack, name);
+      if (popped?.boundary) {
+        boundaries.push({
+          start: popped.start,
+          end: (match.index ?? 0) + rawTag.length,
+          libraryIds: popped.libraryIds,
+        });
+      }
+      continue;
+    }
+    if (voidTags.has(name) || /\/\s*>$/.test(rawTag)) {
+      continue;
+    }
+    const entry: RenderedCardStackEntry = {
+      name,
+      start: match.index ?? 0,
+      boundary: isRenderedCardBoundary(rawTag, name),
+      libraryIds: new Set<string>(),
+    };
+    const libraryId = name === "a" ? extractLibraryIdFromAnchorTag(rawTag) : null;
+    if (libraryId) {
+      for (const ancestor of stack) {
+        if (ancestor.boundary) {
+          ancestor.libraryIds.add(libraryId);
+        }
+      }
+    }
+    stack.push(entry);
+  }
+
+  return boundaries;
+}
+
+function extractLibraryIdFromAnchorTag(rawTag: string) {
+  const href = rawTag.match(/\bhref=(['"])(.*?)\1/i)?.[2];
+  return decodeHtmlEntity(href ?? "").match(/[?&](?:amp;)?id=(\d+)/)?.[1] ?? null;
+}
+
+/** Prefer the smallest real card boundary with exactly one Library ID. */
+function findRenderedCardBoundary(boundaries: RenderedCardBoundary[], anchorStart: number) {
+  const boundary = boundaries
+    .filter(
+      (candidate) =>
+        candidate.start <= anchorStart && anchorStart < candidate.end && candidate.libraryIds.size === 1,
+    )
+    .sort((left, right) => left.end - left.start - (right.end - right.start))[0];
+  if (!boundary) {
+    return null;
+  }
+
+  return boundary;
+}
+
+function popRenderedTag(
+  stack: RenderedCardStackEntry[],
+  name: string,
+) {
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    if (stack[index].name !== name) {
+      continue;
+    }
+    const [popped] = stack.splice(index, 1);
+    return popped;
+  }
+  return null;
+}
+
+function isRenderedCardBoundary(rawTag: string, name: string) {
+  return (
+    name === "article" ||
+    /\brole\s*=\s*["']article["']/i.test(rawTag) ||
+    /\bdata-ad-preview(?:\s*=|\s|>)/i.test(rawTag)
+  );
 }
 
 function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[] {

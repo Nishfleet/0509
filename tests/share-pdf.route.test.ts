@@ -29,6 +29,7 @@ function makePuppeteerMocks(options: {
   pdf?: () => Promise<unknown>;
   goto?: () => Promise<unknown>;
   limits?: { allowedBrowserAcquisitions: number; timeUntilNextAllowedBrowserAcquisition: number };
+  limitsError?: unknown;
 } = {}) {
   const page = {
     goto: vi.fn(async (..._args: unknown[]) => (options.goto ? options.goto() : undefined)),
@@ -40,9 +41,15 @@ function makePuppeteerMocks(options: {
     close: vi.fn(async () => undefined),
   };
   const launch = vi.fn(async () => browser);
-  const limits = vi.fn(async () =>
-    options.limits ?? { allowedBrowserAcquisitions: 3, timeUntilNextAllowedBrowserAcquisition: 0 },
-  );
+  const limits = vi.fn(async () => {
+    if (options.limitsError !== undefined) {
+      throw options.limitsError;
+    }
+    return options.limits ?? {
+      allowedBrowserAcquisitions: 3,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    };
+  });
 
   vi.doMock("@cloudflare/puppeteer", () => ({
     default: { launch, limits },
@@ -200,6 +207,33 @@ describe("GET /share/:token/pdf", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("retry-after")).toBe("12");
     expect(await response.json()).toMatchObject({ error: "capacity_exhausted" });
+    expect(mocks.enforceSharePdfDailyCap).not.toHaveBeenCalled();
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when browser capacity preflight is rejected", async () => {
+    const mocks = mockCollaborators({});
+    const { launch } = makePuppeteerMocks({ limitsError: new Error("limits unavailable") });
+
+    const response = await runPdfRequest();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(await response.json()).toMatchObject({ error: "capacity_unavailable" });
+    expect(mocks.enforceSharePdfDailyCap).not.toHaveBeenCalled();
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when browser capacity preflight is malformed", async () => {
+    const mocks = mockCollaborators({});
+    const { launch } = makePuppeteerMocks({
+      limits: { allowedBrowserAcquisitions: Number.NaN, timeUntilNextAllowedBrowserAcquisition: 0 },
+    });
+
+    const response = await runPdfRequest();
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "capacity_unavailable" });
     expect(mocks.enforceSharePdfDailyCap).not.toHaveBeenCalled();
     expect(launch).not.toHaveBeenCalled();
   });

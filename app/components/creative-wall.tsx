@@ -74,8 +74,9 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
 }
 
 function CreativeTilePill({ item }: { item: CreativeWallItem }) {
-  // Meta-published start date wins; otherwise fall back to our own window.
-  if (adLongevityDays(item.ad) !== null) {
+  // Only active ads can keep accruing from Meta's published start date.
+  // Inactive ads use the closed local observation window below.
+  if (item.isActive && adLongevityDays(item.ad) !== null) {
     return <AdLongevityPill ad={item.ad} />;
   }
 

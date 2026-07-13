@@ -17,11 +17,49 @@ const session = {
   },
 };
 
-const PNG_BYTES = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00];
-const JPEG_BYTES = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0xff, 0xd9];
-const WEBP_BYTES = [
-  0x52, 0x49, 0x46, 0x46, 0x04, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
-];
+const PNG_BYTES = Array.from(
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+);
+const PNG_WITH_ZERO_LENGTH_IDAT_BYTES = Array.from(
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAElEQVQ1rwYeAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+);
+const PNG_WITH_UNKNOWN_CRITICAL_CHUNK_BYTES = Array.from(
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAEFCQ0TbFyClAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+);
+const JPEG_BYTES = Array.from(
+  Buffer.from(
+    "/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYyLjI4LjEwMgD/2wBDAAgEBAQEBAUFBQUFBQYGBgYGBgYGBgYGBgYHBwcICAgHBwcGBgcHCAgICAkJCQgICAgJCQoKCgwMCwsODg4RERT/xABMAAEBAAAAAAAAAAAAAAAAAAAABgEBAQAAAAAAAAAAAAAAAAAABgcQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCAABAAEDASIAAhEAAxEA/9oADAMBAAIRAxEAPwCLAE1/f//Z",
+    "base64",
+  ),
+);
+const WEBP_BYTES = Array.from(
+  Buffer.from(
+    "UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoBAAEAAgA0JaACdLoB+AADsAD+8Oj3/yC5YXXI1/8gP+QH/ID/+PIAAAA=",
+    "base64",
+  ),
+);
+const WEBP_LOSSLESS_BYTES = Array.from(
+  Buffer.from("UklGRhwAAABXRUJQVlA4TA8AAAAvAAAAAAcQ9Y/+ByKi/wEA", "base64"),
+);
+const ANIMATED_WEBP_BYTES = Array.from(
+  Buffer.from("UklGRhYAAABXRUJQVlA4WAoAAAACAAAAAAAAAAAA", "base64"),
+);
+const RESERVED_FLAG_WEBP_BYTES = [...ANIMATED_WEBP_BYTES];
+RESERVED_FLAG_WEBP_BYTES[20] = 1;
+const ZERO_DIMENSION_WEBP = [...WEBP_BYTES];
+ZERO_DIMENSION_WEBP[26] = 0;
+const ZERO_DIMENSION_JPEG = [...JPEG_BYTES];
+ZERO_DIMENSION_JPEG[192] = 0;
+ZERO_DIMENSION_JPEG[193] = 0;
 
 function createContext() {
   return { cloudflare: { env: {} } };
@@ -116,9 +154,46 @@ describe("account agency logo action", () => {
     expect(result).toMatchObject({ ok: true, intent: "save-report-branding" });
   });
 
+  it("accepts a minimal lossless WebP", async () => {
+    const upsertWorkspaceBranding = mockBrandingAction();
+    const formData = brandingForm();
+    formData.set("brandLogo", logoFile(WEBP_LOSSLESS_BYTES, "logo-lossless.webp", "image/webp"));
+
+    const result = await submitBranding(formData);
+
+    expect(upsertWorkspaceBranding).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      brandName: "Northwind Growth",
+      brandLogo: expectedDataUrl("image/webp", WEBP_LOSSLESS_BYTES),
+    });
+    expect(result).toMatchObject({ ok: true, intent: "save-report-branding" });
+  });
+
+  it("accepts legal zero-length IDAT chunks when the concatenated stream is non-empty", async () => {
+    const upsertWorkspaceBranding = mockBrandingAction();
+    const formData = brandingForm();
+    formData.set("brandLogo", logoFile(PNG_WITH_ZERO_LENGTH_IDAT_BYTES, "logo-zero-idat.png", "image/png"));
+
+    const result = await submitBranding(formData);
+
+    expect(upsertWorkspaceBranding).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      brandName: "Northwind Growth",
+      brandLogo: expectedDataUrl("image/png", PNG_WITH_ZERO_LENGTH_IDAT_BYTES),
+    });
+    expect(result).toMatchObject({ ok: true, intent: "save-report-branding" });
+  });
+
   it.each([
     ["MIME and content mismatch", logoFile(PNG_BYTES, "spoofed.jpg", "image/jpeg")],
     ["SVG", new File(["<svg></svg>"], "logo.svg", { type: "image/svg+xml" })],
+    ["signature-only PNG", logoFile(PNG_BYTES.slice(0, 8), "truncated.png", "image/png")],
+    ["truncated JPEG", logoFile(JPEG_BYTES.slice(0, 3), "truncated.jpg", "image/jpeg")],
+    ["zero-dimension JPEG", logoFile(ZERO_DIMENSION_JPEG, "zero-dimension.jpg", "image/jpeg")],
+    ["truncated WebP", logoFile(WEBP_BYTES.slice(0, 12), "truncated.webp", "image/webp")],
+    ["zero-dimension WebP", logoFile(ZERO_DIMENSION_WEBP, "zero-dimension.webp", "image/webp")],
+    ["malformed PNG chunk", logoFile(PNG_BYTES.slice(0, -4), "malformed.png", "image/png")],
+    ["unknown critical PNG chunk", logoFile(PNG_WITH_UNKNOWN_CRITICAL_CHUNK_BYTES, "unknown-critical.png", "image/png")],
+    ["animated WebP", logoFile(ANIMATED_WEBP_BYTES, "animated.webp", "image/webp")],
+    ["reserved-flag WebP", logoFile(RESERVED_FLAG_WEBP_BYTES, "reserved.webp", "image/webp")],
     ["empty named image", new File([], "empty.png", { type: "image/png" })],
     ["oversized image", new File([new Uint8Array(48_001)], "large.png", { type: "image/png" })],
   ])("rejects %s without writing", async (_label, file) => {
