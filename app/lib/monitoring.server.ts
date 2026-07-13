@@ -48,7 +48,10 @@ import {
   upsertProofTarget,
   upsertAd,
   addDigestItem,
+  updateDigestRunSummary,
 } from "~/lib/data.server";
+import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
+import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
@@ -1453,13 +1456,49 @@ async function runDigests(
         continue;
       }
 
+      // AI weekly strategy paragraph: paid weekly digests with movement only.
+      // Existing runs reuse the stored paragraph verbatim — regenerating would
+      // put nondeterministic content in front of the customer. A null result
+      // changes nothing downstream; absence is always silent.
+      let strategyParagraph: string | null = null;
+      if (existingDigest) {
+        strategyParagraph = readDigestStrategyNote(existingDigest.summary)?.paragraph ?? null;
+      } else if (
+        cadence === "weekly" &&
+        digestItems.length > 0 &&
+        (plan === "starter" || plan === "agency")
+      ) {
+        strategyParagraph = await buildWeeklyStrategyParagraph(env, {
+          items: digestItems,
+          totalChanges: digestItems.length,
+          watchlistCount: watchlists.length,
+          periodStart: periodStartIso,
+          periodEnd: periodEndIso,
+        });
+      }
+      const digestSummary: Record<string, unknown> = {
+        totalEvents: digestItems.length,
+        watchlists: watchlists.length,
+        ...(strategyParagraph
+          ? {
+              strategyParagraph,
+              strategyModel: DIGEST_STRATEGY_MODEL,
+              strategyGeneratedAt: new Date().toISOString(),
+            }
+          : {}),
+      };
+
       const digestRunId =
         existingDigest?.id ??
-        (await createDigestRun(env, user.id, periodStartIso, periodEndIso, {
-          totalEvents: digestItems.length,
-          watchlists: watchlists.length,
-        }));
+        (await createDigestRun(env, user.id, periodStartIso, periodEndIso, digestSummary));
       handledDigestRunIds.add(digestRunId);
+
+      if (!existingDigest && strategyParagraph) {
+        // createDigestRun is INSERT OR IGNORE: if a run row already existed,
+        // the summary above was silently dropped. Persist it explicitly BEFORE
+        // delivery so the retry sweep reuses this exact paragraph.
+        await updateDigestRunSummary(env, digestRunId, digestSummary);
+      }
 
       if (existingDigest) {
         await clearDigestItems(env, digestRunId);
@@ -1486,6 +1525,7 @@ async function runDigests(
         periodStart: periodStartIso,
         periodEnd: periodEndIso,
         items: digestItems,
+        strategyParagraph,
         cadence,
         lane: "customer",
       });
@@ -1563,6 +1603,8 @@ async function retryFailedDigests(
           summary: item.summary,
           metadata: item.metadata,
         })),
+        // Retries only ever replay the persisted paragraph — never regenerate.
+        strategyParagraph: readDigestStrategyNote(digest.summary)?.paragraph ?? null,
         cadence,
         lane: "customer",
       });

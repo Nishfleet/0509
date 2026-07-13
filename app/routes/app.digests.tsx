@@ -11,6 +11,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { DigestDecisionSummary, DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
+import { DigestStrategyNote } from "~/components/digest-strategy-note";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
@@ -305,6 +306,8 @@ export default function DigestsRoute() {
                     </Form>
                   </div>
                 </div>
+
+                <DigestStrategyNote summary={data.selectedDigest.summary ?? null} />
 
                 <div className="f9-detail-split">
                   <DigestDecisionSummary items={data.selectedDigest.items} />

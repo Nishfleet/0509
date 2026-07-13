@@ -235,6 +235,7 @@ async function loadReport(input: {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCollection,
+    getLatestDigestRunSummaryForUser,
     getWatchlist,
     listAdsByIds,
     listCollectionItems,
@@ -273,16 +274,21 @@ async function loadReport(input: {
   }
 
   const events = await listWatchEvents(env, watchlist.id, 60);
-  const ads = await listAdsByIds(
-    env,
-    events
-      .map((event) => event.adId)
-      .filter((adId): adId is string => Boolean(adId)),
-  );
+  const [ads, aiWeeklySummary] = await Promise.all([
+    listAdsByIds(
+      env,
+      events
+        .map((event) => event.adId)
+        .filter((adId): adId is string => Boolean(adId)),
+    ),
+    // Latest stored digest paragraph; never a fresh AI call at report time.
+    getLatestDigestRunSummaryForUser(env, workspaceUserId),
+  ]);
 
   return buildWatchlistReport({
     watchlist,
     events,
     adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
+    aiWeeklySummary,
   });
 }

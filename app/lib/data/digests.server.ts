@@ -16,6 +16,7 @@ import {
   parseJson,
   type JsonRecord,
 } from "~/lib/data/helpers.server";
+import { readDigestStrategyNote } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   DigestDeliveryRecord,
@@ -29,6 +30,7 @@ interface DigestRunRow {
   user_id: string;
   period_start: string;
   period_end: string;
+  summary_json: string;
   created_at: string;
 }
 
@@ -55,6 +57,14 @@ interface DigestDeliveryRow {
   delivered_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+function toDigestRunSummary(row: DigestRunRow): JsonRecord {
+  // summary_json is free-form JSON; legacy rows may hold non-object payloads.
+  const parsed = parseJson<unknown>(row.summary_json, {});
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as JsonRecord)
+    : {};
 }
 
 function toDigestItemRecord(row: DigestItemRow): DigestItemRecord {
@@ -129,6 +139,60 @@ export async function createDigestRun(
   );
 
   return row?.id ?? id;
+}
+
+/**
+ * Replaces a digest run's summary_json. createDigestRun is INSERT OR IGNORE
+ * (no update path), so callers that must guarantee the persisted summary —
+ * e.g. the AI strategy paragraph, which has to be stored BEFORE delivery so
+ * retries reuse it instead of regenerating — call this after createDigestRun.
+ */
+export async function updateDigestRunSummary(
+  env: AppEnv,
+  digestRunId: string,
+  summary: JsonRecord,
+) {
+  await run(
+    env,
+    "UPDATE digest_run SET summary_json = ? WHERE id = ?",
+    jsonValue(summary),
+    digestRunId,
+  );
+}
+
+const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;
+
+/**
+ * Returns the most recent stored AI strategy paragraph for a user, scanning
+ * the latest few digest runs (daily runs and heartbeats carry no paragraph).
+ * Read-only: never triggers generation.
+ */
+export async function getLatestDigestRunSummaryForUser(env: AppEnv, userId: string) {
+  const rows = await many<DigestRunRow>(
+    env,
+    `
+      SELECT id, user_id, period_start, period_end, summary_json, created_at
+      FROM digest_run
+      WHERE user_id = ?
+      ORDER BY period_end DESC
+      LIMIT ?
+    `,
+    userId,
+    LATEST_STRATEGY_SUMMARY_SCAN_LIMIT,
+  );
+
+  for (const row of rows) {
+    const note = readDigestStrategyNote(toDigestRunSummary(row));
+    if (note) {
+      return {
+        paragraph: note.paragraph,
+        generatedAt: note.generatedAt,
+        periodEnd: row.period_end,
+      };
+    }
+  }
+
+  return null;
 }
 
 export async function clearDigestItems(env: AppEnv, digestRunId: string) {
@@ -294,6 +358,7 @@ export async function listDigests(
       userId: run.user_id,
       periodStart: run.period_start,
       periodEnd: run.period_end,
+      summary: toDigestRunSummary(run),
       createdAt: run.created_at,
       items: (itemsByDigestId.get(run.id) ?? []).map(toDigestItemRecord),
       delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
@@ -320,6 +385,7 @@ export async function getDigest(env: AppEnv, digestRunId: string) {
     userId: run.user_id,
     periodStart: run.period_start,
     periodEnd: run.period_end,
+    summary: toDigestRunSummary(run),
     createdAt: run.created_at,
     items: items.map(toDigestItemRecord),
     delivery: delivery ? toDigestDeliveryRecord(delivery) : null,

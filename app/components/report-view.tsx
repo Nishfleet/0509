@@ -66,6 +66,20 @@ export function ReportView({ report }: { report: ReportDocument }) {
 
       <ReportDecisionSummary report={report} />
 
+      {report.aiWeeklySummary ? (
+        <section className="f9-proof-packet" aria-label="AI weekly summary">
+          <div>
+            <span className="f9-app-kicker">AI weekly summary</span>
+            <h3>What competitors did this week</h3>
+            <p className="f9-muted-copy">
+              Written by AI from the digest for the week ending{" "}
+              <LocalTime iso={report.aiWeeklySummary.periodEnd} mode="date" />. Check the evidence rows below before sharing.
+            </p>
+          </div>
+          <p>{report.aiWeeklySummary.paragraph}</p>
+        </section>
+      ) : null}
+
       {report.sourceCoverage ? (
         <section className="f9-proof-packet" aria-label="Report source coverage">
           <div>

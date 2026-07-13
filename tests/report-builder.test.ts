@@ -361,4 +361,45 @@ describe("buildWatchlistReport", () => {
       excluded: 3,
     });
   });
+
+  it("includes the stored AI weekly summary when provided", () => {
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+      aiWeeklySummary: {
+        paragraph:
+          "boAt introduced a new ad and left its landing page untouched, so creative rotation was the only movement this week.",
+        generatedAt: "2026-03-30T05:01:00.000Z",
+        periodEnd: "2026-03-30T05:00:00.000Z",
+      },
+    });
+
+    expect(report.aiWeeklySummary).toEqual({
+      paragraph:
+        "boAt introduced a new ad and left its landing page untouched, so creative rotation was the only movement this week.",
+      generatedAt: "2026-03-30T05:01:00.000Z",
+      periodEnd: "2026-03-30T05:00:00.000Z",
+    });
+  });
+
+  it("omits the AI weekly summary field entirely when none is stored", () => {
+    const withNull = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+      aiWeeklySummary: null,
+    });
+    const withoutKey = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect("aiWeeklySummary" in withNull).toBe(false);
+    expect(withNull).toEqual(withoutKey);
+  });
 });
