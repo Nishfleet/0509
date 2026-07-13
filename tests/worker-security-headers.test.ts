@@ -73,6 +73,36 @@ describe("Worker security headers", () => {
     expect(response.headers.get("expires")).toBe("0");
   });
 
+  it("marks share-link responses noindex for the document and data requests", () => {
+    const documentResponse = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/share/abc"),
+    );
+    const dataResponse = withSecurityHeaders(
+      new Response("{}", { headers: { "content-type": "application/json" } }),
+      new Request("https://0509.io/share/abc.data"),
+    );
+
+    expect(documentResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(dataResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+
+  it("does not mark public marketing pages noindex", () => {
+    const homeResponse = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/"),
+    );
+    const helpResponse = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/help"),
+    );
+    const noRequestResponse = withSecurityHeaders(new Response("ok"));
+
+    expect(homeResponse.headers.has("x-robots-tag")).toBe(false);
+    expect(helpResponse.headers.has("x-robots-tag")).toBe(false);
+    expect(noRequestResponse.headers.has("x-robots-tag")).toBe(false);
+  });
+
   it("leaves non-HTML asset caching alone", () => {
     const response = withSecurityHeaders(
       new Response("console.log('asset')", {
