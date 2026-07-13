@@ -17,6 +17,7 @@ import {
 } from "~/lib/proof-classification";
 import {
   createReportId,
+  type ReportAiWeeklySummary,
   type ReportDocument,
   type ReportField,
   type ReportResourceType,
@@ -96,6 +97,9 @@ export function buildWatchlistReport(input: {
   watchlist: WatchlistRecord;
   events: WatchEventRecord[];
   adsById: Map<string, AdRecord>;
+  // Latest stored digest-run AI paragraph (see getLatestDigestRunSummaryForUser).
+  // Never sourced from a fresh AI call; omitted when none is stored.
+  aiWeeklySummary?: ReportAiWeeklySummary | null;
   generatedAt?: string;
 }): ReportDocument {
   const generatedAt = input.generatedAt ?? new Date().toISOString();
@@ -151,6 +155,7 @@ export function buildWatchlistReport(input: {
     ],
     insightDepth: buildWatchlistInsightDepth(eligibleEvents),
     sourceCoverage,
+    ...(input.aiWeeklySummary ? { aiWeeklySummary: input.aiWeeklySummary } : {}),
     rows: rows.map(stripInternalMeta),
   };
 }

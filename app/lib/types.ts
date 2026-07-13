@@ -630,6 +630,9 @@ export interface DigestRecord {
   userId: string;
   periodStart: string;
   periodEnd: string;
+  // Free-form digest_run.summary_json (counts plus the optional AI strategy
+  // paragraph). Optional so snapshot/export fixtures predating it stay valid.
+  summary?: Record<string, unknown>;
   createdAt: string;
   items: DigestItemRecord[];
   delivery: DigestDeliveryRecord | null;

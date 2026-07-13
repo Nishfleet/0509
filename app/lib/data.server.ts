@@ -139,9 +139,11 @@ export {
   clearDigestItems,
   addDigestItem,
   upsertDigestDelivery,
+  updateDigestRunSummary,
   listDigests,
   getDigest,
   getDigestByPeriod,
+  getLatestDigestRunSummaryForUser,
   listRetryableDigestRuns,
 } from "~/lib/data/digests.server";
 

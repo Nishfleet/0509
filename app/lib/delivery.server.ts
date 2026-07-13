@@ -102,6 +102,9 @@ export interface DeliverWeeklyDigestInput {
   // Present when the period had zero changes but successful scans: the
   // digest becomes an "all quiet" heartbeat (email only).
   heartbeat?: DigestHeartbeat | null;
+  // Optional AI weekly strategy paragraph persisted on the digest run.
+  // Null/absent renders nothing — never an apology string.
+  strategyParagraph?: string | null;
   cadence?: DigestCadence;
   lane?: DeliveryLane;
 }
@@ -538,6 +541,7 @@ async function deliverDigestToEmailTarget(
     periodEnd: input.periodEnd,
     items: input.items,
     heartbeat: input.heartbeat ?? null,
+    strategyParagraph: input.strategyParagraph ?? null,
     cadence: input.cadence,
     timeZone,
     unsubscribeUrl,
@@ -2150,6 +2154,7 @@ function renderDigestEmail(
     periodEnd: string;
     items: DigestDeliveryItem[];
     heartbeat?: DigestHeartbeat | null;
+    strategyParagraph?: string | null;
     cadence?: DigestCadence;
     timeZone?: string | null;
     unsubscribeUrl: string | null;
@@ -2162,6 +2167,7 @@ function renderDigestEmail(
     periodEnd: input.periodEnd,
     items: input.items,
     heartbeat: input.heartbeat ?? null,
+    strategyParagraph: input.strategyParagraph ?? null,
     cadence: input.cadence,
     timeZone: input.timeZone ?? null,
     fullDigestUrl: `${baseUrl}/app/digests?digest=${encodeURIComponent(input.digestRunId)}`,

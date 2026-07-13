@@ -75,6 +75,12 @@ export interface ReportRow {
   event?: ReportEventSummary;
 }
 
+export interface ReportAiWeeklySummary {
+  paragraph: string;
+  generatedAt: string | null;
+  periodEnd: string;
+}
+
 export interface ReportDocument {
   kind: "report";
   reportId: string;
@@ -87,6 +93,9 @@ export interface ReportDocument {
   stats: ReportStat[];
   insightDepth: InsightDepthSummary;
   sourceCoverage?: ReportSourceCoverage;
+  // AI weekly summary sourced from the latest stored digest run — never a
+  // fresh AI call at report time. Absent renders nothing.
+  aiWeeklySummary?: ReportAiWeeklySummary;
   rows: ReportRow[];
 }
 
