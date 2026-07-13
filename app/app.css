@@ -8552,3 +8552,267 @@ one signal-green accent.
     transform: none;
   }
 }
+
+/* P2: creative wall + trend charts (2026-07-13) */
+
+.f9-creative-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-creative-tile {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
+  border-radius: 16px;
+  background: #fff;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.f9-creative-tile:hover {
+  border-color: rgba(10, 169, 130, 0.34);
+  box-shadow: 0 12px 26px rgba(6, 22, 41, 0.07);
+}
+
+/* Wall tiles reuse AdThumb but stretch it to the tile width. */
+.f9-creative-tile .f9-ad-thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 5;
+  border-radius: 12px;
+}
+
+.f9-creative-tile.is-inactive .f9-ad-thumb {
+  filter: grayscale(1);
+  opacity: 0.72;
+}
+
+.f9-creative-tile-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.f9-creative-tile-advertiser {
+  margin: 0;
+  overflow: hidden;
+  color: var(--f9-search-ink, #061629);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.f9-creative-tile-cta {
+  margin: 0;
+  overflow: hidden;
+  color: var(--f9-search-muted, #40546a);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.f9-creative-tile-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Tracked-days variant: our observation window, not Meta's published start
+   date — achromatic so it never reads as the green "Running" badge. */
+.f9-longevity-pill.f9-longevity-pill.is-tracked {
+  background: rgba(6, 22, 41, 0.07);
+  color: var(--f9-search-muted, #40546a);
+}
+
+.f9-creative-tile-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(6, 22, 41, 0.06);
+  color: var(--f9-search-soft, #64788d);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.f9-trend-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.f9-trend-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
+  border-radius: 22px;
+  background: #fff;
+}
+
+.f9-trend-label,
+.f9-trend-series-label {
+  margin: 0;
+  color: var(--f9-search-soft, #64788d);
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.f9-trend-series-label {
+  margin-top: 4px;
+  letter-spacing: 0.06em;
+}
+
+.f9-trend-value {
+  margin: 0;
+  color: var(--f9-search-ink, #061629);
+  font-size: 1.7rem;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.f9-trend-unit {
+  color: var(--f9-search-muted, #40546a);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.f9-trend-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.f9-trend-bar {
+  fill: rgba(6, 22, 41, 0.18);
+}
+
+.f9-trend-bar.is-accent {
+  fill: rgba(10, 169, 130, 0.78);
+}
+
+.f9-trend-baseline {
+  fill: rgba(6, 22, 41, 0.12);
+}
+
+.f9-trend-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--f9-search-soft, #64788d);
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.f9-trend-leaderboard {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-trend-leader-row {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.f9-trend-leader-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.f9-trend-leader-name {
+  overflow: hidden;
+  color: var(--f9-search-ink, #061629);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.f9-trend-leader-days {
+  flex-shrink: 0;
+  color: var(--f9-search-muted, #40546a);
+}
+
+.f9-trend-leader-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(6, 22, 41, 0.07);
+}
+
+.f9-trend-leader-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(10, 169, 130, 0.8);
+  transition: width 240ms ease;
+}
+
+.f9-trend-leader-fill.is-tracked {
+  background: rgba(6, 22, 41, 0.28);
+}
+
+.f9-trend-sparse {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed rgba(6, 22, 41, 0.16);
+  border-radius: 14px;
+  background: #f7fafc;
+  color: var(--f9-search-muted, #40546a);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.f9-trend-note {
+  margin: 0;
+  color: var(--f9-search-soft, #64788d);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 980px) {
+  .f9-trend-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .f9-creative-wall {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-creative-tile {
+    transition: none;
+  }
+
+  .f9-trend-leader-fill {
+    transition: none;
+  }
+}

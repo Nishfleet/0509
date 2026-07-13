@@ -10,6 +10,7 @@ import {
   hasBrowserRunQuickActions,
 } from "~/lib/browser-run.server";
 import { isoFromCountryName } from "~/lib/countries";
+import { findStartedRunningLine, parseStartedRunningDate } from "~/lib/meta-ad-dates";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
 import { fetchWithTimeout, promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import type {
@@ -73,6 +74,8 @@ interface ExtractedAdCard {
   landingPageUrl: string | null;
   platforms: string[];
   active: boolean;
+  /** Raw "Started running on <date>" card line; parsed server-side into firstSeenAt. */
+  startedRunning?: string | null;
 }
 
 interface BrowserRunSession {
@@ -237,6 +240,11 @@ async function searchMetaLibraryViaSessions(
             "Threads",
           ];
           const platforms = platformTokens.filter((token) => text.includes(token));
+          const startedRunning =
+            text
+              .split("\n")
+              .map((line) => line.trim())
+              .find((line) => /^started running on\b/i.test(line)) ?? null;
 
           return {
             libraryId,
@@ -251,6 +259,7 @@ async function searchMetaLibraryViaSessions(
             // Status is a standalone "Inactive" line on the card; matching the
             // word anywhere flags ads whose creative copy merely contains it.
             active: !text.split("\n").some((line) => /^inactive$/i.test(line.trim())),
+            startedRunning,
           };
         })
         .filter(Boolean);
@@ -843,6 +852,11 @@ function buildQuickActionExtractionScript() {
         "Threads",
       ];
       const platforms = platformTokens.filter((token) => text.includes(token));
+      const startedRunning =
+        text
+          .split("\\n")
+          .map((line) => line.trim())
+          .find((line) => /^started running on\\b/i.test(line)) ?? null;
 
       return {
         libraryId,
@@ -855,6 +869,7 @@ function buildQuickActionExtractionScript() {
         landingPageUrl: externalLink,
         platforms,
         active: !text.split("\\n").some((line) => /^inactive$/i.test(line.trim())),
+        startedRunning,
       };
     })
     .filter(Boolean);
@@ -1004,6 +1019,7 @@ function extractQuickActionPayloadFromScrape(
 
     const html = element.html ?? "";
     const text = stripHtml(html) || element.text?.trim() || "Meta Ad Library result";
+    const lineText = stripHtmlPreservingLines(html);
 
     cards.push({
       libraryId,
@@ -1015,7 +1031,8 @@ function extractQuickActionPayloadFromScrape(
       adSnapshotUrl: absolutizeMetaAdUrl(href),
       landingPageUrl: extractExternalLink(html),
       platforms: inferPlatforms(text),
-      active: !hasStandaloneInactiveLine(stripHtmlPreservingLines(html)),
+      active: !hasStandaloneInactiveLine(lineText),
+      startedRunning: findStartedRunningLine(lineText),
     });
   }
 
@@ -1061,6 +1078,7 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
     const contextStart = Math.max(0, (match.index ?? 0) - 1200);
     const contextEnd = Math.min(content.length, (match.index ?? 0) + match[0].length + 1800);
     const contextHtml = content.slice(contextStart, contextEnd);
+    const contextLineText = stripHtmlPreservingLines(contextHtml);
     const body = stripHtml(contextHtml) || stripHtml(match[3] ?? "");
     const landingPageUrl = extractExternalLink(contextHtml);
 
@@ -1074,7 +1092,8 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
       adSnapshotUrl: absolutizeMetaAdUrl(href),
       landingPageUrl,
       platforms: inferPlatforms(body),
-      active: !hasStandaloneInactiveLine(stripHtmlPreservingLines(contextHtml)),
+      active: !hasStandaloneInactiveLine(contextLineText),
+      startedRunning: findStartedRunningLine(contextLineText),
     });
   }
 
@@ -1140,6 +1159,9 @@ function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[] {
       landingPageUrl: inferLandingPageFromTextBlock(block),
       platforms: inferPlatforms(blockText),
       active: !block.some((line) => /^Inactive$/i.test(line)),
+      // isTextCardUiLine keeps this line out of the ad body; the block still
+      // carries it, so capture Meta's published start date before it drops.
+      startedRunning: findStartedRunningLine(blockText),
     });
   }
 
@@ -1383,7 +1405,10 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
       card.adSnapshotUrl || `https://www.facebook.com/ads/library/?id=${card.libraryId}`,
     countries: [query.filters.country || "all"],
     platforms: card.platforms,
-    firstSeenAt: null,
+    // Meta publishes the ad's start date on every Ad Library card ("Started
+    // running on <date>"). Treat it as firstSeenAt exactly like the Meta API
+    // path treats ad_delivery_start_time; unparseable stays an honest null.
+    firstSeenAt: parseStartedRunningDate(card.startedRunning ?? null),
     lastSeenAt: null,
     active: card.active,
     researchSummary:
