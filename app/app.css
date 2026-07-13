@@ -2703,6 +2703,142 @@ button[aria-busy="true"] {
   align-items: start;
 }
 
+/* Master–detail pages (watchlists, digests): the record list is a compact
+   selector rail and the selected record owns the wide column. The base
+   dashboard grid is main-first, which used to starve these detail panes
+   into a ~320px rail. */
+.f9-master-detail {
+  display: grid;
+  grid-template-columns: minmax(264px, 324px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.f9-master-detail > .f9-side-panel {
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+}
+
+/* Detail toolbars carry up to six actions — wrap them under the title
+   instead of crushing it into a one-word-per-line column. */
+.f9-master-detail .f9-panel-toolbar {
+  flex-wrap: wrap;
+}
+
+.f9-master-detail .f9-panel-toolbar > div:first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* Two-up flow for detail sections that can share a row; collapses on its
+   own once a column would fall under 300px. */
+.f9-detail-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+/* Tinted grouping card for one functional area of a detail pane — same
+   family as .f9-status-strip > div and .f9-empty-panel. */
+.f9-detail-cell {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 22px;
+  background: #f6f9fc;
+}
+
+.f9-detail-cell > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.f9-detail-cell > h3,
+.f9-detail-cell > p {
+  margin: 0;
+}
+
+.f9-detail-cell > .f9-primary-button,
+.f9-detail-cell > .f9-secondary-button {
+  justify-self: start;
+}
+
+.f9-field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* Proof packets inside the wide detail column read as grouping cards. */
+.f9-master-detail .f9-proof-packet {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 22px;
+  background: #f6f9fc;
+}
+
+.f9-master-detail .f9-proof-packet h3 {
+  margin: 4px 0 0;
+}
+
+.f9-master-detail .f9-proof-packet .f9-muted-copy {
+  margin: 0;
+}
+
+.f9-master-detail .f9-proof-packet .proof-trail-list div {
+  padding: 10px 0;
+}
+
+/* Digest movement summary reads as a stat strip in the wide column. */
+.f9-master-detail .digest-movement-summary {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  column-gap: 20px;
+}
+
+/* Digest filter bar: labelled selects in one row, apply button at the end. */
+.f9-filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.f9-filter-row label {
+  display: grid;
+  gap: 7px;
+  color: var(--f9-search-soft);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.f9-filter-row select {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 13px;
+  border: 1px solid rgba(6, 22, 41, 0.12);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--f9-search-ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.f9-filter-row select:focus {
+  border-color: rgba(10, 169, 130, 0.44);
+  box-shadow: 0 0 0 4px rgba(10, 169, 130, 0.1);
+  outline: none;
+}
+
 .f9-activity-panel {
   min-height: 420px;
 }
@@ -3404,6 +3540,7 @@ button[aria-busy="true"] {
   .f9-dashboard-setup-row,
 .f9-dashboard-grid,
 .f9-work-list.is-compact .f9-dashboard-grid,
+.f9-master-detail,
 .f9-status-strip,
 .f9-source-readiness-panel,
 .f9-onboard-steps,
@@ -3411,6 +3548,12 @@ button[aria-busy="true"] {
 .f9-value-loop-list,
 .f9-first-fifteen-list {
     grid-template-columns: 1fr;
+  }
+
+  .f9-master-detail > .f9-side-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 
   .f9-dashboard-empty .f9-primary-button {
@@ -3466,6 +3609,8 @@ button[aria-busy="true"] {
 .f9-market-board-head,
 .f9-market-board-metrics,
 .f9-market-empty,
+.f9-detail-split,
+.f9-filter-row,
 .f9-app-panel {
     grid-template-columns: 1fr;
   }

@@ -128,3 +128,31 @@ describe("formatAdvertiserLabel", () => {
     expect(formatAdvertiserLabel(undefined)).toBe("Advertiser unconfirmed");
   });
 });
+
+describe("machine token labels", () => {
+  it("never shows raw snake_case to the customer", async () => {
+    const {
+      formatMachineTokenLabel,
+      formatProofCaptureStatusLabel,
+      formatWatchEventStatusLabel,
+      formatWatchEventTypeLabel,
+    } = await import("~/lib/landing-page-display");
+
+    expect(formatWatchEventTypeLabel("ad_new")).toBe("New ad");
+    expect(formatWatchEventTypeLabel("landing_page_offer_changed")).toBe("Offer changed");
+    expect(formatWatchEventTypeLabel("landing_page_url_changed")).toBe("Destination changed");
+    expect(formatWatchEventTypeLabel("future_event_kind")).toBe("Future event kind");
+
+    expect(formatWatchEventStatusLabel("proof_pending")).toBe("Evidence pending");
+    expect(formatWatchEventStatusLabel("confirmed")).toBe("Confirmed");
+    expect(formatWatchEventStatusLabel("new_status_token")).toBe("New status token");
+
+    expect(formatProofCaptureStatusLabel("succeeded")).toBe("Evidence captured");
+    expect(formatProofCaptureStatusLabel("skipped_due_to_budget")).toBe(
+      "Skipped — evidence budget reached",
+    );
+    expect(formatProofCaptureStatusLabel("odd_capture_state")).toBe("Odd capture state");
+
+    expect(formatMachineTokenLabel("rate_limited")).toBe("Rate limited");
+  });
+});

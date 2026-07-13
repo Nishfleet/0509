@@ -306,6 +306,26 @@ describe("DigestMovementSummary", () => {
     expect(markup).toContain("2 changes across 2 competitors");
     expect(markup).toContain("1 high · 0 medium · 1 low");
   });
+
+  it("uses singular wording for one change from one competitor", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DigestMovementSummary, {
+        items: [
+          {
+            watchlistName: "Nykaa",
+            metadata: {
+              priorityScore: 90,
+              priorityBand: "High priority",
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("1 change across 1 competitor");
+    expect(markup).not.toContain("1 changes");
+    expect(markup).not.toContain("1 competitors");
+  });
 });
 
 describe("DigestIntelligence", () => {
