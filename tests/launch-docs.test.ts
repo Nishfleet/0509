@@ -52,8 +52,8 @@ describe("final launch documentation", () => {
     expect(scorecard).toContain("aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed");
     expect(launchReadiness).toContain("A fresh owner-operated manual backup uploaded to R2 on 2026-07-02");
     expect(launchReadiness).toContain("required Cloudflare repository secrets were absent on 2026-07-02");
-    expect(launchReadiness).toContain("repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are still missing");
-    expect(backupUptime).toContain("scheduled Actions runs remain blocked on secrets");
+    expect(launchReadiness).toContain("first successful Actions backup end-to-end");
+    expect(backupUptime).toContain("Unblocked 2026-07-13");
     expect(backupUptime).toContain("D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2");
     expect(backupUptime).toContain("2026-07-02 owner-operated manual backup");
     expect(backupUptime).toContain("2026-07-13 operator-run manual backup");

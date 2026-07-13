@@ -94,7 +94,7 @@ Owner verification steps (no API token): see `docs/ops-backup-uptime.md` § Upti
 
 ## Backup Schedule Status
 
-`.github/workflows/d1-backup-r2.yml` now schedules `npm run backup:d1:r2` weekly at 22:17 UTC Sunday and supports manual runs. A fresh owner-operated manual backup uploaded to R2 on 2026-07-02, but the GitHub scheduled backup remains unproven: the required Cloudflare repository secrets were absent on 2026-07-02, and repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are still missing. D1 export blocks database requests while it runs, so keep the schedule in a low-traffic window.
+`.github/workflows/d1-backup-r2.yml` now schedules `npm run backup:d1:r2` weekly at 22:17 UTC Sunday and supports manual runs. A fresh owner-operated manual backup uploaded to R2 on 2026-07-02 while the required Cloudflare repository secrets were absent on 2026-07-02. On 2026-07-13 the owner added repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` and dispatch run `29225583866` completed the first successful Actions backup end-to-end, so the off-machine weekly schedule is proven and live. D1 export blocks database requests while it runs, so keep the schedule in a low-traffic window.
 
 ## Agency Fan-Out Status
 

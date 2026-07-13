@@ -49,11 +49,12 @@ describe("scheduled D1 backup workflow", () => {
     expect(workflow).not.toMatch(/api[_-]?token:\s*['\"]/i);
   });
 
-  it("documents that Actions backups stay blocked until Cloudflare secrets exist", () => {
+  it("documents that Actions backups are proven end-to-end since 2026-07-13", () => {
     const opsDoc = readFileSync("docs/ops-backup-uptime.md", "utf8");
     expect(opsDoc).toContain("CLOUDFLARE_ACCOUNT_ID");
     expect(opsDoc).toContain("CLOUDFLARE_API_TOKEN");
     expect(opsDoc).toContain("workflow_dispatch");
-    expect(opsDoc).toContain("scheduled Actions runs remain blocked on secrets");
+    expect(opsDoc).toContain("Unblocked 2026-07-13");
+    expect(opsDoc).toContain("first successful Actions backup end-to-end");
   });
 });
