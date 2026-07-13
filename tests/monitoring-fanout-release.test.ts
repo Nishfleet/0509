@@ -48,6 +48,7 @@ async function seedSlotSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"
       user_id TEXT PRIMARY KEY,
       plan TEXT NOT NULL,
       dodo_status TEXT,
+      dodo_payment_id TEXT,
       dodo_product_id TEXT,
       dodo_subscription_id TEXT,
       dodo_customer_id TEXT,

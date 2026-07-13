@@ -325,6 +325,7 @@ export async function getUserIdForDodoLifecycle(
 export interface UserPlanBillingInfo {
   plan: "free" | "scout" | "starter" | "agency";
   dodoStatus: string | null;
+  dodoPaymentId: string | null;
   dodoProductId: string | null;
   dodoPlanChangeProductId: string | null;
   billingInterval: "monthly" | "annual" | null;
@@ -341,6 +342,7 @@ export async function getUserPlanBillingInfo(
   const row = await one<{
     plan: string | null;
     dodo_status: string | null;
+    dodo_payment_id: string | null;
     dodo_product_id: string | null;
     dodo_plan_change_product_id: string | null;
     dodo_subscription_id: string | null;
@@ -350,7 +352,7 @@ export async function getUserPlanBillingInfo(
   }>(
     env,
     `
-      SELECT plan, dodo_status, dodo_product_id, dodo_subscription_id,
+      SELECT plan, dodo_status, dodo_payment_id, dodo_product_id, dodo_subscription_id,
              dodo_customer_id, dodo_next_billing_at, dodo_plan_change_product_id,
              plan_updated_at
       FROM user_plan
@@ -377,6 +379,7 @@ export async function getUserPlanBillingInfo(
   return {
     plan,
     dodoStatus: row?.dodo_status ?? null,
+    dodoPaymentId: row?.dodo_payment_id ?? null,
     dodoProductId: row?.dodo_product_id ?? null,
     dodoPlanChangeProductId: row?.dodo_plan_change_product_id ?? null,
     billingInterval,

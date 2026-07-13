@@ -2452,6 +2452,20 @@ describe("alert email content quality", () => {
 });
 
 describe("billing lifecycle emails", () => {
+  const currentBillingInfo = {
+    plan: "starter" as const,
+    dodoStatus: "active",
+    dodoPaymentId: "payment-current",
+    dodoProductId: "product-current",
+    dodoPlanChangeProductId: null,
+    billingInterval: "monthly" as const,
+    dodoSubscriptionId: "subscription-current",
+    dodoCustomerId: "customer-current",
+    dodoNextBillingAt: "2026-08-13T09:00:00.000Z",
+    planUpdatedAt: "2026-07-13T09:00:00.000Z",
+  };
+  const currentBillingStateFingerprint = JSON.stringify(currentBillingInfo);
+
   function mockBillingDataServer(overrides: Record<string, unknown> = {}) {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue(null);
@@ -2462,6 +2476,11 @@ describe("billing lifecycle emails", () => {
       getDeliveryAttemptByIdempotencyKey,
       listStaleBillingLifecycleEmailAttempts,
       updateDeliveryAttemptResult,
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue(currentBillingInfo),
       getDeliveryTargetById: vi.fn(),
       getDeliveryTargetByProviderIdentifier: vi.fn(),
       getOldestUserId: vi.fn(),
@@ -2527,6 +2546,7 @@ describe("billing lifecycle emails", () => {
         subject: "Action needed: a Five to Nine payment didn't go through",
         bodyHtml: expect.stringContaining("your plan stays active"),
         tag: "billing-payment-issue",
+        billingStateFingerprint: currentBillingStateFingerprint,
       }),
     );
   });
@@ -2750,6 +2770,7 @@ describe("billing lifecycle emails", () => {
     const sendMock = mockEmailSend("msg_recovered_billing");
     const staleAttempt = {
       id: "attempt-recovery",
+      userId: "user-1",
       targetValue: "owner@example.com",
       templateName: "billing_refund",
       payloadSnapshot: {
@@ -2757,6 +2778,7 @@ describe("billing lifecycle emails", () => {
         subject: "Your refund has been processed",
         bodyHtml: "<p>Your refund is complete.</p>",
         tag: "billing-refund",
+        billingStateFingerprint: currentBillingStateFingerprint,
       },
       updatedAt: "2026-07-13T09:03:00.000Z",
     };
@@ -2779,6 +2801,7 @@ describe("billing lifecycle emails", () => {
       sent: 1,
       failed: 0,
       providerUnknown: 0,
+      superseded: 0,
       conflicts: 0,
     });
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -2814,12 +2837,69 @@ describe("billing lifecycle emails", () => {
     );
   });
 
+  it("suppresses a recovered billing email after newer account state wins", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_superseded_must_not_send");
+    const staleAttempt = {
+      id: "attempt-superseded",
+      userId: "user-1",
+      targetValue: "owner@example.com",
+      templateName: "billing_payment_issue",
+      payloadSnapshot: {
+        kind: "billing_payment_issue",
+        subject: "Action needed: payment failed",
+        bodyHtml: "<p>Please update your payment method.</p>",
+        tag: "billing-payment-issue",
+        billingStateFingerprint: currentBillingStateFingerprint,
+      },
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo,
+        dodoStatus: "active_after_recovery",
+        planUpdatedAt: "2026-07-13T09:04:00.000Z",
+      }),
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const result = await recoverAbandonedBillingLifecycleEmails({
+      ...emailEnv,
+      DB: {},
+    } as never);
+
+    expect(result).toEqual({
+      scanned: 1,
+      claimed: 1,
+      sent: 0,
+      failed: 0,
+      providerUnknown: 0,
+      superseded: 1,
+      conflicts: 0,
+    });
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "skipped_due_to_dedupe",
+        errorMessage:
+          "Billing lifecycle recovery was superseded by newer account state.",
+      }),
+    );
+  });
+
   it("persists a recovered provider timeout as unknown and does not retry it", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     emailSend = vi.fn(() => new Promise(() => undefined));
     const staleAttempt = {
       id: "attempt-recovery-timeout",
+      userId: "user-1",
       targetValue: "owner@example.com",
       templateName: "billing_refund",
       payloadSnapshot: {
@@ -2827,6 +2907,7 @@ describe("billing lifecycle emails", () => {
         subject: "Your refund has been processed",
         bodyHtml: "<p>Your refund is complete.</p>",
         tag: "billing-refund",
+        billingStateFingerprint: currentBillingStateFingerprint,
       },
       updatedAt: "2026-07-13T09:03:00.000Z",
     };
@@ -2851,6 +2932,7 @@ describe("billing lifecycle emails", () => {
       sent: 0,
       failed: 0,
       providerUnknown: 1,
+      superseded: 0,
       conflicts: 0,
     });
     expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
@@ -2870,6 +2952,7 @@ describe("billing lifecycle emails", () => {
     const sendMock = mockEmailSend("msg_should_not_send");
     const staleAttempt = {
       id: "attempt-malformed",
+      userId: "user-1",
       targetValue: "owner@example.com",
       templateName: "billing_refund",
       payloadSnapshot: { kind: "billing_refund" },

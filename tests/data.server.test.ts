@@ -1716,6 +1716,7 @@ describe("Dodo billing persistence", () => {
           {
             plan: "starter",
             dodo_status: "subscription.active",
+            dodo_payment_id: "payment-current",
             dodo_product_id: "prod_starter_annual",
             dodo_subscription_id: "sub_123",
             dodo_customer_id: "cus_123",
@@ -1736,6 +1737,7 @@ describe("Dodo billing persistence", () => {
       ),
     ).resolves.toMatchObject({
       plan: "starter",
+      dodoPaymentId: "payment-current",
       dodoProductId: "prod_starter_annual",
       billingInterval: "annual",
     });
