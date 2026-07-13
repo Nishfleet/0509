@@ -1145,7 +1145,12 @@ function buildRenderedCardBlockStarts(
     if (!libraryId) {
       continue;
     }
-    const start = match.index ?? 0;
+    const libraryIdStart = match.index ?? 0;
+    // Meta can place the card status on its own line immediately before the
+    // Library ID. Keep that status with this card so the preceding card does
+    // not inherit it when slicing at the next Library ID.
+    const start =
+      findStandaloneStatusImmediatelyBefore(content, libraryIdStart) ?? libraryIdStart;
     const current = starts.get(libraryId);
     starts.set(libraryId, current === undefined ? start : Math.min(current, start));
   }
@@ -1153,6 +1158,35 @@ function buildRenderedCardBlockStarts(
   return [...starts]
     .map(([libraryId, start]) => ({ libraryId, start }))
     .sort((a, b) => a.start - b.start);
+}
+
+function findStandaloneStatusImmediatelyBefore(content: string, beforeIndex: number) {
+  const prefix = content.slice(0, beforeIndex);
+  const statusRegex =
+    /(?:^|>|\r?\n)(?:\s|&nbsp;)*(Active|Inactive)(?:\s|&nbsp;)*(?=<|$|\r?\n)/gi;
+  let statusStart: number | null = null;
+
+  for (const match of prefix.matchAll(statusRegex)) {
+    const matched = match[0];
+    const status = match[1];
+    if (!status) {
+      continue;
+    }
+
+    const statusOffset = matched.toLowerCase().lastIndexOf(status.toLowerCase());
+    if (statusOffset < 0) {
+      continue;
+    }
+    const candidateStart = (match.index ?? 0) + statusOffset;
+    const candidateEnd = candidateStart + status.length;
+    const gap = prefix.slice(candidateEnd);
+    if (stripHtmlPreservingLines(gap).trim()) {
+      continue;
+    }
+    statusStart = candidateStart;
+  }
+
+  return statusStart;
 }
 
 function sliceRenderedCardBlock(

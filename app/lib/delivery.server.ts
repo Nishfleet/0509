@@ -17,11 +17,16 @@ import {
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
   listDeliveryTargets,
+  listStaleBillingLifecycleEmailAttempts,
   reconcileDeliveryAttemptByProviderMessageId,
   updateDeliveryAttemptResult,
   upsertDeliveryTarget,
   upsertDigestDelivery,
 } from "~/lib/data.server";
+import {
+  deliveryPreDispatchStaleBefore,
+  isStalePreDispatchAttempt,
+} from "~/lib/delivery-attempt-lease";
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import type { AppEnv } from "~/lib/env.server";
 import { emailFromSender, isEmailSendingConfigured } from "~/lib/env.server";
@@ -53,6 +58,7 @@ import { PromiseTimeoutError, promiseWithTimeout } from "~/lib/fetch-timeout.ser
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
 const EMAIL_PROVIDER = "cloudflare_email" as const;
 const CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS = 10_000;
+const BILLING_LIFECYCLE_RECOVERY_LIMIT = 10;
 const SUPPORT_CASE_IDEMPOTENCY_PREFIX = "support-case:";
 const SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX = "support-case-reopen:";
 
@@ -546,30 +552,37 @@ async function claimDigestDeliveryAttempt(
   },
 ): Promise<{
   attemptId: string | null;
+  claimUpdatedAt: string | null;
   duplicate: DeliveryAttemptRecord | null;
 }> {
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
-  if (duplicate && duplicate.status !== "failed") {
-    return { attemptId: null, duplicate };
-  }
-
   if (duplicate) {
+    const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
+    if (duplicate.status !== "failed" && !stalePreDispatch) {
+      return { attemptId: null, claimUpdatedAt: null, duplicate };
+    }
+
+    const claimUpdatedAt = new Date().toISOString();
     const retryClaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
       provider: input.provider,
       status: "pending",
-      webhookStatus: "provider_unknown",
+      webhookStatus: "pending",
       providerMessageId: null,
-      providerStatusLastSeenAt: new Date().toISOString(),
+      providerStatusLastSeenAt: null,
       templateName: input.templateName ?? null,
       errorMessage: null,
       sentAt: null,
       failedAt: null,
-      expectedStatus: "failed",
+      payloadSnapshot: input.payloadSnapshot,
+      updatedAt: claimUpdatedAt,
+      expectedStatus: stalePreDispatch ? "pending" : "failed",
+      expectedWebhookStatus: stalePreDispatch ? "pending" : undefined,
+      expectedUpdatedAt: stalePreDispatch ? duplicate.updatedAt : undefined,
     });
     // Some unit-test adapters predate the boolean return. Only an explicit
     // false is a lost durable claim.
     if (retryClaimed !== false) {
-      return { attemptId: duplicate.id, duplicate: null };
+      return { attemptId: duplicate.id, claimUpdatedAt, duplicate: null };
     }
 
     const concurrentRetry = await getDeliveryAttemptByIdempotencyKey(
@@ -579,9 +592,10 @@ async function claimDigestDeliveryAttempt(
     if (!concurrentRetry) {
       throw new Error("Digest delivery retry claim disappeared.");
     }
-    return { attemptId: null, duplicate: concurrentRetry };
+    return { attemptId: null, claimUpdatedAt: null, duplicate: concurrentRetry };
   }
 
+  const claimUpdatedAt = new Date().toISOString();
   try {
     const attemptId = await createDeliveryAttempt(env, {
       userId: input.userId,
@@ -592,7 +606,7 @@ async function claimDigestDeliveryAttempt(
       channel: input.channel,
       provider: input.provider,
       status: "pending",
-      webhookStatus: "provider_unknown",
+      webhookStatus: "pending",
       targetValue: input.targetValue,
       providerMessageId: null,
       providerStatusLastSeenAt: null,
@@ -603,8 +617,9 @@ async function claimDigestDeliveryAttempt(
       errorMessage: null,
       sentAt: null,
       failedAt: null,
+      timestamp: claimUpdatedAt,
     });
-    return { attemptId, duplicate: null };
+    return { attemptId, claimUpdatedAt, duplicate: null };
   } catch (error) {
     // The unique idempotency index is the arbiter. If another execution
     // inserted the claim after our read, return its durable state without
@@ -614,7 +629,7 @@ async function claimDigestDeliveryAttempt(
       input.idempotencyKey,
     );
     if (concurrentClaim) {
-      return { attemptId: null, duplicate: concurrentClaim };
+      return { attemptId: null, claimUpdatedAt: null, duplicate: concurrentClaim };
     }
     throw error;
   }
@@ -699,7 +714,10 @@ async function deliverDigestToEmailTarget(
     return summarizeDigestDeliveryAttempt("email", attemptClaim.duplicate);
   }
   const attemptId = attemptClaim.attemptId;
-  if (!attemptId) throw new Error("Digest email delivery claim did not return an attempt id.");
+  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
+  if (!attemptId || !claimUpdatedAt) {
+    throw new Error("Digest email delivery claim did not return an owned attempt.");
+  }
 
   const providerResult = await sendRenderedDigestEmail(env, {
     to: target.targetValue,
@@ -716,6 +734,8 @@ async function deliverDigestToEmailTarget(
     sentAt: providerResult.status === "sent" ? providerResult.providerStatusLastSeenAt : null,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
+    expectedWebhookStatus: "pending",
+    expectedUpdatedAt: claimUpdatedAt,
   });
   const providerSummary: DigestAttemptSummary = {
     channel: "email",
@@ -1160,7 +1180,10 @@ async function deliverDigestToWhatsAppTarget(
     return summarizeDigestDeliveryAttempt("whatsapp", attemptClaim.duplicate);
   }
   const attemptId = attemptClaim.attemptId;
-  if (!attemptId) throw new Error("Digest WhatsApp claim did not return an attempt id.");
+  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
+  if (!attemptId || !claimUpdatedAt) {
+    throw new Error("Digest WhatsApp claim did not return an owned attempt.");
+  }
 
   const providerResult = await sendDigestWhatsApp(env, {
     lane,
@@ -1182,6 +1205,8 @@ async function deliverDigestToWhatsAppTarget(
     sentAt: deliveredAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
+    expectedWebhookStatus: "pending",
+    expectedUpdatedAt: claimUpdatedAt,
   });
   const providerSummary: DigestAttemptSummary = {
     channel: "whatsapp",
@@ -1250,7 +1275,10 @@ async function deliverDigestToSlackTarget(
     return summarizeDigestDeliveryAttempt("slack", attemptClaim.duplicate);
   }
   const attemptId = attemptClaim.attemptId;
-  if (!attemptId) throw new Error("Digest Slack claim did not return an attempt id.");
+  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
+  if (!attemptId || !claimUpdatedAt) {
+    throw new Error("Digest Slack claim did not return an owned attempt.");
+  }
 
   const providerResult = await sendSlackWebhookMessage(env, target, {
     text: slackText,
@@ -1265,6 +1293,8 @@ async function deliverDigestToSlackTarget(
     sentAt: providerResult.deliveredAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
+    expectedWebhookStatus: "pending",
+    expectedUpdatedAt: claimUpdatedAt,
   });
   const providerSummary: DigestAttemptSummary = {
     channel: "slack",
@@ -1770,30 +1800,40 @@ async function sendBillingLifecycleEmail(
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
+  const payloadSnapshot = {
+    kind: input.templateName,
+    subject: input.subject,
+    bodyHtml: input.bodyHtml,
+    tag: input.tag,
+  };
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
-  // Same semantics as digest emails: only a recorded failure is retryable in
-  // place. 'sent' is a true duplicate, and 'pending' means a provider timeout
-  // where Cloudflare may have ACCEPTED the email anyway — re-sending either
-  // would double-email the customer.
-  if (duplicate && duplicate.status !== "failed") {
-    return false;
-  }
-
   let attemptId = duplicate?.id ?? null;
-  if (duplicate?.status === "failed") {
-    // A failed row is retryable, but only one handler may move it back to
-    // pending. The status predicate is the durable retry claim; concurrent
-    // losers observe zero changed rows and must not call the provider.
+  let claimUpdatedAt: string | null = null;
+  if (duplicate) {
+    const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
+    // Sent rows and provider-unknown timeouts are terminal for automatic
+    // retries. Only an explicit failure or an abandoned pre-dispatch lease can
+    // call the provider again.
+    if (duplicate.status !== "failed" && !stalePreDispatch) {
+      return false;
+    }
+
+    claimUpdatedAt = new Date().toISOString();
     const retryClaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
-      provider: duplicate.provider || EMAIL_PROVIDER,
+      provider: EMAIL_PROVIDER,
       status: "pending",
-      webhookStatus: "provider_unknown",
-      providerMessageId: duplicate.providerMessageId,
-      providerStatusLastSeenAt: new Date().toISOString(),
+      webhookStatus: "pending",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: input.templateName,
       errorMessage: null,
       sentAt: null,
       failedAt: null,
-      expectedStatus: "failed",
+      payloadSnapshot,
+      updatedAt: claimUpdatedAt,
+      expectedStatus: stalePreDispatch ? "pending" : "failed",
+      expectedWebhookStatus: stalePreDispatch ? "pending" : undefined,
+      expectedUpdatedAt: stalePreDispatch ? duplicate.updatedAt : undefined,
     });
     // Older/mocked data adapters returned void; only an explicit false means
     // this handler lost the conditional database claim.
@@ -1808,6 +1848,7 @@ async function sendBillingLifecycleEmail(
     // subscription.failed for one failed renewal) can't both email: the
     // UNIQUE index on delivery_attempt.idempotency_key lets exactly one
     // claim win; the loser sees the row and backs off.
+    claimUpdatedAt = new Date().toISOString();
     try {
       attemptId = await createDeliveryAttempt(env, {
         userId: input.userId,
@@ -1818,12 +1859,13 @@ async function sendBillingLifecycleEmail(
         channel: "email",
         provider: EMAIL_PROVIDER,
         status: "pending",
-        webhookStatus: "provider_unknown",
+        webhookStatus: "pending",
         targetValue: input.email,
         templateName: input.templateName,
         eventIds: [],
-        payloadSnapshot: { kind: input.templateName },
+        payloadSnapshot,
         idempotencyKey: input.idempotencyKey,
+        timestamp: claimUpdatedAt,
       });
     } catch (error) {
       const concurrentClaim = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
@@ -1832,6 +1874,10 @@ async function sendBillingLifecycleEmail(
       }
       throw error;
     }
+  }
+
+  if (!claimUpdatedAt) {
+    throw new Error("Billing lifecycle delivery claim did not return an owner token.");
   }
 
   const providerResult = await sendCloudflareEmail(env, {
@@ -1856,6 +1902,8 @@ async function sendBillingLifecycleEmail(
     sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
+    expectedWebhookStatus: "pending",
+    expectedUpdatedAt: claimUpdatedAt,
   });
   if (finalized === false) {
     return false;
@@ -1869,6 +1917,135 @@ async function sendBillingLifecycleEmail(
   }
 
   return providerResult.status === "sent";
+}
+
+function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
+  const kind = readString(attempt.payloadSnapshot.kind);
+  const subject = readString(attempt.payloadSnapshot.subject);
+  const bodyHtml = readString(attempt.payloadSnapshot.bodyHtml);
+  const tag = readString(attempt.payloadSnapshot.tag);
+  const targetValue = readString(attempt.targetValue);
+
+  if (
+    !kind ||
+    kind !== attempt.templateName ||
+    !kind.startsWith("billing_") ||
+    !subject ||
+    !bodyHtml ||
+    !tag ||
+    !targetValue
+  ) {
+    return null;
+  }
+
+  return { subject, bodyHtml, tag, targetValue };
+}
+
+/**
+ * Replays bounded billing-email outbox rows whose worker stopped before the
+ * provider call. This is intentionally at-least-once crash recovery: caught
+ * provider timeouts are persisted as provider_unknown and never auto-retried.
+ */
+export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
+  const emptyResult = {
+    scanned: 0,
+    claimed: 0,
+    sent: 0,
+    failed: 0,
+    providerUnknown: 0,
+    conflicts: 0,
+  };
+  if (!env.DB) {
+    return emptyResult;
+  }
+
+  const attempts = await listStaleBillingLifecycleEmailAttempts(env, {
+    staleBefore: deliveryPreDispatchStaleBefore(),
+    limit: BILLING_LIFECYCLE_RECOVERY_LIMIT,
+  });
+  const result = { ...emptyResult, scanned: attempts.length };
+
+  for (const attempt of attempts) {
+    const claimUpdatedAt = new Date().toISOString();
+    const claimed = await updateDeliveryAttemptResult(env, attempt.id, {
+      provider: EMAIL_PROVIDER,
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: attempt.templateName,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      updatedAt: claimUpdatedAt,
+      expectedStatus: "pending",
+      expectedWebhookStatus: "pending",
+      expectedUpdatedAt: attempt.updatedAt,
+    });
+    if (claimed !== true) {
+      result.conflicts += 1;
+      continue;
+    }
+    result.claimed += 1;
+
+    const payload = readBillingLifecycleRecoveryPayload(attempt);
+    if (!payload) {
+      const failedAt = new Date().toISOString();
+      const finalized = await updateDeliveryAttemptResult(env, attempt.id, {
+        provider: EMAIL_PROVIDER,
+        status: "failed",
+        webhookStatus: "failed",
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: attempt.templateName,
+        errorMessage: "Billing lifecycle recovery payload is incomplete.",
+        sentAt: null,
+        failedAt,
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: claimUpdatedAt,
+      });
+      if (finalized === false) {
+        result.conflicts += 1;
+      } else {
+        result.failed += 1;
+      }
+      continue;
+    }
+
+    const providerResult = await sendCloudflareEmail(env, {
+      to: payload.targetValue,
+      subject: payload.subject,
+      html: payload.bodyHtml,
+      tag: payload.tag,
+      unsubscribeUrl: null,
+    });
+    const finalized = await updateDeliveryAttemptResult(env, attempt.id, {
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      templateName: attempt.templateName,
+      errorMessage: providerResult.errorMessage,
+      sentAt: providerAcceptedAt(providerResult),
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+      expectedStatus: "pending",
+      expectedWebhookStatus: "pending",
+      expectedUpdatedAt: claimUpdatedAt,
+    });
+    if (finalized === false) {
+      result.conflicts += 1;
+    } else if (providerResult.status === "sent") {
+      result.sent += 1;
+    } else if (providerResult.status === "pending") {
+      result.providerUnknown += 1;
+    } else {
+      result.failed += 1;
+    }
+  }
+
+  return result;
 }
 
 /**

@@ -444,7 +444,7 @@ describe("deliverWeeklyDigest", () => {
       expect.objectContaining({
         channel: "email",
         status: "pending",
-        webhookStatus: "provider_unknown",
+        webhookStatus: "pending",
         errorMessage: null,
         failedAt: null,
       }),
@@ -2455,10 +2455,12 @@ describe("billing lifecycle emails", () => {
   function mockBillingDataServer(overrides: Record<string, unknown> = {}) {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue(null);
+    const listStaleBillingLifecycleEmailAttempts = vi.fn().mockResolvedValue([]);
     const updateDeliveryAttemptResult = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey,
+      listStaleBillingLifecycleEmailAttempts,
       updateDeliveryAttemptResult,
       getDeliveryTargetById: vi.fn(),
       getDeliveryTargetByProviderIdentifier: vi.fn(),
@@ -2474,7 +2476,12 @@ describe("billing lifecycle emails", () => {
       upsertDigestDelivery: vi.fn(),
       ...overrides,
     }));
-    return { createDeliveryAttempt, getDeliveryAttemptByIdempotencyKey, updateDeliveryAttemptResult };
+    return {
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey,
+      listStaleBillingLifecycleEmailAttempts,
+      updateDeliveryAttemptResult,
+    };
   }
 
   afterEach(() => {
@@ -2511,6 +2518,17 @@ describe("billing lifecycle emails", () => {
     expect(attempt.channel).toBe("email");
     expect(attempt.templateName).toBe("billing_payment_issue");
     expect(attempt.idempotencyKey).toBe("billing-payment-issue:user-1:2026-07-13");
+    expect(attempt.status).toBe("pending");
+    expect(attempt.webhookStatus).toBe("pending");
+    expect(attempt.timestamp).toBe("2026-07-13T09:00:00.000Z");
+    expect(attempt.payloadSnapshot).toEqual(
+      expect.objectContaining({
+        kind: "billing_payment_issue",
+        subject: "Action needed: a Five to Nine payment didn't go through",
+        bodyHtml: expect.stringContaining("your plan stays active"),
+        tag: "billing-payment-issue",
+      }),
+    );
   });
 
   it("short-circuits a duplicate dunning send on the same day", async () => {
@@ -2671,6 +2689,219 @@ describe("billing lifecycle emails", () => {
     expect(mocks.updateDeliveryAttemptResult).not.toHaveBeenCalled();
   });
 
+  it("reclaims a stale billing pre-dispatch lease and sends once", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_stale_billing");
+    const staleAttempt = {
+      id: "attempt-stale",
+      provider: "cloudflare_email",
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const mocks = mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(staleAttempt),
+      updateDeliveryAttemptResult,
+    });
+
+    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
+    const sent = await sendBillingRefundEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      eventId: "evt-stale-refund",
+    });
+
+    expect(sent).toBe(true);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "pending",
+        webhookStatus: "pending",
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: staleAttempt.updatedAt,
+        updatedAt: "2026-07-13T09:05:00.000Z",
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "sent",
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: "2026-07-13T09:05:00.000Z",
+      }),
+    );
+  });
+
+  it("recovers a stale billing outbox row from its durable payload", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_recovered_billing");
+    const staleAttempt = {
+      id: "attempt-recovery",
+      targetValue: "owner@example.com",
+      templateName: "billing_refund",
+      payloadSnapshot: {
+        kind: "billing_refund",
+        subject: "Your refund has been processed",
+        bodyHtml: "<p>Your refund is complete.</p>",
+        tag: "billing-refund",
+      },
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const listStaleBillingLifecycleEmailAttempts = vi.fn().mockResolvedValue([staleAttempt]);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts,
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const result = await recoverAbandonedBillingLifecycleEmails({
+      ...emailEnv,
+      DB: {},
+    } as never);
+
+    expect(result).toEqual({
+      scanned: 1,
+      claimed: 1,
+      sent: 1,
+      failed: 0,
+      providerUnknown: 0,
+      conflicts: 0,
+    });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(emailSendPayload(sendMock)).toEqual(
+      expect.objectContaining({
+        to: "owner@example.com",
+        subject: "Your refund has been processed",
+      }),
+    );
+    expect(listStaleBillingLifecycleEmailAttempts).toHaveBeenCalledWith(
+      expect.anything(),
+      { staleBefore: "2026-07-13T09:04:00.000Z", limit: 10 },
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: staleAttempt.updatedAt,
+        updatedAt: "2026-07-13T09:05:00.000Z",
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "sent",
+        expectedUpdatedAt: "2026-07-13T09:05:00.000Z",
+      }),
+    );
+  });
+
+  it("persists a recovered provider timeout as unknown and does not retry it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    emailSend = vi.fn(() => new Promise(() => undefined));
+    const staleAttempt = {
+      id: "attempt-recovery-timeout",
+      targetValue: "owner@example.com",
+      templateName: "billing_refund",
+      payloadSnapshot: {
+        kind: "billing_refund",
+        subject: "Your refund has been processed",
+        bodyHtml: "<p>Your refund is complete.</p>",
+        tag: "billing-refund",
+      },
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const resultPromise = recoverAbandonedBillingLifecycleEmails({
+      ...emailEnv,
+      DB: {},
+    } as never);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await expect(resultPromise).resolves.toEqual({
+      scanned: 1,
+      claimed: 1,
+      sent: 0,
+      failed: 0,
+      providerUnknown: 1,
+      conflicts: 0,
+    });
+    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "pending",
+        webhookStatus: "provider_unknown",
+        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
+      }),
+    );
+  });
+
+  it("fails a malformed billing outbox row without calling the provider", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_should_not_send");
+    const staleAttempt = {
+      id: "attempt-malformed",
+      targetValue: "owner@example.com",
+      templateName: "billing_refund",
+      payloadSnapshot: { kind: "billing_refund" },
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const result = await recoverAbandonedBillingLifecycleEmails({
+      ...emailEnv,
+      DB: {},
+    } as never);
+
+    expect(result).toEqual(
+      expect.objectContaining({ scanned: 1, claimed: 1, sent: 0, failed: 1 }),
+    );
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "failed",
+        webhookStatus: "failed",
+        errorMessage: "Billing lifecycle recovery payload is incomplete.",
+      }),
+    );
+  });
+
   it("reconciles an unknown billing attempt to failed so the same idempotent send can retry", async () => {
     const sendMock = mockEmailSend("msg_reconciled_retry");
     const pendingAttempt = {
@@ -2777,7 +3008,7 @@ describe("billing lifecycle emails", () => {
     }
   });
 
-  it("does not overwrite reconciliation when provider finalization loses the pending claim", async () => {
+  it("keeps an in-flight pre-dispatch claim separate from provider-unknown reconciliation", async () => {
     let releaseProvider: ((value: { messageId: string }) => void) | undefined;
     let signalProviderStarted: (() => void) | undefined;
     const providerStarted = new Promise<void>((resolve) => {
@@ -2793,9 +3024,14 @@ describe("billing lifecycle emails", () => {
 
     let durableStatus: string | null = null;
     let durableWebhookStatus: string | null = null;
-    const createDeliveryAttempt = vi.fn().mockImplementation(async () => {
-      durableStatus = "pending";
-      durableWebhookStatus = "provider_unknown";
+    let durableUpdatedAt: string | null = null;
+    const createDeliveryAttempt = vi.fn().mockImplementation(async (
+      _env: unknown,
+      input: { status: string; webhookStatus: string; timestamp?: string },
+    ) => {
+      durableStatus = input.status;
+      durableWebhookStatus = input.webhookStatus;
+      durableUpdatedAt = input.timestamp ?? null;
       return "attempt-in-flight";
     });
     const getDeliveryAttemptByIdempotencyKey = vi.fn().mockImplementation(async () => {
@@ -2808,19 +3044,37 @@ describe("billing lifecycle emails", () => {
         status: durableStatus,
         webhookStatus: durableWebhookStatus,
         providerMessageId: null,
+        updatedAt: durableUpdatedAt,
       };
     });
     const updateDeliveryAttemptResult = vi.fn(
       async (
         _env: unknown,
         _id: string,
-        input: { expectedStatus?: string; status: string; webhookStatus: string },
+        input: {
+          expectedStatus?: string;
+          expectedWebhookStatus?: string;
+          expectedUpdatedAt?: string;
+          status: string;
+          webhookStatus: string;
+          updatedAt?: string;
+        },
       ) => {
         if (input.expectedStatus && durableStatus !== input.expectedStatus) {
           return false;
         }
+        if (
+          input.expectedWebhookStatus &&
+          durableWebhookStatus !== input.expectedWebhookStatus
+        ) {
+          return false;
+        }
+        if (input.expectedUpdatedAt && durableUpdatedAt !== input.expectedUpdatedAt) {
+          return false;
+        }
         durableStatus = input.status;
         durableWebhookStatus = input.webhookStatus;
+        durableUpdatedAt = input.updatedAt ?? durableUpdatedAt;
         return true;
       },
     );
@@ -2848,16 +3102,21 @@ describe("billing lifecycle emails", () => {
         reconciledAt: "2026-07-13T09:05:00.000Z",
         errorMessage: "Provider evidence confirmed no acceptance.",
       }),
-    ).resolves.toBe(true);
+    ).resolves.toBe(false);
     releaseProvider?.({ messageId: "msg_arrived_after_reconcile" });
 
-    await expect(sendResult).resolves.toBe(false);
-    expect(durableStatus).toBe("failed");
-    expect(durableWebhookStatus).toBe("failed");
+    await expect(sendResult).resolves.toBe(true);
+    expect(durableStatus).toBe("sent");
+    expect(durableWebhookStatus).toBe("provider_unknown");
     expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
       expect.anything(),
       "attempt-in-flight",
-      expect.objectContaining({ expectedStatus: "pending", status: "sent" }),
+      expect.objectContaining({
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: durableUpdatedAt,
+        status: "sent",
+      }),
     );
   });
 

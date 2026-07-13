@@ -23,6 +23,7 @@ export {
 
 export {
   listRetryableInstantAttempts,
+  listStaleBillingLifecycleEmailAttempts,
   listDeliveryAttempts,
   getDeliveryAttemptByIdempotencyKey,
   reconcileDeliveryAttemptByProviderMessageId,

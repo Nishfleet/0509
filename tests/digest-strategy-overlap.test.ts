@@ -54,6 +54,15 @@ function setupHarness() {
   applyMigration(harness.sqlite, "migrations/0000_auth.sql");
   applyMigration(harness.sqlite, "migrations/0001_app.sql");
   applyMigration(harness.sqlite, "migrations/0002_monitoring_trust.sql");
+  harness.sqlite.exec(`
+    CREATE TABLE delivery_attempt (
+      id TEXT PRIMARY KEY NOT NULL,
+      digest_run_id TEXT,
+      status TEXT NOT NULL,
+      webhook_status TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
   harness.sqlite
     .prepare(
       "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)",
