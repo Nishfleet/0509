@@ -7,6 +7,7 @@
   "observability": {
     "enabled": true
   },
+  "placement": { "mode": "smart" },
   "browser": {
     "binding": "BROWSER"
   },

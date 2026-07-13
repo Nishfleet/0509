@@ -1804,6 +1804,73 @@ describe("Dodo billing persistence", () => {
     });
   });
 
+  it("reports a lapsed scheduled cancellation as the free plan", async () => {
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM user_plan",
+        results: [
+          {
+            plan: "starter",
+            dodo_status: "cancellation_scheduled",
+            dodo_product_id: "prod_starter_annual",
+            dodo_subscription_id: "sub_123",
+            dodo_customer_id: "cus_123",
+            dodo_next_billing_at: "2026-01-01T00:00:00.000Z",
+            plan_updated_at: "2025-12-01T12:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      getUserPlanBillingInfo(
+        {
+          DB: mock.db,
+          DODO_0509_PRODUCT_STARTER_YEARLY_ID: "prod_starter_annual",
+        } as never,
+        "user-1",
+      ),
+    ).resolves.toMatchObject({
+      plan: "free",
+      dodoStatus: "cancellation_scheduled",
+      billingInterval: null,
+    });
+  });
+
+  it("keeps the paid plan visible while a scheduled cancellation is still in the future", async () => {
+    const futureBillingAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const mock = createMockDb([
+      {
+        sqlIncludes: "FROM user_plan",
+        results: [
+          {
+            plan: "starter",
+            dodo_status: "cancellation_scheduled",
+            dodo_product_id: "prod_starter_annual",
+            dodo_subscription_id: "sub_123",
+            dodo_customer_id: "cus_123",
+            dodo_next_billing_at: futureBillingAt,
+            plan_updated_at: "2026-06-04T12:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      getUserPlanBillingInfo(
+        {
+          DB: mock.db,
+          DODO_0509_PRODUCT_STARTER_YEARLY_ID: "prod_starter_annual",
+        } as never,
+        "user-1",
+      ),
+    ).resolves.toMatchObject({
+      plan: "starter",
+      dodoStatus: "cancellation_scheduled",
+      billingInterval: "annual",
+    });
+  });
+
   it("revokes Dodo plan access to free with monotonic timestamp ordering", async () => {
     const mock = createMockDb();
 

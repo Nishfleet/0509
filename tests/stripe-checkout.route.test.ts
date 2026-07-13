@@ -88,6 +88,11 @@ describe("app layout loader", () => {
       isMember: false,
       ownerName: null,
     })),
+    getCachedWorkspaceForRequest: vi.fn().mockImplementation(async () => ({
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("free"),
