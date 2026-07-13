@@ -85,11 +85,61 @@ describe("upsertAd seen-window ratchet", () => {
     expect(row.last_seen_at).toBe("2026-07-12");
   });
 
+  it("atomically preserves the widest seen window across concurrent scans", async () => {
+    // The sqlite test adapter implements D1.batch with BEGIN IMMEDIATE on one
+    // connection. Serialize the unrelated analysis-field cleanup batches so
+    // this test isolates concurrent ad-row claims, as separate D1 requests do.
+    const originalBatch = harness.db.batch.bind(harness.db);
+    let priorBatch = Promise.resolve();
+    harness.db.batch = async (statements) => {
+      const currentBatch = priorBatch.then(() => originalBatch(statements));
+      priorBatch = currentBatch.then(() => undefined, () => undefined);
+      return currentBatch;
+    };
+
+    await upsertAd(env, buildAd({ firstSeenAt: "2026-07-10", lastSeenAt: "2026-07-10" }));
+
+    await Promise.all([
+      upsertAd(env, buildAd({
+        body: "Earliest-start observation",
+        firstSeenAt: "2026-05-01",
+        lastSeenAt: "2026-07-15",
+      })),
+      upsertAd(env, buildAd({
+        body: "Latest-end observation",
+        firstSeenAt: "2026-06-01",
+        lastSeenAt: "2026-08-01",
+      })),
+    ]);
+
+    const row = readAdRow("1280520150312258");
+    const persisted = JSON.parse(row.raw_json) as AdRecord;
+    expect(row.first_seen_at).toBe("2026-05-01");
+    expect(row.last_seen_at).toBe("2026-08-01");
+    expect(persisted.firstSeenAt).toBe(row.first_seen_at);
+    expect(persisted.lastSeenAt).toBe(row.last_seen_at);
+  });
+
   it("fills previously-null dates the first time a scan learns them", async () => {
     await upsertAd(env, buildAd({ firstSeenAt: null, lastSeenAt: null }));
     await upsertAd(env, buildAd({ firstSeenAt: "2026-07-03", lastSeenAt: "2026-07-04" }));
 
     const row = readAdRow("1280520150312258");
+    expect(row.first_seen_at).toBe("2026-07-03");
+    expect(row.last_seen_at).toBe("2026-07-04");
+  });
+
+  it("treats malformed seen timestamps as missing", async () => {
+    await upsertAd(env, buildAd({ firstSeenAt: "not-a-date", lastSeenAt: "also-not-a-date" }));
+
+    let row = readAdRow("1280520150312258");
+    expect(row.first_seen_at).toBeNull();
+    expect(row.last_seen_at).toBeNull();
+
+    await upsertAd(env, buildAd({ firstSeenAt: "2026-07-03", lastSeenAt: "2026-07-04" }));
+    await upsertAd(env, buildAd({ firstSeenAt: "invalid", lastSeenAt: "invalid" }));
+
+    row = readAdRow("1280520150312258");
     expect(row.first_seen_at).toBe("2026-07-03");
     expect(row.last_seen_at).toBe("2026-07-04");
   });
