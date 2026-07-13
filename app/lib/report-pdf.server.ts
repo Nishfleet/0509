@@ -80,13 +80,6 @@ export async function renderShareReportPdfResponse(
     );
   }
 
-  // Daily cap belongs to the sharer: a forwarded link reaches any number of
-  // viewer IPs, so the sharer's account is the budget that bounds spend.
-  const dailyLimited = await enforceSharePdfDailyCap(request, env, share.userId, ctx);
-  if (dailyLimited) {
-    return dailyLimited;
-  }
-
   const origin = resolveConfiguredOrigin(env);
   if (!env.BROWSER || !origin) {
     return pdfErrorResponse(
@@ -107,6 +100,15 @@ export async function renderShareReportPdfResponse(
       "PDF rendering capacity is temporarily busy. Try again shortly.",
       retryAfterSeconds,
     );
+  }
+
+  // Reserve the sharer's daily render budget only after configuration and
+  // provider capacity preflight pass. The reservation is intentionally not
+  // refunded after this point: a launch/render failure may already consume
+  // usage-billed Browser Run capacity, so every attempted render counts.
+  const dailyLimited = await enforceSharePdfDailyCap(request, env, share.userId, ctx);
+  if (dailyLimited) {
+    return dailyLimited;
   }
 
   const renderUrl = new URL(`/share/${share.token}`, origin);

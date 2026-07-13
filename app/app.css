@@ -2606,7 +2606,8 @@ button[aria-busy="true"] {
   align-items: flex-start;
 }
 
-.f9-panel-toolbar h2 {
+.f9-panel-toolbar h2,
+.f9-panel-toolbar-heading {
   margin: 6px 0 0;
   color: var(--f9-search-ink);
   font-size: 1.8rem;
