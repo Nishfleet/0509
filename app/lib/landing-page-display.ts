@@ -137,6 +137,54 @@ export function formatProofAgeLabel(
   return `${days}d ago`;
 }
 
+// Machine tokens (event types, statuses) must never reach the customer as
+// raw snake_case. Known tokens get a curated label; unknown ones fall back
+// to a sentence-cased phrase instead of "proof_pending"-style output.
+export function formatMachineTokenLabel(value: string) {
+  const phrase = value.replaceAll("_", " ").trim();
+  return phrase ? phrase.charAt(0).toUpperCase() + phrase.slice(1) : value;
+}
+
+const WATCH_EVENT_TYPE_LABELS: Record<string, string> = {
+  ad_new: "New ad",
+  ad_inactive: "Ad stopped",
+  landing_page_url_changed: "Destination changed",
+  landing_page_headline_changed: "Headline changed",
+  landing_page_offer_changed: "Offer changed",
+  landing_page_cta_changed: "CTA changed",
+  landing_page_form_changed: "Form changed",
+};
+
+export function formatWatchEventTypeLabel(eventType: string) {
+  return WATCH_EVENT_TYPE_LABELS[eventType] ?? formatMachineTokenLabel(eventType);
+}
+
+const WATCH_EVENT_STATUS_LABELS: Record<string, string> = {
+  detected: "Detected",
+  proof_pending: "Evidence pending",
+  confirmed: "Confirmed",
+  proof_failed: "Evidence check failed",
+  suppressed: "Suppressed",
+  invalidated: "Invalidated",
+};
+
+export function formatWatchEventStatusLabel(status: string) {
+  return WATCH_EVENT_STATUS_LABELS[status] ?? formatMachineTokenLabel(status);
+}
+
+const PROOF_CAPTURE_STATUS_LABELS: Record<string, string> = {
+  pending: "Evidence check pending",
+  succeeded: "Evidence captured",
+  failed: "Evidence check failed",
+  skipped_due_to_budget: "Skipped — evidence budget reached",
+  skipped_due_to_rate_limit: "Skipped — provider rate limited",
+  skipped_due_to_dedupe: "Skipped — duplicate change",
+};
+
+export function formatProofCaptureStatusLabel(status: string) {
+  return PROOF_CAPTURE_STATUS_LABELS[status] ?? formatMachineTokenLabel(status);
+}
+
 export function formatWhyAlertedLabel(input: {
   eventType: WatchEventType;
   status: WatchEventStatus;

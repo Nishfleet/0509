@@ -113,7 +113,10 @@ export function DigestMovementSummary({ items }: { items: DigestMovementItem[] }
     <dl className="proof-trail-list digest-movement-summary">
       <div>
         <dt>Movement</dt>
-        <dd>{items.length} changes across {watchlists.size} competitors</dd>
+        <dd>
+          {items.length} change{items.length === 1 ? "" : "s"} across {watchlists.size}{" "}
+          competitor{watchlists.size === 1 ? "" : "s"}
+        </dd>
       </div>
       <div>
         <dt>Priority mix</dt>
