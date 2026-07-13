@@ -9,7 +9,9 @@ import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
   getOldestUserId,
+  getUserDeliveryProfile,
   getUserIdByEmail,
+  getUserPlanBillingInfo,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
   getWatchlistDeliveryConfig,
@@ -22,6 +24,7 @@ import {
   updateDeliveryAttemptResult,
   upsertDeliveryTarget,
   upsertDigestDelivery,
+  type UserPlanBillingInfo,
 } from "~/lib/data.server";
 import {
   deliveryPreDispatchStaleBefore,
@@ -1800,24 +1803,28 @@ async function sendBillingLifecycleEmail(
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
+  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+  const stalePreDispatch = duplicate ? isStalePreDispatchAttempt(duplicate) : false;
+  // Sent rows and provider-unknown timeouts are terminal for automatic
+  // retries. Only an explicit failure or an abandoned pre-dispatch lease can
+  // call the provider again.
+  if (duplicate && duplicate.status !== "failed" && !stalePreDispatch) {
+    return false;
+  }
+
+  const billingStateFingerprint = billingLifecycleStateFingerprint(
+    await getUserPlanBillingInfo(env, input.userId),
+  );
   const payloadSnapshot = {
     kind: input.templateName,
     subject: input.subject,
     bodyHtml: input.bodyHtml,
     tag: input.tag,
+    billingStateFingerprint,
   };
-  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
   let attemptId = duplicate?.id ?? null;
   let claimUpdatedAt: string | null = null;
   if (duplicate) {
-    const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
-    // Sent rows and provider-unknown timeouts are terminal for automatic
-    // retries. Only an explicit failure or an abandoned pre-dispatch lease can
-    // call the provider again.
-    if (duplicate.status !== "failed" && !stalePreDispatch) {
-      return false;
-    }
-
     claimUpdatedAt = new Date().toISOString();
     const retryClaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
       provider: EMAIL_PROVIDER,
@@ -1919,11 +1926,29 @@ async function sendBillingLifecycleEmail(
   return providerResult.status === "sent";
 }
 
+function billingLifecycleStateFingerprint(info: UserPlanBillingInfo) {
+  return JSON.stringify({
+    plan: info.plan,
+    dodoStatus: info.dodoStatus,
+    dodoPaymentId: info.dodoPaymentId,
+    dodoProductId: info.dodoProductId,
+    dodoPlanChangeProductId: info.dodoPlanChangeProductId,
+    billingInterval: info.billingInterval,
+    dodoSubscriptionId: info.dodoSubscriptionId,
+    dodoCustomerId: info.dodoCustomerId,
+    dodoNextBillingAt: info.dodoNextBillingAt,
+    planUpdatedAt: info.planUpdatedAt,
+  });
+}
+
 function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
   const kind = readString(attempt.payloadSnapshot.kind);
   const subject = readString(attempt.payloadSnapshot.subject);
   const bodyHtml = readString(attempt.payloadSnapshot.bodyHtml);
   const tag = readString(attempt.payloadSnapshot.tag);
+  const billingStateFingerprint = readString(
+    attempt.payloadSnapshot.billingStateFingerprint,
+  );
   const targetValue = readString(attempt.targetValue);
 
   if (
@@ -1933,12 +1958,13 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
     !subject ||
     !bodyHtml ||
     !tag ||
+    !billingStateFingerprint ||
     !targetValue
   ) {
     return null;
   }
 
-  return { subject, bodyHtml, tag, targetValue };
+  return { subject, bodyHtml, tag, targetValue, billingStateFingerprint };
 }
 
 /**
@@ -1953,6 +1979,7 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
     sent: 0,
     failed: 0,
     providerUnknown: 0,
+    superseded: 0,
     conflicts: 0,
   };
   if (!env.DB) {
@@ -2009,6 +2036,39 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
         result.conflicts += 1;
       } else {
         result.failed += 1;
+      }
+      continue;
+    }
+
+    const [currentBillingInfo, currentProfile] = await Promise.all([
+      getUserPlanBillingInfo(env, attempt.userId),
+      getUserDeliveryProfile(env, attempt.userId),
+    ]);
+    const currentEmail = readString(currentProfile?.email)?.toLowerCase() ?? null;
+    const stateStillCurrent =
+      billingLifecycleStateFingerprint(currentBillingInfo) ===
+        payload.billingStateFingerprint &&
+      currentEmail === payload.targetValue.toLowerCase();
+    if (!stateStillCurrent) {
+      const finalized = await updateDeliveryAttemptResult(env, attempt.id, {
+        provider: EMAIL_PROVIDER,
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: attempt.templateName,
+        errorMessage:
+          "Billing lifecycle recovery was superseded by newer account state.",
+        sentAt: null,
+        failedAt: null,
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: claimUpdatedAt,
+      });
+      if (finalized === false) {
+        result.conflicts += 1;
+      } else {
+        result.superseded += 1;
       }
       continue;
     }
