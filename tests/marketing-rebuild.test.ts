@@ -257,3 +257,35 @@ describe("marketing rebuild", () => {
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
   });
 });
+
+describe("landing reveal fail-safe", () => {
+  it("guarantees a visible resting state even if the reveal animation never runs", () => {
+    const animationRuleIndex = appCss.indexOf("animation: ld-reveal-in");
+    const failSafeRule = appCss
+      .slice(animationRuleIndex)
+      .match(/\.ld-motion \.ld-reveal\.is-seen > \* \{\s*opacity: 1;\s*\}/);
+
+    expect(animationRuleIndex).toBeGreaterThan(-1);
+    expect(failSafeRule).not.toBeNull();
+  });
+
+  it("force-reveals remaining sections after load if the observer never fires", () => {
+    expect(marketingRoute).toContain("scheduleRevealFallback");
+    expect(marketingRoute).toContain('window.addEventListener("load", scheduleRevealFallback');
+    expect(marketingRoute).toContain("window.setTimeout(revealRemaining, 3000)");
+  });
+
+  it("finishes stuck reveal animations so a frozen animation clock cannot hide content", () => {
+    // Hidden/background tabs can freeze the animation timeline at 0, leaving
+    // backwards-fill opacity 0 applied forever (observed live 2026-07-13).
+    expect(marketingRoute).toContain('animationName === "ld-reveal-in"');
+    expect(marketingRoute).toContain("animation.finish()");
+  });
+
+  it("never hides landing content without JS: ld-motion is only added at runtime", () => {
+    // No SSR markup may carry the ld-motion gate; it is added in useEffect only.
+    expect(marketingRoute).toContain('root.classList.add("ld-motion")');
+    expect(marketingRoute).not.toMatch(/className="[^"]*ld-motion/);
+    expect(rootRoute).not.toContain("ld-motion");
+  });
+});

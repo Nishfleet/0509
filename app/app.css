@@ -1071,6 +1071,40 @@ img {
   }
 }
 
+/* Loading placeholders — shimmer instead of "price loading" prose. */
+.f9-skeleton-line {
+  display: inline-block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e9eef4 25%, #f5f8fb 50%, #e9eef4 75%);
+  background-size: 200% 100%;
+  animation: f9-skeleton-shimmer 1.4s ease-in-out infinite;
+  color: transparent;
+  user-select: none;
+}
+
+.f9-skeleton-price {
+  width: 92px;
+  height: 1.35rem;
+  margin-top: 4px;
+}
+
+@keyframes f9-skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-skeleton-line {
+    animation: none;
+    background: #e9eef4;
+  }
+}
+
 button[aria-busy="true"] {
   cursor: progress;
 }
@@ -2554,6 +2588,13 @@ button[aria-busy="true"] {
   font-size: 0.92rem;
 }
 
+/* Step titles stack above their body copy — never run together inline. */
+.f9-numbered-guide li strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--f9-search-ink);
+}
+
 .f9-copy-button {
   white-space: nowrap;
 }
@@ -3094,8 +3135,19 @@ button[aria-busy="true"] {
   color: #9e3328;
 }
 
+/* The base feature list is styled for the dark marketing commerce card;
+   on white app plan cards it needs readable ink and a quiet bullet. */
 .f9-app-plan-card .f9-plan-feature-list {
   margin: 0;
+  color: #425466;
+  font-size: 0.9rem;
+}
+
+.f9-app-plan-card .f9-plan-feature-list li::before {
+  width: 6px;
+  height: 6px;
+  background: #171611;
+  box-shadow: none;
 }
 
 .f9-app-plan-card .f9-plan-actions,
@@ -7346,6 +7398,16 @@ one signal-green accent.
     opacity: 1;
     transform: none;
   }
+}
+
+/* Fail-safe end state: if the reveal animation never runs (element not
+   rendered when it was created, dropped animation, etc.), the resting
+   opacity is still fully visible. The keyframes above override this while
+   the animation is actually playing, so the stagger is unaffected.
+   Observed live 2026-07-13: .ld-case-card stuck at opacity 0 inside a
+   parent that already had .is-seen. */
+.ld-motion .ld-reveal.is-seen > * {
+  opacity: 1;
 }
 
 .f9-home .f9-commerce-card { animation: none; }

@@ -129,7 +129,7 @@ export function DeveloperAccessRoute() {
               <dl className="proof-trail-list">
                 <div>
                   <dt>JSON</dt>
-                  <dd>/api/v1/watchlists/&lbrace;id&rbrace;?format=json</dd>
+                  <dd>{"/api/v1/watchlists/{id}?format=json"}</dd>
                 </div>
                 <div>
                   <dt>Header</dt>

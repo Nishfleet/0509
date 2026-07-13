@@ -4,6 +4,7 @@ import type { MetaFunction } from "react-router";
 import { LocalTime } from "~/components/local-time";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { SubmitButton } from "~/components/submit-button";
+import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import type { NullableString, RouteActionData } from "~/routes/workspace-settings.shared";
 
 export const sourceAccessMeta: MetaFunction = () => [
@@ -193,20 +194,8 @@ function formatDiscoveryStatus(status: string) {
 }
 
 function formatTrackingStatusSummary(summary: string | null | undefined) {
-  if (!summary) {
-    return "Tracking status will appear after the first check.";
-  }
-
-  return summary
-    .replace(/Live commercial discovery/gi, "Fresh ad checks")
-    .replace(/commercial discovery/gi, "competitor ad checks")
-    .replace(/Commercial discovery/gi, "Competitor ad checks")
-    .replace(/Browser Run/gi, "visual checks")
-    .replace(/Official Meta API/gi, "alternate Meta ad access")
-    .replace(/API fallback/gi, "alternate Meta ad results")
-    .replace(/workspace Meta access/gi, "alternate Meta ad access")
-    .replace(/fresh discovery/gi, "fresh checks")
-    .replace(/cached live results/gi, "recent results")
-    .replace(/cached results/gi, "recent results")
-    .replace(/demo mode/gi, "sample mode");
+  return (
+    customerDiscoverySummary(summary) ??
+    "Tracking status will appear after the first check."
+  );
 }
