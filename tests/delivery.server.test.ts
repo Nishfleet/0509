@@ -2764,6 +2764,203 @@ describe("billing lifecycle emails", () => {
     );
   });
 
+  it("claims a freshly-enqueued outbox row and dispatches it immediately", async () => {
+    // The webhook batch inserted this pending row atomically with the ledger
+    // finalize moments ago (NOT stale). The live send path must claim it via
+    // compare-and-set instead of backing off — otherwise every lifecycle
+    // email would wait for the next recovery cron.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_outbox_dispatch");
+    const outboxAttempt = {
+      id: "attempt-outbox",
+      provider: "cloudflare_email",
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      payloadSnapshot: { outboxPendingDispatch: true },
+      updatedAt: "2026-07-13T09:04:59.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const mocks = mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(outboxAttempt),
+      updateDeliveryAttemptResult,
+    });
+
+    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
+    const sent = await sendBillingRefundEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      eventId: "evt-outbox-refund",
+    });
+
+    expect(sent).toBe(true);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      outboxAttempt.id,
+      expect.objectContaining({
+        status: "pending",
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: outboxAttempt.updatedAt,
+        targetValue: "owner@example.com",
+        // The claim rewrites the payload: marker cleared, post-mutation
+        // fingerprint recorded for any later fingerprint-based recovery.
+        payloadSnapshot: expect.objectContaining({
+          billingStateFingerprint: currentBillingStateFingerprint,
+        }),
+      }),
+    );
+  });
+
+  it("records the current recipient when retrying a failed attempt in place", async () => {
+    // The account email changed between the failed attempt and this retry.
+    // The claim must move target_value to the address actually being sent
+    // to, or the ledger and recovery payload keep the stale recipient.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    mockEmailSend("msg_retry_new_target");
+    const failedAttempt = {
+      id: "attempt-failed-old-target",
+      provider: "cloudflare_email",
+      status: "failed",
+      webhookStatus: "failed",
+      providerMessageId: null,
+      targetValue: "old@example.com",
+      updatedAt: "2026-07-13T08:00:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedAttempt),
+      updateDeliveryAttemptResult,
+    });
+
+    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
+    const sent = await sendBillingRefundEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "new@example.com",
+      name: null,
+      eventId: "evt-retry-new-target",
+    });
+
+    expect(sent).toBe(true);
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      failedAttempt.id,
+      expect.objectContaining({
+        status: "pending",
+        expectedStatus: "failed",
+        targetValue: "new@example.com",
+      }),
+    );
+  });
+
+  it("recovers a marker outbox row when the billing state still matches its kind", async () => {
+    // Crash after the webhook batch, before dispatch: the row has no
+    // post-mutation fingerprint (marker instead). Recovery validates by kind
+    // against the CURRENT billing state and replays.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_marker_recovered");
+    const markerAttempt = {
+      id: "attempt-marker",
+      userId: "user-1",
+      targetValue: "owner@example.com",
+      templateName: "billing_payment_issue",
+      payloadSnapshot: {
+        kind: "billing_payment_issue",
+        subject: "Action needed: payment failed",
+        bodyHtml: "<p>Please update your payment method.</p>",
+        tag: "billing-payment-issue",
+        billingStateFingerprint: null,
+        outboxPendingDispatch: true,
+      },
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo,
+        dodoStatus: "payment.failed",
+      }),
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const result = await recoverAbandonedBillingLifecycleEmails({
+      ...emailEnv,
+      DB: {},
+    } as never);
+
+    expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 1, superseded: 0 });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    // The recovery claim must clear the outbox marker and record a current
+    // fingerprint — a recovery-claimed row that still looks never-dispatched
+    // could be seized by a live sibling webhook mid-provider-call (double
+    // send).
+    const claimCall = updateDeliveryAttemptResult.mock.calls[0]!;
+    expect(claimCall[1]).toBe(markerAttempt.id);
+    expect(claimCall[2].payloadSnapshot).toBeDefined();
+    expect(claimCall[2].payloadSnapshot.outboxPendingDispatch).toBeUndefined();
+    expect(typeof claimCall[2].payloadSnapshot.billingStateFingerprint).toBe("string");
+  });
+
+  it("supersedes a marker outbox row when the billing state moved past its kind", async () => {
+    // Same crash shape, but the customer's payment recovered before the
+    // sweep ran — dodoStatus is healthy again, so the dunning email must not
+    // send. It finalizes as retryable 'failed', keeping the day slot open.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_marker_superseded");
+    const markerAttempt = {
+      id: "attempt-marker-superseded",
+      userId: "user-1",
+      targetValue: "owner@example.com",
+      templateName: "billing_payment_issue",
+      payloadSnapshot: {
+        kind: "billing_payment_issue",
+        subject: "Action needed: payment failed",
+        bodyHtml: "<p>Please update your payment method.</p>",
+        tag: "billing-payment-issue",
+        billingStateFingerprint: null,
+        outboxPendingDispatch: true,
+      },
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo,
+        dodoStatus: "active",
+      }),
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const result = await recoverAbandonedBillingLifecycleEmails({
+      ...emailEnv,
+      DB: {},
+    } as never);
+
+    expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 0, superseded: 1 });
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
+      expect.anything(),
+      markerAttempt.id,
+      expect.objectContaining({
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
+      }),
+    );
+  });
+
   it("recovers a stale billing outbox row from its durable payload", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
@@ -2882,13 +3079,63 @@ describe("billing lifecycle emails", () => {
       conflicts: 0,
     });
     expect(sendMock).not.toHaveBeenCalled();
+    // Superseded rows finalize as skipped (an intentional non-send that must
+    // not inflate operator failure counts) — but the slot stays claimable:
+    // sendBillingLifecycleEmail retries skipped+provider_unknown rows in
+    // place, so a later same-day payment.failed webhook can still send.
     expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
       expect.anything(),
       staleAttempt.id,
       expect.objectContaining({
         status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
         errorMessage:
           "Billing lifecycle recovery was superseded by newer account state.",
+      }),
+    );
+  });
+
+  it("claims a recovery-superseded slot in place and sends fresh content", async () => {
+    // The recovery sweep refused to replay stale content and skipped the
+    // row; a NEW same-day payment event must still be able to take the
+    // day-keyed slot and email content built from the current event.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_superseded_reclaim");
+    const supersededAttempt = {
+      id: "attempt-superseded-slot",
+      provider: "cloudflare_email",
+      status: "skipped_due_to_dedupe",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+      targetValue: "owner@example.com",
+      updatedAt: "2026-07-13T08:30:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const mocks = mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(supersededAttempt),
+      updateDeliveryAttemptResult,
+    });
+
+    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
+    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      occurredAt: "2026-07-13T09:00:00.000Z",
+    });
+
+    expect(sent).toBe(true);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      supersededAttempt.id,
+      expect.objectContaining({
+        status: "pending",
+        expectedStatus: "skipped_due_to_dedupe",
+        expectedWebhookStatus: "provider_unknown",
       }),
     );
   });
