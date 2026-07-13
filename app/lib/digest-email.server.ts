@@ -2,7 +2,9 @@ import {
   type DigestCadence,
   digestCadenceLabel,
   readDigestIntelligence,
+  safeHttpsImageUrl,
 } from "~/lib/change-intelligence";
+import { buildDigestTrendRollups } from "~/lib/insight-depth";
 import {
   classifyDigestItemSource,
   isDigestDecisionCandidate,
@@ -61,17 +63,20 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const preheader = `${answer} ${proofMixLabel(proofMix)}.`;
   const dateRange = `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`;
   const omittedCount = Math.max(input.items.length - topItems.length, 0);
+  const trendLines =
+    input.cadence === "weekly" ? buildDigestTrendRollups(input.items) : [];
 
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(answer)}</h1>
       <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
+      ${renderTrendSectionHtml(trendLines)}
       <h2 style="font-size: 18px; margin: 0 0 12px;">Top moves</h2>
       <ol style="margin: 0 0 20px; padding-left: 20px;">
         ${topItems.map((item) => renderTopMoveHtml(item, input.periodEnd, input.timeZone, input.fullDigestUrl)).join("")}
@@ -80,7 +85,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full digest</a>
       </p>
-      <p style="margin: 0; color: #5b6577; font-size: 13px;">
+      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
         Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
@@ -95,6 +100,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     `Priority mix: ${priorityMixLabel(priorityMix)}`,
     `Evidence mix: ${proofMixLabel(proofMix)}`,
+    ...renderTrendSectionText(trendLines),
     "",
     "Top moves:",
     ...topItems.flatMap((item, index) => renderTopMoveText(item, index + 1, input.periodEnd, input.timeZone, input.fullDigestUrl)),
@@ -126,7 +132,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">All quiet: no competitor moves worth action ${escapeHtml(quietPeriodLabel)}.</h1>
       <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
       <p style="margin: 0 0 16px;">
@@ -136,7 +142,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
       </p>
-      <p style="margin: 0; color: #5b6577; font-size: 13px;">
+      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
         Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
     </div>
@@ -202,12 +208,21 @@ function renderTopMoveHtml(
   const priority = intelligence.priorityScore === null
     ? intelligence.priorityBand
     : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
+  const metricLines = readMetricBandLines(item.metadata);
+  const creativeHtml = renderCreativeThumbnailHtml(item.metadata);
 
   return `
     <li style="margin-bottom: 18px;">
       <p style="margin: 0 0 4px;"><strong>${escapeHtml(watchlistName)}: ${escapeHtml(title)}</strong></p>
       <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(truncate(summary, 220))}</p>
-      <p style="margin: 0 0 8px; color: #5b6577; font-size: 13px;">
+      ${creativeHtml}
+      ${metricLines
+        .map(
+          (line) =>
+            `<p style="margin: 0 0 8px; color: #475467; font-size: 13px;">${escapeHtml(line)}</p>`,
+        )
+        .join("")}
+      <p style="margin: 0 0 8px; color: #98a2b3; font-size: 13px;">
         ${escapeHtml(priority)} · ${escapeHtml(classification.label)} · ${escapeHtml(classification.sourceTypeLabel)} · ${escapeHtml(when)}
       </p>
       <p style="margin: 0 0 8px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
@@ -231,9 +246,13 @@ function renderTopMoveText(
   const priority = intelligence.priorityScore === null
     ? intelligence.priorityBand
     : `${intelligence.priorityBand} (${intelligence.priorityScore}/100)`;
+  const metricLines = readMetricBandLines(item.metadata);
+  const creativeNote = creativeThumbnailTextNote(item.metadata);
   return [
     `${index}. ${watchlistName}: ${title}`,
     `   What changed: ${truncate(summary, 220)}`,
+    creativeNote ? `   ${creativeNote}` : null,
+    ...metricLines.map((line) => `   ${line}`),
     `   Priority: ${priority}`,
     `   Source status: ${classification.label}`,
     `   Source type: ${classification.sourceTypeLabel}`,
@@ -241,7 +260,144 @@ function renderTopMoveText(
     `   Suggested next action: ${intelligence.recommendedAction}`,
     `   Review in Five to Nine: ${fullDigestUrl}`,
     "",
-  ];
+  ].filter((line): line is string => typeof line === "string");
+}
+
+function renderTrendSectionHtml(lines: Array<{ text: string }>) {
+  if (lines.length === 0) {
+    return "";
+  }
+
+  return `
+      <h2 style="font-size: 18px; margin: 0 0 12px;">Trends this period</h2>
+      <table style="margin: 0 0 20px; border-collapse: collapse; width: 100%; background-color: #ffffff; color: #0b1220;">
+        ${lines
+          .map(
+            (line) => `
+          <tr>
+            <td style="padding: 6px 0; color: #475467; font-size: 14px; border-bottom: 1px solid #eef1f6;">${escapeHtml(line.text)}</td>
+          </tr>`,
+          )
+          .join("")}
+      </table>
+  `;
+}
+
+function renderTrendSectionText(lines: Array<{ text: string }>) {
+  if (lines.length === 0) {
+    return [];
+  }
+  return ["", "Trends this period:", ...lines.map((line) => `- ${line.text}`)];
+}
+
+function renderCreativeThumbnailHtml(metadata: Record<string, unknown> | undefined) {
+  const beforeUrl = safeHttpsImageUrl(metadata?.beforeCreativeImageUrl);
+  const afterUrl =
+    safeHttpsImageUrl(metadata?.afterCreativeImageUrl) ??
+    (beforeUrl ? safeHttpsImageUrl(metadata?.creativeImageUrl) : null);
+  const singleUrl = safeHttpsImageUrl(metadata?.creativeImageUrl);
+
+  if (beforeUrl && afterUrl) {
+    return `
+      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: #ffffff; color: #0b1220;">
+        <tr>
+          <td style="padding: 0 10px 0 0; vertical-align: top; background-color: #ffffff;">
+            <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Before</p>
+            <img src="${escapeHtml(beforeUrl)}" alt="Previous creative" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:#ffffff;">
+          </td>
+          <td style="padding: 0; vertical-align: top; background-color: #ffffff;">
+            <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Now</p>
+            <img src="${escapeHtml(afterUrl)}" alt="Current creative" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:#ffffff;">
+          </td>
+        </tr>
+      </table>
+    `;
+  }
+
+  if (!singleUrl) {
+    return "";
+  }
+
+  return `
+      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: #ffffff; color: #0b1220;">
+        <tr>
+          <td style="padding: 0; background-color: #ffffff;">
+            <img src="${escapeHtml(singleUrl)}" alt="Ad creative" width="200" style="display:block; max-width:200px; width:200px; border-radius:8px; border:1px solid #e4e7ec; background-color:#ffffff;">
+          </td>
+        </tr>
+      </table>
+  `;
+}
+
+function creativeThumbnailTextNote(metadata: Record<string, unknown> | undefined) {
+  const beforeUrl = safeHttpsImageUrl(metadata?.beforeCreativeImageUrl);
+  const afterUrl =
+    safeHttpsImageUrl(metadata?.afterCreativeImageUrl) ??
+    (beforeUrl ? safeHttpsImageUrl(metadata?.creativeImageUrl) : null);
+  const singleUrl = safeHttpsImageUrl(metadata?.creativeImageUrl);
+
+  if (beforeUrl && afterUrl) {
+    return "Creative: before/after thumbnails attached in the HTML email.";
+  }
+  if (singleUrl) {
+    return "Creative thumbnail attached in the HTML email.";
+  }
+  return null;
+}
+
+/**
+ * Surface sourced spend/reach/impressions only. Never invent bands.
+ * Range-shaped values become "… in the X–Y band"; single values stay "Observed …".
+ */
+export function readMetricBandLines(metadata: Record<string, unknown> | undefined) {
+  const lines: string[] = [];
+  const spend = readSourcedMetric(metadata, ["observedSpend", "spend"]);
+  const impressions = readSourcedMetric(metadata, ["observedImpressions", "impressions"]);
+  const reach = readSourcedMetric(metadata, ["observedReach", "reach"]);
+
+  if (spend) lines.push(formatMetricBandLine("spend", spend));
+  if (impressions) lines.push(formatMetricBandLine("impressions", impressions));
+  if (reach) lines.push(formatMetricBandLine("reach", reach));
+  return lines;
+}
+
+function formatMetricBandLine(
+  kind: "spend" | "impressions" | "reach",
+  value: string,
+) {
+  const range = splitMetricRange(value);
+  if (kind === "spend") {
+    return range
+      ? `Spending in the ${range.low}–${range.high} band`
+      : `Observed spend: ${value}`;
+  }
+  if (kind === "impressions") {
+    return range
+      ? `Impressions in the ${range.low}–${range.high} band`
+      : `Observed impressions: ${value}`;
+  }
+  return range
+    ? `Reach in the ${range.low}–${range.high} band`
+    : `Observed reach: ${value}`;
+}
+
+function splitMetricRange(value: string) {
+  const match = value.match(/^(.+?)\s*(?:–|—|-|to)\s*(.+)$/i);
+  if (!match) return null;
+  const low = match[1]?.trim();
+  const high = match[2]?.trim();
+  if (!low || !high || low === high) return null;
+  return { low, high };
+}
+
+function readSourcedMetric(metadata: Record<string, unknown> | undefined, keys: string[]) {
+  for (const key of keys) {
+    const value = metadata?.[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim().replace(/\s+/g, " ").slice(0, 120);
+    }
+  }
+  return null;
 }
 
 function safeTimestamp(

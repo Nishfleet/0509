@@ -107,6 +107,7 @@ describe("runWatchlistManual OCR reuse", () => {
       listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
       listObservationsForRun: vi.fn().mockResolvedValue([]),
       listWatchEvents: vi.fn().mockResolvedValue([]),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
       listWatchEventsBetween: vi.fn(),
       listWatchlists: vi.fn(),
       logMetaIntegrationStatus: vi.fn(),

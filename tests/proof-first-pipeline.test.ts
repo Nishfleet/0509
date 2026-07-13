@@ -259,6 +259,7 @@ function installSharedMocks(input: {
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([successfulBaseline()]),
     listWatchEvents: vi.fn().mockResolvedValue(input.recentEvents ?? []),
+    listAdsByIds: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween: vi.fn().mockImplementation(async () => input.createdEvents),
     listWatchlists: vi.fn().mockResolvedValue([watchlist]),
     logMetaIntegrationStatus: vi.fn(),
