@@ -17,6 +17,10 @@ function mockWorkspaceSession(options: {
       ownerName: options.isMember ? "Owner" : null,
     })),
   }));
+  vi.doMock("~/lib/plan.server", () => ({
+    getUserPlan: vi.fn().mockResolvedValue("starter"),
+    checkPlanLimit: vi.fn(),
+  }));
 }
 
 function mockCloseCounterMove(result: { ok: boolean }) {

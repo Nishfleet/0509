@@ -63,7 +63,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { checkPlanLimit } = await import("~/lib/plan.server");
+  const { requireWorkspacePlanLimit } = await import("~/lib/with-workspace.server");
   const {
     addExternalProofToCollection,
     createCollection,
@@ -84,15 +84,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Collection name is required." };
     }
 
-    const collectionLimit = await checkPlanLimit(env, workspaceUserId, "collections");
-    if (!collectionLimit.allowed) {
-      return {
-        ok: false,
-        error: "plan_limit_exceeded",
-        limit: collectionLimit.limit,
-        current: collectionLimit.current,
-        message: "You have reached your collection limit.",
-      };
+    const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "collections", {
+      limitMessage: "You have reached your collection limit.",
+    });
+    if (!limitGate.ok) {
+      return limitGate.result;
     }
 
     const collection = await createCollection(env, workspaceUserId, {

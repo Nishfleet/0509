@@ -320,6 +320,7 @@ describe("watchlists route loader", () => {
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn(),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
@@ -405,6 +406,7 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("free"),
+      checkPlanLimit: vi.fn(),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual,
@@ -456,6 +458,7 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn(),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual: vi
@@ -512,6 +515,7 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn(),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual: vi
@@ -561,6 +565,7 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn(),
     }));
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual,
@@ -606,6 +611,7 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn(),
     }));
 
     const { action } = await import("~/routes/app.watchlists");
@@ -676,6 +682,7 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn(),
     }));
 
     const { action } = await import("~/routes/app.watchlists");

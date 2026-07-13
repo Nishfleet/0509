@@ -201,6 +201,7 @@ describe("watchlist pause/resume action", () => {
       setWatchlistActive: setWatchlistActiveMock,
     }));
     vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
       checkPlanLimit: vi.fn().mockResolvedValue({ allowed: false, limit: 3, current: 3 }),
     }));
 
@@ -228,6 +229,10 @@ describe("watchlist pause/resume action", () => {
       isMember: false,
       ownerName: null,
     })),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+      checkPlanLimit: vi.fn(),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getDeliveryTargetById: vi.fn().mockResolvedValue({

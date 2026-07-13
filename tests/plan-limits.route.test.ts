@@ -83,6 +83,7 @@ describe("search watchlist limit", () => {
       })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
       checkPlanLimit: vi.fn().mockResolvedValue({
         allowed: false,
         current: 3,
@@ -210,6 +211,7 @@ describe("collection limit", () => {
       })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("free"),
       checkPlanLimit: vi.fn(),
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -402,6 +404,7 @@ describe("dashboard watchlist limit", () => {
       })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("free"),
       checkPlanLimit: vi.fn().mockResolvedValue({
         allowed: false,
         current: 3,

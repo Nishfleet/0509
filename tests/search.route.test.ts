@@ -39,6 +39,18 @@ const appSession = {
   },
 };
 
+function mockWorkspaceAuth(session = appSession) {
+  return {
+    requireSession: vi.fn().mockResolvedValue(session),
+    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: false,
+      ownerName: null,
+    })),
+  };
+}
+
 function createContext(env = {}) {
   return {
     cloudflare: {
@@ -783,20 +795,7 @@ describe("search actions", () => {
       const createSavedQuery = vi.fn();
       const createWatchlist = vi.fn();
 
-      vi.doMock("~/lib/auth.server", () => ({
-        requireSession: vi.fn().mockResolvedValue({
-          user: {
-            id: "user-1",
-            email: "owner@example.com",
-            name: "Owner",
-          },
-          session: {
-            id: "session-1",
-            userId: "user-1",
-            expiresAt: "2026-04-03T00:00:00.000Z",
-          },
-        }),
-      }));
+      vi.doMock("~/lib/auth.server", () => mockWorkspaceAuth());
       vi.doMock("~/lib/workspace.server", () => ({
       resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
         workspaceUserId: id,
@@ -808,6 +807,7 @@ describe("search actions", () => {
         getEnv: vi.fn(() => env),
       }));
       vi.doMock("~/lib/plan.server", () => ({
+        getUserPlan: vi.fn().mockResolvedValue("starter"),
         checkPlanLimit,
       }));
       vi.doMock("~/lib/data.server", () => ({
@@ -862,20 +862,7 @@ describe("search actions", () => {
       limit: 10,
     });
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue({
-        user: {
-          id: "user-1",
-          email: "owner@example.com",
-          name: "Owner",
-        },
-        session: {
-          id: "session-1",
-          userId: "user-1",
-          expiresAt: "2026-04-03T00:00:00.000Z",
-        },
-      }),
-    }));
+    vi.doMock("~/lib/auth.server", () => mockWorkspaceAuth());
     vi.doMock("~/lib/workspace.server", () => ({
       resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
         workspaceUserId: id,
@@ -887,6 +874,7 @@ describe("search actions", () => {
       getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       checkPlanLimit,
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -943,9 +931,7 @@ describe("search actions", () => {
     const createSavedQuery = vi.fn();
     const createWatchlist = vi.fn();
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(appSession),
-    }));
+    vi.doMock("~/lib/auth.server", () => mockWorkspaceAuth(appSession));
     vi.doMock("~/lib/workspace.server", () => ({
       resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
         workspaceUserId: id,
@@ -957,6 +943,7 @@ describe("search actions", () => {
       getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       checkPlanLimit,
     }));
     vi.doMock("~/lib/data.server", () => ({
@@ -1009,9 +996,7 @@ describe("search actions", () => {
       limit: 10,
     });
 
-    vi.doMock("~/lib/auth.server", () => ({
-      requireSession: vi.fn().mockResolvedValue(appSession),
-    }));
+    vi.doMock("~/lib/auth.server", () => mockWorkspaceAuth(appSession));
     vi.doMock("~/lib/workspace.server", () => ({
       resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
         workspaceUserId: id,
@@ -1023,6 +1008,7 @@ describe("search actions", () => {
       getEnv: vi.fn(() => env),
     }));
     vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       checkPlanLimit,
     }));
     vi.doMock("~/lib/data.server", () => ({

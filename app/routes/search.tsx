@@ -219,15 +219,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { checkPlanLimit } = await import("~/lib/plan.server");
+  const {
+    withWorkspace,
+    requireWorkspacePlanLimit,
+    planLimitExceededActionResult,
+  } = await import("~/lib/with-workspace.server");
   const { addAdToCollection, createSavedQuery } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const session = await requireSession(env, request);
-  const workspaceUserId = (
-    await (await import("~/lib/workspace.server")).resolveWorkspace(env, session.user.id)
-  ).workspaceUserId;
+  const workspace = await withWorkspace(request, env);
+  if (!workspace.ok) {
+    return workspace.result;
+  }
+  const { workspaceUserId } = workspace;
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   const competitorWebsite = normalizeCompetitorWebsiteInput(
@@ -269,7 +273,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Give the saved search a name first." };
     }
 
-    await createSavedQuery(env, workspaceUserId!, {
+    await createSavedQuery(env, workspaceUserId, {
       name,
       mode: normalizedQuery.mode,
       filters: normalizedQuery.filters,
@@ -282,7 +286,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { requireVerifiedEmailForRetention, emailUnverifiedActionResult } = await import(
       "~/lib/email-verification.server"
     );
-    const verification = await requireVerifiedEmailForRetention(env, workspaceUserId!);
+    const verification = await requireVerifiedEmailForRetention(env, workspaceUserId);
     if (!verification.ok) {
       return emailUnverifiedActionResult();
     }
@@ -290,25 +294,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const inferredName = (competitorWebsite.displayName ?? normalizedQuery.filters.query) || "Competitor";
     const queryName = String(formData.get("name") ?? "").trim() || `${inferredName} watch`;
     const shouldUseAdvertiserMode = canCreateAdvertiserWatchlist(normalizedQuery);
-    const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
-    if (!watchlistLimit.allowed) {
-      return {
-        ok: false,
-        error: "plan_limit_exceeded",
-        limit: watchlistLimit.limit,
-        current: watchlistLimit.current,
-        message:
-          watchlistLimit.limit <= 1
-            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
-            : "You have reached your competitor tracking limit.",
-        upgradePath: "/app/billing?source=search#plans",
-      };
+    const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "watchlists", {
+      limitMessage: ({ limit }) =>
+        limit <= 1
+          ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+          : "You have reached your competitor tracking limit.",
+      upgradePath: "/app/billing?source=search#plans",
+    });
+    if (!limitGate.ok) {
+      return limitGate.result;
     }
+    const watchlistLimit = limitGate.planLimit;
 
     const { createWatchlistWithinLimit } = await import("~/lib/data.server");
     let watchlistResult: Awaited<ReturnType<typeof createWatchlistWithinLimit>> | null = null;
     if (shouldUseAdvertiserMode) {
-      watchlistResult = await createWatchlistWithinLimit(env, workspaceUserId!, {
+      watchlistResult = await createWatchlistWithinLimit(env, workspaceUserId, {
         name: queryName,
         targetType: "advertiser",
         targetId: competitorWebsite.normalizedUrl ?? normalizedQuery.filters.query,
@@ -318,7 +319,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         trackingRole,
       }, watchlistLimit.limit);
     } else {
-      const savedQuery = await createSavedQuery(env, workspaceUserId!, {
+      const savedQuery = await createSavedQuery(env, workspaceUserId, {
         name: `${queryName} source`,
         mode: normalizedQuery.mode,
         filters: normalizedQuery.filters,
@@ -328,7 +329,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         return { ok: false, message: "Could not prepare this competitor for tracking." };
       }
 
-      watchlistResult = await createWatchlistWithinLimit(env, workspaceUserId!, {
+      watchlistResult = await createWatchlistWithinLimit(env, workspaceUserId, {
         name: queryName,
         targetType: "saved_query",
         targetId: savedQuery.id,
@@ -340,9 +341,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     if (watchlistResult.status === "over_cap") {
-      return {
-        ok: false,
-        error: "plan_limit_exceeded",
+      return planLimitExceededActionResult({
         limit: watchlistResult.limit,
         current: watchlistResult.current,
         message:
@@ -350,7 +349,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
             : "You have reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
-      };
+      });
     }
 
     const watchlist = watchlistResult.watchlist;
@@ -379,7 +378,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const ad = JSON.parse(adJson) as AdRecord;
     await addAdToCollection(
       env,
-      workspaceUserId!,
+      workspaceUserId,
       collectionId,
       ad,
       String(formData.get("note") ?? "").trim() || null,

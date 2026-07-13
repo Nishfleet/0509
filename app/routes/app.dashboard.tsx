@@ -155,12 +155,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-  const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { withWorkspace, planLimitExceededActionResult } = await import(
+    "~/lib/with-workspace.server"
+  );
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const { createWatchlistWithinLimit, getSavedQuery, touchSavedQueryRun } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const workspace = await withWorkspace(request, env);
+  if (!workspace.ok) {
+    return workspace.result;
+  }
+  const { workspaceUserId } = workspace;
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
@@ -209,16 +215,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }, watchlistLimit.limit);
 
     if (result.status === "over_cap") {
-      return {
-        ok: false,
-        error: "plan_limit_exceeded",
+      return planLimitExceededActionResult({
         limit: result.limit,
         current: result.current,
         message:
           result.limit <= 1
             ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
             : "You have reached your competitor tracking limit.",
-      };
+      });
     }
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
