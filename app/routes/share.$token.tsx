@@ -6,6 +6,7 @@ import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
 import { ReportView } from "~/components/report-view";
+import { ShareBrandIdentity } from "~/components/share-brand-identity";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import type { DigestShareSnapshot } from "~/lib/digest-share";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
@@ -19,7 +20,10 @@ import {
 import { isReportDocument, type ReportDocument } from "~/lib/report";
 import type { ShareResourceType } from "~/lib/types";
 
-export const meta = () => [{ title: "Shared report | Five to Nine" }];
+export const meta = () => [
+  { title: "Shared report | Five to Nine" },
+  { name: "robots", content: "noindex, nofollow" },
+];
 
 export async function loader({ context, params }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
@@ -31,7 +35,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     listCollectionItems,
     listWatchEvents,
   } = await import("~/lib/data.server");
-  const { resolveWorkspacePreparedBy } = await import("~/lib/plan-feature-gate.server");
+  const { resolveWorkspaceBrandIdentity } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const token = params.token;
 
@@ -44,7 +48,8 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
-  const preparedBy = await resolveWorkspacePreparedBy(env, share.userId);
+  const brandIdentity = await resolveWorkspaceBrandIdentity(env, share.userId);
+  const preparedBy = brandIdentity?.brandName ?? null;
 
   if (share.isSnapshot) {
     return {
@@ -52,6 +57,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       resourceType: share.resourceType,
       payload: sanitizeSnapshotPayload(share.resourceType, share.snapshotPayload),
       preparedBy,
+      brandIdentity,
     };
   }
 
@@ -65,6 +71,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       collection,
       items,
       preparedBy,
+      brandIdentity,
     };
   }
 
@@ -80,6 +87,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       events: eligibleEvents,
       sourceCoverage,
       preparedBy,
+      brandIdentity,
     };
   }
 
@@ -94,6 +102,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     resourceType: "digest" as const,
     digest,
     preparedBy,
+    brandIdentity,
   };
 }
 
@@ -104,21 +113,22 @@ export default function ShareRoute() {
     "payload" in data && data.resourceType === "digest" && isDigestSnapshotPayload(data.payload)
       ? data.payload
       : null;
+  const hasAgencyIdentity = Boolean(
+    data.brandIdentity?.brandName || data.brandIdentity?.brandLogo,
+  );
 
   return (
     <main className="f9-share-page">
       <div className="f9-container">
         <div className="f9-share-header">
-          <Link className="f9-app-brand" to="/">
-            <BrandWordmark meta="Shared evidence" />
-          </Link>
+          {hasAgencyIdentity && data.brandIdentity ? (
+            <ShareBrandIdentity identity={data.brandIdentity} />
+          ) : (
+            <Link className="f9-app-brand" to="/">
+              <BrandWordmark meta="Shared evidence" />
+            </Link>
+          )}
         </div>
-
-        {data.preparedBy ? (
-          <p className="f9-share-prepared-by">
-            Prepared by <strong>{data.preparedBy}</strong>
-          </p>
-        ) : null}
 
         {reportSnapshot ? (
           <article className="f9-app-panel f9-report-page">
@@ -234,8 +244,8 @@ export default function ShareRoute() {
         )}
 
         <footer className="f9-share-footer">
-          <p>
-            Monitoring and evidence by <Link to="/">Five to Nine</Link>
+          <p className="f9-share-powered-by">
+            Powered by <Link to="/">Five to Nine</Link>
           </p>
         </footer>
       </div>

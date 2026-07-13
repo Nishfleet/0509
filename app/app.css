@@ -3464,6 +3464,79 @@ button[aria-busy="true"] {
   padding: 24px 0;
 }
 
+.f9-brand-logo-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
+  border-radius: 14px;
+  background: #fffdf8;
+}
+
+.f9-brand-logo-preview img {
+  width: auto;
+  max-width: min(220px, 100%);
+  height: auto;
+  max-height: 72px;
+  object-fit: contain;
+}
+
+.f9-share-brand-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+}
+
+.f9-share-brand-logo {
+  display: grid;
+  place-items: center;
+  min-width: 80px;
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.f9-share-brand-logo img {
+  width: auto;
+  max-width: 180px;
+  height: auto;
+  max-height: 56px;
+  object-fit: contain;
+}
+
+.f9-share-brand-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.f9-share-brand-copy small {
+  color: var(--f9-search-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.f9-share-brand-copy strong {
+  color: var(--f9-search-ink);
+  font-size: clamp(1.25rem, 3vw, 1.8rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.f9-share-brand-copy a {
+  width: fit-content;
+  color: var(--f9-search-muted);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
 .f9-share-header .f9-wordmark,
 .f9-share-header .f9-wordmark-bridge {
   color: var(--f9-search-ink);
@@ -3494,6 +3567,12 @@ button[aria-busy="true"] {
 
 .f9-share-footer p {
   margin: 0;
+}
+
+.f9-share-powered-by {
+  color: var(--f9-search-soft, #64788d);
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
 }
 
 .f9-share-footer a {
@@ -3737,9 +3816,27 @@ button[aria-busy="true"] {
 
   .f9-cursor-rail,
   .f9-dash-topbar,
-  .f9-share-header,
-  .f9-report-toolbar {
+  .f9-report-toolbar button {
     display: none !important;
+  }
+
+  .f9-share-header,
+  .f9-share-brand-identity,
+  .f9-share-powered-by {
+    display: flex !important;
+  }
+
+  .f9-share-header {
+    padding: 0 0 18px;
+  }
+
+  .f9-share-brand-identity {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .f9-share-powered-by {
+    margin-top: 18px;
   }
 
   .f9-cursor-shell,
