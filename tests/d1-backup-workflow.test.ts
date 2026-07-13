@@ -54,6 +54,6 @@ describe("scheduled D1 backup workflow", () => {
     expect(opsDoc).toContain("CLOUDFLARE_ACCOUNT_ID");
     expect(opsDoc).toContain("CLOUDFLARE_API_TOKEN");
     expect(opsDoc).toContain("workflow_dispatch");
-    expect(opsDoc).toContain("first scheduled Actions run is still blocked");
+    expect(opsDoc).toContain("scheduled Actions runs remain blocked on secrets");
   });
 });

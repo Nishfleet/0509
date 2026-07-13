@@ -9,10 +9,54 @@ import {
   parseWatchlistRunStatusCounts,
 } from "./monitoring-fanout-canary.lib.mjs";
 
+// The canary must evaluate the real committed prod posture, not the bare
+// local shell: wrangler.jsonc vars are the source of truth for mode/global/
+// max-inflight, and the internal-workspace ID lives in Worker secret storage
+// (checked by name only — values are never read). Env vars always override.
+const wranglerConfigText = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+
+/**
+ * @param {string} name
+ */
+function wranglerVar(name) {
+  const match = wranglerConfigText.match(new RegExp(`"${name}"\\s*:\\s*"([^"]*)"`));
+  return match ? match[1] : null;
+}
+
+/**
+ * @param {string} name
+ * @returns {boolean | null} true/false when wrangler answered, null when unavailable
+ */
+function prodSecretExists(name) {
+  try {
+    const raw = execFileSync("npx", ["wrangler", "secret", "list"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return raw.includes(`"${name}"`);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * @param {string[]} args
  */
 function parseArgs(args) {
+  const envGlobal = process.env.MONITORING_FANOUT_GLOBAL;
+  const envMaxInflight =
+    process.env.MONITORING_FANOUT_MAX_INFLIGHT ?? wranglerVar("MONITORING_FANOUT_MAX_INFLIGHT");
+  /** @type {"env" | "wrangler_secret_list" | "unavailable"} */
+  let internalWorkspaceSource = "env";
+  let internalWorkspaceConfigured = Boolean(
+    process.env.MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID?.trim(),
+  );
+  if (!internalWorkspaceConfigured) {
+    const secretPresent = prodSecretExists("MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID");
+    internalWorkspaceSource = secretPresent === null ? "unavailable" : "wrangler_secret_list";
+    internalWorkspaceConfigured = secretPresent === true;
+  }
+
   /** @type {{
    *   step: string,
    *   json: boolean,
@@ -23,6 +67,7 @@ function parseArgs(args) {
    *   maxInflight: number | null,
    *   globalEnabled: boolean,
    *   internalWorkspaceConfigured: boolean,
+   *   internalWorkspaceSource: "env" | "wrangler_secret_list" | "unavailable",
    *   workflowBindingConfigured: boolean,
    *   shadowOnly: number | null,
    * }} */
@@ -31,15 +76,13 @@ function parseArgs(args) {
     json: false,
     remote: false,
     metricsFile: null,
-    mode: process.env.MONITORING_FANOUT_MODE ?? null,
+    mode: process.env.MONITORING_FANOUT_MODE ?? wranglerVar("MONITORING_FANOUT_MODE"),
     allowlist: process.env.MONITORING_FANOUT_ALLOWLIST ?? null,
-    maxInflight: process.env.MONITORING_FANOUT_MAX_INFLIGHT
-      ? Number.parseInt(process.env.MONITORING_FANOUT_MAX_INFLIGHT, 10)
-      : null,
-    globalEnabled: process.env.MONITORING_FANOUT_GLOBAL === "1",
-    internalWorkspaceConfigured: Boolean(
-      process.env.MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID?.trim(),
-    ),
+    maxInflight: envMaxInflight ? Number.parseInt(envMaxInflight, 10) : null,
+    globalEnabled:
+      envGlobal != null ? envGlobal === "1" : wranglerVar("MONITORING_FANOUT_GLOBAL") === "1",
+    internalWorkspaceConfigured,
+    internalWorkspaceSource,
     workflowBindingConfigured: true,
     shadowOnly: null,
   };
@@ -175,6 +218,7 @@ const payload = {
     allowlistConfigured: Boolean(config.allowlist?.trim()),
     maxInflight: config.maxInflight,
     internalWorkspaceConfigured: config.internalWorkspaceConfigured,
+    internalWorkspaceSource: config.internalWorkspaceSource,
   },
   metrics,
 };
@@ -183,6 +227,13 @@ if (config.json) {
   console.log(JSON.stringify(payload, null, 2));
 } else {
   console.log(formatFanoutLadderReport(evaluation));
+  if (config.internalWorkspaceSource === "wrangler_secret_list") {
+    console.log("internal workspace: verified present via `wrangler secret list` (name only).");
+  } else if (config.internalWorkspaceSource === "unavailable") {
+    console.log(
+      "internal workspace: could not verify (wrangler unavailable); export MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID per docs/monitoring-fanout-rollout.md.",
+    );
+  }
   if (config.step !== "config" && !config.remote && !config.metricsFile) {
     console.log("");
     console.log("Tip: pass --remote for read-only D1 metrics, or --metrics-file <wrangler-json>.");
