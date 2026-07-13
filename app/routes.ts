@@ -40,6 +40,7 @@ export default [
   route("api/webhooks/dodo", "routes/api.webhooks.dodo.ts"),
   route("api/delivery-status/:provider", "routes/api.delivery-status.$provider.ts"),
   route("api/health", "routes/api.health.ts"),
+  route("api/health/deep", "routes/api.health.deep.ts"),
   route("api/presence/oauth/linkedin", "routes/api.presence.oauth.linkedin.ts"),
   route("api/presence/oauth/linkedin/callback", "routes/api.presence.oauth.linkedin.callback.ts"),
   route("api/launch-readiness", "routes/api.launch-readiness.ts"),

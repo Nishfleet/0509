@@ -21,7 +21,7 @@ npm run dev
 - Dormant WhatsApp Cloud API and Slack webhook code retained behind product gates; email is the verified GA delivery channel
 - Dodo Payments (live checkout + signed webhooks); legacy secondary payment routes have been removed
 - Cloudflare Browser Rendering (primary ad discovery scrapes the Meta Ad Library; the Meta API token is a gated fallback)
-- Cloudflare Workers AI (creative-text OCR) and Cloudflare Workflows (monitoring fan-out — currently bypassed in prod, see below)
+- Cloudflare Workers AI (creative-text OCR) and Cloudflare Workflows (monitoring fan-out — live in prod via `MONITORING_FANOUT_MODE=fanout`, see Production Reality)
 - Pure CSS via `app/app.css` (no Tailwind, no CSS-in-JS)
 - Vitest for testing
 
@@ -31,9 +31,9 @@ npm run dev
 - `app/lib/*.server.ts` — server-side logic (D1 queries, ad discovery, monitoring, analysis, delivery, billing)
 - `app/lib/*.ts` — shared logic (language classifier, types, display helpers)
 - `workers/app.ts` — Cloudflare Worker entry with scheduled event handler
-- `workers/monitoring-workflow.ts` — Cloudflare Workflow for watchlist scans (currently dead code in prod: `shouldRunScheduledMonitoringInline` always selects the inline loop when `BROWSER` is bound)
+- `workers/monitoring-workflow.ts` — Cloudflare Workflow for watchlist scans (active in prod when `MONITORING_FANOUT_MODE=fanout`; gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts`)
 - `workers/schedule.ts` — cron string → scheduled task mapping
-- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0060`)
+- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0064`; post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is empty)
 - `tests/` — Vitest coverage for search, monitoring, analysis, onboarding, plan limits, reporting, billing webhooks, and route exposure
 - `scripts/` — deploy, prod canaries, launch-readiness canary, D1 backup
 - `docs/launch-readiness.md` — launch gate definition (accurate, maintained)
@@ -41,11 +41,16 @@ npm run dev
 
 ## Key Files
 
-- `app/lib/data.server.ts` — D1 CRUD layer (~4,500 lines; overdue for a split by domain)
+- `app/lib/data.server.ts` — D1 CRUD layer (~9,000 lines; overdue for a split by domain)
+- `app/lib/customer-agent-actions.server.ts` — customer agent action dispatch (~2,600 lines)
+- `app/lib/browser-run.server.ts` — Browser Rendering snapshot runner (~700 lines)
+- `app/lib/evidence-usage.server.ts` — proof/evidence credit ledger (~790 lines)
+- Presence subsystem — `app/lib/presence-*.server.ts` (rollout-flag gated via `wrangler.jsonc` `PRESENCE_*` vars; website connector is GA, digest/X/Reddit/LinkedIn remain disabled)
 - `app/lib/ad-source.server.ts` — commercial discovery resolver (browser scraping primary, Meta API fallback, honest demo mode)
 - `app/lib/meta-library-browser.server.ts` — Browser Rendering scraper for the Meta Ad Library
 - `app/lib/meta-api.server.ts` — Meta Ad Library API client
 - `app/lib/monitoring.server.ts` — watchlist monitoring + digests + proof budgets
+- `app/lib/monitoring-fanout.server.ts` — scheduled monitoring fan-out orchestration (`resolveMonitoringFanoutMode()`; inline is only the unset-var default/fallback)
 - `app/lib/delivery.server.ts` — email (Cloudflare Email Service) delivery plus dormant WhatsApp/Slack code paths with idempotency keys, attempt records, and unsubscribe headers
 - `app/lib/unsubscribe.server.ts` — HMAC-signed unsubscribe tokens for the `/unsubscribe` route
 - `app/lib/whatsapp.server.ts` — WhatsApp Cloud API templates, webhook signature verification, target validation
@@ -70,7 +75,7 @@ The checked-in Cloudflare app is the active production runtime and billing is wi
 - region-aware pricing was REMOVED in `migrations/0016_drop_region_pricing.sql`; pricing is live-loaded from Dodo (`app/lib/dodo-pricing.server.ts`, `/api/pricing-preview`)
 - plan gating is enforced at creation time (`checkPlanLimit`), on manual refresh (free plan blocked), on watchlist resume, and on downgrade/revocation/refund (over-limit watchlists auto-pause, newest kept); authenticated live search is rate-limited per account (60/10min)
 - a retention audit (first-week experience, signal quality, promise-vs-delivery, churn lifecycle) followed on 2026-06-12 and a 12-PR program (#160-#172) landed the same day: Dodo subscription grants fixed for real payloads (subscription payments carry NO product_cart — grants come from checkout metadata; subscription.active/renewed handled; migration 0023 rebuilt user_plan absorbing remote drift and added subscription/customer/next-billing linkage), first scan on watchlist creation, all-quiet heartbeat digests, baseline event instead of first-scan ad_new flood, canonical-URL diffing + 48h per-field suppression + stale-cache-honest scans, paused-watchlist visibility + auto-resume on grant, per-plan daily proof caps (agency math now reachable), Dodo customer portal + cancel-at-period-end guard, scan-failure notices + nightly customer-at-risk operator email, before/now diffs + links in alert emails, /app/account (password/email/sessions/delete), honest cadence copy, hidden-value pricing bullets + agency scan priority. A live-mode Dodo API key lives at ~/.config/dodo/claude-api-key. RESOLVED 2026-06-12 (verified via Dodo API): the production webhook ep_3DyWwxkqJjUoAInxV07esfVvUDb subscribes to all 8 handled events (payment.succeeded, refund.succeeded, subscription.active/renewed/cancelled/expired/failed/on_hold) — filter_types match the handler exactly.
-- a full launch audit (security, code, architecture, DB, business) was completed 2026-06-11 and a 13-PR hardening program (#138-#158) landed 2026-06-12 resolving: SSRF in creative-text, open redirect on auth `redirectTo`, D1 100-param crashes, missing indexes (0022) + retention sweep, share-link expiry/revocation (+ `/app/shares`), password reset, billing page + double-subscription guard, dunning grace + refund handling + Dodo event ledger, digests-before-scans + cron deadline guard, digest-only Mondays, scraper advertiser/CTA honesty, instant-alert retry + quiet-hours flush, watchlist pause/resume + collection delete + send-test-email, cost gates. CURRENT GA POSTURE: Email is the verified delivery lane; WhatsApp and Slack are dormant/non-GA customer channels; Workflow-based scan capacity is post-launch.
+- a full launch audit (security, code, architecture, DB, business) was completed 2026-06-11 and a 13-PR hardening program (#138-#158) landed 2026-06-12 resolving: SSRF in creative-text, open redirect on auth `redirectTo`, D1 100-param crashes, missing indexes (0022) + retention sweep, share-link expiry/revocation (+ `/app/shares`), password reset, billing page + double-subscription guard, dunning grace + refund handling + Dodo event ledger, digests-before-scans + cron deadline guard, digest-only Mondays, scraper advertiser/CTA honesty, instant-alert retry + quiet-hours flush, watchlist pause/resume + collection delete + send-test-email, cost gates. CURRENT GA POSTURE: Email is the verified delivery lane; WhatsApp and Slack are dormant/non-GA customer channels; Workflow-based monitoring fan-out is live in prod (`MONITORING_FANOUT_MODE=fanout`, max 8 in-flight).
 - a round-3 audit program (waves A/B/C + ops) landed 2026-06-12 as PRs #176-#186: scan-reliability interaction fixes (deletion guard, operator-alert FK, email-change target migration, paused_reason, in-flight scan guard with lazy scan thunks, soft-failure classification, capacity staleness signals), pending states + first-scan live pulse, tab titles/favicon/PNG og-image, the GLOBAL-FIRST pass (see Conventions; migrations 0024-0025), email dark-mode hardening, dashboard wake-up greeting, creative thumbnails (creativeImageUrl on AdRecord raw_json), Boards rename + ad-longevity badges, weekly business-numbers operator email (Monday cron), D1→R2 weekly backups (npm run backup:d1:r2 + scheduled task on Nish's Mac; docs/ops-backup-uptime.md), and agency report branding (migration 0026, /app/account, plan-gated). Remote D1 migrations applied through 0026. PENDING NISH (see docs/ops-backup-uptime.md): UptimeRobot monitor on /api/health, Dodo dashboard customer-portal "Allow Subscription Updates" toggle, WhatsApp Meta-side setup.
 
 Last local verification on 2026-06-11:
@@ -83,10 +88,10 @@ Last local verification on 2026-06-11:
 
 - `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains for the current Cloudflare app under `app/` and `workers/`.
 - `0509.in`, `www.0509.in`, and `api.0509.in` are redirect compatibility routes only. Do not introduce new `.in` product copy, auth origins, SEO links, or support addresses.
-- Cloudflare deploy state is represented by `wrangler.jsonc`: D1 database `0509`, R2 bucket binding `LANDING_PAGE_ARTIFACTS`, Browser Rendering, Workers AI, Cloudflare Email Service, and `MonitoringWorkflow` bindings are configured there.
-- Remote D1 migrations were verified on 2026-06-27 with `SAFE_DEPLOY_APPROVED=d1 npx wrangler d1 migrations list 0509 --remote`; `0060_remove_legacy_billing_provider.sql` is pending as a post-deploy cleanup migration and must be applied only after the retired-provider-free Worker is live.
+- Cloudflare deploy state is represented by `wrangler.jsonc`: D1 database `0509`, R2 bucket binding `LANDING_PAGE_ARTIFACTS`, Browser Rendering, Workers AI, Cloudflare Email Service, and `MonitoringWorkflow` bindings are configured there. `wrangler.jsonc` sets `MONITORING_FANOUT_MODE: "fanout"` and `MONITORING_FANOUT_GLOBAL: "1"` (max 8 in-flight via `MONITORING_FANOUT_MAX_INFLIGHT`).
+- Remote D1 migrations: `0060_remove_legacy_billing_provider.sql` was applied (PR #251); the repo migration chain is currently through `0064`. The post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is correctly empty.
 - Crons: `17 */6 * * *` (warmup), `0 4 * * *` (daily monitoring), and `0 5 * * MON` (weekly cadence).
-- scheduled monitoring runs INLINE in the main Worker; Agency checkout stays held until live fan-out proof passes.
+- scheduled monitoring runs via the `MonitoringWorkflow` fan-out path (not inline). The real gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts` — inline is only the unset-var default/fallback. There is no `shouldRunScheduledMonitoringInline` helper.
 - auth/origin logic should stay proxy-aware for Cloudflare and any future front-door changes:
   - `app/lib/env.server.ts` must respect `Forwarded` and `x-forwarded-*` headers
   - `tests/env.server.test.ts` covers that behavior
@@ -124,7 +129,7 @@ The product is **Five to Nine**; **0509.io** is its current production domain (0
 - Immutability: create new objects, never mutate existing ones.
 - File organization: 200-400 lines typical, 800 max.
 - D1 queries: always use parameterized `.bind()` — never string interpolation.
-- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. `npm run deploy` enforces this via `scripts/check-d1-migrations-synced.mjs`, which fails the deploy while remote D1 is behind `migrations/` except for an explicitly allowlisted post-deploy cleanup migration. Cleanup migration `0060_remove_legacy_billing_provider.sql` is destructive and must run only after the compatible Worker is live, with a fresh backup plus pre/post SQL evidence. (Lesson from the 0019_slack_delivery drift incident, 2026-06-11: schema was changed out-of-band, the migration ledger lied, and the next apply crashed on it.)
+- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. `npm run deploy` enforces this via `scripts/check-d1-migrations-synced.mjs`, which fails the deploy while remote D1 is behind `migrations/` except for an explicitly allowlisted post-deploy cleanup migration (`POST_DEPLOY_CLEANUP_MIGRATIONS` in `scripts/d1-migration-sync-check.lib.mjs` — currently empty after `0060` completed). (Lesson from the 0019_slack_delivery drift incident, 2026-06-11: schema was changed out-of-band, the migration ledger lied, and the next apply crashed on it.)
 
 ## Design System
 

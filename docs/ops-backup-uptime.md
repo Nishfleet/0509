@@ -4,10 +4,17 @@
 
 - `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available.
 - The repository validation gate is `node scripts/validate-d1-backup.mjs`. It dry-runs backup-script prerequisites, the D1 binding, and the current migration chain through the latest migration; it does not prove that a fresh production R2 object exists.
-- `.github/workflows/d1-backup-r2.yml` schedules the same D1-to-R2 backup weekly at 22:17 UTC Sunday and can be run manually from GitHub Actions. It requires repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`; the required Cloudflare repository secrets were absent on 2026-07-02, so the first scheduled Actions run is still blocked.
+- `.github/workflows/d1-backup-r2.yml` is correct and runnable: it supports `workflow_dispatch` plus a weekly schedule (`17 22 * * SUN`), runs only on `main`, uses the `d1-backup-r2` GitHub Environment, validates with `node scripts/validate-d1-backup.mjs`, then runs `npm run backup:d1:r2` with `D1_BACKUP_AUTOMATION_APPROVED=0509-weekly-d1-to-r2`.
+- **Blocked state (still true):** the workflow has never completed a successful Actions backup because repository (or `d1-backup-r2` environment) secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are missing. The 2026-06-28 scheduled run `28339411098` reached validation, then failed at `Run approved D1-to-R2 backup` for that reason. Until those secrets are set and a manual `workflow_dispatch` from `main` succeeds, automated cloud backups remain blocked — owner-operated manual backups are the live path.
 - Cloudflare documents that D1 export blocks other database requests while it runs. Keep this schedule in a low-traffic window and move it if real customer traffic shows a better quiet period.
 - Manual run any time: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available). This marker is the script's explicit confirmation for a production-blocking remote D1 export; unapproved manual runs fail before Wrangler starts.
 - Backup command output redacts temporary signed export URL query strings before logging.
+
+### Owner actions to unblock Actions backups
+
+1. Add repository secrets (or secrets on the `d1-backup-r2` GitHub Environment): `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (token needs D1 export + R2 write on the backup bucket).
+2. Confirm the GitHub Environment named `d1-backup-r2` exists for this repo.
+3. From Actions → **D1 backup to R2** → **Run workflow** on `main` (`workflow_dispatch`) and confirm the job uploads a fresh object under the private R2 `backups/d1/` prefix.
 
 ### Backup evidence
 
@@ -15,7 +22,7 @@
 - 2026-06-28 post-cleanup backup after `0060`: timestamped object under the private R2 backup prefix confirmed.
 - The post-cleanup backup passed an isolated local SQLite import smoke; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed.
 - 2026-07-02 owner-operated manual backup: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` exported remote D1, uploaded a fresh object under the private R2 backup prefix, and pruned only old local backup copies. `node scripts/validate-d1-backup.mjs` passed afterward through migration `0062_dodo_plan_change_pending_target.sql`.
-- 2026-06-28 scheduled GitHub Actions backup run `28339411098` reached `node scripts/validate-d1-backup.mjs`, then failed at `Run approved D1-to-R2 backup` because the required Cloudflare repository secrets were not configured.
+- 2026-06-28 scheduled GitHub Actions backup run `28339411098` reached `node scripts/validate-d1-backup.mjs`, then failed at `Run approved D1-to-R2 backup` because the required Cloudflare repository secrets were not configured — first scheduled Actions run is still blocked.
 - A remote scratch D1 restore attempt was intentionally isolated from production but hit `SQLITE_TOOBIG` on large exported insert statements. Production-like D1 rebuild is not proven until the export is split/transformed into D1-importable statements and restored into a scratch D1 database.
 
 ### Post-deploy D1 cleanup evidence
@@ -81,7 +88,7 @@ free tier —
    returns JSON with a `status` field).
 4. Alert contact: nishant345@gmail.com (or me@inish.in).
 
-The endpoint is public and unauthenticated by design. It does **not** query D1 — a database blip should not flip the external monitor while the Worker edge is healthy.
+The endpoint is public and unauthenticated by design. `/api/health` does **not** query D1 — a database blip should not flip the external monitor while the Worker edge is healthy. Operators who need a D1 check can hit `/api/health/deep` (cheap `SELECT 1`, returns per-dependency status, rate-limited under the public api-read bucket).
 
 ### Owner verification (no API token)
 
