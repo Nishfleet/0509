@@ -79,13 +79,8 @@ async function enforceRateLimitPolicy(
     const since = new Date(now.getTime() - policy.windowSeconds * 1000).toISOString();
     const keyHash = await requestKeyHash(request, policy);
 
-    await env.DB.prepare(
-      `INSERT INTO rate_limit_events (id, scope, key_hash, route, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-      .bind(crypto.randomUUID(), policy.scope, keyHash, route, now.toISOString())
-      .run();
-
+    // Gate on the windowed COUNT alone so the request path does not wait on
+    // the INSERT. Auth/write scopes stay fail-closed when D1 is unavailable.
     const row = await env.DB.prepare(
       `SELECT COUNT(*) AS count
          FROM rate_limit_events
@@ -98,12 +93,35 @@ async function enforceRateLimitPolicy(
       .first<{ count: number }>();
 
     const count = Number(row?.count ?? 0);
-    if (count > policy.limit) {
+    if (count >= policy.limit) {
       return tooManyRequestsResponse(policy.windowSeconds);
     }
 
-    if (ctx && Math.random() < 0.02) {
-      ctx.waitUntil(cleanupRateLimitEvents(env));
+    const eventId = crypto.randomUUID();
+    const createdAt = now.toISOString();
+    const recordEvent = () =>
+      env.DB!.prepare(
+        `INSERT INTO rate_limit_events (id, scope, key_hash, route, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+        .bind(eventId, policy.scope, keyHash, route, createdAt)
+        .run();
+
+    if (ctx) {
+      ctx.waitUntil(
+        recordEvent()
+          .then(() => {
+            if (Math.random() < 0.02) {
+              return cleanupRateLimitEvents(env);
+            }
+            return undefined;
+          })
+          .catch((error) => {
+            console.error("[rate-limit] deferred event insert failed", error);
+          }),
+      );
+    } else {
+      await recordEvent();
     }
 
     return null;

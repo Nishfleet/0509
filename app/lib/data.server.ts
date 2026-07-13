@@ -1,5 +1,5 @@
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
-import { chunkForBoundParams } from "~/lib/d1-chunk.server";
+import { chunkForBoundParams, D1_MAX_BOUND_PARAMS } from "~/lib/d1-chunk.server";
 import {
   hydrateAdsWithPersistedCreatives as hydrateAdsWithPersistedCreativesImpl,
   listAdsByIds,
@@ -18,6 +18,13 @@ import {
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import { resolveBillingSkuFromProviderProductId } from "~/lib/billing-sku-catalog";
+import {
+  decodeListCursor,
+  nextListCursorFromPage,
+  resolveListPageLimit,
+  type ListPageOptions,
+  type ListPageResult,
+} from "~/lib/list-pagination";
 import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
 import { normalizeSupportCaseInput, SupportCaseInputError } from "~/lib/support";
@@ -3948,18 +3955,85 @@ export async function touchSavedQueryRun(env: AppEnv, savedQueryId: string) {
   );
 }
 
-export async function listCollections(env: AppEnv, userId: string) {
+const WATCHLIST_LIST_COLUMNS = `
+  id,
+  user_id,
+  name,
+  target_type,
+  tracking_role,
+  target_id,
+  target_fingerprint,
+  target_label,
+  target_country,
+  is_active,
+  last_scanned_at,
+  created_at,
+  updated_at
+`;
+
+const COLLECTION_LIST_COLUMNS = `
+  id,
+  user_id,
+  name,
+  description,
+  created_at,
+  updated_at
+`;
+
+const COLLECTION_ITEM_LIST_COLUMNS = `
+  id,
+  collection_id,
+  ad_id,
+  note,
+  ad_snapshot_json,
+  created_at,
+  updated_at
+`;
+
+const ACTIVE_WATCHLIST_PAGE_SIZE = 100;
+const OBSERVATION_RUN_PAGE_SIZE = 200;
+const USER_LIST_PAGE_SIZE = 500;
+
+export async function listCollectionsPage(
+  env: AppEnv,
+  userId: string,
+  options: ListPageOptions = {},
+): Promise<ListPageResult<CollectionRecord>> {
+  const limit = resolveListPageLimit(options.limit, USER_LIST_PAGE_SIZE);
+  const cursor = decodeListCursor(options.cursor);
   const rows = await many<CollectionRow>(
     env,
     `
-      SELECT *
+      SELECT ${COLLECTION_LIST_COLUMNS}
       FROM collection
       WHERE user_id = ?
-      ORDER BY updated_at DESC
+        ${cursor ? "AND (updated_at < ? OR (updated_at = ? AND id < ?))" : ""}
+      ORDER BY updated_at DESC, id DESC
+      LIMIT ?
     `,
-    userId,
+    ...(cursor
+      ? [userId, cursor.sortValue, cursor.sortValue, cursor.id, limit]
+      : [userId, limit]),
   );
-  return rows.map(toCollectionRecord);
+  const items = rows.map(toCollectionRecord);
+  return {
+    items,
+    nextCursor: nextListCursorFromPage(
+      items,
+      limit,
+      (item) => item.updatedAt,
+      (item) => item.id,
+    ),
+  };
+}
+
+export async function listCollections(
+  env: AppEnv,
+  userId: string,
+  options: ListPageOptions = {},
+) {
+  const page = await listCollectionsPage(env, userId, options);
+  return page.items;
 }
 
 export async function getCollection(env: AppEnv, collectionId: string, userId?: string) {
@@ -4001,16 +4075,26 @@ export async function createCollection(
   return row ? toCollectionRecord(row) : null;
 }
 
-export async function listCollectionItems(env: AppEnv, collectionId: string) {
+export async function listCollectionItemsPage(
+  env: AppEnv,
+  collectionId: string,
+  options: ListPageOptions = {},
+): Promise<ListPageResult<CollectionItemRecord>> {
+  const limit = resolveListPageLimit(options.limit, USER_LIST_PAGE_SIZE);
+  const cursor = decodeListCursor(options.cursor);
   const rows = await many<CollectionItemRow>(
     env,
     `
-      SELECT *
+      SELECT ${COLLECTION_ITEM_LIST_COLUMNS}
       FROM collection_item
       WHERE collection_id = ?
-      ORDER BY created_at DESC
+        ${cursor ? "AND (created_at < ? OR (created_at = ? AND id < ?))" : ""}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
     `,
-    collectionId,
+    ...(cursor
+      ? [collectionId, cursor.sortValue, cursor.sortValue, cursor.id, limit]
+      : [collectionId, limit]),
   );
 
   const tagsByItemId = new Map<string, string[]>();
@@ -4039,7 +4123,7 @@ export async function listCollectionItems(env: AppEnv, collectionId: string) {
     }
   }
 
-  return rows.map<CollectionItemRecord>((row: CollectionItemRow) => ({
+  const items = rows.map<CollectionItemRecord>((row: CollectionItemRow) => ({
     id: row.id,
     collectionId: row.collection_id,
     adId: row.ad_id,
@@ -4049,6 +4133,25 @@ export async function listCollectionItems(env: AppEnv, collectionId: string) {
     ad: parseJson<AdRecord>(row.ad_snapshot_json, {} as AdRecord),
     tags: tagsByItemId.get(row.id) ?? [],
   }));
+
+  return {
+    items,
+    nextCursor: nextListCursorFromPage(
+      items,
+      limit,
+      (item) => item.createdAt,
+      (item) => item.id,
+    ),
+  };
+}
+
+export async function listCollectionItems(
+  env: AppEnv,
+  collectionId: string,
+  options: ListPageOptions = {},
+) {
+  const page = await listCollectionItemsPage(env, collectionId, options);
+  return page.items;
 }
 
 export async function updateCollectionItem(
@@ -4223,34 +4326,55 @@ async function ensureTags(env: AppEnv, userId: string, labels: string[]) {
   return ids;
 }
 
-export async function listWatchlists(
+export async function listWatchlistsPage(
   env: AppEnv,
   userId: string,
-  options: { includeInactive?: boolean } = {},
-) {
+  options: { includeInactive?: boolean } & ListPageOptions = {},
+): Promise<ListPageResult<WatchlistRecord>> {
   // Paused watchlists default to hidden (digests, dashboard counts), but the
   // watchlists page opts in: after a cancellation auto-paused everything, an
   // invisible watchlist looked like a deleted one — a returning subscriber
   // found an "empty" product with no way to resume.
+  const limit = resolveListPageLimit(options.limit, USER_LIST_PAGE_SIZE);
+  const cursor = decodeListCursor(options.cursor);
+  const activeFilter = options.includeInactive ? "" : "AND is_active = 1";
+  const orderBy = options.includeInactive
+    ? "is_active DESC, updated_at DESC, id DESC"
+    : "updated_at DESC, id DESC";
   const rows = await many<WatchlistRow>(
     env,
-    options.includeInactive
-      ? `
-        SELECT *
-        FROM watchlist
-        WHERE user_id = ?
-        ORDER BY is_active DESC, updated_at DESC
-      `
-      : `
-        SELECT *
-        FROM watchlist
-        WHERE user_id = ?
-          AND is_active = 1
-        ORDER BY updated_at DESC
-      `,
-    userId,
+    `
+      SELECT ${WATCHLIST_LIST_COLUMNS}
+      FROM watchlist
+      WHERE user_id = ?
+        ${activeFilter}
+        ${cursor ? "AND (updated_at < ? OR (updated_at = ? AND id < ?))" : ""}
+      ORDER BY ${orderBy}
+      LIMIT ?
+    `,
+    ...(cursor
+      ? [userId, cursor.sortValue, cursor.sortValue, cursor.id, limit]
+      : [userId, limit]),
   );
-  return rows.map(toWatchlistRecord);
+  const items = rows.map(toWatchlistRecord);
+  return {
+    items,
+    nextCursor: nextListCursorFromPage(
+      items,
+      limit,
+      (item) => item.updatedAt,
+      (item) => item.id,
+    ),
+  };
+}
+
+export async function listWatchlists(
+  env: AppEnv,
+  userId: string,
+  options: { includeInactive?: boolean } & ListPageOptions = {},
+) {
+  const page = await listWatchlistsPage(env, userId, options);
+  return page.items;
 }
 
 export async function reactivateWatchlistsUpToPlanLimit(
@@ -4304,14 +4428,31 @@ export async function reactivateWatchlistsUpToPlanLimit(
   return changed;
 }
 
-export async function listActiveWatchlists(
+export async function listActiveWatchlistsPage(
   env: AppEnv,
-  options: { includeScout?: boolean } = {},
-) {
+  options: { includeScout?: boolean } & ListPageOptions = {},
+): Promise<ListPageResult<WatchlistRecord>> {
+  const limit = resolveListPageLimit(options.limit, ACTIVE_WATCHLIST_PAGE_SIZE);
+  // Complex plan-priority ORDER BY makes keyset cursors brittle; use offset
+  // tokens for cron paging instead.
+  const offset = Math.max(0, Math.floor(Number(options.cursor ?? 0)) || 0);
   const rows = await many<WatchlistRow>(
     env,
     `
-      SELECT watchlist.*
+      SELECT
+        watchlist.id,
+        watchlist.user_id,
+        watchlist.name,
+        watchlist.target_type,
+        watchlist.tracking_role,
+        watchlist.target_id,
+        watchlist.target_fingerprint,
+        watchlist.target_label,
+        watchlist.target_country,
+        watchlist.is_active,
+        watchlist.last_scanned_at,
+        watchlist.created_at,
+        watchlist.updated_at
       FROM watchlist
       INNER JOIN user_plan
         ON user_plan.user_id = watchlist.user_id
@@ -4322,11 +4463,46 @@ export async function listActiveWatchlists(
         )
       ORDER BY
         CASE user_plan.plan WHEN 'agency' THEN 0 WHEN 'starter' THEN 1 ELSE 2 END ASC,
-        watchlist.updated_at ASC
+        watchlist.updated_at ASC,
+        watchlist.id ASC
+      LIMIT ?
+      OFFSET ?
     `,
     options.includeScout ? 1 : 0,
+    limit,
+    offset,
   );
-  return rows.map(toWatchlistRecord);
+  const items = rows.map(toWatchlistRecord);
+  return {
+    items,
+    nextCursor: items.length < limit ? null : String(offset + limit),
+  };
+}
+
+export async function listActiveWatchlists(
+  env: AppEnv,
+  options: { includeScout?: boolean } & ListPageOptions = {},
+) {
+  // Cron paths need the full active set; page through D1 so a single query
+  // never pulls an unbounded watchlist snapshot.
+  if (options.limit != null || options.cursor != null) {
+    const page = await listActiveWatchlistsPage(env, options);
+    return page.items;
+  }
+
+  const items: WatchlistRecord[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await listActiveWatchlistsPage(env, {
+      includeScout: options.includeScout,
+      limit: ACTIVE_WATCHLIST_PAGE_SIZE,
+      cursor,
+    });
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+
+  return items;
 }
 
 export async function getWatchlist(env: AppEnv, watchlistId: string, userId?: string) {
@@ -4753,7 +4929,22 @@ export async function listWebMentionObservations(
   const rows = await many<WebMentionObservationRow>(
     env,
     `
-      SELECT web_mention_observation.*
+      SELECT
+        web_mention_observation.id,
+        web_mention_observation.target_id,
+        web_mention_observation.user_id,
+        web_mention_observation.source,
+        web_mention_observation.source_id,
+        web_mention_observation.url,
+        web_mention_observation.url_hash,
+        web_mention_observation.title,
+        web_mention_observation.author,
+        web_mention_observation.excerpt,
+        web_mention_observation.published_at,
+        web_mention_observation.observed_at,
+        web_mention_observation.sentiment,
+        web_mention_observation.engagement_json,
+        web_mention_observation.created_at
       FROM web_mention_observation
       INNER JOIN web_mention_target
         ON web_mention_target.id = web_mention_observation.target_id
@@ -6113,7 +6304,27 @@ export async function listProofCapturesForTarget(
   const rows = await many<ProofCaptureRow>(
     env,
     `
-      SELECT *
+      SELECT
+        id,
+        proof_target_id,
+        status,
+        skip_reason,
+        failure_code,
+        failure_reason,
+        screenshot_artifact_key,
+        html_artifact_key,
+        extracted_fields_json,
+        field_confidence_json,
+        extraction_warnings_json,
+        capture_metadata_json,
+        render_mode,
+        device_profile,
+        extractor_version,
+        idempotency_key,
+        attempted_at,
+        succeeded_at,
+        created_at,
+        updated_at
       FROM proof_capture
       WHERE proof_target_id = ?
       ORDER BY attempted_at DESC
@@ -6124,6 +6335,74 @@ export async function listProofCapturesForTarget(
   );
 
   return rows.map(toProofCaptureRecord);
+}
+
+const PROOF_CAPTURE_LIST_COLUMNS = `
+  proof_capture.id,
+  proof_capture.proof_target_id,
+  proof_capture.status,
+  proof_capture.skip_reason,
+  proof_capture.failure_code,
+  proof_capture.failure_reason,
+  proof_capture.screenshot_artifact_key,
+  proof_capture.html_artifact_key,
+  proof_capture.extracted_fields_json,
+  proof_capture.field_confidence_json,
+  proof_capture.extraction_warnings_json,
+  proof_capture.capture_metadata_json,
+  proof_capture.render_mode,
+  proof_capture.device_profile,
+  proof_capture.extractor_version,
+  proof_capture.idempotency_key,
+  proof_capture.attempted_at,
+  proof_capture.succeeded_at,
+  proof_capture.created_at,
+  proof_capture.updated_at
+`;
+
+export async function listProofCapturesForTargets(
+  env: AppEnv,
+  proofTargetIds: string[],
+  limitPerTarget = 20,
+) {
+  const uniqueIds = [...new Set(proofTargetIds.filter(Boolean))];
+  const capturesByTargetId = new Map<string, ProofCaptureRecord[]>();
+  if (uniqueIds.length === 0) {
+    return capturesByTargetId;
+  }
+
+  const perTarget = Math.max(1, Math.min(50, Math.floor(limitPerTarget)));
+  for (const chunk of chunkForBoundParams(uniqueIds)) {
+    const rows = await many<ProofCaptureRow & { rn: number }>(
+      env,
+      `
+        SELECT *
+        FROM (
+          SELECT
+            ${PROOF_CAPTURE_LIST_COLUMNS},
+            ROW_NUMBER() OVER (
+              PARTITION BY proof_capture.proof_target_id
+              ORDER BY proof_capture.attempted_at DESC
+            ) AS rn
+          FROM proof_capture
+          WHERE proof_capture.proof_target_id IN (${chunk.map(() => "?").join(", ")})
+        )
+        WHERE rn <= ?
+        ORDER BY proof_target_id ASC, attempted_at DESC
+      `,
+      ...chunk,
+      perTarget,
+    );
+
+    for (const row of rows) {
+      const record = toProofCaptureRecord(row);
+      const next = capturesByTargetId.get(record.proofTargetId) ?? [];
+      next.push(record);
+      capturesByTargetId.set(record.proofTargetId, next);
+    }
+  }
+
+  return capturesByTargetId;
 }
 
 async function getProofCaptureByIdempotencyKey(
@@ -6209,7 +6488,7 @@ export async function listSuccessfulProofCapturesForAd(
   const rows = await many<ProofCaptureRow>(
     env,
     `
-      SELECT proof_capture.*
+      SELECT ${PROOF_CAPTURE_LIST_COLUMNS}
       FROM proof_capture
       INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
       WHERE proof_target.watchlist_id = ?
@@ -6225,6 +6504,58 @@ export async function listSuccessfulProofCapturesForAd(
   );
 
   return rows.map(toProofCaptureRecord);
+}
+
+export async function listLastSuccessfulProofCapturesForAds(
+  env: AppEnv,
+  watchlistId: string,
+  adIds: string[],
+  limitPerAd = 5,
+) {
+  const uniqueIds = [...new Set(adIds.filter(Boolean))];
+  const capturesByAdId = new Map<string, ProofCaptureRecord[]>();
+  if (uniqueIds.length === 0) {
+    return capturesByAdId;
+  }
+
+  const perAd = Math.max(1, Math.min(20, Math.floor(limitPerAd)));
+  for (const chunk of chunkForBoundParams(uniqueIds, D1_MAX_BOUND_PARAMS - 2)) {
+    const rows = await many<ProofCaptureRow & { ad_id: string; rn: number }>(
+      env,
+      `
+        SELECT *
+        FROM (
+          SELECT
+            ${PROOF_CAPTURE_LIST_COLUMNS},
+            proof_target.ad_id AS ad_id,
+            ROW_NUMBER() OVER (
+              PARTITION BY proof_target.ad_id
+              ORDER BY proof_capture.succeeded_at DESC
+            ) AS rn
+          FROM proof_capture
+          INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+          WHERE proof_target.watchlist_id = ?
+            AND proof_target.ad_id IN (${chunk.map(() => "?").join(", ")})
+            AND proof_capture.status = 'succeeded'
+            AND proof_capture.succeeded_at IS NOT NULL
+        )
+        WHERE rn <= ?
+        ORDER BY ad_id ASC, succeeded_at DESC
+      `,
+      watchlistId,
+      ...chunk,
+      perAd,
+    );
+
+    for (const row of rows) {
+      const record = toProofCaptureRecord(row);
+      const next = capturesByAdId.get(row.ad_id) ?? [];
+      next.push(record);
+      capturesByAdId.set(row.ad_id, next);
+    }
+  }
+
+  return capturesByAdId;
 }
 
 export async function listRecentProofCapturesForWatchlist(
@@ -7591,8 +7922,14 @@ export async function createAdObservation(
   return id;
 }
 
-export async function listObservationsForRun(env: AppEnv, runId: string) {
-  return many<ObservationRow>(
+export async function listObservationsForRunPage(
+  env: AppEnv,
+  runId: string,
+  options: ListPageOptions = {},
+): Promise<ListPageResult<ObservationRow>> {
+  const limit = resolveListPageLimit(options.limit, OBSERVATION_RUN_PAGE_SIZE);
+  const cursor = decodeListCursor(options.cursor);
+  const rows = await many<ObservationRow>(
     env,
     `
       SELECT
@@ -7610,9 +7947,50 @@ export async function listObservationsForRun(env: AppEnv, runId: string) {
       LEFT JOIN landing_page_snapshot
         ON landing_page_snapshot.id = ad_observation.landing_page_snapshot_id
       WHERE ad_observation.watchlist_run_id = ?
+        ${cursor ? "AND (ad_observation.seen_at > ? OR (ad_observation.seen_at = ? AND ad_observation.id > ?))" : ""}
+      ORDER BY ad_observation.seen_at ASC, ad_observation.id ASC
+      LIMIT ?
     `,
-    runId,
+    ...(cursor
+      ? [runId, cursor.sortValue, cursor.sortValue, cursor.id, limit]
+      : [runId, limit]),
   );
+
+  return {
+    items: rows,
+    nextCursor: nextListCursorFromPage(
+      rows,
+      limit,
+      (item) => item.seen_at,
+      (item) => item.id,
+    ),
+  };
+}
+
+export async function listObservationsForRun(
+  env: AppEnv,
+  runId: string,
+  options: ListPageOptions = {},
+) {
+  // Scan/diff semantics require the full observation set for a run. Page
+  // internally unless the caller asks for an explicit single page.
+  if (options.limit != null || options.cursor != null) {
+    const page = await listObservationsForRunPage(env, runId, options);
+    return page.items;
+  }
+
+  const items: ObservationRow[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await listObservationsForRunPage(env, runId, {
+      limit: OBSERVATION_RUN_PAGE_SIZE,
+      cursor,
+    });
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+
+  return items;
 }
 
 export async function createDigestRun(

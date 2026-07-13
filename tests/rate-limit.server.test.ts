@@ -93,6 +93,34 @@ describe("enforceRequestRateLimit", () => {
     await expect(blocked?.json()).resolves.toMatchObject({ error: "rate_limited" });
   });
 
+  it("defers event inserts through waitUntil while gating on the count", async () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const deferred: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil(promise: Promise<unknown>) {
+        deferred.push(promise);
+      },
+    } as ExecutionContext;
+    const request = new Request("https://0509.io/auth/login", {
+      method: "POST",
+      headers: {
+        "cf-connecting-ip": "203.0.113.40",
+        "user-agent": "vitest-waituntil",
+      },
+    });
+
+    for (let index = 0; index < 20; index += 1) {
+      await expect(enforceRequestRateLimit(request, env, ctx)).resolves.toBeNull();
+      await Promise.all(deferred.splice(0, deferred.length));
+    }
+
+    const blocked = await enforceRequestRateLimit(request, env, ctx);
+    expect(blocked?.status).toBe(429);
+    await Promise.all(deferred.splice(0, deferred.length));
+    randomSpy.mockRestore();
+  });
+
   it("fails closed for protected writes when the limiter store is unavailable", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await enforceRequestRateLimit(

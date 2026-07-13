@@ -256,8 +256,23 @@ function installSharedMocks(input: {
       failedRecentAttempt(),
       successfulBaseline(),
     ]),
+    listProofCapturesForTargets: vi.fn(async (_env: unknown, ids: string[]) => {
+      const map = new Map<string, ReturnType<typeof successfulBaseline>[]>();
+      const captures = [failedRecentAttempt(), successfulBaseline()];
+      for (const id of ids) {
+        map.set(id, captures);
+      }
+      return map;
+    }),
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([successfulBaseline()]),
+    listLastSuccessfulProofCapturesForAds: vi.fn(async (_env: unknown, _watchlistId: string, adIds: string[]) => {
+      const map = new Map<string, ReturnType<typeof successfulBaseline>[]>();
+      for (const id of adIds) {
+        map.set(id, [successfulBaseline()]);
+      }
+      return map;
+    }),
     listWatchEvents: vi.fn().mockResolvedValue(input.recentEvents ?? []),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween: vi.fn().mockImplementation(async () => input.createdEvents),
