@@ -184,6 +184,13 @@ export async function beginDodoWebhookEventProcessing(
         metadata_json = CASE
           WHEN dodo_webhook_event.outcome = 'failed'
             THEN dodo_webhook_event.metadata_json
+          -- A redelivery that claimed an armed 'failed' row carries the
+          -- lifecycle-email retry claim forward into 'processing'. If that
+          -- worker dies mid-run, the next lease-expiry reclaim must keep the
+          -- claim too — wiping it here would reprocess the event as a no-op
+          -- grant with no retry context and drop the customer email.
+          WHEN json_extract(dodo_webhook_event.metadata_json, '$.action') = 'lifecycle_email_retry'
+            THEN dodo_webhook_event.metadata_json
           ELSE '{}'
         END
       WHERE ${reclaimWhere}
@@ -269,6 +276,12 @@ export async function failDodoWebhookEventForLifecycleEmailRetry(
     error: string;
   },
 ) {
+  // A retry run whose guarded grant no-ops finalizes the ledger as 'ignored'
+  // (e.g. plan_change_guard_mismatch) while the email retry still runs from
+  // state revalidation. Re-arming must succeed from BOTH terminal outcomes —
+  // scoping to 'processed' only would silently drop the retry: this function
+  // returns false, the caller swallows the provider failure, Dodo gets a 200
+  // and never redelivers.
   const result = await run(
     env,
     `
@@ -278,7 +291,7 @@ export async function failDodoWebhookEventForLifecycleEmailRetry(
           processed_at = NULL,
           metadata_json = ?
       WHERE event_id = ?
-        AND outcome = 'processed'
+        AND outcome IN ('processed', 'ignored')
     `,
     jsonValue({ action: "lifecycle_email_retry", ...input }),
     eventId.trim(),

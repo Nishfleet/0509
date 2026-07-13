@@ -1,5 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import type { BillingLifecycleEmailOutboxInput } from "~/lib/delivery.server";
+
 const DODO_WEBHOOK_MAX_BODY_BYTES = 256_000;
 type BillingLifecycleEmailKind =
   | "payment_issue"
@@ -208,6 +210,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
         planChangedWithoutProviderTimestamp && !cancellationScheduled;
       const allowsPendingPlanChangeTarget =
         planChangedWithoutProviderTimestamp && !cancellationScheduled;
+      const cancellationOutbox = cancellationScheduled
+        ? await prepareLifecycleEmailOutbox(subscriptionGrant.userId, (profile) => ({
+            kind: "cancellation_scheduled",
+            userId: subscriptionGrant.userId,
+            email: profile.email,
+            name: profile.name,
+            effectiveAt: subscriptionGrant.nextBillingAt,
+            eventId,
+          }))
+        : undefined;
       const grantApplied = await applyDodoPlanGrantWithWatchlistReconcile(
         env,
         {
@@ -235,6 +247,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             eventType: subscriptionGrant.eventType,
           },
         },
+        { lifecycleEmailOutbox: cancellationOutbox },
       );
       const matchesScheduledCancellationRetry =
         lifecycleEmailRetry?.kind === "cancellation_scheduled" &&
@@ -341,6 +354,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
           }
         }
 
+        const paymentIssueOutbox = await prepareLifecycleEmailOutbox(userId, (profile) => ({
+          kind: "payment_issue",
+          userId,
+          email: profile.email,
+          name: profile.name,
+          occurredAt: revocation.revokedAt,
+        }));
         const paymentIssueApplied = await applyDodoPlanPaymentIssueWithLedger(
           env,
           {
@@ -353,6 +373,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             outcome: "processed",
             metadata: { action: "payment_issue", userId, eventType: revocation.eventType },
           },
+          { lifecycleEmailOutbox: paymentIssueOutbox },
         );
         // Skip the email when the monotonic guard rejected a stale event —
         // the plan already moved past this state (e.g. payment recovered).
@@ -385,6 +406,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
         };
       }
 
+      const revokeOutbox = await prepareLifecycleEmailOutbox(userId, (profile) => ({
+        kind: "revoke",
+        userId,
+        email: profile.email,
+        name: profile.name,
+        eventId,
+      }));
       const revokeApplied = await applyDodoPlanRevokeWithWatchlistReconcile(
         env,
         {
@@ -399,6 +427,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           outcome: "processed",
           metadata: { action: "revoke", userId, eventType: revocation.eventType },
         },
+        { lifecycleEmailOutbox: revokeOutbox },
       );
       const matchesRevokeRetry =
         lifecycleEmailRetry?.kind === "revoke" && lifecycleEmailRetry.userId === userId;
@@ -436,6 +465,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
         lifecycleEmailRetry?.kind === "refund" ? lifecycleEmailRetry.userId : null;
       const refundedUserId =
         retryResolvedUserId ?? (await getUserIdForDodoPayment(env, refund.paymentId));
+      const refundOutbox = refundedUserId
+        ? await prepareLifecycleEmailOutbox(refundedUserId, (profile) => ({
+            kind: "refund",
+            userId: refundedUserId,
+            email: profile.email,
+            name: profile.name,
+            eventId,
+          }))
+        : undefined;
       const refundApplied = await applyDodoRefundWithWatchlistReconcile(
         env,
         {
@@ -449,6 +487,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           outcome: "processed",
           metadata: { action: "refund", paymentId: refund.paymentId },
         },
+        { lifecycleEmailOutbox: refundOutbox },
       );
       const matchesRefundRetry =
         lifecycleEmailRetry?.kind === "refund" &&
@@ -519,6 +558,32 @@ export async function action({ context, request }: ActionFunctionArgs) {
       metadata: { action: "proof_credit_grant", userId: grant.userId, bundle: grant.bundle },
       body: { ok: true },
     };
+  }
+
+  // Freeze the lifecycle email BEFORE the mutation batch so its pending
+  // outbox row rides the same D1 transaction as the plan mutation + ledger
+  // finalize — a worker crash after the batch can no longer lose the email
+  // (the recovery sweep replays pending outbox rows; Dodo redelivery is
+  // already deduped by the finalized ledger). Best-effort: a failure here
+  // must never block the billing mutation itself — the post-batch send path
+  // simply falls back to creating its own attempt row.
+  async function prepareLifecycleEmailOutbox(
+    lifecycleUserId: string,
+    build: (profile: { email: string; name: string | null }) => BillingLifecycleEmailOutboxInput,
+  ) {
+    try {
+      const profile = await getUserDeliveryProfile(env, lifecycleUserId);
+      if (!profile?.email) {
+        return undefined;
+      }
+      const delivery = await import("~/lib/delivery.server");
+      return delivery.prepareBillingLifecycleEmailOutbox(
+        env,
+        build({ email: profile.email, name: profile.name }),
+      );
+    } catch {
+      return undefined;
+    }
   }
 
   // Lifecycle emails remain best-effort for unexpected application errors.

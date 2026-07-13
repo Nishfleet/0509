@@ -61,6 +61,15 @@ function mockWebhookDependencies(overrides: {
     sendBillingPaymentIssueEmail: vi.fn().mockResolvedValue(true),
     sendBillingCancellationEmail: vi.fn().mockResolvedValue(true),
     sendBillingRefundEmail: vi.fn().mockResolvedValue(true),
+    prepareBillingLifecycleEmailOutbox: vi.fn(
+      (_env: unknown, input: { kind: string; userId: string; email: string }) => ({
+        userId: input.userId,
+        email: input.email,
+        idempotencyKey: `outbox:${input.kind}:${input.userId}`,
+        templateName: `billing_${input.kind}`,
+        payloadSnapshot: { outboxPendingDispatch: true },
+      }),
+    ),
     ...overrides.delivery,
   };
 
@@ -201,6 +210,16 @@ describe("Dodo webhook route", () => {
       }),
       1,
       expect.objectContaining({ eventId: "evt-cancel", outcome: "processed" }),
+      // The frozen lifecycle-email outbox spec must ride the reconcile batch
+      // so the pending row commits atomically with the ledger finalize.
+      expect.objectContaining({
+        lifecycleEmailOutbox: expect.objectContaining({
+          userId: "user-1",
+          email: "owner@example.com",
+          templateName: "billing_revoke",
+          payloadSnapshot: expect.objectContaining({ outboxPendingDispatch: true }),
+        }),
+      }),
     );
     expect(data.getUserIdForDodoLifecycle).not.toHaveBeenCalled();
   });
@@ -245,6 +264,7 @@ describe("Dodo webhook route", () => {
       }),
       10,
       expect.objectContaining({ eventId: "evt-renewal", outcome: "processed" }),
+      expect.anything(),
     );
   });
 
@@ -296,6 +316,7 @@ describe("Dodo webhook route", () => {
         outcome: "processed",
         metadata: expect.objectContaining({ eventType: "subscription.plan_changed" }),
       }),
+      expect.anything(),
     );
   });
 
@@ -337,6 +358,7 @@ describe("Dodo webhook route", () => {
         }),
       10,
       expect.objectContaining({ eventId: "evt-plan-changed-no-timestamp" }),
+      expect.anything(),
     );
   });
 
@@ -385,6 +407,7 @@ describe("Dodo webhook route", () => {
       }),
       10,
       expect.objectContaining({ eventId: "evt-plan-changed-no-header-timestamp" }),
+      expect.anything(),
     );
   });
 
@@ -611,6 +634,7 @@ describe("Dodo webhook route", () => {
         eventId: "evt-subscription-failed-active",
         outcome: "processed",
       }),
+      expect.anything(),
     );
   });
 
@@ -649,6 +673,7 @@ describe("Dodo webhook route", () => {
         eventId: "evt-plan-change-payment-failed",
         outcome: "processed",
       }),
+      expect.anything(),
     );
   });
 
@@ -718,6 +743,7 @@ describe("Dodo webhook route", () => {
         occurredAt: "2026-07-01T00:00:00.000Z",
       }),
       expect.objectContaining({ eventId: "evt-on-hold", outcome: "processed" }),
+      expect.anything(),
     );
     expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
   });
@@ -757,6 +783,7 @@ describe("Dodo webhook route", () => {
         status: "subscription.on_hold",
       }),
       expect.objectContaining({ eventId: "evt-on-hold-linked", outcome: "processed" }),
+      expect.anything(),
     );
     expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledWith(
       expect.anything(),
@@ -844,6 +871,7 @@ describe("Dodo webhook route", () => {
       }),
       1,
       expect.objectContaining({ eventId: "evt-refund", outcome: "processed" }),
+      expect.anything(),
     );
   });
 
@@ -892,6 +920,7 @@ describe("Dodo webhook route", () => {
       }),
       1,
       expect.objectContaining({ eventId: "evt-expire", outcome: "processed" }),
+      expect.anything(),
     );
   });
 
@@ -1059,6 +1088,7 @@ describe("scheduled cancellation safety", () => {
       }),
       1,
       expect.objectContaining({ eventId: "evt-scheduled-cancel", outcome: "processed" }),
+      expect.anything(),
     );
     expect(data.applyDodoPlanPaymentIssueWithLedger).not.toHaveBeenCalled();
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
@@ -1484,6 +1514,7 @@ describe("customer lifecycle billing emails", () => {
       }),
       10,
       expect.objectContaining({ eventId: "evt-cancel-scheduled-email" }),
+      expect.anything(),
     );
     expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
@@ -1551,6 +1582,7 @@ describe("customer lifecycle billing emails", () => {
       }),
       10,
       expect.objectContaining({ eventId: "evt-cancel-scheduled-no-ts" }),
+      expect.anything(),
     );
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledWith(
@@ -1592,6 +1624,7 @@ describe("customer lifecycle billing emails", () => {
       expect.anything(),
       expect.objectContaining({ status: "active" }),
       10,
+      expect.anything(),
       expect.anything(),
     );
     expect(delivery.sendBillingCancellationEmail).not.toHaveBeenCalled();
