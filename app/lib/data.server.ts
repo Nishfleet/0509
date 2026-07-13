@@ -32,10 +32,6 @@ import {
 } from "~/lib/env.server";
 import { buildExternalProofAd } from "~/lib/external-proof.server";
 import {
-  isSlackDeliveryCustomerFacing,
-  isWhatsAppDeliveryCustomerFacing,
-} from "~/lib/ga-customer-surface";
-import {
   decodeListCursor,
   nextListCursorFromPage,
   resolveListPageLimit,
@@ -60,14 +56,12 @@ import type {
   ClientRoomResourceRef,
   CustomerMetaConnectionRecord,
   CustomerApiKeyRecord,
-  DeliveryAttemptRecord,
   DeliveryAttemptStatus,
   DeliveryChannel,
   DiscoveryCacheStatus,
   DiscoveryFailureClass,
   DiscoveryFetchStatus,
   DiscoveryRouteContext,
-  DeliveryQuietHours,
   DigestDeliveryRecord,
   DigestItemRecord,
   DigestRecord,
@@ -76,7 +70,6 @@ import type {
   NormalizedSavedQuery,
   ProofStatus,
   SavedQueryRecord,
-  SensitivityMode,
   ShareLinkRecord,
   ShareResourceType,
   SupportCaseCategory,
@@ -87,10 +80,6 @@ import type {
   SupportCaseStatus,
   WatchEventType,
   WebhookReconciliationStatus,
-  WorkspaceDeliveryConfigRecord,
-  DeliveryLane,
-  DeliveryTargetRecord,
-  DeliveryTargetValidationStatus,
   SearchResponse,
 } from "~/lib/types";
 
@@ -205,46 +194,6 @@ interface SupportCaseEventRow {
   created_at: string;
 }
 
-interface WorkspaceDeliveryConfigRow {
-  id: string;
-  user_id: string;
-  sensitivity_mode: SensitivityMode;
-  instant_enabled: number;
-  digest_enabled: number;
-  email_enabled: number;
-  whatsapp_enabled: number;
-  slack_enabled: number;
-  quiet_hours_json: string | null;
-  timezone: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-
-interface DeliveryTargetRow {
-  id: string;
-  user_id: string;
-  watchlist_id: string | null;
-  channel: DeliveryChannel;
-  target_value: string;
-  validation_status: DeliveryTargetValidationStatus;
-  is_validated: number;
-  is_opted_in: number;
-  opt_in_source: string | null;
-  opted_in_at: string | null;
-  is_paused: number;
-  paused_at: string | null;
-  opted_out_at: string | null;
-  template_eligible: number;
-  last_successful_delivery_at: string | null;
-  last_successful_attempt_id: string | null;
-  provider_identifier: string | null;
-  metadata_json: string;
-  created_at: string;
-  updated_at: string;
-}
-
-
 interface DigestRunRow {
   id: string;
   user_id: string;
@@ -274,31 +223,6 @@ interface DigestDeliveryRow {
   external_message_id: string | null;
   error_message: string | null;
   delivered_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface DeliveryAttemptRow {
-  id: string;
-  user_id: string;
-  watchlist_id: string | null;
-  digest_run_id: string | null;
-  delivery_target_id: string | null;
-  lane: DeliveryLane;
-  channel: DeliveryChannel;
-  provider: string;
-  status: DeliveryAttemptStatus;
-  webhook_status: WebhookReconciliationStatus;
-  target_value: string;
-  provider_message_id: string | null;
-  provider_status_last_seen_at: string | null;
-  template_name: string | null;
-  event_ids_json: string;
-  payload_snapshot_json: string;
-  idempotency_key: string | null;
-  error_message: string | null;
-  sent_at: string | null;
-  failed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -492,6 +416,25 @@ export {
   type DodoWebhookProcessingClaim,
   type UserPlanBillingInfo,
 } from "~/lib/data/billing.server";
+
+export {
+  legacyWorkspaceDeliveryDefaults,
+  migrateAutoProvisionedEmailTargets,
+  listRetryableInstantAttempts,
+  getWorkspaceDeliveryConfig,
+  upsertWorkspaceDeliveryConfig,
+  listDeliveryTargets,
+  getDeliveryTargetReadinessStats,
+  upsertDeliveryTarget,
+  getDeliveryTargetById,
+  getDeliveryTargetByProviderIdentifier,
+  getUserDeliveryProfile,
+  listDeliveryAttempts,
+  getDeliveryAttemptByIdempotencyKey,
+  reconcileDeliveryAttemptByProviderMessageId,
+  createDeliveryAttempt,
+  updateDeliveryAttemptResult,
+} from "~/lib/data/delivery-records.server";
 
 
 export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecord[]) {
@@ -1747,17 +1690,6 @@ function parseDiscoveryCachePayload(value: string) {
 }
 
 
-export function legacyWorkspaceDeliveryDefaults(input: { hasEmail: boolean }) {
-  return {
-    sensitivityMode: "balanced" as const,
-    instantEnabled: false,
-    digestEnabled: true,
-    emailEnabled: input.hasEmail,
-    whatsappEnabled: false,
-    slackEnabled: false,
-  };
-}
-
 function toSavedQueryRecord(row: SavedQueryRow): SavedQueryRecord {
   return {
     id: row.id,
@@ -1780,52 +1712,6 @@ function toCollectionRecord(row: CollectionRow): CollectionRecord {
     userId: row.user_id,
     name: row.name,
     description: row.description,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-
-function toWorkspaceDeliveryConfigRecord(
-  row: WorkspaceDeliveryConfigRow,
-): WorkspaceDeliveryConfigRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    sensitivityMode: row.sensitivity_mode,
-    instantEnabled: row.instant_enabled === 1,
-    digestEnabled: row.digest_enabled === 1,
-    emailEnabled: row.email_enabled === 1,
-    whatsappEnabled: row.whatsapp_enabled === 1,
-    slackEnabled: row.slack_enabled === 1,
-    quietHours: parseJson<DeliveryQuietHours | null>(row.quiet_hours_json, null),
-    timezone: row.timezone,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-
-function toDeliveryTargetRecord(row: DeliveryTargetRow): DeliveryTargetRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    watchlistId: row.watchlist_id,
-    channel: row.channel,
-    targetValue: row.target_value,
-    validationStatus: row.validation_status,
-    isValidated: row.is_validated === 1,
-    isOptedIn: row.is_opted_in === 1,
-    optInSource: row.opt_in_source,
-    optedInAt: row.opted_in_at,
-    isPaused: row.is_paused === 1,
-    pausedAt: row.paused_at,
-    optedOutAt: row.opted_out_at,
-    templateEligible: row.template_eligible === 1,
-    lastSuccessfulDeliveryAt: row.last_successful_delivery_at,
-    lastSuccessfulAttemptId: row.last_successful_attempt_id,
-    providerIdentifier: row.provider_identifier,
-    metadata: parseJson<JsonRecord>(row.metadata_json, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1857,84 +1743,6 @@ function toDigestDeliveryRecord(row: DigestDeliveryRow): DigestDeliveryRecord {
     errorMessage: row.error_message,
     deliveredAt: row.delivered_at,
   };
-}
-
-function toDeliveryAttemptRecord(row: DeliveryAttemptRow): DeliveryAttemptRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    watchlistId: row.watchlist_id,
-    digestRunId: row.digest_run_id,
-    deliveryTargetId: row.delivery_target_id,
-    lane: row.lane,
-    channel: row.channel,
-    provider: row.provider,
-    status: row.status,
-    webhookStatus: row.webhook_status,
-    targetValue: row.target_value,
-    providerMessageId: row.provider_message_id,
-    providerStatusLastSeenAt: row.provider_status_last_seen_at,
-    templateName: row.template_name,
-    eventIds: parseJson<string[]>(row.event_ids_json, []),
-    payloadSnapshot: parseJson<JsonRecord>(row.payload_snapshot_json, {}),
-    idempotencyKey: row.idempotency_key,
-    errorMessage: row.error_message,
-    sentAt: row.sent_at,
-    failedAt: row.failed_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-
-// After a verified email change, the auto-provisioned delivery target still
-// points at the OLD address — and because any usable target short-circuits
-// auto-provisioning, the customer's digests/alerts would silently keep going
-// to an inbox they may have lost. Retarget those rows to the new address.
-export async function migrateAutoProvisionedEmailTargets(
-  env: AppEnv,
-  userId: string,
-  newEmail: string,
-) {
-  const db = ensureDb(env);
-  const timestamp = nowIso();
-
-  // UPDATE OR IGNORE skips rows whose new-address twin already exists
-  // (unique indexes on user/watchlist/channel/value)…
-  const updated = await db
-    .prepare(
-      `
-        UPDATE OR IGNORE delivery_target
-        SET target_value = ?,
-            validation_status = 'validated',
-            is_validated = 1,
-            updated_at = ?
-        WHERE user_id = ?
-          AND channel = 'email'
-          AND opt_in_source = 'account_email'
-          AND opted_out_at IS NULL
-          AND target_value != ?
-      `,
-    )
-    .bind(newEmail, timestamp, userId, newEmail)
-    .run();
-
-  // …and any stale row that couldn't be updated (twin existed) is removed.
-  await db
-    .prepare(
-      `
-        DELETE FROM delivery_target
-        WHERE user_id = ?
-          AND channel = 'email'
-          AND opt_in_source = 'account_email'
-          AND opted_out_at IS NULL
-          AND target_value != ?
-      `,
-    )
-    .bind(userId, newEmail)
-    .run();
-
-  return Number(updated.meta?.changes ?? 0);
 }
 
 
@@ -2779,502 +2587,6 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
 }
 
 
-export async function listRetryableInstantAttempts(
-  env: AppEnv,
-  input: {
-    since: string;
-    limit: number;
-  },
-) {
-  // Instant alerts that were deferred by quiet hours (and never flushed) or
-  // failed at the provider. Successful re-sends update or supersede these
-  // rows, so they naturally drop out of this query.
-  const rows = await many<DeliveryAttemptRow>(
-    env,
-    `
-      SELECT *
-      FROM delivery_attempt
-      WHERE lane = 'customer'
-        AND watchlist_id IS NOT NULL
-        AND digest_run_id IS NULL
-        AND created_at >= ?
-        AND status IN ('skipped_due_to_quiet_hours', 'failed')
-      ORDER BY created_at ASC
-      LIMIT ?
-    `,
-    input.since,
-    input.limit,
-  );
-
-  return rows.map(toDeliveryAttemptRecord);
-}
-
-
-export async function getWorkspaceDeliveryConfig(env: AppEnv, userId: string) {
-  const row = await one<WorkspaceDeliveryConfigRow>(
-    env,
-    `
-      SELECT *
-      FROM workspace_delivery_config
-      WHERE user_id = ?
-      LIMIT 1
-    `,
-    userId,
-  );
-
-  return row ? toWorkspaceDeliveryConfigRecord(row) : null;
-}
-
-export async function upsertWorkspaceDeliveryConfig(
-  env: AppEnv,
-  input: {
-    userId: string;
-    sensitivityMode: SensitivityMode;
-    instantEnabled: boolean;
-    digestEnabled: boolean;
-    emailEnabled: boolean;
-    whatsappEnabled: boolean;
-    slackEnabled?: boolean;
-    quietHours?: DeliveryQuietHours | null;
-    timezone?: string | null;
-  },
-) {
-  const id = createId();
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO workspace_delivery_config (
-        id,
-        user_id,
-        sensitivity_mode,
-        instant_enabled,
-        digest_enabled,
-        email_enabled,
-        whatsapp_enabled,
-        slack_enabled,
-        quiet_hours_json,
-        timezone,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id)
-      DO UPDATE SET sensitivity_mode = excluded.sensitivity_mode,
-                    instant_enabled = excluded.instant_enabled,
-                    digest_enabled = excluded.digest_enabled,
-                    email_enabled = excluded.email_enabled,
-                    whatsapp_enabled = excluded.whatsapp_enabled,
-                    slack_enabled = excluded.slack_enabled,
-                    quiet_hours_json = excluded.quiet_hours_json,
-                    timezone = excluded.timezone,
-                    updated_at = excluded.updated_at
-    `,
-    id,
-    input.userId,
-    input.sensitivityMode,
-    boolToInt(input.instantEnabled),
-    boolToInt(input.digestEnabled),
-    boolToInt(input.emailEnabled),
-    boolToInt(input.whatsappEnabled),
-    boolToInt(input.slackEnabled ?? false),
-    jsonValue(input.quietHours ?? null),
-    input.timezone ?? null,
-    timestamp,
-    timestamp,
-  );
-
-  return getWorkspaceDeliveryConfig(env, input.userId);
-}
-
-
-export async function listDeliveryTargets(
-  env: AppEnv,
-  userId: string,
-  options: { watchlistId?: string | null; channel?: DeliveryChannel; limit?: number } = {},
-) {
-  const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
-  const clauses = ["user_id = ?"];
-  const bindings: unknown[] = [userId];
-  if (options.watchlistId !== undefined) {
-    clauses.push(options.watchlistId === null ? "watchlist_id IS NULL" : "watchlist_id = ?");
-    if (options.watchlistId !== null) {
-      bindings.push(options.watchlistId);
-    }
-  }
-  if (options.channel) {
-    clauses.push("channel = ?");
-    bindings.push(options.channel);
-  }
-
-  const rows = await many<DeliveryTargetRow>(
-    env,
-    `
-      SELECT *
-      FROM delivery_target
-      WHERE ${clauses.join(" AND ")}
-      ORDER BY updated_at DESC
-      LIMIT ?
-    `,
-    ...bindings,
-    limit,
-  );
-
-  return rows.map(toDeliveryTargetRecord);
-}
-
-export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: string) {
-  const channelPredicates = [
-    `
-      (
-        channel = 'email'
-        AND is_opted_in = 1
-        AND is_paused = 0
-        AND opted_out_at IS NULL
-        AND is_validated = 1
-        AND validation_status = 'validated'
-      )
-    `,
-  ];
-  if (isSlackDeliveryCustomerFacing()) {
-    channelPredicates.push(`
-      (
-        channel = 'slack'
-        AND is_opted_in = 1
-        AND is_paused = 0
-        AND opted_out_at IS NULL
-        AND is_validated = 1
-        AND validation_status = 'validated'
-      )
-    `);
-  }
-  if (isWhatsAppDeliveryCustomerFacing()) {
-    channelPredicates.push(`
-      (
-        channel = 'whatsapp'
-        AND is_opted_in = 1
-        AND is_paused = 0
-        AND opted_out_at IS NULL
-        AND is_validated = 1
-        AND validation_status = 'validated'
-        AND template_eligible = 1
-      )
-    `);
-  }
-
-  const row = await one<{
-    active_count: number | null;
-    proven_count: number | null;
-  }>(
-    env,
-    `
-      WITH usable_targets AS (
-        SELECT last_successful_delivery_at
-        FROM delivery_target
-        WHERE user_id = ?
-          AND (${channelPredicates.join(" OR ")})
-      )
-      SELECT
-        COUNT(*) AS active_count,
-        SUM(CASE
-          WHEN last_successful_delivery_at IS NOT NULL
-          THEN 1 ELSE 0
-        END) AS proven_count
-      FROM usable_targets
-    `,
-    userId,
-  );
-
-  return {
-    activeCount: Number(row?.active_count ?? 0),
-    provenCount: Number(row?.proven_count ?? 0),
-  };
-}
-
-export async function upsertDeliveryTarget(
-  env: AppEnv,
-  input: {
-    userId: string;
-    watchlistId?: string | null;
-    channel: DeliveryChannel;
-    targetValue: string;
-    validationStatus?: DeliveryTargetValidationStatus;
-    isValidated?: boolean;
-    isOptedIn?: boolean;
-    optInSource?: string | null;
-    optedInAt?: string | null;
-    isPaused?: boolean;
-    pausedAt?: string | null;
-    optedOutAt?: string | null;
-    templateEligible?: boolean;
-    lastSuccessfulDeliveryAt?: string | null;
-    lastSuccessfulAttemptId?: string | null;
-    providerIdentifier?: string | null;
-    metadata?: JsonRecord;
-  },
-) {
-  const existingTarget = await getDeliveryTargetByUniqueFields(env, {
-    userId: input.userId,
-    watchlistId: input.watchlistId ?? null,
-    channel: input.channel,
-    targetValue: input.targetValue,
-  });
-  const timestamp = nowIso();
-  if (existingTarget) {
-    await run(
-      env,
-      `
-        UPDATE delivery_target
-        SET validation_status = ?,
-            is_validated = ?,
-            is_opted_in = ?,
-            opt_in_source = ?,
-            opted_in_at = ?,
-            is_paused = ?,
-            paused_at = ?,
-            opted_out_at = ?,
-            template_eligible = ?,
-            last_successful_delivery_at = ?,
-            last_successful_attempt_id = ?,
-            provider_identifier = ?,
-            metadata_json = ?,
-            updated_at = ?
-        WHERE id = ?
-      `,
-      input.validationStatus ?? "pending",
-      boolToInt(input.isValidated ?? false),
-      boolToInt(input.isOptedIn ?? false),
-      input.optInSource ?? null,
-      input.optedInAt ?? null,
-      boolToInt(input.isPaused ?? false),
-      input.pausedAt ?? null,
-      input.optedOutAt ?? null,
-      boolToInt(input.templateEligible ?? false),
-      input.lastSuccessfulDeliveryAt ?? null,
-      input.lastSuccessfulAttemptId ?? null,
-      input.providerIdentifier ?? null,
-      jsonValue(input.metadata ?? {}),
-      timestamp,
-      existingTarget.id,
-    );
-  } else {
-    await run(
-      env,
-      `
-        INSERT INTO delivery_target (
-          id,
-          user_id,
-          watchlist_id,
-          channel,
-          target_value,
-          validation_status,
-          is_validated,
-          is_opted_in,
-          opt_in_source,
-          opted_in_at,
-          is_paused,
-          paused_at,
-          opted_out_at,
-          template_eligible,
-          last_successful_delivery_at,
-          last_successful_attempt_id,
-          provider_identifier,
-          metadata_json,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      createId(),
-      input.userId,
-      input.watchlistId ?? null,
-      input.channel,
-      input.targetValue,
-      input.validationStatus ?? "pending",
-      boolToInt(input.isValidated ?? false),
-      boolToInt(input.isOptedIn ?? false),
-      input.optInSource ?? null,
-      input.optedInAt ?? null,
-      boolToInt(input.isPaused ?? false),
-      input.pausedAt ?? null,
-      input.optedOutAt ?? null,
-      boolToInt(input.templateEligible ?? false),
-      input.lastSuccessfulDeliveryAt ?? null,
-      input.lastSuccessfulAttemptId ?? null,
-      input.providerIdentifier ?? null,
-      jsonValue(input.metadata ?? {}),
-      timestamp,
-      timestamp,
-    );
-  }
-
-  const [target] = await listDeliveryTargets(env, input.userId, {
-    watchlistId: input.watchlistId ?? null,
-    channel: input.channel,
-    limit: 1,
-  });
-  return target ?? null;
-}
-
-async function getDeliveryTargetByUniqueFields(
-  env: AppEnv,
-  input: {
-    userId: string;
-    watchlistId: string | null;
-    channel: DeliveryChannel;
-    targetValue: string;
-  },
-) {
-  const row = await one<DeliveryTargetRow>(
-    env,
-    `
-      SELECT *
-      FROM delivery_target
-      WHERE user_id = ?
-        AND ${input.watchlistId === null ? "watchlist_id IS NULL" : "watchlist_id = ?"}
-        AND channel = ?
-        AND target_value = ?
-      LIMIT 1
-    `,
-    ...[
-      input.userId,
-      ...(input.watchlistId === null ? [] : [input.watchlistId]),
-      input.channel,
-      input.targetValue,
-    ],
-  );
-
-  return row ? toDeliveryTargetRecord(row) : null;
-}
-
-export async function getDeliveryTargetById(
-  env: AppEnv,
-  input: {
-    userId: string;
-    targetId: string;
-  },
-) {
-  const row = await one<DeliveryTargetRow>(
-    env,
-    `
-      SELECT *
-      FROM delivery_target
-      WHERE user_id = ?
-        AND id = ?
-      LIMIT 1
-    `,
-    input.userId,
-    input.targetId,
-  );
-
-  return row ? toDeliveryTargetRecord(row) : null;
-}
-
-export async function getDeliveryTargetByProviderIdentifier(
-  env: AppEnv,
-  input: {
-    channel: DeliveryChannel;
-    providerIdentifier: string;
-  },
-) {
-  const row = await one<DeliveryTargetRow>(
-    env,
-    `
-      SELECT *
-      FROM delivery_target
-      WHERE channel = ?
-        AND provider_identifier = ?
-      ORDER BY updated_at DESC
-      LIMIT 1
-    `,
-    input.channel,
-    input.providerIdentifier,
-  );
-
-  return row ? toDeliveryTargetRecord(row) : null;
-}
-
-export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
-  const row = await one<{ id: string; email: string | null; name: string | null }>(
-    env,
-    `
-      SELECT id, email, name
-      FROM user
-      WHERE id = ?
-      LIMIT 1
-    `,
-    userId,
-  );
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    id: row.id,
-    email: row.email,
-    name: row.name ?? "",
-  };
-}
-
-export async function listDeliveryAttempts(
-  env: AppEnv,
-  options: {
-    userId?: string;
-    watchlistId?: string;
-    channel?: DeliveryChannel;
-    targetValue?: string;
-    limit?: number;
-  } = {},
-) {
-  const clauses = ["1 = 1"];
-  const bindings: unknown[] = [];
-  if (options.userId) {
-    clauses.push("user_id = ?");
-    bindings.push(options.userId);
-  }
-  if (options.watchlistId) {
-    clauses.push("watchlist_id = ?");
-    bindings.push(options.watchlistId);
-  }
-  if (options.channel) {
-    clauses.push("channel = ?");
-    bindings.push(options.channel);
-  }
-  if (options.targetValue) {
-    clauses.push("target_value = ?");
-    bindings.push(options.targetValue);
-  }
-
-  const rows = await many<DeliveryAttemptRow>(
-    env,
-    `
-      SELECT *
-      FROM delivery_attempt
-      WHERE ${clauses.join(" AND ")}
-      ORDER BY created_at DESC
-      LIMIT ?
-    `,
-    ...bindings,
-    options.limit ?? 40,
-  );
-
-  return rows.map(toDeliveryAttemptRecord);
-}
-
-export async function getDeliveryAttemptByIdempotencyKey(
-  env: AppEnv,
-  idempotencyKey: string,
-) {
-  const row = await one<DeliveryAttemptRow>(
-    env,
-    "SELECT * FROM delivery_attempt WHERE idempotency_key = ?",
-    idempotencyKey,
-  );
-
-  return row ? toDeliveryAttemptRecord(row) : null;
-}
-
 export async function getOperatorSnapshot(env: AppEnv) {
   const stuckThresholdIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
   const recentWindowIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -3616,199 +2928,6 @@ export async function getOperatorSnapshot(env: AppEnv) {
     discoveryFailures,
     discoveryProviders,
   };
-}
-
-export async function reconcileDeliveryAttemptByProviderMessageId(
-  env: AppEnv,
-  input: {
-    provider: string;
-    providerMessageId: string;
-    webhookStatus: WebhookReconciliationStatus;
-    status?: DeliveryAttemptStatus | null;
-    providerStatusLastSeenAt: string;
-    errorMessage?: string | null;
-  },
-) {
-  const existing = await one<DeliveryAttemptRow>(
-    env,
-    `
-      SELECT *
-      FROM delivery_attempt
-      WHERE provider = ?
-        AND provider_message_id = ?
-    `,
-    input.provider,
-    input.providerMessageId,
-  );
-
-  if (!existing) {
-    return null;
-  }
-
-  const nextStatus = input.status ?? existing.status;
-  const nextFailedAt =
-    nextStatus === "failed" && !existing.failed_at
-      ? input.providerStatusLastSeenAt
-      : existing.failed_at;
-  const nextSentAt =
-    nextStatus === "sent" && !existing.sent_at
-      ? input.providerStatusLastSeenAt
-      : existing.sent_at;
-
-  await run(
-    env,
-    `
-      UPDATE delivery_attempt
-      SET status = ?,
-          webhook_status = ?,
-          provider_status_last_seen_at = ?,
-          error_message = COALESCE(?, error_message),
-          sent_at = ?,
-          failed_at = ?,
-          updated_at = ?
-      WHERE id = ?
-    `,
-    nextStatus,
-    input.webhookStatus,
-    input.providerStatusLastSeenAt,
-    input.errorMessage ?? null,
-    nextSentAt,
-    nextFailedAt,
-    nowIso(),
-    existing.id,
-  );
-
-  const updated = await one<DeliveryAttemptRow>(
-    env,
-    "SELECT * FROM delivery_attempt WHERE id = ?",
-    existing.id,
-  );
-
-  return updated ? toDeliveryAttemptRecord(updated) : null;
-}
-
-export async function createDeliveryAttempt(
-  env: AppEnv,
-  input: {
-    userId: string;
-    watchlistId: string | null;
-    digestRunId: string | null;
-    deliveryTargetId: string | null;
-    lane: DeliveryLane;
-    channel: DeliveryChannel;
-    provider: string;
-    status: DeliveryAttemptStatus;
-    webhookStatus: WebhookReconciliationStatus;
-    targetValue: string;
-    providerMessageId?: string | null;
-    providerStatusLastSeenAt?: string | null;
-    templateName?: string | null;
-    eventIds?: string[];
-    payloadSnapshot?: JsonRecord;
-    idempotencyKey?: string | null;
-    errorMessage?: string | null;
-    sentAt?: string | null;
-    failedAt?: string | null;
-  },
-) {
-  const id = createId();
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO delivery_attempt (
-        id,
-        user_id,
-        watchlist_id,
-        digest_run_id,
-        delivery_target_id,
-        lane,
-        channel,
-        provider,
-        status,
-        webhook_status,
-        target_value,
-        provider_message_id,
-        provider_status_last_seen_at,
-        template_name,
-        event_ids_json,
-        payload_snapshot_json,
-        idempotency_key,
-        error_message,
-        sent_at,
-        failed_at,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    id,
-    input.userId,
-    input.watchlistId,
-    input.digestRunId,
-    input.deliveryTargetId,
-    input.lane,
-    input.channel,
-    input.provider,
-    input.status,
-    input.webhookStatus,
-    input.targetValue,
-    input.providerMessageId ?? null,
-    input.providerStatusLastSeenAt ?? null,
-    input.templateName ?? null,
-    jsonValue(input.eventIds ?? []),
-    jsonValue(input.payloadSnapshot ?? {}),
-    input.idempotencyKey ?? null,
-    input.errorMessage ?? null,
-    input.sentAt ?? null,
-    input.failedAt ?? null,
-    timestamp,
-    timestamp,
-  );
-
-  return id;
-}
-
-export async function updateDeliveryAttemptResult(
-  env: AppEnv,
-  attemptId: string,
-  input: {
-    provider: string;
-    status: DeliveryAttemptStatus;
-    webhookStatus: WebhookReconciliationStatus;
-    providerMessageId?: string | null;
-    providerStatusLastSeenAt?: string | null;
-    errorMessage?: string | null;
-    sentAt?: string | null;
-    failedAt?: string | null;
-  },
-) {
-  await run(
-    env,
-    `
-      UPDATE delivery_attempt
-      SET provider = ?,
-          status = ?,
-          webhook_status = ?,
-          provider_message_id = ?,
-          provider_status_last_seen_at = ?,
-          error_message = ?,
-          sent_at = ?,
-          failed_at = ?,
-          updated_at = ?
-      WHERE id = ?
-    `,
-    input.provider,
-    input.status,
-    input.webhookStatus,
-    input.providerMessageId ?? null,
-    input.providerStatusLastSeenAt ?? null,
-    input.errorMessage ?? null,
-    input.sentAt ?? null,
-    input.failedAt ?? null,
-    nowIso(),
-    attemptId,
-  );
 }
 
 export async function createLandingPageSnapshot(
