@@ -24,7 +24,7 @@ import {
 } from "~/lib/data.server";
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import type { AppEnv } from "~/lib/env.server";
-import { emailFromAddress, isEmailSendingConfigured } from "~/lib/env.server";
+import { emailFromSender, isEmailSendingConfigured } from "~/lib/env.server";
 import {
   isSlackDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
@@ -1603,6 +1603,251 @@ export async function sendAccountActionEmail(
   return providerResult.status === "sent";
 }
 
+// --- Customer lifecycle billing emails (Dodo webhook driven) -----------------
+// Transactional: they must reach the customer regardless of digest
+// unsubscribe state, so they carry no List-Unsubscribe header — but every
+// send still records a delivery_attempt. Webhook handlers can legitimately
+// re-run (the dodo_webhook_event ledger reclaims failed events and expired
+// processing leases, and Dodo re-emits dunning events across payment
+// retries), so these sends use DETERMINISTIC idempotency keys with a
+// pre-send duplicate check — the operator-alert pattern, not the
+// crypto.randomUUID one used by user-initiated account emails.
+
+function billingDateLabel(iso: string | null | undefined) {
+  const ms = Date.parse(iso ?? "");
+  if (!Number.isFinite(ms)) {
+    return null;
+  }
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(ms));
+  return `${formatted} (UTC)`;
+}
+
+function renderBillingEmailHtml(input: {
+  name: string | null;
+  paragraphs: string[];
+  ctaLabel: string;
+  ctaUrl: string;
+  footnote: string;
+}) {
+  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+  const paragraphs = input.paragraphs
+    .map((paragraph) => `<p style="margin: 0 0 16px;">${paragraph}</p>`)
+    .join("");
+
+  return `
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
+      <p style="margin: 0 0 12px;">${greeting}</p>
+      ${paragraphs}
+      <p style="margin: 0 0 20px;">
+        <a href="${escapeHtml(input.ctaUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+          ${escapeHtml(input.ctaLabel)}
+        </a>
+      </p>
+      <p style="margin: 0 0 12px;">— Five to Nine</p>
+      <p style="margin: 0; color: #5b6577; font-size: 13px;">${escapeHtml(input.footnote)}</p>
+    </div>
+  `;
+}
+
+async function sendBillingLifecycleEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    idempotencyKey: string;
+    subject: string;
+    bodyHtml: string;
+    tag: string;
+    templateName: string;
+  },
+) {
+  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+  if (duplicate?.status === "sent") {
+    return false;
+  }
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: input.subject,
+    html: input.bodyHtml,
+    tag: input.tag,
+    unsubscribeUrl: null,
+  });
+
+  if (duplicate) {
+    await updateDeliveryAttemptResult(env, duplicate.id, {
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      errorMessage: providerResult.errorMessage,
+      sentAt: providerAcceptedAt(providerResult),
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    });
+    return providerResult.status === "sent";
+  }
+
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: input.templateName,
+    eventIds: [],
+    payloadSnapshot: { kind: input.templateName },
+    idempotencyKey: input.idempotencyKey,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
+
+  return providerResult.status === "sent";
+}
+
+// Dunning: a subscription payment failed and Dodo is retrying. Dodo emits
+// these events repeatedly across its retry schedule, each with a fresh
+// webhook id, so the key is day-coarse: at most one dunning email per
+// customer per day no matter how the retries land.
+export async function sendBillingPaymentIssueEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+  },
+) {
+  const dayKey = new Date().toISOString().slice(0, 10);
+  return sendBillingLifecycleEmail(env, {
+    userId: input.userId,
+    email: input.email,
+    idempotencyKey: `billing-payment-issue:${input.userId}:${dayKey}`,
+    subject: "Action needed: a Five to Nine payment didn't go through",
+    tag: "billing-payment-issue",
+    templateName: "billing_payment_issue",
+    bodyHtml: renderBillingEmailHtml({
+      name: input.name,
+      paragraphs: [
+        "The latest payment for your Five to Nine subscription didn't go through. Nothing has changed yet — your plan stays active while the payment processor retries.",
+        "To avoid an interruption, make sure your payment method is up to date.",
+      ],
+      ctaLabel: "Update payment method",
+      ctaUrl: `${appBaseUrl(env)}/app/billing`,
+      footnote:
+        "If a retry has already succeeded, you can ignore this email — nothing changes.",
+    }),
+  });
+}
+
+// Cancellation, both shapes: "scheduled" (cancelled but paid through a
+// future date) and "ended" (access revoked now — immediate cancellation or
+// expiry). Keyed on the webhook event id: exactly one email per event even
+// when the ledger re-runs the handler.
+export async function sendBillingCancellationEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    kind: "scheduled" | "ended";
+    effectiveAt?: string | null;
+    eventId: string;
+  },
+) {
+  const billingUrl = `${appBaseUrl(env)}/app/billing`;
+  const base = {
+    userId: input.userId,
+    email: input.email,
+    idempotencyKey: `billing-cancellation:${input.userId}:${input.eventId}`,
+    tag: "billing-cancellation",
+  };
+
+  if (input.kind === "scheduled") {
+    const dateLabel = billingDateLabel(input.effectiveAt);
+    const activeUntil = dateLabel
+      ? `Your plan stays active until <strong>${escapeHtml(dateLabel)}</strong> — watchlists, digests, and alerts keep running until then.`
+      : "Your plan stays active until the end of the period you already paid for — watchlists, digests, and alerts keep running until then.";
+    return sendBillingLifecycleEmail(env, {
+      ...base,
+      subject: "Your Five to Nine cancellation is confirmed",
+      templateName: "billing_cancellation_scheduled",
+      bodyHtml: renderBillingEmailHtml({
+        name: input.name,
+        paragraphs: [
+          `Your Five to Nine subscription is cancelled and won't renew. ${activeUntil}`,
+          "After that, your workspace moves to the Free plan. Watchlists over the Free limit are paused automatically (the newest one stays active), and your boards, history, and evidence stay in place.",
+        ],
+        ctaLabel: "Review billing",
+        ctaUrl: billingUrl,
+        footnote:
+          "Changed your mind? Resubscribe from your billing page any time — paused watchlists resume automatically.",
+      }),
+    });
+  }
+
+  return sendBillingLifecycleEmail(env, {
+    ...base,
+    subject: "Your Five to Nine plan has ended",
+    templateName: "billing_access_ended",
+    bodyHtml: renderBillingEmailHtml({
+      name: input.name,
+      paragraphs: [
+        "Your Five to Nine subscription has ended and your workspace is now on the Free plan.",
+        "Watchlists over the Free limit were paused automatically — the newest one stays active. Your boards, history, and evidence are untouched.",
+      ],
+      ctaLabel: "Reactivate your plan",
+      ctaUrl: billingUrl,
+      footnote:
+        "Resubscribe any time — paused watchlists resume automatically when a plan is active again.",
+    }),
+  });
+}
+
+// Full refund: plan revoked to Free and purchased credits expired. Keyed on
+// the webhook event id.
+export async function sendBillingRefundEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    eventId: string;
+  },
+) {
+  return sendBillingLifecycleEmail(env, {
+    userId: input.userId,
+    email: input.email,
+    idempotencyKey: `billing-refund:${input.userId}:${input.eventId}`,
+    subject: "Your Five to Nine refund has been processed",
+    tag: "billing-refund",
+    templateName: "billing_refund_revoked",
+    bodyHtml: renderBillingEmailHtml({
+      name: input.name,
+      paragraphs: [
+        "A full refund for your Five to Nine purchase has been processed. Your workspace has moved to the Free plan, and credits from that purchase have expired.",
+        "Your boards, history, and evidence stay in place on the Free plan.",
+      ],
+      ctaLabel: "View billing",
+      ctaUrl: `${appBaseUrl(env)}/app/billing`,
+      footnote:
+        "If this refund is unexpected, contact support using the address below.",
+    }),
+  });
+}
+
 export async function sendTeamInviteEmail(
   env: AppEnv,
   input: {
@@ -1910,7 +2155,7 @@ async function sendCloudflareEmail(
   try {
     const result = await promiseWithTimeout(
       env.EMAIL!.send({
-        from: emailFromAddress(env),
+        from: emailFromSender(env),
         to: input.to,
         subject: input.subject,
         html,

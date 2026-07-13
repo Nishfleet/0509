@@ -506,6 +506,7 @@ describe("Better Auth magic links", () => {
     );
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
+        from: { email: "alerts@0509.io", name: "Five to Nine" },
         html: expect.stringContaining(
           'href="https://0509.io/auth/better/magic-link?ticket=',
         ),
@@ -1255,11 +1256,24 @@ describe("Better Auth magic links", () => {
       url: "https://0509.io/auth/better/magic-link?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&context=context-1",
     });
 
-    expect(email.subject).toBe("Activate your 0509 workspace");
-    expect(email.html).toContain("0509 Account Activation");
+    expect(email.subject).toBe("Activate your Five to Nine workspace");
+    expect(email.html).toContain("Five to Nine account activation");
     expect(email.html).toContain(">Activate account</a>");
     expect(email.html).not.toContain(">https://0509.io/auth/better/magic-link");
     expect(email.text).toContain("Activate account: https://0509.io/auth/better/magic-link");
+  });
+
+  it("uses a mode-aware eyebrow and subject for sign-in emails", () => {
+    const email = buildBetterAuthMagicLinkEmail({
+      mode: "login",
+      url: "https://0509.io/auth/better/magic-link?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&context=context-1",
+    });
+
+    expect(email.subject).toBe("Sign in to Five to Nine");
+    expect(email.html).toContain("Five to Nine sign in");
+    // Regression: the eyebrow used to say "Account Activation" on sign-in emails.
+    expect(email.html).not.toContain("account activation");
+    expect(email.html).not.toContain("Account Activation");
   });
 });
 

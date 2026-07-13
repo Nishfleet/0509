@@ -4,7 +4,7 @@ import { magicLink } from "better-auth/plugins";
 
 import {
   appOrigin,
-  emailFromAddress,
+  emailFromSender,
   isBetterAuthEnabled,
   isEmailSendingConfigured,
   type AppEnv,
@@ -777,10 +777,7 @@ async function sendMagicLinkEmail(
   await promiseWithTimeout(
     Promise.resolve().then(() =>
       env.EMAIL!.send({
-        from: {
-          email: emailFromAddress(env),
-          name: input.mode === "signup" ? "0509 Account Activation" : "0509 Sign In",
-        },
+        from: emailFromSender(env),
         html: email.html,
         subject: email.subject,
         text: email.text,
@@ -1295,8 +1292,9 @@ export function buildBetterAuthMagicLinkEmail(input: {
   url: string;
 }) {
   const isSignup = input.mode === "signup";
-  const subject = isSignup ? "Activate your 0509 workspace" : "Sign in to 0509";
+  const subject = isSignup ? "Activate your Five to Nine workspace" : "Sign in to Five to Nine";
   const heading = isSignup ? "Activate your Five to Nine workspace" : "Sign in to Five to Nine";
+  const eyebrow = isSignup ? "Five to Nine account activation" : "Five to Nine sign in";
   const action = isSignup ? "Activate account" : "Sign in";
   const preview = isSignup
     ? "Confirm this request to activate your Five to Nine workspace."
@@ -1309,7 +1307,7 @@ export function buildBetterAuthMagicLinkEmail(input: {
       escapeHtml(preview),
       "</div>",
       '<div style="font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; background-color:#ffffff; color:#101828; line-height:1.55; padding:0;">',
-      '<p style="margin:0 0 8px; color:#667085; font-size:13px; letter-spacing:.08em; text-transform:uppercase;">0509 Account Activation</p>',
+      `<p style="margin:0 0 8px; color:#667085; font-size:13px; letter-spacing:.08em; text-transform:uppercase;">${escapeHtml(eyebrow)}</p>`,
       `<h1 style="margin:0 0 16px; font-size:24px; line-height:1.25; font-weight:700;">${escapeHtml(heading)}</h1>`,
       `<p style="margin:0 0 22px; color:#344054; font-size:15px;">${escapeHtml(preview)}</p>`,
       '<p style="margin:0 0 24px;">',
