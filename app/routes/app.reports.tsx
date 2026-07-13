@@ -33,7 +33,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
     resolveWorkspacePreparedBy,
   } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const reportGate = await requireWorkspacePlanFeature(env, workspaceUserId, "client_reports");
   if (!reportGate.ok) {
     throw reportGate.response;
@@ -56,6 +56,13 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 // only when its canonical report content still matches. Report generation time
 // is intentionally excluded because loadReport regenerates it on every POST.
 const PDF_SNAPSHOT_REUSE_WINDOW_MS = 10 * 60 * 1000;
+// PDF rendering follows a redirect into a separate request, so the bearer
+// token cannot be revoked synchronously after Browser Rendering finishes.
+// Keep this purpose-scoped render share short-lived instead of pretending it is
+// one-time; getShareLink enforces this expiry on every request.
+export const PDF_RENDER_SHARE_TTL_MS = 10 * 60 * 1000;
+export const PDF_RENDER_SHARE_MIN_REMAINING_TTL_MS = 2 * 60 * 1000;
+const PDF_RENDER_SHARE_PURPOSE = "pdf-render";
 
 export async function action({ context, params, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
@@ -106,13 +113,23 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
     }
 
     const snapshotPayload = sanitizeReportShareSnapshot(report);
-    const currentSnapshotFingerprint = reportSnapshotContentFingerprint(snapshotPayload);
+    const pdfSnapshotPayload = {
+      ...snapshotPayload,
+      sharePurpose: PDF_RENDER_SHARE_PURPOSE,
+    };
+    const currentSnapshotFingerprint = reportSnapshotContentFingerprint(pdfSnapshotPayload);
+    const now = Date.now();
     const recentSnapshot = (await listActiveShareLinks(env, workspaceUserId, 50)).find(
       (link) =>
         link.isSnapshot &&
         link.resourceType === "report" &&
         link.resourceId === report.reportId &&
-        Date.now() - new Date(link.createdAt).getTime() < PDF_SNAPSHOT_REUSE_WINDOW_MS &&
+        now - new Date(link.createdAt).getTime() < PDF_SNAPSHOT_REUSE_WINDOW_MS &&
+        link.snapshotPayload?.sharePurpose === PDF_RENDER_SHARE_PURPOSE &&
+        link.expiresAt !== null &&
+        Date.parse(link.expiresAt) > now &&
+        Date.parse(link.expiresAt) <= now + PDF_RENDER_SHARE_TTL_MS &&
+        Date.parse(link.expiresAt) >= now + PDF_RENDER_SHARE_MIN_REMAINING_TTL_MS &&
         currentSnapshotFingerprint !== null &&
         reportSnapshotContentFingerprint(link.snapshotPayload) === currentSnapshotFingerprint,
     );
@@ -126,7 +143,8 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
             resourceType: "report",
             resourceId: report.reportId,
             isSnapshot: true,
-            snapshotPayload: snapshotPayload as unknown as Record<string, unknown>,
+            snapshotPayload: pdfSnapshotPayload as unknown as Record<string, unknown>,
+            expiresAt: new Date(now + PDF_RENDER_SHARE_TTL_MS).toISOString(),
           },
         )
       ).token;

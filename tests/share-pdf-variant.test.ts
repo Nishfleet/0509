@@ -372,6 +372,8 @@ describe("/app/reports/:id PDF wiring", () => {
   }
 
   it("download-pdf mints a snapshot share and 303-redirects to its /pdf", async () => {
+    const now = 1_783_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
     const { createShareLink } = mockReportsCollaborators({ pdfAllowed: true });
 
     const { action } = await import("~/routes/app.reports");
@@ -396,8 +398,16 @@ describe("/app/reports/:id PDF wiring", () => {
     expect(createShareLink).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ user: expect.objectContaining({ id: "user-1" }) }),
-      expect.objectContaining({ resourceType: "report", isSnapshot: true }),
+      expect.objectContaining({
+        resourceType: "report",
+        isSnapshot: true,
+        snapshotPayload: expect.objectContaining({ sharePurpose: "pdf-render" }),
+        expiresAt: expect.any(String),
+      }),
     );
+
+    const createInput = createShareLink.mock.calls[0]?.[2] as { expiresAt?: string };
+    expect(createInput.expiresAt).toBe(new Date(now + 10 * 60 * 1000).toISOString());
   });
 
   it("reuses a snapshot share minted moments ago instead of creating another", async () => {
@@ -411,9 +421,9 @@ describe("/app/reports/:id PDF wiring", () => {
           resourceType: "report",
           resourceId: "collection:col-1",
           isSnapshot: true,
-          snapshotPayload: collectionSnapshotPayload(),
+          snapshotPayload: { ...collectionSnapshotPayload(), sharePurpose: "pdf-render" },
           createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
-          expiresAt: null,
+          expiresAt: new Date(Date.now() + 9 * 60 * 1000).toISOString(),
           revokedAt: null,
         },
       ],
@@ -437,6 +447,93 @@ describe("/app/reports/:id PDF wiring", () => {
 
     expect(redirected?.headers.get("location")).toBe("/share/recent-token/pdf");
     expect(createShareLink).not.toHaveBeenCalled();
+  });
+
+  it("does not reuse a canonical default-lifetime public snapshot for PDF rendering", async () => {
+    const { createShareLink } = mockReportsCollaborators({
+      pdfAllowed: true,
+      existingShares: [
+        {
+          id: "share-public",
+          token: "public-token",
+          userId: "user-1",
+          resourceType: "report",
+          resourceId: "collection:col-1",
+          isSnapshot: true,
+          snapshotPayload: collectionSnapshotPayload(),
+          createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
+          // The share-link helper's normal 90-day default is represented by
+          // this long expiry; PDF downloads must mint their own short token.
+          expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+          revokedAt: null,
+        },
+      ],
+    });
+
+    const { action } = await import("~/routes/app.reports");
+    let redirected: Response | null = null;
+    try {
+      await action({
+        context: {},
+        params: { id: "collection:col-1" },
+        request: new Request("https://0509.io/app/reports/collection:col-1", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+        }),
+      } as never);
+    } catch (thrown) {
+      redirected = thrown as Response;
+    }
+
+    expect(redirected?.headers.get("location")).toBe("/share/fresh-token/pdf");
+    expect(createShareLink).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        snapshotPayload: expect.objectContaining({ sharePurpose: "pdf-render" }),
+        expiresAt: expect.any(String),
+      }),
+    );
+  });
+
+  it("mints a fresh PDF token when a matching render share is too close to expiry", async () => {
+    const { createShareLink } = mockReportsCollaborators({
+      pdfAllowed: true,
+      existingShares: [
+        {
+          id: "share-expiring",
+          token: "expiring-token",
+          userId: "user-1",
+          resourceType: "report",
+          resourceId: "collection:col-1",
+          isSnapshot: true,
+          snapshotPayload: { ...collectionSnapshotPayload(), sharePurpose: "pdf-render" },
+          createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
+          expiresAt: new Date(Date.now() + 60 * 1000).toISOString(),
+          revokedAt: null,
+        },
+      ],
+    });
+
+    const { action } = await import("~/routes/app.reports");
+    let redirected: Response | null = null;
+    try {
+      await action({
+        context: {},
+        params: { id: "collection:col-1" },
+        request: new Request("https://0509.io/app/reports/collection:col-1", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+        }),
+      } as never);
+    } catch (thrown) {
+      redirected = thrown as Response;
+    }
+
+    expect(redirected?.headers.get("location")).toBe("/share/fresh-token/pdf");
+    expect(createShareLink).toHaveBeenCalledTimes(1);
   });
 
   it("mints a fresh snapshot when the current report changed within the reuse window", async () => {

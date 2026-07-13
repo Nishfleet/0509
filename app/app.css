@@ -3817,7 +3817,8 @@ button[aria-busy="true"] {
 
   .f9-cursor-rail,
   .f9-dash-topbar,
-  .f9-report-toolbar button {
+  .f9-report-toolbar button,
+  .f9-report-toolbar a {
     display: none !important;
   }
 

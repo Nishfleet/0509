@@ -794,6 +794,12 @@ function normalizeBrowserlessError(status: number, message: string | null) {
 function buildQuickActionExtractionScript() {
   return `
 (() => {
+  const renderedText = (element) => {
+    if (!element) {
+      return "";
+    }
+    return typeof element.innerText === "string" ? element.innerText : element.textContent ?? "";
+  };
   const normalizeText = (value) =>
     (value ?? "")
       .replace(/\\u00a0/g, " ")
@@ -836,7 +842,7 @@ function buildQuickActionExtractionScript() {
           ) ?? null;
       const advertiser = card?.querySelector("strong, h3, h4, [data-advertiser-name]")?.textContent ?? null;
       const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
-      const text = normalizeText(card?.textContent ?? anchor.textContent);
+      const text = normalizeText(renderedText(card) || renderedText(anchor));
       const cta =
         card
           ?.querySelector(
