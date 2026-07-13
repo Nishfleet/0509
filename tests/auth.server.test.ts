@@ -1255,11 +1255,24 @@ describe("Better Auth magic links", () => {
       url: "https://0509.io/auth/better/magic-link?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&context=context-1",
     });
 
-    expect(email.subject).toBe("Activate your 0509 workspace");
-    expect(email.html).toContain("0509 Account Activation");
+    expect(email.subject).toBe("Activate your Five to Nine workspace");
+    expect(email.html).toContain("Five to Nine account activation");
     expect(email.html).toContain(">Activate account</a>");
     expect(email.html).not.toContain(">https://0509.io/auth/better/magic-link");
     expect(email.text).toContain("Activate account: https://0509.io/auth/better/magic-link");
+  });
+
+  it("brands the sign-in email as a sign-in, not an account activation", () => {
+    const email = buildBetterAuthMagicLinkEmail({
+      mode: "login",
+      url: "https://0509.io/auth/better/magic-link?token=secret-token&callbackURL=https%3A%2F%2F0509.io%2Fapp&context=context-1",
+    });
+
+    expect(email.subject).toBe("Sign in to Five to Nine");
+    expect(email.html).toContain("Five to Nine sign in");
+    expect(email.html).not.toContain("Account Activation");
+    expect(email.html).not.toContain("Activate account");
+    expect(email.html).toContain(">Sign in</a>");
   });
 });
 

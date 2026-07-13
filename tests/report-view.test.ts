@@ -103,6 +103,71 @@ describe("ReportView", () => {
     expect(markup).toContain("Evidence unavailable");
   });
 
+  it("omits missing row fields entirely instead of rendering placeholder prose", () => {
+    const sparseRow: ReportDocument["rows"][number] = {
+      ...reportRow("row-sparse", "https://example.com/source"),
+      advertiser: null,
+      previewHeadline: "New offer",
+      offer: null,
+      cta: null,
+      languageLabel: null,
+      creativeText: null,
+      translatedText: null,
+      landingPage: { url: null, headline: null, captureLabel: null, capturedAt: null, signals: [] },
+    };
+    const report = { ...legacyReport, rows: [sparseRow] };
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report }),
+    );
+
+    expect(markup).not.toMatch(/unavailable<\/dd>/i);
+    expect(markup).not.toContain("Offer unavailable");
+    expect(markup).not.toContain("CTA unavailable");
+    expect(markup).not.toContain("Creative text unavailable");
+    expect(markup).not.toContain("Translation unavailable");
+    expect(markup).not.toContain("Landing page unavailable");
+    expect(markup).not.toContain("<dt>Offer</dt>");
+    expect(markup).not.toContain("<dt>URL</dt>");
+    expect(markup).not.toContain("Landing page</p>");
+    // The row still leads with what is known.
+    expect(markup).toContain("New offer");
+  });
+
+  it("treats legacy placeholder snapshot values as missing", () => {
+    const legacyPlaceholderRow: ReportDocument["rows"][number] = {
+      ...reportRow("row-legacy", "https://example.com/source"),
+      advertiser: "Ad context unavailable",
+      previewHeadline: "Preview unavailable",
+      offer: "Offer unavailable",
+      cta: "CTA unavailable",
+      languageLabel: "Language unavailable",
+      creativeText: "Creative text unavailable",
+      translatedText: "Translation unavailable",
+      landingPage: {
+        url: "Landing page unavailable",
+        headline: "Landing page headline unavailable",
+        captureLabel: "Not checked yet",
+        capturedAt: null,
+        signals: [
+          { label: "CTA", value: "Not detected" },
+          { label: "Price", value: "Not detected" },
+        ],
+      },
+    };
+    const report = { ...legacyReport, rows: [legacyPlaceholderRow] };
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report }),
+    );
+
+    expect(markup).not.toContain("Offer unavailable");
+    expect(markup).not.toContain("Ad context unavailable");
+    expect(markup).not.toContain("Landing page unavailable");
+    expect(markup).not.toContain("Not detected");
+    expect(markup).not.toContain("Not checked yet");
+  });
+
   it("does not describe saved collection proof as a no-action watchlist report", () => {
     const savedProofRow = { ...reportRow("row-collection", ""), event: undefined };
     const report = {

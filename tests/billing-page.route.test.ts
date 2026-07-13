@@ -801,7 +801,8 @@ describe("billing page", () => {
     expect(markup).toContain('value="starter_monthly_v1"');
     expect(markup).toContain('name="source"');
     expect(markup).toContain('value="pricing"');
-    expect(markup).toContain("Every plan checkout must validate against Dodo checkout preview");
+    expect(markup).toContain("Prices are shown in your local currency automatically");
+    expect(markup).not.toContain("Every plan checkout must validate");
   });
 
   it("keeps plan checkout disabled while a pending Dodo checkout exists", async () => {
@@ -1326,7 +1327,7 @@ describe("billing page", () => {
     expect(markup).toContain("never expire");
   });
 
-  it("presents the hosted billing portal as card and invoice support with cancellation fallback", async () => {
+  it("presents the hosted billing portal with confident cancellation guidance", async () => {
     mockReactRouterRender({
       email: "owner@example.com",
       billing: {
@@ -1352,9 +1353,10 @@ describe("billing page", () => {
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
-    expect(markup).toContain("Open Dodo");
+    expect(markup).toContain("Open billing portal");
     expect(markup).toContain("card and invoice tasks");
-    expect(markup).toContain("use support for cancellation");
+    expect(markup).toContain("Cancel anytime from the billing portal");
+    expect(markup).not.toContain("until portal cancellation is fully available");
     expect(markup).toContain("Use the plan cards above to switch plans");
     expect(markup).toContain("/app/support?category=billing");
     expect(markup).not.toContain("cancel — self-serve");

@@ -69,15 +69,15 @@ Authorization: Bearer f9_live_...
           </div>
           <div>
             <dt>Collections</dt>
-            <dd>GET /api/v1/collections/&lbrace;collectionId&rbrace;?format=json</dd>
+            <dd>{"GET /api/v1/collections/{collectionId}?format=json"}</dd>
           </div>
           <div>
             <dt>Watchlists</dt>
-            <dd>GET /api/v1/watchlists/&lbrace;watchlistId&rbrace;?format=csv</dd>
+            <dd>{"GET /api/v1/watchlists/{watchlistId}?format=csv"}</dd>
           </div>
           <div>
             <dt>Digests</dt>
-            <dd>GET /api/v1/digests/&lbrace;digestId&rbrace;?format=json</dd>
+            <dd>{"GET /api/v1/digests/{digestId}?format=json"}</dd>
           </div>
         </dl>
         <p>Supported formats are JSON and CSV where the resource supports them.</p>

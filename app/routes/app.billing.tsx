@@ -417,8 +417,7 @@ export default function BillingRoute() {
             <span className="f9-app-kicker">Choose inside the app</span>
             <h2>Pick a plan and billing cycle</h2>
             <p className="f9-muted-copy">
-              Every plan checkout must validate against Dodo checkout preview for your location.
-              Annual checkout also stays off unless the annual SKU validates as{" "}
+              Prices are shown in your local currency automatically. Pay annually and get{" "}
               {DODO_ANNUAL_SAVINGS_LABEL}.
             </p>
           </div>
@@ -486,7 +485,11 @@ export default function BillingRoute() {
                 <div className="f9-app-plan-card-head">
                   <div>
                     <span className="f9-app-kicker">{plan.name}</span>
-                    <strong>{planCyclePrice || priceFallback(plan, selectedCycle)}</strong>
+                    {planCyclePrice ? (
+                      <strong>{planCyclePrice}</strong>
+                    ) : (
+                      <strong aria-label="Loading price" className="f9-skeleton-line f9-skeleton-price" />
+                    )}
                   </div>
                   {isCurrentBillingChoice ? (
                     <span className="f9-status-pill is-healthy">Current plan</span>
@@ -563,23 +566,27 @@ export default function BillingRoute() {
                       Request billing help
                     </Link>
                   ) : billing.plan !== "free" ? (
-                    <button className="f9-secondary-button" disabled type="button">
-                      {hasPaymentIssue
-                        ? "Resolve payment first"
-                        : hasCancellationScheduled
-                          ? "Cancellation scheduled"
-                        : hasPlanChangePending
-                          ? "Change pending"
-                        : annualBlocked
-                          ? "Annual unavailable"
-                          : checkoutSku
-                            ? "Price loading"
+                    hasPaymentIssue || hasCancellationScheduled || hasPlanChangePending || annualBlocked || !checkoutSku ? (
+                      <button className="f9-secondary-button" disabled type="button">
+                        {hasPaymentIssue
+                          ? "Resolve payment first"
+                          : hasCancellationScheduled
+                            ? "Cancellation scheduled"
+                          : hasPlanChangePending
+                            ? "Change pending"
+                          : annualBlocked
+                            ? "Annual unavailable"
                             : "Change unavailable"}
+                      </button>
+                    ) : (
+                      <PriceLoadingButton />
+                    )
+                  ) : annualBlocked || !checkoutSku ? (
+                    <button className="f9-secondary-button" disabled type="button">
+                      {annualBlocked ? "Annual unavailable" : "Checkout unavailable"}
                     </button>
                   ) : (
-                    <button className="f9-secondary-button" disabled type="button">
-                      {annualBlocked ? "Annual unavailable" : checkoutSku ? "Price loading" : "Checkout unavailable"}
-                    </button>
+                    <PriceLoadingButton />
                   )}
                   {!selected ? (
                     <Link
@@ -726,14 +733,17 @@ export default function BillingRoute() {
         <div className="f9-topup-grid">
           {bundles.map((bundle) => {
             const previewPrice = bundlePrice(pricingPreview, bundle.slug);
-            const price = previewPrice || bundle.priceLabel;
             const sku = bundle.sku ?? "";
             const ready = Boolean(previewPrice && sku);
             return (
               <section className="f9-topup-card" key={bundle.slug}>
                 <span className="f9-app-kicker">{bundle.creditLabel}</span>
                 <h3>{bundle.name}</h3>
-                <strong>{price}</strong>
+                {previewPrice ? (
+                  <strong>{previewPrice}</strong>
+                ) : (
+                  <strong aria-label="Loading price" className="f9-skeleton-line f9-skeleton-price" />
+                )}
                 <p>{bundle.detail}</p>
                 {!canManageBilling ? (
                   <button className="f9-secondary-button" disabled type="button">
@@ -751,9 +761,11 @@ export default function BillingRoute() {
                       Buy pack
                     </SubmitButton>
                   </Form>
+                ) : isPaid && sku ? (
+                  <PriceLoadingButton />
                 ) : isPaid ? (
                   <button className="f9-secondary-button" disabled type="button">
-                    Price loading
+                    Pack unavailable
                   </button>
                 ) : (
                   <Link className="f9-secondary-button" to="/app/billing?source=top-up#plans">
@@ -783,9 +795,9 @@ export default function BillingRoute() {
             <div className="f9-work-row">
               <strong>Manage subscription</strong>
               <span>
-                  Open Dodo's hosted portal for card and invoice tasks. Use the plan cards above
-                  to switch plans or billing cycles through Dodo; use support for cancellation
-                  until portal cancellation is fully available.{" "}
+                  Open the billing portal for card and invoice tasks. Use the plan cards above
+                  to switch plans or billing cycles. Cancel anytime from the billing portal or
+                  by emailing support.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
                   <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
                     Open billing portal
@@ -825,6 +837,15 @@ export default function BillingRoute() {
       </article>
     </section>
     </DashboardPage>
+  );
+}
+
+function PriceLoadingButton() {
+  return (
+    <button aria-busy="true" className="f9-secondary-button" disabled type="button">
+      <span aria-hidden="true" className="f9-button-spinner" />
+      Loading price…
+    </button>
   );
 }
 
@@ -1227,13 +1248,6 @@ function annualValidationFor(
   plan: PricingPlanSlug,
 ): DodoAnnualDisplayValidation | null {
   return preview?.annualValidation?.[plan] ?? null;
-}
-
-function priceFallback(
-  plan: ReturnType<typeof pricingPlans>[number],
-  cycle: PricingBillingCycle,
-) {
-  return cycle === "yearly" ? plan.yearlyLabel : plan.monthlyLabel;
 }
 
 function planSaleIsOpen(

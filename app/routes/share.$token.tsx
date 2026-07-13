@@ -343,15 +343,16 @@ function sanitizeReportStat(stat: Record<string, unknown>): ReportDocument["stat
 function sanitizeReportRow(row: Record<string, unknown>, index: number): ReportDocument["rows"][number] {
   return {
     id: `row-${index + 1}`,
-    advertiser: readString(row.advertiser) ?? "Advertiser",
-    previewHeadline: readString(row.previewHeadline) ?? "",
-    offer: readString(row.offer) ?? "",
-    cta: readString(row.cta) ?? "",
+    // Missing values stay null; the report view omits absent fields.
+    advertiser: readString(row.advertiser),
+    previewHeadline: readString(row.previewHeadline),
+    offer: readString(row.offer),
+    cta: readString(row.cta),
     formatLabel: readString(row.formatLabel) ?? "",
-    languageLabel: readString(row.languageLabel) ?? "",
+    languageLabel: readString(row.languageLabel),
     previewImageUrl: readString(row.previewImageUrl),
-    creativeText: readString(row.creativeText) ?? "",
-    translatedText: readString(row.translatedText) ?? "",
+    creativeText: readString(row.creativeText),
+    translatedText: readString(row.translatedText),
     landingPage: sanitizeReportLandingPage(row.landingPage),
     analysisFields: sanitizeReportFields(row.analysisFields),
     tags: sanitizeReportTags(row.tags),
@@ -364,9 +365,9 @@ function sanitizeReportLandingPage(value: unknown): ReportDocument["rows"][numbe
   const landingPage = isPlainRecord(value) ? value : {};
 
   return {
-    url: readString(landingPage.url) ?? "",
-    headline: readString(landingPage.headline) ?? "",
-    captureLabel: readString(landingPage.captureLabel) ?? "",
+    url: readString(landingPage.url),
+    headline: readString(landingPage.headline),
+    captureLabel: readString(landingPage.captureLabel),
     capturedAt: readString(landingPage.capturedAt),
     signals: sanitizeReportFields(landingPage.signals),
   };
