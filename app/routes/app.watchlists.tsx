@@ -15,6 +15,7 @@ import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page"
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { CopyButton } from "~/components/copy-button";
+import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
@@ -760,13 +761,12 @@ export default function WatchlistsRoute() {
               );
             })}
             {data.watchlists.length === 0 ? (
-              <div className="f9-empty-panel">
-                <h3>Add your first competitor</h3>
-                <p>Paste your website or a competitor website to start tracking visible changes.</p>
-                <Link className="f9-primary-button" to="/search">
-                  Add competitor
-                </Link>
-              </div>
+              <EmptyState
+                action={{ label: "Add competitor", to: "/search" }}
+                description="Paste your website or a competitor website to start tracking visible changes."
+                headingLevel="h3"
+                title="Add your first competitor"
+              />
             ) : null}
           </div>
         </article>
@@ -1344,13 +1344,11 @@ export default function WatchlistsRoute() {
               </div>
             </>
           ) : (
-            <div className="f9-empty-panel">
-              <h2>Add your first competitor</h2>
-              <p>Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes.</p>
-              <Link className="f9-primary-button" to="/search">
-                Add competitor
-              </Link>
-            </div>
+            <EmptyState
+              action={{ label: "Add competitor", to: "/search" }}
+              description="Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes."
+              title="Add your first competitor"
+            />
           )}
         </article>
       </div>

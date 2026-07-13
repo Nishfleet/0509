@@ -159,6 +159,7 @@ function billingRenderData(overrides: Record<string, unknown> = {}) {
     legacyPlanReturnConfirmed: false,
     blockedCheckout: false,
     pendingCheckout: false,
+    invalidCheckoutTarget: false,
     agencyCheckoutHeld: false,
     planCheckoutUnavailable: false,
     annualCheckoutUnavailable: false,
@@ -220,6 +221,38 @@ function billingRenderData(overrides: Record<string, unknown> = {}) {
 }
 
 describe("billing page", () => {
+  it("maps an invalid checkout redirect to durable billing-page feedback", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: null,
+        dodoProductId: null,
+        dodoPlanChangeProductId: null,
+        billingInterval: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=invalid-target"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ invalidCheckoutTarget: true });
+  });
+
+  it("renders invalid checkout feedback as an assertive inline error", async () => {
+    mockReactRouterRender(billingRenderData({ invalidCheckoutTarget: true }));
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+    expect(markup).toContain("That checkout option is invalid or no longer available.");
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain('aria-live="assertive"');
+  });
+
   it("loads plan, usage, and billing status for a paying customer", async () => {
     const mocks = mockBillingLoaderDependencies({
       billing: {

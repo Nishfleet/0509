@@ -252,6 +252,7 @@ describe("developer access route action", () => {
       expect(revokeCustomerApiKey).not.toHaveBeenCalled();
       expect(result).toEqual({
         ok: false,
+        intent,
         message: "Only the account owner can manage developer access and API keys.",
       });
     },
@@ -300,6 +301,8 @@ describe("developer access route action", () => {
     });
     expect(result).toEqual({
       ok: true,
+      intent: "revoke-api-key",
+      apiKeyId: "api-key-1",
       message: "API key revoked.",
     });
   });

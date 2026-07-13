@@ -26,6 +26,8 @@ describe("ReportView", () => {
 
     expect(markup).not.toContain("Insight depth");
     expect(markup).not.toContain("Pending");
+    expect(markup).toContain("f9-dash-state-empty");
+    expect(markup).not.toContain("f9-empty-panel");
   });
 
   it("normalizes legacy system labels without rewriting customer-owned report text", () => {

@@ -3,9 +3,11 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
-import { LocalTime } from "~/components/local-time";
+import { ActionFeedback } from "~/components/action-feedback";
+import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { CopyButton } from "~/components/copy-button";
-import { SubmitButton } from "~/components/submit-button";
+import { EmptyState } from "~/components/empty-state";
+import { LocalTime } from "~/components/local-time";
 
 const RESOURCE_LABELS: Record<string, string> = {
   collection: "Collection",
@@ -60,8 +62,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const revoked = await revokeShareLink(env, workspaceUserId, shareLinkId);
 
     return revoked
-      ? { ok: true, message: "Share link revoked. The URL stops working immediately." }
-      : { ok: false, message: "Share link not found — it may already be revoked." };
+      ? { ok: true, intent, shareLinkId, message: "Share link revoked. The URL stops working immediately." }
+      : { ok: false, intent, shareLinkId, message: "Share link not found — it may already be revoked." };
   }
 
   return { ok: false, message: "Unknown share action." };
@@ -79,18 +81,15 @@ export default function SharesRoute() {
           title="Reports"
         />
 
-      {actionData?.message ? (
-        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-          <p>{actionData.message}</p>
-        </div>
-      ) : null}
+      <ActionFeedback data={actionData} fallback />
 
       <article className="f9-app-panel">
+        <ActionFeedback data={actionData} intent="revoke-share" />
         {data.shares.length === 0 ? (
-          <p>
-            No active share links. Share a watchlist, collection, digest, or report and it will
-            appear here so you can revoke it any time.
-          </p>
+          <EmptyState
+            description="Share a watchlist, collection, digest, or report and it will appear here so you can revoke it any time."
+            title="No active share links"
+          />
         ) : (
           <div className="f9-work-list is-compact">
             {data.shares.map((share) => (
@@ -117,15 +116,16 @@ export default function SharesRoute() {
                   <CopyButton value={share.url} />
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-share" />
-                  <input name="shareLinkId" type="hidden" value={share.id} />
-                  <SubmitButton
-                    className="f9-secondary-button"
-                    intent="revoke-share"
-                    match={{ shareLinkId: share.id }}
-                    pendingLabel="Removing…"
-                  >
-                    Revoke
-                  </SubmitButton>
+                    <input name="shareLinkId" type="hidden" value={share.id} />
+                    <ConfirmSubmitButton
+                      className="f9-secondary-button"
+                      confirmLabel="Confirm — revoke link?"
+                      intent="revoke-share"
+                      match={{ shareLinkId: share.id }}
+                      pendingLabel="Removing…"
+                    >
+                      Revoke
+                    </ConfirmSubmitButton>
                   </Form>
                 </div>
               </div>

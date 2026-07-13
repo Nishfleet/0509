@@ -3,6 +3,8 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { ActionFeedback } from "~/components/action-feedback";
+import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 
@@ -76,7 +78,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     if (!invite.ok) {
-      return { ok: false, message: invite.reason };
+      return { ok: false, intent, message: invite.reason };
     }
 
     const origin = appOrigin(env, request);
@@ -88,25 +90,27 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     return sent
-      ? { ok: true, message: `Invite sent to ${email.trim().toLowerCase()}. It expires in 7 days.` }
-      : { ok: false, message: "Invite saved, but the email failed to send — revoke and retry." };
+      ? { ok: true, intent, message: `Invite sent to ${email.trim().toLowerCase()}. It expires in 7 days.` }
+      : { ok: false, intent, message: "Invite saved, but the email failed to send — revoke and retry." };
   }
 
   if (intent === "revoke") {
+    const memberId = String(formData.get("memberId") ?? "");
     await revokeWorkspaceMember(env, {
       ownerUserId: session.user.id,
-      memberRowId: String(formData.get("memberId") ?? ""),
+      memberRowId: memberId,
     });
-    return { ok: true, message: "Seat revoked. Their access ends immediately." };
+    return { ok: true, intent, memberId, message: "Seat revoked. Their access ends immediately." };
   }
 
   if (intent === "resend-invite") {
+    const memberId = String(formData.get("memberId") ?? "");
     const invite = await resendWorkspaceInvite(env, {
       ownerUserId: session.user.id,
-      memberRowId: String(formData.get("memberId") ?? ""),
+      memberRowId: memberId,
     });
     if (!invite.ok) {
-      return { ok: false, message: invite.reason };
+      return { ok: false, intent, memberId, message: invite.reason };
     }
 
     const origin = appOrigin(env, request);
@@ -118,8 +122,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     return sent
-      ? { ok: true, message: `Invite resent to ${invite.inviteeEmail}. It expires in 7 days.` }
-      : { ok: false, message: "Invite refreshed, but the email failed to send — retry from this page." };
+      ? { ok: true, intent, memberId, message: `Invite resent to ${invite.inviteeEmail}. It expires in 7 days.` }
+      : { ok: false, intent, memberId, message: "Invite refreshed, but the email failed to send — retry from this page." };
   }
 
   return { ok: false, message: "Unknown action." };
@@ -160,11 +164,7 @@ export default function TeamRoute() {
           title="Team"
         />
 
-      {actionData?.message ? (
-        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-          <p>{actionData.message}</p>
-        </div>
-      ) : null}
+      <ActionFeedback data={actionData} fallback />
 
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
@@ -183,6 +183,7 @@ export default function TeamRoute() {
             : "Upgrade to the Agency plan to share your account with teammates."}
         </p>
 
+        <ActionFeedback data={actionData} intent="invite" />
         {data.plan === "agency" && seatsUsed < data.seatLimit ? (
           <Form method="post" className="f9-action-row">
             <input type="hidden" name="intent" value="invite" />
@@ -193,10 +194,13 @@ export default function TeamRoute() {
               required
               placeholder="teammate@agency.com"
             />
-            <SubmitButton pendingLabel="Sending…">Send invite</SubmitButton>
+            <SubmitButton className="f9-primary-button" intent="invite" pendingLabel="Sending…">
+              Send invite
+            </SubmitButton>
           </Form>
         ) : null}
 
+        <ActionFeedback data={actionData} intent="revoke" />
         {data.members.length > 0 ? (
           <div className="f9-work-list is-compact">
             {data.members.map((member) => {
@@ -223,12 +227,19 @@ export default function TeamRoute() {
                       )}
                     </p>
                   </div>
+                  <ActionFeedback
+                    data={actionData}
+                    intent="resend-invite"
+                    match={{ memberId: member.id }}
+                  />
                   <div className="f9-action-row">
                     {member.status === "invited" ? (
                       <Form method="post">
                         <input type="hidden" name="intent" value="resend-invite" />
                         <input type="hidden" name="memberId" value={member.id} />
                         <SubmitButton
+                          className="f9-secondary-button"
+                          intent="resend-invite"
                           match={{ memberId: member.id }}
                           pendingLabel="Sending…"
                         >
@@ -239,12 +250,15 @@ export default function TeamRoute() {
                     <Form method="post">
                       <input type="hidden" name="intent" value="revoke" />
                       <input type="hidden" name="memberId" value={member.id} />
-                      <SubmitButton
+                      <ConfirmSubmitButton
+                        className="f9-secondary-button"
+                        confirmLabel="Confirm — revoke seat?"
+                        intent="revoke"
                         match={{ memberId: member.id }}
                         pendingLabel="Revoking…"
                       >
                         Revoke
-                      </SubmitButton>
+                      </ConfirmSubmitButton>
                     </Form>
                   </div>
                 </div>
