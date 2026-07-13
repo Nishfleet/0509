@@ -46,11 +46,27 @@ function isHtmlResponse(headers: Headers) {
 // in app/lib/seo.ts.
 const NOINDEX_PATH_PREFIXES = ["/share/"] as const;
 
+// React Router matches routes case-insensitively and after percent-decoding,
+// so /SHARE/<token> and /%73hare/<token> serve the same report as /share/<token>.
+// Normalize the pathname the same way before the prefix check — otherwise those
+// URL aliases would be served WITHOUT the noindex header and could get indexed.
+// Over-matching is safe here (a noindex header on a 404 is harmless); missing
+// the header on a live alias is the bug.
+function normalizePathnameForNoindex(pathname: string): string {
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    // Malformed percent-encoding: keep the raw pathname.
+  }
+  return decoded.toLowerCase();
+}
+
 function isNoindexRequestPath(request?: Request): boolean {
   if (!request) {
     return false;
   }
-  const pathname = new URL(request.url).pathname;
+  const pathname = normalizePathnameForNoindex(new URL(request.url).pathname);
   return NOINDEX_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
