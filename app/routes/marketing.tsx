@@ -307,15 +307,21 @@ export default function MarketingRoute() {
     );
     targets.forEach((el) => observer.observe(el));
 
-    // Fail-safe: content must never stay hidden if the observer or the
-    // reveal animation misbehaves. Shortly after the page has fully loaded,
-    // force-reveal anything still waiting (observed live 2026-07-13:
+    // Fail-safe: content that has reached the viewport must never stay hidden
+    // if the observer or reveal animation misbehaves. Shortly after the page
+    // has fully loaded, unstick only visible/previous sections so below-fold
+    // sections keep their normal stagger (observed live 2026-07-13:
     // .ld-case-card stuck at opacity 0 with parent .is-seen — the animation
     // clock can freeze at 0 in hidden/background tabs, leaving the
     // backwards-fill "from" state applied indefinitely).
     let revealFallbackTimer = 0;
     const revealRemaining = () => {
-      for (const el of targets) {
+      const stuckTargets = targets.filter(
+        (el) =>
+          !el.classList.contains("is-seen") &&
+          el.getBoundingClientRect().top < window.innerHeight,
+      );
+      for (const el of stuckTargets) {
         el.classList.add("is-seen");
         observer.unobserve(el);
       }

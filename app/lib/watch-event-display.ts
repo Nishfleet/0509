@@ -1,11 +1,12 @@
 import type { WatchEventType } from "~/lib/types";
 
-// Customer-facing labels for watch event types. Raw tokens like "ad_new"
-// (or the underscore-stripped "ad new") must never render on customer
-// surfaces such as shared reports.
+// Canonical customer-facing labels for watch event types — the single
+// vocabulary for every surface (watchlists, digests, reports, shares).
+// Raw tokens like "ad_new" (or the underscore-stripped "ad new") must
+// never render on customer surfaces.
 const WATCH_EVENT_TYPE_LABELS: Record<WatchEventType, string> = {
   ad_new: "New ad",
-  ad_inactive: "Ad inactive",
+  ad_inactive: "Ad stopped",
   landing_page_url_changed: "Landing page changed",
   landing_page_headline_changed: "Headline changed",
   landing_page_offer_changed: "Offer changed",

@@ -275,6 +275,17 @@ describe("landing reveal fail-safe", () => {
     expect(marketingRoute).toContain("window.setTimeout(revealRemaining, 3000)");
   });
 
+  it("only unsticks unseen sections that have already reached the viewport", () => {
+    expect(marketingRoute).toContain('!el.classList.contains("is-seen")');
+    expect(marketingRoute).toContain("el.getBoundingClientRect().top < window.innerHeight");
+  });
+
+  it("leaves content visible when reduced motion is requested", () => {
+    expect(marketingRoute).toContain(
+      'if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;',
+    );
+  });
+
   it("finishes stuck reveal animations so a frozen animation clock cannot hide content", () => {
     // Hidden/background tabs can freeze the animation timeline at 0, leaving
     // backwards-fill opacity 0 applied forever (observed live 2026-07-13).
