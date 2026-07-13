@@ -8,6 +8,7 @@ import {
 } from "~/lib/data/helpers.server";
 import { validIsoTimestamp } from "~/lib/data/billing-helpers.server";
 import { resolveBillingSkuFromProviderProductId } from "~/lib/billing-sku-catalog";
+import { effectivePlanFromRow } from "~/lib/plan-effective.server";
 import type { AppEnv } from "~/lib/env.server";
 
 export async function grantDodoPlanAccess(
@@ -358,10 +359,10 @@ export async function getUserPlanBillingInfo(
     userId,
   );
 
-  const plan =
-    row?.plan === "scout" || row?.plan === "starter" || row?.plan === "agency"
-      ? row.plan
-      : "free";
+  // Same lapse rule as plan.server getUserPlan: once a scheduled cancellation
+  // passes its effective date, the displayed plan must read free too —
+  // otherwise the billing page shows paid UI while enforcement denies it.
+  const plan = effectivePlanFromRow(row);
   const skuMatch = row?.dodo_product_id
     ? resolveBillingSkuFromProviderProductId(env, row.dodo_product_id)
     : null;

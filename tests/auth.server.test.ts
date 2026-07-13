@@ -367,6 +367,66 @@ describe("auth session boundary", () => {
       status: 302,
     });
   });
+
+  it("runs the session lookup once per Request across parallel loaders", async () => {
+    const getBetterAuthSession = vi.fn().mockResolvedValue({
+      session: {
+        expiresAt: "2026-06-30T00:00:00.000Z",
+        id: "session-1",
+        userId: "user-1",
+      },
+      user: {
+        email: "owner@example.com",
+        id: "user-1",
+        image: null,
+        name: "Owner",
+        onboardedAt: null,
+      },
+    });
+    vi.doMock("~/lib/better-auth.server", () => ({
+      getBetterAuthSession,
+    }));
+
+    const { getCachedOptionalSession } = await import("~/lib/auth.server");
+    const request = new Request("https://0509.io/app");
+    const [first, second] = await Promise.all([
+      getCachedOptionalSession(env(), request),
+      getCachedOptionalSession(env(), request),
+    ]);
+    const third = await getCachedOptionalSession(env(), request);
+
+    expect(getBetterAuthSession).toHaveBeenCalledTimes(1);
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+
+    await getCachedOptionalSession(env(), new Request("https://0509.io/app"));
+    expect(getBetterAuthSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("resolves the workspace once per Request and re-resolves for a different user id", async () => {
+    const resolveWorkspace = vi.fn().mockResolvedValue({
+      workspaceUserId: "owner-1",
+      isMember: true,
+      ownerName: "Owner",
+    });
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace,
+    }));
+
+    const { getCachedWorkspaceForRequest } = await import("~/lib/auth.server");
+    const request = new Request("https://0509.io/app");
+    const [first, second] = await Promise.all([
+      getCachedWorkspaceForRequest(env(), request, "user-1"),
+      getCachedWorkspaceForRequest(env(), request, "user-1"),
+    ]);
+
+    expect(resolveWorkspace).toHaveBeenCalledTimes(1);
+    expect(second).toBe(first);
+
+    await getCachedWorkspaceForRequest(env(), request, "user-2");
+    expect(resolveWorkspace).toHaveBeenCalledTimes(2);
+    expect(resolveWorkspace).toHaveBeenLastCalledWith(expect.anything(), "user-2");
+  });
 });
 
 describe("Better Auth magic links", () => {

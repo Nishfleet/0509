@@ -66,6 +66,13 @@ function authModuleFromSession(session: unknown) {
       isMember: false,
       ownerName: null,
     })),
+    getCachedWorkspaceForRequest: vi.fn(
+      async (_env: unknown, _request: unknown, userId: string) => ({
+        workspaceUserId: userId,
+        isMember: false,
+        ownerName: null,
+      }),
+    ),
   };
 }
 

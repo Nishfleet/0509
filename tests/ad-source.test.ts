@@ -3158,3 +3158,123 @@ describe("searchAdsViaSourceResolver", () => {
     );
   });
 });
+
+describe("hasFreshDiscoveryCacheEntry", () => {
+  const query: NormalizedSavedQuery = {
+    mode: "advertiser",
+    filters: {
+      query: "nykaa",
+      country: "India",
+      platform: "all",
+      creativeType: "all",
+      status: "all",
+      firstSeenFrom: "",
+      lastSeenFrom: "",
+    },
+  };
+
+  function cacheEntry(overrides: Record<string, unknown> = {}) {
+    const cachedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    return {
+      cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: buildLiveBrowserResult(),
+      fetchedAt: cachedAt,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      browserMsUsed: null,
+      createdAt: cachedAt,
+      updatedAt: cachedAt,
+      ...overrides,
+    };
+  }
+
+  it("reports a fresh usable cache entry without running discovery", async () => {
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(cacheEntry());
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { hasFreshDiscoveryCacheEntry } = await import("~/lib/ad-source.server");
+
+    await expect(
+      hasFreshDiscoveryCacheEntry(
+        { BROWSER: { fetch: vi.fn() }, DB: {} as D1Database } as never,
+        query,
+        null,
+      ),
+    ).resolves.toBe(true);
+    expect(getDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports false for an expired cache entry", async () => {
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(
+      cacheEntry({ expiresAt: new Date(Date.now() - 60 * 1000).toISOString() }),
+    );
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { hasFreshDiscoveryCacheEntry } = await import("~/lib/ad-source.server");
+
+    await expect(
+      hasFreshDiscoveryCacheEntry(
+        { BROWSER: { fetch: vi.fn() }, DB: {} as D1Database } as never,
+        query,
+        null,
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it("reports false for a zero-ad browser cache entry that is not an explicit no-results", async () => {
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(
+      cacheEntry({ payload: buildLiveBrowserResult({ ads: [] }) }),
+    );
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { hasFreshDiscoveryCacheEntry } = await import("~/lib/ad-source.server");
+
+    await expect(
+      hasFreshDiscoveryCacheEntry(
+        { BROWSER: { fetch: vi.fn() }, DB: {} as D1Database } as never,
+        query,
+        null,
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it("reports false in explicit demo mode", async () => {
+    const getDiscoveryCacheEntry = vi.fn();
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { hasFreshDiscoveryCacheEntry } = await import("~/lib/ad-source.server");
+
+    await expect(
+      hasFreshDiscoveryCacheEntry({ DB: {} as D1Database } as never, query, null),
+    ).resolves.toBe(false);
+    expect(getDiscoveryCacheEntry).not.toHaveBeenCalled();
+  });
+});

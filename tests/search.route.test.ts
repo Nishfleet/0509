@@ -86,6 +86,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/landing-pages.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/rate-limit.server");
+  vi.doUnmock("~/lib/search-execution.server");
   vi.doUnmock("~/lib/search-selection.server");
   vi.doUnmock("~/lib/translation.server");
   vi.doUnmock("~/lib/analysis.server");
@@ -243,6 +244,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -318,6 +320,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -369,6 +372,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -438,6 +442,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -474,6 +479,356 @@ describe("search loader", () => {
     expect(result.result).toBe(hydratedResult);
   });
 
+  it("charges the search-selection bucket instead of the search limit for a warm-cache selection", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "hit",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue(sourceResult);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: baseAd,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforceAuthenticatedSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforceSearchSelectionRateLimit = vi.fn().mockResolvedValue(null);
+    const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(true);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit,
+      enforceSearchSelectionRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn(),
+      hasWarmSearchCacheEntry,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&selected=meta-boat-1"),
+    } as never);
+
+    expect(hasWarmSearchCacheEntry).toHaveBeenCalledTimes(1);
+    expect(hasWarmSearchCacheEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env,
+        cursor: null,
+        customerMetaAdLibraryToken: null,
+        parsed: expect.objectContaining({
+          filters: expect.objectContaining({ query: "nykaa" }),
+        }),
+      }),
+    );
+    expect(enforceAuthenticatedSearchRateLimit).not.toHaveBeenCalled();
+    expect(enforcePublicSearchRateLimit).not.toHaveBeenCalled();
+    expect(enforceSearchSelectionRateLimit).toHaveBeenCalledTimes(1);
+    expect(enforceSearchSelectionRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      env,
+      "user-1",
+      undefined,
+    );
+    expect(searchAdsViaSourceResolver).toHaveBeenCalledTimes(1);
+    expect(result.selectedAd).toBe(baseAd);
+  });
+
+  it("refuses a warm-cache selection once the search-selection bucket is exhausted", async () => {
+    const env = { DB: {} };
+    const rateLimitedResponse = new Response("Too many requests", { status: 429 });
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+    const enforceAuthenticatedSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforceSearchSelectionRateLimit = vi.fn().mockResolvedValue(rateLimitedResponse);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit,
+      enforceSearchSelectionRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn(),
+      hasWarmSearchCacheEntry: vi.fn().mockResolvedValue(true),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    await expect(
+      loader({
+        context: createContext(env),
+        request: new Request("http://localhost/search?query=nykaa&selected=meta-boat-1"),
+      } as never),
+    ).rejects.toBe(rateLimitedResponse);
+
+    expect(enforceSearchSelectionRateLimit).toHaveBeenCalledTimes(1);
+    expect(enforceAuthenticatedSearchRateLimit).not.toHaveBeenCalled();
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+  });
+
+  it("still charges the account search limit when selecting with a cold cache", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const enforceAuthenticatedSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforceSearchSelectionRateLimit = vi.fn().mockResolvedValue(null);
+    const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(false);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit,
+      enforceSearchSelectionRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn(),
+      hasWarmSearchCacheEntry,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        selectedAd: baseAd,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&selected=meta-boat-1"),
+    } as never);
+
+    expect(hasWarmSearchCacheEntry).toHaveBeenCalledTimes(1);
+    expect(enforceSearchSelectionRateLimit).not.toHaveBeenCalled();
+    expect(enforceAuthenticatedSearchRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      env,
+      "user-1",
+      undefined,
+    );
+  });
+
+  it("charges a fresh signed-in search without probing the cache", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const enforceAuthenticatedSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforceSearchSelectionRateLimit = vi.fn().mockResolvedValue(null);
+    const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(true);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit,
+      enforceSearchSelectionRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn(),
+      hasWarmSearchCacheEntry,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        selectedAd: null,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never);
+
+    expect(hasWarmSearchCacheEntry).not.toHaveBeenCalled();
+    expect(enforceSearchSelectionRateLimit).not.toHaveBeenCalled();
+    expect(enforceAuthenticatedSearchRateLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not charge the public search limit when an anonymous selection is served from cache", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "hit",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforceSearchSelectionRateLimit = vi.fn().mockResolvedValue(null);
+    const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(true);
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: sourceResult,
+      selectedAd: baseAd,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn(),
+      hasWarmSearchCacheEntry,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa&selected=meta-boat-1"),
+    } as never);
+
+    expect(hasWarmSearchCacheEntry).toHaveBeenCalledTimes(1);
+    expect(enforcePublicSearchRateLimit).not.toHaveBeenCalled();
+    // Anonymous selections stay unmetered because they carry no provider
+    // spend: enrichment is disabled without a session.
+    expect(enforceSearchSelectionRateLimit).not.toHaveBeenCalled();
+    expect(prepareSearchResultSelection).toHaveBeenCalledWith(
+      env,
+      sourceResult,
+      "meta-boat-1",
+      { enrichSelected: false, hydratePersisted: false },
+    );
+  });
+
   it("stops anonymous public searches when the route limiter blocks them", async () => {
     const env = { DB: {} };
     const rateLimitedResponse = new Response("Too many requests", { status: 429 });
@@ -500,6 +855,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -550,6 +906,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -619,6 +976,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,
@@ -705,6 +1063,7 @@ describe("search loader", () => {
     vi.doMock("~/lib/rate-limit.server", () => ({
       enforcePublicSearchRateLimit,
       enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
       searchAdsViaSourceResolver,

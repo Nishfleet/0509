@@ -6,11 +6,10 @@ import { DashboardShell } from "~/components/dashboard-shell";
 import { DashboardRouteError } from "~/components/dashboard-route-loading";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
+  const { getCachedWorkspaceForRequest, requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { isOpsUserAllowed } = await import("~/lib/env.server");
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
-  const { resolveWorkspace } = await import("~/lib/workspace.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const path = new URL(request.url).pathname;
@@ -19,7 +18,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect("/app/onboard");
   }
 
-  const workspace = await resolveWorkspace(env, session.user.id);
+  const workspace = await getCachedWorkspaceForRequest(env, request, session.user.id);
   const showPresenceNav = await presenceNavVisible(env, workspace.workspaceUserId);
 
   return {

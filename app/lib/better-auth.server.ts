@@ -194,6 +194,15 @@ export function getBetterAuth(env: AppEnv, request: Request) {
     socialProviders: socialProviders(env),
     trustedOrigins,
     user: {
+      // Surface the app-owned onboarding column on session.user so
+      // getBetterAuthSession never needs a second user SELECT per request.
+      additionalFields: {
+        onboardedAt: {
+          type: "string",
+          required: false,
+          input: false,
+        },
+      },
       deleteUser: {
         enabled: false,
       },
@@ -220,17 +229,9 @@ export async function getBetterAuthSession(
     return null;
   }
 
-  const user = await env.DB!.prepare(
-    "SELECT id, email, name, image, onboardedAt FROM user WHERE id = ? LIMIT 1",
-  )
-    .bind(session.user.id)
-    .first<{
-      id: string;
-      email: string;
-      name: string;
-      image: string | null;
-      onboardedAt: string | null;
-    }>();
+  // The user.additionalFields config surfaces onboardedAt on the session
+  // lookup's own user join, so no second user SELECT is needed here.
+  const onboardedAt = (session.user as { onboardedAt?: Date | string | null }).onboardedAt;
 
   return {
     session: {
@@ -239,11 +240,11 @@ export async function getBetterAuthSession(
       userId: session.session.userId,
     },
     user: {
-      email: user?.email ?? session.user.email,
-      id: user?.id ?? session.user.id,
-      image: user?.image ?? session.user.image ?? null,
-      name: user?.name ?? session.user.name,
-      onboardedAt: user?.onboardedAt ?? null,
+      email: session.user.email,
+      id: session.user.id,
+      image: session.user.image ?? null,
+      name: session.user.name,
+      onboardedAt: onboardedAt == null ? null : toIsoString(onboardedAt),
     },
   };
 }

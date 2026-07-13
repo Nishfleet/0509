@@ -262,11 +262,14 @@ describe("scheduled Browser Run billing access", () => {
       reason: "active_subscription",
       plan: "starter",
     });
+    // A lapsed scheduled cancellation reads as the free plan everywhere
+    // (getUserPlanBillingInfo applies the same effective-plan rule as
+    // getUserPlan), so the denial reason is plan_ineligible, not
+    // subscription_required. Eligibility stays false either way.
     await expect(evaluateScheduledBrowserAccess(env, "cancel-past-date-owner")).resolves.toMatchObject({
       eligible: false,
-      reason: "subscription_required",
-      plan: "starter",
-      hasSubscriptionId: true,
+      reason: "plan_ineligible",
+      plan: "free",
     });
     await expect(evaluateScheduledBrowserAccess(env, "one-time-owner")).resolves.toMatchObject({
       eligible: false,
