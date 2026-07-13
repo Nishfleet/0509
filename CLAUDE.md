@@ -120,7 +120,7 @@ The product is **Five to Nine**; **0509.io** is its current production domain (0
 
 - Keep new work in the Cloudflare app unless explicitly touching legacy reference code.
 - Favor honest product behavior over optimistic marketing claims.
-- If a live discovery provider is configured (browser scraping or Meta token) and live search fails, monitoring must fail honestly rather than silently degrading into demo-backed success. Demo mode is only for the explicitly unconfigured state and must always be labeled. Caution: `searchAds` in `meta-api.server.ts` still *defaults* to demo fallback — production callers must pass `allowDemoFallback: false`.
+- If a live discovery provider is configured (browser scraping or Meta token) and live search fails, monitoring must fail honestly rather than silently degrading into demo-backed success. Demo mode is only for the explicitly unconfigured state and must always be labeled. `searchAds` in `meta-api.server.ts` defaults `allowDemoFallback` to `false`; callers that intentionally want demo on live failure must pass `allowDemoFallback: true`.
 - Verify the active runtime before making topology assumptions. Today the canonical public hosts all run through Cloudflare Worker custom domains.
 - For local Worker development, prefer `.dev.vars` over `.env.local`.
 - Cloudflare cost policy: stay on included/free usage by default. Only enable usage-billed add-ons when the missing capability is materially hampering product quality, operations, or launch. Note: monitoring already depends on usage-billed products (Browser Rendering, Workers AI, Workflows) — the account must be on Workers Paid for the cron design to function.

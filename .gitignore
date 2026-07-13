@@ -13,6 +13,8 @@
 /.auth/
 /test-results/
 /playwright-report/
+/output/
+/tmp/
 
 .DS_Store
 *.pem
