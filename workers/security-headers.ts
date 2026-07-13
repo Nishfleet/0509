@@ -38,6 +38,22 @@ function isHtmlResponse(headers: Headers) {
   return (headers.get("content-type") ?? "").toLowerCase().includes("text/html");
 }
 
+// Public share links must never end up in search results: they carry customer
+// evidence behind an unguessable token. The header is set at the worker layer
+// (not via a route meta/headers export) so it covers the document response AND
+// the React Router data request ("/share/<token>.data"). robots.txt must keep
+// /share/ crawlable so crawlers can actually SEE this header — see ROBOTS_TXT
+// in app/lib/seo.ts.
+const NOINDEX_PATH_PREFIXES = ["/share/"] as const;
+
+function isNoindexRequestPath(request?: Request): boolean {
+  if (!request) {
+    return false;
+  }
+  const pathname = new URL(request.url).pathname;
+  return NOINDEX_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
 function securityHeadersForRequest(responseHeaders: Headers, request?: Request): Record<string, string> {
   if (!request || !isHtmlResponse(responseHeaders)) {
     return SECURITY_HEADERS;
@@ -68,6 +84,9 @@ export function withSecurityHeaders(response: Response, request?: Request): Resp
     for (const [name, value] of Object.entries(HTML_NO_STORE_HEADERS)) {
       headers.set(name, value);
     }
+  }
+  if (isNoindexRequestPath(request)) {
+    headers.set("x-robots-tag", "noindex, nofollow");
   }
   return new Response(response.body, {
     status: response.status,

@@ -16,11 +16,26 @@ interface WorkspaceBrandingRow {
   user_id: string;
   brand_name: string | null;
   brand_website: string | null;
+  brand_logo: string | null;
   updated_at: string;
 }
 
 export const WORKSPACE_BRAND_NAME_MAX_LENGTH = 60;
 export const WORKSPACE_BRAND_WEBSITE_MAX_LENGTH = 2048;
+// Hard cap on the encoded data URL (~64KB). Keeps the row comfortably inside
+// D1 statement/row limits; anything larger belongs in R2, not here.
+export const WORKSPACE_BRAND_LOGO_MAX_LENGTH = 65536;
+
+// Raster formats only. SVG is deliberately excluded: an SVG logo is a stored-
+// XSS vector the moment it is reused outside an <img> tag (emails, exported
+// HTML), so it is rejected at the storage boundary, not just at render time.
+const WORKSPACE_BRAND_LOGO_ALLOWED_PREFIXES = [
+  "data:image/png;base64,",
+  "data:image/jpeg;base64,",
+  "data:image/webp;base64,",
+] as const;
+
+const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 
 function normalizeWorkspaceBrandName(value: string | null | undefined): string | null {
   const trimmed = (value ?? "").trim().slice(0, WORKSPACE_BRAND_NAME_MAX_LENGTH).trim();
@@ -32,48 +47,81 @@ function normalizeWorkspaceBrandWebsite(value: string | null | undefined): strin
   return trimmed.length > 0 ? trimmed : null;
 }
 
+export function normalizeWorkspaceBrandLogo(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length === 0 || trimmed.length > WORKSPACE_BRAND_LOGO_MAX_LENGTH) {
+    return null;
+  }
+
+  const prefix = WORKSPACE_BRAND_LOGO_ALLOWED_PREFIXES.find((allowed) =>
+    trimmed.startsWith(allowed),
+  );
+  if (!prefix) {
+    return null;
+  }
+
+  const payload = trimmed.slice(prefix.length);
+  if (payload.length === 0 || !BASE64_PAYLOAD_PATTERN.test(payload)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
 export async function getWorkspaceBranding(env: AppEnv, userId: string) {
   const row = await one<WorkspaceBrandingRow>(
     env,
     `
-      SELECT user_id, brand_name, brand_website, updated_at
+      SELECT user_id, brand_name, brand_website, brand_logo, updated_at
       FROM workspace_branding
       WHERE user_id = ?
     `,
     userId,
   );
 
-  return { brandName: row?.brand_name ?? null, brandWebsite: row?.brand_website ?? null };
+  return {
+    brandName: row?.brand_name ?? null,
+    brandWebsite: row?.brand_website ?? null,
+    brandLogo: row?.brand_logo ?? null,
+  };
 }
 
 export async function upsertWorkspaceBranding(
   env: AppEnv,
   userId: string,
-  input: { brandName?: string | null | undefined; brandWebsite?: string | null | undefined },
+  input: {
+    brandName?: string | null | undefined;
+    brandWebsite?: string | null | undefined;
+    brandLogo?: string | null | undefined;
+  },
 ) {
   const current = await getWorkspaceBranding(env, userId);
   const hasBrandName = Object.prototype.hasOwnProperty.call(input, "brandName");
   const hasBrandWebsite = Object.prototype.hasOwnProperty.call(input, "brandWebsite");
+  const hasBrandLogo = Object.prototype.hasOwnProperty.call(input, "brandLogo");
   const brandName = hasBrandName ? normalizeWorkspaceBrandName(input.brandName) : current.brandName;
   const brandWebsite = hasBrandWebsite
     ? normalizeWorkspaceBrandWebsite(input.brandWebsite)
     : current.brandWebsite;
+  const brandLogo = hasBrandLogo ? normalizeWorkspaceBrandLogo(input.brandLogo) : current.brandLogo;
 
   await run(
     env,
     `
-      INSERT INTO workspace_branding (user_id, brand_name, brand_website, updated_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO workspace_branding (user_id, brand_name, brand_website, brand_logo, updated_at)
+      VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         brand_name = excluded.brand_name,
         brand_website = excluded.brand_website,
+        brand_logo = excluded.brand_logo,
         updated_at = excluded.updated_at
     `,
     userId,
     brandName,
     brandWebsite,
+    brandLogo,
     nowIso(),
   );
 
-  return { brandName, brandWebsite };
+  return { brandName, brandWebsite, brandLogo };
 }
