@@ -315,6 +315,7 @@ describe("/app/reports/:id PDF wiring", () => {
       input.createShareLink ?? vi.fn().mockResolvedValue({ id: "share-new", token: "fresh-token", expiresAt: null });
     vi.doMock("~/lib/data.server", () => ({
       createShareLink,
+      getLatestDigestRunSummaryForWatchlist: vi.fn().mockResolvedValue(null),
       listActiveShareLinks: vi.fn().mockResolvedValue(input.existingShares ?? []),
       getCollection: vi.fn().mockResolvedValue({ id: "col-1", name: "Board", userId: "user-1" }),
       getWatchlist: vi.fn(),
