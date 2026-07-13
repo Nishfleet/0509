@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { ensureDb, execute as runStatement, queryOne as one } from "~/lib/data/d1.server";
 import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
@@ -239,13 +240,6 @@ export interface MonitoringOrchestrationMetrics {
   delayed: number;
   duplicatesPrevented: number;
   oldestQueuedAgeMs: number | null;
-}
-
-function ensureDb(env: AppEnv) {
-  if (!env.DB) {
-    throw new Error("Cloudflare D1 binding `DB` is not configured.");
-  }
-  return env.DB;
 }
 
 function nowIso() {
@@ -532,17 +526,6 @@ interface OrchestratedRunRow {
   queued_at: string | null;
   started_at: string | null;
   created_at: string | null;
-}
-
-async function one<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
-  return ensureDb(env)
-    .prepare(sql)
-    .bind(...bindings)
-    .first<T>();
-}
-
-async function runStatement(env: AppEnv, sql: string, ...bindings: unknown[]) {
-  return ensureDb(env).prepare(sql).bind(...bindings).run();
 }
 
 export async function ensureOrchestratedWatchlistRun(

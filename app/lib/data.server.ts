@@ -1,11 +1,17 @@
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
-import { chunkForBoundParams, D1_MAX_BOUND_PARAMS } from "~/lib/d1-chunk.server";
 import {
   hydrateAdsWithPersistedCreatives as hydrateAdsWithPersistedCreativesImpl,
   listAdsByIds,
   replaceAnalysisFields,
   upsertAd as upsertAdImpl,
 } from "~/lib/ad-persistence.server";
+import {
+  ensureDb,
+  execute as run,
+  queryAll as many,
+  queryIn,
+  queryOne as one,
+} from "~/lib/data/d1.server";
 import {
   isCustomerWhatsAppReady,
   isWhatsAppProviderConfigured,
@@ -1036,36 +1042,31 @@ export async function listAgentMemoryForClientRooms(
   }
 
   const limitPerRoom = Math.max(1, Math.min(100, Math.floor(options.limitPerRoom ?? 20)));
-  const chunks = await Promise.all(
-    chunkForBoundParams(uniqueRoomIds, 80).map((chunk) => {
-      const placeholders = chunk.map(() => "?").join(", ");
-      return many<AgentMemoryRow>(
-        env,
-        `
-          SELECT *
-          FROM (
-            SELECT
-              agent_memory.*,
-              ROW_NUMBER() OVER (
-                PARTITION BY client_room_id
-                ORDER BY updated_at DESC
-              ) AS room_rank
-            FROM agent_memory
-            WHERE user_id = ?
-              AND watchlist_id IS NULL
-              AND client_room_id IN (${placeholders})
-          )
-          WHERE room_rank <= ?
-          ORDER BY updated_at DESC
-        `,
-        userId,
-        ...chunk,
-        limitPerRoom,
-      );
-    }),
-  );
+  const rows = await queryIn<AgentMemoryRow>(env, {
+    buildSql: (placeholders) => `
+      SELECT *
+      FROM (
+        SELECT
+          agent_memory.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY client_room_id
+            ORDER BY updated_at DESC
+          ) AS room_rank
+        FROM agent_memory
+        WHERE user_id = ?
+          AND watchlist_id IS NULL
+          AND client_room_id IN (${placeholders})
+      )
+      WHERE room_rank <= ?
+      ORDER BY updated_at DESC
+    `,
+    values: uniqueRoomIds,
+    prefix: [userId],
+    suffix: [limitPerRoom],
+    chunkSize: 80,
+  });
 
-  return chunks.flat().map(toAgentMemoryRecord);
+  return rows.map(toAgentMemoryRecord);
 }
 
 export async function getClientRoom(env: AppEnv, userId: string, roomId: string) {
@@ -1813,30 +1814,6 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
   }
 
   await upsertAdImpl(env, ad);
-}
-
-function ensureDb(env: AppEnv) {
-  if (!env.DB) {
-    throw new Error("Cloudflare D1 binding `DB` is not configured.");
-  }
-
-  return env.DB;
-}
-
-async function many<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
-  const db = ensureDb(env);
-  const result = await db.prepare(sql).bind(...bindings).all<T>();
-  return result.results ?? [];
-}
-
-async function one<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
-  const rows = await many<T>(env, sql, ...bindings);
-  return rows[0] ?? null;
-}
-
-async function run(env: AppEnv, sql: string, ...bindings: unknown[]) {
-  const db = ensureDb(env);
-  await db.prepare(sql).bind(...bindings).run();
 }
 
 function isMissingTableError(error: unknown, tableName: string) {
@@ -5528,25 +5505,20 @@ export async function listWatchEventsByIds(
     return [];
   }
 
-  const chunkedRows = await Promise.all(
-    chunkForBoundParams(uniqueIds, 80).map((chunk) => {
-      const placeholders = chunk.map(() => "?").join(", ");
-      return many<WatchEventRow>(
-        env,
-        `
-          SELECT *
-          FROM watch_event
-          WHERE watchlist_id = ?
-            AND id IN (${placeholders})
-          ORDER BY created_at ASC
-        `,
-        watchlistId,
-        ...chunk,
-      );
-    }),
-  );
+  const rows = await queryIn<WatchEventRow>(env, {
+    buildSql: (placeholders) => `
+      SELECT *
+      FROM watch_event
+      WHERE watchlist_id = ?
+        AND id IN (${placeholders})
+      ORDER BY created_at ASC
+    `,
+    values: uniqueIds,
+    prefix: [watchlistId],
+    chunkSize: 80,
+  });
 
-  return chunkedRows.flat().map(toWatchEventRecord);
+  return rows.map(toWatchEventRecord);
 }
 
 export interface OperatorRiskSummary {
@@ -6372,34 +6344,31 @@ export async function listProofCapturesForTargets(
   }
 
   const perTarget = Math.max(1, Math.min(50, Math.floor(limitPerTarget)));
-  for (const chunk of chunkForBoundParams(uniqueIds)) {
-    const rows = await many<ProofCaptureRow & { rn: number }>(
-      env,
-      `
-        SELECT *
-        FROM (
-          SELECT
-            ${PROOF_CAPTURE_LIST_COLUMNS},
-            ROW_NUMBER() OVER (
-              PARTITION BY proof_capture.proof_target_id
-              ORDER BY proof_capture.attempted_at DESC
-            ) AS rn
-          FROM proof_capture
-          WHERE proof_capture.proof_target_id IN (${chunk.map(() => "?").join(", ")})
-        )
-        WHERE rn <= ?
-        ORDER BY proof_target_id ASC, attempted_at DESC
-      `,
-      ...chunk,
-      perTarget,
-    );
+  const rows = await queryIn<ProofCaptureRow & { rn: number }>(env, {
+    buildSql: (placeholders) => `
+      SELECT *
+      FROM (
+        SELECT
+          ${PROOF_CAPTURE_LIST_COLUMNS},
+          ROW_NUMBER() OVER (
+            PARTITION BY proof_capture.proof_target_id
+            ORDER BY proof_capture.attempted_at DESC
+          ) AS rn
+        FROM proof_capture
+        WHERE proof_capture.proof_target_id IN (${placeholders})
+      )
+      WHERE rn <= ?
+      ORDER BY proof_target_id ASC, attempted_at DESC
+    `,
+    values: uniqueIds,
+    suffix: [perTarget],
+  });
 
-    for (const row of rows) {
-      const record = toProofCaptureRecord(row);
-      const next = capturesByTargetId.get(record.proofTargetId) ?? [];
-      next.push(record);
-      capturesByTargetId.set(record.proofTargetId, next);
-    }
+  for (const row of rows) {
+    const record = toProofCaptureRecord(row);
+    const next = capturesByTargetId.get(record.proofTargetId) ?? [];
+    next.push(record);
+    capturesByTargetId.set(record.proofTargetId, next);
   }
 
   return capturesByTargetId;
@@ -6519,40 +6488,37 @@ export async function listLastSuccessfulProofCapturesForAds(
   }
 
   const perAd = Math.max(1, Math.min(20, Math.floor(limitPerAd)));
-  for (const chunk of chunkForBoundParams(uniqueIds, D1_MAX_BOUND_PARAMS - 2)) {
-    const rows = await many<ProofCaptureRow & { ad_id: string; rn: number }>(
-      env,
-      `
-        SELECT *
-        FROM (
-          SELECT
-            ${PROOF_CAPTURE_LIST_COLUMNS},
-            proof_target.ad_id AS ad_id,
-            ROW_NUMBER() OVER (
-              PARTITION BY proof_target.ad_id
-              ORDER BY proof_capture.succeeded_at DESC
-            ) AS rn
-          FROM proof_capture
-          INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
-          WHERE proof_target.watchlist_id = ?
-            AND proof_target.ad_id IN (${chunk.map(() => "?").join(", ")})
-            AND proof_capture.status = 'succeeded'
-            AND proof_capture.succeeded_at IS NOT NULL
-        )
-        WHERE rn <= ?
-        ORDER BY ad_id ASC, succeeded_at DESC
-      `,
-      watchlistId,
-      ...chunk,
-      perAd,
-    );
+  const rows = await queryIn<ProofCaptureRow & { ad_id: string; rn: number }>(env, {
+    buildSql: (placeholders) => `
+      SELECT *
+      FROM (
+        SELECT
+          ${PROOF_CAPTURE_LIST_COLUMNS},
+          proof_target.ad_id AS ad_id,
+          ROW_NUMBER() OVER (
+            PARTITION BY proof_target.ad_id
+            ORDER BY proof_capture.succeeded_at DESC
+          ) AS rn
+        FROM proof_capture
+        INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+        WHERE proof_target.watchlist_id = ?
+          AND proof_target.ad_id IN (${placeholders})
+          AND proof_capture.status = 'succeeded'
+          AND proof_capture.succeeded_at IS NOT NULL
+      )
+      WHERE rn <= ?
+      ORDER BY ad_id ASC, succeeded_at DESC
+    `,
+    values: uniqueIds,
+    prefix: [watchlistId],
+    suffix: [perAd],
+  });
 
-    for (const row of rows) {
-      const record = toProofCaptureRecord(row);
-      const next = capturesByAdId.get(row.ad_id) ?? [];
-      next.push(record);
-      capturesByAdId.set(row.ad_id, next);
-    }
+  for (const row of rows) {
+    const record = toProofCaptureRecord(row);
+    const next = capturesByAdId.get(row.ad_id) ?? [];
+    next.push(record);
+    capturesByAdId.set(row.ad_id, next);
   }
 
   return capturesByAdId;
