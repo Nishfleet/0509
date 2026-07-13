@@ -29,7 +29,11 @@ import {
   formatConfidenceBandLabel,
   formatDeliveryAttemptStatusLabel,
   formatImportanceBandLabel,
+  formatMachineTokenLabel,
   formatProofAgeLabel,
+  formatProofCaptureStatusLabel,
+  formatWatchEventStatusLabel,
+  formatWatchEventTypeLabel,
   formatWhyAlertedLabel,
 } from "~/lib/landing-page-display";
 import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
@@ -708,7 +712,7 @@ export default function WatchlistsRoute() {
         </p>
       ) : null}
 
-      <div className="f9-dashboard-grid">
+      <div className="f9-master-detail">
         <article className="f9-app-panel f9-side-panel">
           <div className="f9-panel-toolbar">
             <div>
@@ -857,7 +861,8 @@ export default function WatchlistsRoute() {
       {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
               <div className="f9-work-list">
-                <section>
+                <div className="f9-detail-split">
+                <section className="f9-detail-cell">
                   <p className="f9-app-kicker">Watchlist setup</p>
                   <Form method="post" className="f9-work-list is-compact">
                     <input name="intent" type="hidden" value="update-watchlist" />
@@ -919,65 +924,62 @@ export default function WatchlistsRoute() {
                   </Form>
                 </section>
 
-                <section>
+                <section className="f9-detail-cell">
                   <p className="f9-app-kicker">Tracking status</p>
-                  <div className="f9-dashboard-grid">
-                    <article className="f9-app-panel">
-                      <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
-                      <p className="f9-muted-copy">
-                        {formatTrackingStatusSummary(data.discoveryStatus.summary)}
-                      </p>
-                      {data.discoveryStatus.lastErrorCode ? (
-                        <p className="f9-muted-copy">
-                          What happened: {formatDiscoveryIssue(data.discoveryStatus.lastErrorCode)}
-                        </p>
-                      ) : null}
+                  <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
+                  <p className="f9-muted-copy">
+                    {formatTrackingStatusSummary(data.discoveryStatus.summary)}
+                  </p>
+                  {data.discoveryStatus.lastErrorCode ? (
+                    <p className="f9-muted-copy">
+                      What happened: {formatDiscoveryIssue(data.discoveryStatus.lastErrorCode)}
+                    </p>
+                  ) : null}
 
-                      <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
-                        <div className="f9-work-row">
-                          <p className="f9-app-kicker">How ads are checked</p>
-                          <p className="f9-muted-copy">
-                            {formatDiscoveryProviderLabel(
-                              data.discoveryStatus.provider,
-                              data.discoveryStatus.mode,
-                            )}
-                          </p>
-                        </div>
-                        <div className="f9-work-row">
-                          <p className="f9-app-kicker">Status</p>
-                          <p className="f9-muted-copy">
-                            {formatDiscoveryStatusLabel(data.discoveryStatus.status)}
-                          </p>
-                        </div>
-                        <div className="f9-work-row">
-                          <p className="f9-app-kicker">Last check</p>
-                          <p className="f9-muted-copy">
-                            {data.discoveryStatus.lastCheckedAt ? (
-                              <LocalTime iso={data.discoveryStatus.lastCheckedAt} />
-                            ) : (
-                              "No recent check yet"
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <Link className="f9-secondary-button" to="/app/source-access">
-                        Review tracking access
-                      </Link>
-                    </article>
-                    {data.showPresenceNav ? (
-                      <article className="f9-app-panel">
-                        <h3>Website presence</h3>
-                        <p className="f9-muted-copy">
-                          Track public website, blog, and feed changes for this competitor in Presence — separate from ad
-                          watchlists.
-                        </p>
-                        <Link className="f9-secondary-button" to="/app/presence">
-                          Open Presence
-                        </Link>
-                      </article>
-                    ) : null}
+                  <div className="f9-work-list is-compact">
+                    <div className="f9-work-row">
+                      <p className="f9-app-kicker">How ads are checked</p>
+                      <p className="f9-muted-copy">
+                        {formatDiscoveryProviderLabel(
+                          data.discoveryStatus.provider,
+                          data.discoveryStatus.mode,
+                        )}
+                      </p>
+                    </div>
+                    <div className="f9-work-row">
+                      <p className="f9-app-kicker">Status</p>
+                      <p className="f9-muted-copy">
+                        {formatDiscoveryStatusLabel(data.discoveryStatus.status)}
+                      </p>
+                    </div>
+                    <div className="f9-work-row">
+                      <p className="f9-app-kicker">Last check</p>
+                      <p className="f9-muted-copy">
+                        {data.discoveryStatus.lastCheckedAt ? (
+                          <LocalTime iso={data.discoveryStatus.lastCheckedAt} />
+                        ) : (
+                          "No recent check yet"
+                        )}
+                      </p>
+                    </div>
                   </div>
+                  <Link className="f9-secondary-button" to="/app/source-access">
+                    Review tracking access
+                  </Link>
+                  {data.showPresenceNav ? (
+                    <>
+                      <h3>Website presence</h3>
+                      <p className="f9-muted-copy">
+                        Track public website, blog, and feed changes for this competitor in Presence — separate from ad
+                        watchlists.
+                      </p>
+                      <Link className="f9-secondary-button" to="/app/presence">
+                        Open Presence
+                      </Link>
+                    </>
+                  ) : null}
                 </section>
+                </div>
 
                 <section>
                   <p className="f9-app-kicker">See what changed</p>
@@ -1000,7 +1002,7 @@ export default function WatchlistsRoute() {
                             <div className="f9-panel-toolbar">
                               <div>
                                 <p className="f9-app-kicker">
-                                  {humanizeEventType(event.eventType)} · {event.status.replaceAll("_", " ")}
+                                  {formatWatchEventTypeLabel(event.eventType)} · {formatWatchEventStatusLabel(event.status)}
                                 </p>
                                 <h3>{event.title}</h3>
                               </div>
@@ -1054,8 +1056,8 @@ export default function WatchlistsRoute() {
                     </div>
                   </div>
 
-                  <div className="f9-dashboard-grid">
-                    <article className="f9-app-panel">
+                  <div className="f9-detail-split">
+                    <article className="f9-detail-cell">
                       <p className="f9-app-kicker">Recent evidence checks</p>
                       <h3>Evidence freshness</h3>
                       <p className="f9-muted-copy">
@@ -1074,7 +1076,7 @@ export default function WatchlistsRoute() {
                           <div className="f9-work-row" key={capture.id}>
                             <div>
                               <h4 style={{ marginBottom: "0.25rem" }}>
-                                {capture.status.replaceAll("_", " ")}
+                                {formatProofCaptureStatusLabel(capture.status)}
                               </h4>
                               <p className="f9-muted-copy">
                                 {formatConfidenceBandLabel(capture.fieldConfidence)} ·{" "}
@@ -1089,7 +1091,7 @@ export default function WatchlistsRoute() {
                       </div>
                     </article>
 
-                    <article className="f9-app-panel">
+                    <article className="f9-detail-cell">
                       <p className="f9-app-kicker">Delivery settings</p>
                       <h3>Channel policy</h3>
                       {!data.watchlistDeliveryConfig ? (
@@ -1117,7 +1119,7 @@ export default function WatchlistsRoute() {
                             type="text"
                           />
                         </label>
-                        <div className="f9-dashboard-grid">
+                        <div className="f9-field-pair">
                           <label className="f9-field">
                             <span>Quiet hours start</span>
                             <input
@@ -1174,6 +1176,9 @@ export default function WatchlistsRoute() {
                       <h3 style={{ marginTop: 0 }}>Targets and pauses</h3>
                     </div>
                   </div>
+                  <div className="f9-detail-split">
+                  <div className="f9-detail-cell">
+                  <p className="f9-app-kicker">Watchlist targets</p>
                   <div className="f9-work-list is-compact">
                     {data.deliveryTargets.map((target) => (
                       <div className="f9-work-row" key={target.id}>
@@ -1231,8 +1236,18 @@ export default function WatchlistsRoute() {
                       </p>
                     ) : null}
                   </div>
+                  {data.workspaceDeliveryTargets.length > 0 ? (
+                    <div>
+                      <p className="f9-app-kicker">Default delivery</p>
+                      <p className="f9-muted-copy">
+                        {data.workspaceDeliveryTargets.map((target) => target.targetValue).join(" · ")}
+                      </p>
+                    </div>
+                  ) : null}
+                  </div>
 
-                  <Form method="post" className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
+                  <Form method="post" className="f9-detail-cell">
+                    <p className="f9-app-kicker">Add delivery target</p>
                     <input name="intent" type="hidden" value="add-delivery-target" />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
                     <label className="f9-field">
@@ -1260,15 +1275,7 @@ export default function WatchlistsRoute() {
                       Add delivery target
                     </SubmitButton>
                   </Form>
-
-                  {data.workspaceDeliveryTargets.length > 0 ? (
-                    <div style={{ marginTop: "1rem" }}>
-                      <p className="f9-app-kicker">Default delivery</p>
-                      <p className="f9-muted-copy">
-                        {data.workspaceDeliveryTargets.map((target) => target.targetValue).join(" · ")}
-                      </p>
-                    </div>
-                  ) : null}
+                  </div>
                 </section>
 
                 <section>
@@ -1276,7 +1283,7 @@ export default function WatchlistsRoute() {
                   {data.runs.length === 0 ? (
                     <p className="f9-muted-copy">No checks recorded yet.</p>
                   ) : (
-                    <ul className="event-list">
+                    <ul className="event-list f9-detail-split">
                       {data.runs.map((run) => (
                         <li className="f9-event-card" key={run.id}>
                           <div className="f9-panel-toolbar">
@@ -1324,7 +1331,7 @@ export default function WatchlistsRoute() {
                           <div>
                             <h4 style={{ marginBottom: "0.25rem" }}>{candidate.title}</h4>
                             <p className="f9-muted-copy">
-                              {candidate.status.replaceAll("_", " ")} · {formatImportanceBandLabel(candidate.importanceScore)}
+                              {formatWatchEventStatusLabel(candidate.status)} · {formatImportanceBandLabel(candidate.importanceScore)}
                             </p>
                           </div>
                         </div>
@@ -1540,10 +1547,6 @@ function buildLastAttemptByEventId(attempts: DeliveryAttemptRecord[]) {
   }, new Map<string, DeliveryAttemptRecord>());
 }
 
-function humanizeEventType(eventType: string) {
-  return eventType.replaceAll("_", " ");
-}
-
 function formatRunSummary(summary: Record<string, unknown>) {
   const message = typeof summary.message === "string" ? summary.message.trim() : "";
   const parts = [
@@ -1567,7 +1570,7 @@ function formatRunEventTypes(summary: Record<string, unknown>) {
 
   const parts = Object.entries(value)
     .filter((entry): entry is [string, number] => typeof entry[1] === "number" && entry[1] > 0)
-    .map(([eventType, count]) => `${count} ${eventType.replaceAll("_", " ")}`);
+    .map(([eventType, count]) => `${formatWatchEventTypeLabel(eventType)} ×${count}`);
 
   return parts.join(" · ");
 }
@@ -1653,7 +1656,7 @@ function formatDiscoveryIssue(issue: string) {
     empty_result: "No ad cards were found for this check.",
   };
 
-  return labels[issue] ?? issue.replaceAll("_", " ");
+  return labels[issue] ?? formatMachineTokenLabel(issue);
 }
 
 function formatNumericSummaryPart(

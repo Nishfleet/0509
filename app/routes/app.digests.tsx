@@ -18,6 +18,7 @@ import { PlanLimitState } from "~/components/plan-limit-state";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
+import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
 import {
   classifyDigestItemSource,
@@ -223,7 +224,7 @@ export default function DigestsRoute() {
           title="Digests are included in paid plans"
         />
       ) : (
-        <div className="f9-dashboard-grid">
+        <div className="f9-master-detail">
           <article className="f9-app-panel f9-side-panel">
             <div className="f9-panel-toolbar">
               <div>
@@ -280,19 +281,6 @@ export default function DigestsRoute() {
                       <LocalTime iso={data.selectedDigest.periodEnd} mode="date" />
                     </h2>
                   </div>
-                </div>
-
-                <DigestDecisionSummary items={data.selectedDigest.items} />
-
-                <DigestProofPacket items={data.selectedDigest.items} />
-
-                <DigestMovementSummary items={data.selectedDigest.items} />
-
-                <section className="f9-work-list is-compact" style={{ marginBottom: "1rem" }}>
-                  <div>
-                    <span className="f9-app-kicker">Digest actions</span>
-                    <h3 style={{ marginTop: 0 }}>Share or export after reviewing the decision summary</h3>
-                  </div>
                   <div className="f9-action-row">
                     <a
                       className="f9-secondary-button"
@@ -314,13 +302,18 @@ export default function DigestsRoute() {
                       </SubmitButton>
                     </Form>
                   </div>
-                </section>
+                </div>
+
+                <div className="f9-detail-split">
+                  <DigestDecisionSummary items={data.selectedDigest.items} />
+                  <DigestProofPacket items={data.selectedDigest.items} />
+                </div>
+
+                <DigestMovementSummary items={data.selectedDigest.items} />
 
                 {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
-                <ProofGlossary />
-
-                <section className="f9-work-list is-compact" style={{ marginBottom: "1rem" }}>
+                <section className="f9-detail-cell">
                   <div>
                     <span className="f9-app-kicker">Filters</span>
                     <h3 style={{ marginTop: 0 }}>Full digest detail</h3>
@@ -362,7 +355,7 @@ export default function DigestsRoute() {
                       <select name="eventType" defaultValue={selectedFilters.eventType}>
                         <option value="all">All event types</option>
                         {filterOptions.eventTypes.map((type) => (
-                          <option key={type} value={type}>{type.replaceAll("_", " ")}</option>
+                          <option key={type} value={type}>{formatWatchEventTypeLabel(type)}</option>
                         ))}
                       </select>
                     </label>
@@ -385,7 +378,7 @@ export default function DigestsRoute() {
                         </div>
                         <div className="f9-action-row">
                           <span className="f9-status-pill">{classification.label}</span>
-                          <span className="f9-status-pill">{item.eventType.replaceAll("_", " ")}</span>
+                          <span className="f9-status-pill">{formatWatchEventTypeLabel(item.eventType)}</span>
                         </div>
                       </div>
                       <p>{item.summary}</p>
@@ -423,7 +416,8 @@ export default function DigestsRoute() {
                   </div>
                 ) : null}
 
-                <section className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
+                <div className="f9-detail-split">
+                <section className="f9-detail-cell">
                   <div>
                     <span className="f9-app-kicker">Delivery health</span>
                     <h3 style={{ marginTop: 0 }}>Recent channel outcomes</h3>
@@ -458,6 +452,8 @@ export default function DigestsRoute() {
                     </p>
                   )}
                 </section>
+                <ProofGlossary />
+                </div>
               </>
             ) : (
               <div className="f9-empty-panel">
