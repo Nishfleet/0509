@@ -185,7 +185,7 @@ describe("/share/:token route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),
@@ -277,7 +277,7 @@ describe("/share/:token route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),
@@ -298,6 +298,13 @@ describe("/share/:token route", () => {
           subtitle: "Latest verified moves",
           summary: "One move included.",
           generatedAt: "2026-06-08T01:00:00.000Z",
+          aiWeeklySummary: {
+            paragraph: "Competitors concentrated this week's movement on promotional offers.",
+            generatedAt: "2026-06-08T01:05:00.000Z",
+            periodEnd: "2026-06-08T01:00:00.000Z",
+            strategyWatchlistIds: ["watch-internal-1"],
+            ownerId: "owner-secret",
+          },
           ownerId: "owner-secret",
           recipientEmail: "owner@example.com",
           externalMessageId: "provider-msg-1",
@@ -398,8 +405,14 @@ describe("/share/:token route", () => {
       kind: "report",
       reportId: "shared-report",
       resourceId: "shared",
+      aiWeeklySummary: {
+        paragraph: "Competitors concentrated this week's movement on promotional offers.",
+        generatedAt: "2026-06-08T01:05:00.000Z",
+        periodEnd: "2026-06-08T01:00:00.000Z",
+      },
       rows: [expect.objectContaining({ id: "row-1" })],
     });
+    expect(serialized).toContain("Competitors concentrated this week's movement");
     expect(serialized).not.toContain("watch-internal-1");
     expect(serialized).not.toContain("watch-event-internal-1");
     expect(serialized).not.toContain("owner-secret");
@@ -418,7 +431,7 @@ describe("/share/:token route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),

@@ -5,6 +5,7 @@
  */
 
 import {
+  ensureDb,
   execute as run,
   queryAll as many,
   queryOne as one,
@@ -16,6 +17,7 @@ import {
   parseJson,
   type JsonRecord,
 } from "~/lib/data/helpers.server";
+import { readDigestStrategyNote } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   DigestDeliveryRecord,
@@ -29,6 +31,7 @@ interface DigestRunRow {
   user_id: string;
   period_start: string;
   period_end: string;
+  summary_json: string;
   created_at: string;
 }
 
@@ -55,6 +58,37 @@ interface DigestDeliveryRow {
   delivered_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DigestRunClaim {
+  digestRunId: string;
+  created: boolean;
+}
+
+export interface DigestRunItemInput {
+  watchlistId: string;
+  watchlistName: string;
+  eventType: WatchEventType;
+  title: string;
+  summary: string;
+  metadata?: JsonRecord;
+}
+
+interface DigestRunClaimOptions {
+  returnClaim: true;
+  /**
+   * When present, the claim and its complete item set are committed in one D1
+   * batch transaction. A losing claim writes neither the run nor any items.
+   */
+  items?: readonly DigestRunItemInput[];
+}
+
+function toDigestRunSummary(row: DigestRunRow): JsonRecord {
+  // summary_json is free-form JSON; legacy rows may hold non-object payloads.
+  const parsed = parseJson<unknown>(row.summary_json, {});
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as JsonRecord)
+    : {};
 }
 
 function toDigestItemRecord(row: DigestItemRow): DigestItemRecord {
@@ -84,18 +118,36 @@ function toDigestDeliveryRecord(row: DigestDeliveryRow): DigestDeliveryRecord {
   };
 }
 
+export function createDigestRun(
+  env: AppEnv,
+  userId: string,
+  periodStart: string,
+  periodEnd: string,
+  summary: JsonRecord,
+): Promise<string>;
+export function createDigestRun(
+  env: AppEnv,
+  userId: string,
+  periodStart: string,
+  periodEnd: string,
+  summary: JsonRecord,
+  options: DigestRunClaimOptions,
+): Promise<DigestRunClaim>;
 export async function createDigestRun(
   env: AppEnv,
   userId: string,
   periodStart: string,
   periodEnd: string,
   summary: JsonRecord,
-) {
+  options?: DigestRunClaimOptions,
+): Promise<string | DigestRunClaim> {
   const id = createId();
-  await run(
-    env,
-    `
-      INSERT OR IGNORE INTO digest_run (
+  const createdAt = nowIso();
+  const db = ensureDb(env);
+  const insertStatement = db
+    .prepare(
+      `
+      INSERT INTO digest_run (
         id,
         user_id,
         period_start,
@@ -104,14 +156,62 @@ export async function createDigestRun(
         created_at
       )
       VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, period_start, period_end) DO NOTHING
     `,
-    id,
-    userId,
-    periodStart,
-    periodEnd,
-    jsonValue(summary),
-    nowIso(),
-  );
+    )
+    .bind(
+      id,
+      userId,
+      periodStart,
+      periodEnd,
+      jsonValue(summary),
+      createdAt,
+    );
+
+  const itemInputs = options?.items;
+  const results = itemInputs === undefined
+    ? [await insertStatement.run()]
+    : await db.batch([
+        insertStatement,
+        ...itemInputs.map((input) =>
+          db
+            .prepare(
+              `
+                INSERT INTO digest_item (
+                  id,
+                  digest_run_id,
+                  watchlist_id,
+                  watchlist_name,
+                  event_type,
+                  title,
+                  summary,
+                  metadata_json,
+                  created_at
+                )
+                SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+                FROM digest_run
+                WHERE id = ?
+              `,
+            )
+            .bind(
+              createId(),
+              id,
+              input.watchlistId,
+              input.watchlistName,
+              input.eventType,
+              input.title,
+              input.summary,
+              jsonValue(input.metadata ?? {}),
+              createdAt,
+              id,
+            ),
+        ),
+      ]);
+
+  const created = Number(results[0]?.meta?.changes ?? 0) > 0;
+  if (created) {
+    return options?.returnClaim ? { digestRunId: id, created: true } : id;
+  }
 
   const row = await one<DigestRunRow>(
     env,
@@ -128,7 +228,73 @@ export async function createDigestRun(
     periodEnd,
   );
 
-  return row?.id ?? id;
+  if (!row) {
+    throw new Error("Digest period claim was not created and no existing run was found.");
+  }
+
+  return options?.returnClaim
+    ? { digestRunId: row.id, created: false }
+    : row.id;
+}
+
+/**
+ * Explicitly replaces a digest run's summary_json. Period-claim losers must
+ * never call this: the row creator's summary is the immutable delivery source
+ * for overlapping executions, retries, and reports.
+ */
+export async function updateDigestRunSummary(
+  env: AppEnv,
+  digestRunId: string,
+  summary: JsonRecord,
+) {
+  await run(
+    env,
+    "UPDATE digest_run SET summary_json = ? WHERE id = ?",
+    jsonValue(summary),
+    digestRunId,
+  );
+}
+
+const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;
+
+/**
+ * Returns the most recent stored AI strategy paragraph whose persisted input
+ * provenance belongs exclusively to this watchlist. Legacy, mixed-watchlist,
+ * and mismatched notes fail closed. Read-only: never triggers generation.
+ */
+export async function getLatestDigestRunSummaryForWatchlist(
+  env: AppEnv,
+  userId: string,
+  watchlistId: string,
+) {
+  const rows = await many<DigestRunRow>(
+    env,
+    `
+      SELECT id, user_id, period_start, period_end, summary_json, created_at
+      FROM digest_run
+      WHERE user_id = ?
+      ORDER BY period_end DESC
+      LIMIT ?
+    `,
+    userId,
+    LATEST_STRATEGY_SUMMARY_SCAN_LIMIT,
+  );
+
+  for (const row of rows) {
+    const note = readDigestStrategyNote(toDigestRunSummary(row));
+    if (
+      note?.watchlistIds?.length &&
+      note.watchlistIds.every((provenanceId) => provenanceId === watchlistId)
+    ) {
+      return {
+        paragraph: note.paragraph,
+        generatedAt: note.generatedAt,
+        periodEnd: row.period_end,
+      };
+    }
+  }
+
+  return null;
 }
 
 export async function clearDigestItems(env: AppEnv, digestRunId: string) {
@@ -138,14 +304,7 @@ export async function clearDigestItems(env: AppEnv, digestRunId: string) {
 export async function addDigestItem(
   env: AppEnv,
   digestRunId: string,
-  input: {
-    watchlistId: string;
-    watchlistName: string;
-    eventType: WatchEventType;
-    title: string;
-    summary: string;
-    metadata?: JsonRecord;
-  },
+  input: DigestRunItemInput,
 ) {
   await run(
     env,
@@ -198,12 +357,35 @@ export async function upsertDigestDelivery(
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(digest_run_id)
-      DO UPDATE SET provider = excluded.provider,
-                    status = excluded.status,
-                    recipient_email = excluded.recipient_email,
-                    external_message_id = excluded.external_message_id,
-                    error_message = excluded.error_message,
-                    delivered_at = excluded.delivered_at,
+      DO UPDATE SET provider = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.provider
+                      ELSE excluded.provider
+                    END,
+                    status = CASE
+                      WHEN digest_delivery.status = 'sent' THEN 'sent'
+                      ELSE excluded.status
+                    END,
+                    recipient_email = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.recipient_email
+                      ELSE excluded.recipient_email
+                    END,
+                    external_message_id = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.external_message_id
+                      ELSE excluded.external_message_id
+                    END,
+                    error_message = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.error_message
+                      ELSE excluded.error_message
+                    END,
+                    delivered_at = CASE
+                      WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                        THEN digest_delivery.delivered_at
+                      ELSE excluded.delivered_at
+                    END,
                     updated_at = excluded.updated_at
     `,
     createId(),
@@ -294,6 +476,7 @@ export async function listDigests(
       userId: run.user_id,
       periodStart: run.period_start,
       periodEnd: run.period_end,
+      summary: toDigestRunSummary(run),
       createdAt: run.created_at,
       items: (itemsByDigestId.get(run.id) ?? []).map(toDigestItemRecord),
       delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
@@ -320,6 +503,7 @@ export async function getDigest(env: AppEnv, digestRunId: string) {
     userId: run.user_id,
     periodStart: run.period_start,
     periodEnd: run.period_end,
+    summary: toDigestRunSummary(run),
     createdAt: run.created_at,
     items: items.map(toDigestItemRecord),
     delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
@@ -358,6 +542,7 @@ export async function listRetryableDigestRuns(
   env: AppEnv,
   input: {
     since: string;
+    stalePreDispatchBefore: string;
     limit: number;
   },
 ) {
@@ -374,11 +559,20 @@ export async function listRetryableDigestRuns(
         AND (
           digest_delivery.status = 'failed'
           OR digest_delivery.id IS NULL
+          OR EXISTS (
+            SELECT 1
+            FROM delivery_attempt
+            WHERE delivery_attempt.digest_run_id = digest_run.id
+              AND delivery_attempt.status = 'pending'
+              AND delivery_attempt.webhook_status = 'pending'
+              AND delivery_attempt.updated_at <= ?
+          )
         )
       ORDER BY digest_run.period_end ASC
       LIMIT ?
     `,
     input.since,
+    input.stalePreDispatchBefore,
     input.limit,
   );
 

@@ -1,6 +1,9 @@
 import { Form, useActionData, useLoaderData } from "react-router";
 import type { MetaFunction } from "react-router";
 
+import { ActionFeedback } from "~/components/action-feedback";
+import { ConfirmSubmitButton } from "~/components/confirm-button";
+import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { SubmitButton } from "~/components/submit-button";
@@ -33,6 +36,7 @@ export type DeveloperAccessLoaderData = {
 type DeveloperAccessActionData = RouteActionData & {
   apiKeySecret?: string;
   apiKeyPrefix?: string;
+  apiKeyId?: string;
 };
 
 export function DeveloperAccessRoute() {
@@ -87,21 +91,7 @@ export function DeveloperAccessRoute() {
             </div>
           </div>
 
-          {actionData?.message && !hasNewApiKeySecret ? (
-            <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-              <p>{actionData.message}</p>
-            </div>
-          ) : null}
-
-          {hasNewApiKeySecret && actionData && "apiKeySecret" in actionData ? (
-            <div className="f9-message is-success">
-              <p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
-              <label className="f9-field">
-                <span>{actionData.apiKeyPrefix}</span>
-                <textarea readOnly rows={3} value={actionData.apiKeySecret} />
-              </label>
-            </div>
-          ) : null}
+          <ActionFeedback data={actionData} fallback />
 
           <div className="f9-dashboard-grid">
             <section className="f9-app-panel f9-source-guide">
@@ -129,7 +119,7 @@ export function DeveloperAccessRoute() {
               <dl className="proof-trail-list">
                 <div>
                   <dt>JSON</dt>
-                  <dd>/api/v1/watchlists/&lbrace;id&rbrace;?format=json</dd>
+                  <dd>{"/api/v1/watchlists/{id}?format=json"}</dd>
                 </div>
                 <div>
                   <dt>Header</dt>
@@ -151,6 +141,18 @@ export function DeveloperAccessRoute() {
               {createDisabledReason ? (
                 <div className="f9-message is-error">
                   <p>{createDisabledReason}</p>
+                </div>
+              ) : null}
+              {!hasNewApiKeySecret ? (
+                <ActionFeedback data={actionData} intent="create-api-key" />
+              ) : null}
+              {hasNewApiKeySecret && actionData && "apiKeySecret" in actionData ? (
+                <div className="f9-message is-success" role="status">
+                  <p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
+                  <label className="f9-field">
+                    <span>{actionData.apiKeyPrefix}</span>
+                    <textarea readOnly rows={3} value={actionData.apiKeySecret} />
+                  </label>
                 </div>
               ) : null}
               <Form className="f9-auth-form" method="post">
@@ -181,6 +183,7 @@ export function DeveloperAccessRoute() {
             </section>
           </div>
 
+          <ActionFeedback data={actionData} intent="revoke-api-key" />
           <div className="f9-work-list">
             {data.apiKeys.length > 0 ? (
               data.apiKeys.map((apiKey) => (
@@ -207,25 +210,25 @@ export function DeveloperAccessRoute() {
                     <Form method="post">
                       <input name="intent" type="hidden" value="revoke-api-key" />
                       <input name="apiKeyId" type="hidden" value={apiKey.id} />
-                      <SubmitButton
+                      <ConfirmSubmitButton
                         className="f9-secondary-button"
+                        confirmLabel="Confirm — revoke key?"
                         intent="revoke-api-key"
                         match={{ apiKeyId: apiKey.id }}
                         pendingLabel="Removing…"
                       >
                         Revoke
-                      </SubmitButton>
+                      </ConfirmSubmitButton>
                     </Form>
                   )}
                 </article>
               ))
             ) : (
-              <article className="f9-work-row">
-                <div>
-                  <strong>No API keys yet</strong>
-                  <p>Create one when you are ready to connect an external tool.</p>
-                </div>
-              </article>
+              <EmptyState
+                description="Create one when you are ready to connect an external tool."
+                title="No API keys yet"
+                variant="row"
+              />
             )}
           </div>
         </section>

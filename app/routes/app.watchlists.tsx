@@ -11,10 +11,13 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { CreativeWall } from "~/components/creative-wall";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { WatchlistTrends } from "~/components/watchlist-trends";
 import { CopyButton } from "~/components/copy-button";
+import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
@@ -37,6 +40,7 @@ import {
   formatWhyAlertedLabel,
 } from "~/lib/landing-page-display";
 import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
+import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { formatNextScanLabel } from "~/lib/schedule-display";
@@ -96,6 +100,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchlists,
   } = await import("~/lib/data.server");
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
+  const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
+  const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -134,6 +140,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       plan,
       whatsappAvailable,
       showPresenceNav,
+      creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
+      trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
     };
   }
 
@@ -149,6 +157,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceDeliveryTargetsByChannel,
     recentDeliveryAttemptsByChannel,
     recentProofCaptures,
+    creativeWall,
+    trendDailyActivity,
   ] = await Promise.all([
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
@@ -178,6 +188,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       }),
     )),
     listRecentProofCapturesForWatchlist(env, selectedWatchlist.id, 12),
+    listCreativeWallAds(env, selectedWatchlist.id),
+    listWatchlistDailyActivity(env, selectedWatchlist.id),
   ]);
 
   const workspaceDeliveryConfig =
@@ -220,6 +232,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     plan,
     whatsappAvailable,
     showPresenceNav,
+    creativeWall,
+    trendDailyActivity,
   };
 }
 
@@ -759,13 +773,12 @@ export default function WatchlistsRoute() {
               );
             })}
             {data.watchlists.length === 0 ? (
-              <div className="f9-empty-panel">
-                <h3>Add your first competitor</h3>
-                <p>Paste your website or a competitor website to start tracking visible changes.</p>
-                <Link className="f9-primary-button" to="/search">
-                  Add competitor
-                </Link>
-              </div>
+              <EmptyState
+                action={{ label: "Add competitor", to: "/search" }}
+                description="Paste your website or a competitor website to start tracking visible changes."
+                headingLevel="h3"
+                title="Add your first competitor"
+              />
             ) : null}
           </div>
         </article>
@@ -861,6 +874,12 @@ export default function WatchlistsRoute() {
       {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
               <div className="f9-work-list">
+                <CreativeWall items={data.creativeWall} plan={data.plan} />
+                <WatchlistTrends
+                  dailyActivity={data.trendDailyActivity}
+                  items={data.creativeWall}
+                  plan={data.plan}
+                />
                 <div className="f9-detail-split">
                 <section className="f9-detail-cell">
                   <p className="f9-app-kicker">Watchlist setup</p>
@@ -928,7 +947,8 @@ export default function WatchlistsRoute() {
                   <p className="f9-app-kicker">Tracking status</p>
                   <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
                   <p className="f9-muted-copy">
-                    {formatTrackingStatusSummary(data.discoveryStatus.summary)}
+                    {customerDiscoverySummary(data.discoveryStatus.summary) ??
+                      "Tracking status will appear after the first check."}
                   </p>
                   {data.discoveryStatus.lastErrorCode ? (
                     <p className="f9-muted-copy">
@@ -1342,13 +1362,11 @@ export default function WatchlistsRoute() {
               </div>
             </>
           ) : (
-            <div className="f9-empty-panel">
-              <h2>Add your first competitor</h2>
-              <p>Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes.</p>
-              <Link className="f9-primary-button" to="/search">
-                Add competitor
-              </Link>
-            </div>
+            <EmptyState
+              action={{ label: "Add competitor", to: "/search" }}
+              description="Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes."
+              title="Add your first competitor"
+            />
           )}
         </article>
       </div>
@@ -1588,7 +1606,7 @@ function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
   if (status.status === "disabled") {
     return "Competitor tracking is unavailable";
   }
-  return "Tracking path needs attention";
+  return "Live ad checks are temporarily delayed";
 }
 
 function formatDiscoveryProviderLabel(
@@ -1626,29 +1644,10 @@ function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status"]) {
   return "Needs attention";
 }
 
-function formatTrackingStatusSummary(summary: string | null | undefined) {
-  if (!summary) {
-    return "Tracking status will appear after the first check.";
-  }
-
-  return summary
-    .replace(/Live commercial discovery/gi, "Fresh ad checks")
-    .replace(/commercial discovery/gi, "competitor ad checks")
-    .replace(/Commercial discovery/gi, "Competitor ad checks")
-    .replace(/Browser Run/gi, "visual checks")
-    .replace(/Official Meta API/gi, "alternate Meta ad access")
-    .replace(/API fallback/gi, "alternate Meta ad results")
-    .replace(/workspace Meta access/gi, "alternate Meta ad access")
-    .replace(/fresh discovery/gi, "fresh checks")
-    .replace(/cached live results/gi, "recent results")
-    .replace(/cached results/gi, "recent results")
-    .replace(/demo mode/gi, "sample mode");
-}
-
 function formatDiscoveryIssue(issue: string) {
   const labels: Record<string, string> = {
     browser_unavailable: "The visual ad check is temporarily unavailable.",
-    browser_launch_failed: "The visual ad check could not start.",
+    browser_launch_failed: "The visual ad check is temporarily delayed. We'll retry automatically.",
     timeout: "The ad check took too long.",
     login_wall: "Meta asked for login before showing ads.",
     rate_limited: "Meta is rate limiting checks right now.",

@@ -189,7 +189,7 @@ describe("buildCollectionReport", () => {
       previewImageUrl: "https://cdn.example.com/boat.png",
       languageLabel: "Hinglish",
       creativeText: "60 Hours Playback\nOnly ₹999",
-      translatedText: "Translation unavailable",
+      translatedText: null,
       note: "Strong price framing for launch week.",
       tags: ["audio", "launch"],
       landingPage: {
@@ -228,7 +228,7 @@ describe("buildWatchlistReport", () => {
     expect(report.stats).toEqual([
       { label: "Events", value: "1" },
       { label: "Linked ads", value: "1" },
-      { label: "Event types", value: "ad new" },
+      { label: "Event types", value: "New ad" },
       { label: "Excluded", value: "0" },
     ]);
     expect(report.sourceCoverage).toMatchObject({
@@ -243,7 +243,7 @@ describe("buildWatchlistReport", () => {
     expect(report.rows[0]).toMatchObject({
       advertiser: "boAt",
       event: {
-        typeLabel: "ad new",
+        typeLabel: "New ad",
         title: "New ad detected",
         summary: "A new ad entered Audio competitors.",
         proofStatusLabel: "Verified evidence",
@@ -252,8 +252,75 @@ describe("buildWatchlistReport", () => {
         metaAdId: "meta-boat-1",
       },
       creativeText: "60 Hours Playback\nOnly ₹999",
-      translatedText: "Translation unavailable",
+      translatedText: null,
     });
+  });
+
+  it("emits null for missing fields instead of placeholder prose", () => {
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [
+        {
+          ...watchEvent,
+          adId: "meta-missing",
+          metadata: { sourceStatus: "proof_backed" },
+        },
+      ],
+      adsById: new Map(),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0]).toMatchObject({
+      advertiser: null,
+      previewHeadline: "New ad detected",
+      offer: null,
+      cta: null,
+      languageLabel: null,
+      creativeText: null,
+      translatedText: null,
+      landingPage: {
+        url: null,
+        headline: null,
+        captureLabel: null,
+        capturedAt: null,
+        signals: [],
+      },
+    });
+    expect(JSON.stringify(report)).not.toMatch(/unavailable/i);
+  });
+
+  it("keeps the advertiser fallback from event metadata when the ad is missing", () => {
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [{ ...watchEvent, adId: "meta-missing" }],
+      adsById: new Map(),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect(report.rows[0].advertiser).toBe("boAt");
+  });
+
+  it("omits undetected landing-page signals instead of rendering filler", () => {
+    const sparseAd: AdRecord = {
+      ...baseAd,
+      landingPage: {
+        ...baseAd.landingPage!,
+        ctaText: null,
+        priceText: "₹999",
+        formPresent: null,
+      },
+    };
+
+    const report = buildCollectionReport({
+      collection,
+      items: [{ ...collectionItem, ad: sparseAd }],
+      generatedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect(report.rows[0].landingPage.signals).toEqual([
+      { label: "Price", value: "₹999" },
+    ]);
   });
 
   it("excludes non-client-ready watch events from proof-backed reports", () => {
@@ -293,5 +360,46 @@ describe("buildWatchlistReport", () => {
       included: 1,
       excluded: 3,
     });
+  });
+
+  it("includes the stored AI weekly summary when provided", () => {
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+      aiWeeklySummary: {
+        paragraph:
+          "boAt introduced a new ad and left its landing page untouched, so creative rotation was the only movement this week.",
+        generatedAt: "2026-03-30T05:01:00.000Z",
+        periodEnd: "2026-03-30T05:00:00.000Z",
+      },
+    });
+
+    expect(report.aiWeeklySummary).toEqual({
+      paragraph:
+        "boAt introduced a new ad and left its landing page untouched, so creative rotation was the only movement this week.",
+      generatedAt: "2026-03-30T05:01:00.000Z",
+      periodEnd: "2026-03-30T05:00:00.000Z",
+    });
+  });
+
+  it("omits the AI weekly summary field entirely when none is stored", () => {
+    const withNull = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+      aiWeeklySummary: null,
+    });
+    const withoutKey = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect("aiWeeklySummary" in withNull).toBe(false);
+    expect(withNull).toEqual(withoutKey);
   });
 });

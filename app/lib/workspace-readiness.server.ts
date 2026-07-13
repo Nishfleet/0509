@@ -1,4 +1,5 @@
 import { resolveCommercialAdSourceStatus } from "~/lib/ad-source.server";
+import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import {
   listCustomerApiKeys,
   listAgentMemory,
@@ -277,7 +278,7 @@ export async function getWorkspaceReadiness(
           : sourceStatus.status === "cache_only" || sourceStatus.status === "degraded"
             ? "attention"
             : "needs_setup",
-      detail: sourceStatus.summary,
+      detail: customerDiscoverySummary(sourceStatus.summary) ?? sourceStatus.summary,
       action: sourceStatus.status === "healthy" ? null : { label: "Open source access", href: "/app/source-access" },
     },
     {

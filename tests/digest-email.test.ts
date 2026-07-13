@@ -362,7 +362,76 @@ describe("buildDigestEmail", () => {
     expect(daily.text).not.toContain("Trends this period");
     expect(daily.html).not.toContain("<img");
   });
+
+  it("renders the AI strategy paragraph escaped in html and text when present", () => {
+    const paragraph =
+      'Nykaa & boAt both leaned on <b>"festival"</b> pricing this week, while Mamaearth rotated its hero creative and left offers untouched.';
+    const email = buildDigestEmail({
+      ...strategyEmailInput(),
+      strategyParagraph: paragraph,
+    });
+
+    expect(email.html).toContain("AI summary of the week");
+    expect(email.html).toContain(
+      "Nykaa &amp; boAt both leaned on &lt;b&gt;&quot;festival&quot;&lt;/b&gt; pricing this week",
+    );
+    expect(email.html).not.toContain('<b>"festival"</b>');
+    expect(email.text).toContain("AI summary of the week:");
+    expect(email.text).toContain(paragraph);
+    // Section order: paragraph sits between the date line and the priority box.
+    expect(email.html.indexOf("AI summary of the week")).toBeLessThan(
+      email.html.indexOf("Priority mix:"),
+    );
+  });
+
+  it("is byte-identical without a paragraph — absence stays silent", () => {
+    const withoutKey = buildDigestEmail(strategyEmailInput());
+    const withNull = buildDigestEmail({ ...strategyEmailInput(), strategyParagraph: null });
+    const withBlank = buildDigestEmail({ ...strategyEmailInput(), strategyParagraph: "   " });
+
+    expect(withNull).toEqual(withoutKey);
+    expect(withBlank).toEqual(withoutKey);
+    expect(withNull.html).toBe(withoutKey.html);
+    expect(withNull.text).toBe(withoutKey.text);
+    expect(withoutKey.html).not.toContain("AI summary");
+    expect(withoutKey.text).not.toContain("AI summary");
+    expect(withoutKey.html).not.toContain("unavailable");
+  });
+
+  it("keeps heartbeat digests unaffected by a stray paragraph", () => {
+    const heartbeatInput = {
+      ...strategyEmailInput(),
+      items: [],
+      heartbeat: { runs: 3, watchlistsChecked: 2, adsSeen: 42 },
+    };
+    const plain = buildDigestEmail(heartbeatInput);
+    const withParagraph = buildDigestEmail({
+      ...heartbeatInput,
+      strategyParagraph: "Should never appear in an all-quiet heartbeat.",
+    });
+
+    expect(withParagraph).toEqual(plain);
+    expect(withParagraph.html).not.toContain("AI summary");
+    expect(withParagraph.text).not.toContain("AI summary");
+    expect(withParagraph.html).not.toContain("Should never appear");
+  });
 });
+
+function strategyEmailInput() {
+  return {
+    name: "Owner",
+    periodStart: "2026-06-01T00:00:00.000Z",
+    periodEnd: "2026-06-08T00:00:00.000Z",
+    cadence: "weekly" as const,
+    timeZone: "UTC",
+    fullDigestUrl: "https://0509.io/app/digests",
+    manageFrequencyUrl: "https://0509.io/app/notifications",
+    supportEmail: "support@0509.io",
+    supportMailto: "mailto:support@0509.io",
+    unsubscribeUrl: null,
+    items: [digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed")],
+  };
+}
 
 function digestItem(
   watchlistName: string,

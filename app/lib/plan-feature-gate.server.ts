@@ -33,6 +33,8 @@ export const ROUTE_FEATURE_REQUIREMENTS = [
   { routeId: "app.notifications", action: "save-slack-webhook", feature: "slack_delivery" as PlanFeature },
   { routeId: "app.account", action: "save-report-branding", feature: "agency_branding" as PlanFeature },
   { routeId: "share.$token", feature: "agency_branding" as PlanFeature },
+  { routeId: "share.$token.pdf", feature: "pdf_reports" as PlanFeature },
+  { routeId: "app.reports", action: "download-pdf", feature: "pdf_reports" as PlanFeature },
   { routeId: "app.reports", surface: "preparedBy", feature: "agency_branding" as PlanFeature },
   { routeId: "delivery.server", surface: "deliverWeeklyDigest", feature: "slack_delivery" as PlanFeature },
   { routeId: "delivery.server", surface: "deliverWatchlistAlerts", feature: "high_priority_alerts" as PlanFeature },
@@ -195,4 +197,33 @@ export async function resolveWorkspacePreparedBy(env: AppEnv, workspaceUserId: s
   const { getWorkspaceBranding } = await import("~/lib/data.server");
   const branding = await getWorkspaceBranding(env, workspaceUserId);
   return branding.brandName;
+}
+
+export interface WorkspaceBrandIdentity {
+  brandName: string | null;
+  brandWebsite: string | null;
+  brandLogo: string | null;
+}
+
+/**
+ * Full brand identity for branded shared reports (Agency plan). Sibling of
+ * resolveWorkspacePreparedBy — that function's signature/behavior stays
+ * untouched for its existing consumers; render work adopts this one later.
+ */
+export async function resolveWorkspaceBrandIdentity(
+  env: AppEnv,
+  workspaceUserId: string,
+): Promise<WorkspaceBrandIdentity | null> {
+  const plan = await getUserPlan(env, workspaceUserId);
+  if (!canUsePlanFeature(plan, "agency_branding")) {
+    return null;
+  }
+
+  const { getWorkspaceBranding } = await import("~/lib/data.server");
+  const branding = await getWorkspaceBranding(env, workspaceUserId);
+  return {
+    brandName: branding.brandName,
+    brandWebsite: branding.brandWebsite,
+    brandLogo: branding.brandLogo,
+  };
 }

@@ -4,6 +4,10 @@ import { useState } from "react";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { ActionFeedback } from "~/components/action-feedback";
+import { AccountBrandingForm } from "~/components/account-branding-form";
+import { ConfirmSubmitButton } from "~/components/confirm-button";
+import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import {
@@ -31,14 +35,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlan } = await import("~/lib/plan.server");
   const { getWorkspaceBranding } = await import("~/lib/data.server");
-  const { resolveWorkspacePreparedBy } = await import("~/lib/plan-feature-gate.server");
+  const { resolveWorkspaceBrandIdentity } = await import("~/lib/plan-feature-gate.server");
   const { isE2ETestSessionId } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
 
   const plan = await getUserPlan(env, session.user.id);
-  const brandName = await resolveWorkspacePreparedBy(env, session.user.id);
+  const reportBrandIdentity = await resolveWorkspaceBrandIdentity(env, session.user.id);
   const branding = await getWorkspaceBranding(env, session.user.id);
   const passkeysEnabled = !isE2EFixtureSession && isBetterAuthPasskeyEnabled(env);
   let passkeys: Awaited<ReturnType<typeof listBetterAuthPasskeys>> = [];
@@ -80,7 +84,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     name: session.user.name,
     sessionExpiresAt: session.session.expiresAt,
     plan,
-    brandName,
+    brandName: reportBrandIdentity?.brandName ?? null,
+    brandLogo: reportBrandIdentity?.brandLogo ?? null,
     brandWebsite: branding.brandWebsite,
     passkeys,
     passkeysEnabled,
@@ -113,16 +118,43 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    const result = await upsertWorkspaceBranding(env, session.user.id, {
+    const removeBrandLogo = formData.get("removeBrandLogo") === "true";
+    const brandingInput: { brandName: string; brandLogo?: string | null } = {
       brandName: String(formData.get("brandName") ?? ""),
-    });
+    };
+
+    if (removeBrandLogo) {
+      brandingInput.brandLogo = null;
+    } else {
+      const { parseWorkspaceBrandLogoUpload } = await import(
+        "~/lib/workspace-brand-logo.server"
+      );
+      const logoUpload = await parseWorkspaceBrandLogoUpload(formData.get("brandLogo"));
+      if (!logoUpload.ok) {
+        return {
+          ok: false,
+          intent,
+          error: "invalid_brand_logo" as const,
+          message: logoUpload.message,
+        };
+      }
+      if (logoUpload.brandLogo) {
+        brandingInput.brandLogo = logoUpload.brandLogo;
+      }
+    }
+
+    const result = await upsertWorkspaceBranding(env, session.user.id, brandingInput);
 
     return {
       ok: true,
       intent,
-      message: result.brandName
-        ? `Saved. Shared reports now open with "Prepared by ${result.brandName}".`
-        : "Branding cleared. Shared reports show Five to Nine only.",
+      message: removeBrandLogo
+        ? "Logo removed. Shared reports still use your saved agency name when present."
+        : brandingInput.brandLogo
+          ? "Agency name and logo saved for shared reports."
+          : result.brandName
+            ? `Saved. Shared reports now open with "Prepared by ${result.brandName}".`
+            : "Branding cleared. Shared reports show Five to Nine only.",
     };
   }
 
@@ -286,6 +318,12 @@ export default function AccountRoute() {
     actionData?.intent === "save-brand-profile" ? actionData : null;
   const reportBrandingAction =
     actionData?.intent === "save-report-branding" ? actionData : null;
+  const reportBrandLogoInvalid = Boolean(
+    reportBrandingAction &&
+      !reportBrandingAction.ok &&
+      "error" in reportBrandingAction &&
+      reportBrandingAction.error === "invalid_brand_logo",
+  );
   const sessionAction =
     actionData?.intent === "revoke-session" || actionData?.intent === "revoke-other-sessions"
       ? actionData
@@ -405,9 +443,7 @@ export default function AccountRoute() {
                   ))}
                 </div>
               ) : (
-                <p className="f9-muted-copy">
-                  No passkeys are attached to this account yet.
-                </p>
+                <EmptyState title="No passkeys are attached to this account yet." variant="inline" />
               )}
             </>
           )}
@@ -460,36 +496,24 @@ export default function AccountRoute() {
             <h2>Put your agency name on shared reports</h2>
           </div>
         </div>
-        {reportBrandingAction?.message ? (
-          <div className={`f9-message ${reportBrandingAction.ok ? "is-success" : "is-error"}`}>
-            <p>{reportBrandingAction.message}</p>
-          </div>
-        ) : null}
+        <ActionFeedback
+          data={
+            reportBrandingAction
+              ? {
+                  ok: reportBrandingAction.ok,
+                  intent: reportBrandingAction.intent,
+                  message: reportBrandingAction.message ?? undefined,
+                }
+              : null
+          }
+          intent="save-report-branding"
+        />
         {data.plan === "agency" ? (
-          <Form className="f9-auth-form" method="post">
-            <input name="intent" type="hidden" value="save-report-branding" />
-            <label className="f9-field">
-              <span>Brand name shown to clients</span>
-              <input
-                defaultValue={data.brandName ?? ""}
-                maxLength={60}
-                name="brandName"
-                placeholder="Your agency name"
-                type="text"
-              />
-            </label>
-            <SubmitButton
-              className="f9-secondary-button"
-              intent="save-report-branding"
-              pendingLabel="Saving…"
-            >
-              Save branding
-            </SubmitButton>
-            <p className="f9-muted-copy">
-              Shared report links open with "Prepared by {data.brandName || "your brand"}". Five to
-              Nine stays in the footer. Leave the field empty to clear it.
-            </p>
-          </Form>
+          <AccountBrandingForm
+            brandLogo={data.brandLogo}
+            brandLogoInvalid={reportBrandLogoInvalid}
+            brandName={data.brandName}
+          />
         ) : (
           <p className="f9-muted-copy">
             Branded reports are part of Agency.{" "}
@@ -537,7 +561,16 @@ export default function AccountRoute() {
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-session" />
                     <input name="sessionId" type="hidden" value={session.id} />
-                    <SubmitButton pendingLabel="Revoking…">Revoke</SubmitButton>
+                    <ConfirmSubmitButton
+                      className="f9-secondary-button"
+                      confirmLabel="Confirm — revoke?"
+                      intent="revoke-session"
+                      match={{ sessionId: session.id }}
+                      pendingLabel="Revoking…"
+                      variant="light"
+                    >
+                      Revoke
+                    </ConfirmSubmitButton>
                   </Form>
                 )}
               </div>
@@ -547,14 +580,16 @@ export default function AccountRoute() {
         <div className="f9-account-security-actions">
           <Form method="post">
             <input name="intent" type="hidden" value="revoke-other-sessions" />
-            <SubmitButton
+            <ConfirmSubmitButton
               className="f9-secondary-button"
+              confirmLabel="Confirm — revoke all others?"
               disabled={otherSessionCount === 0}
               intent="revoke-other-sessions"
               pendingLabel="Revoking…"
+              variant="light"
             >
               Revoke other sessions
-            </SubmitButton>
+            </ConfirmSubmitButton>
           </Form>
           <a className="f9-secondary-button" href={SUPPORT_MAILTO}>
             Change email

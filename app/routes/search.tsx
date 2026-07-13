@@ -34,6 +34,7 @@ import {
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
+import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { buildSearchAnswer } from "~/lib/search-answer";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
@@ -1009,22 +1010,12 @@ export function formatDiscoverySummary(result: SearchResponse) {
     return null;
   }
 
-  if (/rate limited/i.test(result.discoverySummary)) {
-    return result.discoverySummary
-      .replace(/Commercial discovery/gi, "Competitor ad checks")
-      .replace(/commercial discovery/gi, "competitor ad checks");
-  }
-
-  if (/degraded and no cached results are available/i.test(result.discoverySummary)) {
-    return "Live search is delayed and no recent results are available.";
-  }
-
   if (result.ads.length > 0 && /no cached results are available/i.test(result.discoverySummary)) {
-    return "Live search is delayed; showing recent results.";
+    return "Live ad checks are temporarily delayed, so we're showing your most recent results. We'll retry automatically.";
   }
 
-  if (/Commercial discovery degraded; serving cached results/i.test(result.discoverySummary)) {
-    return "Live search is delayed; showing recent results.";
+  if (/rate limited|degraded/i.test(result.discoverySummary)) {
+    return customerDiscoverySummary(result.discoverySummary);
   }
 
   if (/API fallback/i.test(result.discoverySummary)) {

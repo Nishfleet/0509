@@ -6,6 +6,7 @@ import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
 import { ReportView } from "~/components/report-view";
+import { ShareBrandIdentity } from "~/components/share-brand-identity";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import type { DigestShareSnapshot } from "~/lib/digest-share";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
@@ -19,9 +20,12 @@ import {
 import { isReportDocument, type ReportDocument } from "~/lib/report";
 import type { ShareResourceType } from "~/lib/types";
 
-export const meta = () => [{ title: "Shared report | Five to Nine" }];
+export const meta = () => [
+  { title: "Shared report | Five to Nine" },
+  { name: "robots", content: "noindex, nofollow" },
+];
 
-export async function loader({ context, params }: LoaderFunctionArgs) {
+export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCollection,
@@ -31,7 +35,7 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     listCollectionItems,
     listWatchEvents,
   } = await import("~/lib/data.server");
-  const { resolveWorkspacePreparedBy } = await import("~/lib/plan-feature-gate.server");
+  const { resolveWorkspaceBrandIdentity } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const token = params.token;
 
@@ -44,7 +48,12 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
-  const preparedBy = await resolveWorkspacePreparedBy(env, share.userId);
+  // ?pdf=1 is the print-clean variant loaded by the server-side PDF renderer.
+  // It exposes only the same public snapshot and entitled identity as the
+  // normal share page.
+  const pdfVariant = new URL(request.url).searchParams.get("pdf") === "1";
+  const brandIdentity = await resolveWorkspaceBrandIdentity(env, share.userId);
+  const preparedBy = brandIdentity?.brandName ?? null;
 
   if (share.isSnapshot) {
     return {
@@ -52,6 +61,9 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       resourceType: share.resourceType,
       payload: sanitizeSnapshotPayload(share.resourceType, share.snapshotPayload),
       preparedBy,
+      brandIdentity,
+      pdfVariant,
+      pdfPath: await resolveShareReportPdfPath(env, share, token),
     };
   }
 
@@ -65,6 +77,9 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       collection,
       items,
       preparedBy,
+      brandIdentity,
+      pdfVariant,
+      pdfPath: null,
     };
   }
 
@@ -80,6 +95,9 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       events: eligibleEvents,
       sourceCoverage,
       preparedBy,
+      brandIdentity,
+      pdfVariant,
+      pdfPath: null,
     };
   }
 
@@ -94,7 +112,31 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     resourceType: "digest" as const,
     digest,
     preparedBy,
+    brandIdentity,
+    pdfVariant,
+    pdfPath: null,
   };
+}
+
+// The viewer only ever learns a boolean (button vs. print fallback) — never
+// the sharer's plan. A failed plan lookup downgrades to the honest print
+// button instead of advertising a download that would 403.
+async function resolveShareReportPdfPath(
+  env: unknown,
+  share: { isSnapshot: boolean; resourceType: ShareResourceType; userId: string },
+  token: string,
+) {
+  if (!share.isSnapshot || share.resourceType !== "report") {
+    return null;
+  }
+
+  try {
+    const { getUserPlan, canUsePlanFeature } = await import("~/lib/plan.server");
+    const plan = await getUserPlan(env as never, share.userId);
+    return canUsePlanFeature(plan, "pdf_reports") ? `/share/${token}/pdf` : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function ShareRoute() {
@@ -104,36 +146,54 @@ export default function ShareRoute() {
     "payload" in data && data.resourceType === "digest" && isDigestSnapshotPayload(data.payload)
       ? data.payload
       : null;
+  const hasAgencyIdentity = Boolean(
+    data.brandIdentity?.brandName || data.brandIdentity?.brandLogo,
+  );
+  const pdfVariant = Boolean("pdfVariant" in data && data.pdfVariant);
+  const pdfPath = "pdfPath" in data && typeof data.pdfPath === "string" ? data.pdfPath : null;
 
   return (
-    <main className="f9-share-page">
+    <main className={`f9-share-page${pdfVariant ? " f9-share-pdf" : ""}`}>
       <div className="f9-container">
-        <div className="f9-share-header">
-          <Link className="f9-app-brand" to="/">
-            <BrandWordmark meta="Shared evidence" />
-          </Link>
-        </div>
-
-        {data.preparedBy ? (
-          <p className="f9-share-prepared-by">
-            Prepared by <strong>{data.preparedBy}</strong>
-          </p>
-        ) : null}
-
+        {pdfVariant ? (
+          <header className="f9-pdf-masthead">
+            {hasAgencyIdentity && data.brandIdentity ? (
+              <ShareBrandIdentity identity={data.brandIdentity} />
+            ) : (
+              <BrandWordmark meta="Shared report" />
+            )}
+          </header>
+        ) : (
+          <div className="f9-share-header">
+            {hasAgencyIdentity && data.brandIdentity ? (
+              <ShareBrandIdentity identity={data.brandIdentity} />
+            ) : (
+              <Link className="f9-app-brand" to="/">
+                <BrandWordmark meta="Shared evidence" />
+              </Link>
+            )}
+          </div>
+        )}
         {reportSnapshot ? (
-          <article className="f9-app-panel f9-report-page">
+          <article className="f9-app-panel f9-report-page" data-report-root>
             <div className="f9-panel-toolbar f9-report-toolbar">
               <div>
                 <p className="f9-app-kicker">Shared report snapshot</p>
-                <h2>{reportSnapshot.title}</h2>
+                <p className="f9-panel-toolbar-heading">{reportSnapshot.title}</p>
               </div>
-              <button
-                className="f9-secondary-button"
-                onClick={() => window.print()}
-                type="button"
-              >
-                Download PDF
-              </button>
+              {pdfVariant ? null : pdfPath ? (
+                <a className="f9-secondary-button" href={pdfPath}>
+                  Download PDF
+                </a>
+              ) : (
+                <button
+                  className="f9-secondary-button"
+                  onClick={() => window.print()}
+                  type="button"
+                >
+                  Print report
+                </button>
+              )}
             </div>
             <ReportView report={reportSnapshot} />
           </article>
@@ -147,13 +207,15 @@ export default function ShareRoute() {
                   <LocalTime iso={digestSnapshot.periodEnd} mode="date" />
                 </h1>
               </div>
-              <button
-                className="f9-secondary-button"
-                onClick={() => window.print()}
-                type="button"
-              >
-                Download PDF
-              </button>
+              {pdfVariant ? null : (
+                <button
+                  className="f9-secondary-button"
+                  onClick={() => window.print()}
+                  type="button"
+                >
+                  Print digest
+                </button>
+              )}
             </div>
             <DigestProofPacket items={digestSnapshot.items} />
             <DigestMovementSummary items={digestSnapshot.items} />
@@ -233,11 +295,17 @@ export default function ShareRoute() {
           </article>
         )}
 
-        <footer className="f9-share-footer">
-          <p>
-            Monitoring and evidence by <Link to="/">Five to Nine</Link>
-          </p>
-        </footer>
+        {pdfVariant ? (
+          <footer className="f9-share-footer f9-pdf-footer">
+            <p className="f9-share-powered-by">Prepared with Five to Nine · 0509.io</p>
+          </footer>
+        ) : (
+          <footer className="f9-share-footer">
+            <p className="f9-share-powered-by">
+              Powered by <Link to="/">Five to Nine</Link>
+            </p>
+          </footer>
+        )}
       </div>
     </main>
   );
@@ -299,6 +367,7 @@ function sanitizeReportSnapshotPayload(payload: Record<string, unknown>): Report
   const rows = Array.isArray(rawPayload.rows) ? rawPayload.rows : [];
   const safeRows = rows.filter(isPlainRecord);
   const sourceCoverage = sanitizeReportSourceCoverage(rawPayload.sourceCoverage);
+  const aiWeeklySummary = sanitizeReportAiWeeklySummary(rawPayload.aiWeeklySummary);
 
   if (resourceType === "watchlist" && (!sourceCoverage || !safeRows.every(hasVerifiedReportRowProof))) {
     return null;
@@ -316,7 +385,28 @@ function sanitizeReportSnapshotPayload(payload: Record<string, unknown>): Report
     stats: stats.filter(isPlainRecord).map(sanitizeReportStat),
     insightDepth: sanitizeReportInsightDepth(payload.insightDepth),
     sourceCoverage,
+    ...(aiWeeklySummary ? { aiWeeklySummary } : {}),
     rows: safeRows.map(sanitizeReportRow),
+  };
+}
+
+function sanitizeReportAiWeeklySummary(
+  value: unknown,
+): ReportDocument["aiWeeklySummary"] | null {
+  if (!isPlainRecord(value)) {
+    return null;
+  }
+
+  const paragraph = readString(value.paragraph);
+  const periodEnd = readString(value.periodEnd);
+  if (!paragraph || !periodEnd) {
+    return null;
+  }
+
+  return {
+    paragraph,
+    generatedAt: value.generatedAt === null ? null : readString(value.generatedAt),
+    periodEnd,
   };
 }
 
@@ -343,15 +433,16 @@ function sanitizeReportStat(stat: Record<string, unknown>): ReportDocument["stat
 function sanitizeReportRow(row: Record<string, unknown>, index: number): ReportDocument["rows"][number] {
   return {
     id: `row-${index + 1}`,
-    advertiser: readString(row.advertiser) ?? "Advertiser",
-    previewHeadline: readString(row.previewHeadline) ?? "",
-    offer: readString(row.offer) ?? "",
-    cta: readString(row.cta) ?? "",
+    // Missing values stay null; the report view omits absent fields.
+    advertiser: readString(row.advertiser),
+    previewHeadline: readString(row.previewHeadline),
+    offer: readString(row.offer),
+    cta: readString(row.cta),
     formatLabel: readString(row.formatLabel) ?? "",
-    languageLabel: readString(row.languageLabel) ?? "",
+    languageLabel: readString(row.languageLabel),
     previewImageUrl: readString(row.previewImageUrl),
-    creativeText: readString(row.creativeText) ?? "",
-    translatedText: readString(row.translatedText) ?? "",
+    creativeText: readString(row.creativeText),
+    translatedText: readString(row.translatedText),
     landingPage: sanitizeReportLandingPage(row.landingPage),
     analysisFields: sanitizeReportFields(row.analysisFields),
     tags: sanitizeReportTags(row.tags),
@@ -364,9 +455,9 @@ function sanitizeReportLandingPage(value: unknown): ReportDocument["rows"][numbe
   const landingPage = isPlainRecord(value) ? value : {};
 
   return {
-    url: readString(landingPage.url) ?? "",
-    headline: readString(landingPage.headline) ?? "",
-    captureLabel: readString(landingPage.captureLabel) ?? "",
+    url: readString(landingPage.url),
+    headline: readString(landingPage.headline),
+    captureLabel: readString(landingPage.captureLabel),
     capturedAt: readString(landingPage.capturedAt),
     signals: sanitizeReportFields(landingPage.signals),
   };

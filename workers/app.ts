@@ -19,6 +19,7 @@ import {
 import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
+import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
 import {
   resolveOperationalRiskAlertIdempotencyKey,
@@ -113,6 +114,11 @@ export default {
   },
   async scheduled(controller, env, ctx) {
     const scheduledTask = resolveScheduledTask(controller.cron);
+
+    // Every cron also drains a bounded customer-email outbox. Keeping this
+    // before the warmup early return ensures a worker that stopped after the
+    // durable pre-dispatch claim cannot strand a finalized billing event.
+    scheduleBillingLifecycleEmailRecovery(env, ctx);
 
     if (controller.cron === WEEKLY_DIGEST_CRON) {
       // Monday morning: the operator gets last week's business numbers

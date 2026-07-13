@@ -13,7 +13,6 @@ import {
   createProofCapture,
   createWatchEvent,
   createWatchlistRun,
-  clearDigestItems,
   countProofCapturesForWatchlistSince,
   countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
@@ -47,8 +46,10 @@ import {
   touchWatchlistScanned,
   upsertProofTarget,
   upsertAd,
-  addDigestItem,
 } from "~/lib/data.server";
+import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
+import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
+import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
@@ -1354,6 +1355,7 @@ async function runDigests(
     since: new Date(
       periodEnd.getTime() - DIGEST_RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString(),
+    stalePreDispatchBefore: deliveryPreDispatchStaleBefore(periodEnd.getTime()),
     limit: DIGEST_RETRY_SWEEP_LIMIT,
   });
 
@@ -1430,11 +1432,21 @@ async function runDigests(
         }
       }
 
+      const existingDigest = await getDigestByPeriod(
+        env,
+        user.id,
+        periodStartIso,
+        periodEndIso,
+      );
+      if (existingDigest?.delivery?.status === "sent") {
+        continue;
+      }
+
       // Zero changes is still a result the customer pays for. If we scanned
       // successfully this period, send an "all quiet" heartbeat instead of
       // going silent — silence is indistinguishable from a dead product.
       let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
-      if (digestItems.length === 0) {
+      if (!existingDigest && digestItems.length === 0) {
         const runStats = await getSuccessfulRunStatsForUserBetween(
           env,
           user.id,
@@ -1448,32 +1460,115 @@ async function runDigests(
         heartbeat = runStats;
       }
 
-      const existingDigest = await getDigestByPeriod(env, user.id, periodStartIso, periodEndIso);
-      if (existingDigest?.delivery?.status === "sent") {
-        continue;
+      // AI weekly strategy paragraph: paid weekly digests with movement only.
+      // Existing runs reuse the stored paragraph verbatim — regenerating would
+      // put nondeterministic content in front of the customer. A null result
+      // changes nothing downstream; absence is always silent.
+      let strategyParagraph: string | null = null;
+      let strategyWatchlistIds: string[] | null = null;
+      if (
+        !existingDigest &&
+        cadence === "weekly" &&
+        digestItems.length > 0 &&
+        (plan === "starter" || plan === "agency")
+      ) {
+        const generatedStrategy = await buildWeeklyStrategyParagraph(env, {
+          items: digestItems,
+          periodStart: periodStartIso,
+          periodEnd: periodEndIso,
+        });
+        strategyParagraph = generatedStrategy?.paragraph ?? null;
+        strategyWatchlistIds = generatedStrategy?.watchlistIds ?? null;
       }
+      const digestSummary: Record<string, unknown> = {
+        totalEvents: digestItems.length,
+        watchlists: watchlists.length,
+        ...(strategyParagraph
+          ? {
+              strategyParagraph,
+              strategyModel: DIGEST_STRATEGY_MODEL,
+              strategyGeneratedAt: new Date().toISOString(),
+              strategyWatchlistIds,
+            }
+          : {}),
+      };
+      const candidateItems = digestItems.map((item) => ({
+        watchlistId: item.watchlistId,
+        watchlistName: item.watchlistName,
+        eventType: item.eventType,
+        title: item.title,
+        summary: item.summary,
+        metadata: item.metadata,
+      }));
 
-      const digestRunId =
-        existingDigest?.id ??
-        (await createDigestRun(env, user.id, periodStartIso, periodEndIso, {
-          totalEvents: digestItems.length,
-          watchlists: watchlists.length,
-        }));
+      let digestRunId: string;
+      let canonicalDigest = existingDigest;
+      if (existingDigest) {
+        digestRunId = existingDigest.id;
+        if (!hasCompleteDigestItemSet(existingDigest)) {
+          // Legacy rows created before digest items were persisted atomically
+          // carry no event IDs or candidate fingerprint. A count match cannot
+          // prove that today's eligible events are the original snapshot, so
+          // never rewrite or deliver an identity-unprovable digest.
+          throw new Error(
+            "Digest run is incomplete and its original candidate identity cannot be proven.",
+          );
+        }
+      } else {
+        const claim = await createDigestRun(
+          env,
+          user.id,
+          periodStartIso,
+          periodEndIso,
+          digestSummary,
+          {
+            returnClaim: true,
+            items: candidateItems,
+          },
+        );
+        digestRunId = claim.digestRunId;
+
+        if (!claim.created) {
+          // Another execution owns both this period's persisted candidate and
+          // its first dispatch. The losing execution must not call providers;
+          // a later retry sweep can safely replay the stored winner if needed.
+          handledDigestRunIds.add(digestRunId);
+          continue;
+        }
+      }
       handledDigestRunIds.add(digestRunId);
 
-      if (existingDigest) {
-        await clearDigestItems(env, digestRunId);
-      }
+      // Creators persist the complete candidate atomically with the period
+      // claim. Every non-creator delivers only the stored winner; it never
+      // clears, re-adds, or substitutes locally recomputed run-owned data.
+      const deliveryItems = canonicalDigest
+        ? canonicalDigest.items.map((item) => ({
+            eventId: item.id,
+            watchlistId: item.watchlistId,
+            watchlistName: item.watchlistName,
+            eventType: item.eventType,
+            title: item.title,
+            summary: item.summary,
+            metadata: item.metadata,
+          }))
+        : digestItems;
+      const deliveryStrategyParagraph = canonicalDigest
+        ? readDigestStrategyNote(canonicalDigest.summary)?.paragraph ?? null
+        : strategyParagraph;
 
-      for (const item of digestItems) {
-        await addDigestItem(env, digestRunId, {
-          watchlistId: item.watchlistId,
-          watchlistName: item.watchlistName,
-          eventType: item.eventType,
-          title: item.title,
-          summary: item.summary,
-          metadata: item.metadata,
-        });
+      if (deliveryItems.length > 0) {
+        heartbeat = null;
+      } else if (!heartbeat) {
+        const runStats = await getSuccessfulRunStatsForUserBetween(
+          env,
+          user.id,
+          periodStartIso,
+          periodEndIso,
+        );
+        if (runStats.runs === 0) {
+          continue;
+        }
+        heartbeat = runStats;
       }
 
       const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
@@ -1485,7 +1580,8 @@ async function runDigests(
         digestRunId,
         periodStart: periodStartIso,
         periodEnd: periodEndIso,
-        items: digestItems,
+        items: deliveryItems,
+        strategyParagraph: deliveryStrategyParagraph,
         cadence,
         lane: "customer",
       });
@@ -1527,30 +1623,30 @@ async function retryFailedDigests(
         continue;
       }
 
-	      const digest = await getDigest(env, candidate.id);
-	      if (!digest) {
-	        continue;
-	      }
-	      let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
-	      if (digest.items.length === 0) {
-	        const runStats = await getSuccessfulRunStatsForUserBetween(
-	          env,
-	          candidate.userId,
-	          candidate.periodStart,
-	          candidate.periodEnd,
-	        );
-	        if (runStats.runs === 0) {
-	          continue;
-	        }
-	        heartbeat = runStats;
-	      }
+      const digest = await getDigest(env, candidate.id);
+      if (!digest || !hasCompleteDigestItemSet(digest)) {
+        continue;
+      }
+      let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
+      if (digest.items.length === 0) {
+        const runStats = await getSuccessfulRunStatsForUserBetween(
+          env,
+          candidate.userId,
+          candidate.periodStart,
+          candidate.periodEnd,
+        );
+        if (runStats.runs === 0) {
+          continue;
+        }
+        heartbeat = runStats;
+      }
 
-	      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-	      const delivery = await deliverWeeklyDigest(env, {
-	        heartbeat,
-	        userId: candidate.userId,
-	        userName: candidate.userName,
-	        accountEmail: candidate.userEmail,
+      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+      const delivery = await deliverWeeklyDigest(env, {
+        heartbeat,
+        userId: candidate.userId,
+        userName: candidate.userName,
+        accountEmail: candidate.userEmail,
         digestRunId: candidate.id,
         periodStart: candidate.periodStart,
         periodEnd: candidate.periodEnd,
@@ -1563,6 +1659,8 @@ async function retryFailedDigests(
           summary: item.summary,
           metadata: item.metadata,
         })),
+        // Retries only ever replay the persisted paragraph — never regenerate.
+        strategyParagraph: readDigestStrategyNote(digest.summary)?.paragraph ?? null,
         cadence,
         lane: "customer",
       });
@@ -1583,6 +1681,21 @@ async function retryFailedDigests(
 function digestCadenceForPeriod(periodStart: string, periodEnd: string): DigestCadence {
   const spanMs = new Date(periodEnd).getTime() - new Date(periodStart).getTime();
   return spanMs <= 36 * 60 * 60 * 1000 ? "daily" : "weekly";
+}
+
+function hasCompleteDigestItemSet(digest: {
+  summary?: Record<string, unknown>;
+  items: readonly unknown[];
+}) {
+  const expectedItemCount = readDigestExpectedItemCount(digest.summary);
+  return expectedItemCount !== null && digest.items.length === expectedItemCount;
+}
+
+function readDigestExpectedItemCount(summary?: Record<string, unknown>) {
+  const expectedItemCount = summary?.totalEvents;
+  return Number.isSafeInteger(expectedItemCount) && Number(expectedItemCount) >= 0
+    ? Number(expectedItemCount)
+    : null;
 }
 
 function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoringOptions) {

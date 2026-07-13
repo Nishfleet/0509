@@ -52,6 +52,10 @@ function jsonValue(value: unknown) {
   return JSON.stringify(value ?? null);
 }
 
+function normalizeSeenAt(value: string | null) {
+  return value && !Number.isNaN(Date.parse(value)) ? value : null;
+}
+
 function findTranslatedAnalysisField(fields: AnalysisFieldInput[]) {
   return fields.find((field) => field.fieldKey === "translated_text" && field.fieldValue.trim()) ?? null;
 }
@@ -150,6 +154,9 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
 
 export async function upsertAd(env: AppEnv, ad: AdRecord) {
   const timestamp = nowIso();
+  const firstSeenAt = normalizeSeenAt(ad.firstSeenAt);
+  const lastSeenAt = normalizeSeenAt(ad.lastSeenAt);
+  const rawJson = jsonValue({ ...ad, firstSeenAt, lastSeenAt });
   await run(
     env,
     `
@@ -199,15 +206,73 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                     ad_snapshot_url = excluded.ad_snapshot_url,
                     countries_json = excluded.countries_json,
                     platforms_json = excluded.platforms_json,
-                    first_seen_at = excluded.first_seen_at,
-                    last_seen_at = excluded.last_seen_at,
+                    first_seen_at = CASE
+                      WHEN excluded.first_seen_at IS NULL
+                        OR julianday(excluded.first_seen_at) IS NULL
+                        THEN CASE
+                          WHEN ad.first_seen_at IS NULL
+                            OR julianday(ad.first_seen_at) IS NULL THEN NULL
+                          ELSE ad.first_seen_at
+                        END
+                      WHEN ad.first_seen_at IS NULL
+                        OR julianday(ad.first_seen_at) IS NULL THEN excluded.first_seen_at
+                      WHEN julianday(excluded.first_seen_at) <= julianday(ad.first_seen_at)
+                        THEN excluded.first_seen_at
+                      ELSE ad.first_seen_at
+                    END,
+                    last_seen_at = CASE
+                      WHEN excluded.last_seen_at IS NULL
+                        OR julianday(excluded.last_seen_at) IS NULL
+                        THEN CASE
+                          WHEN ad.last_seen_at IS NULL
+                            OR julianday(ad.last_seen_at) IS NULL THEN NULL
+                          ELSE ad.last_seen_at
+                        END
+                      WHEN ad.last_seen_at IS NULL
+                        OR julianday(ad.last_seen_at) IS NULL THEN excluded.last_seen_at
+                      WHEN julianday(excluded.last_seen_at) >= julianday(ad.last_seen_at)
+                        THEN excluded.last_seen_at
+                      ELSE ad.last_seen_at
+                    END,
                     is_active = excluded.is_active,
                     source = excluded.source,
                     research_summary = excluded.research_summary,
                     creative_text = excluded.creative_text,
                     creative_text_capture_method = excluded.creative_text_capture_method,
                     creative_text_metadata_json = excluded.creative_text_metadata_json,
-                    raw_json = excluded.raw_json,
+                    raw_json = json_set(
+                      excluded.raw_json,
+                      '$.firstSeenAt',
+                      CASE
+                        WHEN excluded.first_seen_at IS NULL
+                          OR julianday(excluded.first_seen_at) IS NULL
+                          THEN CASE
+                            WHEN ad.first_seen_at IS NULL
+                              OR julianday(ad.first_seen_at) IS NULL THEN NULL
+                            ELSE ad.first_seen_at
+                          END
+                        WHEN ad.first_seen_at IS NULL
+                          OR julianday(ad.first_seen_at) IS NULL THEN excluded.first_seen_at
+                        WHEN julianday(excluded.first_seen_at) <= julianday(ad.first_seen_at)
+                          THEN excluded.first_seen_at
+                        ELSE ad.first_seen_at
+                      END,
+                      '$.lastSeenAt',
+                      CASE
+                        WHEN excluded.last_seen_at IS NULL
+                          OR julianday(excluded.last_seen_at) IS NULL
+                          THEN CASE
+                            WHEN ad.last_seen_at IS NULL
+                              OR julianday(ad.last_seen_at) IS NULL THEN NULL
+                            ELSE ad.last_seen_at
+                          END
+                        WHEN ad.last_seen_at IS NULL
+                          OR julianday(ad.last_seen_at) IS NULL THEN excluded.last_seen_at
+                        WHEN julianday(excluded.last_seen_at) >= julianday(ad.last_seen_at)
+                          THEN excluded.last_seen_at
+                        ELSE ad.last_seen_at
+                      END
+                    ),
                     updated_at = excluded.updated_at
     `,
     ad.metaAdId,
@@ -226,15 +291,15 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
     ad.adSnapshotUrl,
     jsonValue(ad.countries),
     jsonValue(ad.platforms),
-    ad.firstSeenAt,
-    ad.lastSeenAt,
+    firstSeenAt,
+    lastSeenAt,
     ad.active ? 1 : 0,
     ad.source,
     ad.researchSummary,
     ad.creativeText ?? null,
     ad.creativeTextCaptureMethod ?? null,
     jsonValue(ad.creativeTextMetadata ?? null),
-    jsonValue(ad),
+    rawJson,
     timestamp,
     timestamp,
   );

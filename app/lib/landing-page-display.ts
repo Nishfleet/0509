@@ -145,19 +145,10 @@ export function formatMachineTokenLabel(value: string) {
   return phrase ? phrase.charAt(0).toUpperCase() + phrase.slice(1) : value;
 }
 
-const WATCH_EVENT_TYPE_LABELS: Record<string, string> = {
-  ad_new: "New ad",
-  ad_inactive: "Ad stopped",
-  landing_page_url_changed: "Destination changed",
-  landing_page_headline_changed: "Headline changed",
-  landing_page_offer_changed: "Offer changed",
-  landing_page_cta_changed: "CTA changed",
-  landing_page_form_changed: "Form changed",
-};
-
-export function formatWatchEventTypeLabel(eventType: string) {
-  return WATCH_EVENT_TYPE_LABELS[eventType] ?? formatMachineTokenLabel(eventType);
-}
+// Watch event type labels live in ~/lib/watch-event-display — the single
+// canonical vocabulary shared by watchlists, digests, reports, and shares.
+// Re-exported here so display call sites keep one import surface.
+export { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
 
 const WATCH_EVENT_STATUS_LABELS: Record<string, string> = {
   detected: "Detected",

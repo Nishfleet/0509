@@ -62,9 +62,10 @@ function pollSourceRequest(url: string) {
   });
 }
 
-function deleteEntityRequest(url: string) {
+function deleteEntityRequest(url: string, entityId?: string) {
   const formData = new FormData();
   formData.set("intent", "delete-entity");
+  if (entityId) formData.set("entityId", entityId);
   return new Request(url, {
     method: "POST",
     body: formData,
@@ -392,7 +393,12 @@ describe("presence desk routes", () => {
       request: pollSourceRequest("http://localhost/app/presence"),
     } as never);
 
-    expect(result).toEqual({ ok: false, message: "Could not fetch the website." });
+    expect(result).toEqual({
+      ok: false,
+      intent: "poll-source",
+      targetId: "target-1",
+      message: "Could not fetch the website.",
+    });
     expect(pollPresenceSourceTarget).toHaveBeenCalledWith({}, "user-1", "target-1");
   });
 
@@ -412,7 +418,12 @@ describe("presence desk routes", () => {
       request: pollSourceRequest("http://localhost/app/presence"),
     } as never);
 
-    expect(result).toEqual({ ok: true, message: "Checked website: 1 new, 3 updated, 2 removed." });
+    expect(result).toEqual({
+      ok: true,
+      intent: "poll-source",
+      targetId: "target-1",
+      message: "Checked website: 1 new, 3 updated, 2 removed.",
+    });
     expect(pollPresenceSourceTarget).toHaveBeenCalledWith({}, "user-1", "target-1");
   });
 
@@ -438,7 +449,12 @@ describe("presence desk routes", () => {
       request: pollSourceRequest("http://localhost/app/presence/entity-1"),
     } as never);
 
-    expect(result).toEqual({ ok: false, message: "robots.txt disallows crawling the requested path." });
+    expect(result).toEqual({
+      ok: false,
+      intent: "poll-source",
+      targetId: "target-1",
+      message: "robots.txt disallows crawling the requested path.",
+    });
     expect(pollPresenceSourceTarget).toHaveBeenCalledWith({}, "user-1", "target-1");
   });
 
@@ -459,7 +475,12 @@ describe("presence desk routes", () => {
       request: pollSourceRequest("http://localhost/app/presence/entity-1"),
     } as never);
 
-    expect(result).toEqual({ ok: true, message: "Polled: 1 new, 3 updated, 2 removed." });
+    expect(result).toEqual({
+      ok: true,
+      intent: "poll-source",
+      targetId: "target-1",
+      message: "Polled: 1 new, 3 updated, 2 removed.",
+    });
     expect(pollPresenceSourceTarget).toHaveBeenCalledWith({}, "user-1", "target-1");
   });
 
@@ -477,7 +498,47 @@ describe("presence desk routes", () => {
 
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(302);
-    expect((result as Response).headers.get("location")).toBe("/app/presence");
+    expect((result as Response).headers.get("location")).toBe(
+      "/app/presence?notice=entity-deleted",
+    );
     expect(deletePresenceEntity).toHaveBeenCalledWith({}, "user-1", "entity-1");
+  });
+
+  it("restores accessible deletion feedback from the redirect query on the Presence list", async () => {
+    vi.resetModules();
+    const route = await import("~/routes/app.presence");
+
+    expect(
+      route.readPresenceRedirectFeedback(
+        new Request("http://localhost/app/presence?notice=entity-deleted"),
+      ),
+    ).toEqual({ ok: true, message: "Entity deleted." });
+    expect(
+      route.readPresenceRedirectFeedback(new Request("http://localhost/app/presence")),
+    ).toBeNull();
+  });
+
+  it("renders the restored deletion notice in the list page live region", async () => {
+    vi.resetModules();
+    await mockRouter({
+      snapshot: { entities: [], recentItems: [] },
+      plan: "starter",
+      limits: { maxTrackedEntities: 5, maxWebsiteSourcesPerEntity: 3 },
+      access: { rolloutState: "ga", allowed: true },
+      selfAllowed: true,
+      competitorAllowed: true,
+      connectors: [],
+      sourceCoverage: { self: [], competitor: [] },
+      partialDataNotice: null,
+      redirectFeedback: { ok: true, message: "Entity deleted." },
+      userEmail: "owner@example.com",
+    });
+
+    const route = await import("~/routes/app.presence");
+    const markup = renderToStaticMarkup(createElement(route.default));
+    expect(markup).toContain("Entity deleted.");
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup).toContain('aria-atomic="true"');
   });
 });

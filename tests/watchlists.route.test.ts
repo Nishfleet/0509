@@ -1391,6 +1391,8 @@ describe("watchlists route rendering", () => {
           lastAttemptAt: "2026-04-18T09:59:50.000Z",
           lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
         },
+        creativeWall: [],
+        trendDailyActivity: [],
       },
     });
 
@@ -1460,6 +1462,8 @@ describe("watchlists route rendering", () => {
           lastAttemptAt: "2026-04-18T09:59:50.000Z",
           lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
         },
+        creativeWall: [],
+        trendDailyActivity: [],
       },
     });
 
@@ -1470,5 +1474,68 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Recent results");
     expect(markup).not.toContain("Browser Run");
     expect(markup).not.toContain("cached live results");
+  });
+
+  it("uses calm shared customer copy when live ad checks are delayed", async () => {
+    const degradedStatus = {
+      status: "degraded",
+      provider: "meta_library_browser",
+      mode: "live",
+      summary: "Commercial discovery degraded and no cached results are available.",
+      lastCheckedAt: "2026-04-18T10:06:00.000Z",
+      lastErrorCode: "browser_launch_failed",
+      lastErrorMessage: "Browser process exited before startup.",
+    } as const;
+
+    await mockRouter({
+      actionData: undefined,
+      loaderData: {
+        watchlists: [watchlist],
+        selectedWatchlist: watchlist,
+        eventCandidates: recentCandidates,
+        events: recentEvents,
+        runs: recentRuns,
+        workspaceDeliveryConfig,
+        watchlistDeliveryConfig,
+        discoveryStatus: degradedStatus,
+        effectiveDeliveryConfig: {
+          sensitivityMode: "quiet",
+          instantEnabled: true,
+          digestEnabled: true,
+          emailEnabled: true,
+          whatsappEnabled: true,
+          slackEnabled: false,
+          quietHours: {
+            startHour: 22,
+            endHour: 8,
+          },
+          timezone: "Asia/Kolkata",
+        },
+        deliveryTargets,
+        workspaceDeliveryTargets: [],
+        recentDeliveryAttempts,
+        recentProofCaptures,
+        proofSummary: {
+          totalAttempts: 1,
+          successfulAttempts: 1,
+          failedAttempts: 0,
+          skippedAttempts: 0,
+          lastAttemptAt: "2026-04-18T09:59:50.000Z",
+          lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
+        },
+        creativeWall: [],
+        trendDailyActivity: [],
+      },
+    });
+
+    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
+
+    expect(markup).toContain("Live ad checks are temporarily delayed");
+    expect(markup).toContain("results refresh as soon as checks recover");
+    expect(markup).toContain("The visual ad check is temporarily delayed");
+    expect(markup).not.toContain("Tracking path needs attention");
+    expect(markup).not.toContain("The visual ad check could not start");
+    expect(markup).not.toContain("Competitor ad checks degraded");
   });
 });

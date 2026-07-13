@@ -159,6 +159,7 @@ function billingRenderData(overrides: Record<string, unknown> = {}) {
     legacyPlanReturnConfirmed: false,
     blockedCheckout: false,
     pendingCheckout: false,
+    invalidCheckoutTarget: false,
     agencyCheckoutHeld: false,
     planCheckoutUnavailable: false,
     annualCheckoutUnavailable: false,
@@ -220,6 +221,38 @@ function billingRenderData(overrides: Record<string, unknown> = {}) {
 }
 
 describe("billing page", () => {
+  it("maps an invalid checkout redirect to durable billing-page feedback", async () => {
+    mockBillingLoaderDependencies({
+      billing: {
+        plan: "free",
+        dodoStatus: null,
+        dodoProductId: null,
+        dodoPlanChangeProductId: null,
+        billingInterval: null,
+        planUpdatedAt: null,
+      },
+    });
+
+    const { loader } = await import("~/routes/app.billing");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing?checkout=invalid-target"),
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ invalidCheckoutTarget: true });
+  });
+
+  it("renders invalid checkout feedback as an assertive inline error", async () => {
+    mockReactRouterRender(billingRenderData({ invalidCheckoutTarget: true }));
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+    expect(markup).toContain("That checkout option is invalid or no longer available.");
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain('aria-live="assertive"');
+  });
+
   it("loads plan, usage, and billing status for a paying customer", async () => {
     const mocks = mockBillingLoaderDependencies({
       billing: {
@@ -801,7 +834,8 @@ describe("billing page", () => {
     expect(markup).toContain('value="starter_monthly_v1"');
     expect(markup).toContain('name="source"');
     expect(markup).toContain('value="pricing"');
-    expect(markup).toContain("Every plan checkout must validate against Dodo checkout preview");
+    expect(markup).toContain("Prices are shown in your local currency automatically");
+    expect(markup).not.toContain("Every plan checkout must validate");
   });
 
   it("keeps plan checkout disabled while a pending Dodo checkout exists", async () => {
@@ -1326,7 +1360,7 @@ describe("billing page", () => {
     expect(markup).toContain("never expire");
   });
 
-  it("presents the hosted billing portal as card and invoice support with cancellation fallback", async () => {
+  it("presents the hosted billing portal with confident cancellation guidance", async () => {
     mockReactRouterRender({
       email: "owner@example.com",
       billing: {
@@ -1352,12 +1386,79 @@ describe("billing page", () => {
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
-    expect(markup).toContain("Open Dodo");
+    expect(markup).toContain("Open billing portal");
     expect(markup).toContain("card and invoice tasks");
-    expect(markup).toContain("use support for cancellation");
+    expect(markup).toContain("Cancel anytime — email");
+    expect(markup).toContain("support@0509.io");
+    expect(markup).toContain("confirm your cancellation request");
+    expect(markup).not.toContain("confirm the same day");
+    expect(markup).not.toContain("Cancel anytime from the billing portal");
+    expect(markup).not.toContain("until portal cancellation is fully available");
     expect(markup).toContain("Use the plan cards above to switch plans");
     expect(markup).toContain("/app/support?category=billing");
     expect(markup).not.toContain("cancel — self-serve");
     expect(markup).not.toContain("100% customer satisfaction");
+  });
+
+  it("gives pre-preview loading placeholders accessible status text", async () => {
+    mockReactRouterRender({
+      ...billingRenderData(),
+      pricingPreview: undefined,
+    });
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain('class="f9-sr-only">Loading price</span>');
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup).toContain('aria-atomic="true"');
+    expect(markup).not.toContain('aria-label="Loading price"');
+  });
+
+  it("treats missing SKUs as terminal when only part of the provider preview resolves", async () => {
+    mockReactRouterRender(billingRenderData({
+      pricingPreview: {
+        available: true,
+        prices: {
+          scout: {
+            monthly: { display: "$19" },
+          },
+        },
+        usageBundles: {
+          proof_500: { display: "$25" },
+        },
+      },
+    }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("$19");
+    expect(markup).toContain("$25");
+    expect(markup.match(/Price unavailable/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(markup).not.toContain("f9-skeleton-price");
+    expect(markup).not.toContain("Loading price");
+    expect(markup).not.toContain('aria-busy="true"');
+  });
+
+  it("shows a terminal pricing error instead of permanent loading placeholders", async () => {
+    mockReactRouterRender(billingRenderData({
+      pricingPreview: {
+        available: false,
+        prices: {},
+        annualValidation: {},
+        usageBundles: {},
+      },
+    }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup.match(/Prices are temporarily unavailable — try again shortly/g)).toHaveLength(1);
+    expect(markup).toContain("Price unavailable");
+    expect(markup).not.toContain("f9-skeleton-price");
+    expect(markup).not.toContain("Loading price");
+    expect(markup).not.toContain('aria-busy="true"');
   });
 });

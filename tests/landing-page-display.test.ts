@@ -139,8 +139,9 @@ describe("machine token labels", () => {
     } = await import("~/lib/landing-page-display");
 
     expect(formatWatchEventTypeLabel("ad_new")).toBe("New ad");
+    expect(formatWatchEventTypeLabel("ad_inactive")).toBe("Ad stopped");
     expect(formatWatchEventTypeLabel("landing_page_offer_changed")).toBe("Offer changed");
-    expect(formatWatchEventTypeLabel("landing_page_url_changed")).toBe("Destination changed");
+    expect(formatWatchEventTypeLabel("landing_page_url_changed")).toBe("Landing page changed");
     expect(formatWatchEventTypeLabel("future_event_kind")).toBe("Future event kind");
 
     expect(formatWatchEventStatusLabel("proof_pending")).toBe("Evidence pending");
@@ -154,5 +155,17 @@ describe("machine token labels", () => {
     expect(formatProofCaptureStatusLabel("odd_capture_state")).toBe("Odd capture state");
 
     expect(formatMachineTokenLabel("rate_limited")).toBe("Rate limited");
+  });
+
+  it("resolves to the same canonical vocabulary as watch-event-display", async () => {
+    const display = await import("~/lib/landing-page-display");
+    const canonical = await import("~/lib/watch-event-display");
+    const { WATCH_EVENT_TYPES } = await import("~/lib/types");
+
+    for (const eventType of WATCH_EVENT_TYPES) {
+      expect(display.formatWatchEventTypeLabel(eventType)).toBe(
+        canonical.formatWatchEventTypeLabel(eventType),
+      );
+    }
   });
 });
