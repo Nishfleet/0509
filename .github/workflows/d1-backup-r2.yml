@@ -22,7 +22,7 @@ jobs:
       D1_DATABASE_NAME: "0509"
       R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.0
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
