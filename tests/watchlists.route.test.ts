@@ -1391,6 +1391,8 @@ describe("watchlists route rendering", () => {
           lastAttemptAt: "2026-04-18T09:59:50.000Z",
           lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
         },
+        creativeWall: [],
+        trendDailyActivity: [],
       },
     });
 
@@ -1460,6 +1462,8 @@ describe("watchlists route rendering", () => {
           lastAttemptAt: "2026-04-18T09:59:50.000Z",
           lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
         },
+        creativeWall: [],
+        trendDailyActivity: [],
       },
     });
 

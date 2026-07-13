@@ -663,10 +663,70 @@ describe("searchMetaLibraryByBrowser", () => {
           adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1280520150312258",
           landingPageUrl: "https://nykaaman.com/",
           active: true,
+          // Meta's published "Started running on" line becomes firstSeenAt…
+          firstSeenAt: "2025-07-14",
           source: "meta_library_browser",
         }),
       ],
     });
+    // …while staying excluded from the ad body as UI noise.
+    expect(result.ads[0].body).not.toMatch(/started running/i);
+  });
+
+  it("keeps firstSeenAt null when the started-running line is unparseable", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: `
+                  <html>
+                    <body>
+                      <main>
+                        Active
+                        Library ID: 1280520150312259
+                        Started running on soon
+                        See ad details
+                        Nykaa Man
+                        Sponsored
+                        For the Man Who Never Settles For Less
+                        NYKAAMAN.COM
+                        Shop Now
+                      </main>
+                    </body>
+                  </html>
+                `,
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      ) as never,
+    );
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+      },
+      buildQuery(),
+    );
+
+    expect(result.ads).toEqual([
+      expect.objectContaining({
+        metaAdId: "1280520150312259",
+        // honest null: an unreadable date is never guessed
+        firstSeenAt: null,
+      }),
+    ]);
+    expect(result.ads[0].body).not.toMatch(/started running/i);
   });
 
   it("fails fast when Browser Run reports no new browser acquisitions are allowed", async () => {

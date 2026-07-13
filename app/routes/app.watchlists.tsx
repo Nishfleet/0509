@@ -11,9 +11,11 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { CreativeWall } from "~/components/creative-wall";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { WatchlistTrends } from "~/components/watchlist-trends";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
@@ -98,6 +100,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchlists,
   } = await import("~/lib/data.server");
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
+  const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
+  const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -136,6 +140,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       plan,
       whatsappAvailable,
       showPresenceNav,
+      creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
+      trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
     };
   }
 
@@ -151,6 +157,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceDeliveryTargetsByChannel,
     recentDeliveryAttemptsByChannel,
     recentProofCaptures,
+    creativeWall,
+    trendDailyActivity,
   ] = await Promise.all([
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
@@ -180,6 +188,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       }),
     )),
     listRecentProofCapturesForWatchlist(env, selectedWatchlist.id, 12),
+    listCreativeWallAds(env, selectedWatchlist.id),
+    listWatchlistDailyActivity(env, selectedWatchlist.id),
   ]);
 
   const workspaceDeliveryConfig =
@@ -222,6 +232,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     plan,
     whatsappAvailable,
     showPresenceNav,
+    creativeWall,
+    trendDailyActivity,
   };
 }
 
@@ -862,6 +874,12 @@ export default function WatchlistsRoute() {
       {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
               <div className="f9-work-list">
+                <CreativeWall items={data.creativeWall} plan={data.plan} />
+                <WatchlistTrends
+                  dailyActivity={data.trendDailyActivity}
+                  items={data.creativeWall}
+                  plan={data.plan}
+                />
                 <div className="f9-detail-split">
                 <section className="f9-detail-cell">
                   <p className="f9-app-kicker">Watchlist setup</p>

@@ -9,6 +9,11 @@ interface AdLookupRow {
   raw_json: string;
 }
 
+interface AdSeenWindowRow {
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -50,6 +55,46 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
 
 function jsonValue(value: unknown) {
   return JSON.stringify(value ?? null);
+}
+
+function parseSeenTimestamp(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+// Seen-window ratchet: first_seen_at only ever moves earlier and last_seen_at
+// only ever moves later. A later scan that could not read a date (null) must
+// never clobber a real one already on record.
+function earliestSeenAt(incoming: string | null, stored: string | null): string | null {
+  const incomingTime = parseSeenTimestamp(incoming);
+  const storedTime = parseSeenTimestamp(stored);
+
+  if (incomingTime === null) {
+    return storedTime === null ? null : stored;
+  }
+  if (storedTime === null) {
+    return incoming;
+  }
+
+  return incomingTime <= storedTime ? incoming : stored;
+}
+
+function latestSeenAt(incoming: string | null, stored: string | null): string | null {
+  const incomingTime = parseSeenTimestamp(incoming);
+  const storedTime = parseSeenTimestamp(stored);
+
+  if (incomingTime === null) {
+    return storedTime === null ? null : stored;
+  }
+  if (storedTime === null) {
+    return incoming;
+  }
+
+  return incomingTime >= storedTime ? incoming : stored;
 }
 
 function findTranslatedAnalysisField(fields: AnalysisFieldInput[]) {
@@ -150,6 +195,20 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
 
 export async function upsertAd(env: AppEnv, ad: AdRecord) {
   const timestamp = nowIso();
+  // Hydration reads ONLY raw_json, so ratcheted dates must land in the
+  // serialized AdRecord too — writing the SQL columns alone would let stale
+  // raw_json dates resurface on every read.
+  const storedWindows = await many<AdSeenWindowRow>(
+    env,
+    "SELECT first_seen_at, last_seen_at FROM ad WHERE id = ?",
+    ad.metaAdId,
+  );
+  const storedWindow = storedWindows[0] ?? null;
+  const persistedAd: AdRecord = {
+    ...ad,
+    firstSeenAt: earliestSeenAt(ad.firstSeenAt, storedWindow?.first_seen_at ?? null),
+    lastSeenAt: latestSeenAt(ad.lastSeenAt, storedWindow?.last_seen_at ?? null),
+  };
   await run(
     env,
     `
@@ -210,31 +269,31 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                     raw_json = excluded.raw_json,
                     updated_at = excluded.updated_at
     `,
-    ad.metaAdId,
-    ad.advertiser,
-    ad.body,
-    ad.bodySecondary ?? null,
-    ad.previewHeadline,
-    ad.previewSubhead,
-    ad.hook,
-    ad.offer,
-    ad.cta,
-    ad.format,
-    ad.languageLabel,
-    ad.destinationType,
-    ad.landingPageUrl,
-    ad.adSnapshotUrl,
-    jsonValue(ad.countries),
-    jsonValue(ad.platforms),
-    ad.firstSeenAt,
-    ad.lastSeenAt,
-    ad.active ? 1 : 0,
-    ad.source,
-    ad.researchSummary,
-    ad.creativeText ?? null,
-    ad.creativeTextCaptureMethod ?? null,
-    jsonValue(ad.creativeTextMetadata ?? null),
-    jsonValue(ad),
+    persistedAd.metaAdId,
+    persistedAd.advertiser,
+    persistedAd.body,
+    persistedAd.bodySecondary ?? null,
+    persistedAd.previewHeadline,
+    persistedAd.previewSubhead,
+    persistedAd.hook,
+    persistedAd.offer,
+    persistedAd.cta,
+    persistedAd.format,
+    persistedAd.languageLabel,
+    persistedAd.destinationType,
+    persistedAd.landingPageUrl,
+    persistedAd.adSnapshotUrl,
+    jsonValue(persistedAd.countries),
+    jsonValue(persistedAd.platforms),
+    persistedAd.firstSeenAt,
+    persistedAd.lastSeenAt,
+    persistedAd.active ? 1 : 0,
+    persistedAd.source,
+    persistedAd.researchSummary,
+    persistedAd.creativeText ?? null,
+    persistedAd.creativeTextCaptureMethod ?? null,
+    jsonValue(persistedAd.creativeTextMetadata ?? null),
+    jsonValue(persistedAd),
     timestamp,
     timestamp,
   );
@@ -242,10 +301,10 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
   await replaceAnalysisFields(
     env,
     "ad",
-    ad.metaAdId,
-    ad.analysisFields.length > 0
-      ? ad.analysisFields
-      : buildAnalysisFields(ad, mapAdSourceToAnalysisSource(ad.source)),
+    persistedAd.metaAdId,
+    persistedAd.analysisFields.length > 0
+      ? persistedAd.analysisFields
+      : buildAnalysisFields(persistedAd, mapAdSourceToAnalysisSource(persistedAd.source)),
   );
 }
 
