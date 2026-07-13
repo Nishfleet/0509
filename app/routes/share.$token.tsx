@@ -25,7 +25,7 @@ export const meta = () => [
   { name: "robots", content: "noindex, nofollow" },
 ];
 
-export async function loader({ context, params }: LoaderFunctionArgs) {
+export async function loader({ context, params, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCollection,
@@ -48,6 +48,10 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
+  // ?pdf=1 is the print-clean variant loaded by the server-side PDF renderer.
+  // It exposes only the same public snapshot and entitled identity as the
+  // normal share page.
+  const pdfVariant = new URL(request.url).searchParams.get("pdf") === "1";
   const brandIdentity = await resolveWorkspaceBrandIdentity(env, share.userId);
   const preparedBy = brandIdentity?.brandName ?? null;
 
@@ -58,6 +62,8 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       payload: sanitizeSnapshotPayload(share.resourceType, share.snapshotPayload),
       preparedBy,
       brandIdentity,
+      pdfVariant,
+      pdfPath: await resolveShareReportPdfPath(env, share, token),
     };
   }
 
@@ -72,6 +78,8 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       items,
       preparedBy,
       brandIdentity,
+      pdfVariant,
+      pdfPath: null,
     };
   }
 
@@ -88,6 +96,8 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
       sourceCoverage,
       preparedBy,
       brandIdentity,
+      pdfVariant,
+      pdfPath: null,
     };
   }
 
@@ -103,7 +113,30 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
     digest,
     preparedBy,
     brandIdentity,
+    pdfVariant,
+    pdfPath: null,
   };
+}
+
+// The viewer only ever learns a boolean (button vs. print fallback) — never
+// the sharer's plan. A failed plan lookup downgrades to the honest print
+// button instead of advertising a download that would 403.
+async function resolveShareReportPdfPath(
+  env: unknown,
+  share: { isSnapshot: boolean; resourceType: ShareResourceType; userId: string },
+  token: string,
+) {
+  if (!share.isSnapshot || share.resourceType !== "report") {
+    return null;
+  }
+
+  try {
+    const { getUserPlan, canUsePlanFeature } = await import("~/lib/plan.server");
+    const plan = await getUserPlan(env as never, share.userId);
+    return canUsePlanFeature(plan, "pdf_reports") ? `/share/${token}/pdf` : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function ShareRoute() {
@@ -116,34 +149,51 @@ export default function ShareRoute() {
   const hasAgencyIdentity = Boolean(
     data.brandIdentity?.brandName || data.brandIdentity?.brandLogo,
   );
+  const pdfVariant = Boolean("pdfVariant" in data && data.pdfVariant);
+  const pdfPath = "pdfPath" in data && typeof data.pdfPath === "string" ? data.pdfPath : null;
 
   return (
-    <main className="f9-share-page">
+    <main className={`f9-share-page${pdfVariant ? " f9-share-pdf" : ""}`}>
       <div className="f9-container">
-        <div className="f9-share-header">
-          {hasAgencyIdentity && data.brandIdentity ? (
-            <ShareBrandIdentity identity={data.brandIdentity} />
-          ) : (
-            <Link className="f9-app-brand" to="/">
-              <BrandWordmark meta="Shared evidence" />
-            </Link>
-          )}
-        </div>
-
+        {pdfVariant ? (
+          <header className="f9-pdf-masthead">
+            {hasAgencyIdentity && data.brandIdentity ? (
+              <ShareBrandIdentity identity={data.brandIdentity} />
+            ) : (
+              <BrandWordmark meta="Shared report" />
+            )}
+          </header>
+        ) : (
+          <div className="f9-share-header">
+            {hasAgencyIdentity && data.brandIdentity ? (
+              <ShareBrandIdentity identity={data.brandIdentity} />
+            ) : (
+              <Link className="f9-app-brand" to="/">
+                <BrandWordmark meta="Shared evidence" />
+              </Link>
+            )}
+          </div>
+        )}
         {reportSnapshot ? (
-          <article className="f9-app-panel f9-report-page">
+          <article className="f9-app-panel f9-report-page" data-report-root>
             <div className="f9-panel-toolbar f9-report-toolbar">
               <div>
                 <p className="f9-app-kicker">Shared report snapshot</p>
                 <h2>{reportSnapshot.title}</h2>
               </div>
-              <button
-                className="f9-secondary-button"
-                onClick={() => window.print()}
-                type="button"
-              >
-                Download PDF
-              </button>
+              {pdfVariant ? null : pdfPath ? (
+                <a className="f9-secondary-button" href={pdfPath}>
+                  Download PDF
+                </a>
+              ) : (
+                <button
+                  className="f9-secondary-button"
+                  onClick={() => window.print()}
+                  type="button"
+                >
+                  Print report
+                </button>
+              )}
             </div>
             <ReportView report={reportSnapshot} />
           </article>
@@ -157,13 +207,15 @@ export default function ShareRoute() {
                   <LocalTime iso={digestSnapshot.periodEnd} mode="date" />
                 </h1>
               </div>
-              <button
-                className="f9-secondary-button"
-                onClick={() => window.print()}
-                type="button"
-              >
-                Download PDF
-              </button>
+              {pdfVariant ? null : (
+                <button
+                  className="f9-secondary-button"
+                  onClick={() => window.print()}
+                  type="button"
+                >
+                  Print digest
+                </button>
+              )}
             </div>
             <DigestProofPacket items={digestSnapshot.items} />
             <DigestMovementSummary items={digestSnapshot.items} />
@@ -243,11 +295,17 @@ export default function ShareRoute() {
           </article>
         )}
 
-        <footer className="f9-share-footer">
-          <p className="f9-share-powered-by">
-            Powered by <Link to="/">Five to Nine</Link>
-          </p>
-        </footer>
+        {pdfVariant ? (
+          <footer className="f9-share-footer f9-pdf-footer">
+            <p className="f9-share-powered-by">Prepared with Five to Nine · 0509.io</p>
+          </footer>
+        ) : (
+          <footer className="f9-share-footer">
+            <p className="f9-share-powered-by">
+              Powered by <Link to="/">Five to Nine</Link>
+            </p>
+          </footer>
+        )}
       </div>
     </main>
   );

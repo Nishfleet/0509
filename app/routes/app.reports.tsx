@@ -1,6 +1,7 @@
 import {
   Form,
   Link,
+  redirect,
   useActionData,
   useLoaderData,
 } from "react-router";
@@ -38,6 +39,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
     throw reportGate.response;
   }
   const preparedBy = await resolveWorkspacePreparedBy(env, workspaceUserId);
+  const pdfGate = await requireWorkspacePlanFeature(env, workspaceUserId, "pdf_reports");
 
   return {
     report: await loadReport({
@@ -46,13 +48,19 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
       reportId: params.id,
     }),
     preparedBy,
+    pdfAvailable: pdfGate.ok,
   };
 }
+
+// Reuse a snapshot share minted moments ago (double clicks, quick re-downloads)
+// so PDF exports don't pile up share links; anything older gets a fresh
+// snapshot so the PDF always reflects the current report.
+const PDF_SNAPSHOT_REUSE_WINDOW_MS = 10 * 60 * 1000;
 
 export async function action({ context, params, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { createShareLink } = await import("~/lib/data.server");
+  const { createShareLink, listActiveShareLinks } = await import("~/lib/data.server");
   const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
@@ -87,6 +95,43 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
     };
   }
 
+  if (intent === "download-pdf") {
+    const pdfGate = await requireWorkspacePlanFeature(env, workspaceUserId, "pdf_reports");
+    if (!pdfGate.ok) {
+      throw pdfGate.response;
+    }
+    const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
+    if (!shareGate.ok) {
+      throw shareGate.response;
+    }
+
+    const recentSnapshot = (await listActiveShareLinks(env, workspaceUserId, 50)).find(
+      (link) =>
+        link.isSnapshot &&
+        link.resourceType === "report" &&
+        link.resourceId === report.reportId &&
+        Date.now() - new Date(link.createdAt).getTime() < PDF_SNAPSHOT_REUSE_WINDOW_MS,
+    );
+    const token =
+      recentSnapshot?.token ??
+      (
+        await createShareLink(
+          env,
+          { ...session, user: { ...session.user, id: workspaceUserId } },
+          {
+            resourceType: "report",
+            resourceId: report.reportId,
+            isSnapshot: true,
+            snapshotPayload: sanitizeReportShareSnapshot(report) as unknown as Record<string, unknown>,
+          },
+        )
+      ).token;
+
+    // 303 forces a GET; with a full-document form post the browser follows
+    // it into the attachment download and stays on the report page.
+    throw redirect(`/share/${token}/pdf`, 303);
+  }
+
   return {
     ok: false,
     message: "Unknown report action.",
@@ -102,7 +147,7 @@ function sanitizeReportShareSnapshot<T extends { reportId: string; resourceId: s
 }
 
 export default function ReportsRoute() {
-  const { report, preparedBy } = useLoaderData<typeof loader>();
+  const { report, preparedBy, pdfAvailable } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const shareUrl =
     actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
@@ -146,13 +191,25 @@ export default function ReportsRoute() {
                 Share snapshot
               </SubmitButton>
             </Form>
-            <button
-              className="f9-primary-button"
-              onClick={() => window.print()}
-              type="button"
-            >
-              Download PDF
-            </button>
+            {pdfAvailable ? (
+              // reloadDocument: a browser-native POST follows the 303 into
+              // the attachment download without routing PDF bytes through
+              // the SPA navigation.
+              <Form method="post" reloadDocument>
+                <input name="intent" type="hidden" value="download-pdf" />
+                <SubmitButton className="f9-primary-button" intent="download-pdf" pendingLabel="Preparing…">
+                  Download PDF
+                </SubmitButton>
+              </Form>
+            ) : (
+              <button
+                className="f9-primary-button"
+                onClick={() => window.print()}
+                type="button"
+              >
+                Print report
+              </button>
+            )}
           </div>
         </div>
 

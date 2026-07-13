@@ -3864,6 +3864,105 @@ button[aria-busy="true"] {
   }
 }
 
+/* P2: report PDF variant (2026-07-13)
+   /share/:token?pdf=1 — the print-clean page the server-side PDF renderer
+   (Browser Rendering + CDP printToPDF) loads for /share/:token/pdf. Agency
+   branding headlines the masthead; Five to Nine demotes to the footer
+   credit. Keep it chrome-free and page-break friendly. */
+
+.f9-share-pdf {
+  background: #fff;
+  padding-bottom: 32px;
+}
+
+.f9-share-pdf .f9-container {
+  max-width: 780px;
+}
+
+.f9-pdf-masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 26px 0 14px;
+  border-bottom: 2px solid var(--f9-search-ink, #061629);
+  margin-bottom: 20px;
+}
+
+.f9-pdf-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.f9-pdf-brand-name {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--f9-search-ink, #061629);
+}
+
+.f9-pdf-brand-site {
+  margin: 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+  color: var(--f9-search-soft, #64788d);
+}
+
+/* No interactive chrome may survive into the printed document. */
+.f9-share-pdf button,
+.f9-share-pdf .f9-primary-button,
+.f9-share-pdf .f9-secondary-button {
+  display: none !important;
+}
+
+.f9-share-pdf .f9-app-panel {
+  border: 0;
+  box-shadow: none;
+  background: #fff;
+  padding: 0;
+}
+
+.f9-share-pdf .report-card,
+.f9-share-pdf .report-stat-card,
+.f9-share-pdf .report-signal-card,
+.f9-share-pdf .report-event,
+.f9-share-pdf .f9-proof-packet {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.f9-share-pdf .report-hero {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.f9-pdf-footer {
+  margin-top: 26px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(6, 22, 41, 0.12);
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+  color: var(--f9-search-soft, #64788d);
+}
+
+@media print {
+  /* The masthead and footer credit must survive the shared chrome-hiding
+     print rules above — they ARE the document header/footer. */
+  .f9-share-pdf .f9-pdf-masthead {
+    display: flex;
+  }
+
+  .f9-share-pdf .f9-pdf-footer {
+    display: block;
+  }
+
+  .f9-share-pdf .f9-container {
+    max-width: none;
+  }
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,

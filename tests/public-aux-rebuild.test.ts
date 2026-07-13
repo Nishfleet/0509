@@ -22,7 +22,11 @@ const auxClasses = Array.from(publicAuxSurface.matchAll(/className=(?:"([^"]+)"|
 describe("public auxiliary rebuild", () => {
   it("uses the fresh auxiliary page frames", () => {
     expect(publicAuxSurface).toContain('className="f9-legal-page"');
-    expect(publicAuxSurface).toContain('className="f9-share-page"');
+    // The share page frame gained a PDF-variant modifier (P2, 2026-07-13),
+    // so accept the plain literal or a template literal rooted in the frame.
+    expect(publicAuxSurface).toMatch(
+      /className=(?:"f9-share-page"|\{`f9-share-page[^`]*`\})/,
+    );
     expect(publicAuxSurface).toContain('className="f9-error-page"');
     expect(auxClasses).not.toEqual(
       expect.arrayContaining([

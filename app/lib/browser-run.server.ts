@@ -227,7 +227,7 @@ export async function captureBrowserRunSnapshot(
   }
 }
 
-async function installPublicBrowserRequestGuard(page: BrowserRunPage) {
+export async function installPublicBrowserRequestGuard(page: BrowserRunPage) {
   await page.setRequestInterception(true);
   page.on("request", (request: BrowserRequestLike) => {
     void handleGuardedBrowserRequest(request);
