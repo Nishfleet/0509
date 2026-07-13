@@ -24,14 +24,35 @@ import {
   deleteCollectionItem,
 } from "~/lib/data/collections.server";
 import {
+  findAgentActionAuditByIdempotencyKey,
+  listRecentAgentActionAudits,
+  createAgentActionAudit,
+  claimAgentActionAudit,
+  finishAgentActionAudit,
+  closeCounterMoveFollowUp,
+  upsertAgentMemory,
+  listAgentMemory,
+  listAgentMemoryForClientRooms,
+  getClientRoom,
+  upsertClientRoom,
+  listClientRooms,
+  listCustomerApiKeys,
+  insertCustomerApiKey,
+  getActiveCustomerApiKeyByHash,
+  recordCustomerApiKeyUsed,
+  revokeCustomerApiKey,
+  getCustomerMetaConnection,
+  upsertCustomerMetaConnection,
+  updateCustomerMetaConnectionStatus,
+  deleteCustomerMetaConnection,
+} from "~/lib/data/customer-api.server";
+import {
   ensureDb,
   execute as run,
   queryAll as many,
-  queryIn,
   queryOne as one,
 } from "~/lib/data/d1.server";
 import {
-  boolToInt,
   createId,
   jsonValue,
   nowIso,
@@ -54,15 +75,7 @@ import { normalizeSupportCaseInput, SupportCaseInputError } from "~/lib/support"
 import { SUPPORT_CASE_EVENT_TYPES } from "~/lib/types";
 import type {
   AdDiscoveryProvider,
-  AgentActionAuditRecord,
-  AgentActionAuditStatus,
-  AgentMemoryRecord,
-  AgentMemoryScope,
   AppSession,
-  ClientRoomRecord,
-  ClientRoomResourceRef,
-  CustomerMetaConnectionRecord,
-  CustomerApiKeyRecord,
   DeliveryAttemptStatus,
   DeliveryChannel,
   DiscoveryCacheStatus,
@@ -83,7 +96,6 @@ import type {
   WebhookReconciliationStatus,
 } from "~/lib/types";
 
-
 interface SavedQueryRow {
   id: string;
   user_id: string;
@@ -96,58 +108,6 @@ interface SavedQueryRow {
   last_run_at: string | null;
   created_at: string;
   updated_at: string;
-}
-
-
-interface AgentActionAuditRow {
-  id: string;
-  user_id: string;
-  api_key_id: string | null;
-  action_name: string;
-  resource_type: string | null;
-  resource_id: string | null;
-  idempotency_key: string | null;
-  status: AgentActionAuditStatus;
-  result_json: string | null;
-  error_code: string | null;
-  error_message: string | null;
-  metadata_json: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface AgentMemoryRow {
-  id: string;
-  user_id: string;
-  scope: AgentMemoryScope;
-  memory_key: string;
-  watchlist_id: string | null;
-  client_room_id: string | null;
-  value_json: string;
-  source: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface ClientRoomRow {
-  id: string;
-  user_id: string;
-  name: string;
-  client_label: string | null;
-  status: ClientRoomRecord["status"];
-  notes_json: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface ClientRoomResourceRow {
-  id: string;
-  room_id: string;
-  user_id: string;
-  resource_type: ClientRoomResourceRef["resourceType"];
-  resource_id: string;
-  label: string | null;
-  created_at: string;
 }
 
 interface SupportCaseRow {
@@ -202,34 +162,6 @@ interface MetaLogRow {
   error_message: string | null;
   created_at: string;
 }
-
-interface CustomerMetaConnectionRow {
-  user_id: string;
-  encrypted_access_token: string;
-  token_last_four: string;
-  token_fingerprint: string;
-  status: CustomerMetaConnectionRecord["status"];
-  summary: string;
-  last_checked_at: string | null;
-  last_error_code: string | null;
-  last_error_message: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface CustomerApiKeyRow {
-  id: string;
-  user_id: string;
-  name: string;
-  key_prefix: string;
-  key_hash: string;
-  actions_write_enabled: number;
-  last_used_at: string | null;
-  revoked_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 
 export { nowIso, createId } from "~/lib/data/helpers.server";
 export {
@@ -298,7 +230,6 @@ export {
   upsertWatchlistDeliveryConfig,
   type ObservationRow,
 } from "~/lib/data/watchlists.server";
-
 
 export {
   grantProofUsageCredit,
@@ -381,648 +312,29 @@ export {
   deleteCollectionItem,
 };
 
-export async function findAgentActionAuditByIdempotencyKey(
-  env: AppEnv,
-  userId: string,
-  idempotencyKey: string,
-) {
-  const row = await one<AgentActionAuditRow>(
-    env,
-    `
-      SELECT *
-      FROM agent_action_audit
-      WHERE user_id = ?
-        AND idempotency_key = ?
-      LIMIT 1
-    `,
-    userId,
-    idempotencyKey,
-  );
-
-  return row ? toAgentActionAuditRecord(row) : null;
-}
-
-export async function listRecentAgentActionAudits(
-  env: AppEnv,
-  userId: string,
-  options: {
-    actionName?: string | null;
-    status?: AgentActionAuditStatus | null;
-    resourceType?: string | null;
-    limit?: number;
-    offset?: number;
-  } = {},
-) {
-  const actionName = options.actionName ?? null;
-  const status = options.status ?? null;
-  const resourceType = options.resourceType ?? null;
-  const limit = Math.max(1, Math.min(50, Math.floor(options.limit ?? 10)));
-  const offset = Math.max(0, Math.floor(options.offset ?? 0));
-
-  const rows = await many<AgentActionAuditRow>(
-    env,
-    `
-      SELECT *
-      FROM agent_action_audit
-      WHERE user_id = ?
-        AND (? IS NULL OR action_name = ?)
-        AND (? IS NULL OR status = ?)
-        AND (? IS NULL OR resource_type = ?)
-      ORDER BY updated_at DESC
-      LIMIT ? OFFSET ?
-    `,
-    userId,
-    actionName,
-    actionName,
-    status,
-    status,
-    resourceType,
-    resourceType,
-    limit,
-    offset,
-  );
-
-  return rows.map(toAgentActionAuditRecord);
-}
-
-export async function createAgentActionAudit(
-  env: AppEnv,
-  input: {
-    userId: string;
-    apiKeyId?: string | null;
-    actionName: string;
-    resourceType?: string | null;
-    resourceId?: string | null;
-    idempotencyKey?: string | null;
-    status?: AgentActionAuditStatus;
-    result?: JsonRecord | null;
-    errorCode?: string | null;
-    errorMessage?: string | null;
-    metadata?: JsonRecord | null;
-  },
-) {
-  const id = createId();
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO agent_action_audit (
-        id,
-        user_id,
-        api_key_id,
-        action_name,
-        resource_type,
-        resource_id,
-        idempotency_key,
-        status,
-        result_json,
-        error_code,
-        error_message,
-        metadata_json,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    id,
-    input.userId,
-    input.apiKeyId ?? null,
-    input.actionName,
-    input.resourceType ?? null,
-    input.resourceId ?? null,
-    input.idempotencyKey ?? null,
-    input.status ?? "started",
-    input.result ? jsonValue(input.result) : null,
-    input.errorCode ?? null,
-    input.errorMessage ?? null,
-    jsonValue(input.metadata ?? {}),
-    timestamp,
-    timestamp,
-  );
-
-  const row = await one<AgentActionAuditRow>(env, "SELECT * FROM agent_action_audit WHERE id = ?", id);
-  return row ? toAgentActionAuditRecord(row) : null;
-}
-
-export async function claimAgentActionAudit(
-  env: AppEnv,
-  input: {
-    userId: string;
-    apiKeyId?: string | null;
-    actionName: string;
-    resourceType?: string | null;
-    resourceId?: string | null;
-    idempotencyKey?: string | null;
-    metadata?: JsonRecord | null;
-  },
-) {
-  const id = createId();
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT OR IGNORE INTO agent_action_audit (
-        id,
-        user_id,
-        api_key_id,
-        action_name,
-        resource_type,
-        resource_id,
-        idempotency_key,
-        status,
-        result_json,
-        error_code,
-        error_message,
-        metadata_json,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'started', NULL, NULL, NULL, ?, ?, ?)
-    `,
-    id,
-    input.userId,
-    input.apiKeyId ?? null,
-    input.actionName,
-    input.resourceType ?? null,
-    input.resourceId ?? null,
-    input.idempotencyKey ?? null,
-    jsonValue(input.metadata ?? {}),
-    timestamp,
-    timestamp,
-  );
-
-  const claimed = await one<AgentActionAuditRow>(
-    env,
-    "SELECT * FROM agent_action_audit WHERE id = ?",
-    id,
-  );
-  if (claimed) {
-    return {
-      audit: toAgentActionAuditRecord(claimed),
-      claimed: true,
-    };
-  }
-
-  const existing = input.idempotencyKey
-    ? await findAgentActionAuditByIdempotencyKey(env, input.userId, input.idempotencyKey)
-    : null;
-  return existing
-    ? { audit: existing, claimed: false }
-    : null;
-}
-
-export async function finishAgentActionAudit(
-  env: AppEnv,
-  auditId: string,
-  input: {
-    status: Exclude<AgentActionAuditStatus, "started">;
-    resourceType?: string | null;
-    resourceId?: string | null;
-    result?: JsonRecord | null;
-    errorCode?: string | null;
-    errorMessage?: string | null;
-    metadata?: JsonRecord | null;
-  },
-) {
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      UPDATE agent_action_audit
-      SET status = ?,
-          resource_type = COALESCE(?, resource_type),
-          resource_id = COALESCE(?, resource_id),
-          result_json = ?,
-          error_code = ?,
-          error_message = ?,
-          metadata_json = ?,
-          updated_at = ?
-      WHERE id = ?
-    `,
-    input.status,
-    input.resourceType ?? null,
-    input.resourceId ?? null,
-    input.result ? jsonValue(input.result) : null,
-    input.errorCode ?? null,
-    input.errorMessage ?? null,
-    jsonValue(input.metadata ?? {}),
-    timestamp,
-    auditId,
-  );
-
-  const row = await one<AgentActionAuditRow>(env, "SELECT * FROM agent_action_audit WHERE id = ?", auditId);
-  return row ? toAgentActionAuditRecord(row) : null;
-}
-
-export async function upsertAgentMemory(
-  env: AppEnv,
-  userId: string,
-  input: {
-    scope: AgentMemoryScope;
-    key: string;
-    watchlistId?: string | null;
-    clientRoomId?: string | null;
-    value: JsonRecord;
-    source?: string | null;
-  },
-) {
-  const id = createId();
-  const timestamp = nowIso();
-  const key = input.key.trim();
-  const watchlistId = input.watchlistId?.trim() || null;
-  const clientRoomId = input.clientRoomId?.trim() || null;
-  if (watchlistId && clientRoomId) {
-    throw new Error("Agent memory can be scoped to either a watchlist or a client room, not both.");
-  }
-
-  const existing = await findAgentMemoryRow(env, userId, {
-    scope: input.scope,
-    key,
-    watchlistId,
-    clientRoomId,
-  });
-
-  if (existing) {
-    await run(
-      env,
-      `
-        UPDATE agent_memory
-        SET value_json = ?,
-            source = ?,
-            updated_at = ?
-        WHERE id = ?
-      `,
-      jsonValue(input.value),
-      input.source ?? null,
-      timestamp,
-      existing.id,
-    );
-
-    const row = await one<AgentMemoryRow>(env, "SELECT * FROM agent_memory WHERE id = ?", existing.id);
-    return row ? toAgentMemoryRecord(row) : null;
-  }
-
-  await run(
-    env,
-    `
-      INSERT OR IGNORE INTO agent_memory (
-        id,
-        user_id,
-        scope,
-        memory_key,
-        watchlist_id,
-        client_room_id,
-        value_json,
-        source,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    id,
-    userId,
-    input.scope,
-    key,
-    watchlistId,
-    clientRoomId,
-    jsonValue(input.value),
-    input.source ?? null,
-    timestamp,
-    timestamp,
-  );
-
-  const row = await findAgentMemoryRow(env, userId, {
-    scope: input.scope,
-    key,
-    watchlistId,
-    clientRoomId,
-  });
-
-  if (row && row.id !== id) {
-    await run(
-      env,
-      `
-        UPDATE agent_memory
-        SET value_json = ?,
-            source = ?,
-            updated_at = ?
-        WHERE id = ?
-      `,
-      jsonValue(input.value),
-      input.source ?? null,
-      timestamp,
-      row.id,
-    );
-    const updated = await one<AgentMemoryRow>(env, "SELECT * FROM agent_memory WHERE id = ?", row.id);
-    return updated ? toAgentMemoryRecord(updated) : null;
-  }
-
-  return row ? toAgentMemoryRecord(row) : null;
-}
-
-async function findAgentMemoryRow(
-  env: AppEnv,
-  userId: string,
-  input: {
-    scope: AgentMemoryScope;
-    key: string;
-    watchlistId: string | null;
-    clientRoomId: string | null;
-  },
-) {
-  return one<AgentMemoryRow>(
-    env,
-    `
-      SELECT *
-      FROM agent_memory
-      WHERE user_id = ?
-        AND scope = ?
-        AND memory_key = ?
-        AND watchlist_id IS ?
-        AND client_room_id IS ?
-      LIMIT 1
-    `,
-    userId,
-    input.scope,
-    input.key,
-    input.watchlistId,
-    input.clientRoomId,
-  );
-}
-
-export async function listAgentMemory(
-  env: AppEnv,
-  userId: string,
-  options: {
-    scope?: AgentMemoryScope | null;
-    watchlistId?: string | null;
-    clientRoomId?: string | null;
-    limit?: number | null;
-  } = {},
-) {
-  const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 50)));
-  const clauses = ["user_id = ?"];
-  const bindings: unknown[] = [userId];
-
-  if (options.scope) {
-    clauses.push("scope = ?");
-    bindings.push(options.scope);
-  }
-  if (typeof options.watchlistId !== "undefined") {
-    clauses.push(options.watchlistId ? "watchlist_id = ?" : "watchlist_id IS NULL");
-    if (options.watchlistId) {
-      bindings.push(options.watchlistId);
-    }
-  }
-  if (typeof options.clientRoomId !== "undefined") {
-    clauses.push(options.clientRoomId ? "client_room_id = ?" : "client_room_id IS NULL");
-    if (options.clientRoomId) {
-      bindings.push(options.clientRoomId);
-    }
-  }
-
-  const rows = await many<AgentMemoryRow>(
-    env,
-    `
-      SELECT *
-      FROM agent_memory
-      WHERE ${clauses.join(" AND ")}
-      ORDER BY updated_at DESC
-      LIMIT ?
-    `,
-    ...bindings,
-    limit,
-  );
-
-  return rows.map(toAgentMemoryRecord);
-}
-
-export async function listAgentMemoryForClientRooms(
-  env: AppEnv,
-  userId: string,
-  roomIds: string[],
-  options: {
-    limitPerRoom?: number | null;
-  } = {},
-) {
-  const uniqueRoomIds = Array.from(new Set(roomIds.filter(Boolean)));
-  if (uniqueRoomIds.length === 0) {
-    return [];
-  }
-
-  const limitPerRoom = Math.max(1, Math.min(100, Math.floor(options.limitPerRoom ?? 20)));
-  const rows = await queryIn<AgentMemoryRow>(env, {
-    buildSql: (placeholders) => `
-      SELECT *
-      FROM (
-        SELECT
-          agent_memory.*,
-          ROW_NUMBER() OVER (
-            PARTITION BY client_room_id
-            ORDER BY updated_at DESC
-          ) AS room_rank
-        FROM agent_memory
-        WHERE user_id = ?
-          AND watchlist_id IS NULL
-          AND client_room_id IN (${placeholders})
-      )
-      WHERE room_rank <= ?
-      ORDER BY updated_at DESC
-    `,
-    values: uniqueRoomIds,
-    prefix: [userId],
-    suffix: [limitPerRoom],
-    chunkSize: 80,
-  });
-
-  return rows.map(toAgentMemoryRecord);
-}
-
-export async function getClientRoom(env: AppEnv, userId: string, roomId: string) {
-  const row = await one<ClientRoomRow>(
-    env,
-    `
-      SELECT *
-      FROM client_room
-      WHERE id = ?
-        AND user_id = ?
-      LIMIT 1
-    `,
-    roomId,
-    userId,
-  );
-
-  return row ? toClientRoomRecord(row, await listClientRoomResourceRefs(env, userId, row.id)) : null;
-}
-
-export async function upsertClientRoom(
-  env: AppEnv,
-  userId: string,
-  input: {
-    roomId?: string | null;
-    name: string;
-    clientLabel?: string | null;
-    status?: ClientRoomRecord["status"] | null;
-    resourceRefs?: ClientRoomResourceRef[] | null;
-    notes?: JsonRecord | null;
-  },
-) {
-  const timestamp = nowIso();
-  const name = input.name.trim();
-  const status = input.status ?? "active";
-  const clientLabel = input.clientLabel?.trim() || null;
-  const hasResourceRefs = Array.isArray(input.resourceRefs);
-  const hasNotes = Object.prototype.hasOwnProperty.call(input, "notes");
-  const notesJson = hasNotes ? jsonValue(input.notes ?? {}) : null;
-
-  if (input.roomId) {
-    const conflictingRoom = await one<ClientRoomRow>(
-      env,
-      `
-        SELECT *
-        FROM client_room
-        WHERE user_id = ?
-          AND name = ?
-          AND id <> ?
-        LIMIT 1
-      `,
-      userId,
-      name,
-      input.roomId,
-    );
-    if (conflictingRoom) {
-      return null;
-    }
-
-    await run(
-      env,
-      `
-        UPDATE client_room
-        SET name = ?,
-            client_label = ?,
-            status = ?,
-            notes_json = CASE WHEN ? = 1 THEN ? ELSE notes_json END,
-            updated_at = ?
-        WHERE id = ?
-          AND user_id = ?
-      `,
-      name,
-      clientLabel,
-      status,
-      hasNotes ? 1 : 0,
-      notesJson,
-      timestamp,
-      input.roomId,
-      userId,
-    );
-
-    const updatedRoom = await getClientRoom(env, userId, input.roomId);
-    if (!updatedRoom) {
-      return null;
-    }
-
-    if (hasResourceRefs) {
-      await replaceClientRoomResourceRefs(env, userId, input.roomId, input.resourceRefs ?? []);
-      return getClientRoom(env, userId, input.roomId);
-    }
-
-    return updatedRoom;
-  }
-
-  const id = createId();
-  await run(
-    env,
-    `
-      INSERT INTO client_room (
-        id,
-        user_id,
-        name,
-        client_label,
-        status,
-        notes_json,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, name)
-      DO UPDATE SET client_label = excluded.client_label,
-                    status = excluded.status,
-                    notes_json = CASE WHEN ? = 1 THEN excluded.notes_json ELSE client_room.notes_json END,
-                    updated_at = excluded.updated_at
-    `,
-    id,
-    userId,
-    name,
-    clientLabel,
-    status,
-    notesJson ?? jsonValue({}),
-    timestamp,
-    timestamp,
-    hasNotes ? 1 : 0,
-  );
-
-  const row = await one<ClientRoomRow>(
-    env,
-    `
-      SELECT *
-      FROM client_room
-      WHERE user_id = ?
-        AND name = ?
-      LIMIT 1
-    `,
-    userId,
-    name,
-  );
-
-  if (row && hasResourceRefs) {
-    await replaceClientRoomResourceRefs(env, userId, row.id, input.resourceRefs ?? []);
-  }
-
-  return row ? toClientRoomRecord(row, await listClientRoomResourceRefs(env, userId, row.id)) : null;
-}
-
-export async function listClientRooms(
-  env: AppEnv,
-  userId: string,
-  options: {
-    status?: ClientRoomRecord["status"] | "all" | null;
-    limit?: number | null;
-  } = {},
-) {
-  const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 50)));
-  const status = options.status ?? "active";
-  const rows = status === "all"
-    ? await many<ClientRoomRow>(
-      env,
-      `
-        SELECT *
-        FROM client_room
-        WHERE user_id = ?
-        ORDER BY updated_at DESC
-        LIMIT ?
-      `,
-      userId,
-      limit,
-    )
-    : await many<ClientRoomRow>(
-      env,
-      `
-        SELECT *
-        FROM client_room
-        WHERE user_id = ?
-          AND status = ?
-        ORDER BY updated_at DESC
-        LIMIT ?
-      `,
-      userId,
-      status,
-      limit,
-    );
-
-  return Promise.all(
-    rows.map(async (row) => toClientRoomRecord(row, await listClientRoomResourceRefs(env, userId, row.id))),
-  );
-}
+export {
+  findAgentActionAuditByIdempotencyKey,
+  listRecentAgentActionAudits,
+  createAgentActionAudit,
+  claimAgentActionAudit,
+  finishAgentActionAudit,
+  closeCounterMoveFollowUp,
+  upsertAgentMemory,
+  listAgentMemory,
+  listAgentMemoryForClientRooms,
+  getClientRoom,
+  upsertClientRoom,
+  listClientRooms,
+  listCustomerApiKeys,
+  insertCustomerApiKey,
+  getActiveCustomerApiKeyByHash,
+  recordCustomerApiKeyUsed,
+  revokeCustomerApiKey,
+  getCustomerMetaConnection,
+  upsertCustomerMetaConnection,
+  updateCustomerMetaConnectionStatus,
+  deleteCustomerMetaConnection,
+};
 
 export async function createSupportCase(
   env: AppEnv,
@@ -1508,71 +820,6 @@ function supportCaseOpenedEventMetadata(context: JsonRecord): JsonRecord {
   return metadata;
 }
 
-async function replaceClientRoomResourceRefs(
-  env: AppEnv,
-  userId: string,
-  roomId: string,
-  refs: ClientRoomResourceRef[],
-) {
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      DELETE FROM client_room_resource
-      WHERE room_id = ?
-        AND user_id = ?
-    `,
-    roomId,
-    userId,
-  );
-
-  for (const ref of refs) {
-    await run(
-      env,
-      `
-        INSERT INTO client_room_resource (
-          id,
-          room_id,
-          user_id,
-          resource_type,
-          resource_id,
-          label,
-          created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      createId(),
-      roomId,
-      userId,
-      ref.resourceType,
-      ref.resourceId,
-      ref.label?.trim() || null,
-      timestamp,
-    );
-  }
-}
-
-async function listClientRoomResourceRefs(env: AppEnv, userId: string, roomId: string) {
-  const rows = await many<ClientRoomResourceRow>(
-    env,
-    `
-      SELECT *
-      FROM client_room_resource
-      WHERE room_id = ?
-        AND user_id = ?
-      ORDER BY created_at ASC
-    `,
-    roomId,
-    userId,
-  );
-
-  return rows.map((row) => ({
-    resourceType: row.resource_type,
-    resourceId: row.resource_id,
-    ...(row.label ? { label: row.label } : {}),
-  }));
-}
-
 function toSavedQueryRecord(row: SavedQueryRow): SavedQueryRecord {
   return {
     id: row.id,
@@ -1588,7 +835,6 @@ function toSavedQueryRecord(row: SavedQueryRow): SavedQueryRecord {
     updatedAt: row.updated_at,
   };
 }
-
 
 export async function getOldestUserId(env: AppEnv) {
   const row = await one<{ id: string }>(
@@ -1606,7 +852,6 @@ export async function getUserIdByEmail(env: AppEnv, email: string) {
   );
   return row?.id ?? null;
 }
-
 
 export async function completeUserOnboarding(env: AppEnv, userId: string) {
   await run(
@@ -1709,94 +954,6 @@ export async function touchSavedQueryRun(env: AppEnv, savedQueryId: string) {
     savedQueryId,
   );
 }
-
-
-export async function closeCounterMoveFollowUp(
-  env: AppEnv,
-  input: {
-    auditId: string;
-    userId: string;
-    eventId: string;
-  },
-) {
-  const audit = await one<AgentActionAuditRow>(
-    env,
-    `
-      SELECT *
-      FROM agent_action_audit
-      WHERE id = ?
-        AND user_id = ?
-        AND action_name = 'counter_move_brief.create'
-        AND status = 'succeeded'
-    `,
-    input.auditId,
-    input.userId,
-  );
-  if (!audit) {
-    return { ok: false as const, reason: "not_found" as const };
-  }
-
-  const result = parseJson<Record<string, unknown>>(audit.result_json, {});
-  const brief =
-    result.brief && typeof result.brief === "object" && !Array.isArray(result.brief)
-      ? (result.brief as Record<string, unknown>)
-      : {};
-  const workflow =
-    brief.workflow && typeof brief.workflow === "object" && !Array.isArray(brief.workflow)
-      ? (brief.workflow as Record<string, unknown>)
-      : {};
-  const followUps = Array.isArray(workflow.followUps) ? workflow.followUps : [];
-  let matched = false;
-  const nextFollowUps = followUps.map((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      return entry;
-    }
-    const followUp = entry as Record<string, unknown>;
-    if (followUp.eventId !== input.eventId || followUp.status === "closed") {
-      return followUp;
-    }
-    matched = true;
-    return {
-      ...followUp,
-      status: "closed",
-    };
-  });
-
-  if (!matched) {
-    return { ok: false as const, reason: "follow_up_not_found" as const };
-  }
-
-  const openCount = nextFollowUps.filter(
-    (entry) =>
-      entry &&
-      typeof entry === "object" &&
-      !Array.isArray(entry) &&
-      (entry as Record<string, unknown>).status !== "closed",
-  ).length;
-
-  const nextWorkflow = {
-    ...workflow,
-    followUps: nextFollowUps,
-    openCount,
-    status: openCount > 0 ? workflow.status ?? "needs_review" : "quiet",
-  };
-  const nextBrief = {
-    ...brief,
-    workflow: nextWorkflow,
-  };
-  const nextResult = {
-    ...result,
-    brief: nextBrief,
-  };
-
-  const updated = await finishAgentActionAudit(env, audit.id, {
-    status: "succeeded",
-    result: nextResult,
-  });
-
-  return updated ? { ok: true as const, audit: updated } : { ok: false as const, reason: "update_failed" as const };
-}
-
 
 export interface OperatorRiskSummary {
   troubleWatchlists: Array<{
@@ -2047,7 +1204,6 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
     stuckRuns: Number(stuckRow?.count ?? 0),
   };
 }
-
 
 export async function getOperatorSnapshot(env: AppEnv) {
   const stuckThresholdIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
@@ -2595,86 +1751,6 @@ function toShareLinkRecord(row: ShareLinkRow): ShareLinkRecord {
   } satisfies ShareLinkRecord;
 }
 
-function toCustomerMetaConnectionRecord(
-  row: CustomerMetaConnectionRow,
-): CustomerMetaConnectionRecord {
-  return {
-    userId: row.user_id,
-    encryptedAccessToken: row.encrypted_access_token,
-    tokenLastFour: row.token_last_four,
-    tokenFingerprint: row.token_fingerprint,
-    status: row.status,
-    summary: row.summary,
-    lastCheckedAt: row.last_checked_at,
-    lastErrorCode: row.last_error_code,
-    lastErrorMessage: row.last_error_message,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function toCustomerApiKeyRecord(row: CustomerApiKeyRow): CustomerApiKeyRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    name: row.name,
-    keyPrefix: row.key_prefix,
-    actionsWriteEnabled: row.actions_write_enabled === 1,
-    lastUsedAt: row.last_used_at,
-    revokedAt: row.revoked_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function toAgentActionAuditRecord(row: AgentActionAuditRow): AgentActionAuditRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    apiKeyId: row.api_key_id ?? null,
-    actionName: row.action_name,
-    resourceType: row.resource_type ?? null,
-    resourceId: row.resource_id ?? null,
-    idempotencyKey: row.idempotency_key ?? null,
-    status: row.status,
-    result: parseJson<Record<string, unknown> | null>(row.result_json, null),
-    errorCode: row.error_code ?? null,
-    errorMessage: row.error_message ?? null,
-    metadata: parseJson<Record<string, unknown>>(row.metadata_json, {}),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function toAgentMemoryRecord(row: AgentMemoryRow): AgentMemoryRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    scope: row.scope,
-    key: row.memory_key,
-    watchlistId: row.watchlist_id ?? null,
-    clientRoomId: row.client_room_id ?? null,
-    value: parseJson<Record<string, unknown>>(row.value_json, {}),
-    source: row.source ?? null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function toClientRoomRecord(row: ClientRoomRow, resourceRefs: ClientRoomResourceRef[] = []): ClientRoomRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    name: row.name,
-    clientLabel: row.client_label ?? null,
-    status: row.status,
-    resourceRefs,
-    notes: parseJson<Record<string, unknown>>(row.notes_json, {}),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
 function toSupportCaseRecord(row: SupportCaseRow): SupportCaseRecord {
   return {
     id: row.id,
@@ -2702,248 +1778,6 @@ function toSupportCaseEventRecord(row: SupportCaseEventRow): SupportCaseEventRec
     metadata: parseJson<Record<string, unknown>>(row.metadata_json, {}),
     createdAt: row.created_at,
   };
-}
-
-export async function listCustomerApiKeys(env: AppEnv, userId: string) {
-  const rows = await many<CustomerApiKeyRow>(
-    env,
-    `
-      SELECT *
-      FROM customer_api_key
-      WHERE user_id = ?
-      ORDER BY revoked_at ASC, created_at DESC
-    `,
-    userId,
-  );
-
-  return rows.map(toCustomerApiKeyRecord);
-}
-
-export async function insertCustomerApiKey(
-  env: AppEnv,
-  input: {
-    userId: string;
-    name: string;
-    keyPrefix: string;
-    keyHash: string;
-    actionsWriteEnabled?: boolean;
-  },
-) {
-  const id = createId();
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO customer_api_key (
-        id,
-        user_id,
-        name,
-        key_prefix,
-        key_hash,
-        actions_write_enabled,
-        last_used_at,
-        revoked_at,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
-    `,
-    id,
-    input.userId,
-    input.name,
-    input.keyPrefix,
-    input.keyHash,
-    boolToInt(Boolean(input.actionsWriteEnabled)),
-    timestamp,
-    timestamp,
-  );
-
-  const row = await one<CustomerApiKeyRow>(
-    env,
-    "SELECT * FROM customer_api_key WHERE id = ?",
-    id,
-  );
-
-  if (!row) {
-    throw new Error("Created API key could not be loaded.");
-  }
-
-  return toCustomerApiKeyRecord(row);
-}
-
-export async function getActiveCustomerApiKeyByHash(env: AppEnv, keyHash: string) {
-  const row = await one<CustomerApiKeyRow>(
-    env,
-    `
-      SELECT *
-      FROM customer_api_key
-      WHERE key_hash = ?
-        AND revoked_at IS NULL
-      LIMIT 1
-    `,
-    keyHash,
-  );
-
-  return row ? toCustomerApiKeyRecord(row) : null;
-}
-
-export async function recordCustomerApiKeyUsed(env: AppEnv, apiKeyId: string) {
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      UPDATE customer_api_key
-      SET last_used_at = ?,
-          updated_at = ?
-      WHERE id = ?
-        AND revoked_at IS NULL
-    `,
-    timestamp,
-    timestamp,
-    apiKeyId,
-  );
-}
-
-export async function revokeCustomerApiKey(
-  env: AppEnv,
-  input: {
-    userId: string;
-    apiKeyId: string;
-  },
-) {
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      UPDATE customer_api_key
-      SET revoked_at = ?,
-          updated_at = ?
-      WHERE id = ?
-        AND user_id = ?
-        AND revoked_at IS NULL
-    `,
-    timestamp,
-    timestamp,
-    input.apiKeyId,
-    input.userId,
-  );
-}
-
-export async function getCustomerMetaConnection(env: AppEnv, userId: string) {
-  const row = await one<CustomerMetaConnectionRow>(
-    env,
-    `
-      SELECT *
-      FROM customer_meta_connection
-      WHERE user_id = ?
-      LIMIT 1
-    `,
-    userId,
-  );
-
-  return row ? toCustomerMetaConnectionRecord(row) : null;
-}
-
-export async function upsertCustomerMetaConnection(
-  env: AppEnv,
-  input: {
-    userId: string;
-    encryptedAccessToken: string;
-    tokenLastFour: string;
-    tokenFingerprint: string;
-    status: CustomerMetaConnectionRecord["status"];
-    summary: string;
-    lastCheckedAt?: string | null;
-    lastErrorCode?: string | null;
-    lastErrorMessage?: string | null;
-  },
-) {
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      INSERT INTO customer_meta_connection (
-        user_id,
-        encrypted_access_token,
-        token_last_four,
-        token_fingerprint,
-        status,
-        summary,
-        last_checked_at,
-        last_error_code,
-        last_error_message,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id)
-      DO UPDATE SET encrypted_access_token = excluded.encrypted_access_token,
-                    token_last_four = excluded.token_last_four,
-                    token_fingerprint = excluded.token_fingerprint,
-                    status = excluded.status,
-                    summary = excluded.summary,
-                    last_checked_at = excluded.last_checked_at,
-                    last_error_code = excluded.last_error_code,
-                    last_error_message = excluded.last_error_message,
-                    updated_at = excluded.updated_at
-    `,
-    input.userId,
-    input.encryptedAccessToken,
-    input.tokenLastFour,
-    input.tokenFingerprint,
-    input.status,
-    input.summary,
-    input.lastCheckedAt ?? timestamp,
-    input.lastErrorCode ?? null,
-    input.lastErrorMessage ?? null,
-    timestamp,
-    timestamp,
-  );
-
-  return getCustomerMetaConnection(env, input.userId);
-}
-
-export async function updateCustomerMetaConnectionStatus(
-  env: AppEnv,
-  input: {
-    userId: string;
-    status: CustomerMetaConnectionRecord["status"];
-    summary: string;
-    lastErrorCode?: string | null;
-    lastErrorMessage?: string | null;
-  },
-) {
-  const timestamp = nowIso();
-  await run(
-    env,
-    `
-      UPDATE customer_meta_connection
-      SET status = ?,
-          summary = ?,
-          last_checked_at = ?,
-          last_error_code = ?,
-          last_error_message = ?,
-          updated_at = ?
-      WHERE user_id = ?
-    `,
-    input.status,
-    input.summary,
-    timestamp,
-    input.lastErrorCode ?? null,
-    input.lastErrorMessage ?? null,
-    timestamp,
-    input.userId,
-  );
-
-  return getCustomerMetaConnection(env, input.userId);
-}
-
-export async function deleteCustomerMetaConnection(env: AppEnv, userId: string) {
-  await run(
-    env,
-    "DELETE FROM customer_meta_connection WHERE user_id = ?",
-    userId,
-  );
 }
 
 export async function logMetaIntegrationStatus(
