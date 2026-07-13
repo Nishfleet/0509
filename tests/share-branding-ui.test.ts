@@ -96,6 +96,8 @@ describe("shared report agency identity", () => {
     expect(printCss).toContain(".f9-share-brand-identity");
     expect(printCss).toContain(".f9-share-powered-by");
     expect(printCss).toContain(".f9-report-toolbar button");
+    expect(printCss).toContain(".f9-report-toolbar a");
+    expect(printCss).not.toMatch(/\.f9-report-toolbar\s*\{[^}]*display:\s*none/);
     expect(printCss).not.toMatch(/\.f9-share-header,[\s\S]{0,160}display:\s*none/);
   });
 });
