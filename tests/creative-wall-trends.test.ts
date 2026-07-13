@@ -46,4 +46,35 @@ describe("creative wall + trend cards rendering", () => {
     expect(trends).toContain("free plan takes one snapshot");
     expect(trends).not.toContain("svg");
   });
+
+  it("caps and labels only the wall preview while trends use the full creative set", () => {
+    const fullItems: CreativeWallItem[] = Array.from({ length: 20 }, (_, index) => ({
+      ...items[0],
+      ad: {
+        ...baseAd,
+        metaAdId: `ad-${index + 1}`,
+        advertiser: index === 19 ? "Outside preview leader" : baseAd.advertiser,
+        firstSeenAt:
+          index === 19 ? "2020-01-01" : `2026-06-${String(index + 1).padStart(2, "0")}`,
+      },
+    }));
+
+    const wall = renderToStaticMarkup(
+      createElement(CreativeWall, { items: fullItems, plan: "starter" }),
+    );
+    const trends = renderToStaticMarkup(
+      createElement(WatchlistTrends, {
+        items: fullItems,
+        dailyActivity: daily,
+        plan: "starter",
+      }),
+    );
+
+    expect(wall).toContain("Showing 18 of 20 creatives");
+    expect(wall.match(/class="f9-creative-tile(?: is-inactive)?"/g)).toHaveLength(18);
+    expect(wall).not.toContain("Outside preview leader");
+    expect(trends).toContain('20<span class="f9-trend-unit"> dated ads</span>');
+    expect(trends).toContain("+1 started earlier");
+    expect(trends).toContain("Outside preview leader");
+  });
 });

@@ -13,7 +13,7 @@ import { ReportView } from "~/components/report-view";
 import { ActionFeedback } from "~/components/action-feedback";
 import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
-import { parseReportId } from "~/lib/report";
+import { isReportDocument, parseReportId } from "~/lib/report";
 
 export const meta = () => [{ title: "Reports | Five to Nine" }];
 
@@ -53,8 +53,8 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 }
 
 // Reuse a snapshot share minted moments ago (double clicks, quick re-downloads)
-// so PDF exports don't pile up share links; anything older gets a fresh
-// snapshot so the PDF always reflects the current report.
+// only when its canonical report content still matches. Report generation time
+// is intentionally excluded because loadReport regenerates it on every POST.
 const PDF_SNAPSHOT_REUSE_WINDOW_MS = 10 * 60 * 1000;
 
 export async function action({ context, params, request }: ActionFunctionArgs) {
@@ -105,12 +105,16 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
       throw shareGate.response;
     }
 
+    const snapshotPayload = sanitizeReportShareSnapshot(report);
+    const currentSnapshotFingerprint = reportSnapshotContentFingerprint(snapshotPayload);
     const recentSnapshot = (await listActiveShareLinks(env, workspaceUserId, 50)).find(
       (link) =>
         link.isSnapshot &&
         link.resourceType === "report" &&
         link.resourceId === report.reportId &&
-        Date.now() - new Date(link.createdAt).getTime() < PDF_SNAPSHOT_REUSE_WINDOW_MS,
+        Date.now() - new Date(link.createdAt).getTime() < PDF_SNAPSHOT_REUSE_WINDOW_MS &&
+        currentSnapshotFingerprint !== null &&
+        reportSnapshotContentFingerprint(link.snapshotPayload) === currentSnapshotFingerprint,
     );
     const token =
       recentSnapshot?.token ??
@@ -122,7 +126,7 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
             resourceType: "report",
             resourceId: report.reportId,
             isSnapshot: true,
-            snapshotPayload: sanitizeReportShareSnapshot(report) as unknown as Record<string, unknown>,
+            snapshotPayload: snapshotPayload as unknown as Record<string, unknown>,
           },
         )
       ).token;
@@ -144,6 +148,42 @@ function sanitizeReportShareSnapshot<T extends { reportId: string; resourceId: s
     reportId: "shared-report",
     resourceId: "shared",
   };
+}
+
+function reportSnapshotContentFingerprint(value: unknown) {
+  try {
+    const serialized = JSON.stringify(value);
+    if (!serialized) return null;
+
+    const payload = JSON.parse(serialized) as unknown;
+    if (!isReportDocument(payload) || !isValidSnapshotGeneratedAt(payload.generatedAt)) {
+      return null;
+    }
+
+    const { generatedAt: _generatedAt, ...content } = payload;
+    return JSON.stringify(sortJsonValue(content));
+  } catch {
+    return null;
+  }
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record)
+        .sort()
+        .map((key) => [key, sortJsonValue(record[key])]),
+    );
+  }
+  return value;
+}
+
+function isValidSnapshotGeneratedAt(value: unknown) {
+  return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value));
 }
 
 export default function ReportsRoute() {

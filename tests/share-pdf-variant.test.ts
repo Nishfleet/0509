@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { buildCollectionReport } from "~/lib/report-builder.server";
+
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 const REPORT_SNAPSHOT_PAYLOAD = {
@@ -43,6 +45,31 @@ const REPORT_SHARE = {
   expiresAt: null,
   revokedAt: null,
 };
+
+function collectionSnapshotPayload({
+  generatedAt = "2026-07-01T00:00:00.000Z",
+  title = "Board",
+}: {
+  generatedAt?: string;
+  title?: string;
+} = {}) {
+  return {
+    ...buildCollectionReport({
+      collection: {
+        id: "col-1",
+        userId: "user-1",
+        name: title,
+        description: null,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      items: [],
+      generatedAt,
+    }),
+    reportId: "shared-report",
+    resourceId: "shared",
+  };
+}
 
 function withSynchronizedStaleCountReads(
   baseDb: ReturnType<typeof createSqliteD1>["db"],
@@ -303,6 +330,7 @@ describe("/app/reports/:id PDF wiring", () => {
 
   function mockReportsCollaborators(input: {
     pdfAllowed: boolean;
+    collectionName?: string;
     existingShares?: Array<Record<string, unknown>>;
     createShareLink?: ReturnType<typeof vi.fn>;
   }) {
@@ -330,7 +358,11 @@ describe("/app/reports/:id PDF wiring", () => {
       createShareLink,
       getLatestDigestRunSummaryForWatchlist: vi.fn().mockResolvedValue(null),
       listActiveShareLinks: vi.fn().mockResolvedValue(input.existingShares ?? []),
-      getCollection: vi.fn().mockResolvedValue({ id: "col-1", name: "Board", userId: "user-1" }),
+      getCollection: vi.fn().mockResolvedValue({
+        id: "col-1",
+        name: input.collectionName ?? "Board",
+        userId: "user-1",
+      }),
       getWatchlist: vi.fn(),
       listAdsByIds: vi.fn().mockResolvedValue([]),
       listCollectionItems: vi.fn().mockResolvedValue([]),
@@ -379,7 +411,7 @@ describe("/app/reports/:id PDF wiring", () => {
           resourceType: "report",
           resourceId: "collection:col-1",
           isSnapshot: true,
-          snapshotPayload: null,
+          snapshotPayload: collectionSnapshotPayload(),
           createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
           expiresAt: null,
           revokedAt: null,
@@ -405,6 +437,92 @@ describe("/app/reports/:id PDF wiring", () => {
 
     expect(redirected?.headers.get("location")).toBe("/share/recent-token/pdf");
     expect(createShareLink).not.toHaveBeenCalled();
+  });
+
+  it("mints a fresh snapshot when the current report changed within the reuse window", async () => {
+    const { createShareLink } = mockReportsCollaborators({
+      pdfAllowed: true,
+      collectionName: "Board updated",
+      existingShares: [
+        {
+          id: "share-stale",
+          token: "stale-token",
+          userId: "user-1",
+          resourceType: "report",
+          resourceId: "collection:col-1",
+          isSnapshot: true,
+          snapshotPayload: collectionSnapshotPayload({ title: "Board" }),
+          createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
+          expiresAt: null,
+          revokedAt: null,
+        },
+      ],
+    });
+
+    const { action } = await import("~/routes/app.reports");
+    let redirected: Response | null = null;
+    try {
+      await action({
+        context: {},
+        params: { id: "collection:col-1" },
+        request: new Request("https://0509.io/app/reports/collection:col-1", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+        }),
+      } as never);
+    } catch (thrown) {
+      redirected = thrown as Response;
+    }
+
+    expect(redirected?.headers.get("location")).toBe("/share/fresh-token/pdf");
+    expect(createShareLink).toHaveBeenCalledTimes(1);
+    expect(createShareLink).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        snapshotPayload: expect.objectContaining({ title: "Board updated" }),
+      }),
+    );
+  });
+
+  it("mints a fresh snapshot instead of reusing a recent invalid legacy payload", async () => {
+    const { createShareLink } = mockReportsCollaborators({
+      pdfAllowed: true,
+      existingShares: [
+        {
+          id: "share-invalid",
+          token: "invalid-token",
+          userId: "user-1",
+          resourceType: "report",
+          resourceId: "collection:col-1",
+          isSnapshot: true,
+          snapshotPayload: null,
+          createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
+          expiresAt: null,
+          revokedAt: null,
+        },
+      ],
+    });
+
+    const { action } = await import("~/routes/app.reports");
+    let redirected: Response | null = null;
+    try {
+      await action({
+        context: {},
+        params: { id: "collection:col-1" },
+        request: new Request("https://0509.io/app/reports/collection:col-1", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+        }),
+      } as never);
+    } catch (thrown) {
+      redirected = thrown as Response;
+    }
+
+    expect(redirected?.headers.get("location")).toBe("/share/fresh-token/pdf");
+    expect(createShareLink).toHaveBeenCalledTimes(1);
   });
 
   it("throws the plan-gate response for non-agency download-pdf attempts", async () => {
