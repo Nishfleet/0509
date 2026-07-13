@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { ensureDb } from "~/lib/data/d1.server";
 import {
   getIncludedEvidenceAllowance,
   isPaidPlanFamily,
@@ -44,11 +45,6 @@ interface ReservationRow {
   logical_operation_key: string;
   quantity: number;
   status: string;
-}
-
-function ensureDb(env: AppEnv) {
-  if (!env.DB) throw new Error("Cloudflare D1 binding `DB` is not configured.");
-  return env.DB;
 }
 
 function createId() {

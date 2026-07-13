@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { ensureDb } from "~/lib/data/d1.server";
 import { newPresenceId, presenceContentHash, presenceUrlHash } from "~/lib/presence-hash";
 import type {
   NormalizedPresenceItem,
@@ -14,10 +15,7 @@ import type {
 } from "~/lib/presence-types";
 
 function requireDb(env: AppEnv) {
-  if (!env.DB) {
-    throw new Error("D1 database is not configured.");
-  }
-  return env.DB;
+  return ensureDb(env);
 }
 
 function parseJsonObject(value: string | null): Record<string, unknown> {
