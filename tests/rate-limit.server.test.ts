@@ -4,6 +4,7 @@ import {
   enforceAuthenticatedSearchRateLimit,
   enforcePublicSearchRateLimit,
   enforceRequestRateLimit,
+  enforceSearchSelectionRateLimit,
   rateLimitPolicyFor,
 } from "~/lib/rate-limit.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -253,6 +254,69 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
         "user-2",
       ),
     ).resolves.toBeNull();
+  });
+});
+
+describe("enforceSearchSelectionRateLimit", () => {
+  it("refuses the 121st warm selection in the window without touching the fresh-search bucket", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+
+    for (let index = 0; index < 120; index += 1) {
+      const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+        headers: {
+          "cf-connecting-ip": `203.0.113.${index % 250}`,
+          "user-agent": `rotating-agent-${index}`,
+        },
+      });
+      await expect(
+        enforceSearchSelectionRateLimit(request, env, "user-1"),
+      ).resolves.toBeNull();
+    }
+
+    const blocked = await enforceSearchSelectionRateLimit(
+      new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+        headers: { "cf-connecting-ip": "198.51.100.99", "user-agent": "fresh" },
+      }),
+      env,
+      "user-1",
+    );
+    expect(blocked?.status).toBe(429);
+
+    // separate buckets: an exhausted selection bucket never blocks fresh searches
+    await expect(
+      enforceAuthenticatedSearchRateLimit(
+        new Request("https://0509.io/search?query=nykaa", {
+          headers: { "cf-connecting-ip": "198.51.100.99", "user-agent": "fresh" },
+        }),
+        env,
+        "user-1",
+      ),
+    ).resolves.toBeNull();
+
+    // a different account is unaffected
+    await expect(
+      enforceSearchSelectionRateLimit(
+        new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+          headers: { "cf-connecting-ip": "198.51.100.99", "user-agent": "fresh" },
+        }),
+        env,
+        "user-2",
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it("fails closed when the limiter store is unavailable", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const env = { DB: createMissingTableD1() } as unknown as AppEnv;
+
+    const response = await enforceSearchSelectionRateLimit(
+      new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+      env,
+      "user-1",
+    );
+
+    expect(response?.status).toBe(503);
+    consoleError.mockRestore();
   });
 });
 

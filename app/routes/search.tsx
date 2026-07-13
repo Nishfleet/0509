@@ -119,7 +119,30 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
-  if (!session && parsed.filters.query && !forceLive) {
+  const customerMetaAdLibraryToken = session && parsed.filters.query
+    ? await (await import("~/lib/customer-meta.server")).getCustomerMetaAdLibraryToken(env, workspaceUserId!)
+    : null;
+
+  // Selecting an ad from already-rendered results reruns this loader with the
+  // same query; when the discovery cache can serve that query, the click must
+  // not consume the fresh-search rate limit. Fresh searches always charge.
+  // Anonymous selections skip entirely (enrichSelected stays false below, so
+  // there is no provider spend); signed-in selections still run usage-billed
+  // landing-page enrichment, so they consume a dedicated, more generous
+  // search-selection bucket instead of going unmetered.
+  const selectionServedFromCache =
+    Boolean(url.searchParams.get("selected")) && Boolean(parsed.filters.query) && !forceLive
+      ? await (await import("~/lib/search-execution.server")).hasWarmSearchCacheEntry({
+          env,
+          competitorWebsite,
+          parsed,
+          scope: searchScope,
+          cursor: url.searchParams.get("after"),
+          customerMetaAdLibraryToken,
+        })
+      : false;
+
+  if (!session && parsed.filters.query && !forceLive && !selectionServedFromCache) {
     const { enforcePublicSearchRateLimit } = await import("~/lib/rate-limit.server");
     const rateLimitResponse = await enforcePublicSearchRateLimit(request, env, context.cloudflare?.ctx);
     if (rateLimitResponse) {
@@ -128,13 +151,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   if (session && parsed.filters.query && !forceLive) {
-    const { enforceAuthenticatedSearchRateLimit } = await import("~/lib/rate-limit.server");
-    const rateLimitResponse = await enforceAuthenticatedSearchRateLimit(
-      request,
-      env,
-      session.user.id,
-      context.cloudflare?.ctx,
+    const { enforceAuthenticatedSearchRateLimit, enforceSearchSelectionRateLimit } = await import(
+      "~/lib/rate-limit.server"
     );
+    const rateLimitResponse = selectionServedFromCache
+      ? await enforceSearchSelectionRateLimit(request, env, session.user.id, context.cloudflare?.ctx)
+      : await enforceAuthenticatedSearchRateLimit(request, env, session.user.id, context.cloudflare?.ctx);
     if (rateLimitResponse) {
       throw rateLimitResponse;
     }
@@ -163,9 +185,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { executeSearchWithRelevance } = await import("~/lib/search-execution.server");
   const { shouldApplySearchV2 } = await import("~/lib/search-rollout.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
-  const customerMetaAdLibraryToken = session
-    ? await (await import("~/lib/customer-meta.server")).getCustomerMetaAdLibraryToken(env, workspaceUserId!)
-    : null;
 
   const useSearchV2 = shouldApplySearchV2(env) && Boolean(competitorWebsite.raw);
   const searchExecution = useSearchV2

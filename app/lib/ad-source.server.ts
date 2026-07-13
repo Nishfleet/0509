@@ -285,6 +285,46 @@ export async function resolveCommercialAdSourceStatus(
   };
 }
 
+// Cheap existence check mirroring searchAdsViaSourceResolver's fresh-cache
+// hit path (same provider resolution, cache key, and usability rules) without
+// running discovery. Used by the search loader to decide whether a selection
+// click can skip the rate-limit charge.
+export async function hasFreshDiscoveryCacheEntry(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+  cursor?: string | null,
+  options: Pick<SearchAdsViaSourceOptions, "cacheKeyOverride" | "customerMetaAdLibraryToken"> = {},
+): Promise<boolean> {
+  const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
+  const provider = resolveCommercialDiscoveryProvider(effectiveEnv, {
+    customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+  });
+  if (provider === "demo" || !effectiveEnv.DB) {
+    return false;
+  }
+
+  const hasCustomerMetaToken = Boolean(options.customerMetaAdLibraryToken?.trim());
+  const baseCacheKey =
+    options.cacheKeyOverride ??
+    buildDiscoveryCacheKey({
+      provider,
+      fingerprint: fingerprintSavedQuery(query),
+      country: query.filters.country || "all",
+      cursor,
+    });
+  const customerScopedCacheKey = await scopeDiscoveryCacheKeyForCustomerToken(baseCacheKey, {
+    customerMetaAdLibraryToken: hasCustomerMetaToken ? options.customerMetaAdLibraryToken : null,
+  });
+  const cacheKey =
+    provider === "meta_api" && customerScopedCacheKey ? customerScopedCacheKey : baseCacheKey;
+  const cached = await getDiscoveryCacheEntry(effectiveEnv, cacheKey);
+  if (!cached || !isUsableDiscoveryCache(provider, cached)) {
+    return false;
+  }
+
+  return new Date(cached.expiresAt).getTime() > Date.now();
+}
+
 export async function searchAdsViaSourceResolver(
   env: AppEnv,
   query: NormalizedSavedQuery,

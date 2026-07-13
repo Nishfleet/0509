@@ -61,6 +61,32 @@ export async function enforceAuthenticatedSearchRateLimit(
   );
 }
 
+// Signed-in selection clicks on a warm discovery cache skip the account-search
+// bucket, but selection enrichment still runs usage-billed landing-page
+// capture (Browser Rendering rendered fallback) per click. This dedicated
+// bucket is the hard ceiling on that spend: twice as generous as fresh
+// searches and separate from them, so browsing results never locks a user
+// out of new searches. Fail-closed — it is the only spend gate on this path.
+export async function enforceSearchSelectionRateLimit(
+  request: Request,
+  env: AppEnv,
+  userId: string,
+  ctx?: ExecutionContext,
+): Promise<Response | null> {
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    {
+      scope: "search-selection",
+      limit: 120,
+      windowSeconds: 10 * 60,
+      failClosed: true,
+      keySeed: userId,
+    },
+    ctx,
+  );
+}
+
 async function enforceRateLimitPolicy(
   request: Request,
   env: AppEnv,

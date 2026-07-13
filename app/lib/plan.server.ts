@@ -4,11 +4,11 @@ import {
   getPlanEntitlements,
   getPlanLimit,
   getWorkspaceSeatLimit,
-  parsePlanFamily,
   PLAN_LIMITS,
   type PlanFamily,
   type PlanResource,
 } from "~/lib/plan-entitlements";
+import { effectivePlanFromRow, type EffectivePlanRow } from "~/lib/plan-effective.server";
 import {
   getEvidenceUsageSummary,
   listTopUpGrantHistory,
@@ -31,12 +31,6 @@ export {
   parsePlanFamily,
 } from "~/lib/plan-entitlements";
 
-interface UserPlanRow {
-  plan: string;
-  dodo_status: string | null;
-  dodo_next_billing_at: string | null;
-}
-
 interface CountRow {
   count: number;
 }
@@ -58,24 +52,6 @@ async function many<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
 async function one<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
   const rows = await many<T>(env, sql, ...bindings);
   return rows[0] ?? null;
-}
-
-function effectivePlanFromRow(row: UserPlanRow | null): PlanFamily {
-  const parsed = parsePlanFamily(row?.plan);
-  if (parsed === "free") {
-    return "free";
-  }
-
-  const effectiveAtMs = row?.dodo_next_billing_at ? Date.parse(row.dodo_next_billing_at) : Number.NaN;
-  if (
-    row?.dodo_status === "cancellation_scheduled" &&
-    Number.isFinite(effectiveAtMs) &&
-    effectiveAtMs <= Date.now()
-  ) {
-    return "free";
-  }
-
-  return parsed;
 }
 
 async function countWatchlists(env: AppEnv, userId: string) {
@@ -108,7 +84,7 @@ async function countCollections(env: AppEnv, userId: string) {
 }
 
 export async function getUserPlan(env: AppEnv, userId: string): Promise<PlanFamily> {
-  const row = await one<UserPlanRow>(
+  const row = await one<EffectivePlanRow>(
     env,
     `
       SELECT plan, dodo_status, dodo_next_billing_at
