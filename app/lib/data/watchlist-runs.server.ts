@@ -1,0 +1,418 @@
+import {
+  ensureDb,
+  execute as run,
+  queryAll as many,
+  queryOne as one,
+} from "~/lib/data/d1.server";
+import { createId, jsonValue, nowIso, type JsonRecord } from "~/lib/data/helpers.server";
+import {
+  toWatchlistRunRecord,
+  type ObservationRow,
+  type WatchlistRunRow,
+} from "~/lib/data/watchlist-rows.server";
+import type { AppEnv } from "~/lib/env.server";
+import {
+  decodeListCursor,
+  nextListCursorFromPage,
+  resolveListPageLimit,
+  type ListPageOptions,
+  type ListPageResult,
+} from "~/lib/list-pagination";
+import type { WatchlistRunRecord } from "~/lib/types";
+const OBSERVATION_RUN_PAGE_SIZE = 200;
+export async function hasInFlightWatchlistRun(
+  env: AppEnv,
+  watchlistId: string,
+  sinceIso: string,
+) {
+  const row = await one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM watchlist_run
+      WHERE watchlist_id = ?
+        AND status IN ('pending', 'running')
+        AND started_at >= ?
+      LIMIT 1
+    `,
+    watchlistId,
+    sinceIso,
+  );
+  return Boolean(row);
+}
+export async function createWatchlistRun(
+  env: AppEnv,
+  watchlistId: string,
+  triggerType: WatchlistRunRecord["triggerType"],
+  baselineFromRunId: string | null,
+  pageBudget: number,
+) {
+  const id = createId();
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT INTO watchlist_run (
+        id,
+        watchlist_id,
+        trigger_type,
+        status,
+        page_budget,
+        pages_scanned,
+        baseline_from_run_id,
+        summary_json,
+        started_at,
+        finished_at,
+        error_code,
+        error_message,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, 'running', ?, 0, ?, '{}', ?, NULL, NULL, NULL, ?, ?)
+    `,
+    id,
+    watchlistId,
+    triggerType,
+    pageBudget,
+    baselineFromRunId,
+    timestamp,
+    timestamp,
+    timestamp,
+  );
+
+  return id;
+}
+export async function finishWatchlistRun(
+  env: AppEnv,
+  runId: string,
+  input: {
+    status: WatchlistRunRecord["status"];
+    pagesScanned: number;
+    summary: JsonRecord;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  },
+) {
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      UPDATE watchlist_run
+      SET status = ?,
+          pages_scanned = ?,
+          summary_json = ?,
+          finished_at = ?,
+          error_code = ?,
+          error_message = ?,
+          updated_at = ?
+      WHERE id = ?
+    `,
+    input.status,
+    input.pagesScanned,
+    jsonValue(input.summary),
+    timestamp,
+    input.errorCode ?? null,
+    input.errorMessage ?? null,
+    timestamp,
+    runId,
+  );
+}
+export async function getRecentSuccessfulRuns(
+  env: AppEnv,
+  watchlistId: string,
+  limit = 3,
+) {
+  const rows = await many<WatchlistRunRow>(
+    env,
+    `
+      SELECT *
+      FROM watchlist_run
+      WHERE watchlist_id = ? AND status = 'succeeded'
+      ORDER BY started_at DESC
+      LIMIT ?
+    `,
+    watchlistId,
+    limit,
+  );
+  return rows.map(toWatchlistRunRecord);
+}
+export function buildCapacitySkipIdempotencyKey(input: {
+  watchlistId: string;
+  scheduledTime?: number;
+  cron?: string | null;
+  triggerType?: WatchlistRunRecord["triggerType"];
+}) {
+  const triggerType = input.triggerType ?? "scheduled";
+  const slot = new Date(input.scheduledTime ?? Date.now()).toISOString().replace(/[:.]/g, "-");
+  const cronFragment = (input.cron ?? "daily").replace(/[^a-zA-Z0-9_-]+/g, "-");
+  return `capacity_budget:${triggerType}:${input.watchlistId}:${cronFragment}:${slot}`;
+}
+export async function recordWatchlistCapacitySkip(
+  env: AppEnv,
+  watchlistId: string,
+  input: {
+    triggerType?: WatchlistRunRecord["triggerType"];
+    reason?: string;
+    scheduledTime?: number;
+    cron?: string | null;
+    idempotencyKey?: string;
+  } = {},
+) {
+  const id = createId();
+  const timestamp = nowIso();
+  const triggerType = input.triggerType ?? "scheduled";
+  const idempotencyKey =
+    input.idempotencyKey ??
+    buildCapacitySkipIdempotencyKey({
+      watchlistId,
+      scheduledTime: input.scheduledTime,
+      cron: input.cron,
+      triggerType,
+    });
+  const summary = {
+    reason: input.reason ?? "capacity_budget",
+    message:
+      "The scheduled scan window filled before this watchlist was reached. It stays queued for the next run.",
+  };
+
+  const db = ensureDb(env);
+  const insert = await db.prepare(`
+      INSERT OR IGNORE INTO watchlist_run (
+        id,
+        watchlist_id,
+        trigger_type,
+        status,
+        page_budget,
+        pages_scanned,
+        baseline_from_run_id,
+        summary_json,
+        started_at,
+        finished_at,
+        error_code,
+        error_message,
+        idempotency_key,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, 'skipped', 0, 0, NULL, ?, ?, ?, 'capacity_budget', ?, ?, ?, ?)
+    `).bind(
+      id,
+      watchlistId,
+      triggerType,
+      jsonValue(summary),
+      timestamp,
+      timestamp,
+      summary.message,
+      idempotencyKey,
+      timestamp,
+      timestamp,
+    ).run();
+
+  if (Number(insert.meta?.changes ?? 0) > 0) {
+    return id;
+  }
+
+  const existing = await one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM watchlist_run
+      WHERE idempotency_key = ?
+      LIMIT 1
+    `,
+    idempotencyKey,
+  );
+  return existing?.id ?? id;
+}
+export async function listWatchlistRuns(
+  env: AppEnv,
+  watchlistId: string,
+  limit = 12,
+) {
+  const rows = await many<WatchlistRunRow>(
+    env,
+    `
+      SELECT *
+      FROM watchlist_run
+      WHERE watchlist_id = ?
+      ORDER BY started_at DESC
+      LIMIT ?
+    `,
+    watchlistId,
+    limit,
+  );
+
+  return rows.map(toWatchlistRunRecord);
+}
+export async function touchWatchlistScanned(env: AppEnv, watchlistId: string) {
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      UPDATE watchlist
+      SET last_scanned_at = ?, updated_at = ?
+      WHERE id = ?
+    `,
+    timestamp,
+    timestamp,
+    watchlistId,
+  );
+}
+export function isSoftScanFailure(status: string, errorCode: string | null | undefined) {
+  return status === "failed" && (errorCode === "rate_limited" || errorCode === "cache_only");
+}
+export function countLeadingFailures(statuses: string[]) {
+  let count = 0;
+  for (const status of statuses) {
+    if (status !== "failed") break;
+    count += 1;
+  }
+  return count;
+}
+export async function getSuccessfulRunStatsForUserBetween(
+  env: AppEnv,
+  userId: string,
+  startIso: string,
+  endIso: string,
+) {
+  const row = await one<{
+    runs: number;
+    watchlists_checked: number;
+    ads_seen: number | null;
+  }>(
+    env,
+    `
+      SELECT
+        COUNT(*) AS runs,
+        COUNT(DISTINCT watchlist_run.watchlist_id) AS watchlists_checked,
+        SUM(COALESCE(json_extract(watchlist_run.summary_json, '$.adsSeen'), 0)) AS ads_seen
+      FROM watchlist_run
+      INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
+      WHERE watchlist.user_id = ?
+        AND watchlist_run.status = 'succeeded'
+        AND COALESCE(json_extract(watchlist_run.summary_json, '$.scanStatus'), '') != 'degraded'
+        AND watchlist_run.finished_at >= ?
+        AND watchlist_run.finished_at < ?
+    `,
+    userId,
+    startIso,
+    endIso,
+  );
+
+  return {
+    runs: Number(row?.runs ?? 0),
+    watchlistsChecked: Number(row?.watchlists_checked ?? 0),
+    adsSeen: Number(row?.ads_seen ?? 0),
+  };
+}
+export async function createAdObservation(
+  env: AppEnv,
+  input: {
+    adId: string;
+    watchlistRunId: string;
+    landingPageSnapshotId: string | null;
+    landingPageUrl: string | null;
+    seenAt: string;
+    isActive: boolean;
+    metadata?: JsonRecord;
+  },
+) {
+  const id = createId();
+  await run(
+    env,
+    `
+      INSERT INTO ad_observation (
+        id,
+        ad_id,
+        watchlist_run_id,
+        landing_page_snapshot_id,
+        seen_at,
+        is_active,
+        landing_page_url,
+        metadata_json,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    id,
+    input.adId,
+    input.watchlistRunId,
+    input.landingPageSnapshotId,
+    input.seenAt,
+    input.isActive ? 1 : 0,
+    input.landingPageUrl,
+    jsonValue(input.metadata ?? {}),
+    nowIso(),
+  );
+
+  return id;
+}
+export async function listObservationsForRunPage(
+  env: AppEnv,
+  runId: string,
+  options: ListPageOptions = {},
+): Promise<ListPageResult<ObservationRow>> {
+  const limit = resolveListPageLimit(options.limit, OBSERVATION_RUN_PAGE_SIZE);
+  const cursor = decodeListCursor(options.cursor);
+  const rows = await many<ObservationRow>(
+    env,
+    `
+      SELECT
+        ad_observation.id,
+        ad_observation.ad_id,
+        ad_observation.watchlist_run_id,
+        ad_observation.landing_page_snapshot_id,
+        ad_observation.landing_page_url,
+        ad_observation.seen_at,
+        ad_observation.is_active,
+        ad_observation.metadata_json,
+        landing_page_snapshot.normalized_headline_hash,
+        landing_page_snapshot.raw_headline
+      FROM ad_observation
+      LEFT JOIN landing_page_snapshot
+        ON landing_page_snapshot.id = ad_observation.landing_page_snapshot_id
+      WHERE ad_observation.watchlist_run_id = ?
+        ${cursor ? "AND (ad_observation.seen_at > ? OR (ad_observation.seen_at = ? AND ad_observation.id > ?))" : ""}
+      ORDER BY ad_observation.seen_at ASC, ad_observation.id ASC
+      LIMIT ?
+    `,
+    ...(cursor
+      ? [runId, cursor.sortValue, cursor.sortValue, cursor.id, limit]
+      : [runId, limit]),
+  );
+
+  return {
+    items: rows,
+    nextCursor: nextListCursorFromPage(
+      rows,
+      limit,
+      (item) => item.seen_at,
+      (item) => item.id,
+    ),
+  };
+}
+export async function listObservationsForRun(
+  env: AppEnv,
+  runId: string,
+  options: ListPageOptions = {},
+) {
+  // Scan/diff semantics require the full observation set for a run. Page
+  // internally unless the caller asks for an explicit single page.
+  if (options.limit != null || options.cursor != null) {
+    const page = await listObservationsForRunPage(env, runId, options);
+    return page.items;
+  }
+
+  const items: ObservationRow[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await listObservationsForRunPage(env, runId, {
+      limit: OBSERVATION_RUN_PAGE_SIZE,
+      cursor,
+    });
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+
+  return items;
+}
