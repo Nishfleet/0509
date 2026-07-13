@@ -24,6 +24,11 @@ describe("public SEO files", () => {
     const robots = publicSeoFileForPathname("/robots.txt");
 
     expect(robots?.body).toContain("Disallow: /app/");
+    // Bare /app (the URL users actually link to) needs its own rule — the
+    // trailing-slash prefix rule "/app/" does not match it. "$" anchors the
+    // rule so hypothetical future public paths like /apply stay crawlable.
+    expect(robots?.body).toContain("Disallow: /app$");
+    expect(robots?.body).not.toContain("Disallow: /app\n");
     expect(robots?.body).toContain("Disallow: /export/");
     expect(robots?.body).toContain("Disallow: /api/");
     expect(robots?.body).toContain("Allow: /api/docs");

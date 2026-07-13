@@ -73,8 +73,15 @@ ${SITEMAP_PATHS.map((path) => `  <url><loc>${canonicalUrl(path)}</loc></url>`).j
 // Adding `Disallow: /share/` here would block the crawl and let Google index
 // bare /share URLs from external links anyway ("indexed, though blocked by
 // robots.txt" zombies). Do NOT "fix" this by disallowing /share/.
+// "Disallow: /app/" alone does not cover the bare "/app" dashboard URL
+// (trailing-slash prefix rules require the slash). "/app$" closes that for
+// Google/Bing, which honor the $ end-of-URL anchor; crawlers that don't
+// treat the line as a harmless literal, and "/app/" still covers subpaths.
+// A bare "Disallow: /app" is NOT used because it would also block any future
+// public path starting with "app" (e.g. /apply).
 const ROBOTS_TXT = `User-agent: *
 Allow: /api/docs
+Disallow: /app$
 Disallow: /app/
 Disallow: /export/
 Disallow: /api/

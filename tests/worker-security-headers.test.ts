@@ -87,6 +87,38 @@ describe("Worker security headers", () => {
     expect(dataResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
   });
 
+  it("marks case-variant and percent-encoded /share aliases noindex too", () => {
+    // React Router matches routes case-insensitively and after percent
+    // decoding, so these aliases serve the SAME report as /share/<token> and
+    // must carry the same noindex header (Google treats them as distinct URLs).
+    const aliases = [
+      "https://0509.io/SHARE/abc",
+      "https://0509.io/Share/abc",
+      "https://0509.io/%73hare/abc",
+      "https://0509.io/SHARE/abc.data",
+      "https://0509.io/%53hare/abc",
+    ];
+
+    for (const url of aliases) {
+      const response = withSecurityHeaders(
+        new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+        new Request(url),
+      );
+      expect(response.headers.get("x-robots-tag"), url).toBe("noindex, nofollow");
+    }
+  });
+
+  it("survives malformed percent-encoding without throwing", () => {
+    const response = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/share%9/abc"),
+    );
+
+    // decodeURIComponent throws on "%9"; the check must fall back to the raw
+    // pathname instead of crashing the worker response path.
+    expect(response.headers.get("x-robots-tag")).toBeNull();
+  });
+
   it("does not mark public marketing pages noindex", () => {
     const homeResponse = withSecurityHeaders(
       new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
