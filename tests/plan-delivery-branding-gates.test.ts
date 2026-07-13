@@ -214,7 +214,11 @@ describe("shared report branding gates", () => {
       getDigest: vi.fn(),
       getWatchlist: vi.fn(),
       listWatchEvents: vi.fn().mockResolvedValue([]),
-      getWorkspaceBranding: vi.fn().mockResolvedValue({ brandName: "Northwind Growth", brandWebsite: null }),
+      getWorkspaceBranding: vi.fn().mockResolvedValue({
+        brandName: "Northwind Growth",
+        brandWebsite: "https://northwind.example",
+        brandLogo: "data:image/png;base64,iVBORw0KGgo=",
+      }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
@@ -228,6 +232,7 @@ describe("shared report branding gates", () => {
     } as never);
 
     expect(data.preparedBy).toBeNull();
+    expect(data.brandIdentity).toBeNull();
   });
 
   it("renders agency branding on public shares when entitled", async () => {
@@ -247,7 +252,11 @@ describe("shared report branding gates", () => {
       getDigest: vi.fn(),
       getWatchlist: vi.fn(),
       listWatchEvents: vi.fn().mockResolvedValue([]),
-      getWorkspaceBranding: vi.fn().mockResolvedValue({ brandName: "Northwind Growth", brandWebsite: null }),
+      getWorkspaceBranding: vi.fn().mockResolvedValue({
+        brandName: "Northwind Growth",
+        brandWebsite: "https://northwind.example",
+        brandLogo: "data:image/png;base64,iVBORw0KGgo=",
+      }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("agency"),
@@ -261,6 +270,11 @@ describe("shared report branding gates", () => {
     } as never);
 
     expect(data.preparedBy).toBe("Northwind Growth");
+    expect(data.brandIdentity).toEqual({
+      brandName: "Northwind Growth",
+      brandWebsite: "https://northwind.example",
+      brandLogo: "data:image/png;base64,iVBORw0KGgo=",
+    });
   });
 });
 
@@ -330,7 +344,7 @@ describe("route feature requirement coverage", () => {
 
     expect(watchlists).toContain("requireDeliveryConfigSave");
     expect(delivery).toContain("resolveEntitledDeliveryConfigs");
-    expect(share).toContain("resolveWorkspacePreparedBy");
+    expect(share).toContain("resolveWorkspaceBrandIdentity");
     expect(account).toContain("agency_branding");
   });
 });

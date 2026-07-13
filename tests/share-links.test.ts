@@ -185,7 +185,7 @@ describe("/share/:token route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),
@@ -277,7 +277,7 @@ describe("/share/:token route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),
@@ -418,7 +418,7 @@ describe("/share/:token route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
+      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),
