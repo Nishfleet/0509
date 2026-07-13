@@ -9,6 +9,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ReportView } from "~/components/report-view";
+import { ActionFeedback } from "~/components/action-feedback";
 import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
 import { parseReportId } from "~/lib/report";
@@ -80,7 +81,9 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      message: new URL(`/share/${share.token}`, request.url).toString(),
+      intent,
+      message: "Snapshot link created.",
+      shareUrl: new URL(`/share/${share.token}`, request.url).toString(),
     };
   }
 
@@ -101,6 +104,10 @@ function sanitizeReportShareSnapshot<T extends { reportId: string; resourceId: s
 export default function ReportsRoute() {
   const { report, preparedBy } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const shareUrl =
+    actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
+      ? actionData.shareUrl
+      : null;
   const backHref =
     report.resourceType === "collection"
       ? `/app/collections?collection=${report.resourceId}`
@@ -109,20 +116,18 @@ export default function ReportsRoute() {
   return (
     <DashboardPage>
       <section className="f9-app-stack">
-      {actionData?.message ? (
-        <p className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-          {actionData.ok && actionData.message.startsWith("http") ? (
-            <>
-              <a href={actionData.message} rel="noreferrer" target="_blank">
-                {actionData.message}
-              </a>{" "}
-              <CopyButton value={actionData.message} />
-            </>
-            ) : (
-              actionData.message
-            )}
-        </p>
-      ) : null}
+      <ActionFeedback data={actionData} fallback />
+      <ActionFeedback data={actionData} intent="share-report">
+        {shareUrl ? (
+          <>
+            {" "}
+            <a href={shareUrl} rel="noreferrer" target="_blank">
+              {shareUrl}
+            </a>{" "}
+            <CopyButton value={shareUrl} />
+          </>
+        ) : null}
+      </ActionFeedback>
 
       <article className="f9-app-panel f9-report-page">
         <div className="f9-panel-toolbar f9-report-toolbar">

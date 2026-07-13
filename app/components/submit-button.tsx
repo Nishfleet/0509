@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { FocusEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useNavigation } from "react-router";
 
 interface SubmitButtonProps {
@@ -23,6 +23,10 @@ interface SubmitButtonProps {
   disabled?: boolean;
   name?: string;
   value?: string;
+  /** Passthroughs so wrappers (ConfirmSubmitButton) can intercept clicks. */
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
+  onBlur?: (event: FocusEvent<HTMLButtonElement>) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }
 
 export function SubmitButton(props: SubmitButtonProps) {
@@ -48,6 +52,9 @@ export function SubmitButton(props: SubmitButtonProps) {
       value={props.value}
       disabled={props.disabled || pending}
       aria-busy={pending || undefined}
+      onClick={props.onClick}
+      onBlur={props.onBlur}
+      onKeyDown={props.onKeyDown}
     >
       {pending ? (
         <>

@@ -206,6 +206,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     pendingCheckout:
       checkoutNotice === "already-started" ||
       (billing.dodoStatus === "checkout_pending" && checkoutNotice !== "dodo"),
+    invalidCheckoutTarget: checkoutNotice === "invalid-target",
     cancelledCheckout: checkoutNotice === "cancelled",
     agencyCheckoutHeld: checkoutNotice === "agency-held",
     planCheckoutUnavailable: checkoutNotice === "plan-unavailable",
@@ -267,6 +268,20 @@ export default function BillingRoute() {
         title="Billing & usage"
       />
     <section className="f9-app-stack">
+      {data.invalidCheckoutTarget ? (
+        <div
+          aria-atomic="true"
+          aria-live="assertive"
+          className="f9-message is-error"
+          role="alert"
+        >
+          <p>
+            That checkout option is invalid or no longer available. Choose a current plan or check
+            pack below; no billing change was made.
+          </p>
+        </div>
+      ) : null}
+
       {data.blockedCheckout ? (
         <div className="f9-message is-error">
           <p>

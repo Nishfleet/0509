@@ -8301,3 +8301,157 @@ one signal-green accent.
     width: 100%;
   }
 }
+
+/* Interaction layer (2026-07-13): one confirm pattern, scoped action feedback,
+   consolidated empty states, and file-input polish. Workspace scope uses
+   literal warm-bone hex — the --ld- and --f9-search- variables are not
+   defined inside .f9-dash-page. */
+
+.f9-danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid rgba(180, 35, 24, 0.4);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 10px 16px;
+  white-space: nowrap;
+  background: #fff;
+  color: #b42318;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.f9-danger-button:hover {
+  transform: translateY(-1px);
+  border-color: #b42318;
+}
+
+.f9-danger-button.is-filled {
+  background: #b42318;
+  border-color: #b42318;
+  color: #fff;
+}
+
+.f9-danger-button.is-filled:hover {
+  background: #9b1e15;
+  border-color: #9b1e15;
+}
+
+.f9-dash-topbar .f9-danger-button {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.f9-confirm-armed {
+  animation: f9-confirm-settle 160ms ease;
+}
+
+@keyframes f9-confirm-settle {
+  from {
+    opacity: 0.6;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.f9-action-feedback {
+  animation: f9-feedback-rise 180ms ease;
+}
+
+@keyframes f9-feedback-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Feedback inside the workspace stays flat and warm: hairline border,
+   card surface, no floating shadow (matches the customer-grade cleanup). */
+.f9-dash-page .f9-message {
+  border: 1px solid #e0ddd4;
+  border-radius: 12px;
+  background: #fffdf8;
+  box-shadow: none;
+  margin-bottom: 0;
+}
+
+.f9-dash-page .f9-message p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.f9-dash-state h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.f9-empty-inline {
+  margin: 0;
+}
+
+.f9-field input[type="file"] {
+  padding: 8px;
+  border: 1px dashed rgba(6, 22, 41, 0.16);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--f9-search-muted, var(--f9-global-muted));
+  cursor: pointer;
+}
+
+.f9-field input[type="file"]::file-selector-button {
+  min-height: 44px;
+  margin-right: 12px;
+  border: 1px solid rgba(6, 22, 41, 0.12);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--f9-search-ink, var(--f9-global-ink));
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 10px 16px;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease;
+}
+
+.f9-field input[type="file"]::file-selector-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(6, 22, 41, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-confirm-armed {
+    animation: none;
+  }
+
+  .f9-action-feedback {
+    animation: none;
+  }
+
+  .f9-danger-button,
+  .f9-field input[type="file"]::file-selector-button {
+    transition: none;
+  }
+
+  .f9-danger-button:hover,
+  .f9-field input[type="file"]::file-selector-button:hover {
+    transform: none;
+  }
+}

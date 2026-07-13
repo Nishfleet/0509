@@ -9,6 +9,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { EmptyState } from "~/components/empty-state";
 import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import type { AppEnv } from "~/lib/env.server";
@@ -308,10 +309,10 @@ export default function ClientsRoute() {
               />
             ))}
             {activeRooms.length === 0 ? (
-              <div className="f9-empty-panel">
-                <h2>Create the first client room</h2>
-                <p>Use rooms to keep watchlists, collections, reports, and client context together for agency delivery.</p>
-              </div>
+              <EmptyState
+                description="Use rooms to keep watchlists, collections, reports, and client context together for agency delivery."
+                title="Create the first client room"
+              />
             ) : null}
           </div>
         </article>

@@ -11,6 +11,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { ActionFeedback } from "~/components/action-feedback";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
@@ -177,6 +178,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (!savedQuery) {
       return {
         ok: false,
+        intent,
         message: "Saved query not found.",
       };
     }
@@ -192,6 +194,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (!savedQuery) {
       return {
         ok: false,
+        intent,
         message: "Saved query not found.",
       };
     }
@@ -202,7 +205,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     );
     const verification = await requireVerifiedEmailForRetention(env, workspaceUserId);
     if (!verification.ok) {
-      return emailUnverifiedActionResult();
+      return { ...emailUnverifiedActionResult(), intent };
     }
 
     const result = await createWatchlistWithinLimit(env, workspaceUserId, {
@@ -215,14 +218,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }, watchlistLimit.limit);
 
     if (result.status === "over_cap") {
-      return planLimitExceededActionResult({
-        limit: result.limit,
-        current: result.current,
-        message:
-          result.limit <= 1
-            ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
-            : "You have reached your competitor tracking limit.",
-      });
+      return {
+        ...planLimitExceededActionResult({
+          limit: result.limit,
+          current: result.current,
+          message:
+            result.limit <= 1
+              ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
+              : "You have reached your competitor tracking limit.",
+        }),
+        intent,
+      };
     }
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
@@ -231,6 +237,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
+      intent,
       message: `Now tracking ${savedQuery.name}. First scan is running now.`,
     };
   }
@@ -240,7 +247,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const auditId = String(formData.get("auditId") ?? "").trim();
     const eventId = String(formData.get("eventId") ?? "").trim();
     if (!auditId || !eventId) {
-      return { ok: false, message: "Could not mark that follow-up done." };
+      return { ok: false, intent, message: "Could not mark that follow-up done." };
     }
 
     const result = await closeCounterMoveFollowUp(env, {
@@ -250,10 +257,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     if (!result.ok) {
-      return { ok: false, message: "That follow-up is no longer open." };
+      return { ok: false, intent, message: "That follow-up is no longer open." };
     }
 
-    return { ok: true, message: "Marked done." };
+    return { ok: true, intent, message: "Marked done." };
   }
 
   return {
@@ -463,6 +470,7 @@ export default function AppDashboardRoute() {
         </div>
       ) : null}
 
+      <ActionFeedback data={actionData} intent="close-counter-move" />
       {counterMoveFollowUps.length > 0 ? (
         <article className="f9-app-panel">
           <div className="f9-panel-toolbar">
@@ -496,7 +504,12 @@ export default function AppDashboardRoute() {
                       <input name="intent" type="hidden" value="close-counter-move" />
                       <input name="auditId" type="hidden" value={followUp.id} />
                       <input name="eventId" type="hidden" value={followUp.eventId} />
-                      <SubmitButton className="f9-secondary-button" pendingLabel="Saving…">
+                      <SubmitButton
+                        className="f9-secondary-button"
+                        intent="close-counter-move"
+                        match={{ auditId: followUp.id }}
+                        pendingLabel="Saving…"
+                      >
                         Mark done
                       </SubmitButton>
                     </Form>
@@ -535,19 +548,16 @@ export default function AppDashboardRoute() {
         </article>
       ) : null}
 
-      {actionData?.message ? (
-        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-          <p>
-            {actionData.message}
-            {"error" in actionData && actionData.error === "plan_limit_exceeded" ? (
-              <>
-                {" "}
-                <Link to="/app/billing?source=dashboard-limit#plans">View plans</Link> to raise the limit.
-              </>
-            ) : null}
-          </p>
-        </div>
-      ) : null}
+      <ActionFeedback
+        data={actionData}
+        fallback
+        planLimitTo="/app/billing?source=dashboard-limit#plans"
+      />
+      <ActionFeedback
+        data={actionData}
+        intent={["run-saved-query", "track-saved-query"]}
+        planLimitTo="/app/billing?source=dashboard-limit#plans"
+      />
 
       {visibleRecentEvents.length > 0 ? (
         <article className="f9-app-panel f9-activity-panel">

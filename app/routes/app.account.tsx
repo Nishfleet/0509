@@ -4,6 +4,8 @@ import { useState } from "react";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { ConfirmSubmitButton } from "~/components/confirm-button";
+import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import {
@@ -405,9 +407,7 @@ export default function AccountRoute() {
                   ))}
                 </div>
               ) : (
-                <p className="f9-muted-copy">
-                  No passkeys are attached to this account yet.
-                </p>
+                <EmptyState title="No passkeys are attached to this account yet." variant="inline" />
               )}
             </>
           )}
@@ -537,7 +537,16 @@ export default function AccountRoute() {
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-session" />
                     <input name="sessionId" type="hidden" value={session.id} />
-                    <SubmitButton pendingLabel="Revoking…">Revoke</SubmitButton>
+                    <ConfirmSubmitButton
+                      className="f9-secondary-button"
+                      confirmLabel="Confirm — revoke?"
+                      intent="revoke-session"
+                      match={{ sessionId: session.id }}
+                      pendingLabel="Revoking…"
+                      variant="light"
+                    >
+                      Revoke
+                    </ConfirmSubmitButton>
                   </Form>
                 )}
               </div>
@@ -547,14 +556,16 @@ export default function AccountRoute() {
         <div className="f9-account-security-actions">
           <Form method="post">
             <input name="intent" type="hidden" value="revoke-other-sessions" />
-            <SubmitButton
+            <ConfirmSubmitButton
               className="f9-secondary-button"
+              confirmLabel="Confirm — revoke all others?"
               disabled={otherSessionCount === 0}
               intent="revoke-other-sessions"
               pendingLabel="Revoking…"
+              variant="light"
             >
               Revoke other sessions
-            </SubmitButton>
+            </ConfirmSubmitButton>
           </Form>
           <a className="f9-secondary-button" href={SUPPORT_MAILTO}>
             Change email

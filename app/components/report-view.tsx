@@ -1,4 +1,5 @@
 import type { ReportDocument } from "~/lib/report";
+import { EmptyState } from "~/components/empty-state";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { safeInsightDepthSummary } from "~/lib/insight-depth";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
@@ -112,10 +113,10 @@ export function ReportView({ report }: { report: ReportDocument }) {
         ))}
       </section>
       {report.rows.length === 0 ? (
-        <section className="f9-empty-panel">
-          <h2>No client-ready evidence in this report</h2>
-          <p>Only client-ready changes with saved evidence are included in source-backed reports.</p>
-        </section>
+        <EmptyState
+          description="Only client-ready changes with saved evidence are included in source-backed reports."
+          title="No client-ready evidence in this report"
+        />
       ) : null}
     </div>
   );

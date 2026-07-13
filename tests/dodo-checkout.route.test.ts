@@ -132,6 +132,27 @@ function checkoutRequest(body: Record<string, string>) {
 }
 
 describe("Dodo checkout route", () => {
+  it.each([
+    ["an unknown SKU", { sku: "tampered_sku" }],
+    ["a missing target", {}],
+  ])("redirects %s back to billing with an inline-safe notice", async (_label, body) => {
+    const { createDodo0509CheckoutSession, claimDodoPlanCheckout } =
+      mockCheckoutDependencies("free");
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    const response = (await action({
+      context: {},
+      request: checkoutRequest(body),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe("/app/billing?checkout=invalid-target");
+    expect(claimDodoPlanCheckout).not.toHaveBeenCalled();
+    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
+  });
+
   it("redirects an already-subscribed user to billing instead of opening a second checkout", async () => {
     const { createDodo0509CheckoutSession } = mockCheckoutDependencies("starter");
 
