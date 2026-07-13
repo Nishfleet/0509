@@ -33,6 +33,8 @@ export const ROUTE_FEATURE_REQUIREMENTS = [
   { routeId: "app.notifications", action: "save-slack-webhook", feature: "slack_delivery" as PlanFeature },
   { routeId: "app.account", action: "save-report-branding", feature: "agency_branding" as PlanFeature },
   { routeId: "share.$token", feature: "agency_branding" as PlanFeature },
+  { routeId: "share.$token.pdf", feature: "pdf_reports" as PlanFeature },
+  { routeId: "app.reports", action: "download-pdf", feature: "pdf_reports" as PlanFeature },
   { routeId: "app.reports", surface: "preparedBy", feature: "agency_branding" as PlanFeature },
   { routeId: "delivery.server", surface: "deliverWeeklyDigest", feature: "slack_delivery" as PlanFeature },
   { routeId: "delivery.server", surface: "deliverWatchlistAlerts", feature: "high_priority_alerts" as PlanFeature },

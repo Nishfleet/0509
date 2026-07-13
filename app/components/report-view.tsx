@@ -167,6 +167,7 @@ function ReportRowCard({ row }: { row: ReportDocument["rows"][number] }) {
         <img
           alt={`${heading} creative preview`}
           className="report-preview"
+          referrerPolicy="no-referrer"
           src={row.previewImageUrl}
         />
       ) : null}
