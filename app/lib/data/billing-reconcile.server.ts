@@ -313,6 +313,10 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
   ]);
 
   await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1]);
+
+  // Lets callers skip side effects (e.g. lifecycle emails) when the
+  // monotonic-timestamp guard rejected a stale/out-of-order event.
+  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
 }
 
 
@@ -377,7 +381,7 @@ export async function applyDodoPlanPaymentIssueWithLedger(
   const cancellationEffectiveAt = validIsoTimestamp(input.cancellationEffectiveAt ?? undefined);
   const processedAt = nowIso();
 
-  await db.batch([
+  const results = await db.batch([
     db.prepare(`
       UPDATE user_plan
       SET dodo_status = ?,
@@ -399,4 +403,8 @@ export async function applyDodoPlanPaymentIssueWithLedger(
     ),
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
   ]);
+
+  // Lets callers skip side effects (e.g. lifecycle emails) when the
+  // monotonic-timestamp guard or the plan != 'free' filter made this a no-op.
+  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
 }

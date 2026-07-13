@@ -4,7 +4,7 @@ import { magicLink } from "better-auth/plugins";
 
 import {
   appOrigin,
-  emailFromAddress,
+  emailFromSender,
   isBetterAuthEnabled,
   isEmailSendingConfigured,
   type AppEnv,
@@ -777,10 +777,7 @@ async function sendMagicLinkEmail(
   await promiseWithTimeout(
     Promise.resolve().then(() =>
       env.EMAIL!.send({
-        from: {
-          email: emailFromAddress(env),
-          name: "Five to Nine",
-        },
+        from: emailFromSender(env),
         html: email.html,
         subject: email.subject,
         text: email.text,
