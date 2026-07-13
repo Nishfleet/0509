@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCollectionInsightDepth,
   buildDigestInsightDepth,
+  buildDigestTrendRollups,
   buildWatchlistInsightDepth,
   formatInsightDepthMarkdown,
 } from "~/lib/insight-depth";
@@ -227,5 +228,48 @@ describe("insight depth", () => {
     expect(markdown).toContain("_Observed campaign duration_");
     expect(markdown).toContain("_Landing-page history_");
     expect(markdown).toContain("Sale-led hero -> Routine-first bundle");
+  });
+
+  it("builds compact weekly trend rollups from sourced digest event types", () => {
+    const lines = buildDigestTrendRollups([
+      {
+        eventType: "landing_page_offer_changed",
+        title: "Offer changed",
+        summary: "Price drop",
+        metadata: { hook: "Routine-first bundle" },
+        createdAt: "2026-04-19T00:00:00.000Z",
+      },
+      {
+        eventType: "landing_page_offer_changed",
+        title: "Offer changed again",
+        summary: "Another price drop",
+        metadata: { hook: "Routine-first bundle" },
+        createdAt: "2026-04-20T00:00:00.000Z",
+      },
+      {
+        eventType: "landing_page_cta_changed",
+        title: "CTA changed",
+        summary: "Shop now",
+        metadata: {},
+        createdAt: "2026-04-21T00:00:00.000Z",
+      },
+      {
+        eventType: "ad_new",
+        title: "New ad",
+        summary: "Fresh creative",
+        metadata: {},
+        createdAt: "2026-04-22T00:00:00.000Z",
+      },
+    ]);
+
+    expect(lines.map((line) => line.text)).toEqual(
+      expect.arrayContaining([
+        "Changed pricing 2× this period",
+        "Changed CTAs 1× this period",
+        "1 new ad spotted this period",
+        "Top hook (2×): Routine-first bundle",
+      ]),
+    );
+    expect(buildDigestTrendRollups([])).toEqual([]);
   });
 });

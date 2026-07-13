@@ -203,6 +203,7 @@ function mockMonitoringDependencies(input: {
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn().mockResolvedValue([]),
+    listAdsByIds: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween: vi.fn().mockResolvedValue([]),
     listWatchlists: vi.fn().mockResolvedValue([]),
     logMetaIntegrationStatus: vi.fn().mockResolvedValue(undefined),
