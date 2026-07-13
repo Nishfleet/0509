@@ -1609,9 +1609,11 @@ export async function sendAccountActionEmail(
 // send still records a delivery_attempt. Webhook handlers can legitimately
 // re-run (the dodo_webhook_event ledger reclaims failed events and expired
 // processing leases, and Dodo re-emits dunning events across payment
-// retries), so these sends use DETERMINISTIC idempotency keys with a
-// pre-send duplicate check — the operator-alert pattern, not the
-// crypto.randomUUID one used by user-initiated account emails.
+// retries), so these sends use DETERMINISTIC idempotency keys and claim the
+// key (a 'pending' delivery_attempt row) BEFORE calling the provider — the
+// UNIQUE index arbitrates concurrent handlers, and only a recorded 'failed'
+// attempt is retried in place. Not the crypto.randomUUID pattern used by
+// user-initiated account emails.
 
 function billingDateLabel(iso: string | null | undefined) {
   const ms = Date.parse(iso ?? "");
@@ -1667,8 +1669,67 @@ async function sendBillingLifecycleEmail(
   },
 ) {
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
-  if (duplicate?.status === "sent") {
+  // Same semantics as digest emails: only a recorded failure is retryable in
+  // place. 'sent' is a true duplicate, and 'pending' means a provider timeout
+  // where Cloudflare may have ACCEPTED the email anyway — re-sending either
+  // would double-email the customer.
+  if (duplicate && duplicate.status !== "failed") {
     return false;
+  }
+
+  let attemptId = duplicate?.id ?? null;
+  if (duplicate?.status === "failed") {
+    // A failed row is retryable, but only one handler may move it back to
+    // pending. The status predicate is the durable retry claim; concurrent
+    // losers observe zero changed rows and must not call the provider.
+    const retryClaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
+      provider: duplicate.provider || EMAIL_PROVIDER,
+      status: "pending",
+      webhookStatus: "provider_unknown",
+      providerMessageId: duplicate.providerMessageId,
+      providerStatusLastSeenAt: new Date().toISOString(),
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      expectedStatus: "failed",
+    });
+    // Older/mocked data adapters returned void; only an explicit false means
+    // this handler lost the conditional database claim.
+    if (retryClaimed === false) {
+      return false;
+    }
+  }
+
+  if (!attemptId) {
+    // Claim the idempotency key BEFORE sending so two webhook events that
+    // race past the duplicate pre-check (e.g. payment.failed +
+    // subscription.failed for one failed renewal) can't both email: the
+    // UNIQUE index on delivery_attempt.idempotency_key lets exactly one
+    // claim win; the loser sees the row and backs off.
+    try {
+      attemptId = await createDeliveryAttempt(env, {
+        userId: input.userId,
+        watchlistId: null,
+        digestRunId: null,
+        deliveryTargetId: null,
+        lane: "customer",
+        channel: "email",
+        provider: EMAIL_PROVIDER,
+        status: "pending",
+        webhookStatus: "provider_unknown",
+        targetValue: input.email,
+        templateName: input.templateName,
+        eventIds: [],
+        payloadSnapshot: { kind: input.templateName },
+        idempotencyKey: input.idempotencyKey,
+      });
+    } catch (error) {
+      const concurrentClaim = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+      if (concurrentClaim) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   const providerResult = await sendCloudflareEmail(env, {
@@ -1679,43 +1740,75 @@ async function sendBillingLifecycleEmail(
     unsubscribeUrl: null,
   });
 
-  if (duplicate) {
-    await updateDeliveryAttemptResult(env, duplicate.id, {
-      provider: providerResult.provider,
-      status: providerResult.status,
-      webhookStatus: providerResult.webhookStatus,
-      providerMessageId: providerResult.providerMessageId,
-      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-      errorMessage: providerResult.errorMessage,
-      sentAt: providerAcceptedAt(providerResult),
-      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    });
-    return providerResult.status === "sent";
-  }
-
-  await createDeliveryAttempt(env, {
-    userId: input.userId,
-    watchlistId: null,
-    digestRunId: null,
-    deliveryTargetId: null,
-    lane: "customer",
-    channel: "email",
+  // First terminal transition wins. A reconciler may have resolved the
+  // provider-unknown row while this provider call was in flight; in that
+  // case this stale response must neither overwrite the durable outcome nor
+  // report success to its caller.
+  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
     webhookStatus: providerResult.webhookStatus,
-    targetValue: input.email,
     providerMessageId: providerResult.providerMessageId,
     providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    templateName: input.templateName,
-    eventIds: [],
-    payloadSnapshot: { kind: input.templateName },
-    idempotencyKey: input.idempotencyKey,
     errorMessage: providerResult.errorMessage,
     sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    expectedStatus: "pending",
   });
+  if (finalized === false) {
+    return false;
+  }
 
   return providerResult.status === "sent";
+}
+
+/**
+ * Resolve a provider-unknown lifecycle-email claim from external evidence.
+ * Unknown outcomes are never re-sent automatically: an operator/provider
+ * reconciliation must first mark the durable attempt sent (terminal) or
+ * failed (safe for the existing in-place retry path).
+ */
+export async function reconcileBillingLifecycleEmailDelivery(
+  env: AppEnv,
+  input: {
+    idempotencyKey: string;
+    outcome: "sent" | "failed";
+    reconciledAt: string;
+    errorMessage?: string | null;
+  },
+) {
+  if (!/^billing-(?:payment-issue|cancellation|refund):/.test(input.idempotencyKey)) {
+    return false;
+  }
+
+  const attempt = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+  if (
+    !attempt ||
+    attempt.status !== "pending" ||
+    attempt.webhookStatus !== "provider_unknown"
+  ) {
+    return false;
+  }
+
+  // Reconciliation is also a compare-and-set: conflicting external evidence
+  // cannot overwrite whichever terminal outcome claimed the pending row
+  // first. Older test adapters returned void, so only explicit false means
+  // the durable claim was lost.
+  const reconciled = await updateDeliveryAttemptResult(env, attempt.id, {
+    provider: attempt.provider || EMAIL_PROVIDER,
+    status: input.outcome,
+    webhookStatus: input.outcome === "sent" ? "delivered" : "failed",
+    providerMessageId: attempt.providerMessageId,
+    providerStatusLastSeenAt: input.reconciledAt,
+    errorMessage:
+      input.outcome === "failed"
+        ? input.errorMessage ?? "Provider reconciliation confirmed the email was not accepted."
+        : null,
+    sentAt: input.outcome === "sent" ? input.reconciledAt : null,
+    failedAt: input.outcome === "failed" ? input.reconciledAt : null,
+    expectedStatus: "pending",
+  });
+  return reconciled !== false;
 }
 
 // Dunning: a subscription payment failed and Dodo is retrying. Dodo emits
@@ -1793,7 +1886,7 @@ export async function sendBillingCancellationEmail(
         ctaLabel: "Review billing",
         ctaUrl: billingUrl,
         footnote:
-          "Changed your mind? Resubscribe from your billing page any time — paused watchlists resume automatically.",
+          "Changed your mind? Once your access ends, resubscribe from your billing page — paused watchlists resume automatically.",
       }),
     });
   }

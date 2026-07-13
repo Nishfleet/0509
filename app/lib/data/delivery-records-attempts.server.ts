@@ -267,9 +267,10 @@ export async function updateDeliveryAttemptResult(
     errorMessage?: string | null;
     sentAt?: string | null;
     failedAt?: string | null;
+    expectedStatus?: DeliveryAttemptStatus;
   },
 ) {
-  await run(
+  const result = await run(
     env,
     `
       UPDATE delivery_attempt
@@ -283,6 +284,7 @@ export async function updateDeliveryAttemptResult(
           failed_at = ?,
           updated_at = ?
       WHERE id = ?
+        AND (? IS NULL OR status = ?)
     `,
     input.provider,
     input.status,
@@ -294,5 +296,9 @@ export async function updateDeliveryAttemptResult(
     input.failedAt ?? null,
     nowIso(),
     attemptId,
+    input.expectedStatus ?? null,
+    input.expectedStatus ?? null,
   );
+
+  return Number(result.meta?.changes ?? 0) > 0;
 }

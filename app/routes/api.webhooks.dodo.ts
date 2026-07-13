@@ -183,6 +183,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);
     if (subscriptionGrant) {
+      const cancellationScheduled = subscriptionGrant.cancellationScheduled === true;
       const planChangedWithoutProviderTimestamp =
         subscriptionGrant.eventType === "subscription.plan_changed" &&
         !subscriptionGrant.hasProviderGrantTimestamp;
@@ -191,7 +192,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         planChangedWithoutProviderTimestamp;
       const allowsPendingPlanChangeTarget =
         planChangedWithoutProviderTimestamp;
-      await applyDodoPlanGrantWithWatchlistReconcile(
+      const grantApplied = await applyDodoPlanGrantWithWatchlistReconcile(
         env,
         {
           userId: subscriptionGrant.userId,
@@ -201,7 +202,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           providerSubscriptionId: subscriptionGrant.subscriptionId,
           providerCustomerId: subscriptionGrant.customerId,
           nextBillingAt: subscriptionGrant.nextBillingAt,
-          status: subscriptionGrant.status,
+          status: cancellationScheduled ? "cancellation_scheduled" : subscriptionGrant.status,
           grantedAt: subscriptionGrant.grantedAt ?? fallbackGrantAt,
           metadata: subscriptionGrant.metadata,
           forcePlanChangePending: allowsPendingPlanChangeTarget,
@@ -219,6 +220,18 @@ export async function action({ context, request }: ActionFunctionArgs) {
           },
         },
       );
+      if (cancellationScheduled && grantApplied?.changed !== false) {
+        await sendBillingLifecycleEmailSafely("cancellation_scheduled", subscriptionGrant.userId, (delivery, profile) =>
+          delivery.sendBillingCancellationEmail(env, {
+            userId: subscriptionGrant.userId,
+            email: profile.email,
+            name: profile.name,
+            kind: "scheduled",
+            effectiveAt: subscriptionGrant.nextBillingAt,
+            eventId,
+          }),
+        );
+      }
       return {
         outcome: "processed",
         metadata: {
@@ -227,7 +240,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           plan: subscriptionGrant.plan,
           eventType: subscriptionGrant.eventType,
         },
-        body: { ok: true },
+        body: cancellationScheduled ? { ok: true, cancellationScheduled: true } : { ok: true },
       };
     }
 
@@ -319,53 +332,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
         };
       }
 
-      const effectiveAtMs = Date.parse(revocation.effectiveAt ?? "");
-      if (
-        revocation.eventType === "subscription.cancelled" &&
-        Number.isFinite(effectiveAtMs) &&
-        effectiveAtMs > Date.now() + 60_000
-      ) {
-        const cancellationApplied = await applyDodoPlanPaymentIssueWithLedger(
-          env,
-          {
-            userId,
-            status: "cancellation_scheduled",
-            occurredAt: new Date().toISOString(),
-            cancellationEffectiveAt: revocation.effectiveAt,
-          },
-          {
-            ...ledgerBase,
-            outcome: "processed",
-            metadata: {
-              action: "cancellation_scheduled",
-              userId,
-              effectiveAt: revocation.effectiveAt,
-            },
-          },
-        );
-        if (cancellationApplied?.changed !== false) {
-          await sendBillingLifecycleEmailSafely("cancellation_scheduled", userId, (delivery, profile) =>
-            delivery.sendBillingCancellationEmail(env, {
-              userId,
-              email: profile.email,
-              name: profile.name,
-              kind: "scheduled",
-              effectiveAt: revocation.effectiveAt ?? null,
-              eventId,
-            }),
-          );
-        }
-        return {
-          outcome: "processed",
-          metadata: {
-            action: "cancellation_scheduled",
-            userId,
-            effectiveAt: revocation.effectiveAt,
-          },
-          body: { ok: true, cancellationScheduled: true },
-        };
-      }
-
       const revokeApplied = await applyDodoPlanRevokeWithWatchlistReconcile(
         env,
         {
@@ -402,7 +368,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const refund = extractDodoRefund(env, payload);
     if (refund) {
       const refundedUserId = await getUserIdForDodoPayment(env, refund.paymentId);
-      await applyDodoRefundWithWatchlistReconcile(
+      const refundApplied = await applyDodoRefundWithWatchlistReconcile(
         env,
         {
           paymentId: refund.paymentId,
@@ -416,7 +382,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: { action: "refund", paymentId: refund.paymentId },
         },
       );
-      if (refundedUserId) {
+      if (refundedUserId && refundApplied?.changed === true) {
         await sendBillingLifecycleEmailSafely("refund", refundedUserId, (delivery, profile) =>
           delivery.sendBillingRefundEmail(env, {
             userId: refundedUserId,

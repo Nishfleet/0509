@@ -304,6 +304,22 @@ describe("extractDodoSubscriptionGrant", () => {
     });
   });
 
+  it("marks a plan-changed webhook as a scheduled cancellation when Dodo sets the cancel flag", () => {
+    expect(
+      extractDodoSubscriptionGrant(
+        env,
+        subscriptionPayload("subscription.plan_changed", {
+          cancel_at_next_billing_date: true,
+        }),
+      ),
+    ).toMatchObject({
+      eventType: "subscription.plan_changed",
+      status: "active",
+      cancellationScheduled: true,
+      nextBillingAt: "2026-08-12T05:30:00.000Z",
+    });
+  });
+
 	  it("does not use previous billing date or subscription creation as the plan-changed event timestamp", () => {
 	    const grant = extractDodoSubscriptionGrant(
 	      env,

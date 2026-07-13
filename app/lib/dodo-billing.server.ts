@@ -711,6 +711,9 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
     plan,
     cycle,
     status: "active",
+    cancellationScheduled:
+      eventType === "subscription.plan_changed" &&
+      readDodoBoolean(root, "cancel_at_next_billing_date") === true,
     grantedAt: providerGrantedAt || null,
     hasProviderGrantTimestamp: Boolean(providerGrantedAt),
     nextBillingAt: readString(root, "next_billing_date") || null,
@@ -819,8 +822,8 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
 
   const subscriptionId = rawSubscriptionId || eventType;
   const revokedAt =
-    readString(root, "cancelled_at") ||
     readString(root, "updated_at") ||
+    readString(root, "cancelled_at") ||
     readString(root, "created_at") ||
     new Date().toISOString();
 
@@ -833,10 +836,10 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
     subscriptionId,
     status: action === "payment_issue" ? eventType : readString(root, "status") || eventType,
     revokedAt,
-    // When support uses Dodo's cancel-at-next-billing-date, the cancelled
-    // event can carry a future effective timestamp; revoking immediately
-    // would eat the period the customer already paid for.
-    effectiveAt: readString(root, "cancelled_at") || revokedAt,
+    // Dodo reports scheduled cancellation earlier as subscription.plan_changed
+    // with cancel_at_next_billing_date=true. subscription.cancelled is the
+    // terminal state, so its effective time is the event update itself.
+    effectiveAt: revokedAt,
     metadata: root,
   };
 }
