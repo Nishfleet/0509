@@ -77,6 +77,113 @@ describe("queueFirstWatchlistScan", () => {
     await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
   });
 
+  describe("free-plan daily first-scan cap", () => {
+    async function setupCapHarness({
+      plan,
+      recentRuns,
+    }: {
+      plan: string;
+      recentRuns: number;
+    }) {
+      const getUserPlan = vi.fn().mockResolvedValue(plan);
+      const countWatchlistRunsForUserSince = vi.fn().mockResolvedValue(recentRuns);
+      // First data.server call inside runWatchlistManual -> runWatchlist. Used
+      // as the observable "the scan was attempted" signal; returning true makes
+      // runWatchlist bail out immediately so no real scan pipeline executes
+      // (queueFirstWatchlistScan swallows that error by design).
+      const hasInFlightWatchlistRun = vi.fn().mockResolvedValue(true);
+
+      vi.doMock("~/lib/plan.server", async (importOriginal) => ({
+        ...(await importOriginal<Record<string, unknown>>()),
+        getUserPlan,
+      }));
+      vi.doMock("~/lib/data.server", async (importOriginal) => ({
+        ...(await importOriginal<Record<string, unknown>>()),
+        countWatchlistRunsForUserSince,
+        hasInFlightWatchlistRun,
+      }));
+
+      const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+      return {
+        queueFirstWatchlistScan,
+        getUserPlan,
+        countWatchlistRunsForUserSince,
+        hasInFlightWatchlistRun,
+      };
+    }
+
+    beforeEach(() => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    it("skips the first scan for a free plan that already hit 3 runs in 24h", async () => {
+      const harness = await setupCapHarness({ plan: "free", recentRuns: 3 });
+      const waitUntil = vi.fn();
+
+      const queued = harness.queueFirstWatchlistScan(
+        {} as never,
+        { waitUntil } as never,
+        watchlist as never,
+      );
+
+      expect(queued).toBe(true);
+      expect(waitUntil).toHaveBeenCalledTimes(1);
+      await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
+
+      expect(harness.getUserPlan).toHaveBeenCalledWith(expect.anything(), "user-1");
+      expect(harness.countWatchlistRunsForUserSince).toHaveBeenCalledTimes(1);
+      const [, userId, sinceIso] = harness.countWatchlistRunsForUserSince.mock.calls[0];
+      expect(userId).toBe("user-1");
+      // the window is a rolling 24 hours
+      const sinceAgeMs = Date.now() - new Date(sinceIso as string).getTime();
+      expect(sinceAgeMs).toBeGreaterThan(23.9 * 60 * 60 * 1000);
+      expect(sinceAgeMs).toBeLessThan(24.1 * 60 * 60 * 1000);
+      // runWatchlistManual never ran
+      expect(harness.hasInFlightWatchlistRun).not.toHaveBeenCalled();
+    });
+
+    it("runs the first scan for a free plan with no recent runs", async () => {
+      const harness = await setupCapHarness({ plan: "free", recentRuns: 0 });
+      const waitUntil = vi.fn();
+
+      const queued = harness.queueFirstWatchlistScan(
+        {} as never,
+        { waitUntil } as never,
+        watchlist as never,
+      );
+
+      expect(queued).toBe(true);
+      await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
+
+      expect(harness.countWatchlistRunsForUserSince).toHaveBeenCalledTimes(1);
+      // runWatchlistManual was reached (its in-flight guard fired)
+      expect(harness.hasInFlightWatchlistRun).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["starter", "agency"])(
+      "does not cap %s plans regardless of recent run volume",
+      async (plan) => {
+        const harness = await setupCapHarness({ plan, recentRuns: 50 });
+        const waitUntil = vi.fn();
+
+        const queued = harness.queueFirstWatchlistScan(
+          {} as never,
+          { waitUntil } as never,
+          watchlist as never,
+        );
+
+        expect(queued).toBe(true);
+        await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
+
+        // paid plans never consult the cap counter
+        expect(harness.countWatchlistRunsForUserSince).not.toHaveBeenCalled();
+        // and the scan is attempted
+        expect(harness.hasInFlightWatchlistRun).toHaveBeenCalledTimes(1);
+      },
+    );
+  });
+
   it("does nothing for already-scanned watchlists or when ctx is missing", async () => {
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     const waitUntil = vi.fn();

@@ -24,6 +24,7 @@ import {
   getOperatorRiskSummary,
   getSavedQuery,
   getSuccessfulRunStatsForUserBetween,
+  countWatchlistRunsForUserSince,
   getWeeklyBusinessSummary,
   hasInFlightWatchlistRun,
   getUserDeliveryProfile,
@@ -591,6 +592,13 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
 // First scan on creation: a new watchlist must show value within minutes,
 // not after the next scheduled cron. Runs in the background; a failure is
 // non-fatal because the scheduled scan still covers the watchlist.
+//
+// Free accounts keep their activation scan (their scheduled cadence is
+// "none", so this is the only scan they get), but a per-account daily cap
+// stops a pause/recreate loop from turning watchlist creation into
+// unmetered Browser Rendering usage. Paid plans are uncapped here.
+const FREE_FIRST_SCAN_DAILY_CAP = 3;
+
 export function queueFirstWatchlistScan(
   env: AppEnv,
   ctx: ExecutionContext | undefined,
@@ -601,7 +609,7 @@ export function queueFirstWatchlistScan(
   }
 
   ctx.waitUntil(
-    runWatchlistManual(env, watchlist).catch((error) => {
+    runFirstWatchlistScanWithPlanCap(env, watchlist).catch((error) => {
       console.error(
         `First scan failed for watchlist ${watchlist.id}; the scheduled scan will retry.`,
         error,
@@ -610,6 +618,22 @@ export function queueFirstWatchlistScan(
   );
 
   return true;
+}
+
+async function runFirstWatchlistScanWithPlanCap(env: AppEnv, watchlist: WatchlistRecord) {
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const plan = await getUserPlan(env, watchlist.userId);
+  if (plan === "free") {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const recentRuns = await countWatchlistRunsForUserSince(env, watchlist.userId, since);
+    if (recentRuns >= FREE_FIRST_SCAN_DAILY_CAP) {
+      console.warn(
+        `First scan skipped for watchlist ${watchlist.id}: free-plan daily first-scan cap reached.`,
+      );
+      return;
+    }
+  }
+  await runWatchlistManual(env, watchlist);
 }
 
 export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord) {

@@ -524,10 +524,20 @@ export async function searchAdsViaSourceResolver(
             );
       // Browser scrape only encodes country/query in the Ad Library URL — apply
       // platform/creative/status filters client-side so exposed UI filters work.
-      const liveResult =
-        provider === "meta_library_browser"
-          ? { ...liveResultRaw, ads: filterAdsBySearchFilters(liveResultRaw.ads, query) }
-          : liveResultRaw;
+      // A usable scrape narrowed to zero ads by those filters is an honest
+      // empty result; without the explicit reason it would be misclassified as
+      // a provider failure, degrade shared provider health, and burn the
+      // gated API fallback on a scrape that actually worked.
+      const liveResult = (() => {
+        if (provider !== "meta_library_browser") {
+          return liveResultRaw;
+        }
+        const filteredAds = filterAdsBySearchFilters(liveResultRaw.ads, query);
+        if (filteredAds.length === 0 && isUsableLiveDiscoveryResult(provider, liveResultRaw)) {
+          return { ...liveResultRaw, ads: filteredAds, discoveryEmptyReason: "no_results" as const };
+        }
+        return { ...liveResultRaw, ads: filteredAds };
+      })();
       if (!isUsableLiveDiscoveryResult(provider, liveResult)) {
         throw new CommercialDiscoveryError(
           "Live commercial discovery returned no extractable ad cards.",

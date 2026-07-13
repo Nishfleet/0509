@@ -51,6 +51,7 @@ export async function alertScheduledTaskFailure(
   const idempotencyKey = `cron-failure:${taskKey}:${throttleWindowKey(now.getTime())}`;
   const sent = await sendOperatorAlertEmail(env, {
     subject: `0509 cron failure: ${taskKey}`,
+    intro: "Scheduled task failure detected:",
     lines: [
       `Scheduled task "${taskKey}" failed.`,
       `Error: ${message}`,

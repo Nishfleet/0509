@@ -33,7 +33,7 @@ npm run dev
 - `workers/app.ts` — Cloudflare Worker entry with scheduled event handler
 - `workers/monitoring-workflow.ts` — Cloudflare Workflow for watchlist scans (active in prod when `MONITORING_FANOUT_MODE=fanout`; gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts`)
 - `workers/schedule.ts` — cron string → scheduled task mapping
-- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0064`; post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is empty)
+- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0065`; post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is empty)
 - `tests/` — Vitest coverage for search, monitoring, analysis, onboarding, plan limits, reporting, billing webhooks, and route exposure
 - `scripts/` — deploy, prod canaries, launch-readiness canary, D1 backup
 - `docs/launch-readiness.md` — launch gate definition (accurate, maintained)
@@ -89,7 +89,7 @@ Last local verification on 2026-06-11:
 - `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains for the current Cloudflare app under `app/` and `workers/`.
 - `0509.in`, `www.0509.in`, and `api.0509.in` are redirect compatibility routes only. Do not introduce new `.in` product copy, auth origins, SEO links, or support addresses.
 - Cloudflare deploy state is represented by `wrangler.jsonc`: D1 database `0509`, R2 bucket binding `LANDING_PAGE_ARTIFACTS`, Browser Rendering, Workers AI, Cloudflare Email Service, and `MonitoringWorkflow` bindings are configured there. `wrangler.jsonc` sets `MONITORING_FANOUT_MODE: "fanout"` and `MONITORING_FANOUT_GLOBAL: "1"` (max 8 in-flight via `MONITORING_FANOUT_MAX_INFLIGHT`).
-- Remote D1 migrations: `0060_remove_legacy_billing_provider.sql` was applied (PR #251); the repo migration chain is currently through `0064`. The post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is correctly empty.
+- Remote D1 migrations: `0060_remove_legacy_billing_provider.sql` was applied (PR #251); the repo migration chain is currently through `0065`. The post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is correctly empty.
 - Crons: `17 */6 * * *` (warmup), `0 4 * * *` (daily monitoring), and `0 5 * * MON` (weekly cadence).
 - scheduled monitoring runs via the `MonitoringWorkflow` fan-out path (not inline). The real gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts` — inline is only the unset-var default/fallback. There is no `shouldRunScheduledMonitoringInline` helper.
 - auth/origin logic should stay proxy-aware for Cloudflare and any future front-door changes:

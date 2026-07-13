@@ -3069,4 +3069,92 @@ describe("searchAdsViaSourceResolver", () => {
     });
     expect(browserSearch).not.toHaveBeenCalled();
   });
+
+  it("returns an honest empty result when client-side filters narrow a usable scrape to zero ads", async () => {
+    // The scrape itself worked (>=1 extractable ad card); only the exposed UI
+    // filters removed everything. That must NOT throw empty_result, degrade
+    // shared provider health, or burn the gated Meta API fallback.
+    const browserSearch = vi
+      .fn<(...args: unknown[]) => Promise<SearchResponse>>()
+      .mockResolvedValue(buildLiveBrowserResult());
+    const filterAdsBySearchFilters = vi.fn().mockReturnValue([]);
+    const apiSearch = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters,
+      searchAds: apiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: {} as D1Database,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "instagram",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "public_search",
+      },
+    );
+
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(filterAdsBySearchFilters).toHaveBeenCalledTimes(1);
+    // no throw, honest empty result with the explicit reason
+    expect(result.ads).toEqual([]);
+    expect(result.discoveryEmptyReason).toBe("no_results");
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      discoveryStatus: "healthy",
+      discoveryFailureClass: null,
+    });
+    // the gated Meta API fallback must not fire for a scrape that worked
+    expect(apiSearch).not.toHaveBeenCalled();
+    // provider health stays healthy — never marked degraded
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_library_browser",
+        status: "healthy",
+        failureClass: null,
+      }),
+    );
+    expect(createDiscoveryFetchLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_library_browser",
+        status: "succeeded",
+        failureClass: null,
+      }),
+    );
+  });
 });

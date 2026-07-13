@@ -50,6 +50,7 @@ export {
   isSoftScanFailure,
   countLeadingFailures,
   getSuccessfulRunStatsForUserBetween,
+  countWatchlistRunsForUserSince,
   createAdObservation,
   listObservationsForRunPage,
   listObservationsForRun,
