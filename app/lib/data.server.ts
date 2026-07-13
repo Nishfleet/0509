@@ -141,6 +141,7 @@ export {
   addDigestItem,
   upsertDigestDelivery,
   updateDigestRunSummary,
+  repairIncompleteDigestRun,
   listDigests,
   getDigest,
   getDigestByPeriod,

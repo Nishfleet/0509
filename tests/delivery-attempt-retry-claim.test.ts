@@ -23,6 +23,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
         webhook_status TEXT NOT NULL,
         provider_message_id TEXT,
         provider_status_last_seen_at TEXT,
+        template_name TEXT,
         error_message TEXT,
         sent_at TEXT,
         failed_at TEXT,

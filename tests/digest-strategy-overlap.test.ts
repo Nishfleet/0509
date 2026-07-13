@@ -203,11 +203,10 @@ describe("weekly digest overlap", () => {
       const storedSummary = JSON.parse(storedRow.summary_json) as { strategyParagraph: string };
       const storedParagraph = storedSummary.strategyParagraph;
       const initialParagraphs = mockState.deliverWeeklyDigest.mock.calls
-        .slice(0, 2)
         .map((call) => call[1].strategyParagraph);
 
       expect(OVERLAP_PARAGRAPHS).toContain(storedParagraph);
-      expect(initialParagraphs).toEqual([storedParagraph, storedParagraph]);
+      expect(initialParagraphs).toEqual([storedParagraph]);
       expect(
         harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_run").get(),
       ).toMatchObject({ count: 1 });
@@ -221,8 +220,8 @@ describe("weekly digest overlap", () => {
       harness.sqlite.prepare("UPDATE watchlist SET is_active = 0 WHERE id = ?").run("watch-1");
       await runWeeklyDigests(env, options);
 
-      expect(mockState.deliverWeeklyDigest).toHaveBeenCalledTimes(3);
-      expect(mockState.deliverWeeklyDigest.mock.calls[2]?.[1].strategyParagraph).toBe(
+      expect(mockState.deliverWeeklyDigest).toHaveBeenCalledTimes(2);
+      expect(mockState.deliverWeeklyDigest.mock.calls[1]?.[1].strategyParagraph).toBe(
         storedParagraph,
       );
       await expect(
