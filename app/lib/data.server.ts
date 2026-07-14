@@ -142,6 +142,8 @@ export {
 
 export {
   DIGEST_ITEM_SET_PROVENANCE,
+  claimDigestStrategyGenerationLease,
+  completeDigestStrategyGeneration,
   createDigestRun,
   clearDigestItems,
   addDigestItem,

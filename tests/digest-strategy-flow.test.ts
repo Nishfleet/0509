@@ -46,7 +46,9 @@ function provisionalEvent() {
 function dataServerMock(overrides: Record<string, unknown> = {}) {
   return {
     addDigestItem: vi.fn(),
+    claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
     clearDigestItems: vi.fn(),
+    completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
     createAdObservation: vi.fn(),
     createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
     createEventCandidate: vi.fn(),
@@ -173,24 +175,28 @@ describe("weekly digest strategy paragraph flow", () => {
       }),
     );
     expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
-    expect(data.updateDigestRunSummary).toHaveBeenCalledWith(
+    expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
       expect.anything(),
       "digest-1",
       expect.objectContaining({
-        totalEvents: 1,
-        strategyParagraph: GOOD_PARAGRAPH,
-        strategyModel: "@cf/meta/llama-3.2-3b-instruct",
-        strategyGeneratedAt: expect.any(String),
-        strategyWatchlistIds: ["watch-1"],
+        leaseId: expect.any(String),
+        summary: expect.objectContaining({
+          totalEvents: 1,
+          strategyGenerationStatus: "ready",
+          strategyParagraph: GOOD_PARAGRAPH,
+          strategyModel: "@cf/meta/llama-3.2-3b-instruct",
+          strategyGeneratedAt: expect.any(String),
+          strategyWatchlistIds: ["watch-1"],
+        }),
       }),
     );
     expect(data.createDigestRun.mock.invocationCallOrder[0]).toBeLessThan(
       aiRun.mock.invocationCallOrder[0]!,
     );
     expect(aiRun.mock.invocationCallOrder[0]).toBeLessThan(
-      data.updateDigestRunSummary.mock.invocationCallOrder[0]!,
+      data.completeDigestStrategyGeneration.mock.invocationCallOrder[0]!,
     );
-    expect(data.updateDigestRunSummary.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(data.completeDigestStrategyGeneration.mock.invocationCallOrder[0]).toBeLessThan(
       deliverWeeklyDigest.mock.invocationCallOrder[0]!,
     );
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
@@ -246,13 +252,15 @@ describe("weekly digest strategy paragraph flow", () => {
       }),
     );
     expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
-    expect(data.updateDigestRunSummary).toHaveBeenCalledWith(
+    expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
       expect.anything(),
       "digest-1",
       expect.objectContaining({
-        totalEvents: 2,
-        strategyParagraph: GOOD_PARAGRAPH,
-        strategyWatchlistIds: ["watch-1"],
+        summary: expect.objectContaining({
+          totalEvents: 2,
+          strategyParagraph: GOOD_PARAGRAPH,
+          strategyWatchlistIds: ["watch-1"],
+        }),
       }),
     );
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
@@ -283,6 +291,13 @@ describe("weekly digest strategy paragraph flow", () => {
     await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
 
     expect(aiRun).not.toHaveBeenCalled();
+    expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        summary: expect.objectContaining({ strategyGenerationStatus: "ready" }),
+      }),
+    );
     expect(data.createDigestRun).toHaveBeenCalledWith(
       expect.anything(),
       "user-1",
@@ -322,6 +337,7 @@ describe("weekly digest strategy paragraph flow", () => {
 
     expect(result).toBe(1);
     expect(aiRun).not.toHaveBeenCalled();
+    expect(data.completeDigestStrategyGeneration).not.toHaveBeenCalled();
     expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
     expect(data.createDigestRun).toHaveBeenCalledWith(
       expect.anything(),
@@ -396,6 +412,13 @@ describe("weekly digest strategy paragraph flow", () => {
     expect(result).toBe(1);
     expect(aiRun).toHaveBeenCalledTimes(1);
     expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
+    expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        summary: expect.not.objectContaining({ strategyParagraph: expect.anything() }),
+      }),
+    );
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ strategyParagraph: null }),

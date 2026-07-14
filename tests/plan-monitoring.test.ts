@@ -420,7 +420,9 @@ describe("runWeeklyDigests", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn(),
+      claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
       clearDigestItems: vi.fn(),
+      completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
       createAdObservation: vi.fn(),
       createDigestRun,
       createEventCandidate: vi.fn(),
@@ -540,7 +542,9 @@ describe("runWeeklyDigests", () => {
     vi.doMock("~/lib/auth.server", () => ({}));
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem,
+      claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
       clearDigestItems: vi.fn(),
+      completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
       createAdObservation: vi.fn(),
       createDigestRun,
       createEventCandidate: vi.fn(),

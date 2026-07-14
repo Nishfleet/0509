@@ -17,7 +17,11 @@ import {
   summarizeDigestProofMix,
   summarizePriorityMix,
 } from "~/lib/proof-classification";
-import { isReportDocument, type ReportDocument } from "~/lib/report";
+import {
+  isRenderableReportSnapshot,
+  isReportDocument,
+  type ReportDocument,
+} from "~/lib/report";
 import type { ShareResourceType } from "~/lib/types";
 
 export const meta = () => [
@@ -357,7 +361,7 @@ function sanitizeSnapshotPayload(
 }
 
 function sanitizeReportSnapshotPayload(payload: Record<string, unknown>): ReportDocument | null {
-  if (!isReportDocument(payload)) {
+  if (!isRenderableReportSnapshot(payload)) {
     return null;
   }
 
@@ -368,10 +372,6 @@ function sanitizeReportSnapshotPayload(payload: Record<string, unknown>): Report
   const safeRows = rows.filter(isPlainRecord);
   const sourceCoverage = sanitizeReportSourceCoverage(rawPayload.sourceCoverage);
   const aiWeeklySummary = sanitizeReportAiWeeklySummary(rawPayload.aiWeeklySummary);
-
-  if (resourceType === "watchlist" && (!sourceCoverage || !safeRows.every(hasVerifiedReportRowProof))) {
-    return null;
-  }
 
   return {
     kind: "report",
@@ -408,19 +408,6 @@ function sanitizeReportAiWeeklySummary(
     generatedAt: value.generatedAt === null ? null : readString(value.generatedAt),
     periodEnd,
   };
-}
-
-function hasVerifiedReportRowProof(row: Record<string, unknown>) {
-  if (!isPlainRecord(row.event)) {
-    return false;
-  }
-
-  const proofStatusLabel = readString(row.event.proofStatusLabel)?.toLowerCase();
-  const sourceTypeLabel = readString(row.event.sourceTypeLabel)?.toLowerCase();
-  return (
-    (proofStatusLabel === "verified evidence" || proofStatusLabel === "verified proof") &&
-    (sourceTypeLabel === "saved evidence" || sourceTypeLabel === "proof snapshot")
-  );
 }
 
 function sanitizeReportStat(stat: Record<string, unknown>): ReportDocument["stats"][number] {

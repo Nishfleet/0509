@@ -135,3 +135,49 @@ export function isReportDocument(value: unknown): value is ReportDocument {
     Array.isArray(candidate.rows)
   );
 }
+
+/**
+ * Canonical public-share renderability check for immutable report snapshots.
+ * Collection snapshots can be safely normalized from sparse row objects.
+ * Watchlist snapshots additionally require the verified-proof provenance the
+ * public share view promises before any row can be rendered.
+ */
+export function isRenderableReportSnapshot(value: unknown): value is ReportDocument {
+  if (!isReportDocument(value)) {
+    return false;
+  }
+
+  const candidate = value as unknown as Record<string, unknown>;
+  if (candidate.resourceType !== "watchlist") {
+    return true;
+  }
+
+  if (!isPlainRecord(candidate.sourceCoverage)) {
+    return false;
+  }
+
+  return (candidate.rows as unknown[])
+    .filter(isPlainRecord)
+    .every(hasVerifiedReportRowProof);
+}
+
+function hasVerifiedReportRowProof(row: Record<string, unknown>) {
+  if (!isPlainRecord(row.event)) {
+    return false;
+  }
+
+  const proofStatusLabel = readTrimmedString(row.event.proofStatusLabel)?.toLowerCase();
+  const sourceTypeLabel = readTrimmedString(row.event.sourceTypeLabel)?.toLowerCase();
+  return (
+    (proofStatusLabel === "verified evidence" || proofStatusLabel === "verified proof") &&
+    (sourceTypeLabel === "saved evidence" || sourceTypeLabel === "proof snapshot")
+  );
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function readTrimmedString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}

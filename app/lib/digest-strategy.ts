@@ -5,6 +5,15 @@
  */
 
 export const DIGEST_STRATEGY_MODEL = "@cf/meta/llama-3.2-3b-instruct";
+export const DIGEST_STRATEGY_GENERATION_LEASE_MS = 2 * 60 * 1000;
+export const DIGEST_STRATEGY_GENERATION_PENDING = "pending" as const;
+export const DIGEST_STRATEGY_GENERATION_READY = "ready" as const;
+
+export interface PendingDigestStrategyGeneration {
+  status: typeof DIGEST_STRATEGY_GENERATION_PENDING;
+  leaseId: string;
+  leaseExpiresAt: string;
+}
 
 export interface DigestStrategyNote {
   paragraph: string;
@@ -49,4 +58,31 @@ export function readDigestStrategyNote(
       : null;
 
   return { paragraph, generatedAt, watchlistIds };
+}
+
+/**
+ * Missing state is legacy-ready: old runs must keep replaying their immutable
+ * stored content rather than unexpectedly generating new customer-visible AI.
+ */
+export function readPendingDigestStrategyGeneration(
+  summary: Record<string, unknown> | null | undefined,
+): PendingDigestStrategyGeneration | null {
+  if (
+    !summary ||
+    typeof summary !== "object" ||
+    Array.isArray(summary) ||
+    summary.strategyGenerationStatus !== DIGEST_STRATEGY_GENERATION_PENDING
+  ) {
+    return null;
+  }
+
+  return {
+    status: DIGEST_STRATEGY_GENERATION_PENDING,
+    leaseId: readSummaryString(summary.strategyGenerationLeaseId),
+    leaseExpiresAt: readSummaryString(summary.strategyGenerationLeaseExpiresAt),
+  };
+}
+
+function readSummaryString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }

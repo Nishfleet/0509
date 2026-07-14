@@ -10,7 +10,14 @@ const AGENCY_SHARE = {
   resourceType: "report" as const,
   resourceId: "watchlist:watch-1",
   isSnapshot: true,
-  snapshotPayload: { kind: "report", title: "Competitor Report — Q3!" },
+  snapshotPayload: {
+    kind: "report",
+    reportId: "collection:collection-1",
+    resourceType: "collection",
+    resourceId: "collection-1",
+    title: "Competitor Report — Q3!",
+    rows: [],
+  },
   createdAt: "2026-07-01T00:00:00.000Z",
   expiresAt: null,
   revokedAt: null,
@@ -149,6 +156,46 @@ describe("GET /share/:token/pdf", () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toMatchObject({ error: "pdf_unavailable" });
+  });
+
+  it.each([
+    ["null", null],
+    ["legacy", { kind: "report", title: "Legacy report" }],
+    [
+      "malformed",
+      {
+        kind: "report",
+        reportId: "collection:collection-1",
+        resourceType: "collection",
+        resourceId: "collection-1",
+        title: "Malformed report",
+        rows: "not-an-array",
+      },
+    ],
+    [
+      "unrenderable watchlist",
+      {
+        kind: "report",
+        reportId: "watchlist:watch-1",
+        resourceType: "watchlist",
+        resourceId: "watch-1",
+        title: "Unproven watchlist report",
+        rows: [],
+      },
+    ],
+  ])("refuses %s report snapshots before any browser capacity is used", async (_label, snapshotPayload) => {
+    const mocks = mockCollaborators({
+      share: { ...AGENCY_SHARE, snapshotPayload },
+    });
+    const { launch, limits } = makePuppeteerMocks();
+
+    const response = await runPdfRequest();
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: "pdf_unavailable" });
+    expect(limits).not.toHaveBeenCalled();
+    expect(mocks.enforceSharePdfDailyCap).not.toHaveBeenCalled();
+    expect(launch).not.toHaveBeenCalled();
   });
 
   it("gates on the sharer's pdf_reports entitlement without leaking the plan", async () => {

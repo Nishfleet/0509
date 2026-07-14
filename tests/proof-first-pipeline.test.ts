@@ -217,7 +217,9 @@ function installSharedMocks(input: {
   }));
   vi.doMock("~/lib/data.server", () => ({
     addDigestItem: vi.fn(),
+    claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
     clearDigestItems: vi.fn(),
+    completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
     countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
     countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
     createAdObservation: vi.fn(),
