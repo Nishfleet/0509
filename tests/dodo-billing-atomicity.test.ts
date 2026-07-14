@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   applyDodoPlanGrantWithWatchlistReconcile,
+  applyDodoPlanPaymentIssueWithLedger,
   applyDodoPlanRevokeWithWatchlistReconcile,
   applyDodoRefundWithWatchlistReconcile,
   beginDodoWebhookEventProcessing,
@@ -102,6 +103,33 @@ function seedBillingSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) 
       is_active INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE delivery_attempt (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      watchlist_id TEXT,
+      digest_run_id TEXT,
+      delivery_target_id TEXT,
+      lane TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL,
+      webhook_status TEXT NOT NULL,
+      target_value TEXT NOT NULL,
+      provider_message_id TEXT,
+      provider_status_last_seen_at TEXT,
+      template_name TEXT,
+      event_ids_json TEXT NOT NULL DEFAULT '[]',
+      payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+      idempotency_key TEXT,
+      error_message TEXT,
+      sent_at TEXT,
+      failed_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX idx_delivery_attempt_idempotency
+      ON delivery_attempt(idempotency_key);
 
     INSERT INTO watchlist (
       id, user_id, name, target_type, target_id, target_fingerprint, target_label,
@@ -876,6 +904,426 @@ describe("Dodo billing atomicity (sqlite)", () => {
         idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
       },
     });
+  });
+
+  it("re-arms a lifecycle email retry when the retry run finalized the ledger as ignored", async () => {
+    // A redelivered cancellation event whose guarded grant no-ops finalizes
+    // the ledger 'ignored' (plan_change_guard_mismatch) while state
+    // revalidation still retries the email. A second explicit provider
+    // failure must re-arm from 'ignored' too — otherwise the retry is
+    // silently dropped and Dodo stops redelivering.
+    const env = openEnv();
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-retry-from-ignored",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+    await finalizeDodoWebhookLedgerOnly(env, {
+      eventId: "evt-retry-from-ignored",
+      outcome: "ignored",
+      metadata: { ignoredReason: "plan_change_guard_mismatch" },
+    });
+
+    await expect(
+      failDodoWebhookEventForLifecycleEmailRetry(env, "evt-retry-from-ignored", {
+        kind: "cancellation_scheduled",
+        userId: "user-1",
+        idempotencyKey: "billing-cancellation:user-1:evt-retry-from-ignored",
+        error: "Cloudflare Email send failed: rejected.",
+      }),
+    ).resolves.toBe(true);
+
+    await expect(
+      beginDodoWebhookEventProcessing(env, {
+        eventId: "evt-retry-from-ignored",
+        eventType: "subscription.plan_changed",
+        userId: "user-1",
+        payloadTimestamp: null,
+      }),
+    ).resolves.toEqual({
+      status: "claimed",
+      lifecycleEmailRetry: {
+        kind: "cancellation_scheduled",
+        userId: "user-1",
+        idempotencyKey: "billing-cancellation:user-1:evt-retry-from-ignored",
+      },
+    });
+  });
+
+  it("keeps an armed lifecycle email retry across a crashed redelivery lease", async () => {
+    // Arm the retry, let a redelivery claim it (failed → processing with the
+    // claim preserved), then crash that worker. The next lease-expiry reclaim
+    // must still surface the retry claim instead of wiping metadata_json.
+    const env = openEnv();
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-retry-crash",
+      eventType: "subscription.on_hold",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+    await finalizeDodoWebhookLedgerOnly(env, {
+      eventId: "evt-retry-crash",
+      outcome: "processed",
+      metadata: { action: "payment_issue" },
+    });
+    await failDodoWebhookEventForLifecycleEmailRetry(env, "evt-retry-crash", {
+      kind: "payment_issue",
+      userId: "user-1",
+      idempotencyKey: "billing-payment-issue:user-1:2026-07-13",
+      error: "Cloudflare Email send failed: rejected.",
+    });
+
+    const redelivery = await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-retry-crash",
+      eventType: "subscription.on_hold",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+    expect(redelivery.status).toBe("claimed");
+
+    // Crash: the redelivery never finalizes; age its lease past expiry.
+    const staleStartedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    fixtures[0]!.sqlite
+      .prepare(
+        "UPDATE dodo_webhook_event SET processing_started_at = ? WHERE event_id = ?",
+      )
+      .run(staleStartedAt, "evt-retry-crash");
+
+    await expect(
+      beginDodoWebhookEventProcessing(env, {
+        eventId: "evt-retry-crash",
+        eventType: "subscription.on_hold",
+        userId: "user-1",
+        payloadTimestamp: null,
+      }),
+    ).resolves.toEqual({
+      status: "claimed",
+      lifecycleEmailRetry: {
+        kind: "payment_issue",
+        userId: "user-1",
+        idempotencyKey: "billing-payment-issue:user-1:2026-07-13",
+      },
+    });
+  });
+
+  function lifecycleOutboxSpec(idempotencyKey: string, templateName = "billing_access_ended") {
+    return {
+      userId: "user-1",
+      email: "owner@example.com",
+      idempotencyKey,
+      templateName,
+      payloadSnapshot: {
+        kind: templateName,
+        subject: "Your Five to Nine plan has ended",
+        bodyHtml: "<p>ended</p>",
+        tag: "billing-cancellation",
+        billingStateFingerprint: null,
+        outboxPendingDispatch: true,
+      },
+    };
+  }
+
+  it("enqueues the lifecycle email outbox row atomically with a revoke", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
+      ) VALUES ('user-1', 'starter', 'pay-1', 'active', '2026-06-01T00:00:00.000Z');
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-revoke-outbox",
+      eventType: "subscription.expired",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        providerSubscriptionId: "sub-1",
+        status: "subscription.expired",
+        revokedAt: "2026-07-01T00:00:00.000Z",
+      },
+      0,
+      { eventId: "evt-revoke-outbox", outcome: "processed", metadata: { action: "revoke" } },
+      { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-outbox") },
+    );
+
+    expect(result).toEqual({ changed: true });
+    // The pending outbox row committed in the SAME batch as the plan
+    // mutation and ledger finalize — a crash after this point can no longer
+    // lose the email (recovery replays pending rows).
+    const outboxRow = fixtures[0]!.sqlite
+      .prepare(
+        "SELECT status, webhook_status, target_value, template_name, lane, channel, payload_snapshot_json FROM delivery_attempt WHERE idempotency_key = ?",
+      )
+      .get("billing-cancellation:user-1:evt-revoke-outbox") as Record<string, string>;
+    expect(outboxRow).toMatchObject({
+      status: "pending",
+      webhook_status: "pending",
+      target_value: "owner@example.com",
+      template_name: "billing_access_ended",
+      lane: "customer",
+      channel: "email",
+    });
+    expect(JSON.parse(outboxRow.payload_snapshot_json)).toMatchObject({
+      outboxPendingDispatch: true,
+    });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-revoke-outbox"),
+    ).toMatchObject({ outcome: "processed" });
+    // Watchlists still reconciled despite the extra statement in the batch.
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")
+        .get("user-1"),
+    ).toMatchObject({ count: 0 });
+  });
+
+  it("does not enqueue the outbox row when the revoke no-ops", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
+      ) VALUES ('user-1', 'free', 'pay-1', 'refunded', '2026-07-01T00:00:00.000Z');
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-revoke-noop",
+      eventType: "subscription.cancelled",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        providerSubscriptionId: "sub-1",
+        status: "subscription.cancelled",
+        revokedAt: "2026-07-02T00:00:00.000Z",
+      },
+      0,
+      { eventId: "evt-revoke-noop", outcome: "processed", metadata: { action: "revoke" } },
+      { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-noop") },
+    );
+
+    expect(result).toEqual({ changed: false });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM delivery_attempt")
+        .get(),
+    ).toMatchObject({ count: 0 });
+  });
+
+  it("never aborts the batch when the outbox idempotency key already exists", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
+      ) VALUES ('user-1', 'starter', 'pay-1', 'active', '2026-06-01T00:00:00.000Z');
+      INSERT INTO delivery_attempt (
+        id, user_id, lane, channel, provider, status, webhook_status,
+        target_value, template_name, idempotency_key, created_at, updated_at
+      ) VALUES (
+        'attempt-existing', 'user-1', 'customer', 'email', 'cloudflare_email',
+        'failed', 'failed', 'owner@example.com', 'billing_access_ended',
+        'billing-cancellation:user-1:evt-revoke-dup', '2026-06-30T00:00:00.000Z', '2026-06-30T00:00:00.000Z'
+      );
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-revoke-dup",
+      eventType: "subscription.expired",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        providerSubscriptionId: "sub-1",
+        status: "subscription.expired",
+        revokedAt: "2026-07-01T00:00:00.000Z",
+      },
+      0,
+      { eventId: "evt-revoke-dup", outcome: "processed", metadata: { action: "revoke" } },
+      { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-dup") },
+    );
+
+    // INSERT OR IGNORE: the plan mutation must still land and the existing
+    // (failed, in-place-retryable) row must remain untouched.
+    expect(result).toEqual({ changed: true });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT plan FROM user_plan WHERE user_id = ?")
+        .get("user-1"),
+    ).toMatchObject({ plan: "free" });
+    const rows = fixtures[0]!.sqlite
+      .prepare("SELECT id, status FROM delivery_attempt WHERE idempotency_key = ?")
+      .all("billing-cancellation:user-1:evt-revoke-dup") as Array<Record<string, string>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: "attempt-existing", status: "failed" });
+  });
+
+  it("enqueues the outbox row for a payment issue only when the status update applies", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
+      ) VALUES ('user-1', 'starter', 'pay-1', 'active', '2026-06-01T00:00:00.000Z');
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-dunning-1",
+      eventType: "payment.failed",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+    const applied = await applyDodoPlanPaymentIssueWithLedger(
+      env,
+      { userId: "user-1", status: "payment.failed", occurredAt: "2026-07-01T00:00:00.000Z" },
+      { eventId: "evt-dunning-1", outcome: "processed", metadata: { action: "payment_issue" } },
+      {
+        lifecycleEmailOutbox: lifecycleOutboxSpec(
+          "billing-payment-issue:user-1:2026-07-01",
+          "billing_payment_issue",
+        ),
+      },
+    );
+    expect(applied).toEqual({ changed: true });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
+        .get("billing-payment-issue:user-1:2026-07-01"),
+    ).toMatchObject({ count: 1 });
+
+    // A stale, out-of-order event must not enqueue dunning.
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-dunning-stale",
+      eventType: "payment.failed",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+    const stale = await applyDodoPlanPaymentIssueWithLedger(
+      env,
+      { userId: "user-1", status: "payment.failed", occurredAt: "2026-06-15T00:00:00.000Z" },
+      { eventId: "evt-dunning-stale", outcome: "processed", metadata: { action: "payment_issue" } },
+      {
+        lifecycleEmailOutbox: lifecycleOutboxSpec(
+          "billing-payment-issue:user-1:2026-06-15",
+          "billing_payment_issue",
+        ),
+      },
+    );
+    expect(stale).toEqual({ changed: false });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
+        .get("billing-payment-issue:user-1:2026-06-15"),
+    ).toMatchObject({ count: 0 });
+  });
+
+  it("enqueues the outbox row on the unguarded scheduled-cancellation grant path", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_product_id, dodo_subscription_id, dodo_status, plan_updated_at
+      ) VALUES ('user-1', 'starter', 'prod-starter', 'sub-1', 'active', '2026-06-01T00:00:00.000Z');
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-cancel-sched-outbox",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    const applied = await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod-starter",
+        providerSubscriptionId: "sub-1",
+        status: "cancellation_scheduled",
+        grantedAt: "2026-07-13T00:00:00.000Z",
+        metadata: {},
+      },
+      3,
+      {
+        eventId: "evt-cancel-sched-outbox",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+      {
+        lifecycleEmailOutbox: lifecycleOutboxSpec(
+          "billing-cancellation:user-1:evt-cancel-sched-outbox",
+          "billing_cancellation_scheduled",
+        ),
+      },
+    );
+
+    expect(applied).toEqual({ changed: true });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT dodo_status FROM user_plan WHERE user_id = ?")
+        .get("user-1"),
+    ).toMatchObject({ dodo_status: "cancellation_scheduled" });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT status FROM delivery_attempt WHERE idempotency_key = ?")
+        .get("billing-cancellation:user-1:evt-cancel-sched-outbox"),
+    ).toMatchObject({ status: "pending" });
+    // The plan keeps its watchlist entitlement: the grant reconcile even
+    // reactivates the plan-limit-paused watchlist up to the limit of 3.
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")
+        .get("user-1"),
+    ).toMatchObject({ count: 3 });
+  });
+
+  it("enqueues the outbox row atomically with a refund revoke", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
+      ) VALUES ('user-1', 'starter', 'pay-refund', 'active', '2026-06-01T00:00:00.000Z');
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-refund-outbox",
+      eventType: "refund.succeeded",
+      userId: "user-1",
+      payloadTimestamp: null,
+    });
+
+    const applied = await applyDodoRefundWithWatchlistReconcile(
+      env,
+      { paymentId: "pay-refund", refundedAt: "2026-07-01T00:00:00.000Z", userId: "user-1" },
+      0,
+      { eventId: "evt-refund-outbox", outcome: "processed", metadata: { action: "refund" } },
+      {
+        lifecycleEmailOutbox: lifecycleOutboxSpec(
+          "billing-refund:user-1:evt-refund-outbox",
+          "billing_refund_revoked",
+        ),
+      },
+    );
+
+    expect(applied).toEqual({ changed: true });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
+        .get("user-1"),
+    ).toMatchObject({ plan: "free", dodo_status: "refunded" });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT status FROM delivery_attempt WHERE idempotency_key = ?")
+        .get("billing-refund:user-1:evt-refund-outbox"),
+    ).toMatchObject({ status: "pending" });
   });
 });
 

@@ -1,4 +1,5 @@
 import {
+  ensureDb,
   execute as run,
   queryAll as many,
   queryOne as one,
@@ -291,6 +292,95 @@ export async function createDeliveryAttempt(
   return id;
 }
 
+/**
+ * A billing lifecycle email the webhook route wants enqueued atomically with
+ * the plan mutation + ledger finalize. Content is frozen at enqueue time; the
+ * `outboxPendingDispatch` marker in payloadSnapshot tells the dispatch/
+ * recovery paths that this row was created pre-dispatch inside the batch.
+ */
+export interface BillingLifecycleEmailOutboxSpec {
+  userId: string;
+  email: string;
+  idempotencyKey: string;
+  templateName: string;
+  payloadSnapshot: JsonRecord;
+}
+
+export type BillingLifecycleOutboxGate =
+  /**
+   * Insert only when the immediately preceding statement in the batch changed
+   * rows (SQLite changes()). Place DIRECTLY after the business mutation.
+   */
+  | { kind: "prior-statement-changed" }
+  /**
+   * Insert only when THIS batch finalized the ledger row as processed
+   * (matched by the batch's own processedAt). Safe anywhere after the
+   * conditional finalize statement.
+   */
+  | { kind: "ledger-processed"; eventId: string; processedAt: string };
+
+export function buildBillingLifecycleOutboxStatement(
+  db: ReturnType<typeof ensureDb>,
+  spec: BillingLifecycleEmailOutboxSpec,
+  gate: BillingLifecycleOutboxGate,
+  timestamp: string,
+) {
+  const gateSql =
+    gate.kind === "prior-statement-changed"
+      ? "changes() > 0"
+      : `EXISTS (
+          SELECT 1 FROM dodo_webhook_event
+          WHERE event_id = ? AND outcome = 'processed' AND processed_at = ?
+        )`;
+  const gateBindings =
+    gate.kind === "prior-statement-changed" ? [] : [gate.eventId, gate.processedAt];
+
+  // INSERT OR IGNORE: the unique idempotency index arbitrates duplicates
+  // (redeliveries, racing sibling events, an existing failed/sent row). A
+  // plain INSERT conflict would abort the whole batch and roll back the plan
+  // mutation itself.
+  return db.prepare(`
+      INSERT OR IGNORE INTO delivery_attempt (
+        id,
+        user_id,
+        watchlist_id,
+        digest_run_id,
+        delivery_target_id,
+        lane,
+        channel,
+        provider,
+        status,
+        webhook_status,
+        target_value,
+        provider_message_id,
+        provider_status_last_seen_at,
+        template_name,
+        event_ids_json,
+        payload_snapshot_json,
+        idempotency_key,
+        error_message,
+        sent_at,
+        failed_at,
+        created_at,
+        updated_at
+      )
+      SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
+             NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
+      WHERE ${gateSql}
+    `).bind(
+    createId(),
+    spec.userId,
+    "cloudflare_email",
+    spec.email,
+    spec.templateName,
+    jsonValue(spec.payloadSnapshot),
+    spec.idempotencyKey,
+    timestamp,
+    timestamp,
+    ...gateBindings,
+  );
+}
+
 export async function updateDeliveryAttemptResult(
   env: AppEnv,
   attemptId: string,
@@ -308,6 +398,7 @@ export async function updateDeliveryAttemptResult(
     expectedWebhookStatus?: WebhookReconciliationStatus;
     expectedUpdatedAt?: string;
     payloadSnapshot?: JsonRecord;
+    targetValue?: string;
     updatedAt?: string;
   },
 ) {
@@ -328,6 +419,7 @@ export async function updateDeliveryAttemptResult(
           sent_at = ?,
           failed_at = ?,
           payload_snapshot_json = COALESCE(?, payload_snapshot_json),
+          target_value = COALESCE(?, target_value),
           updated_at = ?
       WHERE id = ?
         AND (? IS NULL OR status = ?)
@@ -344,6 +436,7 @@ export async function updateDeliveryAttemptResult(
     input.sentAt ?? null,
     input.failedAt ?? null,
     payloadSnapshot,
+    input.targetValue ?? null,
     input.updatedAt ?? nowIso(),
     attemptId,
     input.expectedStatus ?? null,

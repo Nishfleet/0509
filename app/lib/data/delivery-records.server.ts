@@ -29,4 +29,7 @@ export {
   reconcileDeliveryAttemptByProviderMessageId,
   createDeliveryAttempt,
   updateDeliveryAttemptResult,
+  buildBillingLifecycleOutboxStatement,
+  type BillingLifecycleEmailOutboxSpec,
+  type BillingLifecycleOutboxGate,
 } from "~/lib/data/delivery-records-attempts.server";
