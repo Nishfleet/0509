@@ -2507,6 +2507,29 @@ describe("billing lifecycle emails", () => {
     vi.doUnmock("~/lib/data.server");
   });
 
+  it("persists scheduled-cancellation cutoff and event watermark in the outbox payload", async () => {
+    mockBillingDataServer();
+    const { prepareBillingLifecycleEmailOutbox } = await import("~/lib/delivery.server");
+
+    const outbox = prepareBillingLifecycleEmailOutbox(emailEnv as never, {
+      kind: "cancellation_scheduled",
+      userId: "user-1",
+      email: "owner@example.com",
+      name: "Owner",
+      effectiveAt: "2026-08-13T09:00:00.000Z",
+      eventId: "evt-scheduled-identity",
+      subscriptionId: "subscription-current",
+      stateUpdatedAt: "2026-07-13T09:00:00.000Z",
+    });
+
+    expect(outbox.payloadSnapshot).toMatchObject({
+      scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+      scheduledCancellationEventId: "evt-scheduled-identity",
+      scheduledCancellationSubscriptionId: "subscription-current",
+      scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+    });
+  });
+
   it("sends the dunning email with a day-coarse deterministic idempotency key and no unsubscribe header", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
@@ -2832,6 +2855,181 @@ describe("billing lifecycle emails", () => {
   });
 
   it.each([
+    {
+      label: "passed cutoff",
+      currentPlan: "starter" as const,
+      currentCutoff: "2026-07-13T09:04:00.000Z",
+      currentStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      expectedSent: false,
+    },
+    {
+      label: "non-paid effective plan",
+      currentPlan: "free" as const,
+      currentCutoff: "2026-08-13T09:00:00.000Z",
+      currentStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      expectedSent: false,
+    },
+    {
+      label: "later cancellation date",
+      currentPlan: "starter" as const,
+      currentCutoff: "2026-09-13T09:00:00.000Z",
+      currentStateUpdatedAt: "2026-07-14T09:00:00.000Z",
+      expectedSent: false,
+    },
+    {
+      label: "matching future cancellation",
+      currentPlan: "starter" as const,
+      currentCutoff: "2026-08-13T09:00:00.000Z",
+      currentStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      expectedSent: true,
+    },
+  ])(
+    "validates a batch-enqueued scheduled cancellation with $label before live dispatch",
+    async ({ currentPlan, currentCutoff, currentStateUpdatedAt, expectedSent }) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+      const sendMock = mockEmailSend("msg_scheduled_identity");
+      const outboxAttempt = {
+        id: "attempt-scheduled-identity",
+        provider: "cloudflare_email",
+        status: "pending",
+        webhookStatus: "pending",
+        providerMessageId: null,
+        templateName: "billing_cancellation_scheduled",
+        payloadSnapshot: {
+          kind: "billing_cancellation_scheduled",
+          subject: "Your cancellation is confirmed",
+          bodyHtml: "<p>Your paid plan remains active until the cutoff.</p>",
+          tag: "billing-cancellation",
+          billingStateFingerprint: null,
+          outboxPendingDispatch: true,
+          scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+          scheduledCancellationEventId: "evt-scheduled-identity",
+          scheduledCancellationSubscriptionId: "subscription-current",
+          scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+        },
+        updatedAt: "2026-07-13T09:04:59.000Z",
+      };
+      const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+      mockBillingDataServer({
+        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(outboxAttempt),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          ...currentBillingInfo,
+          plan: currentPlan,
+          dodoStatus: "cancellation_scheduled",
+          dodoNextBillingAt: currentCutoff,
+          planUpdatedAt: currentStateUpdatedAt,
+        }),
+        updateDeliveryAttemptResult,
+      });
+
+      const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
+      const sent = await sendBillingCancellationEmail(emailEnv as never, {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+        kind: "scheduled",
+        effectiveAt: "2026-08-13T09:00:00.000Z",
+        eventId: "evt-scheduled-identity",
+      });
+
+      expect(sent).toBe(expectedSent);
+      expect(sendMock).toHaveBeenCalledTimes(expectedSent ? 1 : 0);
+      if (!expectedSent) {
+        expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(1);
+        expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+          expect.anything(),
+          outboxAttempt.id,
+          expect.objectContaining({
+            status: "skipped_due_to_dedupe",
+            webhookStatus: "provider_unknown",
+            expectedUpdatedAt: outboxAttempt.updatedAt,
+          }),
+        );
+        expect(updateDeliveryAttemptResult.mock.calls[0]?.[2]).not.toHaveProperty(
+          "payloadSnapshot",
+        );
+      } else {
+        expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+          1,
+          expect.anything(),
+          outboxAttempt.id,
+          expect.objectContaining({
+            payloadSnapshot: expect.objectContaining({
+              scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+              scheduledCancellationEventId: "evt-scheduled-identity",
+              scheduledCancellationSubscriptionId: "subscription-current",
+              scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+            }),
+          }),
+        );
+      }
+    },
+  );
+
+  it("does not revive a failed older scheduled cancellation after a later date wins", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_old_scheduled_retry_must_not_send");
+    const failedAttempt = {
+      id: "attempt-old-scheduled-failed",
+      provider: "cloudflare_email",
+      status: "failed",
+      webhookStatus: "failed",
+      providerMessageId: null,
+      templateName: "billing_cancellation_scheduled",
+      payloadSnapshot: {
+        kind: "billing_cancellation_scheduled",
+        subject: "Your cancellation is confirmed",
+        bodyHtml: "<p>Your plan remains active until August.</p>",
+        tag: "billing-cancellation",
+        billingStateFingerprint: currentBillingStateFingerprint,
+        scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+        scheduledCancellationEventId: "evt-old-scheduled",
+        scheduledCancellationSubscriptionId: "subscription-current",
+        scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      },
+      updatedAt: "2026-07-13T09:04:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedAttempt),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo,
+        dodoStatus: "cancellation_scheduled",
+        dodoNextBillingAt: "2026-09-13T09:00:00.000Z",
+        planUpdatedAt: "2026-07-14T09:00:00.000Z",
+      }),
+      updateDeliveryAttemptResult,
+    });
+
+    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
+    const sent = await sendBillingCancellationEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: "Owner",
+      kind: "scheduled",
+      effectiveAt: "2026-08-13T09:00:00.000Z",
+      eventId: "evt-old-scheduled",
+    });
+
+    expect(sent).toBe(false);
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      failedAttempt.id,
+      expect.objectContaining({
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
+        expectedStatus: "failed",
+        expectedWebhookStatus: "failed",
+        expectedUpdatedAt: failedAttempt.updatedAt,
+      }),
+    );
+  });
+
+  it.each([
     ["scheduled cancellation", "billing_cancellation_scheduled"],
     ["access ended", "billing_access_ended"],
     ["refund revoked", "billing_refund_revoked"],
@@ -3000,6 +3198,62 @@ describe("billing lifecycle emails", () => {
     expect(typeof claimCall[2].payloadSnapshot.billingStateFingerprint).toBe("string");
   });
 
+  it("recovers a scheduled-cancellation outbox only for its matching future state", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_scheduled_marker_recovered");
+    const markerAttempt = {
+      id: "attempt-scheduled-marker",
+      userId: "user-1",
+      targetValue: "owner@example.com",
+      templateName: "billing_cancellation_scheduled",
+      payloadSnapshot: {
+        kind: "billing_cancellation_scheduled",
+        subject: "Your cancellation is confirmed",
+        bodyHtml: "<p>Your paid plan remains active until August.</p>",
+        tag: "billing-cancellation",
+        billingStateFingerprint: null,
+        outboxPendingDispatch: true,
+        scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+        scheduledCancellationEventId: "evt-scheduled-marker",
+        scheduledCancellationSubscriptionId: "subscription-current",
+        scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      },
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo,
+        dodoStatus: "cancellation_scheduled",
+      }),
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const result = await recoverAbandonedBillingLifecycleEmails({
+      ...emailEnv,
+      DB: {},
+    } as never);
+
+    expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 1, superseded: 0 });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      markerAttempt.id,
+      expect.objectContaining({
+        payloadSnapshot: expect.objectContaining({
+          scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+          scheduledCancellationEventId: "evt-scheduled-marker",
+          scheduledCancellationSubscriptionId: "subscription-current",
+          scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+        }),
+      }),
+    );
+  });
+
   it("supersedes a marker outbox row when the billing state moved past its kind", async () => {
     // Same crash shape, but the customer's payment recovered before the
     // sweep ran — dodoStatus is healthy again, so the dunning email must not
@@ -3071,6 +3325,10 @@ describe("billing lifecycle emails", () => {
         tag: "billing-cancellation",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
+        scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+        scheduledCancellationEventId: "evt-marker-crash",
+        scheduledCancellationSubscriptionId: "subscription-current",
+        scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
       } as Record<string, unknown>,
       errorMessage: null,
       sentAt: null,
@@ -3103,7 +3361,12 @@ describe("billing lifecycle emails", () => {
     );
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts,
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue(currentBillingInfo),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo,
+        dodoStatus: "cancellation_scheduled",
+        dodoNextBillingAt: "2026-09-13T09:00:00.000Z",
+        planUpdatedAt: "2026-07-14T09:00:00.000Z",
+      }),
       updateDeliveryAttemptResult,
     });
 

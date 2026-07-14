@@ -199,6 +199,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         subscriptionGrant.eventType === "subscription.plan_changed" &&
         !subscriptionGrant.hasProviderGrantTimestamp;
       const fallbackGrantAt = planChangedWithoutProviderTimestamp ? verifiedWebhookTimestamp : undefined;
+      const acceptedGrantAt = subscriptionGrant.grantedAt ?? fallbackGrantAt;
       // Live Dodo subscription payloads carry no updated_at (verified against
       // the live subscriptions API, 2026-07-13), so real plan_changed events
       // arrive without a provider grant timestamp. A pure scheduled
@@ -258,6 +259,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
             name: profile.name,
             effectiveAt: subscriptionGrant.nextBillingAt,
             eventId,
+            subscriptionId: subscriptionGrant.subscriptionId,
+            stateUpdatedAt: acceptedGrantAt ?? null,
           }))
         : undefined;
       const grantApplied = await applyDodoPlanGrantWithWatchlistReconcile(
@@ -271,7 +274,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           providerCustomerId: subscriptionGrant.customerId,
           nextBillingAt: subscriptionGrant.nextBillingAt,
           status: cancellationScheduled ? "cancellation_scheduled" : subscriptionGrant.status,
-          grantedAt: subscriptionGrant.grantedAt ?? fallbackGrantAt,
+          grantedAt: acceptedGrantAt,
           metadata: subscriptionGrant.metadata,
           forcePlanChangePending: allowsPendingPlanChangeTarget,
           requirePlanChangePending: requiresPendingPlanChange,
