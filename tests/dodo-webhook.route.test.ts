@@ -24,7 +24,9 @@ function mockWebhookDependencies(overrides: {
     applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({ changed: true }),
     applyDodoPlanRevokeWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: true }),
     applyDodoProofCreditGrantWithLedger: vi.fn().mockResolvedValue(undefined),
-    applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: true }),
+    applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({
+      changed: true, stateUpdatedAt: "2026-07-05T00:00:00.000Z",
+    }),
     beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue({ status: "claimed" }),
     clearDodoPlanCheckout: vi.fn().mockResolvedValue(true),
     failDodoWebhookEventProcessing: vi.fn().mockResolvedValue(undefined),
@@ -1880,15 +1882,30 @@ describe("customer lifecycle billing emails", () => {
       },
       data: {
         getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "free", dodoStatus: "refunded", dodoPaymentId: "pay-refunded",
+          planUpdatedAt: "2026-07-05T00:00:00.000Z",
+        }),
         getUserDeliveryProfile: vi
           .fn()
           .mockResolvedValue({ id: "user-refund", email: "refunded@example.com", emailVerified: true, name: null }),
       },
     });
+    delivery.prepareBillingLifecycleEmailOutbox.mockRejectedValueOnce(new Error("outbox unavailable"));
 
     const response = await deliverDodoWebhook("evt-refund-email", { type: "refund.succeeded" });
 
     expect(await response.json()).toMatchObject({ ok: true, refunded: true });
+    expect(data.applyDodoRefundWithWatchlistReconcile.mock.calls[0]?.at(-1)).toEqual({ lifecycleEmailOutbox: undefined });
+    data.getUserPlanBillingInfo.mockResolvedValue({
+      plan: "free", dodoStatus: "refunded", dodoPaymentId: "pay-refund-b",
+      planUpdatedAt: "2026-07-10T00:00:00.000Z",
+    });
+    await deliverDodoWebhook("evt-refund-a-after-b", { type: "refund.succeeded" });
+    data.getUserPlanBillingInfo.mockResolvedValue({
+      plan: "free", dodoStatus: "refunded", dodoPaymentId: "pay-refunded",
+      planUpdatedAt: "2026-07-05T00:00:00.000Z",
+    });
     data.getUserDeliveryProfile.mockResolvedValue(unverified);
     await deliverDodoWebhook("evt-u-refund", { type: "refund.succeeded" });
     expect(delivery.sendBillingRefundEmail).toHaveBeenCalledTimes(1);
@@ -1900,6 +1917,8 @@ describe("customer lifecycle billing emails", () => {
         email: "refunded@example.com",
         name: null,
         eventId: "evt-refund-email",
+        paymentId: "pay-refunded",
+        stateUpdatedAt: "2026-07-05T00:00:00.000Z",
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -1937,7 +1956,9 @@ describe("customer lifecycle billing emails", () => {
       },
       data: {
         getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
-        applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: false }),
+        applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({
+          changed: false, stateUpdatedAt: "2026-07-05T00:00:00.000Z",
+        }),
       },
     });
 
@@ -1969,7 +1990,9 @@ describe("customer lifecycle billing emails", () => {
             ),
           ),
         getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
-        applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: false }),
+        applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({
+          changed: false, stateUpdatedAt: "2026-07-05T00:00:00.000Z",
+        }),
         getUserPlanBillingInfo: vi.fn().mockResolvedValue({
           plan: "free",
           dodoStatus: "refunded",
@@ -2018,8 +2041,8 @@ describe("customer lifecycle billing emails", () => {
         getUserIdForDodoPayment,
         applyDodoRefundWithWatchlistReconcile: vi
           .fn()
-          .mockResolvedValueOnce({ changed: true })
-          .mockResolvedValueOnce({ changed: false }),
+          .mockResolvedValueOnce({ changed: true, stateUpdatedAt: "2026-07-05T00:00:00.000Z" })
+          .mockResolvedValueOnce({ changed: false, stateUpdatedAt: "2026-07-05T00:00:00.000Z" }),
         getUserPlanBillingInfo: vi.fn().mockResolvedValue({
           plan: "free",
           dodoStatus: "refunded",
@@ -2038,6 +2061,10 @@ describe("customer lifecycle billing emails", () => {
 
     expect(await redelivery.json()).toMatchObject({ ok: true, refunded: true });
     expect(delivery.sendBillingRefundEmail).toHaveBeenCalledTimes(2);
+    expect(delivery.sendBillingRefundEmail).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ paymentId: "pay_linked", stateUpdatedAt: "2026-07-05T00:00:00.000Z" }),
+    );
     expect(data.getUserIdForDodoPayment).toHaveBeenCalledTimes(1);
   });
 

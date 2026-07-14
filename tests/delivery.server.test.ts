@@ -2466,6 +2466,8 @@ describe("billing lifecycle emails", () => {
     dodoNextBillingAt: scheduledCutoff,
     planUpdatedAt: scheduledWatermark,
   };
+  const refundBillingInfo = { ...currentBillingInfo, plan: "free" as const, dodoStatus: "refunded" };
+  let defaultBillingInfo: typeof currentBillingInfo | typeof refundBillingInfo = currentBillingInfo;
   const currentBillingStateFingerprint = JSON.stringify(currentBillingInfo);
 
   function billingPayload<T extends Record<string, unknown>>(templateName: string, overrides: T) {
@@ -2545,8 +2547,11 @@ describe("billing lifecycle emails", () => {
   }
 
   async function sendRefund(overrides: Partial<RefundInput> & Pick<RefundInput, "eventId">) {
+    defaultBillingInfo = refundBillingInfo;
     const delivery = await import("~/lib/delivery.server");
-    return delivery.sendBillingRefundEmail(emailEnv as never, { ...recipient, ...overrides });
+    return delivery.sendBillingRefundEmail(emailEnv as never, {
+      ...recipient, paymentId: "payment-current", stateUpdatedAt: scheduledWatermark, ...overrides,
+    });
   }
 
   async function sendCancellation(input: Omit<CancellationInput, "userId" | "email" | "name"> & Partial<Pick<CancellationInput, "userId" | "email" | "name">>) {
@@ -2574,7 +2579,7 @@ describe("billing lifecycle emails", () => {
       listStaleBillingLifecycleEmailAttempts,
       updateDeliveryAttemptResult,
       getUserDeliveryProfile: vi.fn().mockResolvedValue({ email: "owner@example.com", emailVerified: true, name: "Owner" }),
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue(currentBillingInfo),
+      getUserPlanBillingInfo: vi.fn(async () => defaultBillingInfo),
       ...overrides,
     }));
     return {
@@ -2616,6 +2621,7 @@ describe("billing lifecycle emails", () => {
   }
 
   afterEach(() => {
+    defaultBillingInfo = currentBillingInfo;
     vi.doUnmock("~/lib/data.server");
   });
 
@@ -2910,6 +2916,29 @@ describe("billing lifecycle emails", () => {
         }),
       }),
     );
+  });
+
+  it.each([
+    ["direct refund A after refund B", false, "payment-new", "2026-07-14T09:00:00.000Z", "payment-current", scheduledWatermark],
+    ["failed direct refund A after refund B", true, "payment-new", "2026-07-14T09:00:00.000Z", "payment-current", scheduledWatermark],
+    ["missing payment identity", false, "payment-current", scheduledWatermark, "", scheduledWatermark],
+    ["missing mutation watermark", false, "payment-current", scheduledWatermark, "payment-current", ""],
+  ])("blocks %s at the final provider gate", async (_label, failed, currentPayment, currentAt, paymentId, stateUpdatedAt) => {
+    const sendMock = mockEmailSend("msg_stale_refund_must_not_send");
+    const duplicate = failed ? refundRecoveryAttempt("attempt-failed-refund-a", {}, {
+      status: "failed", webhookStatus: "failed",
+    }) : null;
+    const mocks = mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(duplicate),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...refundBillingInfo, dodoPaymentId: currentPayment, planUpdatedAt: currentAt,
+      }),
+    });
+
+    await expect(sendRefund({ eventId: "evt-refund-a", paymentId, stateUpdatedAt })).resolves.toBe(false);
+
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
   });
 
   it("recovers only the exact refund identity and watermark", async () => {
@@ -3242,6 +3271,10 @@ describe("billing lifecycle emails", () => {
         status: "pending",
         expectedStatus: "failed",
         targetValue: "new@example.com",
+        payloadSnapshot: expect.objectContaining({
+          refundPaymentId: "payment-current",
+          refundStateUpdatedAt: scheduledWatermark,
+        }),
       }),
     );
   });
@@ -4000,6 +4033,10 @@ describe("billing lifecycle emails", () => {
     expect(attempt.lane).toBe("customer");
     expect(attempt.templateName).toBe("billing_refund_revoked");
     expect(attempt.idempotencyKey).toBe("billing-refund:user-1:evt-refund-1");
+    expect(attempt.payloadSnapshot).toMatchObject({
+      refundPaymentId: "payment-current",
+      refundStateUpdatedAt: scheduledWatermark,
+    });
   });
 
   it("turns an explicit rejection into one durable retry without duplicate successful mail", async () => {

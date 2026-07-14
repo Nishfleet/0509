@@ -1049,7 +1049,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       },
     );
 
-    expect(result).toEqual({ changed: false });
+    expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
@@ -1632,7 +1632,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       },
     );
 
-    expect(applied).toEqual({ changed: true });
+    expect(applied).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")

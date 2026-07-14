@@ -30,8 +30,6 @@ const BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE =
   "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE" as const;
 
 interface ScheduledCancellationStateExpectation {
-  // These are the exact fields the authoritative webhook grant writes to
-  // user_plan in the same batch as the outbox row.
   cutoff: string;
   eventId: string;
   subscriptionId: string;
@@ -63,11 +61,6 @@ export function isBillingLifecycleEmailExplicitFailure(
     typeof error.idempotencyKey === "string"
   );
 }
-
-// --- Customer lifecycle billing emails (Dodo webhook driven) -----------------
-// Transactional and independent of digest opt-out. Deterministic keys claim a
-// pending attempt before provider dispatch; the UNIQUE index arbitrates
-// concurrent webhooks and only durable failures retry in place.
 
 function billingDateLabel(iso: string | null | undefined) {
   const ms = Date.parse(iso ?? "");
@@ -121,22 +114,19 @@ async function sendBillingLifecycleEmail(
     tag: string;
     templateName: string;
     stateExpectation?: ScheduledCancellationStateExpectation | null;
+    refundExpectation?: RefundStateExpectation | null;
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
   const stalePreDispatch = duplicate ? isStalePreDispatchAttempt(duplicate) : false;
-  // Atomically enqueued rows retain this marker until live send or recovery
-  // wins the compare-and-set claim.
   const pendingOutboxDispatch =
     duplicate?.status === "pending" &&
     duplicate.webhookStatus === "pending" &&
     duplicate.payloadSnapshot?.["outboxPendingDispatch"] === true;
-  // Superseded rows stay claimable so fresh same-key content is not suppressed.
   const supersededOutbox =
     duplicate?.status === "skipped_due_to_dedupe" &&
     duplicate.webhookStatus === "provider_unknown";
-  // Sent/provider-unknown outcomes are terminal; only safely claimable states retry.
   if (
     duplicate &&
     duplicate.status !== "failed" &&
@@ -153,12 +143,16 @@ async function sendBillingLifecycleEmail(
     ? readScheduledCancellationStateExpectation(duplicate.payloadSnapshot)
     : input.stateExpectation ?? null;
   const refundExpectation = duplicate
-    ? readRefundStateExpectation(duplicate.payloadSnapshot)
-    : null;
+    ? readRefundStateExpectation(duplicate.payloadSnapshot) ??
+      (duplicate.status === "failed" || (stalePreDispatch && !pendingOutboxDispatch)
+        ? input.refundExpectation ?? null
+        : null)
+    : input.refundExpectation ?? null;
   if (
     pendingOutboxDispatch ||
     supersededOutbox ||
-    input.templateName === "billing_cancellation_scheduled"
+    input.templateName === "billing_cancellation_scheduled" ||
+    input.templateName === "billing_refund_revoked"
   ) {
     const durableKind = pendingOutboxDispatch
       ? readString(duplicate?.payloadSnapshot?.kind)
@@ -222,7 +216,6 @@ async function sendBillingLifecycleEmail(
       sentAt: null,
       failedAt: null,
       payloadSnapshot,
-      // Persist the current retry recipient for ledger and recovery parity.
       targetValue: input.email,
       updatedAt: claimUpdatedAt,
       expectedStatus: claimFromPending
@@ -237,16 +230,12 @@ async function sendBillingLifecycleEmail(
           : undefined,
       expectedUpdatedAt: claimFromPending ? duplicate.updatedAt : undefined,
     });
-    // Older/mocked data adapters returned void; only an explicit false means
-    // this handler lost the conditional database claim.
     if (retryClaimed === false) {
       return false;
     }
   }
 
   if (!attemptId) {
-    // Claim before sending; the UNIQUE idempotency index makes concurrent
-    // webhook handlers converge on one provider dispatch.
     claimUpdatedAt = new Date().toISOString();
     try {
       attemptId = await createDeliveryAttempt(env, {
@@ -287,7 +276,6 @@ async function sendBillingLifecycleEmail(
     unsubscribeUrl: null,
   });
 
-  // First terminal transition wins; stale in-flight responses cannot overwrite it.
   const finalized = await updateDeliveryAttemptResult(env, attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
@@ -338,7 +326,6 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
   const billingStateFingerprint = readString(
     attempt.payloadSnapshot.billingStateFingerprint,
   );
-  // Pre-mutation outbox rows have no fingerprint; validate their marker by kind.
   const pendingDispatch = attempt.payloadSnapshot.outboxPendingDispatch === true;
   const stateExpectation = readScheduledCancellationStateExpectation(
     attempt.payloadSnapshot,
@@ -391,7 +378,6 @@ function billingLifecycleOutboxStateStillApplies(
         info.dodoStatus === "subscription.on_hold"
       );
     case "billing_cancellation_scheduled":
-      // Bind to the exact entitlement, cutoff, subscription, and grant watermark.
       return (
         info.dodoStatus === "cancellation_scheduled" &&
         isPaidPlanFamily(info.plan) &&
@@ -496,8 +482,6 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
     }
 
     if (payload && !currentEmail) {
-      // Refresh the lease without binding an unverified address, consuming an
-      // attempt, or erasing explicit-provider-failure evidence.
       const deferred = await updateDeliveryAttemptResult(env, attempt.id, {
         provider: attempt.provider,
         status: attempt.status,
@@ -537,8 +521,6 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
       errorMessage: null,
       sentAt: null,
       failedAt: null,
-      // Validated markers become fingerprints; existing provenance remains
-      // verbatim and incomplete payloads finalize failed below.
       payloadSnapshot:
         payload && currentBillingInfo
           ? {
@@ -557,7 +539,6 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
               recoveryAttemptCount,
             }
           : undefined,
-      // Billing state validates content; the verified current profile sets delivery.
       targetValue: currentEmail ?? undefined,
       updatedAt: claimUpdatedAt,
       expectedStatus: retryingExplicitFailure ? "failed" : "pending",
@@ -654,7 +635,6 @@ export async function reconcileBillingLifecycleEmailDelivery(
     return false;
   }
 
-  // Compare-and-set preserves the first terminal outcome; only explicit false loses.
   const reconciled = await updateDeliveryAttemptResult(env, attempt.id, {
     provider: attempt.provider || EMAIL_PROVIDER,
     status: input.outcome,
@@ -681,7 +661,6 @@ interface BillingLifecycleEmailContent {
   stateExpectation?: ScheduledCancellationStateExpectation | null;
 }
 
-// Dunning repeats across Dodo retries, so its key permits at most one email/day.
 function billingPaymentIssueEmailContent(
   env: AppEnv,
   input: { userId: string; name: string | null; occurredAt?: string | null },
@@ -709,7 +688,6 @@ function billingPaymentIssueEmailContent(
   };
 }
 
-// Scheduled/ended cancellation is event-keyed so ledger retries emit once.
 function billingCancellationEmailContent(
   env: AppEnv,
   input: {
@@ -769,8 +747,6 @@ function billingCancellationEmailContent(
   };
 }
 
-// Full refund: plan revoked to Free and purchased credits expired. Keyed on
-// the webhook event id.
 function billingRefundEmailContent(
   env: AppEnv,
   input: { userId: string; name: string | null; eventId: string },
@@ -841,13 +817,19 @@ export async function sendBillingRefundEmail(
     email: string;
     name: string | null;
     eventId: string;
+    paymentId: string;
+    stateUpdatedAt: string;
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
+  const paymentId = readString(input.paymentId);
+  const stateUpdatedAt = normalizedBillingTimestamp(input.stateUpdatedAt);
   return sendBillingLifecycleEmail(env, {
     userId: input.userId,
     email: input.email,
     retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
+    refundExpectation:
+      paymentId && stateUpdatedAt ? { paymentId, stateUpdatedAt } : null,
     ...billingRefundEmailContent(env, input),
   });
 }
