@@ -26,13 +26,22 @@ Last updated: 2026-07-14
 - Missing gate: review cycle `a98f5f83-5bab-4c23-985b-4273294f4dd5` still reports `final autoreview is not clean`; the candidate has not passed release verification or cycle close.
 - Integration/deployment: none. Do not resume this branch until every other independent P0/P1 journey has been attempted.
 
+## Frozen Journey 3 candidate
+
+- Status: `blocked` and unintegrated.
+- Branch: `codex/journey3-blocked`.
+- Frozen HEAD: `4f8be88ceb40fab020ddff692346dc4cee3e5a74`.
+- Local proof before freeze: 212 Vitest files / 2,279 tests, generated Cloudflare and route types, TypeScript, production build, and all 13 authenticated browser journeys passed.
+- Missing gate: final xhigh review thread `019f624e-9314-77c2-967f-0898bb960f72` reports four unresolved release findings: request-lifetime first-scan dispatch instead of a durable consumer; post-claim setup failures can strand the queue; legacy recipient rows are not bound to the currently verified account email; and test-email dispatch can race unsubscribe.
+- Integration/deployment: none. Do not resume until every other independent P0/P1 journey has been attempted.
+
 ## Journey execution order
 
 | Journey | Current state | Required completion proof |
 | --- | --- | --- |
 | First visit → value → signup | verified | Local rendered journey at 375/768/1440 px; intent-preserving signup aliases and server validation pass. Real email delivery remains an external provider gate. |
 | Onboarding → first useful search → credible proof | verified | Local V2 proof candidate, canonical-save integrity, honest source/freshness, keyboard activation, browser and contract tests pass. Committed rollout remains shadow until an authorized live canary promotes it. |
-| Save competitor → monitoring → alerts/digests | open | Entitled save flow, monitoring state, delivery/recovery proof, rendered settings and digest states |
+| Save competitor → monitoring → alerts/digests | blocked | Candidate frozen at `4f8be88`; exact candidate must remediate all four final-review findings and pass a clean release review. |
 | Evidence → reports → share/export → client delivery | open | Entitlement-aware actions, evidence freshness, share/export/client-room browser and contract proof |
 | Plan → checkout → entitlements → billing lifecycle | open | Pricing/error states, exact entitlements, safe billing state machine, external money/provider gates recorded |
 | Return value → account/team/support/recovery | open | Account/team/support UX, operational recovery, observability, accessibility, and retained-value proof |
