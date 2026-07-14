@@ -232,6 +232,23 @@ describe("account agency logo action", () => {
     });
   });
 
+  it("reports the retained logo when the brand name is cleared without a new file", async () => {
+    const upsertWorkspaceBranding = mockBrandingAction();
+    const formData = brandingForm();
+    formData.set("brandName", "");
+
+    const result = await submitBranding(formData);
+
+    expect(upsertWorkspaceBranding).toHaveBeenCalledWith(expect.anything(), "user-1", {
+      brandName: "",
+    });
+    expect(result).toEqual({
+      ok: true,
+      intent: "save-report-branding",
+      message: "Saved. Shared reports use your agency logo.",
+    });
+  });
+
   it("clears the current logo only when removal is explicit", async () => {
     const upsertWorkspaceBranding = mockBrandingAction();
     const formData = brandingForm();
