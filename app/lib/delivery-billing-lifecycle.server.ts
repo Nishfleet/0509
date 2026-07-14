@@ -151,9 +151,38 @@ async function sendBillingLifecycleEmail(
   }
   const claimFromPending = stalePreDispatch || pendingOutboxDispatch;
 
-  const billingStateFingerprint = billingLifecycleStateFingerprint(
-    await getUserPlanBillingInfo(env, input.userId),
-  );
+  const currentBillingInfo = await getUserPlanBillingInfo(env, input.userId);
+  if (pendingOutboxDispatch || supersededOutbox) {
+    const durableKind = pendingOutboxDispatch
+      ? readString(duplicate.payloadSnapshot?.kind)
+      : input.templateName;
+    const stateStillCurrent =
+      (!pendingOutboxDispatch ||
+        (durableKind === duplicate.templateName && durableKind === input.templateName)) &&
+      billingLifecycleOutboxStateStillApplies(durableKind, currentBillingInfo);
+    if (!stateStillCurrent) {
+      if (pendingOutboxDispatch) {
+        await updateDeliveryAttemptResult(env, duplicate.id, {
+          provider: EMAIL_PROVIDER,
+          status: "skipped_due_to_dedupe",
+          webhookStatus: "provider_unknown",
+          providerMessageId: null,
+          providerStatusLastSeenAt: null,
+          templateName: duplicate.templateName,
+          errorMessage:
+            "Billing lifecycle outbox was superseded by newer account state.",
+          sentAt: null,
+          failedAt: null,
+          expectedStatus: "pending",
+          expectedWebhookStatus: "pending",
+          expectedUpdatedAt: duplicate.updatedAt,
+        });
+      }
+      return false;
+    }
+  }
+
+  const billingStateFingerprint = billingLifecycleStateFingerprint(currentBillingInfo);
   const payloadSnapshot = {
     kind: input.templateName,
     subject: input.subject,
@@ -407,6 +436,40 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
           getUserDeliveryProfile(env, attempt.userId),
         ])
       : [null, null];
+    const currentEmail = readString(currentProfile?.email)?.toLowerCase() ?? null;
+    const stateStillCurrent =
+      payload !== null &&
+      currentBillingInfo !== null &&
+      (payload.pendingDispatch
+        ? billingLifecycleOutboxStateStillApplies(attempt.templateName, currentBillingInfo)
+        : billingLifecycleStateFingerprint(currentBillingInfo) ===
+          payload.billingStateFingerprint) &&
+      currentEmail === payload.targetValue.toLowerCase();
+
+    if (payload && !stateStillCurrent) {
+      const superseded = await updateDeliveryAttemptResult(env, attempt.id, {
+        provider: EMAIL_PROVIDER,
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: attempt.templateName,
+        errorMessage:
+          "Billing lifecycle recovery was superseded by newer account state.",
+        sentAt: null,
+        failedAt: null,
+        expectedStatus: retryingExplicitFailure ? "failed" : "pending",
+        expectedWebhookStatus: retryingExplicitFailure ? "failed" : "pending",
+        expectedUpdatedAt: attempt.updatedAt,
+      });
+      if (superseded !== true) {
+        result.conflicts += 1;
+      } else {
+        result.claimed += 1;
+        result.superseded += 1;
+      }
+      continue;
+    }
 
     const claimUpdatedAt = new Date().toISOString();
     const claimed = await updateDeliveryAttemptResult(env, attempt.id, {
@@ -419,11 +482,10 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
       errorMessage: null,
       sentAt: null,
       failedAt: null,
-      // The claim rewrites the payload exactly like the live claim does:
-      // marker cleared, current fingerprint recorded. Without this, a
-      // recovery-claimed row still looks like a never-dispatched outbox row,
-      // and a same-day sibling webhook could seize it mid-provider-call for
-      // a double send. Incomplete payloads keep their snapshot (COALESCE)
+      // Kind validation happens before this claim. A validated outbox marker
+      // can now become a fingerprint without letting a crash make stale copy
+      // look current on the next sweep. Existing fingerprint provenance is
+      // retained verbatim. Incomplete payloads keep their snapshot (COALESCE)
       // and finalize as failed right below.
       payloadSnapshot:
         payload && currentBillingInfo
@@ -433,7 +495,9 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
               bodyHtml: payload.bodyHtml,
               tag: payload.tag,
               billingStateFingerprint:
-                billingLifecycleStateFingerprint(currentBillingInfo),
+                payload.pendingDispatch
+                  ? billingLifecycleStateFingerprint(currentBillingInfo)
+                  : payload.billingStateFingerprint,
               recoveryAttemptCount,
             }
           : undefined,
@@ -468,44 +532,6 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
         result.conflicts += 1;
       } else {
         result.failed += 1;
-      }
-      continue;
-    }
-
-    const currentEmail = readString(currentProfile?.email)?.toLowerCase() ?? null;
-    const stateStillCurrent =
-      currentBillingInfo !== null &&
-      (payload.pendingDispatch
-        ? billingLifecycleOutboxStateStillApplies(attempt.templateName, currentBillingInfo)
-        : billingLifecycleStateFingerprint(currentBillingInfo) ===
-          payload.billingStateFingerprint) &&
-      currentEmail === payload.targetValue.toLowerCase();
-    if (!stateStillCurrent) {
-      // Intentional non-send, NOT a failure: the account state moved past
-      // this email, so replaying its stale content would mislead. The
-      // skipped status keeps operator failure counts honest, while
-      // sendBillingLifecycleEmail treats skipped+provider_unknown rows as
-      // claimable — a later same-day dunning event can still take the
-      // idempotency slot and send content rebuilt from the current event.
-      const finalized = await updateDeliveryAttemptResult(env, attempt.id, {
-        provider: EMAIL_PROVIDER,
-        status: "skipped_due_to_dedupe",
-        webhookStatus: "provider_unknown",
-        providerMessageId: null,
-        providerStatusLastSeenAt: null,
-        templateName: attempt.templateName,
-        errorMessage:
-          "Billing lifecycle recovery was superseded by newer account state.",
-        sentAt: null,
-        failedAt: null,
-        expectedStatus: "pending",
-        expectedWebhookStatus: "pending",
-        expectedUpdatedAt: claimUpdatedAt,
-      });
-      if (finalized === false) {
-        result.conflicts += 1;
-      } else {
-        result.superseded += 1;
       }
       continue;
     }

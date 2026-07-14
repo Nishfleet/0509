@@ -2778,12 +2778,26 @@ describe("billing lifecycle emails", () => {
       status: "pending",
       webhookStatus: "pending",
       providerMessageId: null,
-      payloadSnapshot: { outboxPendingDispatch: true },
+      templateName: "billing_refund_revoked",
+      payloadSnapshot: {
+        kind: "billing_refund_revoked",
+        subject: "Your refund has been processed",
+        bodyHtml: "<p>Your workspace moved to Free.</p>",
+        tag: "billing-refund",
+        billingStateFingerprint: null,
+        outboxPendingDispatch: true,
+      },
       updatedAt: "2026-07-13T09:04:59.000Z",
+    };
+    const refundedBillingInfo = {
+      ...currentBillingInfo,
+      plan: "free" as const,
+      dodoStatus: "refunded",
     };
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const mocks = mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(outboxAttempt),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue(refundedBillingInfo),
       updateDeliveryAttemptResult,
     });
 
@@ -2811,11 +2825,86 @@ describe("billing lifecycle emails", () => {
         // The claim rewrites the payload: marker cleared, post-mutation
         // fingerprint recorded for any later fingerprint-based recovery.
         payloadSnapshot: expect.objectContaining({
-          billingStateFingerprint: currentBillingStateFingerprint,
+          billingStateFingerprint: JSON.stringify(refundedBillingInfo),
         }),
       }),
     );
   });
+
+  it.each([
+    ["scheduled cancellation", "billing_cancellation_scheduled"],
+    ["access ended", "billing_access_ended"],
+    ["refund revoked", "billing_refund_revoked"],
+  ] as const)(
+    "supersedes a stale batch-enqueued %s email before provider dispatch",
+    async (_label, templateName) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+      const sendMock = mockEmailSend("msg_stale_outbox_must_not_send");
+      const outboxAttempt = {
+        id: `attempt-${templateName}`,
+        provider: "cloudflare_email",
+        status: "pending" as string,
+        webhookStatus: "pending" as string,
+        providerMessageId: null,
+        templateName,
+        payloadSnapshot: {
+          kind: templateName,
+          subject: "Stale billing state",
+          bodyHtml: "<p>This message no longer describes the account.</p>",
+          tag: "billing-lifecycle",
+          billingStateFingerprint: null,
+          outboxPendingDispatch: true,
+        },
+        updatedAt: "2026-07-13T09:04:59.000Z",
+      };
+      const updateDeliveryAttemptResult = vi.fn(
+        async (_env: unknown, _attemptId: string, input: Record<string, unknown>) => {
+          outboxAttempt.status = String(input.status);
+          outboxAttempt.webhookStatus = String(input.webhookStatus);
+          return true;
+        },
+      );
+      mockBillingDataServer({
+        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(outboxAttempt),
+        updateDeliveryAttemptResult,
+      });
+
+      const { sendBillingCancellationEmail, sendBillingRefundEmail } = await import(
+        "~/lib/delivery.server"
+      );
+      const dispatch = () =>
+        templateName === "billing_refund_revoked"
+          ? sendBillingRefundEmail(emailEnv as never, {
+              userId: "user-1",
+              email: "owner@example.com",
+              name: "Owner",
+              eventId: "evt-stale-outbox",
+            })
+          : sendBillingCancellationEmail(emailEnv as never, {
+              userId: "user-1",
+              email: "owner@example.com",
+              name: "Owner",
+              kind:
+                templateName === "billing_cancellation_scheduled" ? "scheduled" : "ended",
+              eventId: "evt-stale-outbox",
+            });
+
+      await expect(dispatch()).resolves.toBe(false);
+      await expect(dispatch()).resolves.toBe(false);
+      expect(sendMock).not.toHaveBeenCalled();
+      expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(1);
+      const supersede = updateDeliveryAttemptResult.mock.calls[0]?.[2];
+      expect(supersede).toMatchObject({
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: outboxAttempt.updatedAt,
+      });
+      expect(supersede).not.toHaveProperty("payloadSnapshot");
+    },
+  );
 
   it("records the current recipient when retrying a failed attempt in place", async () => {
     // The account email changed between the failed attempt and this retry.
@@ -2959,6 +3048,82 @@ describe("billing lifecycle emails", () => {
         webhookStatus: "provider_unknown",
       }),
     );
+  });
+
+  it("cannot bypass stale outbox-kind validation after a crash during recovery", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_crash_bypass_must_not_send");
+    const markerAttempt = {
+      id: "attempt-marker-crash",
+      userId: "user-1",
+      provider: "cloudflare_email",
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      targetValue: "owner@example.com",
+      templateName: "billing_cancellation_scheduled",
+      payloadSnapshot: {
+        kind: "billing_cancellation_scheduled",
+        subject: "Your cancellation is confirmed",
+        bodyHtml: "<p>Your plan will end.</p>",
+        tag: "billing-cancellation",
+        billingStateFingerprint: null,
+        outboxPendingDispatch: true,
+      } as Record<string, unknown>,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const listStaleBillingLifecycleEmailAttempts = vi.fn(
+      async (_env: unknown, input: { staleBefore: string }) =>
+        markerAttempt.status === "pending" &&
+        markerAttempt.webhookStatus === "pending" &&
+        markerAttempt.updatedAt <= input.staleBefore
+          ? [markerAttempt]
+          : [],
+    );
+    let crashAfterFirstDurableUpdate = true;
+    const updateDeliveryAttemptResult = vi.fn(
+      async (_env: unknown, _attemptId: string, input: Record<string, unknown>) => {
+        markerAttempt.status = String(input.status);
+        markerAttempt.webhookStatus = String(input.webhookStatus);
+        markerAttempt.updatedAt = String(input.updatedAt ?? new Date().toISOString());
+        if (input.payloadSnapshot) {
+          markerAttempt.payloadSnapshot = input.payloadSnapshot as Record<string, unknown>;
+        }
+        if (crashAfterFirstDurableUpdate) {
+          crashAfterFirstDurableUpdate = false;
+          throw new Error("worker crashed after the durable update");
+        }
+        return true;
+      },
+    );
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts,
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue(currentBillingInfo),
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const env = { ...emailEnv, DB: {} } as never;
+    await expect(recoverAbandonedBillingLifecycleEmails(env)).rejects.toThrow(
+      "worker crashed after the durable update",
+    );
+
+    vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z"));
+    const secondSweep = await recoverAbandonedBillingLifecycleEmails(env);
+
+    expect(secondSweep).toMatchObject({ scanned: 0, sent: 0 });
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(markerAttempt).toMatchObject({
+      status: "skipped_due_to_dedupe",
+      webhookStatus: "provider_unknown",
+      payloadSnapshot: expect.objectContaining({ outboxPendingDispatch: true }),
+    });
+    expect(markerAttempt.payloadSnapshot.billingStateFingerprint).toBeNull();
   });
 
   it("recovers a stale billing outbox row from its durable payload", async () => {
@@ -3210,6 +3375,10 @@ describe("billing lifecycle emails", () => {
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const mocks = mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(supersededAttempt),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo,
+        dodoStatus: "payment.failed",
+      }),
       updateDeliveryAttemptResult,
     });
 

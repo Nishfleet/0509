@@ -701,11 +701,16 @@ export async function listRetryableDigestRuns(
               AND delivery_attempt.updated_at <= ?
           )
         )
+        AND json_extract(
+          digest_run.summary_json,
+          '$.digestItemSetProvenance'
+        ) = ?
       ORDER BY digest_run.period_end ASC
       LIMIT ?
     `,
     input.since,
     input.stalePreDispatchBefore,
+    DIGEST_ITEM_SET_PROVENANCE,
     input.limit,
   );
 
