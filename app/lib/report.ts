@@ -148,7 +148,14 @@ export function isRenderableReportSnapshot(value: unknown): value is ReportDocum
   }
 
   const candidate = value as unknown as Record<string, unknown>;
-  if (candidate.resourceType !== "watchlist") {
+  if (
+    candidate.resourceType !== "collection" &&
+    candidate.resourceType !== "watchlist"
+  ) {
+    return false;
+  }
+
+  if (candidate.resourceType === "collection") {
     return true;
   }
 

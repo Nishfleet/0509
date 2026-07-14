@@ -426,6 +426,53 @@ describe("/share/:token route", () => {
     expect(serialized).not.toContain("javascript:alert");
   });
 
+  it.each([
+    ["missing", undefined],
+    ["unknown", "workspace"],
+  ])("rejects report snapshots with %s resourceType", async (_label, resourceType) => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({
+      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getCollection: vi.fn(),
+      getDigest: vi.fn(),
+      getShareLink: vi.fn().mockResolvedValue({
+        id: "share-1",
+        token: "token-1",
+        userId: "user-1",
+        resourceType: "report",
+        resourceId: "collection-internal-1",
+        isSnapshot: true,
+        snapshotPayload: {
+          kind: "report",
+          reportId: "collection:collection-internal-1",
+          ...(resourceType ? { resourceType } : {}),
+          resourceId: "collection-internal-1",
+          title: "Invalid report",
+          rows: [],
+        },
+        createdAt: "2026-06-08T01:00:00.000Z",
+        expiresAt: null,
+        revokedAt: null,
+      }),
+      getWatchlist: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listWatchEvents: vi.fn(),
+    }));
+
+    const { loader } = await import("~/routes/share.$token");
+    const result = await loader({
+      context: {},
+      params: { token: "token-1" },
+      request: new Request("https://0509.io/share/token-1"),
+    } as never);
+
+    expect((result as unknown as { payload: unknown }).payload).toBeNull();
+  });
+
   it("rejects legacy watchlist report snapshots that lack proof eligibility metadata", async () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
