@@ -17,7 +17,11 @@ import {
   parseJson,
   type JsonRecord,
 } from "~/lib/data/helpers.server";
-import { readDigestStrategyNote } from "~/lib/digest-strategy";
+import {
+  DIGEST_STRATEGY_GENERATION_PENDING,
+  DIGEST_STRATEGY_GENERATION_READY,
+  readDigestStrategyNote,
+} from "~/lib/digest-strategy";
 import { DIGEST_ITEM_SET_PROVENANCE } from "~/lib/digest-provenance";
 import type { AppEnv } from "~/lib/env.server";
 import type {
@@ -275,6 +279,89 @@ export async function updateDigestRunSummary(
     jsonValue(persistedSummary),
     digestRunId,
   );
+}
+
+export async function claimDigestStrategyGenerationLease(
+  env: AppEnv,
+  digestRunId: string,
+  input: {
+    expectedLeaseId: string;
+    expectedLeaseExpiresAt: string;
+    leaseId: string;
+    leaseExpiresAt: string;
+  },
+) {
+  const result = await run(
+    env,
+    `
+      UPDATE digest_run
+      SET summary_json = json_set(
+        summary_json,
+        '$.strategyGenerationLeaseId', ?,
+        '$.strategyGenerationLeaseExpiresAt', ?
+      )
+      WHERE id = ?
+        AND json_extract(summary_json, '$.strategyGenerationStatus') = ?
+        AND COALESCE(json_extract(summary_json, '$.strategyGenerationLeaseId'), '') = ?
+        AND COALESCE(json_extract(summary_json, '$.strategyGenerationLeaseExpiresAt'), '') = ?
+    `,
+    input.leaseId,
+    input.leaseExpiresAt,
+    digestRunId,
+    DIGEST_STRATEGY_GENERATION_PENDING,
+    input.expectedLeaseId,
+    input.expectedLeaseExpiresAt,
+  );
+  return Number(result.meta?.changes ?? 0) === 1;
+}
+
+export async function completeDigestStrategyGeneration(
+  env: AppEnv,
+  digestRunId: string,
+  input: {
+    leaseId: string;
+    summary: JsonRecord;
+  },
+) {
+  const row = await one<Pick<DigestRunRow, "summary_json">>(
+    env,
+    "SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
+    digestRunId,
+  );
+  if (!row) {
+    return false;
+  }
+
+  const currentSummary = toDigestRunSummary(row);
+  const persistedSummary: JsonRecord = {
+    ...currentSummary,
+    ...input.summary,
+    strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_READY,
+  };
+  delete persistedSummary.strategyGenerationLeaseId;
+  delete persistedSummary.strategyGenerationLeaseExpiresAt;
+  delete persistedSummary.digestItemSetProvenance;
+  if (
+    currentSummary.digestItemSetProvenance === DIGEST_ITEM_SET_PROVENANCE
+  ) {
+    persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
+  }
+
+  const result = await run(
+    env,
+    `
+      UPDATE digest_run
+      SET summary_json = ?
+      WHERE id = ?
+        AND json_extract(summary_json, '$.strategyGenerationStatus') = ?
+        AND json_extract(summary_json, '$.strategyGenerationLeaseId') = ?
+    `,
+    jsonValue(persistedSummary),
+    digestRunId,
+    DIGEST_STRATEGY_GENERATION_PENDING,
+    input.leaseId,
+  );
+  return Number(result.meta?.changes ?? 0) === 1;
 }
 
 const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;

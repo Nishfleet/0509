@@ -17,6 +17,7 @@ import puppeteer from "@cloudflare/puppeteer";
 import type { AppEnv } from "~/lib/env.server";
 import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import { isRenderableReportSnapshot } from "~/lib/report";
 
 const PDF_LAUNCH_TIMEOUT_MS = 10_000;
 const PDF_CAPACITY_LOOKUP_TIMEOUT_MS = 10_000;
@@ -67,6 +68,14 @@ export async function renderShareReportPdfResponse(
       404,
       "pdf_unavailable",
       "PDF export is only available for report snapshot shares.",
+    );
+  }
+
+  if (!isRenderableReportSnapshot(share.snapshotPayload)) {
+    return pdfErrorResponse(
+      404,
+      "pdf_unavailable",
+      "This report snapshot uses an older or invalid format and cannot be rendered safely.",
     );
   }
 

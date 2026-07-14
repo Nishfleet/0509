@@ -10,6 +10,8 @@ import {
   createAdObservation,
   createEventCandidate,
   createDigestRun,
+  claimDigestStrategyGenerationLease,
+  completeDigestStrategyGeneration,
   createProofCapture,
   createWatchEvent,
   createWatchlistRun,
@@ -46,9 +48,15 @@ import {
   touchWatchlistScanned,
   upsertProofTarget,
   upsertAd,
-  updateDigestRunSummary,
 } from "~/lib/data.server";
-import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
+import {
+  DIGEST_STRATEGY_GENERATION_LEASE_MS,
+  DIGEST_STRATEGY_GENERATION_PENDING,
+  DIGEST_STRATEGY_GENERATION_READY,
+  DIGEST_STRATEGY_MODEL,
+  readDigestStrategyNote,
+  readPendingDigestStrategyGeneration,
+} from "~/lib/digest-strategy";
 import { DIGEST_ITEM_SET_PROVENANCE } from "~/lib/digest-provenance";
 import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
@@ -1463,9 +1471,23 @@ async function runDigests(
       }
 
       let strategyParagraph: string | null = null;
+      const strategyGenerationRequired =
+        cadence === "weekly" &&
+        digestItems.length > 0 &&
+        (plan === "starter" || plan === "agency");
+      const initialStrategyLease = strategyGenerationRequired
+        ? createDigestStrategyGenerationLease()
+        : null;
       const digestSummary: Record<string, unknown> = {
         totalEvents: digestItems.length,
         watchlists: watchlists.length,
+        ...(initialStrategyLease
+          ? {
+              strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_PENDING,
+              strategyGenerationLeaseId: initialStrategyLease.leaseId,
+              strategyGenerationLeaseExpiresAt: initialStrategyLease.leaseExpiresAt,
+            }
+          : {}),
       };
       const candidateItems = digestItems.map((item) => ({
         watchlistId: item.watchlistId,
@@ -1488,6 +1510,48 @@ async function runDigests(
           throw new Error(
             "Digest run is incomplete and its original candidate identity cannot be proven.",
           );
+        }
+        const pendingGeneration = readPendingDigestStrategyGeneration(
+          existingDigest.summary,
+        );
+        if (pendingGeneration) {
+          handledDigestRunIds.add(digestRunId);
+          if (!digestStrategyGenerationLeaseExpired(pendingGeneration.leaseExpiresAt)) {
+            continue;
+          }
+
+          const recoveryLease = createDigestStrategyGenerationLease();
+          const recoveryClaimed = await claimDigestStrategyGenerationLease(
+            env,
+            digestRunId,
+            {
+              expectedLeaseId: pendingGeneration.leaseId,
+              expectedLeaseExpiresAt: pendingGeneration.leaseExpiresAt,
+              leaseId: recoveryLease.leaseId,
+              leaseExpiresAt: recoveryLease.leaseExpiresAt,
+            },
+          );
+          if (!recoveryClaimed) {
+            continue;
+          }
+
+          const settled = await settleDigestStrategyGeneration(env, {
+            digestRunId,
+            leaseId: recoveryLease.leaseId,
+            summary: existingDigest.summary,
+            items: existingDigest.items,
+            periodStart: periodStartIso,
+            periodEnd: periodEndIso,
+            plan,
+          });
+          if (!settled) {
+            continue;
+          }
+          strategyParagraph = settled.strategyParagraph;
+          canonicalDigest = {
+            ...existingDigest,
+            summary: settled.summary,
+          };
         }
       } else {
         const claim = await createDigestRun(
@@ -1512,29 +1576,24 @@ async function runDigests(
         }
 
         // The deterministic run and its complete item snapshot must win the
-        // period claim before any optional AI work starts. Only that creator
-        // can generate or persist a strategy paragraph; overlap losers reuse
-        // the stored snapshot and never spend a second AI call.
-        if (
-          cadence === "weekly" &&
-          digestItems.length > 0 &&
-          (plan === "starter" || plan === "agency")
-        ) {
-          const generatedStrategy = await buildWeeklyStrategyParagraph(env, {
+        // period claim before any optional AI work starts. Its durable lease
+        // keeps overlapping executions from delivering before generation is
+        // settled; an expired lease is recoverable by compare-and-set.
+        if (initialStrategyLease) {
+          const settled = await settleDigestStrategyGeneration(env, {
+            digestRunId,
+            leaseId: initialStrategyLease.leaseId,
+            summary: digestSummary,
             items: digestItems,
             periodStart: periodStartIso,
             periodEnd: periodEndIso,
+            plan,
           });
-          strategyParagraph = generatedStrategy?.paragraph ?? null;
-          if (strategyParagraph) {
-            await updateDigestRunSummary(env, digestRunId, {
-              ...digestSummary,
-              strategyParagraph,
-              strategyModel: DIGEST_STRATEGY_MODEL,
-              strategyGeneratedAt: new Date().toISOString(),
-              strategyWatchlistIds: generatedStrategy?.watchlistIds ?? null,
-            });
+          if (!settled) {
+            handledDigestRunIds.add(digestRunId);
+            continue;
           }
+          strategyParagraph = settled.strategyParagraph;
         }
       }
       handledDigestRunIds.add(digestRunId);
@@ -1603,6 +1662,83 @@ async function runDigests(
   return digestsSent;
 }
 
+type DigestStrategyGenerationItem = {
+  watchlistId: string;
+  watchlistName: string;
+  title: string;
+  summary: string;
+  metadata?: Record<string, unknown>;
+  proofStatus?: string;
+};
+
+function createDigestStrategyGenerationLease(now = Date.now()) {
+  return {
+    leaseId: crypto.randomUUID(),
+    leaseExpiresAt: new Date(
+      now + DIGEST_STRATEGY_GENERATION_LEASE_MS,
+    ).toISOString(),
+  };
+}
+
+function digestStrategyGenerationLeaseExpired(leaseExpiresAt: string, now = Date.now()) {
+  const expiresAt = Date.parse(leaseExpiresAt);
+  return !Number.isFinite(expiresAt) || expiresAt <= now;
+}
+
+async function settleDigestStrategyGeneration(
+  env: AppEnv,
+  input: {
+    digestRunId: string;
+    leaseId: string;
+    summary: Record<string, unknown>;
+    items: DigestStrategyGenerationItem[];
+    periodStart: string;
+    periodEnd: string;
+    plan: Awaited<ReturnType<typeof getUserPlan>>;
+  },
+) {
+  const generatedStrategy =
+    input.plan === "starter" || input.plan === "agency"
+      ? await buildWeeklyStrategyParagraph(env, {
+          items: input.items,
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+        })
+      : null;
+  const readySummary: Record<string, unknown> = {
+    ...input.summary,
+    strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_READY,
+  };
+  delete readySummary.strategyGenerationLeaseId;
+  delete readySummary.strategyGenerationLeaseExpiresAt;
+  delete readySummary.strategyParagraph;
+  delete readySummary.strategyModel;
+  delete readySummary.strategyGeneratedAt;
+  delete readySummary.strategyWatchlistIds;
+
+  if (generatedStrategy) {
+    readySummary.strategyParagraph = generatedStrategy.paragraph;
+    readySummary.strategyModel = DIGEST_STRATEGY_MODEL;
+    readySummary.strategyGeneratedAt = new Date().toISOString();
+    readySummary.strategyWatchlistIds = generatedStrategy.watchlistIds;
+  }
+
+  const completed = await completeDigestStrategyGeneration(
+    env,
+    input.digestRunId,
+    {
+      leaseId: input.leaseId,
+      summary: readySummary,
+    },
+  );
+  return completed
+    ? {
+        summary: readySummary,
+        strategyParagraph: generatedStrategy?.paragraph ?? null,
+      }
+    : null;
+}
+
 async function retryFailedDigests(
   env: AppEnv,
   input: {
@@ -1628,8 +1764,47 @@ async function retryFailedDigests(
       if (!digest || !hasCompleteDigestItemSet(digest)) {
         continue;
       }
+      let deliveryDigest = digest;
+      const pendingGeneration = readPendingDigestStrategyGeneration(digest.summary);
+      if (pendingGeneration) {
+        if (!digestStrategyGenerationLeaseExpired(pendingGeneration.leaseExpiresAt)) {
+          continue;
+        }
+
+        const recoveryLease = createDigestStrategyGenerationLease();
+        const recoveryClaimed = await claimDigestStrategyGenerationLease(
+          env,
+          candidate.id,
+          {
+            expectedLeaseId: pendingGeneration.leaseId,
+            expectedLeaseExpiresAt: pendingGeneration.leaseExpiresAt,
+            leaseId: recoveryLease.leaseId,
+            leaseExpiresAt: recoveryLease.leaseExpiresAt,
+          },
+        );
+        if (!recoveryClaimed) {
+          continue;
+        }
+
+        const settled = await settleDigestStrategyGeneration(env, {
+          digestRunId: candidate.id,
+          leaseId: recoveryLease.leaseId,
+          summary: digest.summary,
+          items: digest.items,
+          periodStart: candidate.periodStart,
+          periodEnd: candidate.periodEnd,
+          plan,
+        });
+        if (!settled) {
+          continue;
+        }
+        deliveryDigest = {
+          ...digest,
+          summary: settled.summary,
+        };
+      }
       let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
-      if (digest.items.length === 0) {
+      if (deliveryDigest.items.length === 0) {
         const runStats = await getSuccessfulRunStatsForUserBetween(
           env,
           candidate.userId,
@@ -1651,7 +1826,7 @@ async function retryFailedDigests(
         digestRunId: candidate.id,
         periodStart: candidate.periodStart,
         periodEnd: candidate.periodEnd,
-        items: digest.items.map((item) => ({
+        items: deliveryDigest.items.map((item) => ({
           eventId: item.id,
           watchlistId: item.watchlistId,
           watchlistName: item.watchlistName,
@@ -1661,7 +1836,7 @@ async function retryFailedDigests(
           metadata: item.metadata,
         })),
         // Retries only ever replay the persisted paragraph — never regenerate.
-        strategyParagraph: readDigestStrategyNote(digest.summary)?.paragraph ?? null,
+        strategyParagraph: readDigestStrategyNote(deliveryDigest.summary)?.paragraph ?? null,
         cadence,
         lane: "customer",
       });

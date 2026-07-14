@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   addDigestItem,
+  claimDigestStrategyGenerationLease,
   clearDigestItems,
+  completeDigestStrategyGeneration,
   createDigestRun,
   getDigest,
   getDigestByPeriod,
@@ -15,7 +17,9 @@ import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 const mockState = vi.hoisted(() => ({
   data: {
     addDigestItem: vi.fn(),
+    claimDigestStrategyGenerationLease: vi.fn(),
     clearDigestItems: vi.fn(),
+    completeDigestStrategyGeneration: vi.fn(),
     createDigestRun: vi.fn(),
     getDigest: vi.fn(),
     getDigestByPeriod: vi.fn(),
@@ -133,7 +137,13 @@ function installDataMocks(
 ) {
   const data = mockState.data;
   data.addDigestItem.mockReset().mockImplementation(addDigestItem);
+  data.claimDigestStrategyGenerationLease
+    .mockReset()
+    .mockImplementation(claimDigestStrategyGenerationLease);
   data.clearDigestItems.mockReset().mockImplementation(clearDigestItems);
+  data.completeDigestStrategyGeneration
+    .mockReset()
+    .mockImplementation(completeDigestStrategyGeneration);
   data.createDigestRun.mockReset().mockImplementation(serializedCreateDigestRun());
   data.getDigest.mockReset().mockImplementation(getDigest);
   data.getDigestByPeriod.mockReset().mockImplementation(getDigestByPeriod);
@@ -150,7 +160,9 @@ function installDataMocks(
 
   return {
     addDigestItem: data.addDigestItem,
+    claimDigestStrategyGenerationLease: data.claimDigestStrategyGenerationLease,
     clearDigestItems: data.clearDigestItems,
+    completeDigestStrategyGeneration: data.completeDigestStrategyGeneration,
     createDigestRun: data.createDigestRun,
     updateDigestRunSummary: data.updateDigestRunSummary,
   };
@@ -192,17 +204,18 @@ describe("weekly digest overlap", () => {
     ]));
     const env = { AI: { run: aiRun }, DB: monitoringDb(harness) } as never;
     const options = { periodEnd: "2026-07-13T05:00:00.000Z" };
+    let winner: Promise<number> | null = null;
 
     try {
       await import("~/lib/delivery.server");
       const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-      const winner = runWeeklyDigests(env, options);
+      winner = runWeeklyDigests(env, options);
       await aiStarted.promise;
       const overlap = runWeeklyDigests(env, options);
-      await Promise.resolve();
-      await Promise.resolve();
+      await expect(overlap).resolves.toBe(0);
+      expect(mockState.deliverWeeklyDigest).not.toHaveBeenCalled();
       aiGate.resolve();
-      await Promise.all([winner, overlap]);
+      await winner;
 
       const storedRow = harness.sqlite
         .prepare("SELECT id, summary_json FROM digest_run")
@@ -221,7 +234,7 @@ describe("weekly digest overlap", () => {
       ).toMatchObject({ count: 1 });
       expect(mutations.addDigestItem).not.toHaveBeenCalled();
       expect(mutations.clearDigestItems).not.toHaveBeenCalled();
-      expect(mutations.updateDigestRunSummary).toHaveBeenCalledTimes(1);
+      expect(mutations.completeDigestStrategyGeneration).toHaveBeenCalledTimes(1);
       expect(
         new Set(initialDeliveries.flatMap((delivery) =>
           delivery.items.map((item: { title: string }) => item.title))),
@@ -230,8 +243,8 @@ describe("weekly digest overlap", () => {
       harness.sqlite.prepare("UPDATE watchlist SET is_active = 0 WHERE id = ?").run("watch-1");
       await runWeeklyDigests(env, options);
 
-      expect(mockState.deliverWeeklyDigest).toHaveBeenCalledTimes(3);
-      expect(mockState.deliverWeeklyDigest.mock.calls[2]?.[1].strategyParagraph).toBe(
+      expect(mockState.deliverWeeklyDigest).toHaveBeenCalledTimes(2);
+      expect(mockState.deliverWeeklyDigest.mock.calls[1]?.[1].strategyParagraph).toBe(
         storedParagraph,
       );
       await expect(
@@ -239,6 +252,71 @@ describe("weekly digest overlap", () => {
       ).resolves.toMatchObject({ paragraph: storedParagraph });
     } finally {
       aiGate.resolve();
+      await winner?.catch(() => undefined);
+      harness.close();
+    }
+  });
+
+  it("recovers an expired strategy-generation lease before delivering", async () => {
+    const harness = setupHarness();
+    const aiRun = vi.fn().mockResolvedValue(OVERLAP_PARAGRAPHS[0]);
+    const env = { AI: { run: aiRun }, DB: monitoringDb(harness) } as never;
+    const periodStart = "2026-07-06T05:00:00.000Z";
+    const periodEnd = "2026-07-13T05:00:00.000Z";
+
+    try {
+      const claim = await createDigestRun(
+        env,
+        "user-1",
+        periodStart,
+        periodEnd,
+        {
+          totalEvents: 1,
+          watchlists: 1,
+          strategyGenerationStatus: "pending",
+          strategyGenerationLeaseId: "abandoned-creator",
+          strategyGenerationLeaseExpiresAt: "2000-01-01T00:00:00.000Z",
+        },
+        {
+          returnClaim: true,
+          items: [{
+            watchlistId: "watch-1",
+            watchlistName: "boAt watch",
+            eventType: "landing_page_offer_changed",
+            title: "Persisted offer change",
+            summary: "The persisted winner changed its offer.",
+            metadata: {
+              eventStatus: "confirmed",
+              sourceStatus: "proof_backed",
+              priorityScore: 79,
+            },
+          }],
+        },
+      );
+      expect(claim.created).toBe(true);
+
+      installDataMocks(vi.fn(async () => []));
+      mockState.deliverWeeklyDigest.mockResolvedValue({ attempts: 1, channels: ["email"] });
+
+      const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+      await expect(runWeeklyDigests(env, { periodEnd })).resolves.toBe(1);
+
+      expect(aiRun).toHaveBeenCalledTimes(1);
+      expect(mockState.data.claimDigestStrategyGenerationLease).toHaveBeenCalledTimes(1);
+      expect(mockState.deliverWeeklyDigest).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          strategyParagraph: OVERLAP_PARAGRAPHS[0],
+          items: [expect.objectContaining({ title: "Persisted offer change" })],
+        }),
+      );
+      await expect(getDigest(env, claim.digestRunId)).resolves.toMatchObject({
+        summary: {
+          strategyGenerationStatus: "ready",
+          strategyParagraph: OVERLAP_PARAGRAPHS[0],
+        },
+      });
+    } finally {
       harness.close();
     }
   });
@@ -326,7 +404,7 @@ describe("weekly digest overlap", () => {
       });
       expect(mutations.addDigestItem).not.toHaveBeenCalled();
       expect(mutations.clearDigestItems).not.toHaveBeenCalled();
-      expect(mutations.updateDigestRunSummary).toHaveBeenCalledTimes(1);
+      expect(mutations.completeDigestStrategyGeneration).toHaveBeenCalledTimes(1);
     } finally {
       firstDeliveryGate.resolve();
       await winner?.catch(() => undefined);
