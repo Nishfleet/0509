@@ -19,7 +19,15 @@ import type { AppEnv } from "~/lib/env.server";
 
 type GrantDodoPlanAccessInput = Parameters<
   typeof import("~/lib/data/billing-plan.server").grantDodoPlanAccess
->[1];
+>[1] & {
+  /**
+   * Apply only when the existing product, subscription, and customer all
+   * match the incoming provider identity. This intentionally uses UPDATE
+   * rather than UPSERT so an identity-bound lifecycle event cannot create a
+   * new entitlement when there is no current subscription to compare.
+   */
+  requireProviderIdentityMatch?: boolean;
+};
 type RevokeDodoPlanAccessInput = Parameters<
   typeof import("~/lib/data/billing-plan.server").revokeDodoPlanAccess
 >[1];
@@ -149,7 +157,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     input.forcePlanChangePending ? 1 : 0,
   );
 
-  if (input.requirePlanChangePending) {
+  if (input.requirePlanChangePending || input.requireProviderIdentityMatch) {
     const guardedGrantStatement = db.prepare(`
       UPDATE user_plan
       SET plan = ?,
@@ -188,27 +196,41 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
           plan_updated_at = ?
       WHERE user_id = ?
         AND (
-          dodo_status IN (
-            'plan_change_pending',
-            'plan_change_scheduled',
-            'payment.failed',
-            'subscription.failed',
-            'subscription.on_hold'
-          )
+          ? = 0
           OR (
-            dodo_status IN ('succeeded', 'payment.succeeded')
-            AND dodo_product_id = ?
+            (
+              dodo_status IN (
+                'plan_change_pending',
+                'plan_change_scheduled',
+                'payment.failed',
+                'subscription.failed',
+                'subscription.on_hold'
+              )
+              OR (
+                dodo_status IN ('succeeded', 'payment.succeeded')
+                AND dodo_product_id = ?
+              )
+            )
+            AND dodo_plan_change_product_id = ?
+            AND (
+              ? IS NULL
+              OR dodo_subscription_id = ?
+            )
+            AND (
+              ? IS NULL
+              OR dodo_customer_id IS NULL
+              OR dodo_customer_id = ?
+            )
           )
         )
-        AND dodo_plan_change_product_id = ?
         AND (
-          ? IS NULL
-          OR dodo_subscription_id = ?
-        )
-        AND (
-          ? IS NULL
-          OR dodo_customer_id IS NULL
-          OR dodo_customer_id = ?
+          ? = 0
+          OR (
+            dodo_product_id = ?
+            AND dodo_subscription_id = ?
+            AND dodo_customer_id = ?
+            AND julianday(?) >= julianday(plan_updated_at)
+          )
         )
     `).bind(
       input.plan,
@@ -227,12 +249,18 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
       input.status,
       planUpdatedAt,
       input.userId,
+      input.requirePlanChangePending ? 1 : 0,
       input.providerProductId ?? null,
       input.providerProductId ?? null,
       input.providerSubscriptionId ?? null,
       input.providerSubscriptionId ?? null,
       input.providerCustomerId ?? null,
       input.providerCustomerId ?? null,
+      input.requireProviderIdentityMatch ? 1 : 0,
+      input.providerProductId ?? null,
+      input.providerSubscriptionId ?? null,
+      input.providerCustomerId ?? null,
+      planUpdatedAt,
     );
     const acceptedPlan = {
       plan: input.plan,
@@ -251,7 +279,9 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
           outcome: "ignored",
           metadata: {
             ...ledger.metadata,
-            ignoredReason: "plan_change_guard_mismatch",
+            ignoredReason: input.requireProviderIdentityMatch
+              ? "provider_identity_guard_mismatch"
+              : "plan_change_guard_mismatch",
           },
         },
         processedAt,

@@ -3243,6 +3243,48 @@ describe("billing lifecycle emails", () => {
     );
   });
 
+  it("retargets a recovered billing email after the verified account email changes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    const sendMock = mockEmailSend("msg_recovery_new_target");
+    const staleAttempt = billingAttempt({
+      id: "attempt-recovery-old-target",
+      targetValue: "old@example.com",
+      payloadSnapshot: billingPayload("billing_refund_revoked", {
+        subject: "Your refund has been processed",
+        bodyHtml: "<p>Your refund is complete.</p>",
+        tag: "billing-refund",
+        billingStateFingerprint: currentBillingStateFingerprint,
+      }),
+    });
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        email: "new@example.com",
+        name: "Owner",
+      }),
+      updateDeliveryAttemptResult,
+    });
+
+    const result = await recoverBilling();
+
+    expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 1, superseded: 0 });
+    expect(emailSendPayload(sendMock).to).toBe("new@example.com");
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      staleAttempt.id,
+      expect.objectContaining({
+        status: "pending",
+        targetValue: "new@example.com",
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: staleAttempt.updatedAt,
+      }),
+    );
+  });
+
   it("recovers a marker outbox row when the billing state still matches its kind", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
