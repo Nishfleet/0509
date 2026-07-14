@@ -379,13 +379,40 @@ export async function getLatestDigestRunSummaryForWatchlist(
   const rows = await many<DigestRunRow>(
     env,
     `
+      WITH
+      js_whitespace(chars) AS (
+        VALUES (char(9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194,
+          8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239,
+          8287, 12288, 65279))
+      ),
+      workspace_runs AS (
+        SELECT digest_run.*,
+          CASE WHEN json_valid(summary_json) THEN summary_json ELSE '{}' END
+            AS valid_summary_json
+        FROM digest_run
+        WHERE user_id = ?
+      )
       SELECT id, user_id, period_start, period_end, summary_json, created_at
-      FROM digest_run
-      WHERE user_id = ?
+      FROM workspace_runs
+      CROSS JOIN js_whitespace
+      WHERE json_type(valid_summary_json, '$.strategyParagraph') = 'text'
+        AND trim(
+          json_extract(valid_summary_json, '$.strategyParagraph'),
+          js_whitespace.chars
+        ) != ''
+        AND json_type(valid_summary_json, '$.strategyWatchlistIds') = 'array'
+        AND json_array_length(valid_summary_json, '$.strategyWatchlistIds') > 0
+        AND NOT EXISTS (
+          SELECT 1
+          FROM json_each(valid_summary_json, '$.strategyWatchlistIds') AS provenance
+          WHERE provenance.type != 'text'
+             OR trim(provenance.value, js_whitespace.chars) != ?
+        )
       ORDER BY period_end DESC
       LIMIT ?
     `,
     userId,
+    watchlistId,
     LATEST_STRATEGY_SUMMARY_SCAN_LIMIT,
   );
 

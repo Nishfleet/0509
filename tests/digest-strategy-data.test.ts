@@ -408,11 +408,19 @@ describe("digest_run summary persistence", () => {
         strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
         strategyWatchlistIds: ["watch-1"],
       });
-      // Newest run (e.g. a daily heartbeat) has no paragraph — must be skipped.
-      await createDigestRun(env, "user-1", "2026-07-13T05:00:00.000Z", "2026-07-14T05:00:00.000Z", {
-        totalEvents: 0,
-        watchlists: 1,
-      });
+      // More than the old scan cap of later heartbeats/other-watchlist notes
+      // must not hide watch-1's retained weekly strategy.
+      for (let offset = 0; offset < 24; offset += 1) {
+        const periodStart = new Date(Date.UTC(2026, 6, 13 + offset, 5)).toISOString();
+        const periodEnd = new Date(Date.UTC(2026, 6, 14 + offset, 5)).toISOString();
+        await createDigestRun(env, "user-1", periodStart, periodEnd, offset >= 12
+          ? { strategyParagraph: "\u00a0\u2007\u202f", strategyGeneratedAt: periodEnd, strategyWatchlistIds: ["watch-1"] }
+          : offset % 2 === 0 ? { totalEvents: 0, watchlists: 1 } : {
+              strategyParagraph: `${PARAGRAPH} (other watchlist)`,
+              strategyGeneratedAt: periodEnd,
+              strategyWatchlistIds: ["watch-2"],
+            });
+      }
 
       await expect(
         getLatestDigestRunSummaryForWatchlist(env, "user-1", "watch-1"),
