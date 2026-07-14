@@ -3010,7 +3010,11 @@ describe("billing lifecycle emails", () => {
     );
     expect(listStaleBillingLifecycleEmailAttempts).toHaveBeenCalledWith(
       expect.anything(),
-      { staleBefore: "2026-07-13T09:04:00.000Z", limit: 10 },
+      {
+        staleBefore: "2026-07-13T09:04:00.000Z",
+        limit: 10,
+        maxRecoveryAttempts: 3,
+      },
     );
     expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
       1,
@@ -3030,6 +3034,98 @@ describe("billing lifecycle emails", () => {
       expect.objectContaining({
         status: "sent",
         expectedUpdatedAt: "2026-07-13T09:05:00.000Z",
+      }),
+    );
+  });
+
+  it("retries one provider-confirmed recovery failure on a later sweep and sends once", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    emailSend = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("provider explicitly rejected"))
+      .mockResolvedValueOnce({ messageId: "msg_recovery_retry" });
+
+    const attempt = {
+      id: "attempt-recovery-two-sweep",
+      userId: "user-1",
+      provider: "cloudflare_email",
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null as string | null,
+      providerStatusLastSeenAt: null as string | null,
+      targetValue: "owner@example.com",
+      templateName: "billing_refund",
+      payloadSnapshot: {
+        kind: "billing_refund",
+        subject: "Your refund has been processed",
+        bodyHtml: "<p>Your refund is complete.</p>",
+        tag: "billing-refund",
+        billingStateFingerprint: currentBillingStateFingerprint,
+      } as Record<string, unknown>,
+      errorMessage: null as string | null,
+      sentAt: null as string | null,
+      failedAt: null as string | null,
+      updatedAt: "2026-07-13T09:03:00.000Z",
+    };
+    const listStaleBillingLifecycleEmailAttempts = vi.fn(async () => {
+      const attempts = Number(attempt.payloadSnapshot.recoveryAttemptCount ?? 0);
+      const retryablePending =
+        attempt.status === "pending" && attempt.webhookStatus === "pending";
+      const retryableExplicitFailure =
+        attempt.status === "failed" &&
+        attempt.webhookStatus === "failed" &&
+        attempt.providerStatusLastSeenAt !== null &&
+        attempts < 3;
+      return retryablePending || retryableExplicitFailure ? [attempt] : [];
+    });
+    const updateDeliveryAttemptResult = vi.fn(async (
+      _env: unknown,
+      _attemptId: string,
+      input: Record<string, unknown>,
+    ) => {
+      if (input.expectedStatus && attempt.status !== input.expectedStatus) return false;
+      if (input.expectedWebhookStatus && attempt.webhookStatus !== input.expectedWebhookStatus) {
+        return false;
+      }
+      if (input.expectedUpdatedAt && attempt.updatedAt !== input.expectedUpdatedAt) return false;
+      attempt.provider = String(input.provider);
+      attempt.status = String(input.status);
+      attempt.webhookStatus = String(input.webhookStatus);
+      attempt.providerMessageId = (input.providerMessageId as string | null) ?? null;
+      attempt.providerStatusLastSeenAt =
+        (input.providerStatusLastSeenAt as string | null) ?? null;
+      attempt.errorMessage = (input.errorMessage as string | null) ?? null;
+      attempt.sentAt = (input.sentAt as string | null) ?? null;
+      attempt.failedAt = (input.failedAt as string | null) ?? null;
+      if (input.payloadSnapshot) {
+        attempt.payloadSnapshot = input.payloadSnapshot as Record<string, unknown>;
+      }
+      attempt.updatedAt = String(input.updatedAt ?? new Date().toISOString());
+      return true;
+    });
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts,
+      updateDeliveryAttemptResult,
+    });
+
+    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+    const env = { ...emailEnv, DB: {} } as never;
+    const firstSweep = await recoverAbandonedBillingLifecycleEmails(env);
+    const secondSweep = await recoverAbandonedBillingLifecycleEmails(env);
+
+    expect(firstSweep).toMatchObject({ scanned: 1, claimed: 1, failed: 1, sent: 0 });
+    expect(secondSweep).toMatchObject({ scanned: 1, claimed: 1, failed: 0, sent: 1 });
+    expect(emailSend).toHaveBeenCalledTimes(2);
+    expect(attempt.status).toBe("sent");
+    expect(attempt.payloadSnapshot.recoveryAttemptCount).toBe(2);
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      attempt.id,
+      expect.objectContaining({
+        expectedStatus: "failed",
+        expectedWebhookStatus: "failed",
+        payloadSnapshot: expect.objectContaining({ recoveryAttemptCount: 2 }),
       }),
     );
   });

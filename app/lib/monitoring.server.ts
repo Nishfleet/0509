@@ -46,8 +46,10 @@ import {
   touchWatchlistScanned,
   upsertProofTarget,
   upsertAd,
+  updateDigestRunSummary,
 } from "~/lib/data.server";
 import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
+import { DIGEST_ITEM_SET_PROVENANCE } from "~/lib/digest-provenance";
 import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
@@ -1460,37 +1462,10 @@ async function runDigests(
         heartbeat = runStats;
       }
 
-      // AI weekly strategy paragraph: paid weekly digests with movement only.
-      // Existing runs reuse the stored paragraph verbatim — regenerating would
-      // put nondeterministic content in front of the customer. A null result
-      // changes nothing downstream; absence is always silent.
       let strategyParagraph: string | null = null;
-      let strategyWatchlistIds: string[] | null = null;
-      if (
-        !existingDigest &&
-        cadence === "weekly" &&
-        digestItems.length > 0 &&
-        (plan === "starter" || plan === "agency")
-      ) {
-        const generatedStrategy = await buildWeeklyStrategyParagraph(env, {
-          items: digestItems,
-          periodStart: periodStartIso,
-          periodEnd: periodEndIso,
-        });
-        strategyParagraph = generatedStrategy?.paragraph ?? null;
-        strategyWatchlistIds = generatedStrategy?.watchlistIds ?? null;
-      }
       const digestSummary: Record<string, unknown> = {
         totalEvents: digestItems.length,
         watchlists: watchlists.length,
-        ...(strategyParagraph
-          ? {
-              strategyParagraph,
-              strategyModel: DIGEST_STRATEGY_MODEL,
-              strategyGeneratedAt: new Date().toISOString(),
-              strategyWatchlistIds,
-            }
-          : {}),
       };
       const candidateItems = digestItems.map((item) => ({
         watchlistId: item.watchlistId,
@@ -1534,6 +1509,32 @@ async function runDigests(
           // a later retry sweep can safely replay the stored winner if needed.
           handledDigestRunIds.add(digestRunId);
           continue;
+        }
+
+        // The deterministic run and its complete item snapshot must win the
+        // period claim before any optional AI work starts. Only that creator
+        // can generate or persist a strategy paragraph; overlap losers reuse
+        // the stored snapshot and never spend a second AI call.
+        if (
+          cadence === "weekly" &&
+          digestItems.length > 0 &&
+          (plan === "starter" || plan === "agency")
+        ) {
+          const generatedStrategy = await buildWeeklyStrategyParagraph(env, {
+            items: digestItems,
+            periodStart: periodStartIso,
+            periodEnd: periodEndIso,
+          });
+          strategyParagraph = generatedStrategy?.paragraph ?? null;
+          if (strategyParagraph) {
+            await updateDigestRunSummary(env, digestRunId, {
+              ...digestSummary,
+              strategyParagraph,
+              strategyModel: DIGEST_STRATEGY_MODEL,
+              strategyGeneratedAt: new Date().toISOString(),
+              strategyWatchlistIds: generatedStrategy?.watchlistIds ?? null,
+            });
+          }
         }
       }
       handledDigestRunIds.add(digestRunId);
@@ -1687,6 +1688,11 @@ function hasCompleteDigestItemSet(digest: {
   summary?: Record<string, unknown>;
   items: readonly unknown[];
 }) {
+  if (
+    digest.summary?.digestItemSetProvenance !== DIGEST_ITEM_SET_PROVENANCE
+  ) {
+    return false;
+  }
   const expectedItemCount = readDigestExpectedItemCount(digest.summary);
   return expectedItemCount !== null && digest.items.length === expectedItemCount;
 }

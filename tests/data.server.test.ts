@@ -3262,6 +3262,7 @@ describe("listStaleBillingLifecycleEmailAttempts", () => {
       {
         staleBefore: "2026-07-13T08:59:00.000Z",
         limit: 10,
+        maxRecoveryAttempts: 3,
       },
     );
 
@@ -3276,9 +3277,14 @@ describe("listStaleBillingLifecycleEmailAttempts", () => {
     expect(query?.sql).toContain("idempotency_key LIKE 'billing-refund:%'");
     expect(query?.sql).toContain("status = 'pending'");
     expect(query?.sql).toContain("webhook_status = 'pending'");
+    expect(query?.sql).toContain("status = 'failed'");
+    expect(query?.sql).toContain("webhook_status = 'failed'");
+    expect(query?.sql).toContain("provider_status_last_seen_at IS NOT NULL");
+    expect(query?.sql).toContain("recoveryAttemptCount");
+    expect(query?.sql).toContain("< ?");
     expect(query?.sql).toContain("updated_at <= ?");
     expect(query?.sql).toContain("ORDER BY updated_at ASC");
-    expect(query?.bindings).toEqual(["2026-07-13T08:59:00.000Z", 10]);
+    expect(query?.bindings).toEqual(["2026-07-13T08:59:00.000Z", 3, 10]);
   });
 });
 

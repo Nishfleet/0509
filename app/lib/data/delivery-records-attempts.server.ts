@@ -52,6 +52,7 @@ export async function listStaleBillingLifecycleEmailAttempts(
   input: {
     staleBefore: string;
     limit: number;
+    maxRecoveryAttempts: number;
   },
 ) {
   const rows = await many<DeliveryAttemptRow>(
@@ -69,13 +70,27 @@ export async function listStaleBillingLifecycleEmailAttempts(
           OR idempotency_key LIKE 'billing-cancellation:%'
           OR idempotency_key LIKE 'billing-refund:%'
         )
-        AND status = 'pending'
-        AND webhook_status = 'pending'
-        AND updated_at <= ?
+        AND (
+          (
+            status = 'pending'
+            AND webhook_status = 'pending'
+            AND updated_at <= ?
+          )
+          OR (
+            status = 'failed'
+            AND webhook_status = 'failed'
+            AND provider_status_last_seen_at IS NOT NULL
+            AND COALESCE(
+              CAST(json_extract(payload_snapshot_json, '$.recoveryAttemptCount') AS INTEGER),
+              0
+            ) < ?
+          )
+        )
       ORDER BY updated_at ASC
       LIMIT ?
     `,
     input.staleBefore,
+    input.maxRecoveryAttempts,
     input.limit,
   );
 

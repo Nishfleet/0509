@@ -63,6 +63,7 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 // Facade re-exports: product code and tests import every delivery sender
 // from this module; the billing lifecycle domain lives in its own file.
 export {
+  BILLING_LIFECYCLE_RECOVERY_MAX_ATTEMPTS,
   BillingLifecycleEmailExplicitFailure,
   isBillingLifecycleEmailExplicitFailure,
   prepareBillingLifecycleEmailOutbox,

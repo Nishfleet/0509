@@ -406,7 +406,11 @@ describe("digest retry sweep", () => {
       userId: "user-7",
       periodStart: "2026-06-09T04:00:00.000Z",
       periodEnd: "2026-06-10T04:00:00.000Z",
-      summary: { totalEvents: 1, watchlists: 1 },
+      summary: {
+        totalEvents: 1,
+        watchlists: 1,
+        digestItemSetProvenance: "atomic-v1",
+      },
       createdAt: "2026-06-10T04:00:00.000Z",
       items: [
         {
@@ -480,7 +484,11 @@ describe("digest retry sweep", () => {
       userId: "user-9",
       periodStart: "2026-06-09T04:00:00.000Z",
       periodEnd: "2026-06-10T04:00:00.000Z",
-      summary: { totalEvents: 0, watchlists: 1 },
+      summary: {
+        totalEvents: 0,
+        watchlists: 1,
+        digestItemSetProvenance: "atomic-v1",
+      },
       createdAt: "2026-06-10T04:00:00.000Z",
       items: [],
       delivery: {

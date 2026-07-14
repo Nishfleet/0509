@@ -23,6 +23,7 @@ import type { AppEnv } from "~/lib/env.server";
 import type { DeliveryAttemptRecord } from "~/lib/types";
 
 const BILLING_LIFECYCLE_RECOVERY_LIMIT = 10;
+export const BILLING_LIFECYCLE_RECOVERY_MAX_ATTEMPTS = 3;
 
 const BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE =
   "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE" as const;
@@ -328,6 +329,11 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
   };
 }
 
+function billingLifecycleRecoveryAttemptCount(attempt: DeliveryAttemptRecord) {
+  const value = attempt.payloadSnapshot.recoveryAttemptCount;
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
+}
+
 /**
  * Kind-aware "does this email still describe reality?" check for outbox rows
  * that never got a post-mutation fingerprint. dodo_status values mirror what
@@ -381,11 +387,17 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
   const attempts = await listStaleBillingLifecycleEmailAttempts(env, {
     staleBefore: deliveryPreDispatchStaleBefore(),
     limit: BILLING_LIFECYCLE_RECOVERY_LIMIT,
+    maxRecoveryAttempts: BILLING_LIFECYCLE_RECOVERY_MAX_ATTEMPTS,
   });
   const result = { ...emptyResult, scanned: attempts.length };
 
   for (const attempt of attempts) {
     const payload = readBillingLifecycleRecoveryPayload(attempt);
+    const recoveryAttemptCount = billingLifecycleRecoveryAttemptCount(attempt) + 1;
+    const retryingExplicitFailure =
+      attempt.status === "failed" &&
+      attempt.webhookStatus === "failed" &&
+      attempt.providerStatusLastSeenAt !== null;
     const [currentBillingInfo, currentProfile] = payload
       ? await Promise.all([
           getUserPlanBillingInfo(env, attempt.userId),
@@ -419,11 +431,12 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
               tag: payload.tag,
               billingStateFingerprint:
                 billingLifecycleStateFingerprint(currentBillingInfo),
+              recoveryAttemptCount,
             }
           : undefined,
       updatedAt: claimUpdatedAt,
-      expectedStatus: "pending",
-      expectedWebhookStatus: "pending",
+      expectedStatus: retryingExplicitFailure ? "failed" : "pending",
+      expectedWebhookStatus: retryingExplicitFailure ? "failed" : "pending",
       expectedUpdatedAt: attempt.updatedAt,
     });
     if (claimed !== true) {

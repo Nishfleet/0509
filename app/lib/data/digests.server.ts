@@ -18,6 +18,7 @@ import {
   type JsonRecord,
 } from "~/lib/data/helpers.server";
 import { readDigestStrategyNote } from "~/lib/digest-strategy";
+import { DIGEST_ITEM_SET_PROVENANCE } from "~/lib/digest-provenance";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   DigestDeliveryRecord,
@@ -34,6 +35,8 @@ interface DigestRunRow {
   summary_json: string;
   created_at: string;
 }
+
+export { DIGEST_ITEM_SET_PROVENANCE } from "~/lib/digest-provenance";
 
 interface DigestItemRow {
   id: string;
@@ -83,7 +86,7 @@ interface DigestRunClaimOptions {
   items?: readonly DigestRunItemInput[];
 }
 
-function toDigestRunSummary(row: DigestRunRow): JsonRecord {
+function toDigestRunSummary(row: Pick<DigestRunRow, "summary_json">): JsonRecord {
   // summary_json is free-form JSON; legacy rows may hold non-object payloads.
   const parsed = parseJson<unknown>(row.summary_json, {});
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
@@ -144,6 +147,13 @@ export async function createDigestRun(
   const id = createId();
   const createdAt = nowIso();
   const db = ensureDb(env);
+  const itemInputs = options?.items;
+  const persistedSummary = itemInputs === undefined
+    ? summary
+    : {
+        ...summary,
+        digestItemSetProvenance: DIGEST_ITEM_SET_PROVENANCE,
+      };
   const insertStatement = db
     .prepare(
       `
@@ -164,11 +174,10 @@ export async function createDigestRun(
       userId,
       periodStart,
       periodEnd,
-      jsonValue(summary),
+      jsonValue(persistedSummary),
       createdAt,
     );
 
-  const itemInputs = options?.items;
   const results = itemInputs === undefined
     ? [await insertStatement.run()]
     : await db.batch([
@@ -247,10 +256,23 @@ export async function updateDigestRunSummary(
   digestRunId: string,
   summary: JsonRecord,
 ) {
+  const row = await one<Pick<DigestRunRow, "summary_json">>(
+    env,
+    "SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
+    digestRunId,
+  );
+  const currentSummary = row ? toDigestRunSummary(row) : {};
+  const persistedSummary = { ...summary };
+  delete persistedSummary.digestItemSetProvenance;
+  if (
+    currentSummary.digestItemSetProvenance === DIGEST_ITEM_SET_PROVENANCE
+  ) {
+    persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
+  }
   await run(
     env,
     "UPDATE digest_run SET summary_json = ? WHERE id = ?",
-    jsonValue(summary),
+    jsonValue(persistedSummary),
     digestRunId,
   );
 }

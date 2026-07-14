@@ -110,7 +110,7 @@ describe("launch readiness canary route", () => {
     const upsertProofTarget = vi.fn().mockResolvedValue({ id: "proof-target-1" });
     const createProofCapture = vi.fn().mockResolvedValue("proof-1");
     const createWatchEvent = vi.fn().mockResolvedValue("event-1");
-    const createDigestRun = vi.fn().mockResolvedValue("digest-1");
+    const createDigestRun = vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true });
     const clearDigestItems = vi.fn().mockResolvedValue(undefined);
     const addDigestItem = vi.fn().mockResolvedValue(undefined);
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
@@ -212,6 +212,63 @@ describe("launch readiness canary route", () => {
         status: "succeeded",
       }),
     );
+    expect(createDigestRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ totalEvents: 1, watchlists: 1 }),
+      expect.objectContaining({
+        returnClaim: true,
+        items: [expect.objectContaining({ title: expect.any(String) })],
+      }),
+    );
+    expect(clearDigestItems).not.toHaveBeenCalled();
+    expect(addDigestItem).not.toHaveBeenCalled();
+  });
+
+  it("fails closed without delivery when another canary owns the digest period", async () => {
+    const deliverWeeklyDigest = vi.fn();
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createDigestRun: vi.fn().mockResolvedValue({
+        digestRunId: "digest-winning-canary",
+        created: false,
+      }),
+      createProofCapture: vi.fn().mockResolvedValue("proof-loser"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-loser"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-loser"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-loser" }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
+    } as never);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      blockers: ["digest_period_claim_conflict"],
+      runId: "run-loser",
+      proofCaptureId: "proof-loser",
+      digestRunId: "digest-winning-canary",
+    });
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   });
 
   it("fails when WhatsApp proof is required but no WhatsApp delivery is sent", async () => {
@@ -240,7 +297,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
@@ -315,7 +372,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
@@ -367,7 +424,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
@@ -425,7 +482,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
@@ -502,7 +559,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture,
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
@@ -577,7 +634,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
@@ -639,7 +696,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue("digest-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
