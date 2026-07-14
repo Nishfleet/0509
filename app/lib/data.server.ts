@@ -141,6 +141,7 @@ export {
 } from "~/lib/data/delivery-records.server";
 
 export {
+  DIGEST_ITEM_SET_PROVENANCE,
   createDigestRun,
   clearDigestItems,
   addDigestItem,

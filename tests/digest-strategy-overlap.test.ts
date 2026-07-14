@@ -169,17 +169,12 @@ describe("weekly digest overlap", () => {
   it("keeps generation, persisted state, email, retry, and report on one winning paragraph", async () => {
     const harness = setupHarness();
 
-    let aiCalls = 0;
-    let releaseBoth: (() => void) | null = null;
-    const bothStarted = new Promise<void>((resolve) => {
-      releaseBoth = resolve;
-    });
+    const aiStarted = deferred();
+    const aiGate = deferred();
     const aiRun = vi.fn(async () => {
-      const callIndex = aiCalls;
-      aiCalls += 1;
-      if (aiCalls === 2) releaseBoth?.();
-      await bothStarted;
-      return OVERLAP_PARAGRAPHS[callIndex];
+      aiStarted.resolve();
+      await aiGate.promise;
+      return OVERLAP_PARAGRAPHS[0];
     });
     mockState.deliverWeeklyDigest.mockImplementation(async () => {
       return { attempts: 1, channels: ["email"] };
@@ -201,21 +196,23 @@ describe("weekly digest overlap", () => {
     try {
       await import("~/lib/delivery.server");
       const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-      await Promise.all([
-        runWeeklyDigests(env, options),
-        runWeeklyDigests(env, options),
-      ]);
+      const winner = runWeeklyDigests(env, options);
+      await aiStarted.promise;
+      const overlap = runWeeklyDigests(env, options);
+      await Promise.resolve();
+      await Promise.resolve();
+      aiGate.resolve();
+      await Promise.all([winner, overlap]);
 
       const storedRow = harness.sqlite
         .prepare("SELECT id, summary_json FROM digest_run")
         .get() as { id: string; summary_json: string };
       const storedSummary = JSON.parse(storedRow.summary_json) as { strategyParagraph: string };
       const storedParagraph = storedSummary.strategyParagraph;
-      const initialParagraphs = mockState.deliverWeeklyDigest.mock.calls
-        .map((call) => call[1].strategyParagraph);
+      const initialDeliveries = mockState.deliverWeeklyDigest.mock.calls.map((call) => call[1]);
 
-      expect(OVERLAP_PARAGRAPHS).toContain(storedParagraph);
-      expect(initialParagraphs).toEqual([storedParagraph]);
+      expect(storedParagraph).toBe(OVERLAP_PARAGRAPHS[0]);
+      expect(aiRun).toHaveBeenCalledTimes(1);
       expect(
         harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_run").get(),
       ).toMatchObject({ count: 1 });
@@ -224,19 +221,24 @@ describe("weekly digest overlap", () => {
       ).toMatchObject({ count: 1 });
       expect(mutations.addDigestItem).not.toHaveBeenCalled();
       expect(mutations.clearDigestItems).not.toHaveBeenCalled();
-      expect(mutations.updateDigestRunSummary).not.toHaveBeenCalled();
+      expect(mutations.updateDigestRunSummary).toHaveBeenCalledTimes(1);
+      expect(
+        new Set(initialDeliveries.flatMap((delivery) =>
+          delivery.items.map((item: { title: string }) => item.title))),
+      ).toEqual(new Set(["Landing page offer changed"]));
 
       harness.sqlite.prepare("UPDATE watchlist SET is_active = 0 WHERE id = ?").run("watch-1");
       await runWeeklyDigests(env, options);
 
-      expect(mockState.deliverWeeklyDigest).toHaveBeenCalledTimes(2);
-      expect(mockState.deliverWeeklyDigest.mock.calls[1]?.[1].strategyParagraph).toBe(
+      expect(mockState.deliverWeeklyDigest).toHaveBeenCalledTimes(3);
+      expect(mockState.deliverWeeklyDigest.mock.calls[2]?.[1].strategyParagraph).toBe(
         storedParagraph,
       );
       await expect(
         getLatestDigestRunSummaryForWatchlist(env, "user-1", "watch-1"),
       ).resolves.toMatchObject({ paragraph: storedParagraph });
     } finally {
+      aiGate.resolve();
       harness.close();
     }
   });
@@ -324,7 +326,7 @@ describe("weekly digest overlap", () => {
       });
       expect(mutations.addDigestItem).not.toHaveBeenCalled();
       expect(mutations.clearDigestItems).not.toHaveBeenCalled();
-      expect(mutations.updateDigestRunSummary).not.toHaveBeenCalled();
+      expect(mutations.updateDigestRunSummary).toHaveBeenCalledTimes(1);
     } finally {
       firstDeliveryGate.resolve();
       await winner?.catch(() => undefined);

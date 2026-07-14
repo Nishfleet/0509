@@ -138,7 +138,7 @@ afterEach(() => {
 });
 
 describe("weekly digest strategy paragraph flow", () => {
-  it("generates, persists before delivery, and threads the paragraph for starter weekly digests", async () => {
+  it("claims the atomic snapshot before AI, persists strategy, then delivers", async () => {
     const data = dataServerMock();
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
     const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
@@ -160,10 +160,7 @@ describe("weekly digest strategy paragraph flow", () => {
       expect.any(String),
       expect.objectContaining({
         totalEvents: 1,
-        strategyParagraph: GOOD_PARAGRAPH,
-        strategyModel: "@cf/meta/llama-3.2-3b-instruct",
-        strategyGeneratedAt: expect.any(String),
-        strategyWatchlistIds: ["watch-1"],
+        watchlists: 1,
       }),
       expect.objectContaining({
         returnClaim: true,
@@ -175,8 +172,25 @@ describe("weekly digest strategy paragraph flow", () => {
         ],
       }),
     );
-    expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
+    expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
+    expect(data.updateDigestRunSummary).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        totalEvents: 1,
+        strategyParagraph: GOOD_PARAGRAPH,
+        strategyModel: "@cf/meta/llama-3.2-3b-instruct",
+        strategyGeneratedAt: expect.any(String),
+        strategyWatchlistIds: ["watch-1"],
+      }),
+    );
     expect(data.createDigestRun.mock.invocationCallOrder[0]).toBeLessThan(
+      aiRun.mock.invocationCallOrder[0]!,
+    );
+    expect(aiRun.mock.invocationCallOrder[0]).toBeLessThan(
+      data.updateDigestRunSummary.mock.invocationCallOrder[0]!,
+    );
+    expect(data.updateDigestRunSummary.mock.invocationCallOrder[0]).toBeLessThan(
       deliverWeeklyDigest.mock.invocationCallOrder[0]!,
     );
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
@@ -217,8 +231,6 @@ describe("weekly digest strategy paragraph flow", () => {
       expect.any(String),
       expect.objectContaining({
         totalEvents: 2,
-        strategyParagraph: GOOD_PARAGRAPH,
-        strategyWatchlistIds: ["watch-1"],
       }),
       expect.objectContaining({
         items: [
@@ -231,6 +243,16 @@ describe("weekly digest strategy paragraph flow", () => {
             metadata: expect.objectContaining({ eventStatus: "proof_pending" }),
           }),
         ],
+      }),
+    );
+    expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
+    expect(data.updateDigestRunSummary).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        totalEvents: 2,
+        strategyParagraph: GOOD_PARAGRAPH,
+        strategyWatchlistIds: ["watch-1"],
       }),
     );
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
@@ -389,6 +411,7 @@ describe("weekly digest strategy paragraph flow", () => {
       summary: {
         totalEvents: 1,
         watchlists: 1,
+        digestItemSetProvenance: "atomic-v1",
         strategyParagraph: STORED_PARAGRAPH,
         strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
       },
@@ -500,6 +523,83 @@ describe("weekly digest strategy paragraph flow", () => {
     expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   });
 
+  it("fails closed on an unmarked legacy run even when its stored item count matches", async () => {
+    const data = dataServerMock({
+      getDigestByPeriod: vi.fn().mockResolvedValue({
+        id: "digest-unmarked-same-count",
+        userId: "user-1",
+        periodStart: "2026-07-06T05:00:00.000Z",
+        periodEnd: "2026-07-13T05:00:00.000Z",
+        summary: { totalEvents: 1, watchlists: 1 },
+        createdAt: "2026-07-13T05:01:00.000Z",
+        items: [{
+          id: "item-unmarked",
+          digestRunId: "digest-unmarked-same-count",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Unproven legacy item",
+          summary: "A matching count does not prove snapshot identity.",
+          metadata: {},
+          createdAt: "2026-07-13T05:01:00.000Z",
+        }],
+        delivery: null,
+      }),
+    });
+    const deliverWeeklyDigest = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => data);
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+    await expect(runWeeklyDigests(envWith(null))).resolves.toBe(0);
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+  });
+
+  it("delivers a marked zero-item heartbeat snapshot", async () => {
+    const data = dataServerMock({
+      getDigestByPeriod: vi.fn().mockResolvedValue({
+        id: "digest-marked-heartbeat",
+        userId: "user-1",
+        periodStart: "2026-07-06T05:00:00.000Z",
+        periodEnd: "2026-07-13T05:00:00.000Z",
+        summary: {
+          totalEvents: 0,
+          watchlists: 1,
+          digestItemSetProvenance: "atomic-v1",
+        },
+        createdAt: "2026-07-13T05:01:00.000Z",
+        items: [],
+        delivery: null,
+      }),
+      getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+        runs: 2,
+        watchlistsChecked: 1,
+        adsSeen: 14,
+      }),
+    });
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => data);
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+    await expect(runWeeklyDigests(envWith(null))).resolves.toBe(1);
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        digestRunId: "digest-marked-heartbeat",
+        items: [],
+        heartbeat: { runs: 2, watchlistsChecked: 1, adsSeen: 14 },
+      }),
+    );
+  });
+
   it("fails closed when an incomplete legacy run has a different current candidate count", async () => {
     const data = dataServerMock({
       getDigestByPeriod: vi.fn().mockResolvedValue({
@@ -548,6 +648,7 @@ describe("weekly digest strategy paragraph flow", () => {
         summary: {
           totalEvents: 1,
           watchlists: 1,
+          digestItemSetProvenance: "atomic-v1",
           strategyParagraph: STORED_PARAGRAPH,
           strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
         },
@@ -590,6 +691,49 @@ describe("weekly digest strategy paragraph flow", () => {
         strategyParagraph: STORED_PARAGRAPH,
       }),
     );
+  });
+
+  it("skips an unmarked same-count legacy row in the retry sweep", async () => {
+    const data = dataServerMock({
+      listRetryableDigestRuns: vi.fn().mockResolvedValue([{
+        id: "digest-retry-unmarked",
+        userId: "user-1",
+        userEmail: "owner@example.com",
+        userName: "Owner",
+        periodStart: "2026-04-13T05:00:00.000Z",
+        periodEnd: "2026-04-20T05:00:00.000Z",
+      }]),
+      getDigest: vi.fn().mockResolvedValue({
+        id: "digest-retry-unmarked",
+        userId: "user-1",
+        periodStart: "2026-04-13T05:00:00.000Z",
+        periodEnd: "2026-04-20T05:00:00.000Z",
+        summary: { totalEvents: 1, watchlists: 1 },
+        createdAt: "2026-04-20T05:01:00.000Z",
+        items: [{
+          id: "item-unmarked",
+          digestRunId: "digest-retry-unmarked",
+          watchlistId: "watch-1",
+          watchlistName: "boAt watch",
+          eventType: "landing_page_offer_changed",
+          title: "Unmarked retry item",
+          summary: "Count matches, identity remains unproven.",
+          metadata: {},
+          createdAt: "2026-04-19T00:00:00.000Z",
+        }],
+        delivery: null,
+      }),
+    });
+    const deliverWeeklyDigest = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({}));
+    vi.doMock("~/lib/data.server", () => data);
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+
+    const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+    await expect(runWeeklyDigests(envWith(null, []))).resolves.toBe(0);
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   });
 
 });

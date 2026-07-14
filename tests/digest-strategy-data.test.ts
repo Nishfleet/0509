@@ -88,11 +88,53 @@ describe("digest_run summary persistence", () => {
       expect(second).toEqual({ created: false, digestRunId: first.digestRunId });
       const stored = await getDigest(env, first.digestRunId);
       expect(stored?.summary).toMatchObject({
+        digestItemSetProvenance: "atomic-v1",
         strategyParagraph: `${PARAGRAPH} first`,
       });
       expect(stored?.items).toEqual([
         expect.objectContaining({ title: "First item", summary: "The winner's item." }),
       ]);
+      expect(
+        harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_run").get(),
+      ).toEqual({ count: 1 });
+      expect(
+        harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_item").get(),
+      ).toEqual({ count: 1 });
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("commits the atomic marker and complete items together or neither", async () => {
+    const harness = setup();
+    try {
+      const env = { DB: harness.db } as never;
+      await expect(
+        createDigestRun(
+          env,
+          "user-1",
+          "2026-07-06T05:00:00.000Z",
+          "2026-07-13T05:00:00.000Z",
+          { totalEvents: 1, watchlists: 1 },
+          {
+            returnClaim: true,
+            items: [{
+              watchlistId: "watch-missing",
+              watchlistName: "Missing watchlist",
+              eventType: "landing_page_offer_changed",
+              title: "Atomic item",
+              summary: "This item should roll the run back with it.",
+            }],
+          },
+        ),
+      ).rejects.toThrow();
+
+      expect(
+        harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_run").get(),
+      ).toEqual({ count: 0 });
+      expect(
+        harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_item").get(),
+      ).toEqual({ count: 0 });
     } finally {
       harness.close();
     }
@@ -276,13 +318,15 @@ describe("digest_run summary persistence", () => {
     const harness = setup();
     try {
       const env = { DB: harness.db } as never;
-      const firstId = await createDigestRun(
+      const firstClaim = await createDigestRun(
         env,
         "user-1",
         "2026-07-06T05:00:00.000Z",
         "2026-07-13T05:00:00.000Z",
         { totalEvents: 0, watchlists: 1 },
+        { returnClaim: true, items: [] },
       );
+      const firstId = firstClaim.digestRunId;
 
       // Same period again: the period claim keeps the original summary.
       const secondId = await createDigestRun(
@@ -296,6 +340,7 @@ describe("digest_run summary persistence", () => {
       expect((await getDigest(env, firstId))?.summary).toEqual({
         totalEvents: 0,
         watchlists: 1,
+        digestItemSetProvenance: "atomic-v1",
       });
 
       await updateDigestRunSummary(env, firstId, {
@@ -304,6 +349,7 @@ describe("digest_run summary persistence", () => {
         strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
       });
       expect((await getDigest(env, firstId))?.summary).toMatchObject({
+        digestItemSetProvenance: "atomic-v1",
         strategyParagraph: PARAGRAPH,
       });
     } finally {
