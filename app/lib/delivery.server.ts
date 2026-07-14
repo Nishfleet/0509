@@ -22,7 +22,10 @@ import {
   upsertDeliveryTarget,
   upsertDigestDelivery,
 } from "~/lib/data.server";
-import { isStalePreDispatchAttempt } from "~/lib/delivery-attempt-lease";
+import {
+  isStalePreDispatchAttempt,
+  markDeliveryAttemptProviderDispatch,
+} from "~/lib/delivery-attempt-lease";
 import {
   EMAIL_PROVIDER,
   type EmailProviderResult,
@@ -625,6 +628,30 @@ async function claimDigestDeliveryAttempt(
   }
 }
 
+function markProviderDispatch(
+  env: AppEnv,
+  attemptId: string,
+  provider: string,
+  claimUpdatedAt: string,
+) {
+  return markDeliveryAttemptProviderDispatch({
+    attemptId,
+    provider,
+    claimUpdatedAt,
+    update: (id, update) => updateDeliveryAttemptResult(env, id, update),
+  });
+}
+
+async function readLostDigestDispatchClaim(
+  env: AppEnv,
+  channel: DeliveryChannel,
+  idempotencyKey: string,
+) {
+  const durable = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+  if (!durable) throw new Error("Digest delivery dispatch claim disappeared.");
+  return summarizeDigestDeliveryAttempt(channel, durable);
+}
+
 function summarizeDigestDeliveryAttempt(
   channel: DeliveryChannel,
   attempt: DeliveryAttemptRecord,
@@ -709,6 +736,9 @@ async function deliverDigestToEmailTarget(
     throw new Error("Digest email delivery claim did not return an owned attempt.");
   }
 
+  const dispatchStartedAt = await markProviderDispatch(env, attemptId, EMAIL_PROVIDER, claimUpdatedAt);
+  if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "email", idempotencyKey);
+
   const providerResult = await sendRenderedDigestEmail(env, {
     to: target.targetValue,
     email,
@@ -724,8 +754,8 @@ async function deliverDigestToEmailTarget(
     sentAt: providerResult.status === "sent" ? providerResult.providerStatusLastSeenAt : null,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
-    expectedWebhookStatus: "pending",
-    expectedUpdatedAt: claimUpdatedAt,
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
   });
   const providerSummary: DigestAttemptSummary = {
     channel: "email",
@@ -1176,6 +1206,9 @@ async function deliverDigestToWhatsAppTarget(
     throw new Error("Digest WhatsApp claim did not return an owned attempt.");
   }
 
+  const dispatchStartedAt = await markProviderDispatch(env, attemptId, "whatsapp_cloud_api", claimUpdatedAt);
+  if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "whatsapp", idempotencyKey);
+
   const providerResult = await sendDigestWhatsApp(env, {
     lane,
     target,
@@ -1196,8 +1229,8 @@ async function deliverDigestToWhatsAppTarget(
     sentAt: deliveredAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
-    expectedWebhookStatus: "pending",
-    expectedUpdatedAt: claimUpdatedAt,
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
   });
   const providerSummary: DigestAttemptSummary = {
     channel: "whatsapp",
@@ -1272,6 +1305,9 @@ async function deliverDigestToSlackTarget(
     throw new Error("Digest Slack claim did not return an owned attempt.");
   }
 
+  const dispatchStartedAt = await markProviderDispatch(env, attemptId, SLACK_PROVIDER, claimUpdatedAt);
+  if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "slack", idempotencyKey);
+
   const providerResult = await sendSlackWebhookMessage(env, target, {
     text: slackText,
   });
@@ -1285,8 +1321,8 @@ async function deliverDigestToSlackTarget(
     sentAt: providerResult.deliveredAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
-    expectedWebhookStatus: "pending",
-    expectedUpdatedAt: claimUpdatedAt,
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
   });
   const providerSummary: DigestAttemptSummary = {
     channel: "slack",

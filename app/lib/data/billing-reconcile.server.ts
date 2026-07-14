@@ -444,6 +444,21 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
       ),
     );
   }
+  // A later terminal event is still an ordering barrier even when an earlier
+  // terminal event already made the account free. Keep statement 0 as the
+  // customer-facing transition (and outbox gate), then advance only the
+  // watermark here so a delayed intermediate grant cannot restore access.
+  // The first terminal status stays sticky; refunds may explicitly supersede
+  // it in applyDodoRefundWithWatchlistReconcile.
+  statements.push(
+    db.prepare(`
+      UPDATE user_plan
+      SET plan_updated_at = ?
+      WHERE user_id = ?
+        AND plan = 'free'
+        AND julianday(?) > julianday(plan_updated_at)
+    `).bind(planUpdatedAt, input.userId, planUpdatedAt),
+  );
   const watchlistIndex = statements.length;
   statements.push(
     buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
@@ -514,7 +529,6 @@ export async function applyDodoRefundWithWatchlistReconcile(
           plan_updated_at = ?
       WHERE dodo_payment_id = ?
         AND plan = 'free'
-        AND dodo_status != 'refunded'
         AND julianday(?) >= julianday(plan_updated_at)
     `).bind(refundedAt, input.paymentId, refundedAt),
     db.prepare(`

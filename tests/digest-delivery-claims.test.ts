@@ -203,12 +203,11 @@ describe("weekly digest per-target delivery claims", () => {
 			}),
 		);
 		expect(sendSlackWebhookMessage).toHaveBeenCalledTimes(1);
-		expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(1);
-		expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
-			expect.anything(),
-			pendingAttempt.id,
-			expect.objectContaining({ expectedStatus: "pending", status: "sent" }),
-		);
+		expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(2);
+		expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(1, expect.anything(), pendingAttempt.id,
+			expect.objectContaining({ status: "pending", webhookStatus: "provider_unknown", expectedStatus: "pending", expectedWebhookStatus: "pending" }));
+		expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(2, expect.anything(), pendingAttempt.id,
+			expect.objectContaining({ expectedStatus: "pending", expectedWebhookStatus: "provider_unknown", status: "sent" }));
 	});
 
 	it("atomically reclaims a failed WhatsApp attempt so overlapping retries emit once", async () => {
@@ -223,6 +222,7 @@ describe("weekly digest per-target delivery claims", () => {
 			.mockResolvedValueOnce(pendingAttempt);
 		const updateDeliveryAttemptResult = vi
 			.fn()
+			.mockResolvedValueOnce(true)
 			.mockResolvedValueOnce(true)
 			.mockResolvedValueOnce(true)
 			.mockResolvedValueOnce(false);
@@ -262,10 +262,16 @@ describe("weekly digest per-target delivery claims", () => {
 			2,
 			expect.anything(),
 			failedAttempt.id,
-			expect.objectContaining({ expectedStatus: "pending", status: "sent" }),
+			expect.objectContaining({ expectedStatus: "pending", webhookStatus: "provider_unknown" }),
 		);
 		expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
 			3,
+			expect.anything(),
+			failedAttempt.id,
+			expect.objectContaining({ expectedWebhookStatus: "provider_unknown", status: "sent" }),
+		);
+		expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+			4,
 			expect.anything(),
 			failedAttempt.id,
 			expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
@@ -323,12 +329,41 @@ describe("weekly digest per-target delivery claims", () => {
 			expect.anything(),
 			staleAttempt.id,
 			expect.objectContaining({
-				status: "sent",
+				status: "pending",
 				expectedStatus: "pending",
 				expectedWebhookStatus: "pending",
 				expectedUpdatedAt: "2026-07-13T05:05:00.000Z",
 			}),
 		);
+		expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+			3,
+			expect.anything(),
+			staleAttempt.id,
+			expect.objectContaining({ status: "sent", expectedWebhookStatus: "provider_unknown" }),
+		);
+	});
+
+	it("never replays Slack after the durable dispatch marker survives a worker crash", async () => {
+		const providerUnknown = { ...deliveryAttempt("slack", "pending"), webhookStatus: "provider_unknown" as const };
+		const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+		mockDataServer({
+			channel: "slack",
+			getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValueOnce(null).mockResolvedValue(providerUnknown),
+			createDeliveryAttempt: vi.fn().mockResolvedValue(providerUnknown.id),
+			updateDeliveryAttemptResult,
+		});
+		const sendSlackWebhookMessage = vi.fn().mockRejectedValue(new Error("worker crashed after dispatch"));
+		vi.doMock("~/lib/slack-webhook.server", () => ({ SLACK_PROVIDER: "slack_incoming_webhook", sendSlackWebhookMessage }));
+		vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+
+		const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+		await expect(deliverWeeklyDigest({} as never, digestInput())).rejects.toThrow("worker crashed after dispatch");
+		await deliverWeeklyDigest({} as never, digestInput());
+
+		expect(sendSlackWebhookMessage).toHaveBeenCalledTimes(1);
+		expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(1);
+		expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(expect.anything(), providerUnknown.id,
+			expect.objectContaining({ status: "pending", webhookStatus: "provider_unknown", expectedWebhookStatus: "pending" }));
 	});
 
 	it("does not reclaim a provider-unknown digest attempt", async () => {
