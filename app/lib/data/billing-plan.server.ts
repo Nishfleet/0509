@@ -144,30 +144,25 @@ export async function revokeDodoPlanAccess(
 ) {
   const planUpdatedAt = validIsoTimestamp(input.revokedAt) ?? nowIso();
 
-  // Mirrors grantDodoPlanAccess's monotonic guard so a late-arriving older
-  // payment webhook can never resurrect a newer cancellation (and vice versa).
-  // Never overwrite dodo_payment_id here — subscription ids belong in
-  // dodo_subscription_id and refunds resolve via the preserved payment id.
+	// Subscription lifecycle events may mutate only their exact stored
+	// subscription. Refunds remain payment-bound and preserve the payment id.
   await run(
     env,
     `
-      INSERT INTO user_plan (
-        user_id,
-        plan,
-        dodo_status,
-        plan_updated_at
-      )
-      VALUES (?, 'free', ?, ?)
-      ON CONFLICT(user_id)
-      DO UPDATE SET
-        plan = 'free',
-        dodo_status = excluded.dodo_status,
-        plan_updated_at = excluded.plan_updated_at
-      WHERE julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
+			UPDATE user_plan
+			SET plan = 'free',
+					dodo_status = ?,
+					plan_updated_at = ?
+			WHERE user_id = ?
+				AND plan != 'free'
+				AND dodo_subscription_id = ?
+				AND julianday(?) >= julianday(plan_updated_at)
     `,
-    input.userId,
     input.status,
     planUpdatedAt,
+		input.userId,
+		input.providerSubscriptionId.trim(),
+		planUpdatedAt,
   );
 }
 
@@ -179,10 +174,14 @@ export async function markDodoPlanPaymentIssue(
     status: string;
     occurredAt?: string;
     cancellationEffectiveAt?: string | null;
+		providerSubscriptionId?: string | null;
+		providerPaymentId?: string | null;
   },
 ) {
   const planUpdatedAt = validIsoTimestamp(input.occurredAt) ?? nowIso();
   const cancellationEffectiveAt = validIsoTimestamp(input.cancellationEffectiveAt ?? undefined);
+	const providerSubscriptionId = input.providerSubscriptionId?.trim() || null;
+	const providerPaymentId = providerSubscriptionId ? null : input.providerPaymentId?.trim() || null;
 
   // Dunning state (subscription.failed / on_hold): the customer keeps the
   // paid plan while Dodo retries the payment; only dodo_status changes so
@@ -200,6 +199,10 @@ export async function markDodoPlanPaymentIssue(
           plan_updated_at = ?
       WHERE user_id = ?
         AND plan != 'free'
+				AND (
+					(? IS NOT NULL AND dodo_subscription_id = ?)
+					OR (? IS NULL AND ? IS NOT NULL AND dodo_payment_id = ?)
+				)
         AND julianday(?) >= julianday(plan_updated_at)
     `,
     input.status,
@@ -207,6 +210,11 @@ export async function markDodoPlanPaymentIssue(
     cancellationEffectiveAt,
     planUpdatedAt,
     input.userId,
+		providerSubscriptionId,
+		providerSubscriptionId,
+		providerSubscriptionId,
+		providerPaymentId,
+		providerPaymentId,
     planUpdatedAt,
   );
 }
@@ -279,7 +287,7 @@ export async function getUserIdForDodoLifecycle(
       "SELECT user_id FROM user_plan WHERE dodo_subscription_id = ? AND plan != 'free' LIMIT 1",
       subscriptionId,
     );
-    if (row?.user_id) return row.user_id;
+		return row?.user_id ?? null;
   }
 
   const customerId = input.customerId?.trim();
@@ -325,7 +333,7 @@ export async function getUserIdForDodoLifecycle(
 export interface UserPlanBillingInfo {
   plan: "free" | "scout" | "starter" | "agency";
   dodoStatus: string | null;
-  dodoPaymentId: string | null;
+	dodoPaymentId: string | null;
   dodoProductId: string | null;
   dodoPlanChangeProductId: string | null;
   billingInterval: "monthly" | "annual" | null;
@@ -342,7 +350,7 @@ export async function getUserPlanBillingInfo(
   const row = await one<{
     plan: string | null;
     dodo_status: string | null;
-    dodo_payment_id: string | null;
+		dodo_payment_id: string | null;
     dodo_product_id: string | null;
     dodo_plan_change_product_id: string | null;
     dodo_subscription_id: string | null;
@@ -352,7 +360,7 @@ export async function getUserPlanBillingInfo(
   }>(
     env,
     `
-      SELECT plan, dodo_status, dodo_payment_id, dodo_product_id, dodo_subscription_id,
+			SELECT plan, dodo_status, dodo_payment_id, dodo_product_id, dodo_subscription_id,
              dodo_customer_id, dodo_next_billing_at, dodo_plan_change_product_id,
              plan_updated_at
       FROM user_plan
@@ -379,7 +387,7 @@ export async function getUserPlanBillingInfo(
   return {
     plan,
     dodoStatus: row?.dodo_status ?? null,
-    dodoPaymentId: row?.dodo_payment_id ?? null,
+		dodoPaymentId: row?.dodo_payment_id ?? null,
     dodoProductId: row?.dodo_product_id ?? null,
     dodoPlanChangeProductId: row?.dodo_plan_change_product_id ?? null,
     billingInterval,

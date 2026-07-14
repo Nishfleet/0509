@@ -106,10 +106,10 @@ function mockReliabilityDependencies(input: {
     .fn()
     .mockResolvedValue(input.retryableDigestRuns ?? []);
   const createWatchEvent = vi.fn(async () => `event-${Math.floor(1e6 * 0.5)}`);
-  const createDigestRun = vi.fn().mockResolvedValue({
-    digestRunId: "digest-run-current",
-    created: true,
-  });
+	const createDigestRun = vi.fn().mockResolvedValue({
+		digestRunId: "digest-run-current",
+		created: true,
+	});
 
   vi.doMock("~/lib/analysis.server", () => ({
     buildAnalysisFields: vi.fn(() => []),
@@ -130,9 +130,9 @@ function mockReliabilityDependencies(input: {
   }));
   vi.doMock("~/lib/data.server", () => ({
     addDigestItem: vi.fn(),
-    claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
+		claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
     clearDigestItems: vi.fn(),
-    completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
+		completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
     countProofCapturesForWatchlistSince: vi.fn().mockResolvedValue(0),
     countProofCapturesForWorkspaceSince: vi.fn().mockResolvedValue(0),
     createAdObservation: vi.fn(),
@@ -408,11 +408,11 @@ describe("digest retry sweep", () => {
       userId: "user-7",
       periodStart: "2026-06-09T04:00:00.000Z",
       periodEnd: "2026-06-10T04:00:00.000Z",
-      summary: {
-        totalEvents: 1,
-        watchlists: 1,
-        digestItemSetProvenance: "atomic-v1",
-      },
+			summary: {
+				totalEvents: 1,
+				watchlists: 1,
+				digestItemSetProvenance: "atomic-v1",
+			},
       createdAt: "2026-06-10T04:00:00.000Z",
       items: [
         {
@@ -486,11 +486,11 @@ describe("digest retry sweep", () => {
       userId: "user-9",
       periodStart: "2026-06-09T04:00:00.000Z",
       periodEnd: "2026-06-10T04:00:00.000Z",
-      summary: {
-        totalEvents: 0,
-        watchlists: 1,
-        digestItemSetProvenance: "atomic-v1",
-      },
+			summary: {
+				totalEvents: 0,
+				watchlists: 1,
+				digestItemSetProvenance: "atomic-v1",
+			},
       createdAt: "2026-06-10T04:00:00.000Z",
       items: [],
       delivery: {
@@ -532,52 +532,52 @@ describe("digest retry sweep", () => {
     expect(result.digests).toBe(1);
   });
 
-  it("never turns an incomplete retry row into a false all-quiet heartbeat", async () => {
-    const failedDigest = {
-      id: "digest-incomplete-1",
-      userId: "user-10",
-      userEmail: "ten@example.com",
-      userName: "Ten",
-      periodStart: "2026-06-09T04:00:00.000Z",
-      periodEnd: "2026-06-10T04:00:00.000Z",
-    };
-    const getDigest = vi.fn().mockResolvedValue({
-      id: "digest-incomplete-1",
-      userId: "user-10",
-      periodStart: "2026-06-09T04:00:00.000Z",
-      periodEnd: "2026-06-10T04:00:00.000Z",
-      summary: { totalEvents: 1, watchlists: 1 },
-      createdAt: "2026-06-10T04:00:00.000Z",
-      items: [],
-      delivery: {
-        id: "delivery-incomplete-1",
-        digestRunId: "digest-incomplete-1",
-        provider: "cloudflare_email",
-        status: "failed",
-        recipientEmail: "ten@example.com",
-        externalMessageId: null,
-        errorMessage: "The worker stopped before persisting the item.",
-        deliveredAt: null,
-      },
-    });
-    const mocks = mockReliabilityDependencies({
-      watchlists: [],
-      digestUsers: [],
-      retryableDigestRuns: [failedDigest],
-      getDigestImpl: getDigest,
-      runStats: { runs: 5, watchlistsChecked: 2, adsSeen: 44 },
-    });
+	it("never turns an incomplete retry row into a false all-quiet heartbeat", async () => {
+		const failedDigest = {
+			id: "digest-incomplete-1",
+			userId: "user-10",
+			userEmail: "ten@example.com",
+			userName: "Ten",
+			periodStart: "2026-06-09T04:00:00.000Z",
+			periodEnd: "2026-06-10T04:00:00.000Z",
+		};
+		const getDigest = vi.fn().mockResolvedValue({
+			id: "digest-incomplete-1",
+			userId: "user-10",
+			periodStart: "2026-06-09T04:00:00.000Z",
+			periodEnd: "2026-06-10T04:00:00.000Z",
+			summary: { totalEvents: 1, watchlists: 1 },
+			createdAt: "2026-06-10T04:00:00.000Z",
+			items: [],
+			delivery: {
+				id: "delivery-incomplete-1",
+				digestRunId: "digest-incomplete-1",
+				provider: "cloudflare_email",
+				status: "failed",
+				recipientEmail: "ten@example.com",
+				externalMessageId: null,
+				errorMessage: "The worker stopped before persisting the item.",
+				deliveredAt: null,
+			},
+		});
+		const mocks = mockReliabilityDependencies({
+			watchlists: [],
+			digestUsers: [],
+			retryableDigestRuns: [failedDigest],
+			getDigestImpl: getDigest,
+			runStats: { runs: 5, watchlistsChecked: 2, adsSeen: 44 },
+		});
 
-    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
-    const result = await runScheduledMonitoring(mocks.env as never, {
-      includeDigests: true,
-      digestCadence: "daily",
-      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
-    });
+		const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+		const result = await runScheduledMonitoring(mocks.env as never, {
+			includeDigests: true,
+			digestCadence: "daily",
+			scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+		});
 
-    expect(mocks.deliverWeeklyDigest).not.toHaveBeenCalled();
-    expect(result.digests).toBe(0);
-  });
+		expect(mocks.deliverWeeklyDigest).not.toHaveBeenCalled();
+		expect(result.digests).toBe(0);
+	});
 
   it("skips retrying digests for users whose plan no longer includes digests", async () => {
     const failedDigest = {

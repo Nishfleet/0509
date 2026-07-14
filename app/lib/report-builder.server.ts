@@ -17,7 +17,7 @@ import {
 } from "~/lib/proof-classification";
 import {
   createReportId,
-  type ReportAiWeeklySummary,
+	type ReportAiWeeklySummary,
   type ReportDocument,
   type ReportField,
   type ReportResourceType,
@@ -97,9 +97,9 @@ export function buildWatchlistReport(input: {
   watchlist: WatchlistRecord;
   events: WatchEventRecord[];
   adsById: Map<string, AdRecord>;
-  // Latest stored digest-run AI paragraph proven exclusive to this watchlist.
-  // Never sourced from a fresh AI call; omitted when none is stored.
-  aiWeeklySummary?: ReportAiWeeklySummary | null;
+	// Latest stored digest-run AI paragraph proven exclusive to this watchlist.
+	// Never sourced from a fresh AI call; omitted when none is stored.
+	aiWeeklySummary?: ReportAiWeeklySummary | null;
   generatedAt?: string;
 }): ReportDocument {
   const generatedAt = input.generatedAt ?? new Date().toISOString();
@@ -116,7 +116,7 @@ export function buildWatchlistReport(input: {
       event.adId,
     ]), ad, {
       event: {
-        typeLabel: formatWatchEventTypeLabel(event.eventType),
+				typeLabel: formatWatchEventTypeLabel(event.eventType),
         title: event.title,
         summary: event.summary,
         createdAt: event.createdAt,
@@ -135,7 +135,7 @@ export function buildWatchlistReport(input: {
 
   const linkedAds = rows.filter((row) => row._meta.hasLinkedAd).length;
   const eventTypes = summarizeDistinct(
-    eligibleEvents.map((event) => formatWatchEventTypeLabel(event.eventType)),
+		eligibleEvents.map((event) => formatWatchEventTypeLabel(event.eventType)),
   );
 
   return {
@@ -155,7 +155,7 @@ export function buildWatchlistReport(input: {
     ],
     insightDepth: buildWatchlistInsightDepth(eligibleEvents),
     sourceCoverage,
-    ...(input.aiWeeklySummary ? { aiWeeklySummary: input.aiWeeklySummary } : {}),
+		...(input.aiWeeklySummary ? { aiWeeklySummary: input.aiWeeklySummary } : {}),
     rows: rows.map(stripInternalMeta),
   };
 }
@@ -174,30 +174,30 @@ function buildReportRow(
   const creativeText = ad?.creativeText?.trim() || findAnalysisFieldValue(ad, "ocr_text");
   const landingPageHeadline =
     ad?.landingPage?.rawHeadline || findAnalysisFieldValue(ad, "landing_page_headline_summary");
-  const landingPageCaptured = Boolean(ad?.landingPage?.captureMethod);
-  // Missing fields stay null so the report view can omit them entirely.
-  // Client-facing reports must never render "unavailable" placeholder prose.
+	const landingPageCaptured = Boolean(ad?.landingPage?.captureMethod);
+	// Missing fields stay null so the report view can omit them entirely.
+	// Client-facing reports must never render "unavailable" placeholder prose.
   const reportRow = {
     id,
-    advertiser: ad ? ad.advertiser : options.advertiserFallback ?? null,
-    previewHeadline: ad?.previewHeadline ?? options.event?.title ?? null,
-    offer: presentString(ad?.offer),
-    cta: presentString(ad?.cta),
+		advertiser: ad ? ad.advertiser : options.advertiserFallback ?? null,
+		previewHeadline: ad?.previewHeadline ?? options.event?.title ?? null,
+		offer: presentString(ad?.offer),
+		cta: presentString(ad?.cta),
     formatLabel: ad?.format ?? "unknown",
-    languageLabel: presentString(ad?.languageLabel),
+		languageLabel: presentString(ad?.languageLabel),
     // Prefer the actual captured creative image; the snapshot URL is only a
     // legacy fallback (it may point at an Ad Library page rather than media).
     previewImageUrl: ad?.creativeImageUrl ?? ad?.adSnapshotUrl ?? null,
-    creativeText: presentString(creativeText),
-    translatedText: presentString(findAnalysisFieldValue(ad, "translated_text")),
+		creativeText: presentString(creativeText),
+		translatedText: presentString(findAnalysisFieldValue(ad, "translated_text")),
     landingPage: {
-      url: ad?.landingPage?.canonicalUrl ?? ad?.landingPageUrl ?? null,
-      headline: presentString(landingPageHeadline),
-      captureLabel: landingPageCaptured
-        ? formatCaptureMethodLabel(ad?.landingPage?.captureMethod)
-        : null,
+			url: ad?.landingPage?.canonicalUrl ?? ad?.landingPageUrl ?? null,
+			headline: presentString(landingPageHeadline),
+			captureLabel: landingPageCaptured
+				? formatCaptureMethodLabel(ad?.landingPage?.captureMethod)
+				: null,
       capturedAt: ad?.landingPage?.capturedAt ?? null,
-      signals: buildLandingPageSignals(ad),
+			signals: buildLandingPageSignals(ad),
     },
     analysisFields: buildAnalysisFieldList(ad),
     tags: options.tags ?? [],
@@ -215,24 +215,24 @@ function buildReportRow(
 }
 
 function presentString(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+	const trimmed = value?.trim();
+	return trimmed ? trimmed : null;
 }
 
 // Only known landing-page signals make it into the report. Undetected
 // signals are omitted rather than rendered as "Not detected" filler.
 function buildLandingPageSignals(ad: AdRecord | null): ReportField[] {
-  const ctaText = presentString(ad?.landingPage?.ctaText);
-  const priceText = presentString(ad?.landingPage?.priceText);
-  const formPresent = ad?.landingPage?.formPresent;
+	const ctaText = presentString(ad?.landingPage?.ctaText);
+	const priceText = presentString(ad?.landingPage?.priceText);
+	const formPresent = ad?.landingPage?.formPresent;
 
-  return [
-    ...(ctaText ? [{ label: "CTA", value: ctaText }] : []),
-    ...(priceText ? [{ label: "Price", value: priceText }] : []),
-    ...(typeof formPresent === "boolean"
-      ? [{ label: "Form present", value: formatLandingPageFormValue(formPresent) }]
-      : []),
-  ];
+	return [
+		...(ctaText ? [{ label: "CTA", value: ctaText }] : []),
+		...(priceText ? [{ label: "Price", value: priceText }] : []),
+		...(typeof formPresent === "boolean"
+			? [{ label: "Form present", value: formatLandingPageFormValue(formPresent) }]
+			: []),
+	];
 }
 
 function buildAnalysisFieldList(ad: AdRecord | null): ReportField[] {

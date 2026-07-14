@@ -27,7 +27,7 @@ describe("WhatsApp delivery helpers", () => {
     expect(() => normalizeWhatsAppRecipient("555")).toThrow(Response);
   });
 
-  it("keeps delivered WhatsApp webhook proof over sent-only updates", async () => {
+	it("keeps newer delivered WhatsApp proof over an older failed update in the same payload", async () => {
     const { extractWhatsAppWebhookStatusUpdates } = await import("~/lib/whatsapp.server");
 
     const updates = extractWhatsAppWebhookStatusUpdates({
@@ -37,15 +37,15 @@ describe("WhatsApp delivery helpers", () => {
             {
               value: {
                 statuses: [
-                  {
-                    id: "wamid.setup-1",
-                    status: "delivered",
-                    timestamp: "1780000000",
-                  },
-                  {
-                    id: "wamid.setup-1",
-                    status: "sent",
-                    timestamp: "1780000001",
+					{
+					id: "wamid.setup-1",
+					status: "delivered",
+					timestamp: "1780000001",
+					},
+					{
+					id: "wamid.setup-1",
+					status: "failed",
+					timestamp: "1780000000",
                   },
                 ],
               },

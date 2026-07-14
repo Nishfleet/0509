@@ -36,7 +36,7 @@ export type DeveloperAccessLoaderData = {
 type DeveloperAccessActionData = RouteActionData & {
   apiKeySecret?: string;
   apiKeyPrefix?: string;
-  apiKeyId?: string;
+	apiKeyId?: string;
 };
 
 export function DeveloperAccessRoute() {
@@ -91,7 +91,7 @@ export function DeveloperAccessRoute() {
             </div>
           </div>
 
-          <ActionFeedback data={actionData} fallback />
+					<ActionFeedback data={actionData} fallback />
 
           <div className="f9-dashboard-grid">
             <section className="f9-app-panel f9-source-guide">
@@ -119,7 +119,7 @@ export function DeveloperAccessRoute() {
               <dl className="proof-trail-list">
                 <div>
                   <dt>JSON</dt>
-                  <dd>{"/api/v1/watchlists/{id}?format=json"}</dd>
+									<dd>{"/api/v1/watchlists/{id}?format=json"}</dd>
                 </div>
                 <div>
                   <dt>Header</dt>
@@ -143,18 +143,18 @@ export function DeveloperAccessRoute() {
                   <p>{createDisabledReason}</p>
                 </div>
               ) : null}
-              {!hasNewApiKeySecret ? (
-                <ActionFeedback data={actionData} intent="create-api-key" />
-              ) : null}
-              {hasNewApiKeySecret && actionData && "apiKeySecret" in actionData ? (
-                <div className="f9-message is-success" role="status">
-                  <p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
-                  <label className="f9-field">
-                    <span>{actionData.apiKeyPrefix}</span>
-                    <textarea readOnly rows={3} value={actionData.apiKeySecret} />
-                  </label>
-                </div>
-              ) : null}
+							{!hasNewApiKeySecret ? (
+								<ActionFeedback data={actionData} intent="create-api-key" />
+							) : null}
+							{hasNewApiKeySecret && actionData && "apiKeySecret" in actionData ? (
+								<div className="f9-message is-success" role="status">
+									<p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
+									<label className="f9-field">
+										<span>{actionData.apiKeyPrefix}</span>
+										<textarea readOnly rows={3} value={actionData.apiKeySecret} />
+									</label>
+								</div>
+							) : null}
               <Form className="f9-auth-form" method="post">
                 <input name="intent" type="hidden" value="create-api-key" />
                 <label className="f9-field">
@@ -183,7 +183,7 @@ export function DeveloperAccessRoute() {
             </section>
           </div>
 
-          <ActionFeedback data={actionData} intent="revoke-api-key" />
+					<ActionFeedback data={actionData} intent="revoke-api-key" />
           <div className="f9-work-list">
             {data.apiKeys.length > 0 ? (
               data.apiKeys.map((apiKey) => (
@@ -210,25 +210,25 @@ export function DeveloperAccessRoute() {
                     <Form method="post">
                       <input name="intent" type="hidden" value="revoke-api-key" />
                       <input name="apiKeyId" type="hidden" value={apiKey.id} />
-                      <ConfirmSubmitButton
+											<ConfirmSubmitButton
                         className="f9-secondary-button"
-                        confirmLabel="Confirm — revoke key?"
+												confirmLabel="Confirm — revoke key?"
                         intent="revoke-api-key"
                         match={{ apiKeyId: apiKey.id }}
                         pendingLabel="Removing…"
                       >
                         Revoke
-                      </ConfirmSubmitButton>
+											</ConfirmSubmitButton>
                     </Form>
                   )}
                 </article>
               ))
             ) : (
-              <EmptyState
-                description="Create one when you are ready to connect an external tool."
-                title="No API keys yet"
-                variant="row"
-              />
+							<EmptyState
+								description="Create one when you are ready to connect an external tool."
+								title="No API keys yet"
+								variant="row"
+							/>
             )}
           </div>
         </section>

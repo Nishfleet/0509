@@ -1011,11 +1011,11 @@ export function formatDiscoverySummary(result: SearchResponse) {
   }
 
   if (result.ads.length > 0 && /no cached results are available/i.test(result.discoverySummary)) {
-    return "Live ad checks are temporarily delayed, so we're showing your most recent results. We'll retry automatically.";
+		return "Live ad checks are temporarily delayed, so we're showing your most recent results. We'll retry automatically.";
   }
 
-  if (/rate limited|degraded/i.test(result.discoverySummary)) {
-    return customerDiscoverySummary(result.discoverySummary);
+	if (/rate limited|degraded/i.test(result.discoverySummary)) {
+		return customerDiscoverySummary(result.discoverySummary);
   }
 
   if (/API fallback/i.test(result.discoverySummary)) {

@@ -214,11 +214,11 @@ describe("shared report branding gates", () => {
       getDigest: vi.fn(),
       getWatchlist: vi.fn(),
       listWatchEvents: vi.fn().mockResolvedValue([]),
-      getWorkspaceBranding: vi.fn().mockResolvedValue({
-        brandName: "Northwind Growth",
-        brandWebsite: "https://northwind.example",
-        brandLogo: "data:image/png;base64,iVBORw0KGgo=",
-      }),
+			getWorkspaceBranding: vi.fn().mockResolvedValue({
+				brandName: "Northwind Growth",
+				brandWebsite: "https://northwind.example",
+				brandLogo: "data:image/png;base64,iVBORw0KGgo=",
+			}),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
@@ -232,7 +232,7 @@ describe("shared report branding gates", () => {
     } as never);
 
     expect(data.preparedBy).toBeNull();
-    expect(data.brandIdentity).toBeNull();
+		expect(data.brandIdentity).toBeNull();
   });
 
   it("renders agency branding on public shares when entitled", async () => {
@@ -252,11 +252,11 @@ describe("shared report branding gates", () => {
       getDigest: vi.fn(),
       getWatchlist: vi.fn(),
       listWatchEvents: vi.fn().mockResolvedValue([]),
-      getWorkspaceBranding: vi.fn().mockResolvedValue({
-        brandName: "Northwind Growth",
-        brandWebsite: "https://northwind.example",
-        brandLogo: "data:image/png;base64,iVBORw0KGgo=",
-      }),
+			getWorkspaceBranding: vi.fn().mockResolvedValue({
+				brandName: "Northwind Growth",
+				brandWebsite: "https://northwind.example",
+				brandLogo: "data:image/png;base64,iVBORw0KGgo=",
+			}),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("agency"),
@@ -270,60 +270,60 @@ describe("shared report branding gates", () => {
     } as never);
 
     expect(data.preparedBy).toBe("Northwind Growth");
-    expect(data.brandIdentity).toEqual({
-      brandName: "Northwind Growth",
-      brandWebsite: "https://northwind.example",
-      brandLogo: "data:image/png;base64,iVBORw0KGgo=",
-    });
-  });
+		expect(data.brandIdentity).toEqual({
+			brandName: "Northwind Growth",
+			brandWebsite: "https://northwind.example",
+			brandLogo: "data:image/png;base64,iVBORw0KGgo=",
+		});
+	});
 });
 
 describe("workspace brand identity gate", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+	beforeEach(() => {
+		vi.resetModules();
+	});
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
 
-  it("returns null for plans without agency branding", async () => {
-    const getWorkspaceBranding = vi.fn();
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("starter"),
-    }));
-    vi.doMock("~/lib/data.server", () => ({
-      getWorkspaceBranding,
-    }));
+	it("returns null for plans without agency branding", async () => {
+		const getWorkspaceBranding = vi.fn();
+		vi.doMock("~/lib/plan.server", () => ({
+			getUserPlan: vi.fn().mockResolvedValue("starter"),
+		}));
+		vi.doMock("~/lib/data.server", () => ({
+			getWorkspaceBranding,
+		}));
 
-    const { resolveWorkspaceBrandIdentity } = await import("~/lib/plan-feature-gate.server");
-    const identity = await resolveWorkspaceBrandIdentity({ DB: {} } as never, "user-1");
+		const { resolveWorkspaceBrandIdentity } = await import("~/lib/plan-feature-gate.server");
+		const identity = await resolveWorkspaceBrandIdentity({ DB: {} } as never, "user-1");
 
-    expect(identity).toBeNull();
-    expect(getWorkspaceBranding).not.toHaveBeenCalled();
-  });
+		expect(identity).toBeNull();
+		expect(getWorkspaceBranding).not.toHaveBeenCalled();
+	});
 
-  it("returns the full brand identity for agency plans", async () => {
-    const logo = "data:image/png;base64,iVBORw0KGgo=";
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("agency"),
-    }));
-    vi.doMock("~/lib/data.server", () => ({
-      getWorkspaceBranding: vi.fn().mockResolvedValue({
-        brandName: "Northwind Growth",
-        brandWebsite: "https://northwind.example",
-        brandLogo: logo,
-      }),
-    }));
+	it("returns the full brand identity for agency plans", async () => {
+		const logo = "data:image/png;base64,iVBORw0KGgo=";
+		vi.doMock("~/lib/plan.server", () => ({
+			getUserPlan: vi.fn().mockResolvedValue("agency"),
+		}));
+		vi.doMock("~/lib/data.server", () => ({
+			getWorkspaceBranding: vi.fn().mockResolvedValue({
+				brandName: "Northwind Growth",
+				brandWebsite: "https://northwind.example",
+				brandLogo: logo,
+			}),
+		}));
 
-    const { resolveWorkspaceBrandIdentity } = await import("~/lib/plan-feature-gate.server");
-    const identity = await resolveWorkspaceBrandIdentity({ DB: {} } as never, "user-1");
+		const { resolveWorkspaceBrandIdentity } = await import("~/lib/plan-feature-gate.server");
+		const identity = await resolveWorkspaceBrandIdentity({ DB: {} } as never, "user-1");
 
-    expect(identity).toEqual({
-      brandName: "Northwind Growth",
-      brandWebsite: "https://northwind.example",
-      brandLogo: logo,
-    });
+		expect(identity).toEqual({
+			brandName: "Northwind Growth",
+			brandWebsite: "https://northwind.example",
+			brandLogo: logo,
+		});
   });
 });
 
@@ -344,7 +344,7 @@ describe("route feature requirement coverage", () => {
 
     expect(watchlists).toContain("requireDeliveryConfigSave");
     expect(delivery).toContain("resolveEntitledDeliveryConfigs");
-    expect(share).toContain("resolveWorkspaceBrandIdentity");
+		expect(share).toContain("resolveWorkspaceBrandIdentity");
     expect(account).toContain("agency_branding");
   });
 });

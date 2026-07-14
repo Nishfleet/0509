@@ -17,9 +17,9 @@ export {
 export {
   WORKSPACE_BRAND_NAME_MAX_LENGTH,
   WORKSPACE_BRAND_WEBSITE_MAX_LENGTH,
-  WORKSPACE_BRAND_LOGO_MAX_LENGTH,
+	WORKSPACE_BRAND_LOGO_MAX_LENGTH,
   getWorkspaceBranding,
-  normalizeWorkspaceBrandLogo,
+	normalizeWorkspaceBrandLogo,
   upsertWorkspaceBranding,
 } from "~/lib/data/workspace-branding.server";
 

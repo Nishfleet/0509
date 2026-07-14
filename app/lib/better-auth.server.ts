@@ -4,7 +4,7 @@ import { magicLink } from "better-auth/plugins";
 
 import {
   appOrigin,
-  emailFromSender,
+	emailFromSender,
   isBetterAuthEnabled,
   isEmailSendingConfigured,
   type AppEnv,
@@ -777,7 +777,7 @@ async function sendMagicLinkEmail(
   await promiseWithTimeout(
     Promise.resolve().then(() =>
       env.EMAIL!.send({
-        from: emailFromSender(env),
+				from: emailFromSender(env),
         html: email.html,
         subject: email.subject,
         text: email.text,
@@ -1292,9 +1292,9 @@ export function buildBetterAuthMagicLinkEmail(input: {
   url: string;
 }) {
   const isSignup = input.mode === "signup";
-  const subject = isSignup ? "Activate your Five to Nine workspace" : "Sign in to Five to Nine";
+	const subject = isSignup ? "Activate your Five to Nine workspace" : "Sign in to Five to Nine";
   const heading = isSignup ? "Activate your Five to Nine workspace" : "Sign in to Five to Nine";
-  const kicker = isSignup ? "Five to Nine account activation" : "Five to Nine sign in";
+	const kicker = isSignup ? "Five to Nine account activation" : "Five to Nine sign in";
   const action = isSignup ? "Activate account" : "Sign in";
   const preview = isSignup
     ? "Confirm this request to activate your Five to Nine workspace."

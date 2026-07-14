@@ -12,15 +12,15 @@ import {
   syncWatchlistMentionTargetsIfChanged,
 } from "~/lib/data/watchlist-plan-reconcile.server";
 import {
-  buildBillingLifecycleOutboxStatement,
-  type BillingLifecycleEmailOutboxSpec,
+	buildBillingLifecycleOutboxStatement,
+	type BillingLifecycleEmailOutboxSpec,
 } from "~/lib/data/delivery-records-attempts.server";
 import type { AppEnv } from "~/lib/env.server";
 
 type GrantDodoPlanAccessInput = Parameters<
   typeof import("~/lib/data/billing-plan.server").grantDodoPlanAccess
 >[1] & {
-  requireProviderIdentityMatch?: boolean;
+	requireProviderIdentityMatch?: boolean;
 };
 type RevokeDodoPlanAccessInput = Parameters<
   typeof import("~/lib/data/billing-plan.server").revokeDodoPlanAccess
@@ -30,7 +30,7 @@ type MarkDodoPlanPaymentIssueInput = Parameters<
 >[1] & { providerSubscriptionId?: string | null; providerPaymentId?: string | null };
 
 export interface ApplyDodoPlanOptions {
-  lifecycleEmailOutbox?: BillingLifecycleEmailOutboxSpec;
+	lifecycleEmailOutbox?: BillingLifecycleEmailOutboxSpec;
 }
 
 export async function applyDodoPlanGrantWithWatchlistReconcile(
@@ -38,7 +38,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   input: GrantDodoPlanAccessInput,
   watchlistLimit: number,
   ledger: DodoWebhookLedgerFinalize,
-  options: ApplyDodoPlanOptions = {},
+	options: ApplyDodoPlanOptions = {},
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
@@ -143,7 +143,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     input.forcePlanChangePending ? 1 : 0,
   );
 
-  if (input.requirePlanChangePending || input.requireProviderIdentityMatch) {
+	if (input.requirePlanChangePending || input.requireProviderIdentityMatch) {
     const guardedGrantStatement = db.prepare(`
       UPDATE user_plan
       SET plan = ?,
@@ -182,41 +182,41 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
           plan_updated_at = ?
       WHERE user_id = ?
         AND (
-          ? = 0
+					? = 0
           OR (
-            (
-              dodo_status IN (
-                'plan_change_pending',
-                'plan_change_scheduled',
-                'payment.failed',
-                'subscription.failed',
-                'subscription.on_hold'
-              )
-              OR (
-                dodo_status IN ('succeeded', 'payment.succeeded')
-                AND dodo_product_id = ?
-              )
-            )
-            AND dodo_plan_change_product_id = ?
-            AND (
-              ? IS NULL
-              OR dodo_subscription_id = ?
-            )
-            AND (
-              ? IS NULL
-              OR dodo_customer_id IS NULL
-              OR dodo_customer_id = ?
-            )
+						(
+							dodo_status IN (
+								'plan_change_pending',
+								'plan_change_scheduled',
+								'payment.failed',
+								'subscription.failed',
+								'subscription.on_hold'
+							)
+							OR (
+								dodo_status IN ('succeeded', 'payment.succeeded')
+								AND dodo_product_id = ?
+							)
+						)
+						AND dodo_plan_change_product_id = ?
+						AND (
+							? IS NULL
+							OR dodo_subscription_id = ?
+						)
+						AND (
+							? IS NULL
+							OR dodo_customer_id IS NULL
+							OR dodo_customer_id = ?
+						)
           )
         )
         AND (
-          ? = 0
-          OR (
-            dodo_product_id = ?
-            AND dodo_subscription_id = ?
-            AND dodo_customer_id = ?
-            AND julianday(?) >= julianday(plan_updated_at)
-          )
+					? = 0
+					OR (
+						dodo_product_id = ?
+						AND dodo_subscription_id = ?
+						AND dodo_customer_id = ?
+						AND julianday(?) >= julianday(plan_updated_at)
+					)
         )
     `).bind(
       input.plan,
@@ -235,18 +235,18 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
       input.status,
       planUpdatedAt,
       input.userId,
-      input.requirePlanChangePending ? 1 : 0,
+			input.requirePlanChangePending ? 1 : 0,
       input.providerProductId ?? null,
       input.providerProductId ?? null,
       input.providerSubscriptionId ?? null,
       input.providerSubscriptionId ?? null,
       input.providerCustomerId ?? null,
       input.providerCustomerId ?? null,
-      input.requireProviderIdentityMatch ? 1 : 0,
-      input.providerProductId ?? null,
-      input.providerSubscriptionId ?? null,
-      input.providerCustomerId ?? null,
-      planUpdatedAt,
+			input.requireProviderIdentityMatch ? 1 : 0,
+			input.providerProductId ?? null,
+			input.providerSubscriptionId ?? null,
+			input.providerCustomerId ?? null,
+			planUpdatedAt,
     );
     const acceptedPlan = {
       plan: input.plan,
@@ -254,7 +254,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
       planUpdatedAt,
       processedLedgerEventId: ledger.eventId,
     };
-    const guardedStatements = [
+		const guardedStatements = [
       guardedGrantStatement,
       buildDodoWebhookLedgerFinalizeAfterChangedStatement(db, ledger, processedAt),
       ...buildWatchlistGrantReconcileStatements(db, input.userId, keepActive, timestamp, acceptedPlan),
@@ -265,30 +265,30 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
           outcome: "ignored",
           metadata: {
             ...ledger.metadata,
-            ignoredReason: input.requireProviderIdentityMatch
-              ? "provider_identity_guard_mismatch"
-              : "plan_change_guard_mismatch",
+						ignoredReason: input.requireProviderIdentityMatch
+							? "provider_identity_guard_mismatch"
+							: "plan_change_guard_mismatch",
           },
         },
         processedAt,
       ),
-    ];
-    if (options.lifecycleEmailOutbox) {
-      guardedStatements.push(
-        buildBillingLifecycleOutboxStatement(
-          db,
-          options.lifecycleEmailOutbox,
-          { kind: "ledger-processed", eventId: ledger.eventId, processedAt },
-          timestamp,
-        ),
-      );
-    }
-    const results = await db.batch(guardedStatements);
+		];
+		if (options.lifecycleEmailOutbox) {
+			guardedStatements.push(
+				buildBillingLifecycleOutboxStatement(
+					db,
+					options.lifecycleEmailOutbox,
+					{ kind: "ledger-processed", eventId: ledger.eventId, processedAt },
+					timestamp,
+				),
+			);
+		}
+		const results = await db.batch(guardedStatements);
 
     const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
     await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [2, 3]);
 
-    if (!grantChanged) return { changed: false };
+		if (!grantChanged) return { changed: false };
 
     try {
       const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
@@ -296,46 +296,46 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     } catch {
       // Anchor columns may be absent on pre-migration databases during local dev.
     }
-    return { changed: true };
+		return { changed: true };
   }
 
-  const statements = [grantStatement];
-  if (options.lifecycleEmailOutbox) {
-    statements.push(
-      buildBillingLifecycleOutboxStatement(
-        db,
-        options.lifecycleEmailOutbox,
-        { kind: "prior-statement-changed" },
-        timestamp,
-      ),
-    );
-  }
-  const watchlistStart = statements.length;
-  const watchlistStatements = buildWatchlistGrantReconcileStatements(
-    db,
-    input.userId,
-    keepActive,
-    timestamp,
-    {
+	const statements = [grantStatement];
+	if (options.lifecycleEmailOutbox) {
+		statements.push(
+			buildBillingLifecycleOutboxStatement(
+				db,
+				options.lifecycleEmailOutbox,
+				{ kind: "prior-statement-changed" },
+				timestamp,
+			),
+		);
+	}
+	const watchlistStart = statements.length;
+	const watchlistStatements = buildWatchlistGrantReconcileStatements(
+		db,
+		input.userId,
+		keepActive,
+		timestamp,
+		{
       plan: input.plan,
       status: input.status,
       planUpdatedAt,
-    },
-  );
-  statements.push(
-    ...watchlistStatements,
+		},
+	);
+	statements.push(
+		...watchlistStatements,
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
-  );
-  const results = await db.batch(statements);
+	);
+	const results = await db.batch(statements);
 
-  await syncWatchlistMentionTargetsIfChanged(
-    env,
-    input.userId,
-    timestamp,
-    results,
-    watchlistStatements.map((_, index) => watchlistStart + index),
-  );
-  const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
+	await syncWatchlistMentionTargetsIfChanged(
+		env,
+		input.userId,
+		timestamp,
+		results,
+		watchlistStatements.map((_, index) => watchlistStart + index),
+	);
+	const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
 
   try {
     const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
@@ -343,53 +343,53 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   } catch {
     // Anchor columns may be absent on pre-migration databases during local dev.
   }
-  return { changed: grantChanged };
+	return { changed: grantChanged };
 }
 
 export async function applyDodoCancellationReversalWithLedger(
-  env: AppEnv,
-  input: GrantDodoPlanAccessInput,
-  ledger: DodoWebhookLedgerFinalize,
+	env: AppEnv,
+	input: GrantDodoPlanAccessInput,
+	ledger: DodoWebhookLedgerFinalize,
 ) {
-  const db = ensureDb(env);
-  const planUpdatedAt = validIsoTimestamp(input.grantedAt);
-  if (!planUpdatedAt) {
-    throw new Error("Cancellation reversal requires a verified webhook timestamp.");
-  }
-  const processedAt = nowIso();
-  const reversal = db.prepare(`
-    UPDATE user_plan
-    SET dodo_status = CASE
-          WHEN dodo_status = 'cancellation_scheduled' THEN ?
-          ELSE dodo_status
-        END,
-        dodo_next_billing_at = COALESCE(?, dodo_next_billing_at),
-        dodo_plan_change_product_id = CASE
-          WHEN dodo_status = 'cancellation_scheduled' THEN NULL
-          ELSE dodo_plan_change_product_id
-        END,
-        plan_updated_at = ?
-    WHERE user_id = ?
-      AND dodo_status IN ('cancellation_scheduled', 'active', 'succeeded', 'payment.succeeded')
-      AND dodo_product_id = ?
-      AND dodo_subscription_id = ?
-      AND dodo_customer_id = ?
-      AND julianday(?) >= julianday(plan_updated_at)
-  `).bind(
-    input.status,
-    input.nextBillingAt ?? null,
-    planUpdatedAt,
-    input.userId,
-    input.providerProductId ?? null,
-    input.providerSubscriptionId ?? null,
-    input.providerCustomerId ?? null,
-    planUpdatedAt,
-  );
-  const results = await db.batch([
-    reversal,
-    buildDodoWebhookLedgerFinalizeAfterChangedStatement(db, ledger, processedAt),
-  ]);
-  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
+	const db = ensureDb(env);
+	const planUpdatedAt = validIsoTimestamp(input.grantedAt);
+	if (!planUpdatedAt) {
+		throw new Error("Cancellation reversal requires a verified webhook timestamp.");
+	}
+	const processedAt = nowIso();
+	const reversal = db.prepare(`
+		UPDATE user_plan
+		SET dodo_status = CASE
+					WHEN dodo_status = 'cancellation_scheduled' THEN ?
+					ELSE dodo_status
+				END,
+				dodo_next_billing_at = COALESCE(?, dodo_next_billing_at),
+				dodo_plan_change_product_id = CASE
+					WHEN dodo_status = 'cancellation_scheduled' THEN NULL
+					ELSE dodo_plan_change_product_id
+				END,
+				plan_updated_at = ?
+		WHERE user_id = ?
+			AND dodo_status IN ('cancellation_scheduled', 'active', 'succeeded', 'payment.succeeded')
+			AND dodo_product_id = ?
+			AND dodo_subscription_id = ?
+			AND dodo_customer_id = ?
+			AND julianday(?) >= julianday(plan_updated_at)
+	`).bind(
+		input.status,
+		input.nextBillingAt ?? null,
+		planUpdatedAt,
+		input.userId,
+		input.providerProductId ?? null,
+		input.providerSubscriptionId ?? null,
+		input.providerCustomerId ?? null,
+		planUpdatedAt,
+	);
+	const results = await db.batch([
+		reversal,
+		buildDodoWebhookLedgerFinalizeAfterChangedStatement(db, ledger, processedAt),
+	]);
+	return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
 }
 
 
@@ -398,84 +398,86 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
   input: RevokeDodoPlanAccessInput,
   watchlistLimit: number,
   ledger: DodoWebhookLedgerFinalize,
-  options: ApplyDodoPlanOptions = {},
+	options: ApplyDodoPlanOptions = {},
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.revokedAt) ?? nowIso();
   const timestamp = nowIso();
   const processedAt = nowIso();
-  const revokeOutbox = options.lifecycleEmailOutbox && {
-    ...options.lifecycleEmailOutbox,
-    payloadSnapshot: {
-      ...options.lifecycleEmailOutbox.payloadSnapshot,
-      billingMutationStatus: input.status,
-      billingMutationSubscriptionId:
-        input.providerSubscriptionId !== input.status ? input.providerSubscriptionId : null,
-      billingMutationStateUpdatedAt: planUpdatedAt,
-    },
-  };
+	const providerSubscriptionId = input.providerSubscriptionId.trim();
+	const revokeOutbox = options.lifecycleEmailOutbox && {
+		...options.lifecycleEmailOutbox,
+		payloadSnapshot: {
+			...options.lifecycleEmailOutbox.payloadSnapshot,
+			billingMutationStatus: input.status,
+			billingMutationSubscriptionId:
+				input.providerSubscriptionId !== input.status ? input.providerSubscriptionId : null,
+			billingMutationStateUpdatedAt: planUpdatedAt,
+		},
+	};
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
 
-  const statements = [
+	const statements = [
     db.prepare(`
-      INSERT INTO user_plan (
-        user_id,
-        plan,
-        dodo_status,
-        plan_updated_at
-      )
-      VALUES (?, 'free', ?, ?)
-      ON CONFLICT(user_id)
-      DO UPDATE SET
-        plan = 'free',
-        dodo_status = excluded.dodo_status,
-        plan_updated_at = excluded.plan_updated_at
-      WHERE user_plan.plan != 'free'
-        AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
-    `).bind(input.userId, input.status, planUpdatedAt),
-  ];
-  if (revokeOutbox) {
-    statements.push(
-      buildBillingLifecycleOutboxStatement(
-        db,
-        revokeOutbox,
-        { kind: "prior-statement-changed" },
-        timestamp,
-      ),
-    );
-  }
-  // A later terminal event is still an ordering barrier even when an earlier
-  // terminal event already made the account free. Keep statement 0 as the
-  // customer-facing transition (and outbox gate), then advance only the
-  // watermark here so a delayed intermediate grant cannot restore access.
-  // The first terminal status stays sticky; refunds may explicitly supersede
-  // it in applyDodoRefundWithWatchlistReconcile.
-  statements.push(
-    db.prepare(`
-      UPDATE user_plan
-      SET plan_updated_at = ?
-      WHERE user_id = ?
-        AND plan = 'free'
-        AND julianday(?) > julianday(plan_updated_at)
-    `).bind(planUpdatedAt, input.userId, planUpdatedAt),
-  );
-  const watchlistIndex = statements.length;
-  statements.push(
+			UPDATE user_plan
+			SET plan = 'free',
+					dodo_status = ?,
+					plan_updated_at = ?
+			WHERE user_id = ?
+				AND plan != 'free'
+				AND dodo_subscription_id = ?
+				AND julianday(?) >= julianday(plan_updated_at)
+		`).bind(
+			input.status,
+			planUpdatedAt,
+			input.userId,
+			providerSubscriptionId,
+			planUpdatedAt,
+		),
+	];
+	if (revokeOutbox) {
+		statements.push(
+			buildBillingLifecycleOutboxStatement(
+				db,
+				revokeOutbox,
+				{ kind: "prior-statement-changed" },
+				timestamp,
+			),
+		);
+	}
+	// A later terminal event is still an ordering barrier even when an earlier
+	// terminal event already made the account free. Keep statement 0 as the
+	// customer-facing transition (and outbox gate), then advance only the
+	// watermark here so a delayed intermediate grant cannot restore access.
+	// The first terminal status stays sticky; refunds may explicitly supersede
+	// it in applyDodoRefundWithWatchlistReconcile.
+	statements.push(
+		db.prepare(`
+			UPDATE user_plan
+			SET plan_updated_at = ?
+			WHERE user_id = ?
+				AND plan = 'free'
+				AND dodo_subscription_id = ?
+				AND julianday(?) > julianday(plan_updated_at)
+		`).bind(planUpdatedAt, input.userId, providerSubscriptionId, planUpdatedAt),
+	);
+	const watchlistIndex = statements.length;
+	statements.push(
     buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
       plan: "free",
       status: input.status,
       planUpdatedAt,
     }),
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
-  );
-  const results = await db.batch(statements);
+	);
+	const results = await db.batch(statements);
 
-  await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [watchlistIndex]);
+	await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [watchlistIndex]);
 
-  return {
-    changed: Number(results[0]?.meta?.changes ?? 0) > 0,
-    stateUpdatedAt: planUpdatedAt,
-  };
+	return {
+		changed: Number(results[0]?.meta?.changes ?? 0) > 0,
+		stateUpdatedAt: planUpdatedAt,
+	};
 }
 
 
@@ -488,18 +490,18 @@ export async function applyDodoRefundWithWatchlistReconcile(
   },
   watchlistLimit: number,
   ledger: DodoWebhookLedgerFinalize,
-  options: ApplyDodoPlanOptions = {},
+	options: ApplyDodoPlanOptions = {},
 ) {
   const db = ensureDb(env);
   const refundedAt = validIsoTimestamp(input.refundedAt) ?? nowIso();
   const timestamp = nowIso();
   const processedAt = nowIso();
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
-  const refundOutbox = options.lifecycleEmailOutbox && {
-    ...options.lifecycleEmailOutbox,
-    payloadSnapshot: { ...options.lifecycleEmailOutbox.payloadSnapshot,
-      refundPaymentId: input.paymentId, refundStateUpdatedAt: refundedAt },
-  };
+	const refundOutbox = options.lifecycleEmailOutbox && {
+		...options.lifecycleEmailOutbox,
+		payloadSnapshot: { ...options.lifecycleEmailOutbox.payloadSnapshot,
+			refundPaymentId: input.paymentId, refundStateUpdatedAt: refundedAt },
+	};
 
   const statements = [
     db.prepare(`
@@ -508,27 +510,27 @@ export async function applyDodoRefundWithWatchlistReconcile(
           dodo_status = 'refunded',
           plan_updated_at = ?
       WHERE dodo_payment_id = ?
-        AND plan != 'free'
-        AND julianday(?) >= julianday(plan_updated_at)
-    `).bind(refundedAt, input.paymentId, refundedAt),
-  ];
-  if (refundOutbox) {
-    statements.push(
-      buildBillingLifecycleOutboxStatement(
-        db,
-        refundOutbox,
-        { kind: "prior-statement-changed" },
-        timestamp,
-      ),
-    );
-  }
-  statements.push(
-    db.prepare(`
-      UPDATE user_plan
-      SET dodo_status = 'refunded',
-          plan_updated_at = ?
-      WHERE dodo_payment_id = ?
-        AND plan = 'free'
+				AND plan != 'free'
+				AND julianday(?) >= julianday(plan_updated_at)
+		`).bind(refundedAt, input.paymentId, refundedAt),
+	];
+	if (refundOutbox) {
+		statements.push(
+			buildBillingLifecycleOutboxStatement(
+				db,
+				refundOutbox,
+				{ kind: "prior-statement-changed" },
+				timestamp,
+			),
+		);
+	}
+	statements.push(
+		db.prepare(`
+			UPDATE user_plan
+			SET dodo_status = 'refunded',
+					plan_updated_at = ?
+			WHERE dodo_payment_id = ?
+				AND plan = 'free'
         AND julianday(?) >= julianday(plan_updated_at)
     `).bind(refundedAt, input.paymentId, refundedAt),
     db.prepare(`
@@ -537,11 +539,11 @@ export async function applyDodoRefundWithWatchlistReconcile(
       WHERE provider_payment_id = ?
         AND julianday(expires_at) > julianday(?)
     `).bind(refundedAt, input.paymentId, refundedAt),
-  );
+	);
 
-  let watchlistIndex: number | null = null;
+	let watchlistIndex: number | null = null;
   if (input.userId) {
-    watchlistIndex = statements.length;
+		watchlistIndex = statements.length;
     statements.push(buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
       plan: "free",
       status: "refunded",
@@ -552,14 +554,14 @@ export async function applyDodoRefundWithWatchlistReconcile(
   statements.push(buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt));
 
   const results = await db.batch(statements);
-  if (input.userId && watchlistIndex !== null) {
+	if (input.userId && watchlistIndex !== null) {
     await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [watchlistIndex]);
   }
 
-  return {
-    changed: Number(results[0]?.meta?.changes ?? 0) > 0,
-    stateUpdatedAt: refundedAt,
-  };
+	return {
+		changed: Number(results[0]?.meta?.changes ?? 0) > 0,
+		stateUpdatedAt: refundedAt,
+	};
 }
 
 
@@ -567,27 +569,29 @@ export async function applyDodoPlanPaymentIssueWithLedger(
   env: AppEnv,
   input: MarkDodoPlanPaymentIssueInput,
   ledger: DodoWebhookLedgerFinalize,
-  options: ApplyDodoPlanOptions = {},
+	options: ApplyDodoPlanOptions = {},
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.occurredAt) ?? nowIso();
   const cancellationEffectiveAt = validIsoTimestamp(input.cancellationEffectiveAt ?? undefined);
-  const timestamp = nowIso();
+	const timestamp = nowIso();
   const processedAt = nowIso();
-  const paymentIssueSubscriptionId = input.providerSubscriptionId?.trim() || null;
-  const paymentIssueOutbox = options.lifecycleEmailOutbox && {
-    ...options.lifecycleEmailOutbox,
-    payloadSnapshot: {
-      ...options.lifecycleEmailOutbox.payloadSnapshot,
-      billingMutationStatus: input.status,
-      billingMutationSubscriptionId: paymentIssueSubscriptionId,
-      billingMutationPaymentId:
-        paymentIssueSubscriptionId ? null : input.providerPaymentId?.trim() || null,
-      billingMutationStateUpdatedAt: planUpdatedAt,
-    },
-  };
+	const paymentIssueSubscriptionId = input.providerSubscriptionId?.trim() || null;
+	const paymentIssuePaymentId = paymentIssueSubscriptionId
+		? null
+		: input.providerPaymentId?.trim() || null;
+	const paymentIssueOutbox = options.lifecycleEmailOutbox && {
+		...options.lifecycleEmailOutbox,
+		payloadSnapshot: {
+			...options.lifecycleEmailOutbox.payloadSnapshot,
+			billingMutationStatus: input.status,
+			billingMutationSubscriptionId: paymentIssueSubscriptionId,
+			billingMutationPaymentId: paymentIssuePaymentId,
+			billingMutationStateUpdatedAt: planUpdatedAt,
+		},
+	};
 
-  const statements = [
+	const statements = [
     db.prepare(`
       UPDATE user_plan
       SET dodo_status = ?,
@@ -598,6 +602,10 @@ export async function applyDodoPlanPaymentIssueWithLedger(
           plan_updated_at = ?
       WHERE user_id = ?
         AND plan != 'free'
+				AND (
+					(? IS NOT NULL AND dodo_subscription_id = ?)
+					OR (? IS NULL AND ? IS NOT NULL AND dodo_payment_id = ?)
+				)
         AND julianday(?) >= julianday(plan_updated_at)
     `).bind(
       input.status,
@@ -605,24 +613,29 @@ export async function applyDodoPlanPaymentIssueWithLedger(
       cancellationEffectiveAt,
       planUpdatedAt,
       input.userId,
+			paymentIssueSubscriptionId,
+			paymentIssueSubscriptionId,
+			paymentIssueSubscriptionId,
+			paymentIssuePaymentId,
+			paymentIssuePaymentId,
       planUpdatedAt,
     ),
-  ];
-  if (paymentIssueOutbox) {
-    statements.push(
-      buildBillingLifecycleOutboxStatement(
-        db,
-        paymentIssueOutbox,
-        { kind: "prior-statement-changed" },
-        timestamp,
-      ),
-    );
-  }
-  statements.push(buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt));
-  const results = await db.batch(statements);
+	];
+	if (paymentIssueOutbox) {
+		statements.push(
+			buildBillingLifecycleOutboxStatement(
+				db,
+				paymentIssueOutbox,
+				{ kind: "prior-statement-changed" },
+				timestamp,
+			),
+		);
+	}
+	statements.push(buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt));
+	const results = await db.batch(statements);
 
-  return {
-    changed: Number(results[0]?.meta?.changes ?? 0) > 0,
-    stateUpdatedAt: planUpdatedAt,
-  };
+	return {
+		changed: Number(results[0]?.meta?.changes ?? 0) > 0,
+		stateUpdatedAt: planUpdatedAt,
+	};
 }

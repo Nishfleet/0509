@@ -35,9 +35,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (target.kind === "plan") {
     if (!isCheckoutPlanSlug(target.planFamily)) {
-      // Only reachable with tampered form values — land on the billing page's
-      // notice system instead of a raw full-page error.
-      throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
+			// Only reachable with tampered form values — land on the billing page's
+			// notice system instead of a raw full-page error.
+			throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
     }
 
     if (currentPlan !== "free") {
@@ -130,7 +130,7 @@ function parseCheckoutTarget(
   if (sku) {
     const target = resolveSku(sku);
     if (!target) {
-      throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
+			throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
     }
     return target;
   }
@@ -164,7 +164,7 @@ function parseCheckoutTarget(
     return target;
   }
 
-  throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
+	throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
 }
 
 function isCheckoutPlanSlug(value: string): value is "scout" | "starter" | "agency" {

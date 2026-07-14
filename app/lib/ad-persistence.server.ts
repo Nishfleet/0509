@@ -53,7 +53,7 @@ function jsonValue(value: unknown) {
 }
 
 function normalizeSeenAt(value: string | null) {
-  return value && !Number.isNaN(Date.parse(value)) ? value : null;
+	return value && !Number.isNaN(Date.parse(value)) ? value : null;
 }
 
 function findTranslatedAnalysisField(fields: AnalysisFieldInput[]) {
@@ -154,9 +154,9 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
 
 export async function upsertAd(env: AppEnv, ad: AdRecord) {
   const timestamp = nowIso();
-  const firstSeenAt = normalizeSeenAt(ad.firstSeenAt);
-  const lastSeenAt = normalizeSeenAt(ad.lastSeenAt);
-  const rawJson = jsonValue({ ...ad, firstSeenAt, lastSeenAt });
+	const firstSeenAt = normalizeSeenAt(ad.firstSeenAt);
+	const lastSeenAt = normalizeSeenAt(ad.lastSeenAt);
+	const rawJson = jsonValue({ ...ad, firstSeenAt, lastSeenAt });
   await run(
     env,
     `
@@ -291,15 +291,15 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
     ad.adSnapshotUrl,
     jsonValue(ad.countries),
     jsonValue(ad.platforms),
-    firstSeenAt,
-    lastSeenAt,
+		firstSeenAt,
+		lastSeenAt,
     ad.active ? 1 : 0,
     ad.source,
     ad.researchSummary,
     ad.creativeText ?? null,
     ad.creativeTextCaptureMethod ?? null,
     jsonValue(ad.creativeTextMetadata ?? null),
-    rawJson,
+		rawJson,
     timestamp,
     timestamp,
   );

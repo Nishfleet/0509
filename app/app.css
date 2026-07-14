@@ -1073,36 +1073,36 @@ img {
 
 /* Loading placeholders — shimmer instead of "price loading" prose. */
 .f9-skeleton-line {
-  display: inline-block;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #e9eef4 25%, #f5f8fb 50%, #e9eef4 75%);
-  background-size: 200% 100%;
-  animation: f9-skeleton-shimmer 1.4s ease-in-out infinite;
-  color: transparent;
-  user-select: none;
+	display: inline-block;
+	border-radius: 6px;
+	background: linear-gradient(90deg, #e9eef4 25%, #f5f8fb 50%, #e9eef4 75%);
+	background-size: 200% 100%;
+	animation: f9-skeleton-shimmer 1.4s ease-in-out infinite;
+	color: transparent;
+	user-select: none;
 }
 
 .f9-skeleton-price {
-  width: 92px;
-  height: 1.35rem;
-  margin-top: 4px;
+	width: 92px;
+	height: 1.35rem;
+	margin-top: 4px;
 }
 
 @keyframes f9-skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
+	0% {
+		background-position: 200% 0;
+	}
 
-  100% {
-    background-position: -200% 0;
-  }
+	100% {
+		background-position: -200% 0;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .f9-skeleton-line {
-    animation: none;
-    background: #e9eef4;
-  }
+	.f9-skeleton-line {
+		animation: none;
+		background: #e9eef4;
+	}
 }
 
 button[aria-busy="true"] {
@@ -2590,9 +2590,9 @@ button[aria-busy="true"] {
 
 /* Step titles stack above their body copy — never run together inline. */
 .f9-numbered-guide li strong {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--f9-search-ink);
+	display: block;
+	margin-bottom: 2px;
+	color: var(--f9-search-ink);
 }
 
 .f9-copy-button {
@@ -3137,18 +3137,18 @@ button[aria-busy="true"] {
 }
 
 /* The base feature list is styled for the dark marketing commerce card;
-   on white app plan cards it needs readable ink and a quiet bullet. */
+	 on white app plan cards it needs readable ink and a quiet bullet. */
 .f9-app-plan-card .f9-plan-feature-list {
   margin: 0;
-  color: #425466;
-  font-size: 0.9rem;
+	color: #425466;
+	font-size: 0.9rem;
 }
 
 .f9-app-plan-card .f9-plan-feature-list li::before {
-  width: 6px;
-  height: 6px;
-  background: #171611;
-  box-shadow: none;
+	width: 6px;
+	height: 6px;
+	background: #171611;
+	box-shadow: none;
 }
 
 .f9-app-plan-card .f9-plan-actions,
@@ -3466,76 +3466,76 @@ button[aria-busy="true"] {
 }
 
 .f9-brand-logo-preview {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
-  padding: 14px;
-  border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
-  border-radius: 14px;
-  background: #fffdf8;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 14px;
+	padding: 14px;
+	border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
+	border-radius: 14px;
+	background: #fffdf8;
 }
 
 .f9-brand-logo-preview img {
-  width: auto;
-  max-width: min(220px, 100%);
-  height: auto;
-  max-height: 72px;
-  object-fit: contain;
+	width: auto;
+	max-width: min(220px, 100%);
+	height: auto;
+	max-height: 72px;
+	object-fit: contain;
 }
 
 .f9-share-brand-identity {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-height: 72px;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	min-height: 72px;
 }
 
 .f9-share-brand-logo {
-  display: grid;
-  place-items: center;
-  min-width: 80px;
-  min-height: 64px;
-  padding: 8px 12px;
-  border: 1px solid var(--f9-search-line);
-  border-radius: 14px;
-  background: #fff;
+	display: grid;
+	place-items: center;
+	min-width: 80px;
+	min-height: 64px;
+	padding: 8px 12px;
+	border: 1px solid var(--f9-search-line);
+	border-radius: 14px;
+	background: #fff;
 }
 
 .f9-share-brand-logo img {
-  width: auto;
-  max-width: 180px;
-  height: auto;
-  max-height: 56px;
-  object-fit: contain;
+	width: auto;
+	max-width: 180px;
+	height: auto;
+	max-height: 56px;
+	object-fit: contain;
 }
 
 .f9-share-brand-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
+	display: grid;
+	gap: 3px;
+	min-width: 0;
 }
 
 .f9-share-brand-copy small {
-  color: var(--f9-search-soft);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+	color: var(--f9-search-soft);
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
 }
 
 .f9-share-brand-copy strong {
-  color: var(--f9-search-ink);
-  font-size: clamp(1.25rem, 3vw, 1.8rem);
-  line-height: 1.1;
-  overflow-wrap: anywhere;
+	color: var(--f9-search-ink);
+	font-size: clamp(1.25rem, 3vw, 1.8rem);
+	line-height: 1.1;
+	overflow-wrap: anywhere;
 }
 
 .f9-share-brand-copy a {
-  width: fit-content;
-  color: var(--f9-search-muted);
-  font-size: 0.88rem;
-  font-weight: 650;
+	width: fit-content;
+	color: var(--f9-search-muted);
+	font-size: 0.88rem;
+	font-weight: 650;
 }
 
 .f9-share-header .f9-wordmark,
@@ -3571,9 +3571,9 @@ button[aria-busy="true"] {
 }
 
 .f9-share-powered-by {
-  color: var(--f9-search-soft, #64788d);
-  font-size: 0.78rem;
-  letter-spacing: 0.01em;
+	color: var(--f9-search-soft, #64788d);
+	font-size: 0.78rem;
+	letter-spacing: 0.01em;
 }
 
 .f9-share-footer a {
@@ -3817,29 +3817,29 @@ button[aria-busy="true"] {
 
   .f9-cursor-rail,
   .f9-dash-topbar,
-  .f9-report-toolbar button,
-  .f9-report-toolbar a {
+	.f9-report-toolbar button,
+	.f9-report-toolbar a {
     display: none !important;
   }
 
-  .f9-share-header,
-  .f9-share-brand-identity,
-  .f9-share-powered-by {
-    display: flex !important;
-  }
+	.f9-share-header,
+	.f9-share-brand-identity,
+	.f9-share-powered-by {
+		display: flex !important;
+	}
 
-  .f9-share-header {
-    padding: 0 0 18px;
-  }
+	.f9-share-header {
+		padding: 0 0 18px;
+	}
 
-  .f9-share-brand-identity {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
+	.f9-share-brand-identity {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
 
-  .f9-share-powered-by {
-    margin-top: 18px;
-  }
+	.f9-share-powered-by {
+		margin-top: 18px;
+	}
 
   .f9-cursor-shell,
   .f9-dash-content,
@@ -3867,63 +3867,63 @@ button[aria-busy="true"] {
 }
 
 /* P2: report PDF variant (2026-07-13)
-   /share/:token?pdf=1 — the print-clean page the server-side PDF renderer
-   (Browser Rendering + CDP printToPDF) loads for /share/:token/pdf. Agency
-   branding headlines the masthead; Five to Nine demotes to the footer
-   credit. Keep it chrome-free and page-break friendly. */
+	 /share/:token?pdf=1 — the print-clean page the server-side PDF renderer
+	 (Browser Rendering + CDP printToPDF) loads for /share/:token/pdf. Agency
+	 branding headlines the masthead; Five to Nine demotes to the footer
+	 credit. Keep it chrome-free and page-break friendly. */
 
 .f9-share-pdf {
-  background: #fff;
-  padding-bottom: 32px;
+	background: #fff;
+	padding-bottom: 32px;
 }
 
 .f9-share-pdf .f9-container {
-  max-width: 780px;
+	max-width: 780px;
 }
 
 .f9-pdf-masthead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 26px 0 14px;
-  border-bottom: 2px solid var(--f9-search-ink, #061629);
-  margin-bottom: 20px;
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 26px 0 14px;
+	border-bottom: 2px solid var(--f9-search-ink, #061629);
+	margin-bottom: 20px;
 }
 
 .f9-pdf-brand {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 }
 
 .f9-pdf-brand-name {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  color: var(--f9-search-ink, #061629);
+	margin: 0;
+	font-size: 1.5rem;
+	font-weight: 750;
+	letter-spacing: -0.02em;
+	color: var(--f9-search-ink, #061629);
 }
 
 .f9-pdf-brand-site {
-  margin: 0;
-  font-size: 0.85rem;
-  letter-spacing: 0.01em;
-  color: var(--f9-search-soft, #64788d);
+	margin: 0;
+	font-size: 0.85rem;
+	letter-spacing: 0.01em;
+	color: var(--f9-search-soft, #64788d);
 }
 
 /* No interactive chrome may survive into the printed document. */
 .f9-share-pdf button,
 .f9-share-pdf .f9-primary-button,
 .f9-share-pdf .f9-secondary-button {
-  display: none !important;
+	display: none !important;
 }
 
 .f9-share-pdf .f9-app-panel {
-  border: 0;
-  box-shadow: none;
-  background: #fff;
-  padding: 0;
+	border: 0;
+	box-shadow: none;
+	background: #fff;
+	padding: 0;
 }
 
 .f9-share-pdf .report-card,
@@ -3931,38 +3931,38 @@ button[aria-busy="true"] {
 .f9-share-pdf .report-signal-card,
 .f9-share-pdf .report-event,
 .f9-share-pdf .f9-proof-packet {
-  break-inside: avoid;
-  page-break-inside: avoid;
+	break-inside: avoid;
+	page-break-inside: avoid;
 }
 
 .f9-share-pdf .report-hero {
-  break-after: avoid;
-  page-break-after: avoid;
+	break-after: avoid;
+	page-break-after: avoid;
 }
 
 .f9-pdf-footer {
-  margin-top: 26px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(6, 22, 41, 0.12);
-  font-size: 0.8rem;
-  letter-spacing: 0.01em;
-  color: var(--f9-search-soft, #64788d);
+	margin-top: 26px;
+	padding-top: 12px;
+	border-top: 1px solid rgba(6, 22, 41, 0.12);
+	font-size: 0.8rem;
+	letter-spacing: 0.01em;
+	color: var(--f9-search-soft, #64788d);
 }
 
 @media print {
-  /* The masthead and footer credit must survive the shared chrome-hiding
-     print rules above — they ARE the document header/footer. */
-  .f9-share-pdf .f9-pdf-masthead {
-    display: flex;
-  }
+	/* The masthead and footer credit must survive the shared chrome-hiding
+		 print rules above — they ARE the document header/footer. */
+	.f9-share-pdf .f9-pdf-masthead {
+		display: flex;
+	}
 
-  .f9-share-pdf .f9-pdf-footer {
-    display: block;
-  }
+	.f9-share-pdf .f9-pdf-footer {
+		display: block;
+	}
 
-  .f9-share-pdf .f9-container {
-    max-width: none;
-  }
+	.f9-share-pdf .f9-container {
+		max-width: none;
+	}
 }
 
 a:focus-visible,
@@ -7599,13 +7599,13 @@ one signal-green accent.
 }
 
 /* Fail-safe end state: if the reveal animation never runs (element not
-   rendered when it was created, dropped animation, etc.), the resting
-   opacity is still fully visible. The keyframes above override this while
-   the animation is actually playing, so the stagger is unaffected.
-   Observed live 2026-07-13: .ld-case-card stuck at opacity 0 inside a
-   parent that already had .is-seen. */
+	 rendered when it was created, dropped animation, etc.), the resting
+	 opacity is still fully visible. The keyframes above override this while
+	 the animation is actually playing, so the stagger is unaffected.
+	 Observed live 2026-07-13: .ld-case-card stuck at opacity 0 inside a
+	 parent that already had .is-seen. */
 .ld-motion .ld-reveal.is-seen > * {
-  opacity: 1;
+	opacity: 1;
 }
 
 .f9-home .f9-commerce-card { animation: none; }
@@ -8501,419 +8501,419 @@ one signal-green accent.
 }
 
 /* Interaction layer (2026-07-13): one confirm pattern, scoped action feedback,
-   consolidated empty states, and file-input polish. Workspace scope uses
-   literal warm-bone hex — the --ld- and --f9-search- variables are not
-   defined inside .f9-dash-page. */
+	 consolidated empty states, and file-input polish. Workspace scope uses
+	 literal warm-bone hex — the --ld- and --f9-search- variables are not
+	 defined inside .f9-dash-page. */
 
 .f9-danger-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  border: 1px solid rgba(180, 35, 24, 0.4);
-  border-radius: 999px;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 900;
-  padding: 10px 16px;
-  white-space: nowrap;
-  background: #fff;
-  color: #b42318;
-  transition:
-    transform 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    background-color 160ms ease;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 44px;
+	border: 1px solid rgba(180, 35, 24, 0.4);
+	border-radius: 999px;
+	cursor: pointer;
+	font: inherit;
+	font-weight: 900;
+	padding: 10px 16px;
+	white-space: nowrap;
+	background: #fff;
+	color: #b42318;
+	transition:
+		transform 160ms ease,
+		border-color 160ms ease,
+		box-shadow 160ms ease,
+		background-color 160ms ease;
 }
 
 .f9-danger-button:hover {
-  transform: translateY(-1px);
-  border-color: #b42318;
+	transform: translateY(-1px);
+	border-color: #b42318;
 }
 
 .f9-danger-button.is-filled {
-  background: #b42318;
-  border-color: #b42318;
-  color: #fff;
+	background: #b42318;
+	border-color: #b42318;
+	color: #fff;
 }
 
 .f9-danger-button.is-filled:hover {
-  background: #9b1e15;
-  border-color: #9b1e15;
+	background: #9b1e15;
+	border-color: #9b1e15;
 }
 
 .f9-dash-topbar .f9-danger-button {
-  min-height: 36px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 0.88rem;
+	min-height: 36px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	font-size: 0.88rem;
 }
 
 .f9-confirm-armed {
-  animation: f9-confirm-settle 160ms ease;
+	animation: f9-confirm-settle 160ms ease;
 }
 
 @keyframes f9-confirm-settle {
-  from {
-    opacity: 0.6;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+	from {
+		opacity: 0.6;
+		transform: translateY(2px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 .f9-action-feedback {
-  animation: f9-feedback-rise 180ms ease;
+	animation: f9-feedback-rise 180ms ease;
 }
 
 @keyframes f9-feedback-rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 /* Feedback inside the workspace stays flat and warm: hairline border,
-   card surface, no floating shadow (matches the customer-grade cleanup). */
+	 card surface, no floating shadow (matches the customer-grade cleanup). */
 .f9-dash-page .f9-message {
-  border: 1px solid #e0ddd4;
-  border-radius: 12px;
-  background: #fffdf8;
-  box-shadow: none;
-  margin-bottom: 0;
+	border: 1px solid #e0ddd4;
+	border-radius: 12px;
+	background: #fffdf8;
+	box-shadow: none;
+	margin-bottom: 0;
 }
 
 .f9-dash-page .f9-message p {
-  margin: 0;
-  line-height: 1.45;
+	margin: 0;
+	line-height: 1.45;
 }
 
 .f9-dash-state h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 800;
+	margin: 0;
+	font-size: 1.05rem;
+	font-weight: 800;
 }
 
 .f9-empty-inline {
-  margin: 0;
+	margin: 0;
 }
 
 .f9-field input[type="file"] {
-  padding: 8px;
-  border: 1px dashed rgba(6, 22, 41, 0.16);
-  border-radius: 14px;
-  background: #fff;
-  color: var(--f9-search-muted, var(--f9-global-muted));
-  cursor: pointer;
+	padding: 8px;
+	border: 1px dashed rgba(6, 22, 41, 0.16);
+	border-radius: 14px;
+	background: #fff;
+	color: var(--f9-search-muted, var(--f9-global-muted));
+	cursor: pointer;
 }
 
 .f9-field input[type="file"]::file-selector-button {
-  min-height: 44px;
-  margin-right: 12px;
-  border: 1px solid rgba(6, 22, 41, 0.12);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--f9-search-ink, var(--f9-global-ink));
-  cursor: pointer;
-  font: inherit;
-  font-weight: 900;
-  padding: 10px 16px;
-  transition:
-    transform 160ms ease,
-    border-color 160ms ease;
+	min-height: 44px;
+	margin-right: 12px;
+	border: 1px solid rgba(6, 22, 41, 0.12);
+	border-radius: 999px;
+	background: #fff;
+	color: var(--f9-search-ink, var(--f9-global-ink));
+	cursor: pointer;
+	font: inherit;
+	font-weight: 900;
+	padding: 10px 16px;
+	transition:
+		transform 160ms ease,
+		border-color 160ms ease;
 }
 
 .f9-field input[type="file"]::file-selector-button:hover {
-  transform: translateY(-1px);
-  border-color: rgba(6, 22, 41, 0.3);
+	transform: translateY(-1px);
+	border-color: rgba(6, 22, 41, 0.3);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .f9-confirm-armed {
-    animation: none;
-  }
+	.f9-confirm-armed {
+		animation: none;
+	}
 
-  .f9-action-feedback {
-    animation: none;
-  }
+	.f9-action-feedback {
+		animation: none;
+	}
 
-  .f9-danger-button,
-  .f9-field input[type="file"]::file-selector-button {
-    transition: none;
-  }
+	.f9-danger-button,
+	.f9-field input[type="file"]::file-selector-button {
+		transition: none;
+	}
 
-  .f9-danger-button:hover,
-  .f9-field input[type="file"]::file-selector-button:hover {
-    transform: none;
-  }
+	.f9-danger-button:hover,
+	.f9-field input[type="file"]::file-selector-button:hover {
+		transform: none;
+	}
 }
 
 /* P2: creative wall + trend charts (2026-07-13) */
 
 .f9-creative-wall {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 12px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .f9-creative-tile {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
-  border-radius: 16px;
-  background: #fff;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+	display: grid;
+	gap: 8px;
+	align-content: start;
+	min-width: 0;
+	padding: 10px;
+	border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
+	border-radius: 16px;
+	background: #fff;
+	transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .f9-creative-tile:hover {
-  border-color: rgba(10, 169, 130, 0.34);
-  box-shadow: 0 12px 26px rgba(6, 22, 41, 0.07);
+	border-color: rgba(10, 169, 130, 0.34);
+	box-shadow: 0 12px 26px rgba(6, 22, 41, 0.07);
 }
 
 /* Wall tiles reuse AdThumb but stretch it to the tile width. */
 .f9-creative-tile .f9-ad-thumb {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 4 / 5;
-  border-radius: 12px;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 4 / 5;
+	border-radius: 12px;
 }
 
 .f9-creative-tile.is-inactive .f9-ad-thumb {
-  filter: grayscale(1);
-  opacity: 0.72;
+	filter: grayscale(1);
+	opacity: 0.72;
 }
 
 .f9-creative-tile-meta {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
+	display: grid;
+	gap: 4px;
+	min-width: 0;
 }
 
 .f9-creative-tile-advertiser {
-  margin: 0;
-  overflow: hidden;
-  color: var(--f9-search-ink, #061629);
-  font-size: 0.86rem;
-  font-weight: 800;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	margin: 0;
+	overflow: hidden;
+	color: var(--f9-search-ink, #061629);
+	font-size: 0.86rem;
+	font-weight: 800;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .f9-creative-tile-cta {
-  margin: 0;
-  overflow: hidden;
-  color: var(--f9-search-muted, #40546a);
-  font-size: 0.78rem;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	margin: 0;
+	overflow: hidden;
+	color: var(--f9-search-muted, #40546a);
+	font-size: 0.78rem;
+	line-height: 1.35;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .f9-creative-tile-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
 }
 
 /* Tracked-days variant: our observation window, not Meta's published start
-   date — achromatic so it never reads as the green "Running" badge. */
+	 date — achromatic so it never reads as the green "Running" badge. */
 .f9-longevity-pill.f9-longevity-pill.is-tracked {
-  background: rgba(6, 22, 41, 0.07);
-  color: var(--f9-search-muted, #40546a);
+	background: rgba(6, 22, 41, 0.07);
+	color: var(--f9-search-muted, #40546a);
 }
 
 .f9-creative-tile-status {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(6, 22, 41, 0.06);
-  color: var(--f9-search-soft, #64788d);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: rgba(6, 22, 41, 0.06);
+	color: var(--f9-search-soft, #64788d);
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
 }
 
 .f9-trend-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
 }
 
 .f9-trend-card {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  min-width: 0;
-  padding: 18px;
-  border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
-  border-radius: 22px;
-  background: #fff;
+	display: grid;
+	gap: 8px;
+	align-content: start;
+	min-width: 0;
+	padding: 18px;
+	border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
+	border-radius: 22px;
+	background: #fff;
 }
 
 .f9-trend-label,
 .f9-trend-series-label {
-  margin: 0;
-  color: var(--f9-search-soft, #64788d);
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+	margin: 0;
+	color: var(--f9-search-soft, #64788d);
+	font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
 }
 
 .f9-trend-series-label {
-  margin-top: 4px;
-  letter-spacing: 0.06em;
+	margin-top: 4px;
+	letter-spacing: 0.06em;
 }
 
 .f9-trend-value {
-  margin: 0;
-  color: var(--f9-search-ink, #061629);
-  font-size: 1.7rem;
-  font-weight: 900;
-  line-height: 1.05;
+	margin: 0;
+	color: var(--f9-search-ink, #061629);
+	font-size: 1.7rem;
+	font-weight: 900;
+	line-height: 1.05;
 }
 
 .f9-trend-unit {
-  color: var(--f9-search-muted, #40546a);
-  font-size: 0.82rem;
-  font-weight: 700;
+	color: var(--f9-search-muted, #40546a);
+	font-size: 0.82rem;
+	font-weight: 700;
 }
 
 .f9-trend-chart {
-  display: block;
-  width: 100%;
-  height: auto;
+	display: block;
+	width: 100%;
+	height: auto;
 }
 
 .f9-trend-bar {
-  fill: rgba(6, 22, 41, 0.18);
+	fill: rgba(6, 22, 41, 0.18);
 }
 
 .f9-trend-bar.is-accent {
-  fill: rgba(10, 169, 130, 0.78);
+	fill: rgba(10, 169, 130, 0.78);
 }
 
 .f9-trend-baseline {
-  fill: rgba(6, 22, 41, 0.12);
+	fill: rgba(6, 22, 41, 0.12);
 }
 
 .f9-trend-axis {
-  display: flex;
-  justify-content: space-between;
-  color: var(--f9-search-soft, #64788d);
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.66rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+	display: flex;
+	justify-content: space-between;
+	color: var(--f9-search-soft, #64788d);
+	font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+	font-size: 0.66rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
 }
 
 .f9-trend-leaderboard {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+	display: grid;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .f9-trend-leader-row {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
+	display: grid;
+	gap: 4px;
+	min-width: 0;
 }
 
 .f9-trend-leader-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-  font-size: 0.8rem;
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+	font-size: 0.8rem;
 }
 
 .f9-trend-leader-name {
-  overflow: hidden;
-  color: var(--f9-search-ink, #061629);
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	color: var(--f9-search-ink, #061629);
+	font-weight: 700;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .f9-trend-leader-days {
-  flex-shrink: 0;
-  color: var(--f9-search-muted, #40546a);
+	flex-shrink: 0;
+	color: var(--f9-search-muted, #40546a);
 }
 
 .f9-trend-leader-track {
-  height: 6px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(6, 22, 41, 0.07);
+	height: 6px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: rgba(6, 22, 41, 0.07);
 }
 
 .f9-trend-leader-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: rgba(10, 169, 130, 0.8);
-  transition: width 240ms ease;
+	height: 100%;
+	border-radius: 999px;
+	background: rgba(10, 169, 130, 0.8);
+	transition: width 240ms ease;
 }
 
 .f9-trend-leader-fill.is-tracked {
-  background: rgba(6, 22, 41, 0.28);
+	background: rgba(6, 22, 41, 0.28);
 }
 
 .f9-trend-sparse {
-  margin: 0;
-  padding: 12px 14px;
-  border: 1px dashed rgba(6, 22, 41, 0.16);
-  border-radius: 14px;
-  background: #f7fafc;
-  color: var(--f9-search-muted, #40546a);
-  font-size: 0.86rem;
-  line-height: 1.5;
+	margin: 0;
+	padding: 12px 14px;
+	border: 1px dashed rgba(6, 22, 41, 0.16);
+	border-radius: 14px;
+	background: #f7fafc;
+	color: var(--f9-search-muted, #40546a);
+	font-size: 0.86rem;
+	line-height: 1.5;
 }
 
 .f9-trend-note {
-  margin: 0;
-  color: var(--f9-search-soft, #64788d);
-  font-size: 0.76rem;
-  line-height: 1.45;
+	margin: 0;
+	color: var(--f9-search-soft, #64788d);
+	font-size: 0.76rem;
+	line-height: 1.45;
 }
 
 @media (max-width: 980px) {
-  .f9-trend-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
+	.f9-trend-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 @media (max-width: 620px) {
-  .f9-creative-wall {
-    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-    gap: 10px;
-  }
+	.f9-creative-wall {
+		grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+		gap: 10px;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .f9-creative-tile {
-    transition: none;
-  }
+	.f9-creative-tile {
+		transition: none;
+	}
 
-  .f9-trend-leader-fill {
-    transition: none;
-  }
+	.f9-trend-leader-fill {
+		transition: none;
+	}
 }

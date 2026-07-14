@@ -1198,66 +1198,66 @@ describe("onboarding route", () => {
     expect(markup).not.toContain("Create watchlist for");
   });
 
-  it("pluralizes the bulk-import create button correctly", async () => {
-    const renderWithImportRows = async (rawText: string) => {
-      vi.resetModules();
-      const { buildCompetitorImportPreview } = await import("~/lib/competitor-import");
-      const preview = buildCompetitorImportPreview({
-        rawText,
-        country: "US",
-        planLimit: 10,
-        currentCount: 0,
-      });
+	it("pluralizes the bulk-import create button correctly", async () => {
+		const renderWithImportRows = async (rawText: string) => {
+			vi.resetModules();
+			const { buildCompetitorImportPreview } = await import("~/lib/competitor-import");
+			const preview = buildCompetitorImportPreview({
+				rawText,
+				country: "US",
+				planLimit: 10,
+				currentCount: 0,
+			});
 
-      vi.doMock("react-router", async () => {
-        const actual = await vi.importActual<typeof import("react-router")>("react-router");
-        const React = await import("react");
+			vi.doMock("react-router", async () => {
+				const actual = await vi.importActual<typeof import("react-router")>("react-router");
+				const React = await import("react");
 
-        return {
-          ...actual,
-          Form: ({ children, ...props }: MockFormProps) =>
-            React.createElement("form", props, children),
-          Link: ({ children, to, ...props }: MockLinkProps) =>
-            React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-          useActionData: vi.fn().mockReturnValue({
-            ok: true,
-            preview,
-            rawText,
-            brandWebsiteInput: "",
-          }),
-          useLoaderData: vi.fn().mockReturnValue({
-            session: {
-              user: {
-                id: "user-1",
-                email: "owner@example.com",
-                name: "Owner",
-                onboardedAt: null,
-              },
-            },
-            plan: "starter",
-            watchlistLimit: {
-              allowed: true,
-              current: 0,
-              limit: 10,
-            },
-            brandWebsite: null,
-            visitorCountry: "United States",
-          }),
-          useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
-        };
-      });
+				return {
+					...actual,
+					Form: ({ children, ...props }: MockFormProps) =>
+						React.createElement("form", props, children),
+					Link: ({ children, to, ...props }: MockLinkProps) =>
+						React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+					useActionData: vi.fn().mockReturnValue({
+						ok: true,
+						preview,
+						rawText,
+						brandWebsiteInput: "",
+					}),
+					useLoaderData: vi.fn().mockReturnValue({
+						session: {
+							user: {
+								id: "user-1",
+								email: "owner@example.com",
+								name: "Owner",
+								onboardedAt: null,
+							},
+						},
+						plan: "starter",
+						watchlistLimit: {
+							allowed: true,
+							current: 0,
+							limit: 10,
+						},
+						brandWebsite: null,
+						visitorCountry: "United States",
+					}),
+					useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+				};
+			});
 
-      const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
-      return renderToStaticMarkup(createElement(AppOnboardRoute));
-    };
+			const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
+			return renderToStaticMarkup(createElement(AppOnboardRoute));
+		};
 
-    const singleMarkup = await renderWithImportRows("nykaa.com");
-    expect(singleMarkup).toContain("Create watchlist");
-    expect(singleMarkup).not.toContain("1 watchlists");
+		const singleMarkup = await renderWithImportRows("nykaa.com");
+		expect(singleMarkup).toContain("Create watchlist");
+		expect(singleMarkup).not.toContain("1 watchlists");
 
-    const multiMarkup = await renderWithImportRows(
-      "nykaa.com\nboat-lifestyle.com\nmamaearth.in",
-    );
-    expect(multiMarkup).toContain("Create 3 watchlists");
-  });
+		const multiMarkup = await renderWithImportRows(
+			"nykaa.com\nboat-lifestyle.com\nmamaearth.in",
+		);
+		expect(multiMarkup).toContain("Create 3 watchlists");
+	});
 });

@@ -6,7 +6,7 @@ import {
   createDodo0509CheckoutSession,
   createDodoCustomerPortalSession,
   extractDodoPlanGrant,
-  extractDodoPlanRevocation,
+	extractDodoPlanRevocation,
   extractDodoProofCreditGrant,
   extractDodoSubscriptionGrant,
   getDodo0509SubscriptionCurrency,
@@ -868,21 +868,21 @@ describe("Dodo billing", () => {
     expect(extractDodoProofCreditGrant(env, processingCreditPayment)).toBeNull();
   });
 
-  it("uses the payment identity when payment.failed has no subscription_id", () => {
-    expect(extractDodoPlanRevocation({ DODO_0509_BRAND_ID: "brand_0509" }, {
-      type: "payment.failed",
-      data: {
-        payment_id: "pay_fallback",
-        brand_id: "brand_0509",
-        updated_at: "2026-07-01T08:00:00.000Z",
-        metadata: { app: "0509", target_kind: "plan", plan: "starter", user_id: "user-1" },
-      },
-    })).toMatchObject({
-      eventType: "payment.failed", action: "payment_issue", userId: "user-1",
-      subscriptionId: "payment.failed", paymentId: "pay_fallback",
-      revokedAt: "2026-07-01T08:00:00.000Z",
-    });
-  });
+	it("uses the payment identity when payment.failed has no subscription_id", () => {
+		expect(extractDodoPlanRevocation({ DODO_0509_BRAND_ID: "brand_0509" }, {
+			type: "payment.failed",
+			data: {
+				payment_id: "pay_fallback",
+				brand_id: "brand_0509",
+				updated_at: "2026-07-01T08:00:00.000Z",
+				metadata: { app: "0509", target_kind: "plan", plan: "starter", user_id: "user-1" },
+			},
+		})).toMatchObject({
+			eventType: "payment.failed", action: "payment_issue", userId: "user-1",
+			subscriptionId: "payment.failed", paymentId: "pay_fallback",
+			revokedAt: "2026-07-01T08:00:00.000Z",
+		});
+	});
 
   it("does not let a one-time Dodo product grant paid plan access through metadata", () => {
     const grant = extractDodoPlanGrant(

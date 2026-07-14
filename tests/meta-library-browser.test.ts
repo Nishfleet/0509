@@ -390,13 +390,13 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.discoveryEmptyReason).toBeUndefined();
   });
 
-  it("keeps rendered fallback dates attached to adjacent Library ID cards", async () => {
-    mockFetchWithDns(
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            data: {
-              html: {
+	it("keeps rendered fallback dates attached to adjacent Library ID cards", async () => {
+		mockFetchWithDns(
+			vi.fn(async () =>
+				new Response(
+					JSON.stringify({
+						data: {
+							html: {
                 html: `
                   <html><body>
                     <div class="card">
@@ -415,30 +415,30 @@ describe("searchMetaLibraryByBrowser", () => {
                     </div>
                   </body></html>
                 `,
-              },
-            },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      ) as never,
-    );
+							},
+						},
+					}),
+					{ status: 200, headers: { "Content-Type": "application/json" } },
+				),
+			) as never,
+		);
 
-    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
-    const result = await searchMetaLibraryByBrowser({ BROWSERLESS_TOKEN: "browserless-token" }, buildQuery());
+		const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+		const result = await searchMetaLibraryByBrowser({ BROWSERLESS_TOKEN: "browserless-token" }, buildQuery());
 
-    expect(result.ads).toEqual([
-      expect.objectContaining({ metaAdId: "1111111111", firstSeenAt: "2025-07-14" }),
-      expect.objectContaining({ metaAdId: "2222222222", firstSeenAt: "2025-08-03" }),
-    ]);
-  });
+		expect(result.ads).toEqual([
+			expect.objectContaining({ metaAdId: "1111111111", firstSeenAt: "2025-07-14" }),
+			expect.objectContaining({ metaAdId: "2222222222", firstSeenAt: "2025-08-03" }),
+		]);
+	});
 
-  it("keeps adjacent rendered fallback statuses with their Library ID cards", async () => {
-    mockFetchWithDns(
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            data: {
-              html: {
+	it("keeps adjacent rendered fallback statuses with their Library ID cards", async () => {
+		mockFetchWithDns(
+			vi.fn(async () =>
+				new Response(
+					JSON.stringify({
+						data: {
+							html: {
                 html: `
                   <html><body>
                     <div class="card">
@@ -457,22 +457,22 @@ describe("searchMetaLibraryByBrowser", () => {
                     </div>
                   </body></html>
                 `,
-              },
-            },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      ) as never,
-    );
+							},
+						},
+					}),
+					{ status: 200, headers: { "Content-Type": "application/json" } },
+				),
+			) as never,
+		);
 
-    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
-    const result = await searchMetaLibraryByBrowser({ BROWSERLESS_TOKEN: "browserless-token" }, buildQuery());
+		const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+		const result = await searchMetaLibraryByBrowser({ BROWSERLESS_TOKEN: "browserless-token" }, buildQuery());
 
-    expect(result.ads).toEqual([
-      expect.objectContaining({ metaAdId: "3333333333", active: true }),
-      expect.objectContaining({ metaAdId: "4444444444", active: false }),
-    ]);
-  });
+		expect(result.ads).toEqual([
+			expect.objectContaining({ metaAdId: "3333333333", active: true }),
+			expect.objectContaining({ metaAdId: "4444444444", active: false }),
+		]);
+	});
 
   it("classifies Browserless fetch aborts as timeouts", async () => {
     mockFetchWithDns(
@@ -748,23 +748,23 @@ describe("searchMetaLibraryByBrowser", () => {
           adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1280520150312258",
           landingPageUrl: "https://nykaaman.com/",
           active: true,
-          // Meta's published "Started running on" line becomes firstSeenAt…
-          firstSeenAt: "2025-07-14",
+					// Meta's published "Started running on" line becomes firstSeenAt…
+					firstSeenAt: "2025-07-14",
           source: "meta_library_browser",
         }),
       ],
     });
-    // …while staying excluded from the ad body as UI noise.
-    expect(result.ads[0].body).not.toMatch(/started running/i);
-  });
+		// …while staying excluded from the ad body as UI noise.
+		expect(result.ads[0].body).not.toMatch(/started running/i);
+	});
 
-  it("keeps firstSeenAt null when the started-running line is unparseable", async () => {
-    mockFetchWithDns(
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            data: {
-              html: {
+	it("keeps firstSeenAt null when the started-running line is unparseable", async () => {
+		mockFetchWithDns(
+			vi.fn(async () =>
+				new Response(
+					JSON.stringify({
+						data: {
+							html: {
                 html: `
                   <html>
                     <body>
@@ -782,36 +782,36 @@ describe("searchMetaLibraryByBrowser", () => {
                     </body>
                   </html>
                 `,
-              },
-            },
-          }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-            },
-          },
-        ),
-      ) as never,
-    );
+							},
+						},
+					}),
+					{
+						status: 200,
+						headers: {
+							"Content-Type": "application/json",
+						},
+					},
+				),
+			) as never,
+		);
 
-    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+		const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
 
-    const result = await searchMetaLibraryByBrowser(
-      {
-        BROWSERLESS_TOKEN: "browserless-token",
-      },
-      buildQuery(),
-    );
+		const result = await searchMetaLibraryByBrowser(
+			{
+				BROWSERLESS_TOKEN: "browserless-token",
+			},
+			buildQuery(),
+		);
 
-    expect(result.ads).toEqual([
-      expect.objectContaining({
-        metaAdId: "1280520150312259",
-        // honest null: an unreadable date is never guessed
-        firstSeenAt: null,
-      }),
-    ]);
-    expect(result.ads[0].body).not.toMatch(/started running/i);
+		expect(result.ads).toEqual([
+			expect.objectContaining({
+				metaAdId: "1280520150312259",
+				// honest null: an unreadable date is never guessed
+				firstSeenAt: null,
+			}),
+		]);
+		expect(result.ads[0].body).not.toMatch(/started running/i);
   });
 
   it("fails fast when Browser Run reports no new browser acquisitions are allowed", async () => {
@@ -1254,57 +1254,57 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.ads).toHaveLength(1);
   });
 
-  it("extracts Quick Actions dates across adjacent rendered card blocks", async () => {
-    let extractionScript = "";
-    const fetchSpy = mockFetchWithDns(
-      vi.fn(async (_input, init) => {
-        const requestBody = JSON.parse(String(init?.body ?? "{}"));
-        extractionScript = requestBody.addScriptTag?.[0]?.content ?? "";
-        return new Response(
-          JSON.stringify({
-            success: true,
-            result: buildQuickActionContent(),
-          }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "X-Browser-Ms-Used": "1234",
-            },
-          },
-        );
-      }) as never,
-    );
+	it("extracts Quick Actions dates across adjacent rendered card blocks", async () => {
+		let extractionScript = "";
+		const fetchSpy = mockFetchWithDns(
+			vi.fn(async (_input, init) => {
+				const requestBody = JSON.parse(String(init?.body ?? "{}"));
+				extractionScript = requestBody.addScriptTag?.[0]?.content ?? "";
+				return new Response(
+					JSON.stringify({
+						success: true,
+						result: buildQuickActionContent(),
+					}),
+					{
+						status: 200,
+						headers: {
+							"Content-Type": "application/json",
+							"X-Browser-Ms-Used": "1234",
+						},
+					},
+				);
+			}) as never,
+		);
 
-    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+		const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
 
-    await searchMetaLibraryByBrowser(
-      {
-        BROWSER_RUN_ACCOUNT_ID: "acct-123",
-        BROWSER_RUN_API_TOKEN: "token-123",
-      },
-      buildQuery(),
-    );
+		await searchMetaLibraryByBrowser(
+			{
+				BROWSER_RUN_ACCOUNT_ID: "acct-123",
+				BROWSER_RUN_API_TOKEN: "token-123",
+			},
+			buildQuery(),
+		);
 
-    const window = new Window({ url: "https://www.facebook.com/ads/library/" });
-    window.document.body.innerHTML =
-      '<article><a href="/ads/library/?id=1234567890">View ad details</a><div>Active</div><div>Started running on 14 Jul 2025</div><div>Sponsored</div></article>';
-    const card = window.document.querySelector("article");
-    expect(card?.textContent).not.toContain("\n");
-    expect(card?.innerText).toMatch(/\nStarted running on 14 Jul 2025/);
+		const window = new Window({ url: "https://www.facebook.com/ads/library/" });
+		window.document.body.innerHTML =
+			'<article><a href="/ads/library/?id=1234567890">View ad details</a><div>Active</div><div>Started running on 14 Jul 2025</div><div>Sponsored</div></article>';
+		const card = window.document.querySelector("article");
+		expect(card?.textContent).not.toContain("\n");
+		expect(card?.innerText).toMatch(/\nStarted running on 14 Jul 2025/);
 
-    window.eval(extractionScript);
-    const payloadScript = window.document.getElementById("__0509_ad_library_payload");
-    const payload = JSON.parse(payloadScript?.textContent ?? "{}");
+		window.eval(extractionScript);
+		const payloadScript = window.document.getElementById("__0509_ad_library_payload");
+		const payload = JSON.parse(payloadScript?.textContent ?? "{}");
 
-    expect(payload.cards).toEqual([
-      expect.objectContaining({
-        libraryId: "1234567890",
-        startedRunning: "Started running on 14 Jul 2025",
-      }),
-    ]);
-    expect(nonDnsFetchCalls(fetchSpy)).toHaveLength(1);
-  });
+		expect(payload.cards).toEqual([
+			expect.objectContaining({
+				libraryId: "1234567890",
+				startedRunning: "Started running on 14 Jul 2025",
+			}),
+		]);
+		expect(nonDnsFetchCalls(fetchSpy)).toHaveLength(1);
+	});
 
   it("keeps the Quick Actions runner separate from the extraction payload", async () => {
     const launch = vi.fn();

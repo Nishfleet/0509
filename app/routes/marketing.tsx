@@ -307,51 +307,51 @@ export default function MarketingRoute() {
     );
     targets.forEach((el) => observer.observe(el));
 
-    // Fail-safe: content that has reached the viewport must never stay hidden
-    // if the observer or reveal animation misbehaves. Shortly after the page
-    // has fully loaded, unstick only visible/previous sections so below-fold
-    // sections keep their normal stagger (observed live 2026-07-13:
-    // .ld-case-card stuck at opacity 0 with parent .is-seen — the animation
-    // clock can freeze at 0 in hidden/background tabs, leaving the
-    // backwards-fill "from" state applied indefinitely).
-    let revealFallbackTimer = 0;
-    const revealRemaining = () => {
-      const stuckTargets = targets.filter(
-        (el) =>
-          !el.classList.contains("is-seen") &&
-          el.getBoundingClientRect().top < window.innerHeight,
-      );
-      for (const el of stuckTargets) {
-        el.classList.add("is-seen");
-        observer.unobserve(el);
-      }
-      // Jump any still-pending reveal animations straight to their end
-      // state so a frozen animation timeline cannot keep content hidden.
-      if (typeof document.getAnimations === "function") {
-        for (const animation of document.getAnimations()) {
-          if ((animation as CSSAnimation).animationName === "ld-reveal-in") {
-            try {
-              animation.finish();
-            } catch {
-              // Ignore animations that cannot be finished.
-            }
-          }
-        }
-      }
-    };
-    const scheduleRevealFallback = () => {
-      window.clearTimeout(revealFallbackTimer);
-      revealFallbackTimer = window.setTimeout(revealRemaining, 3000);
-    };
-    if (document.readyState === "complete") {
-      scheduleRevealFallback();
-    } else {
-      window.addEventListener("load", scheduleRevealFallback, { once: true });
-    }
+		// Fail-safe: content that has reached the viewport must never stay hidden
+		// if the observer or reveal animation misbehaves. Shortly after the page
+		// has fully loaded, unstick only visible/previous sections so below-fold
+		// sections keep their normal stagger (observed live 2026-07-13:
+		// .ld-case-card stuck at opacity 0 with parent .is-seen — the animation
+		// clock can freeze at 0 in hidden/background tabs, leaving the
+		// backwards-fill "from" state applied indefinitely).
+		let revealFallbackTimer = 0;
+		const revealRemaining = () => {
+			const stuckTargets = targets.filter(
+				(el) =>
+					!el.classList.contains("is-seen") &&
+					el.getBoundingClientRect().top < window.innerHeight,
+			);
+			for (const el of stuckTargets) {
+				el.classList.add("is-seen");
+				observer.unobserve(el);
+			}
+			// Jump any still-pending reveal animations straight to their end
+			// state so a frozen animation timeline cannot keep content hidden.
+			if (typeof document.getAnimations === "function") {
+				for (const animation of document.getAnimations()) {
+					if ((animation as CSSAnimation).animationName === "ld-reveal-in") {
+						try {
+							animation.finish();
+						} catch {
+							// Ignore animations that cannot be finished.
+						}
+					}
+				}
+			}
+		};
+		const scheduleRevealFallback = () => {
+			window.clearTimeout(revealFallbackTimer);
+			revealFallbackTimer = window.setTimeout(revealRemaining, 3000);
+		};
+		if (document.readyState === "complete") {
+			scheduleRevealFallback();
+		} else {
+			window.addEventListener("load", scheduleRevealFallback, { once: true });
+		}
 
     return () => {
-      window.clearTimeout(revealFallbackTimer);
-      window.removeEventListener("load", scheduleRevealFallback);
+			window.clearTimeout(revealFallbackTimer);
+			window.removeEventListener("load", scheduleRevealFallback);
       observer.disconnect();
       root.classList.remove("ld-motion");
     };

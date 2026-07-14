@@ -26,7 +26,7 @@ describe("public auxiliary rebuild", () => {
     // so accept the plain literal or a template literal rooted in the frame.
     expect(publicAuxSurface).toMatch(
       /className=(?:"f9-share-page"|\{`f9-share-page[^`]*`\})/,
-    );
+		);
     expect(publicAuxSurface).toContain('className="f9-error-page"');
     expect(auxClasses).not.toEqual(
       expect.arrayContaining([

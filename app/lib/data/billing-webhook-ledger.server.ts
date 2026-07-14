@@ -21,19 +21,19 @@ export interface DodoWebhookLedgerFinalize {
 }
 
 export type DodoLifecycleEmailRetryKind =
-  | "payment_issue"
-  | "cancellation_scheduled"
-  | "revoke"
-  | "refund";
+	| "payment_issue"
+	| "cancellation_scheduled"
+	| "revoke"
+	| "refund";
 
 export interface DodoLifecycleEmailRetryClaim {
-  kind: DodoLifecycleEmailRetryKind;
-  userId: string;
-  idempotencyKey: string;
+	kind: DodoLifecycleEmailRetryKind;
+	userId: string;
+	idempotencyKey: string;
 }
 
 export type DodoWebhookProcessingClaim =
-  | { status: "claimed"; lifecycleEmailRetry?: DodoLifecycleEmailRetryClaim }
+	| { status: "claimed"; lifecycleEmailRetry?: DodoLifecycleEmailRetryClaim }
   | { status: "duplicate"; outcome: "processed" | "ignored" }
   | { status: "in_progress" };
 
@@ -42,39 +42,39 @@ function dodoWebhookProcessingLeaseDays() {
 }
 
 function lifecycleEmailRetryFromMetadata(
-  value: string | null | undefined,
+	value: string | null | undefined,
 ): DodoLifecycleEmailRetryClaim | null {
-  if (!value) return null;
-  try {
-    const metadata = JSON.parse(value) as Record<string, unknown>;
-    const kind = metadata.kind;
-    const userId = typeof metadata.userId === "string" ? metadata.userId.trim() : "";
-    const idempotencyKey =
-      typeof metadata.idempotencyKey === "string" ? metadata.idempotencyKey.trim() : "";
-    if (
-      metadata.action !== "lifecycle_email_retry" ||
-      (kind !== "payment_issue" &&
-        kind !== "cancellation_scheduled" &&
-        kind !== "revoke" &&
-        kind !== "refund") ||
-      !userId ||
-      !idempotencyKey
-    ) {
-      return null;
-    }
+	if (!value) return null;
+	try {
+		const metadata = JSON.parse(value) as Record<string, unknown>;
+		const kind = metadata.kind;
+		const userId = typeof metadata.userId === "string" ? metadata.userId.trim() : "";
+		const idempotencyKey =
+			typeof metadata.idempotencyKey === "string" ? metadata.idempotencyKey.trim() : "";
+		if (
+			metadata.action !== "lifecycle_email_retry" ||
+			(kind !== "payment_issue" &&
+				kind !== "cancellation_scheduled" &&
+				kind !== "revoke" &&
+				kind !== "refund") ||
+			!userId ||
+			!idempotencyKey
+		) {
+			return null;
+		}
 
-    const expectedPrefix =
-      kind === "payment_issue"
+		const expectedPrefix =
+			kind === "payment_issue"
         ? `billing-payment-issue:${userId}:`
-        : kind === "refund"
+				: kind === "refund"
           ? `billing-refund:${userId}:`
           : `billing-cancellation:${userId}:`;
-    return idempotencyKey.startsWith(expectedPrefix)
-      ? { kind, userId, idempotencyKey }
-      : null;
-  } catch {
-    return null;
-  }
+		return idempotencyKey.startsWith(expectedPrefix)
+			? { kind, userId, idempotencyKey }
+			: null;
+	} catch {
+		return null;
+	}
 }
 
 export function buildDodoWebhookLedgerFinalizeStatement(
@@ -241,18 +241,18 @@ export async function beginDodoWebhookEventProcessing(
   }
 
   if (Number(result.meta?.changes ?? 0) > 0) {
-    // Failed-row metadata is preserved by the successful compare-and-set
-    // above, so the retry classification is read from the row we actually
-    // claimed rather than from a racy pre-claim snapshot.
-    const claimed = await one<{ metadata_json: string }>(
-      env,
-      "SELECT metadata_json FROM dodo_webhook_event WHERE event_id = ?",
-      eventId,
-    );
-    const lifecycleEmailRetry = lifecycleEmailRetryFromMetadata(claimed?.metadata_json);
-    return lifecycleEmailRetry
-      ? { status: "claimed", lifecycleEmailRetry }
-      : { status: "claimed" };
+		// Failed-row metadata is preserved by the successful compare-and-set
+		// above, so the retry classification is read from the row we actually
+		// claimed rather than from a racy pre-claim snapshot.
+		const claimed = await one<{ metadata_json: string }>(
+			env,
+			"SELECT metadata_json FROM dodo_webhook_event WHERE event_id = ?",
+			eventId,
+		);
+		const lifecycleEmailRetry = lifecycleEmailRetryFromMetadata(claimed?.metadata_json);
+		return lifecycleEmailRetry
+			? { status: "claimed", lifecycleEmailRetry }
+			: { status: "claimed" };
   }
 
   const row = await one<{ outcome: string }>(
@@ -267,23 +267,23 @@ export async function beginDodoWebhookEventProcessing(
 }
 
 export async function failDodoWebhookEventForLifecycleEmailRetry(
-  env: AppEnv,
-  eventId: string,
-  input: {
-    kind: DodoLifecycleEmailRetryKind;
-    userId: string;
-    idempotencyKey: string;
-    error: string;
-  },
+	env: AppEnv,
+	eventId: string,
+	input: {
+		kind: DodoLifecycleEmailRetryKind;
+		userId: string;
+		idempotencyKey: string;
+		error: string;
+	},
 ) {
-  // A retry run whose guarded grant no-ops finalizes the ledger as 'ignored'
-  // (e.g. plan_change_guard_mismatch) while the email retry still runs from
-  // state revalidation. Re-arming must succeed from BOTH terminal outcomes —
-  // scoping to 'processed' only would silently drop the retry: this function
-  // returns false, the caller swallows the provider failure, Dodo gets a 200
-  // and never redelivers.
-  const result = await run(
-    env,
+	// A retry run whose guarded grant no-ops finalizes the ledger as 'ignored'
+	// (e.g. plan_change_guard_mismatch) while the email retry still runs from
+	// state revalidation. Re-arming must succeed from BOTH terminal outcomes —
+	// scoping to 'processed' only would silently drop the retry: this function
+	// returns false, the caller swallows the provider failure, Dodo gets a 200
+	// and never redelivers.
+	const result = await run(
+		env,
     `
       UPDATE dodo_webhook_event
       SET outcome = 'failed',
@@ -293,11 +293,11 @@ export async function failDodoWebhookEventForLifecycleEmailRetry(
       WHERE event_id = ?
         AND outcome IN ('processed', 'ignored')
     `,
-    jsonValue({ action: "lifecycle_email_retry", ...input }),
-    eventId.trim(),
-  );
+		jsonValue({ action: "lifecycle_email_retry", ...input }),
+		eventId.trim(),
+	);
 
-  return Number(result.meta?.changes ?? 0) > 0;
+	return Number(result.meta?.changes ?? 0) > 0;
 }
 
 /** @deprecated Use beginDodoWebhookEventProcessing for lease-aware claiming. */

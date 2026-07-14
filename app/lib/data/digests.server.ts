@@ -5,7 +5,7 @@
  */
 
 import {
-  ensureDb,
+	ensureDb,
   execute as run,
   queryAll as many,
   queryOne as one,
@@ -18,9 +18,9 @@ import {
   type JsonRecord,
 } from "~/lib/data/helpers.server";
 import {
-  DIGEST_STRATEGY_GENERATION_PENDING,
-  DIGEST_STRATEGY_GENERATION_READY,
-  readDigestStrategyNote,
+	DIGEST_STRATEGY_GENERATION_PENDING,
+	DIGEST_STRATEGY_GENERATION_READY,
+	readDigestStrategyNote,
 } from "~/lib/digest-strategy";
 import { DIGEST_ITEM_SET_PROVENANCE } from "~/lib/digest-provenance";
 import type { AppEnv } from "~/lib/env.server";
@@ -36,7 +36,7 @@ interface DigestRunRow {
   user_id: string;
   period_start: string;
   period_end: string;
-  summary_json: string;
+	summary_json: string;
   created_at: string;
 }
 
@@ -68,34 +68,34 @@ interface DigestDeliveryRow {
 }
 
 export interface DigestRunClaim {
-  digestRunId: string;
-  created: boolean;
+	digestRunId: string;
+	created: boolean;
 }
 
 export interface DigestRunItemInput {
-  watchlistId: string;
-  watchlistName: string;
-  eventType: WatchEventType;
-  title: string;
-  summary: string;
-  metadata?: JsonRecord;
+	watchlistId: string;
+	watchlistName: string;
+	eventType: WatchEventType;
+	title: string;
+	summary: string;
+	metadata?: JsonRecord;
 }
 
 interface DigestRunClaimOptions {
-  returnClaim: true;
-  /**
-   * When present, the claim and its complete item set are committed in one D1
-   * batch transaction. A losing claim writes neither the run nor any items.
-   */
-  items?: readonly DigestRunItemInput[];
+	returnClaim: true;
+	/**
+	 * When present, the claim and its complete item set are committed in one D1
+	 * batch transaction. A losing claim writes neither the run nor any items.
+	 */
+	items?: readonly DigestRunItemInput[];
 }
 
 function toDigestRunSummary(row: Pick<DigestRunRow, "summary_json">): JsonRecord {
-  // summary_json is free-form JSON; legacy rows may hold non-object payloads.
-  const parsed = parseJson<unknown>(row.summary_json, {});
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as JsonRecord)
-    : {};
+	// summary_json is free-form JSON; legacy rows may hold non-object payloads.
+	const parsed = parseJson<unknown>(row.summary_json, {});
+	return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+		? (parsed as JsonRecord)
+		: {};
 }
 
 function toDigestItemRecord(row: DigestItemRow): DigestItemRecord {
@@ -126,19 +126,19 @@ function toDigestDeliveryRecord(row: DigestDeliveryRow): DigestDeliveryRecord {
 }
 
 export function createDigestRun(
-  env: AppEnv,
-  userId: string,
-  periodStart: string,
-  periodEnd: string,
-  summary: JsonRecord,
+	env: AppEnv,
+	userId: string,
+	periodStart: string,
+	periodEnd: string,
+	summary: JsonRecord,
 ): Promise<string>;
 export function createDigestRun(
-  env: AppEnv,
-  userId: string,
-  periodStart: string,
-  periodEnd: string,
-  summary: JsonRecord,
-  options: DigestRunClaimOptions,
+	env: AppEnv,
+	userId: string,
+	periodStart: string,
+	periodEnd: string,
+	summary: JsonRecord,
+	options: DigestRunClaimOptions,
 ): Promise<DigestRunClaim>;
 export async function createDigestRun(
   env: AppEnv,
@@ -146,20 +146,20 @@ export async function createDigestRun(
   periodStart: string,
   periodEnd: string,
   summary: JsonRecord,
-  options?: DigestRunClaimOptions,
+	options?: DigestRunClaimOptions,
 ): Promise<string | DigestRunClaim> {
   const id = createId();
-  const createdAt = nowIso();
-  const db = ensureDb(env);
-  const itemInputs = options?.items;
-  const persistedSummary = itemInputs === undefined
-    ? summary
-    : {
-        ...summary,
-        digestItemSetProvenance: DIGEST_ITEM_SET_PROVENANCE,
-      };
-  const insertStatement = db
-    .prepare(
+	const createdAt = nowIso();
+	const db = ensureDb(env);
+	const itemInputs = options?.items;
+	const persistedSummary = itemInputs === undefined
+		? summary
+		: {
+				...summary,
+				digestItemSetProvenance: DIGEST_ITEM_SET_PROVENANCE,
+			};
+	const insertStatement = db
+		.prepare(
       `
       INSERT INTO digest_run (
         id,
@@ -172,23 +172,23 @@ export async function createDigestRun(
       VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, period_start, period_end) DO NOTHING
     `,
-    )
-    .bind(
-      id,
-      userId,
-      periodStart,
-      periodEnd,
-      jsonValue(persistedSummary),
-      createdAt,
-    );
+		)
+		.bind(
+			id,
+			userId,
+			periodStart,
+			periodEnd,
+			jsonValue(persistedSummary),
+			createdAt,
+		);
 
-  const results = itemInputs === undefined
-    ? [await insertStatement.run()]
-    : await db.batch([
-        insertStatement,
-        ...itemInputs.map((input) =>
-          db
-            .prepare(
+	const results = itemInputs === undefined
+		? [await insertStatement.run()]
+		: await db.batch([
+				insertStatement,
+				...itemInputs.map((input) =>
+					db
+						.prepare(
               `
                 INSERT INTO digest_item (
                   id,
@@ -205,26 +205,26 @@ export async function createDigestRun(
                 FROM digest_run
                 WHERE id = ?
               `,
-            )
-            .bind(
-              createId(),
-              id,
-              input.watchlistId,
-              input.watchlistName,
-              input.eventType,
-              input.title,
-              input.summary,
-              jsonValue(input.metadata ?? {}),
-              createdAt,
-              id,
-            ),
-        ),
-      ]);
+						)
+						.bind(
+							createId(),
+							id,
+							input.watchlistId,
+							input.watchlistName,
+							input.eventType,
+							input.title,
+							input.summary,
+							jsonValue(input.metadata ?? {}),
+							createdAt,
+							id,
+						),
+				),
+			]);
 
-  const created = Number(results[0]?.meta?.changes ?? 0) > 0;
-  if (created) {
-    return options?.returnClaim ? { digestRunId: id, created: true } : id;
-  }
+	const created = Number(results[0]?.meta?.changes ?? 0) > 0;
+	if (created) {
+		return options?.returnClaim ? { digestRunId: id, created: true } : id;
+	}
 
   const row = await one<DigestRunRow>(
     env,
@@ -241,13 +241,13 @@ export async function createDigestRun(
     periodEnd,
   );
 
-  if (!row) {
-    throw new Error("Digest period claim was not created and no existing run was found.");
-  }
+	if (!row) {
+		throw new Error("Digest period claim was not created and no existing run was found.");
+	}
 
-  return options?.returnClaim
-    ? { digestRunId: row.id, created: false }
-    : row.id;
+	return options?.returnClaim
+		? { digestRunId: row.id, created: false }
+		: row.id;
 }
 
 /**
@@ -256,43 +256,43 @@ export async function createDigestRun(
  * for overlapping executions, retries, and reports.
  */
 export async function updateDigestRunSummary(
-  env: AppEnv,
-  digestRunId: string,
-  summary: JsonRecord,
+	env: AppEnv,
+	digestRunId: string,
+	summary: JsonRecord,
 ) {
-  const row = await one<Pick<DigestRunRow, "summary_json">>(
-    env,
-    "SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
-    digestRunId,
-  );
-  const currentSummary = row ? toDigestRunSummary(row) : {};
-  const persistedSummary = { ...summary };
-  delete persistedSummary.digestItemSetProvenance;
-  if (
-    currentSummary.digestItemSetProvenance === DIGEST_ITEM_SET_PROVENANCE
-  ) {
-    persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
-  }
-  await run(
-    env,
-    "UPDATE digest_run SET summary_json = ? WHERE id = ?",
-    jsonValue(persistedSummary),
-    digestRunId,
-  );
+	const row = await one<Pick<DigestRunRow, "summary_json">>(
+		env,
+		"SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
+		digestRunId,
+	);
+	const currentSummary = row ? toDigestRunSummary(row) : {};
+	const persistedSummary = { ...summary };
+	delete persistedSummary.digestItemSetProvenance;
+	if (
+		currentSummary.digestItemSetProvenance === DIGEST_ITEM_SET_PROVENANCE
+	) {
+		persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
+	}
+	await run(
+		env,
+		"UPDATE digest_run SET summary_json = ? WHERE id = ?",
+		jsonValue(persistedSummary),
+		digestRunId,
+	);
 }
 
 export async function claimDigestStrategyGenerationLease(
-  env: AppEnv,
-  digestRunId: string,
-  input: {
-    expectedLeaseId: string;
-    expectedLeaseExpiresAt: string;
-    leaseId: string;
-    leaseExpiresAt: string;
-  },
+	env: AppEnv,
+	digestRunId: string,
+	input: {
+		expectedLeaseId: string;
+		expectedLeaseExpiresAt: string;
+		leaseId: string;
+		leaseExpiresAt: string;
+	},
 ) {
-  const result = await run(
-    env,
+	const result = await run(
+		env,
     `
       UPDATE digest_run
       SET summary_json = json_set(
@@ -305,50 +305,50 @@ export async function claimDigestStrategyGenerationLease(
         AND COALESCE(json_extract(summary_json, '$.strategyGenerationLeaseId'), '') = ?
         AND COALESCE(json_extract(summary_json, '$.strategyGenerationLeaseExpiresAt'), '') = ?
     `,
-    input.leaseId,
-    input.leaseExpiresAt,
-    digestRunId,
-    DIGEST_STRATEGY_GENERATION_PENDING,
-    input.expectedLeaseId,
-    input.expectedLeaseExpiresAt,
-  );
-  return Number(result.meta?.changes ?? 0) === 1;
+		input.leaseId,
+		input.leaseExpiresAt,
+		digestRunId,
+		DIGEST_STRATEGY_GENERATION_PENDING,
+		input.expectedLeaseId,
+		input.expectedLeaseExpiresAt,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
 }
 
 export async function completeDigestStrategyGeneration(
-  env: AppEnv,
-  digestRunId: string,
-  input: {
-    leaseId: string;
-    summary: JsonRecord;
-  },
+	env: AppEnv,
+	digestRunId: string,
+	input: {
+		leaseId: string;
+		summary: JsonRecord;
+	},
 ) {
-  const row = await one<Pick<DigestRunRow, "summary_json">>(
-    env,
-    "SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
-    digestRunId,
-  );
-  if (!row) {
-    return false;
-  }
+	const row = await one<Pick<DigestRunRow, "summary_json">>(
+		env,
+		"SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
+		digestRunId,
+	);
+	if (!row) {
+		return false;
+	}
 
-  const currentSummary = toDigestRunSummary(row);
-  const persistedSummary: JsonRecord = {
-    ...currentSummary,
-    ...input.summary,
-    strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_READY,
-  };
-  delete persistedSummary.strategyGenerationLeaseId;
-  delete persistedSummary.strategyGenerationLeaseExpiresAt;
-  delete persistedSummary.digestItemSetProvenance;
-  if (
-    currentSummary.digestItemSetProvenance === DIGEST_ITEM_SET_PROVENANCE
-  ) {
-    persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
-  }
+	const currentSummary = toDigestRunSummary(row);
+	const persistedSummary: JsonRecord = {
+		...currentSummary,
+		...input.summary,
+		strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_READY,
+	};
+	delete persistedSummary.strategyGenerationLeaseId;
+	delete persistedSummary.strategyGenerationLeaseExpiresAt;
+	delete persistedSummary.digestItemSetProvenance;
+	if (
+		currentSummary.digestItemSetProvenance === DIGEST_ITEM_SET_PROVENANCE
+	) {
+		persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
+	}
 
-  const result = await run(
-    env,
+	const result = await run(
+		env,
     `
       UPDATE digest_run
       SET summary_json = ?
@@ -356,12 +356,12 @@ export async function completeDigestStrategyGeneration(
         AND json_extract(summary_json, '$.strategyGenerationStatus') = ?
         AND json_extract(summary_json, '$.strategyGenerationLeaseId') = ?
     `,
-    jsonValue(persistedSummary),
-    digestRunId,
-    DIGEST_STRATEGY_GENERATION_PENDING,
-    input.leaseId,
-  );
-  return Number(result.meta?.changes ?? 0) === 1;
+		jsonValue(persistedSummary),
+		digestRunId,
+		DIGEST_STRATEGY_GENERATION_PENDING,
+		input.leaseId,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
 }
 
 const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;
@@ -372,12 +372,12 @@ const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;
  * and mismatched notes fail closed. Read-only: never triggers generation.
  */
 export async function getLatestDigestRunSummaryForWatchlist(
-  env: AppEnv,
-  userId: string,
-  watchlistId: string,
+	env: AppEnv,
+	userId: string,
+	watchlistId: string,
 ) {
-  const rows = await many<DigestRunRow>(
-    env,
+	const rows = await many<DigestRunRow>(
+		env,
     `
       WITH
       js_whitespace(chars) AS (
@@ -411,26 +411,26 @@ export async function getLatestDigestRunSummaryForWatchlist(
       ORDER BY period_end DESC
       LIMIT ?
     `,
-    userId,
-    watchlistId,
-    LATEST_STRATEGY_SUMMARY_SCAN_LIMIT,
-  );
+		userId,
+		watchlistId,
+		LATEST_STRATEGY_SUMMARY_SCAN_LIMIT,
+	);
 
-  for (const row of rows) {
-    const note = readDigestStrategyNote(toDigestRunSummary(row));
-    if (
-      note?.watchlistIds?.length &&
-      note.watchlistIds.every((provenanceId) => provenanceId === watchlistId)
-    ) {
-      return {
-        paragraph: note.paragraph,
-        generatedAt: note.generatedAt,
-        periodEnd: row.period_end,
-      };
-    }
-  }
+	for (const row of rows) {
+		const note = readDigestStrategyNote(toDigestRunSummary(row));
+		if (
+			note?.watchlistIds?.length &&
+			note.watchlistIds.every((provenanceId) => provenanceId === watchlistId)
+		) {
+			return {
+				paragraph: note.paragraph,
+				generatedAt: note.generatedAt,
+				periodEnd: row.period_end,
+			};
+		}
+	}
 
-  return null;
+	return null;
 }
 
 export async function clearDigestItems(env: AppEnv, digestRunId: string) {
@@ -440,7 +440,7 @@ export async function clearDigestItems(env: AppEnv, digestRunId: string) {
 export async function addDigestItem(
   env: AppEnv,
   digestRunId: string,
-  input: DigestRunItemInput,
+	input: DigestRunItemInput,
 ) {
   await run(
     env,
@@ -473,20 +473,20 @@ export async function addDigestItem(
 export async function upsertDigestDelivery(
   env: AppEnv,
   digestRunId: string,
-  input: Omit<DigestDeliveryRecord, "id" | "digestRunId"> & {
-    /**
-     * Set ONLY by the writer that won the delivery-attempt claim for this
-     * run. A claim winner may honestly move a 'failed' aggregate back to
-     * 'pending' (e.g. its retry ended provider-unknown); mirror writers that
-     * merely observed someone else's in-flight attempt may not — under a
-     * duplicate cron fire their late 'pending' would bury the failure and
-     * hide the run from the failed-digest retry sweep forever.
-     */
-    allowPendingOverwriteOfFailed?: boolean;
-  },
+	input: Omit<DigestDeliveryRecord, "id" | "digestRunId"> & {
+		/**
+		 * Set ONLY by the writer that won the delivery-attempt claim for this
+		 * run. A claim winner may honestly move a 'failed' aggregate back to
+		 * 'pending' (e.g. its retry ended provider-unknown); mirror writers that
+		 * merely observed someone else's in-flight attempt may not — under a
+		 * duplicate cron fire their late 'pending' would bury the failure and
+		 * hide the run from the failed-digest retry sweep forever.
+		 */
+		allowPendingOverwriteOfFailed?: boolean;
+	},
 ) {
   const timestamp = nowIso();
-  const allowPendingOverFailed = input.allowPendingOverwriteOfFailed === true ? 1 : 0;
+	const allowPendingOverFailed = input.allowPendingOverwriteOfFailed === true ? 1 : 0;
   await run(
     env,
     `
@@ -552,12 +552,12 @@ export async function upsertDigestDelivery(
     input.deliveredAt,
     timestamp,
     timestamp,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
   );
 }
 
@@ -636,7 +636,7 @@ export async function listDigests(
       userId: run.user_id,
       periodStart: run.period_start,
       periodEnd: run.period_end,
-      summary: toDigestRunSummary(run),
+			summary: toDigestRunSummary(run),
       createdAt: run.created_at,
       items: (itemsByDigestId.get(run.id) ?? []).map(toDigestItemRecord),
       delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
@@ -663,7 +663,7 @@ export async function getDigest(env: AppEnv, digestRunId: string) {
     userId: run.user_id,
     periodStart: run.period_start,
     periodEnd: run.period_end,
-    summary: toDigestRunSummary(run),
+		summary: toDigestRunSummary(run),
     createdAt: run.created_at,
     items: items.map(toDigestItemRecord),
     delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
@@ -702,7 +702,7 @@ export async function listRetryableDigestRuns(
   env: AppEnv,
   input: {
     since: string;
-    stalePreDispatchBefore: string;
+		stalePreDispatchBefore: string;
     limit: number;
   },
 ) {
@@ -736,8 +736,8 @@ export async function listRetryableDigestRuns(
       LIMIT ?
     `,
     input.since,
-    input.stalePreDispatchBefore,
-    DIGEST_ITEM_SET_PROVENANCE,
+		input.stalePreDispatchBefore,
+		DIGEST_ITEM_SET_PROVENANCE,
     input.limit,
   );
 

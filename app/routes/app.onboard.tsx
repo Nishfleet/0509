@@ -651,11 +651,11 @@ export default function AppOnboardRoute() {
                     pendingLabel="Creating..."
                     value="create-market-desk-import"
                   >
-                    {importPreview.selectedCount === 1
-                      ? "Create watchlist"
-                      : importPreview.selectedCount > 1
+										{importPreview.selectedCount === 1
+											? "Create watchlist"
+											: importPreview.selectedCount > 1
                         ? `Create ${importPreview.selectedCount} watchlists`
-                        : "Create watchlists"}
+												: "Create watchlists"}
                   </SubmitButton>
                 ) : null}
               </div>

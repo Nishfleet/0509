@@ -5,8 +5,8 @@ export type NullableString = string | null;
 export type RouteActionData = {
   ok: boolean;
   message: string;
-  /** Echo of the submitted intent so feedback renders next to its form. */
-  intent?: string;
+	/** Echo of the submitted intent so feedback renders next to its form. */
+	intent?: string;
 };
 
 export function SourceAccessHydrateFallback() {

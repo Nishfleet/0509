@@ -18,10 +18,10 @@ import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-t
 export const meta = () => [{ title: "Presence Desk | Five to Nine" }];
 
 export function readPresenceRedirectFeedback(request: Request) {
-  const notice = new URL(request.url).searchParams.get("notice");
-  return notice === "entity-deleted"
-    ? { ok: true as const, message: "Entity deleted." }
-    : null;
+	const notice = new URL(request.url).searchParams.get("notice");
+	return notice === "entity-deleted"
+		? { ok: true as const, message: "Entity deleted." }
+		: null;
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -41,7 +41,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     "~/lib/presence-source-coverage.server"
   );
   const env = getEnv(context);
-  const redirectFeedback = readPresenceRedirectFeedback(request);
+	const redirectFeedback = readPresenceRedirectFeedback(request);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   await requirePresenceWorkspaceAccess(env, workspaceUserId);
   const access = await evaluatePresenceWorkspaceAccess(env, workspaceUserId);
@@ -107,7 +107,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       }),
     },
     partialDataNotice,
-    redirectFeedback,
+		redirectFeedback,
     userEmail: session.user.email,
   };
 }
@@ -153,7 +153,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         targetUrl: String(form.get("targetUrl") ?? "").trim() || null,
         targetHandle: String(form.get("targetHandle") ?? "").trim() || null,
       });
-      return { ok: true, intent, message: "Source added." };
+			return { ok: true, intent, message: "Source added." };
     }
 
     if (intent === "poll-source") {
@@ -162,15 +162,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
       if (!result.pollResult.ok) {
         return {
           ok: false,
-          intent,
-          targetId,
+					intent,
+					targetId,
           message: sanitizeCustomerFacingMessage(result.pollResult.errorMessage ?? "Source check failed."),
         };
       }
       return {
         ok: true,
-        intent,
-        targetId,
+				intent,
+				targetId,
         message: `Checked ${result.target.connectorId}: ${result.upsertStats.inserted} new, ${result.upsertStats.updated} updated, ${result.reconcileStats.tombstoned} removed.`,
       };
     }
@@ -178,11 +178,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (intent === "delete-entity") {
       const entityId = String(form.get("entityId") ?? "");
       await deletePresenceEntity(env, workspaceUserId, entityId);
-      return redirect("/app/presence?notice=entity-deleted");
+			return redirect("/app/presence?notice=entity-deleted");
     }
   } catch (error) {
     if (error instanceof PresenceServiceError) {
-      return { ok: false, intent, message: sanitizeCustomerFacingMessage(error.message) };
+			return { ok: false, intent, message: sanitizeCustomerFacingMessage(error.message) };
     }
     throw error;
   }
@@ -207,9 +207,9 @@ export default function PresenceIndexRoute() {
           title="Proof-backed entity tracking"
         />
 
-        <ActionFeedback data={actionData} fallback />
-        <ActionFeedback data={actionData} intent="poll-source" />
-        <ActionFeedback data={data.redirectFeedback} />
+				<ActionFeedback data={actionData} fallback />
+				<ActionFeedback data={actionData} intent="poll-source" />
+				<ActionFeedback data={data.redirectFeedback} />
 
         {data.access.rolloutState === "ga" ? (
           <PartialDataNotice message="Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on each source." />
@@ -221,7 +221,7 @@ export default function PresenceIndexRoute() {
           <article className="f9-app-panel">
             <span className="f9-app-kicker">Add tracked entity</span>
             <h2>Start with a website</h2>
-            <ActionFeedback data={actionData} intent={["create-entity", "add-source"]} />
+						<ActionFeedback data={actionData} intent={["create-entity", "add-source"]} />
             <Form className="f9-auth-form" method="post">
               <input name="intent" type="hidden" value="create-entity" />
               <label className="f9-field">
@@ -331,11 +331,11 @@ export default function PresenceIndexRoute() {
             </div>
           </div>
           {data.snapshot.recentItems.length === 0 ? (
-            <EmptyState
-              description="Check a website source to fetch updates."
-              title="No presence items yet."
-              variant="inline"
-            />
+						<EmptyState
+							description="Check a website source to fetch updates."
+							title="No presence items yet."
+							variant="inline"
+						/>
           ) : (
             <div className="f9-work-list is-compact">
               {data.snapshot.recentItems.map((item) => (

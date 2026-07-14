@@ -249,48 +249,48 @@ export async function action({ context, request }: ActionFunctionArgs) {
     },
   });
 
-  const digestClaim = await createDigestRun(
-    env,
-    target.user_id,
-    periodStart,
-    periodEnd,
-    {
+	const digestClaim = await createDigestRun(
+		env,
+		target.user_id,
+		periodStart,
+		periodEnd,
+		{
       ...metadata,
-      totalEvents: 1,
-      watchlists: 1,
+			totalEvents: 1,
+			watchlists: 1,
     },
-    {
-      returnClaim: true,
-      items: [{
-        watchlistId: target.watchlist_id,
-        watchlistName: target.watchlist_name,
-        eventType: "ad_new",
-        title,
-        summary,
-        metadata: {
-          ...metadata,
-          eventId,
-          proofCaptureId,
-        },
-      }],
-    },
-  );
-  if (!digestClaim.created) {
-    return Response.json(
-      {
-        ok: false,
-        blockers: ["digest_period_claim_conflict"],
-        runId,
-        proofCaptureId,
-        digestRunId: digestClaim.digestRunId,
-      },
-      {
-        status: 409,
-        headers: { "cache-control": "no-store" },
-      },
-    );
-  }
-  const digestRunId = digestClaim.digestRunId;
+		{
+			returnClaim: true,
+			items: [{
+				watchlistId: target.watchlist_id,
+				watchlistName: target.watchlist_name,
+				eventType: "ad_new",
+				title,
+				summary,
+				metadata: {
+					...metadata,
+					eventId,
+					proofCaptureId,
+				},
+			}],
+		},
+	);
+	if (!digestClaim.created) {
+		return Response.json(
+			{
+				ok: false,
+				blockers: ["digest_period_claim_conflict"],
+				runId,
+				proofCaptureId,
+				digestRunId: digestClaim.digestRunId,
+			},
+			{
+				status: 409,
+				headers: { "cache-control": "no-store" },
+			},
+		);
+	}
+	const digestRunId = digestClaim.digestRunId;
 
   const delivery = await deliverWeeklyDigest(env, {
     userId: target.user_id,
