@@ -20,6 +20,7 @@ import {
   sendCloudflareEmail,
 } from "~/lib/delivery-email-core.server";
 import type { AppEnv } from "~/lib/env.server";
+import { isPaidPlanFamily } from "~/lib/plan-entitlements";
 import type { DeliveryAttemptRecord } from "~/lib/types";
 
 const BILLING_LIFECYCLE_RECOVERY_LIMIT = 10;
@@ -27,6 +28,15 @@ export const BILLING_LIFECYCLE_RECOVERY_MAX_ATTEMPTS = 3;
 
 const BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE =
   "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE" as const;
+
+interface ScheduledCancellationStateExpectation {
+  // These are the exact fields the authoritative webhook grant writes to
+  // user_plan in the same batch as the outbox row.
+  cutoff: string;
+  eventId: string;
+  subscriptionId: string;
+  stateUpdatedAt: string;
+}
 
 export class BillingLifecycleEmailExplicitFailure extends Error {
   readonly code = BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE;
@@ -152,16 +162,27 @@ async function sendBillingLifecycleEmail(
   const claimFromPending = stalePreDispatch || pendingOutboxDispatch;
 
   const currentBillingInfo = await getUserPlanBillingInfo(env, input.userId);
-  if (pendingOutboxDispatch || supersededOutbox) {
+  if (
+    pendingOutboxDispatch ||
+    supersededOutbox ||
+    (duplicate && input.templateName === "billing_cancellation_scheduled")
+  ) {
+    const stateExpectation = readScheduledCancellationStateExpectation(
+      duplicate?.payloadSnapshot,
+    );
     const durableKind = pendingOutboxDispatch
-      ? readString(duplicate.payloadSnapshot?.kind)
+      ? readString(duplicate?.payloadSnapshot?.kind)
       : input.templateName;
     const stateStillCurrent =
       (!pendingOutboxDispatch ||
         (durableKind === duplicate.templateName && durableKind === input.templateName)) &&
-      billingLifecycleOutboxStateStillApplies(durableKind, currentBillingInfo);
+      billingLifecycleOutboxStateStillApplies(
+        durableKind,
+        currentBillingInfo,
+        stateExpectation,
+      );
     if (!stateStillCurrent) {
-      if (pendingOutboxDispatch) {
+      if (duplicate && !supersededOutbox) {
         await updateDeliveryAttemptResult(env, duplicate.id, {
           provider: EMAIL_PROVIDER,
           status: "skipped_due_to_dedupe",
@@ -173,8 +194,8 @@ async function sendBillingLifecycleEmail(
             "Billing lifecycle outbox was superseded by newer account state.",
           sentAt: null,
           failedAt: null,
-          expectedStatus: "pending",
-          expectedWebhookStatus: "pending",
+          expectedStatus: duplicate.status,
+          expectedWebhookStatus: duplicate.webhookStatus,
           expectedUpdatedAt: duplicate.updatedAt,
         });
       }
@@ -183,12 +204,16 @@ async function sendBillingLifecycleEmail(
   }
 
   const billingStateFingerprint = billingLifecycleStateFingerprint(currentBillingInfo);
+  const stateExpectation = duplicate
+    ? readScheduledCancellationStateExpectation(duplicate.payloadSnapshot)
+    : null;
   const payloadSnapshot = {
     kind: input.templateName,
     subject: input.subject,
     bodyHtml: input.bodyHtml,
     tag: input.tag,
     billingStateFingerprint,
+    ...scheduledCancellationStateExpectationPayload(stateExpectation),
     ...(duplicate
       ? { recoveryAttemptCount: billingLifecycleRecoveryAttemptCount(duplicate) }
       : {}),
@@ -336,6 +361,9 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
   // plan mutation commits, so they carry no fingerprint — the marker tells
   // recovery to validate against the current billing state by kind instead.
   const pendingDispatch = attempt.payloadSnapshot.outboxPendingDispatch === true;
+  const stateExpectation = readScheduledCancellationStateExpectation(
+    attempt.payloadSnapshot,
+  );
   const targetValue = readString(attempt.targetValue);
 
   if (
@@ -358,6 +386,7 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
     targetValue,
     billingStateFingerprint: billingStateFingerprint ?? null,
     pendingDispatch,
+    stateExpectation,
   };
 }
 
@@ -374,6 +403,7 @@ function billingLifecycleRecoveryAttemptCount(attempt: DeliveryAttemptRecord) {
 function billingLifecycleOutboxStateStillApplies(
   templateName: string | null,
   info: UserPlanBillingInfo,
+  scheduledCancellation: ScheduledCancellationStateExpectation | null = null,
 ) {
   switch (templateName) {
     case "billing_payment_issue":
@@ -383,7 +413,18 @@ function billingLifecycleOutboxStateStillApplies(
         info.dodoStatus === "subscription.on_hold"
       );
     case "billing_cancellation_scheduled":
-      return info.dodoStatus === "cancellation_scheduled";
+      // dodo_status can remain cancellation_scheduled after this particular
+      // email became stale. Match the effective entitlement, cutoff,
+      // subscription, and grant watermark that the outbox was created for.
+      return (
+        info.dodoStatus === "cancellation_scheduled" &&
+        isPaidPlanFamily(info.plan) &&
+        scheduledCancellation !== null &&
+        isFutureBillingCutoff(scheduledCancellation.cutoff) &&
+        sameBillingTimestamp(info.dodoNextBillingAt, scheduledCancellation.cutoff) &&
+        info.dodoSubscriptionId === scheduledCancellation.subscriptionId &&
+        sameBillingTimestamp(info.planUpdatedAt, scheduledCancellation.stateUpdatedAt)
+      );
     case "billing_access_ended":
       return (
         info.plan === "free" &&
@@ -441,7 +482,11 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
       payload !== null &&
       currentBillingInfo !== null &&
       (payload.pendingDispatch
-        ? billingLifecycleOutboxStateStillApplies(attempt.templateName, currentBillingInfo)
+        ? billingLifecycleOutboxStateStillApplies(
+            attempt.templateName,
+            currentBillingInfo,
+            payload.stateExpectation,
+          )
         : billingLifecycleStateFingerprint(currentBillingInfo) ===
           payload.billingStateFingerprint) &&
       currentEmail === payload.targetValue.toLowerCase();
@@ -498,6 +543,9 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
                 payload.pendingDispatch
                   ? billingLifecycleStateFingerprint(currentBillingInfo)
                   : payload.billingStateFingerprint,
+              ...scheduledCancellationStateExpectationPayload(
+                payload.stateExpectation,
+              ),
               recoveryAttemptCount,
             }
           : undefined,
@@ -802,7 +850,16 @@ export async function sendBillingRefundEmail(
 
 export type BillingLifecycleEmailOutboxInput =
   | { kind: "payment_issue"; userId: string; email: string; name: string | null; occurredAt?: string | null }
-  | { kind: "cancellation_scheduled"; userId: string; email: string; name: string | null; effectiveAt?: string | null; eventId: string }
+  | {
+      kind: "cancellation_scheduled";
+      userId: string;
+      email: string;
+      name: string | null;
+      effectiveAt?: string | null;
+      eventId: string;
+      subscriptionId?: string | null;
+      stateUpdatedAt?: string | null;
+    }
   | { kind: "revoke"; userId: string; email: string; name: string | null; eventId: string }
   | { kind: "refund"; userId: string; email: string; name: string | null; eventId: string };
 
@@ -827,6 +884,10 @@ export function prepareBillingLifecycleEmailOutbox(
         : input.kind === "revoke"
           ? billingCancellationEmailContent(env, { ...input, kind: "ended" })
           : billingRefundEmailContent(env, input);
+  const stateExpectation =
+    input.kind === "cancellation_scheduled"
+      ? createScheduledCancellationStateExpectation(input)
+      : null;
   return {
     userId: input.userId,
     email: input.email,
@@ -839,6 +900,65 @@ export function prepareBillingLifecycleEmailOutbox(
       tag: content.tag,
       billingStateFingerprint: null,
       outboxPendingDispatch: true,
+      ...scheduledCancellationStateExpectationPayload(stateExpectation),
     },
   };
+}
+
+function createScheduledCancellationStateExpectation(input: {
+  effectiveAt?: string | null;
+  eventId: string;
+  subscriptionId?: string | null;
+  stateUpdatedAt?: string | null;
+}): ScheduledCancellationStateExpectation | null {
+  const cutoff = normalizedBillingTimestamp(input.effectiveAt);
+  const eventId = readString(input.eventId);
+  const subscriptionId = readString(input.subscriptionId);
+  const stateUpdatedAt = normalizedBillingTimestamp(input.stateUpdatedAt);
+  return cutoff && eventId && subscriptionId && stateUpdatedAt
+    ? { cutoff, eventId, subscriptionId, stateUpdatedAt }
+    : null;
+}
+
+function readScheduledCancellationStateExpectation(
+  payload: Record<string, unknown> | null | undefined,
+): ScheduledCancellationStateExpectation | null {
+  if (!payload) {
+    return null;
+  }
+  return createScheduledCancellationStateExpectation({
+    effectiveAt: readString(payload.scheduledCancellationCutoff),
+    eventId: readString(payload.scheduledCancellationEventId) ?? "",
+    subscriptionId: readString(payload.scheduledCancellationSubscriptionId),
+    stateUpdatedAt: readString(payload.scheduledCancellationStateUpdatedAt),
+  });
+}
+
+function scheduledCancellationStateExpectationPayload(
+  expectation: ScheduledCancellationStateExpectation | null,
+) {
+  return expectation
+    ? {
+        scheduledCancellationCutoff: expectation.cutoff,
+        scheduledCancellationEventId: expectation.eventId,
+        scheduledCancellationSubscriptionId: expectation.subscriptionId,
+        scheduledCancellationStateUpdatedAt: expectation.stateUpdatedAt,
+      }
+    : {};
+}
+
+function normalizedBillingTimestamp(value: string | null | undefined) {
+  const timestamp = Date.parse(value ?? "");
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function sameBillingTimestamp(
+  current: string | null | undefined,
+  expected: string,
+) {
+  return normalizedBillingTimestamp(current) === expected;
+}
+
+function isFutureBillingCutoff(cutoff: string, now = Date.now()) {
+  return Date.parse(cutoff) > now;
 }

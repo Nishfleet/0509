@@ -1570,6 +1570,16 @@ describe("customer lifecycle billing emails", () => {
       expect.anything(),
     );
     expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
+    expect(delivery.prepareBillingLifecycleEmailOutbox).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        kind: "cancellation_scheduled",
+        effectiveAt: futureIso,
+        eventId: "evt-cancel-scheduled-email",
+        subscriptionId: "sub_123",
+        stateUpdatedAt: "2026-07-13T08:00:00.000Z",
+      }),
+    );
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledWith(
       expect.anything(),
@@ -1638,6 +1648,13 @@ describe("customer lifecycle billing emails", () => {
       expect.anything(),
     );
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
+    expect(delivery.prepareBillingLifecycleEmailOutbox).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        subscriptionId: "sub_123",
+        stateUpdatedAt: expect.any(String),
+      }),
+    );
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ kind: "scheduled", effectiveAt: futureIso }),
