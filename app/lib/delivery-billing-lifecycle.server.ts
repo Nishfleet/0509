@@ -478,7 +478,8 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
           getUserDeliveryProfile(env, attempt.userId),
         ])
       : [null, null];
-    const currentEmail = readString(currentProfile?.email) ?? null;
+    const profileEmail = readString(currentProfile?.email) ?? null;
+    const currentEmail = currentProfile?.emailVerified === true ? profileEmail : null;
     const billingStateStillCurrent =
       payload !== null &&
       currentBillingInfo !== null &&
@@ -512,6 +513,40 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
       } else {
         result.claimed += 1;
         result.superseded += 1;
+      }
+      continue;
+    }
+
+    if (payload && !currentEmail) {
+      // Keep the row in its existing retryable state and only refresh its
+      // lease. In particular, do not bind an unverified replacement address,
+      // consume a recovery attempt, or erase explicit-provider-failure
+      // provenance while the account's atomic email/verification pair is
+      // unavailable.
+      const deferred = await updateDeliveryAttemptResult(env, attempt.id, {
+        provider: attempt.provider,
+        status: attempt.status,
+        webhookStatus: attempt.webhookStatus,
+        providerMessageId: attempt.providerMessageId,
+        providerStatusLastSeenAt: attempt.providerStatusLastSeenAt,
+        templateName: attempt.templateName,
+        errorMessage:
+          retryingExplicitFailure && attempt.errorMessage
+            ? attempt.errorMessage
+            : profileEmail
+              ? "Billing lifecycle recovery recipient is not verified."
+              : "Billing lifecycle recovery recipient is unavailable.",
+        sentAt: attempt.sentAt,
+        failedAt: attempt.failedAt,
+        updatedAt: new Date().toISOString(),
+        expectedStatus: retryingExplicitFailure ? "failed" : "pending",
+        expectedWebhookStatus: retryingExplicitFailure ? "failed" : "pending",
+        expectedUpdatedAt: attempt.updatedAt,
+      });
+      if (deferred !== true) {
+        result.conflicts += 1;
+      } else {
+        result.claimed += 1;
       }
       continue;
     }
