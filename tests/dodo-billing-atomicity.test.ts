@@ -493,6 +493,235 @@ describe("Dodo billing atomicity (sqlite)", () => {
     ).rejects.toThrow("verified webhook timestamp");
   });
 
+  it("watermarks a newer reversal before an older cancellation arrives", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-active-t1",
+      eventType: "subscription.active",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-10T00:00:00.000Z",
+    });
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-20T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-10T00:00:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt-active-t1",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-reversal-t3",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-12T00:00:00.000Z",
+    });
+    const reversal = await applyDodoCancellationReversalWithLedger(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-20T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-12T00:00:00.000Z",
+      },
+      {
+        eventId: "evt-reversal-t3",
+        outcome: "processed",
+        metadata: { action: "cancellation_reversal" },
+      },
+    );
+    expect(reversal.changed).toBe(true);
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-cancellation-t2",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-11T00:00:00.000Z",
+    });
+    const olderCancellation = await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-06-20T00:00:00.000Z",
+        status: "cancellation_scheduled",
+        grantedAt: "2026-06-11T00:00:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt-cancellation-t2",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+
+    expect(olderCancellation.changed).toBe(false);
+    const row = harness.sqlite
+      .prepare(
+        `SELECT plan, dodo_status, dodo_next_billing_at, plan_updated_at
+         FROM user_plan WHERE user_id = ?`,
+      )
+      .get("user-1") as {
+      plan: string;
+      dodo_status: string;
+      dodo_next_billing_at: string;
+      plan_updated_at: string;
+    };
+    expect(row).toEqual({
+      plan: "starter",
+      dodo_status: "active",
+      dodo_next_billing_at: "2026-07-20T00:00:00.000Z",
+      plan_updated_at: "2026-06-12T00:00:00.000Z",
+    });
+    expect(effectivePlanFromRow(row)).toBe("starter");
+  });
+
+  it("does not watermark an active row when reversal provider identity mismatches", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-20T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-10T00:00:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt-active-mismatch-base",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-reversal-mismatch",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-12T00:00:00.000Z",
+    });
+
+    const reversal = await applyDodoCancellationReversalWithLedger(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_other",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-20T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-12T00:00:00.000Z",
+      },
+      {
+        eventId: "evt-reversal-mismatch",
+        outcome: "processed",
+        metadata: { action: "cancellation_reversal" },
+      },
+    );
+
+    expect(reversal.changed).toBe(false);
+    expect(
+      harness.sqlite.prepare("SELECT dodo_status, plan_updated_at FROM user_plan WHERE user_id = ?").get("user-1"),
+    ).toEqual({ dodo_status: "active", plan_updated_at: "2026-06-10T00:00:00.000Z" });
+  });
+
+  it("preserves an unrelated pending plan target while watermarking an active reversal", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-20T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-10T00:00:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt-active-pending-target-base",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+    harness.sqlite.exec(
+      "UPDATE user_plan SET dodo_plan_change_product_id = 'prod_agency' WHERE user_id = 'user-1'",
+    );
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-reversal-pending-target",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-12T00:00:00.000Z",
+    });
+
+    const reversal = await applyDodoCancellationReversalWithLedger(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-20T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-12T00:00:00.000Z",
+      },
+      {
+        eventId: "evt-reversal-pending-target",
+        outcome: "processed",
+        metadata: { action: "cancellation_reversal" },
+      },
+    );
+
+    expect(reversal.changed).toBe(true);
+    expect(
+      harness.sqlite
+        .prepare("SELECT dodo_status, dodo_plan_change_product_id, plan_updated_at FROM user_plan WHERE user_id = ?")
+        .get("user-1"),
+    ).toEqual({
+      dodo_status: "active",
+      dodo_plan_change_product_id: "prod_agency",
+      plan_updated_at: "2026-06-12T00:00:00.000Z",
+    });
+  });
+
   it("applies matching plan-change confirmations older than the local claim time", async () => {
     const env = openEnv();
     const harness = fixtures[0]!;
