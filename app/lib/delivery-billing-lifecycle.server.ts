@@ -478,8 +478,8 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
           getUserDeliveryProfile(env, attempt.userId),
         ])
       : [null, null];
-    const currentEmail = readString(currentProfile?.email)?.toLowerCase() ?? null;
-    const stateStillCurrent =
+    const currentEmail = readString(currentProfile?.email) ?? null;
+    const billingStateStillCurrent =
       payload !== null &&
       currentBillingInfo !== null &&
       (payload.pendingDispatch
@@ -489,10 +489,9 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
             payload.stateExpectation,
           )
         : billingLifecycleStateFingerprint(currentBillingInfo) ===
-          payload.billingStateFingerprint) &&
-      currentEmail === payload.targetValue.toLowerCase();
+          payload.billingStateFingerprint);
 
-    if (payload && !stateStillCurrent) {
+    if (payload && !billingStateStillCurrent) {
       const superseded = await updateDeliveryAttemptResult(env, attempt.id, {
         provider: EMAIL_PROVIDER,
         status: "skipped_due_to_dedupe",
@@ -550,6 +549,10 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
               recoveryAttemptCount,
             }
           : undefined,
+      // Recovery follows the same recipient rule as an explicit failed-send
+      // retry: billing state determines whether the message is still valid,
+      // while the verified current profile determines where it is delivered.
+      targetValue: currentEmail ?? undefined,
       updatedAt: claimUpdatedAt,
       expectedStatus: retryingExplicitFailure ? "failed" : "pending",
       expectedWebhookStatus: retryingExplicitFailure ? "failed" : "pending",
@@ -561,7 +564,7 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
     }
     result.claimed += 1;
 
-    if (!payload) {
+    if (!payload || !currentEmail) {
       const failedAt = new Date().toISOString();
       const finalized = await updateDeliveryAttemptResult(env, attempt.id, {
         provider: EMAIL_PROVIDER,
@@ -570,7 +573,9 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
         providerMessageId: null,
         providerStatusLastSeenAt: null,
         templateName: attempt.templateName,
-        errorMessage: "Billing lifecycle recovery payload is incomplete.",
+        errorMessage: payload
+          ? "Billing lifecycle recovery recipient is unavailable."
+          : "Billing lifecycle recovery payload is incomplete.",
         sentAt: null,
         failedAt,
         expectedStatus: "pending",
@@ -586,7 +591,7 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
     }
 
     const providerResult = await sendCloudflareEmail(env, {
-      to: payload.targetValue,
+      to: currentEmail,
       subject: payload.subject,
       html: payload.bodyHtml,
       tag: payload.tag,

@@ -1714,12 +1714,16 @@ describe("Dodo billing atomicity (sqlite)", () => {
     ).toMatchObject({ count: 0 });
   });
 
-  it("enqueues the outbox row on the unguarded scheduled-cancellation grant path", async () => {
+  it("enqueues the outbox row when the scheduled cancellation matches the stored provider identity", async () => {
     const env = openEnv();
     fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
-        user_id, plan, dodo_product_id, dodo_subscription_id, dodo_status, plan_updated_at
-      ) VALUES ('user-1', 'starter', 'prod-starter', 'sub-1', 'active', '2026-06-01T00:00:00.000Z');
+        user_id, plan, dodo_product_id, dodo_subscription_id, dodo_customer_id,
+        dodo_status, plan_updated_at
+      ) VALUES (
+        'user-1', 'starter', 'prod-starter', 'sub-1', 'cus-1',
+        'active', '2026-06-01T00:00:00.000Z'
+      );
     `);
     await beginDodoWebhookEventProcessing(env, {
       eventId: "evt-cancel-sched-outbox",
@@ -1736,9 +1740,11 @@ describe("Dodo billing atomicity (sqlite)", () => {
         providerPaymentId: null,
         providerProductId: "prod-starter",
         providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
         status: "cancellation_scheduled",
         grantedAt: "2026-07-13T00:00:00.000Z",
         metadata: {},
+        requireProviderIdentityMatch: true,
       },
       3,
       {
@@ -1772,6 +1778,77 @@ describe("Dodo billing atomicity (sqlite)", () => {
         .prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")
         .get("user-1"),
     ).toMatchObject({ count: 3 });
+  });
+
+  it("rejects a newer scheduled cancellation from a replaced subscription without enqueueing email", async () => {
+    const env = openEnv();
+    fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (
+        user_id, plan, dodo_product_id, dodo_subscription_id, dodo_customer_id,
+        dodo_next_billing_at, dodo_status, plan_updated_at
+      ) VALUES (
+        'user-1', 'agency', 'prod-agency', 'sub-replacement', 'cus-replacement',
+        '2026-08-20T00:00:00.000Z', 'active', '2026-07-10T00:00:00.000Z'
+      );
+    `);
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-stale-subscription-cancel",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-07-14T00:00:00.000Z",
+    });
+
+    const applied = await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod-starter",
+        providerSubscriptionId: "sub-replaced",
+        providerCustomerId: "cus-replaced",
+        nextBillingAt: "2026-08-01T00:00:00.000Z",
+        status: "cancellation_scheduled",
+        grantedAt: "2026-07-14T00:00:00.000Z",
+        requireProviderIdentityMatch: true,
+      },
+      3,
+      {
+        eventId: "evt-stale-subscription-cancel",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+      {
+        lifecycleEmailOutbox: lifecycleOutboxSpec(
+          "billing-cancellation:user-1:evt-stale-subscription-cancel",
+          "billing_cancellation_scheduled",
+        ),
+      },
+    );
+
+    expect(applied).toEqual({ changed: false });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare(`
+          SELECT plan, dodo_product_id, dodo_subscription_id, dodo_customer_id,
+                 dodo_next_billing_at, dodo_status, plan_updated_at
+          FROM user_plan WHERE user_id = ?
+        `)
+        .get("user-1"),
+    ).toEqual({
+      plan: "agency",
+      dodo_product_id: "prod-agency",
+      dodo_subscription_id: "sub-replacement",
+      dodo_customer_id: "cus-replacement",
+      dodo_next_billing_at: "2026-08-20T00:00:00.000Z",
+      dodo_status: "active",
+      plan_updated_at: "2026-07-10T00:00:00.000Z",
+    });
+    expect(
+      fixtures[0]!.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
+        .get("billing-cancellation:user-1:evt-stale-subscription-cancel"),
+    ).toMatchObject({ count: 0 });
   });
 
   it("enqueues the outbox row atomically with a refund revoke", async () => {

@@ -350,6 +350,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: subscriptionGrant.metadata,
           forcePlanChangePending: allowsPendingPlanChangeTarget,
           requirePlanChangePending: requiresPendingPlanChange,
+          requireProviderIdentityMatch: cancellationScheduled,
         },
         getPlanLimit(subscriptionGrant.plan, "watchlists"),
         grantLedger,
