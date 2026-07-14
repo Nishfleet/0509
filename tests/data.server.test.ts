@@ -3245,11 +3245,89 @@ describe("listRetryableDigestRuns", () => {
     expect(query?.sql).toContain("delivery_attempt.status = 'pending'");
     expect(query?.sql).toContain("delivery_attempt.webhook_status = 'pending'");
     expect(query?.sql).toContain("delivery_attempt.updated_at <= ?");
+    expect(query?.sql).toContain("digestItemSetProvenance");
     expect(query?.bindings).toEqual([
       "2026-06-01T00:00:00.000Z",
       "2026-07-13T08:59:00.000Z",
+      "atomic-v1",
       25,
     ]);
+  });
+
+  it("does not let an older legacy backlog starve retryable atomic digests", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user (
+          id TEXT PRIMARY KEY NOT NULL,
+          email TEXT NOT NULL,
+          name TEXT NOT NULL
+        );
+        CREATE TABLE digest_run (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          period_start TEXT NOT NULL,
+          period_end TEXT NOT NULL,
+          summary_json TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE TABLE digest_delivery (
+          id TEXT PRIMARY KEY NOT NULL,
+          digest_run_id TEXT NOT NULL,
+          status TEXT NOT NULL
+        );
+        CREATE TABLE delivery_attempt (
+          id TEXT PRIMARY KEY NOT NULL,
+          digest_run_id TEXT,
+          status TEXT NOT NULL,
+          webhook_status TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO user (id, email, name)
+        VALUES ('user-1', 'owner@example.com', 'Owner');
+      `);
+      const insertRun = sqlite.sqlite.prepare(`
+        INSERT INTO digest_run (
+          id, user_id, period_start, period_end, summary_json, created_at
+        ) VALUES (?, 'user-1', ?, ?, ?, ?)
+      `);
+      for (let index = 0; index < 30; index += 1) {
+        const day = String(index + 1).padStart(2, "0");
+        const periodEnd = `2026-06-${day}T00:00:00.000Z`;
+        insertRun.run(
+          `legacy-${index}`,
+          "2026-06-01T00:00:00.000Z",
+          periodEnd,
+          JSON.stringify({ totalEvents: 1 }),
+          periodEnd,
+        );
+      }
+      insertRun.run(
+        "atomic-valid",
+        "2026-06-01T00:00:00.000Z",
+        "2026-07-01T00:00:00.000Z",
+        JSON.stringify({
+          digestItemSetProvenance: "atomic-v1",
+          digestItemCount: 0,
+        }),
+        "2026-07-01T00:00:00.000Z",
+      );
+
+      const rows = await listRetryableDigestRuns(
+        { DB: sqlite.db } as never,
+        {
+          since: "2026-06-01T00:00:00.000Z",
+          stalePreDispatchBefore: "2026-07-13T08:59:00.000Z",
+          limit: 1,
+        },
+      );
+
+      expect(rows).toEqual([
+        expect.objectContaining({ id: "atomic-valid", userId: "user-1" }),
+      ]);
+    } finally {
+      sqlite.close();
+    }
   });
 });
 
