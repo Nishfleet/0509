@@ -6,9 +6,10 @@ export interface SearchObservabilityEvent {
   intent: "domain" | "text";
   scope: "exact" | "broader";
   domainHash: string | null;
-  registrableDomain: string | null;
   verifiedCount: number;
+  rawCandidateCount: number;
   broaderCandidateCount: number;
+  missingVerificationCount: number;
   rejectedKeywordOnlyCount: number;
   provider: string | null;
   cacheStatus: string | null;
@@ -39,9 +40,10 @@ export function buildSearchObservabilityEvent(input: {
     intent: input.result.searchIntent,
     scope: input.result.searchScope,
     domainHash: domain ? hashString(domain) : null,
-    registrableDomain: domain,
     verifiedCount: input.result.verifiedCount,
+    rawCandidateCount: input.result.rawCandidateCount,
     broaderCandidateCount: input.result.broaderCandidateCount,
+    missingVerificationCount: input.result.missingVerificationCount,
     rejectedKeywordOnlyCount: input.result.rejectedKeywordOnlyCount,
     provider: input.result.provider ?? input.result.source ?? null,
     cacheStatus: input.result.cacheStatus ?? null,

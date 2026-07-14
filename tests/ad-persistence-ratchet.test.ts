@@ -175,4 +175,111 @@ describe("upsertAd seen-window ratchet", () => {
     expect(incoming.firstSeenAt).toBeNull();
     expect(incoming.lastSeenAt).toBeNull();
   });
+
+  it("does not let a late older capture overwrite newer canonical evidence", async () => {
+    const evidence = (label: string, capturedAt: string) => buildAd({
+      landingPage: {
+        rawUrl: "https://nykaaman.com/sale",
+        canonicalUrl: "https://nykaaman.com/sale",
+        rawHeadline: `${label} landing headline`,
+        normalizedHeadline: `${label} landing headline`,
+        normalizedHeadlineHash: `${label}-landing-hash`,
+        captureMethod: "browser_render",
+        artifactKey: `proof/${label}.png`,
+        capturedAt,
+      },
+      creativeText: `${label} creative text`,
+      creativeTextCaptureMethod: "ad_snapshot_fetch",
+      creativeTextMetadata: { capturedAt, source: label },
+      analysisFields: [
+        {
+          scopeType: "ad",
+          fieldKey: "ocr_text",
+          fieldValue: `${label} creative text`,
+          provenanceSource: "ad_snapshot_fetch",
+          extractorVersion: "ocr-v1",
+          confidence: 0.8,
+          metadata: { capturedAt },
+        },
+        {
+          scopeType: "ad",
+          fieldKey: "landing_page_headline_summary",
+          fieldValue: `${label} landing headline`,
+          provenanceSource: "browser_render",
+          extractorVersion: "landing-v1",
+          confidence: 0.9,
+          metadata: { capturedAt },
+        },
+        {
+          scopeType: "ad",
+          fieldKey: "translated_text",
+          fieldValue: `${label} translated text`,
+          provenanceSource: "ai_summary",
+          extractorVersion: "translation-v1",
+          confidence: 0.7,
+          metadata: { capturedAt },
+        },
+      ],
+    });
+
+    const originalPrepare = harness.db.prepare.bind(harness.db);
+    const originalBatch = harness.db.batch.bind(harness.db);
+    let releaseOlderProjection!: () => void;
+    let markOlderProjectionStarted!: () => void;
+    const olderProjectionStarted = new Promise<void>((resolve) => {
+      markOlderProjectionStarted = resolve;
+    });
+    const olderProjectionRelease = new Promise<void>((resolve) => {
+      releaseOlderProjection = resolve;
+    });
+    (harness.db as unknown as { prepare: typeof harness.db.prepare }).prepare = (sql: string) => {
+      const prepared = originalPrepare(sql);
+      return {
+        bind(...bindings: unknown[]) {
+          const statement = prepared.bind(...bindings);
+          return Object.assign(statement, {
+            isOlderEvidenceProjection:
+              sql.includes("analysis_field") && bindings.includes("older creative text"),
+          });
+        },
+      };
+    };
+    (harness.db as unknown as { batch: typeof harness.db.batch }).batch = async (statements) => {
+      if (statements.some((statement) => (
+        statement as unknown as { isOlderEvidenceProjection?: boolean }
+      ).isOlderEvidenceProjection)) {
+        markOlderProjectionStarted();
+        await olderProjectionRelease;
+      }
+      return originalBatch(statements);
+    };
+
+    const olderWrite = upsertAd(env, evidence("older", "2026-07-14T11:00:00.000Z"));
+    await olderProjectionStarted;
+    await upsertAd(env, evidence("newer", "2026-07-14T12:00:00.000Z"));
+    releaseOlderProjection();
+    await olderWrite;
+
+    const [persisted] = await listAdsByIds(env, ["1280520150312258"]);
+    expect(persisted.landingPage?.rawHeadline).toBe("newer landing headline");
+    expect(persisted.creativeText).toBe("newer creative text");
+    expect(persisted.creativeTextMetadata?.source).toBe("newer");
+    expect(persisted.analysisFields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fieldKey: "ocr_text", fieldValue: "newer creative text" }),
+      expect.objectContaining({ fieldKey: "translated_text", fieldValue: "newer translated text" }),
+      expect.objectContaining({
+        fieldKey: "landing_page_headline_summary",
+        fieldValue: "newer landing headline",
+      }),
+    ]));
+
+    const analysisRows = harness.sqlite.prepare(
+      "SELECT field_key, field_value FROM analysis_field WHERE scope_type = 'ad' AND scope_id = ?",
+    ).all("1280520150312258") as Array<{ field_key: string; field_value: string }>;
+    expect(analysisRows).toEqual(expect.arrayContaining([
+      { field_key: "ocr_text", field_value: "newer creative text" },
+      { field_key: "translated_text", field_value: "newer translated text" },
+      { field_key: "landing_page_headline_summary", field_value: "newer landing headline" },
+    ]));
+  });
 });

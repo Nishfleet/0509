@@ -19,6 +19,8 @@ export default [
   route("unsubscribe", "routes/unsubscribe.tsx"),
   route("auth/login", "routes/auth.login.tsx"),
   route("auth/signup", "routes/auth.signup.tsx"),
+  route("login", "routes/auth.login-alias.ts"),
+  route("signup", "routes/auth.signup-alias.ts"),
   route("auth/logout", "routes/auth.logout.ts"),
   route("auth/better/magic-link", "routes/auth.better.magic-link.tsx"),
   route("auth/better/oauth", "routes/auth.better.oauth.ts"),

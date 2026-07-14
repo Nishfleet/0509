@@ -49,6 +49,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const url = new URL(request.url);
   const resumeSetup = url.searchParams.get("resume") === "1";
+  const prefillWebsite = url.searchParams.get("website")?.trim() ?? "";
 
   if (isMember) {
     const { completeUserOnboarding } = await import("~/lib/data.server");
@@ -71,6 +72,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     plan,
     watchlistLimit,
     brandWebsite: branding.brandWebsite,
+    prefillWebsite,
     resumeSetup,
     visitorCountry: defaultCountryForVisitor(
       (context.cloudflare as { country?: string | null } | undefined)?.country ??
@@ -559,7 +561,7 @@ export default function AppOnboardRoute() {
   const actionData = useActionData<typeof action>();
   const importActionData = hasImportPreview(actionData) ? actionData : null;
   const importPreview = importActionData?.preview ?? null;
-  const [website, setWebsite] = useState("");
+  const [website, setWebsite] = useState(data.prefillWebsite ?? "");
   const [brandWebsite, setBrandWebsite] = useState(importActionData?.brandWebsiteInput ?? data.brandWebsite ?? "");
   const trimmedWebsite = website.trim();
   const trimmedBrandWebsite = brandWebsite.trim();
@@ -576,14 +578,16 @@ export default function AppOnboardRoute() {
       <section className="f9-container f9-onboard-layout">
         <article className="f9-onboard-card">
           <DashboardPageHeader
-            lead={data.resumeSetup
-              ? "Paste your competitors. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."
-              : "Paste your competitors. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."}
+            lead="Start with one competitor. We will validate the website, create its watchlist, and queue the first evidence scan."
             title={data.resumeSetup ? "Resume setup" : "Get started"}
           />
 
           {actionData?.message ? (
-            <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
+            <div
+              aria-live={actionData.ok ? "polite" : "assertive"}
+              className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+              role={actionData.ok ? "status" : "alert"}
+            >
               <p>{actionData.message}</p>
               {!actionData.ok && "upgradePath" in actionData && actionData.upgradePath ? (
                 <Link className="f9-text-link" to={actionData.upgradePath}>
@@ -594,7 +598,64 @@ export default function AppOnboardRoute() {
           ) : null}
 
           {canCreateWatchlist ? (
-            <Form className="f9-auth-form f9-onboard-import-form" encType="multipart/form-data" method="post">
+            <>
+              <Form className="f9-auth-form f9-onboard-single-form" method="post">
+                <input name="intent" type="hidden" value="create-watchlist" />
+                <label className="f9-field">
+                  <span>Competitor website</span>
+                  <input
+                    aria-describedby={competitorWebsite.error ? "onboard-competitor-error" : "onboard-competitor-hint"}
+                    aria-invalid={Boolean(competitorWebsite.error)}
+                    autoComplete="url"
+                    inputMode="url"
+                    name="website"
+                    onChange={(event) => setWebsite(event.currentTarget.value)}
+                    placeholder="https://competitor.com"
+                    spellCheck={false}
+                    value={website}
+                  />
+                  {competitorWebsite.error ? (
+                    <small id="onboard-competitor-error">{competitorWebsite.error}</small>
+                  ) : (
+                    <small id="onboard-competitor-hint">Use the competitor's public website.</small>
+                  )}
+                </label>
+
+                <details className="f9-inline-details">
+                  <summary>Optional: add your brand website</summary>
+                  <label className="f9-field">
+                    <span>My brand website</span>
+                    <input
+                      aria-describedby={ownBrandWebsite.error ? "onboard-brand-error" : undefined}
+                      aria-invalid={Boolean(ownBrandWebsite.error)}
+                      autoComplete="url"
+                      inputMode="url"
+                      name="brandWebsite"
+                      onChange={(event) => setBrandWebsite(event.currentTarget.value)}
+                      placeholder="https://yourbrand.com"
+                      spellCheck={false}
+                      value={brandWebsite}
+                    />
+                    {ownBrandWebsite.error ? <small id="onboard-brand-error">{ownBrandWebsite.error}</small> : null}
+                  </label>
+                </details>
+
+                <SubmitButton
+                  className="f9-primary-button"
+                  disabled={!trimmedWebsite || Boolean(competitorWebsite.error)}
+                  intent="create-watchlist"
+                  pendingLabel="Creating and queuing first scan…"
+                >
+                  Start tracking {competitorWebsite.displayName ?? (competitorQuery || "this competitor")}
+                </SubmitButton>
+                <p className="f9-muted-copy">
+                  The first scan starts immediately. Evidence appears as soon as the source check finishes.
+                </p>
+              </Form>
+
+              <details className="f9-inline-details f9-onboard-import-details">
+                <summary>Add several competitors by paste or CSV</summary>
+                <Form className="f9-auth-form f9-onboard-import-form" encType="multipart/form-data" method="post">
               <label className="f9-field">
                 <span>Competitors</span>
                 <textarea
@@ -618,6 +679,8 @@ export default function AppOnboardRoute() {
                 <label className="f9-field">
                   <span>My brand website</span>
                   <input
+                    aria-describedby={ownBrandWebsite.error ? "onboard-import-brand-error" : undefined}
+                    aria-invalid={Boolean(ownBrandWebsite.error)}
                     autoComplete="url"
                     inputMode="url"
                     name="brandWebsite"
@@ -626,7 +689,7 @@ export default function AppOnboardRoute() {
                     spellCheck={false}
                     value={brandWebsite}
                   />
-                  {ownBrandWebsite.error ? <small>{ownBrandWebsite.error}</small> : null}
+                  {ownBrandWebsite.error ? <small id="onboard-import-brand-error">{ownBrandWebsite.error}</small> : null}
                 </label>
               </details>
 
@@ -663,7 +726,9 @@ export default function AppOnboardRoute() {
               <p className="f9-muted-copy">
                 First scans start right after setup, then the dashboard turns them into a Market Desk Brief.
               </p>
-            </Form>
+                </Form>
+              </details>
+            </>
           ) : (
             <section className="f9-onboard-step">
               <span className="f9-app-kicker">{atWatchlistCap ? "Limit reached" : "Plan required"}</span>
@@ -685,54 +750,6 @@ export default function AppOnboardRoute() {
               </div>
             </section>
           )}
-
-          {canCreateWatchlist ? (
-            <details className="f9-inline-details">
-              <summary>Track one competitor instead</summary>
-              <Form className="f9-auth-form f9-onboard-single-form" method="post">
-                <input name="intent" type="hidden" value="create-watchlist" />
-              <label className="f9-field">
-                <span>Competitor website</span>
-                <input
-                  autoComplete="url"
-                  inputMode="url"
-                  name="website"
-                  onChange={(event) => setWebsite(event.currentTarget.value)}
-                  placeholder="https://competitor.com"
-                  spellCheck={false}
-                  value={website}
-                />
-                {competitorWebsite.error ? <small>{competitorWebsite.error}</small> : null}
-              </label>
-
-              <details className="f9-inline-details">
-                <summary>Optional: add your brand website</summary>
-                <label className="f9-field">
-                  <span>My brand website</span>
-                  <input
-                    autoComplete="url"
-                    inputMode="url"
-                    name="brandWebsite"
-                    onChange={(event) => setBrandWebsite(event.currentTarget.value)}
-                    placeholder="https://yourbrand.com"
-                    spellCheck={false}
-                    value={brandWebsite}
-                  />
-                  {ownBrandWebsite.error ? <small>{ownBrandWebsite.error}</small> : null}
-                </label>
-              </details>
-
-              <SubmitButton
-                className="f9-primary-button"
-                disabled={!trimmedWebsite}
-                intent="create-watchlist"
-                pendingLabel="Creating…"
-              >
-                Start tracking {competitorWebsite.displayName ?? (competitorQuery || "this competitor")}
-              </SubmitButton>
-            </Form>
-            </details>
-          ) : null}
 
           <div className="f9-onboard-actions">
             <Form method="post">

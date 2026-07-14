@@ -115,16 +115,16 @@ async function mockPricingPreview(page: import("@playwright/test").Page) {
         country: "US",
         prices: {
           scout: {
-            monthly: { display: "$19", currency: "USD", billingCountry: "US" },
-            yearly: { display: "$152", currency: "USD", billingCountry: "US" },
+            monthly: { display: "$19", amount: 1900, currency: "USD", billingCountry: "US" },
+            yearly: { display: "$152", amount: 15200, currency: "USD", billingCountry: "US" },
           },
           starter: {
-            monthly: { display: "$59", currency: "USD", billingCountry: "US" },
-            yearly: { display: "$472", currency: "USD", billingCountry: "US" },
+            monthly: { display: "$59", amount: 5900, currency: "USD", billingCountry: "US" },
+            yearly: { display: "$472", amount: 47200, currency: "USD", billingCountry: "US" },
           },
           agency: {
-            monthly: { display: "$199", currency: "USD", billingCountry: "US" },
-            yearly: { display: "$1,592", currency: "USD", billingCountry: "US" },
+            monthly: { display: "$199", amount: 19900, currency: "USD", billingCountry: "US" },
+            yearly: { display: "$1,592", amount: 159200, currency: "USD", billingCountry: "US" },
           },
         },
         annualValidation: {
@@ -232,6 +232,63 @@ test.describe("public production-safe E2E smoke", () => {
     }
   });
 
+  test("first-value journey shows a verified proof and preserves signup intent", async ({ page, baseURL }) => {
+    test.skip(
+      isProductionBaseURL(baseURL),
+      "Branch search fixtures are local-only; production proof uses the authorized live canary gate.",
+    );
+    test.skip(
+      process.env.E2E_SEARCH_V2 !== "1",
+      "Local rendered proof runs only during the explicit V2 candidate check; the committed rollout stays in shadow.",
+    );
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await gotoPublicPage(page, "/");
+    const heroSearch = page.getByRole("form", { name: "Free live search" });
+    await expect(heroSearch).toBeVisible();
+    const heroRect = await heroSearch.boundingBox();
+    expect(heroRect?.y).toBeLessThan(812);
+
+    await gotoPublicPage(page, "/search?website=nykaa.com");
+    await expect(page.getByRole("heading", { name: "1 verified ad linked to nykaa.com" })).toBeVisible();
+    await expect(page.getByText("Source: Meta Ad Library visual check").first()).toBeVisible();
+    await expect(
+      page.locator("#selected-proof").getByRole("heading", { name: "Nykaa summer beauty event" }),
+    ).toBeVisible();
+    await expect(page.getByText("Landing page not captured yet").first()).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    const selectedProof = page.locator("#selected-proof");
+    const results = page.locator(".f9-results-panel");
+    expect((await selectedProof.boundingBox())?.y).toBeLessThan((await results.boundingBox())?.y ?? Infinity);
+    expect((await selectedProof.boundingBox())?.y).toBeLessThan(812);
+
+    await page.locator(".f9-result-card").first().click();
+    await expect(selectedProof).toBeFocused();
+
+    const signup = page.getByRole("link", { name: "Create account" }).last();
+    const signupTarget = new URL((await signup.getAttribute("href"))!, baseURL);
+    expect(signupTarget.pathname).toBe("/auth/signup");
+    expect(signupTarget.searchParams.get("redirectTo")).toContain("/app/onboard?");
+    expect(signupTarget.searchParams.get("redirectTo")).toContain("website=nykaa.com");
+
+    for (const viewport of [
+      { width: 768, height: 900 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await gotoPublicPage(page, "/search?website=nykaa.com");
+      const proofRect = await page.locator("#selected-proof").boundingBox();
+      expect(proofRect?.y).toBeLessThan(viewport.height);
+      await expectNoHorizontalOverflow(page);
+    }
+
+    await gotoPublicPage(page, "/signup?email=owner%40example.com");
+    await expect(page).toHaveURL(/\/auth\/signup\?email=/);
+    await expect(page.getByLabel("Email")).toHaveValue("owner@example.com");
+    await expect(page.getByLabel("Company or agency")).toHaveCount(0);
+  });
+
   test("public pricing preserves monthly and annual plan intent for signed-out buyers", async ({ page, baseURL }) => {
     test.skip(
       isProductionBaseURL(baseURL),
@@ -240,11 +297,18 @@ test.describe("public production-safe E2E smoke", () => {
     await mockPricingPreview(page);
     await gotoPublicPage(page, "/");
 
-    await expect(page.getByRole("link", { name: "Choose monthly" }).first()).toBeVisible();
-    expectSignedOutPlanIntent(
-      await page.getByRole("link", { name: "Choose monthly" }).first().getAttribute("href"),
-      "monthly",
-    );
+    const monthlyPlanLink = page.getByRole("link", { name: "Choose monthly" }).first();
+    if ((await monthlyPlanLink.count()) === 0) {
+      // Local preview intentionally has no provider credentials. In that state
+      // checkout must remain closed rather than manufacturing plan intent.
+      await expect(page.getByRole("button", { name: "Annual" })).toBeDisabled();
+      await expect(page.getByRole("link", { name: "Create account" }).last()).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      return;
+    }
+
+    await expect(monthlyPlanLink).toBeVisible();
+    expectSignedOutPlanIntent(await monthlyPlanLink.getAttribute("href"), "monthly");
 
     await page.getByRole("button", { name: "Annual" }).click();
     await expect(page.getByRole("link", { name: "Choose annual" }).first()).toBeVisible();

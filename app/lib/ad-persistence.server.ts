@@ -60,19 +60,17 @@ function findTranslatedAnalysisField(fields: AnalysisFieldInput[]) {
   return fields.find((field) => field.fieldKey === "translated_text" && field.fieldValue.trim()) ?? null;
 }
 
-function mergePersistedTranslatedField(
+function mergePersistedAnalysisFields(
   fields: AnalysisFieldInput[],
   storedFields: AnalysisFieldInput[],
 ) {
-  const translatedField = findTranslatedAnalysisField(fields) ?? findTranslatedAnalysisField(storedFields);
-
-  if (!translatedField) {
-    return fields;
+  const merged = new Map(
+    storedFields.map((field) => [`${field.scopeType}:${field.fieldKey}`, field]),
+  );
+  for (const field of fields) {
+    merged.set(`${field.scopeType}:${field.fieldKey}`, field);
   }
-
-  const remaining = fields.filter((field) => field.fieldKey !== "translated_text");
-
-  return [...remaining, translatedField];
+  return [...merged.values()];
 }
 
 export async function listAdsByIds(env: AppEnv, adIds: string[]) {
@@ -128,26 +126,33 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
     const storedTranslatedField = storedAd
       ? findTranslatedAnalysisField(storedAd.analysisFields)
       : null;
-    const hasStoredCreative = Boolean(
+    const hasStoredEvidence = Boolean(
       storedAd?.creativeText
       ?? storedAd?.creativeImageUrl
       ?? storedAd?.creativeTextCaptureMethod
-      ?? storedAd?.creativeTextMetadata,
+      ?? storedAd?.creativeTextMetadata
+      ?? storedAd?.landingPage
+      ?? storedAd?.landingPageUrl
+      ?? storedAd?.adSnapshotUrl
+      ?? (storedAd?.analysisFields.length ? true : null),
     );
 
-    if (!storedAd || (!hasStoredCreative && !storedTranslatedField)) {
+    if (!storedAd || (!hasStoredEvidence && !storedTranslatedField)) {
       return ad;
     }
 
     return {
       ...ad,
+      landingPageUrl: ad.landingPageUrl ?? storedAd.landingPageUrl ?? null,
+      adSnapshotUrl: ad.adSnapshotUrl ?? storedAd.adSnapshotUrl ?? null,
+      landingPage: ad.landingPage ?? storedAd.landingPage ?? null,
       creativeText: ad.creativeText ?? storedAd.creativeText ?? null,
       creativeImageUrl: ad.creativeImageUrl ?? storedAd.creativeImageUrl ?? null,
       creativeTextCaptureMethod:
         ad.creativeTextCaptureMethod ?? storedAd.creativeTextCaptureMethod ?? null,
       creativeTextMetadata:
         ad.creativeTextMetadata ?? storedAd.creativeTextMetadata ?? null,
-      analysisFields: mergePersistedTranslatedField(ad.analysisFields, storedAd.analysisFields),
+      analysisFields: mergePersistedAnalysisFields(ad.analysisFields, storedAd.analysisFields),
     };
   });
 }
@@ -156,7 +161,15 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
   const timestamp = nowIso();
   const firstSeenAt = normalizeSeenAt(ad.firstSeenAt);
   const lastSeenAt = normalizeSeenAt(ad.lastSeenAt);
-  const rawJson = jsonValue({ ...ad, firstSeenAt, lastSeenAt });
+  const evidenceCapturedAt = latestEvidenceCapturedAt(ad);
+  const canonicalRevision = createId();
+  const rawJson = jsonValue({
+    ...ad,
+    firstSeenAt,
+    lastSeenAt,
+    evidenceCapturedAt,
+    canonicalRevision,
+  });
   await run(
     env,
     `
@@ -202,8 +215,8 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                     creative_format = excluded.creative_format,
                     language_label = excluded.language_label,
                     destination_type = excluded.destination_type,
-                    landing_page_url = excluded.landing_page_url,
-                    ad_snapshot_url = excluded.ad_snapshot_url,
+                    landing_page_url = COALESCE(excluded.landing_page_url, ad.landing_page_url),
+                    ad_snapshot_url = COALESCE(excluded.ad_snapshot_url, ad.ad_snapshot_url),
                     countries_json = excluded.countries_json,
                     platforms_json = excluded.platforms_json,
                     first_seen_at = CASE
@@ -237,9 +250,35 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                     is_active = excluded.is_active,
                     source = excluded.source,
                     research_summary = excluded.research_summary,
-                    creative_text = excluded.creative_text,
-                    creative_text_capture_method = excluded.creative_text_capture_method,
-                    creative_text_metadata_json = excluded.creative_text_metadata_json,
+                    creative_text = CASE
+                      WHEN excluded.creative_text IS NULL THEN ad.creative_text
+                      WHEN ad.creative_text IS NULL THEN excluded.creative_text
+                      WHEN julianday(json_extract(excluded.creative_text_metadata_json, '$.capturedAt')) IS NOT NULL
+                        AND (
+                          julianday(json_extract(ad.creative_text_metadata_json, '$.capturedAt')) IS NULL
+                          OR julianday(json_extract(excluded.creative_text_metadata_json, '$.capturedAt'))
+                            >= julianday(json_extract(ad.creative_text_metadata_json, '$.capturedAt'))
+                        ) THEN excluded.creative_text
+                      ELSE ad.creative_text
+                    END,
+                    creative_text_capture_method = CASE
+                      WHEN julianday(json_extract(excluded.creative_text_metadata_json, '$.capturedAt')) IS NOT NULL
+                        AND (
+                          julianday(json_extract(ad.creative_text_metadata_json, '$.capturedAt')) IS NULL
+                          OR julianday(json_extract(excluded.creative_text_metadata_json, '$.capturedAt'))
+                            >= julianday(json_extract(ad.creative_text_metadata_json, '$.capturedAt'))
+                        ) THEN excluded.creative_text_capture_method
+                      ELSE COALESCE(ad.creative_text_capture_method, excluded.creative_text_capture_method)
+                    END,
+                    creative_text_metadata_json = CASE
+                      WHEN julianday(json_extract(excluded.creative_text_metadata_json, '$.capturedAt')) IS NOT NULL
+                        AND (
+                          julianday(json_extract(ad.creative_text_metadata_json, '$.capturedAt')) IS NULL
+                          OR julianday(json_extract(excluded.creative_text_metadata_json, '$.capturedAt'))
+                            >= julianday(json_extract(ad.creative_text_metadata_json, '$.capturedAt'))
+                        ) THEN excluded.creative_text_metadata_json
+                      ELSE COALESCE(ad.creative_text_metadata_json, excluded.creative_text_metadata_json)
+                    END,
                     raw_json = json_set(
                       excluded.raw_json,
                       '$.firstSeenAt',
@@ -271,7 +310,133 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                         WHEN julianday(excluded.last_seen_at) >= julianday(ad.last_seen_at)
                           THEN excluded.last_seen_at
                         ELSE ad.last_seen_at
-                      END
+                      END,
+                      '$.landingPageUrl',
+                      COALESCE(
+                        json_extract(excluded.raw_json, '$.landingPageUrl'),
+                        json_extract(ad.raw_json, '$.landingPageUrl')
+                      ),
+                      '$.adSnapshotUrl',
+                      COALESCE(
+                        json_extract(excluded.raw_json, '$.adSnapshotUrl'),
+                        json_extract(ad.raw_json, '$.adSnapshotUrl')
+                      ),
+                      '$.landingPage',
+                      json(CASE
+                        WHEN json_extract(excluded.raw_json, '$.landingPage') IS NULL
+                          THEN COALESCE(json_extract(ad.raw_json, '$.landingPage'), 'null')
+                        WHEN json_extract(ad.raw_json, '$.landingPage') IS NULL
+                          THEN json_extract(excluded.raw_json, '$.landingPage')
+                        WHEN julianday(json_extract(excluded.raw_json, '$.landingPage.capturedAt')) IS NOT NULL
+                          AND (
+                            julianday(json_extract(ad.raw_json, '$.landingPage.capturedAt')) IS NULL
+                            OR julianday(json_extract(excluded.raw_json, '$.landingPage.capturedAt'))
+                              >= julianday(json_extract(ad.raw_json, '$.landingPage.capturedAt'))
+                          ) THEN json_extract(excluded.raw_json, '$.landingPage')
+                        ELSE json_extract(ad.raw_json, '$.landingPage')
+                      END),
+                      '$.creativeText',
+                      CASE
+                        WHEN julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt')) IS NOT NULL
+                          AND (
+                            julianday(json_extract(ad.raw_json, '$.creativeTextMetadata.capturedAt')) IS NULL
+                            OR julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt'))
+                              >= julianday(json_extract(ad.raw_json, '$.creativeTextMetadata.capturedAt'))
+                          ) THEN json_extract(excluded.raw_json, '$.creativeText')
+                        ELSE COALESCE(
+                          json_extract(ad.raw_json, '$.creativeText'),
+                          json_extract(excluded.raw_json, '$.creativeText')
+                        )
+                      END,
+                      '$.creativeImageUrl',
+                      CASE
+                        WHEN julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt')) IS NOT NULL
+                          AND (
+                            julianday(json_extract(ad.raw_json, '$.creativeTextMetadata.capturedAt')) IS NULL
+                            OR julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt'))
+                              >= julianday(json_extract(ad.raw_json, '$.creativeTextMetadata.capturedAt'))
+                          ) THEN json_extract(excluded.raw_json, '$.creativeImageUrl')
+                        ELSE COALESCE(
+                          json_extract(ad.raw_json, '$.creativeImageUrl'),
+                          json_extract(excluded.raw_json, '$.creativeImageUrl')
+                        )
+                      END,
+                      '$.creativeTextCaptureMethod',
+                      CASE
+                        WHEN julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt')) IS NOT NULL
+                          AND (
+                            julianday(json_extract(ad.raw_json, '$.creativeTextMetadata.capturedAt')) IS NULL
+                            OR julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt'))
+                              >= julianday(json_extract(ad.raw_json, '$.creativeTextMetadata.capturedAt'))
+                          ) THEN json_extract(excluded.raw_json, '$.creativeTextCaptureMethod')
+                        ELSE COALESCE(
+                          json_extract(ad.raw_json, '$.creativeTextCaptureMethod'),
+                          json_extract(excluded.raw_json, '$.creativeTextCaptureMethod')
+                        )
+                      END,
+                      '$.creativeTextMetadata',
+                      json(CASE
+                        WHEN julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt')) IS NOT NULL
+                          AND (
+                            julianday(json_extract(ad.raw_json, '$.creativeTextMetadata.capturedAt')) IS NULL
+                            OR julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt'))
+                              >= julianday(json_extract(ad.raw_json, '$.creativeTextMetadata.capturedAt'))
+                          ) THEN COALESCE(json_extract(excluded.raw_json, '$.creativeTextMetadata'), 'null')
+                        ELSE COALESCE(
+                          json_extract(ad.raw_json, '$.creativeTextMetadata'),
+                          json_extract(excluded.raw_json, '$.creativeTextMetadata'),
+                          'null'
+                        )
+                      END),
+                      '$.evidenceCapturedAt',
+                      CASE
+                        WHEN julianday(json_extract(excluded.raw_json, '$.evidenceCapturedAt')) IS NULL
+                          THEN json_extract(ad.raw_json, '$.evidenceCapturedAt')
+                        WHEN julianday(json_extract(ad.raw_json, '$.evidenceCapturedAt')) IS NULL
+                          OR julianday(json_extract(excluded.raw_json, '$.evidenceCapturedAt'))
+                            >= julianday(json_extract(ad.raw_json, '$.evidenceCapturedAt'))
+                          THEN json_extract(excluded.raw_json, '$.evidenceCapturedAt')
+                        ELSE json_extract(ad.raw_json, '$.evidenceCapturedAt')
+                      END,
+                      '$.analysisFields',
+                      json(COALESCE((
+                        SELECT json_group_array(json(candidate.value))
+                        FROM (
+                          SELECT incoming.value AS value
+                          FROM json_each(excluded.raw_json, '$.analysisFields') AS incoming
+                          LEFT JOIN json_each(ad.raw_json, '$.analysisFields') AS existing
+                            ON json_extract(existing.value, '$.scopeType') = json_extract(incoming.value, '$.scopeType')
+                            AND json_extract(existing.value, '$.fieldKey') = json_extract(incoming.value, '$.fieldKey')
+                          WHERE existing.value IS NULL
+                            OR (
+                              julianday(json_extract(incoming.value, '$.metadata.capturedAt')) IS NOT NULL
+                              AND (
+                                julianday(json_extract(existing.value, '$.metadata.capturedAt')) IS NULL
+                                OR julianday(json_extract(incoming.value, '$.metadata.capturedAt'))
+                                  >= julianday(json_extract(existing.value, '$.metadata.capturedAt'))
+                              )
+                            )
+                            OR (
+                              julianday(json_extract(incoming.value, '$.metadata.capturedAt')) IS NULL
+                              AND julianday(json_extract(existing.value, '$.metadata.capturedAt')) IS NULL
+                            )
+                          UNION ALL
+                          SELECT existing.value AS value
+                          FROM json_each(ad.raw_json, '$.analysisFields') AS existing
+                          LEFT JOIN json_each(excluded.raw_json, '$.analysisFields') AS incoming
+                            ON json_extract(incoming.value, '$.scopeType') = json_extract(existing.value, '$.scopeType')
+                            AND json_extract(incoming.value, '$.fieldKey') = json_extract(existing.value, '$.fieldKey')
+                          WHERE incoming.value IS NULL
+                            OR (
+                              julianday(json_extract(existing.value, '$.metadata.capturedAt')) IS NOT NULL
+                              AND (
+                                julianday(json_extract(incoming.value, '$.metadata.capturedAt')) IS NULL
+                                OR julianday(json_extract(existing.value, '$.metadata.capturedAt'))
+                                  > julianday(json_extract(incoming.value, '$.metadata.capturedAt'))
+                              )
+                            )
+                        ) AS candidate
+                      ), '[]'))
                     ),
                     updated_at = excluded.updated_at
     `,
@@ -298,20 +463,32 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
     ad.researchSummary,
     ad.creativeText ?? null,
     ad.creativeTextCaptureMethod ?? null,
-    jsonValue(ad.creativeTextMetadata ?? null),
+    ad.creativeTextMetadata ? jsonValue(ad.creativeTextMetadata) : null,
     rawJson,
     timestamp,
     timestamp,
   );
 
+  const [persistedAd] = evidenceCapturedAt ? await listAdsByIds(env, [ad.metaAdId]) : [null];
+  const analysisAd = persistedAd ?? ad;
   await replaceAnalysisFields(
     env,
     "ad",
     ad.metaAdId,
-    ad.analysisFields.length > 0
-      ? ad.analysisFields
-      : buildAnalysisFields(ad, mapAdSourceToAnalysisSource(ad.source)),
+    analysisAd.analysisFields.length > 0
+      ? analysisAd.analysisFields
+      : buildAnalysisFields(analysisAd, mapAdSourceToAnalysisSource(analysisAd.source)),
+    { canonicalRevision },
   );
+}
+
+function latestEvidenceCapturedAt(ad: AdRecord) {
+  const creativeCapturedAt = typeof ad.creativeTextMetadata?.capturedAt === "string"
+    ? ad.creativeTextMetadata.capturedAt
+    : null;
+  const candidates = [ad.landingPage?.capturedAt ?? null, creativeCapturedAt]
+    .filter((value): value is string => typeof value === "string" && !Number.isNaN(Date.parse(value)));
+  return candidates.sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? null;
 }
 
 export async function replaceAnalysisFields(
@@ -319,12 +496,21 @@ export async function replaceAnalysisFields(
   scopeType: "ad" | "observation" | "landing_page",
   scopeId: string,
   fields: AnalysisFieldInput[],
+  options: { canonicalRevision?: string | null } = {},
 ) {
   const db = ensureDb(env);
   const timestamp = nowIso();
-  const statements = [
-    db.prepare("DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?").bind(scopeType, scopeId),
-  ];
+  const canonicalRevision = options.canonicalRevision ?? null;
+  const projectionGuard = canonicalRevision && scopeType === "ad"
+    ? " AND EXISTS (SELECT 1 FROM ad WHERE id = ? AND json_extract(raw_json, '$.canonicalRevision') = ?)"
+    : "";
+  const statements = [db.prepare(
+    `DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?${projectionGuard}`,
+  ).bind(
+    scopeType,
+    scopeId,
+    ...(projectionGuard ? [scopeId, canonicalRevision] : []),
+  )];
 
   for (const field of fields) {
     statements.push(
@@ -342,7 +528,9 @@ export async function replaceAnalysisFields(
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ${projectionGuard
+          ? "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM ad WHERE id = ? AND json_extract(raw_json, '$.canonicalRevision') = ?)"
+          : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
       `).bind(
         createId(),
         scopeType,
@@ -355,6 +543,7 @@ export async function replaceAnalysisFields(
         jsonValue(field.metadata ?? null),
         timestamp,
         timestamp,
+        ...(projectionGuard ? [scopeId, canonicalRevision] : []),
       ),
     );
   }

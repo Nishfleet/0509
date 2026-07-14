@@ -5728,6 +5728,89 @@ one signal-green accent.
   padding: 10px 0 88px;
 }
 
+.f9-search-page .f9-search-signup-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-top: 1px solid #e7e2d7;
+  background: #f5f8ed;
+}
+
+.f9-search-page .f9-search-signup-cta strong,
+.f9-search-page .f9-search-signup-cta p {
+  margin: 0;
+}
+
+.f9-search-page .f9-search-signup-cta p {
+  max-width: 62ch;
+  margin-top: 4px;
+  color: #6f6a60;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.f9-search-page .f9-proof-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e7e2d7;
+  color: #6f6a60;
+  font-size: 0.78rem;
+}
+
+.f9-search-page .f9-proof-provenance strong {
+  color: #343127;
+}
+
+.f9-search-page .f9-proof-summary {
+  display: grid;
+  gap: 14px;
+  overflow: hidden;
+  padding: 0 0 16px;
+  border: 1.5px solid var(--ld-ink);
+  border-radius: 18px;
+  background: var(--ld-card);
+}
+
+.f9-search-page .f9-proof-summary > :not(.f9-panel-head, .f9-proof-provenance) {
+  margin-right: 16px;
+  margin-left: 16px;
+}
+
+.f9-search-page .f9-proof-summary:focus {
+  outline: 3px solid #0a8f78;
+  outline-offset: 3px;
+}
+
+.f9-search-page .f9-search-refine-disclosure {
+  grid-column: 1 / -1;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid #d8d2c5;
+  border-radius: 10px;
+  background: #fffdf7;
+}
+
+.f9-search-page .f9-search-refine-disclosure > summary {
+  padding: 10px 12px;
+  color: #343127;
+  font-size: 0.84rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.f9-search-page .f9-search-refine-disclosure[open] > summary {
+  border-bottom: 1px solid #e7e2d7;
+}
+
+.f9-search-page .f9-search-refine-disclosure .f9-search-refine {
+  padding: 12px;
+}
+
 .f9-search-dashboard-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(176px, 0.28fr) max-content;
@@ -7317,6 +7400,15 @@ one signal-green accent.
   font-weight: 600;
 }
 
+.ld-hero-copy .ld-command {
+  width: min(100%, 680px);
+  margin-top: clamp(22px, 3vw, 32px);
+}
+
+.ld-hero-copy .ld-honest {
+  max-width: 680px;
+}
+
 .ld-hero-side {
   display: flex;
   flex-direction: column;
@@ -8304,6 +8396,10 @@ one signal-green accent.
   .f9-search-page .f9-search-command .f9-primary-button {
     justify-content: center;
     width: 100%;
+  }
+
+  .f9-search-page .f9-search-signup-cta {
+    display: grid;
   }
 }
 

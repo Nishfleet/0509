@@ -33,7 +33,10 @@ export function buildSearchAnswer(input: {
   const domain = input.displayDomain?.trim() || null;
   const landingPageCount = ads.filter((ad) => Boolean(ad.landingPage || ad.landingPageUrl)).length;
   const verifiedCount = resolveVerifiedCount(result);
-  const broaderCount = Math.max(0, Math.floor(result.broaderCandidateCount ?? (input.isBroaderScope ? adCount : 0)));
+  const broaderCount = Math.max(
+    0,
+    Math.floor(result.broaderCandidateCount ?? result.rawCandidateCount ?? (input.isBroaderScope ? adCount : 0)),
+  );
   const sourceLabel = formatSearchSource(result);
   const landingFact = {
     label: "Landing-page signal",
@@ -67,7 +70,16 @@ export function buildSearchAnswer(input: {
       summary: "We could not confirm ads whose advertiser or landing page is connected to this website.",
       facts: [
         { label: "Verified ads", value: "0", detail: "Exact website match only" },
-        { label: "Broader candidates", value: String(broaderCount), detail: "Use broader search when you want related matches" },
+        {
+          label: "Related candidates",
+          value: String(broaderCount),
+          detail: broaderCount > 0
+            ? "Available to review separately without a verified website claim"
+            : result.source === "demo"
+              ? "The sample source has no related candidates"
+              : "The Meta source returned no related candidates",
+        },
+        { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
       ],
       note: "This is not evidence that the competitor is inactive; it only means this search did not verify a connected ad.",
     };
@@ -88,12 +100,18 @@ export function buildSearchAnswer(input: {
   }
 
   if (input.isBroaderScope && domain) {
+    const relatedOnlyCount = Math.max(0, adCount - verifiedCount);
     return {
       state: "broader",
-      title: `${adCount} broader match${adCount === 1 ? "" : "es"} for ${domain}`,
-      summary: "These are related ad results, not verified website matches. Use them for leads, not confirmed evidence.",
+      title: verifiedCount > 0
+        ? `${verifiedCount} verified and ${relatedOnlyCount} related match${relatedOnlyCount === 1 ? "" : "es"} for ${domain}`
+        : `${adCount} broader match${adCount === 1 ? "" : "es"} for ${domain}`,
+      summary: verifiedCount > 0
+        ? "Verified matches are connected to the website; related matches remain leads until their source can be confirmed."
+        : "These are related ad results, not verified website matches. Use them for leads, not confirmed evidence.",
       facts: [
-        { label: "Broader matches", value: String(adCount), detail: "Related advertiser/text candidates" },
+        { label: "Verified matches", value: String(verifiedCount), detail: "Connected to this website" },
+        { label: "Related matches", value: String(relatedOnlyCount), detail: "Unverified advertiser/text candidates" },
         landingFact,
         { label: "Source", value: sourceLabel, detail: formatCacheDetail(result.cacheStatus) },
       ],
@@ -162,7 +180,7 @@ function formatSearchSource(result: SearchResponse) {
     return "Delayed";
   }
   if (result.provider === "meta_library_browser" || result.source === "meta_library_browser") {
-    return "Live visual check";
+    return "Meta Ad Library visual source";
   }
   if (result.provider === "meta_api" || result.source === "meta_api") {
     return "Alternate Meta check";

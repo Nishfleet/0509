@@ -72,6 +72,7 @@ export function buildAnalysisFields(ad: AdRecord, source: AnalysisSource): Analy
       ad.landingPage?.rawHeadline ?? "",
       landingPageSource,
       ad.landingPage ? 0.92 : 0.2,
+      ad.landingPage ? { capturedAt: ad.landingPage.capturedAt } : undefined,
     ),
   ];
 
@@ -150,11 +151,11 @@ export function buildLandingPageAnalysisFields(
   const fields: AnalysisFieldInput[] = [];
 
   if (snapshot.ctaText) {
-    fields.push(createLandingPageField("cta_text", snapshot.ctaText, provenanceSource, 0.82));
+    fields.push(createLandingPageField("cta_text", snapshot.ctaText, provenanceSource, 0.82, snapshot.capturedAt));
   }
 
   if (snapshot.priceText) {
-    fields.push(createLandingPageField("price_text", snapshot.priceText, provenanceSource, 0.84));
+    fields.push(createLandingPageField("price_text", snapshot.priceText, provenanceSource, 0.84, snapshot.capturedAt));
   }
 
   if (typeof snapshot.formPresent === "boolean") {
@@ -164,6 +165,7 @@ export function buildLandingPageAnalysisFields(
         snapshot.formPresent ? "true" : "false",
         provenanceSource,
         0.92,
+        snapshot.capturedAt,
       ),
     );
   }
@@ -176,6 +178,7 @@ function createLandingPageField(
   fieldValue: string,
   provenanceSource: AnalysisSource,
   confidence: number,
+  capturedAt: string,
 ): AnalysisFieldInput {
   return {
     scopeType: "landing_page",
@@ -184,6 +187,7 @@ function createLandingPageField(
     provenanceSource,
     extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
     confidence,
+    metadata: { capturedAt },
   };
 }
 

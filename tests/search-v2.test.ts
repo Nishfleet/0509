@@ -1,10 +1,59 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildSearchV2CacheKey } from "~/lib/search-v2.server";
+import {
+  applySearchV2PostFilter,
+  buildSearchV2CacheKey,
+  buildSearchV2SavedQuery,
+} from "~/lib/search-v2.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
 import { clearWebsiteIdentityCacheForTests } from "~/lib/website-identity.server";
+import type { AdRecord, SearchResponse } from "~/lib/types";
+
+function ad(overrides: Partial<AdRecord> = {}): AdRecord {
+  return {
+    metaAdId: "ad-1",
+    advertiser: "Nykaa",
+    body: "Beauty sale",
+    previewHeadline: "Beauty sale",
+    previewSubhead: "Shop now",
+    hook: "Beauty sale",
+    offer: "Sale",
+    cta: "Shop now",
+    format: "image",
+    languageLabel: "English",
+    destinationType: "website",
+    landingPageUrl: null,
+    adSnapshotUrl: null,
+    countries: ["India"],
+    platforms: ["Instagram"],
+    firstSeenAt: null,
+    lastSeenAt: null,
+    active: true,
+    researchSummary: "Summary",
+    source: "meta_library_browser",
+    analysisFields: [],
+    ...overrides,
+  };
+}
+
+const filters = {
+  query: "",
+  country: "India",
+  platform: "all",
+  creativeType: "all" as const,
+  status: "all" as const,
+  firstSeenFrom: "",
+  lastSeenFrom: "",
+};
 
 describe("search v2 cache isolation", () => {
+  it("discovers domain candidates with the brand term in both proof scopes", () => {
+    const intent = parseSearchInputFromWebsiteField("https://www.nykaa.com");
+
+    expect(buildSearchV2SavedQuery(intent, "exact", filters).filters.query).toBe("nykaa");
+    expect(buildSearchV2SavedQuery(intent, "broader", filters).filters.query).toBe("nykaa");
+  });
+
   it("uses distinct keys for domain exact vs broader scope", () => {
     const intent = parseSearchInputFromWebsiteField("okara.ai");
     const exact = buildSearchV2CacheKey({
@@ -44,6 +93,63 @@ describe("search v2 cache isolation", () => {
 
     expect(domainKey.startsWith("search-v2:domain:")).toBe(true);
     expect(textKey.startsWith("search-v2:domain:")).toBe(false);
+  });
+});
+
+describe("search v2 proof policy", () => {
+  const intent = parseSearchInputFromWebsiteField("https://nykaa.com");
+  const rawResult: SearchResponse = {
+    ads: [
+      ad({ metaAdId: "verified", landingPageUrl: "https://nykaa.com/sale" }),
+      ad({ metaAdId: "keyword", advertiser: "Nykaa Beauty", body: "Nykaa sale" }),
+      ad({
+        metaAdId: "sparse",
+        advertiser: "",
+        body: "",
+        previewHeadline: "New offer",
+        hook: "New offer",
+      }),
+    ],
+    nextCursor: null,
+    source: "meta_library_browser",
+    provider: "meta_library_browser",
+    cacheStatus: "miss",
+    discoveryStatus: "healthy",
+  };
+
+  it("keeps exact results verified while reporting every rejected candidate", async () => {
+    const result = await applySearchV2PostFilter({}, rawResult, {
+      queryIntent: intent,
+      scope: "exact",
+      displayDomain: "nykaa.com",
+      identityAliases: [],
+    });
+
+    expect(result.ads.map((item) => item.metaAdId)).toEqual(["verified"]);
+    expect(result).toMatchObject({
+      verifiedCount: 1,
+      rawCandidateCount: 3,
+      broaderCandidateCount: 2,
+      missingVerificationCount: 1,
+      rejectedKeywordOnlyCount: 1,
+    });
+  });
+
+  it("shows sparse provider candidates only in explicitly broader results", async () => {
+    const result = await applySearchV2PostFilter({}, rawResult, {
+      queryIntent: intent,
+      scope: "broader",
+      displayDomain: "nykaa.com",
+      identityAliases: [],
+    });
+
+    expect(result.ads.map((item) => item.metaAdId)).toEqual(["verified", "keyword", "sparse"]);
+    expect(result.ads.find((item) => item.metaAdId === "sparse")?.domainMatch).toMatchObject({
+      level: "unverified_provider_candidate",
+      reason: expect.stringContaining("website connection not verified"),
+    });
+    expect(result.verifiedCount).toBe(1);
+    expect(result.broaderCandidateCount).toBe(2);
   });
 });
 

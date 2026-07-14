@@ -4,9 +4,11 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useLocation,
   useRouteLoaderData,
 } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useEffect, useRef } from "react";
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
@@ -14,6 +16,7 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { DashboardShell } from "~/components/dashboard-shell";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
+import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
 import {
   applyWebsiteSearchFallback,
   competitorTrackingLabel,
@@ -98,6 +101,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       inputError: competitorWebsite.error,
       searchScope: "exact" as const,
       displayDomain: null,
+      relevanceApplied: false,
       ...navFlags,
     };
   }
@@ -116,6 +120,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       inputError: null,
       searchScope: "exact" as const,
       displayDomain: null,
+      relevanceApplied: false,
       ...navFlags,
     };
   }
@@ -179,15 +184,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       inputError: null,
       searchScope: "exact" as const,
       displayDomain: null,
+      relevanceApplied: false,
       ...navFlags,
     };
   }
 
   const { executeSearchWithRelevance } = await import("~/lib/search-execution.server");
-  const { shouldApplySearchV2 } = await import("~/lib/search-rollout.server");
+  const { shouldApplySearchV2, shouldRunSearchV2Shadow } = await import("~/lib/search-rollout.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
 
-  const useSearchV2 = shouldApplySearchV2(env) && Boolean(competitorWebsite.raw);
+  const useSearchV2 =
+    Boolean(competitorWebsite.raw) &&
+    (shouldApplySearchV2(env) || shouldRunSearchV2Shadow(env));
   const searchExecution = useSearchV2
     ? await executeSearchWithRelevance({
         env,
@@ -197,6 +205,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         cursor: url.searchParams.get("after"),
         forceLive,
         customerMetaAdLibraryToken,
+        executionContext: context.cloudflare?.ctx,
       })
     : {
         result: await (
@@ -209,6 +218,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         query: normalizeSavedQuery(parsed.mode, parsed.filters),
         searchScope,
         displayDomain: competitorWebsite.host,
+        relevanceApplied: false,
       };
 
   const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
@@ -233,6 +243,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     trackingRole,
     searchScope: searchExecution.searchScope,
     displayDomain: searchExecution.displayDomain,
+    relevanceApplied: searchExecution.relevanceApplied,
     inputError: null,
     ...navFlags,
   };
@@ -380,22 +391,40 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Could not create this watchlist." };
     }
 
+    if (!workspace.isMember && !workspace.session.user.onboardedAt) {
+      const { completeUserOnboarding } = await import("~/lib/data.server");
+      await completeUserOnboarding(env, workspace.session.user.id);
+    }
+
     throw redirect(`/app/watchlists?watchlist=${watchlist.id}`);
   }
 
   if (intent === "save-to-collection") {
     const collectionId = String(formData.get("collectionId") ?? "");
-    const adJson = String(formData.get("adJson") ?? "");
+    const adId = String(formData.get("adId") ?? "").trim();
     const tags = String(formData.get("tags") ?? "")
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    if (!collectionId || !adJson) {
+    if (!collectionId || !adId) {
       return { ok: false, message: "Choose a collection and ad before saving." };
     }
 
-    const ad = JSON.parse(adJson) as AdRecord;
+    const { listAdsByIds } = await import("~/lib/data.server");
+    const ad = (await listAdsByIds(env, [adId]))[0] ?? null;
+    if (!ad) {
+      return {
+        ok: false,
+        message: "That ad is no longer available to save. Select it again and retry.",
+      };
+    }
+    if (!isAdLibraryBackedAd(ad)) {
+      return {
+        ok: false,
+        message: "That result is not public Meta Ad Library evidence. Select a live ad result and retry.",
+      };
+    }
     await addAdToCollection(
       env,
       workspaceUserId,
@@ -414,6 +443,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function SearchRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const location = useLocation();
+  const selectedProofRef = useRef<HTMLElement>(null);
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const creativeTextField = data.selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
@@ -427,7 +458,10 @@ export default function SearchRoute() {
     competitorWebsite.raw,
     trackingRole,
   );
-  const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(`/search?${currentSearchParams.toString()}`)}`;
+  const postSignupPath = competitorWebsite.raw
+    ? `/app/onboard?website=${encodeURIComponent(competitorWebsite.raw)}`
+    : `/search?${currentSearchParams.toString()}`;
+  const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
   const inferredWatchlistName = (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
   const canTrackCurrentCompetitor = Boolean(data.filters.query || competitorWebsite.normalizedUrl) && !data.inputError;
   const discoverySummary = formatDiscoverySummary(data.result);
@@ -436,6 +470,7 @@ export default function SearchRoute() {
   const displayDomain = data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(displayDomain && competitorWebsite.normalizedUrl);
   const isBroaderScope = data.searchScope === "broader";
+  const scopedSearchParams = withSearchScope(currentSearchParams, isBroaderScope ? "broader" : "exact");
   const broaderSearchParams = withTrackingContext(
     buildSearchParams({
       mode: data.mode,
@@ -449,10 +484,16 @@ export default function SearchRoute() {
     ? buildSearchAnswer({
       result: data.result,
       displayDomain,
-      isDomainSearch,
+      isDomainSearch: isDomainSearch && data.relevanceApplied,
       isBroaderScope,
     })
     : null;
+
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has("selected")) {
+      selectedProofRef.current?.focus();
+    }
+  }, [location.search]);
 
   return (
     <DashboardShell
@@ -499,7 +540,9 @@ export default function SearchRoute() {
                   type="text"
                 />
               </label>
-              <div className="f9-search-refine" role="group" aria-label="Search filters">
+              <details className="f9-search-refine-disclosure" open={!hasSearchQuery}>
+                <summary>Refine search</summary>
+                <div className="f9-search-refine" role="group" aria-label="Search filters">
                 <label className="f9-search-field">
                   <span>Country</span>
                   <select defaultValue={data.filters.country} name="country">
@@ -538,7 +581,8 @@ export default function SearchRoute() {
                     <option value="inactive">Inactive</option>
                   </select>
                 </label>
-              </div>
+                </div>
+              </details>
               <div className="f9-search-actions">
                 <SubmitButton className="f9-primary-button" getAction="/search" pendingLabel="Searching…">
                   See ads
@@ -598,7 +642,11 @@ export default function SearchRoute() {
       <section className="f9-search-workspace">
         <div className="f9-container">
           {actionData?.message ? (
-            <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
+            <div
+              aria-live={actionData.ok ? "polite" : "assertive"}
+              className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+              role={actionData.ok ? "status" : "alert"}
+            >
               <p>
                 {actionData.message}
                 {"error" in actionData && actionData.error === "plan_limit_exceeded" ? (
@@ -612,7 +660,7 @@ export default function SearchRoute() {
           ) : null}
 
           {data.inputError ? (
-            <div className="f9-message is-error">
+            <div aria-live="assertive" className="f9-message is-error" role="alert">
               <p>{data.inputError}</p>
             </div>
           ) : null}
@@ -620,6 +668,44 @@ export default function SearchRoute() {
           {hasSearchQuery ? (
             <>
           <div className="f9-search-grid">
+            {data.selectedAd ? (
+              <section
+                aria-labelledby="selected-proof-title"
+                className="f9-proof-summary"
+                id="selected-proof"
+                ref={selectedProofRef}
+                tabIndex={-1}
+              >
+                <div className="f9-panel-head">
+                  <div>
+                    <span>Selected proof</span>
+                    <h2 id="selected-proof-title">{formatAdvertiserLabel(data.selectedAd.advertiser)}</h2>
+                    <AdLongevityPill ad={data.selectedAd} />
+                  </div>
+                  <em className={data.selectedAd.active ? "is-active" : ""}>
+                    {data.selectedAd.active ? "Active" : "Inactive"}
+                  </em>
+                </div>
+                <p className="f9-proof-provenance">
+                  <strong>{formatSearchSourceLabel(data.result)}</strong>
+                  <span>{formatSearchFreshnessLabel(data.result)}</span>
+                  <span>{formatProofCaptureLabel(data.selectedAd)}</span>
+                </p>
+                <div className="f9-detail-hero">
+                  <div className="f9-ad-thumb-row">
+                    <AdThumb ad={data.selectedAd} />
+                    <div>
+                      <h3>{data.selectedAd.previewHeadline}</h3>
+                      <p>{formatAdDetailBody(data.selectedAd)}</p>
+                    </div>
+                  </div>
+                </div>
+                {data.selectedAd.domainMatch?.reason ? <p>{data.selectedAd.domainMatch.reason}</p> : null}
+                <Link className="f9-secondary-button" to="#selected-proof-detail">
+                  Review full evidence
+                </Link>
+              </section>
+            ) : null}
             <section
               className="f9-results-panel"
               data-f9-result-cache-status={data.result.cacheStatus ?? undefined}
@@ -634,10 +720,13 @@ export default function SearchRoute() {
                       displayDomain,
                       isDomainSearch,
                       isBroaderScope,
+                      relevanceApplied: data.relevanceApplied,
                     })}
                   </h2>
-                  {isDomainSearch && !isBroaderScope ? (
+                  {isDomainSearch && data.relevanceApplied && !isBroaderScope ? (
                     <small>{`Verified ads linked to ${displayDomain}`}</small>
+                  ) : isDomainSearch && !isBroaderScope ? (
+                    <small>Legacy source results; website connection is not yet verified.</small>
                   ) : null}
                   {isDomainSearch && isBroaderScope ? (
                     <small>{`Broader matches related to ${displayDomain}`}</small>
@@ -647,14 +736,7 @@ export default function SearchRoute() {
                   <Link
                     className="f9-secondary-button"
                     to={`/search?${appendCursor(
-                      withTrackingContext(
-                        buildSearchParams({
-                          mode: data.mode,
-                          filters: data.filters,
-                        }),
-                        competitorWebsite.raw,
-                        trackingRole,
-                      ),
+                      scopedSearchParams,
                       data.result.nextCursor,
                       data.selectedAd?.metaAdId ?? null,
                     ).toString()}`}
@@ -665,6 +747,24 @@ export default function SearchRoute() {
               </div>
 
               {searchAnswer ? <SearchAnswerPanel answer={searchAnswer} /> : null}
+
+              {!data.session ? (
+                <div className="f9-search-signup-cta">
+                  <div>
+                    <strong>
+                      {data.result.ads.length > 0
+                        ? "Keep this competitor under watch"
+                        : "Keep checking this competitor"}
+                    </strong>
+                    <p>
+                      Create an account to confirm this website and queue its first evidence scan.
+                    </p>
+                  </div>
+                  <Link className="f9-primary-button" to={signupTrackingPath}>
+                    Create account
+                  </Link>
+                </div>
+              ) : null}
 
               {discoverySummary && data.result.ads.length > 0 ? (
                 <div className="f9-discovery-banner">
@@ -679,16 +779,9 @@ export default function SearchRoute() {
                       className={`f9-result-card ${data.selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
                       key={ad.metaAdId}
                       to={`/search?${withSelected(
-                        withTrackingContext(
-                          buildSearchParams({
-                            mode: data.mode,
-                            filters: data.filters,
-                          }),
-                          competitorWebsite.raw,
-                          trackingRole,
-                        ),
+                        scopedSearchParams,
                         ad.metaAdId,
-                      ).toString()}`}
+                      ).toString()}#selected-proof`}
                     >
                       <AdThumb ad={ad} />
                       <div className="f9-result-card-body">
@@ -713,10 +806,11 @@ export default function SearchRoute() {
                         displayDomain,
                         isDomainSearch,
                         isBroaderScope,
+                        relevanceApplied: data.relevanceApplied,
                       })}
                     </h3>
                     <p>
-                      {isDomainSearch && !isBroaderScope
+                      {isDomainSearch && data.relevanceApplied && !isBroaderScope
                         ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
                         : discoverySummary ?? "Try another competitor website."}
                     </p>
@@ -753,7 +847,7 @@ export default function SearchRoute() {
               </div>
             </section>
 
-            <aside className="f9-proof-detail">
+            <aside className="f9-proof-detail" id="selected-proof-detail" tabIndex={-1}>
               {data.selectedAd ? (
                 <>
                   <div className="f9-panel-head">
@@ -766,6 +860,12 @@ export default function SearchRoute() {
                       {data.selectedAd.active ? "Active" : "Inactive"}
                     </em>
                   </div>
+
+                  <p className="f9-proof-provenance">
+                    <strong>{formatSearchSourceLabel(data.result)}</strong>
+                    <span>{formatSearchFreshnessLabel(data.result)}</span>
+                    <span>{formatProofCaptureLabel(data.selectedAd)}</span>
+                  </p>
 
                   <div className="f9-detail-hero">
                     <div className="f9-ad-thumb-row">
@@ -834,7 +934,7 @@ export default function SearchRoute() {
                   {data.session && data.collections.length > 0 ? (
                     <Form className="f9-save-stack" method="post">
                       <input name="intent" type="hidden" value="save-to-collection" />
-                      <input name="adJson" type="hidden" value={JSON.stringify(data.selectedAd)} />
+                      <input name="adId" type="hidden" value={data.selectedAd.metaAdId} />
                       <label className="f9-field">
                         <span>Collection</span>
                         <select name="collectionId" required>
@@ -864,7 +964,17 @@ export default function SearchRoute() {
                         Open collections
                       </Link>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="f9-side-note">
+                      <p>
+                        Public preview shows source evidence only. Create an account to confirm this website and
+                        queue its first evidence scan.
+                      </p>
+                      <Link className="f9-primary-button" to={signupTrackingPath}>
+                        Create account to track this competitor
+                      </Link>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="f9-empty-state">
@@ -892,6 +1002,42 @@ function buildIdleSearchResult(): SearchResponse {
     discoverySummary: null,
     discoveryFailureClass: null,
   };
+}
+
+function formatSearchSourceLabel(result: SearchResponse) {
+  if (result.provider === "meta_library_browser" || result.source === "meta_library_browser") {
+    return "Source: Meta Ad Library visual check";
+  }
+  if (result.provider === "meta_api" || result.source === "meta_api") {
+    return "Source: Meta Ad Library API";
+  }
+  if (result.source === "demo") {
+    return "Source: sample data";
+  }
+  return "Source: search result";
+}
+
+function formatSearchFreshnessLabel(result: SearchResponse) {
+  if (result.discoveryStatus === "degraded") return "Fresh check delayed";
+  if (result.cacheStatus === "hit") return "Recent cached result";
+  if (result.cacheStatus === "stale") return "Older cached result";
+  if (result.cacheStatus === "miss") return "Fresh result";
+  return "Freshness unavailable";
+}
+
+function formatProofCaptureLabel(ad: AdRecord) {
+  if (ad.landingPage?.capturedAt) {
+    const capturedAt = new Date(ad.landingPage.capturedAt);
+    if (!Number.isNaN(capturedAt.getTime())) {
+      return `Landing page checked ${capturedAt.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })}`;
+    }
+  }
+  return ad.landingPageUrl
+    ? "Landing page not captured yet"
+    : "No landing-page destination available";
 }
 
 function SearchStateFields({
@@ -1050,7 +1196,12 @@ export function formatDiscoverySummary(result: SearchResponse) {
 
 function formatEmptyResultHeadline(
   result: SearchResponse,
-  context: { displayDomain?: string | null; isDomainSearch?: boolean; isBroaderScope?: boolean } = {},
+  context: {
+    displayDomain?: string | null;
+    isDomainSearch?: boolean;
+    isBroaderScope?: boolean;
+    relevanceApplied?: boolean;
+  } = {},
 ) {
   if (result.discoveryStatus === "disabled") {
     return "Enter a competitor website";
@@ -1064,24 +1215,43 @@ function formatEmptyResultHeadline(
     return "Live search is temporarily unavailable";
   }
 
-  if (context.isDomainSearch && context.displayDomain && !context.isBroaderScope) {
+  if (
+    context.relevanceApplied &&
+    context.isDomainSearch &&
+    context.displayDomain &&
+    !context.isBroaderScope
+  ) {
     return `No verified ads found for ${context.displayDomain}`;
   }
 
   return "No ads found for this competitor";
 }
 
-function formatResultsPanelTitle(
+export function formatResultsPanelTitle(
   result: SearchResponse,
-  context: { displayDomain?: string | null; isDomainSearch?: boolean; isBroaderScope?: boolean } = {},
+  context: {
+    displayDomain?: string | null;
+    isDomainSearch?: boolean;
+    isBroaderScope?: boolean;
+    relevanceApplied?: boolean;
+  } = {},
 ) {
   if (result.ads.length > 0) {
-    if (context.isDomainSearch && context.displayDomain && !context.isBroaderScope) {
+    if (
+      context.relevanceApplied &&
+      context.isDomainSearch &&
+      context.displayDomain &&
+      !context.isBroaderScope
+    ) {
       return `${result.ads.length} verified ads linked to ${context.displayDomain}`;
     }
 
     if (context.isBroaderScope && context.displayDomain) {
-      return `${result.ads.length} broader matches for ${context.displayDomain}`;
+      const verifiedCount = Math.max(0, Math.floor(result.verifiedCount ?? 0));
+      const relatedCount = Math.max(0, result.ads.length - verifiedCount);
+      return verifiedCount > 0
+        ? `${verifiedCount} verified and ${relatedCount} related matches for ${context.displayDomain}`
+        : `${result.ads.length} broader matches for ${context.displayDomain}`;
     }
 
     return `${result.ads.length} ads found`;
@@ -1091,7 +1261,12 @@ function formatResultsPanelTitle(
     return "Search in progress";
   }
 
-  if (context.isDomainSearch && context.displayDomain && !context.isBroaderScope) {
+  if (
+    context.relevanceApplied &&
+    context.isDomainSearch &&
+    context.displayDomain &&
+    !context.isBroaderScope
+  ) {
     return `No verified ads for ${context.displayDomain}`;
   }
 
@@ -1115,6 +1290,13 @@ function withSelected(params: URLSearchParams, selected: string | null) {
   if (selected) {
     next.set("selected", selected);
   }
+  return next;
+}
+
+export function withSearchScope(params: URLSearchParams, scope: "exact" | "broader") {
+  const next = new URLSearchParams(params);
+  if (scope === "broader") next.set("broader", "1");
+  else next.delete("broader");
   return next;
 }
 

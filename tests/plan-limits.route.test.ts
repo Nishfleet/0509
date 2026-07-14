@@ -471,6 +471,7 @@ describe("pricing CTA rendering", () => {
           React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
         useActionData: vi.fn().mockReturnValue(overrides.actionData),
         useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
+        useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: "", hash: "", state: null, key: "test" }),
         useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
         useRouteLoaderData: vi.fn().mockReturnValue(overrides.rootData),
         useSearchParams: vi.fn().mockReturnValue([new URLSearchParams(), vi.fn()]),

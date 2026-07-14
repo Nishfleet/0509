@@ -24,7 +24,9 @@ export interface SearchV2Result extends SearchResponse {
   searchScope: SearchScope;
   displayDomain: string | null;
   verifiedCount: number;
+  rawCandidateCount: number;
   broaderCandidateCount: number;
+  missingVerificationCount: number;
   rejectedKeywordOnlyCount: number;
   matchedAds: DomainMatchedAd[];
 }
@@ -34,7 +36,14 @@ export function buildDomainProviderQuery(intent: ParsedSearchQuery) {
     return null;
   }
 
-  return intent.registrableDomain ?? intent.comparableHostname ?? intent.originalInput;
+  // Meta Ad Library cannot search by destination domain. Query with the
+  // brand-sized term that can discover candidates, then verify the website
+  // connection below. Exact vs broader is a proof policy, not a provider
+  // search mode.
+  return buildBroaderProviderQuery(intent) ??
+    intent.registrableDomain ??
+    intent.comparableHostname ??
+    intent.originalInput;
 }
 
 export function buildBroaderProviderQuery(intent: ParsedSearchQuery) {
@@ -43,7 +52,11 @@ export function buildBroaderProviderQuery(intent: ParsedSearchQuery) {
   }
 
   const label = intent.registrableDomain.split(".")[0] ?? "";
-  return label.replace(/^www\./, "").trim() || null;
+  return label
+    .replace(/^www\./, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || null;
 }
 
 export function buildSearchV2SavedQuery(
@@ -53,9 +66,7 @@ export function buildSearchV2SavedQuery(
 ): NormalizedSavedQuery {
   const providerTerm =
     intent.intent === "domain"
-      ? scope === "broader"
-        ? buildBroaderProviderQuery(intent) ?? intent.registrableDomain ?? intent.originalInput
-        : buildDomainProviderQuery(intent) ?? intent.originalInput
+      ? buildDomainProviderQuery(intent) ?? intent.originalInput
       : intent.normalizedText ?? intent.originalInput;
 
   return {
@@ -76,6 +87,7 @@ export async function applySearchV2PostFilter(
 
   const includeUnverified = context.scope === "broader";
   const aliases = [...context.identityAliases];
+  const rawCandidateCount = result.ads.length;
 
   const allClassified = classifyDomainMatches(result.ads, context.queryIntent, {
     aliases,
@@ -91,7 +103,29 @@ export async function applySearchV2PostFilter(
     identityAliases: context.identityAliases,
     includeUnverified,
   });
-  const ranked = dedupeDomainMatches(rankDomainMatches(scopedMatches));
+  const matchedIds = new Set(scopedMatches.map((entry) => entry.ad.metaAdId));
+  const providerLabel = result.source === "demo" ? "sample source" : "Meta source";
+  const providerCandidates: DomainMatchedAd[] = includeUnverified
+    ? result.ads
+        .filter((ad) => !matchedIds.has(ad.metaAdId))
+        .map((ad) => ({
+          ad,
+          match: {
+            level: "unverified_provider_candidate" as const,
+            matchedDomain: null,
+            matchedSignal: "provider_query",
+            confidenceCategory: "unverified" as const,
+            providerSource: ad.source,
+            customerReason: `Returned for “${buildBroaderProviderQuery(context.queryIntent) ?? context.displayDomain}” by the ${providerLabel}; website connection not verified`,
+          },
+        }))
+    : [];
+  const ranked = dedupeDomainMatches(rankDomainMatches([...scopedMatches, ...providerCandidates]));
+  const verifiedCount = ranked.filter((entry) => entry.match.confidenceCategory === "verified").length;
+  const broaderCandidateCount = Math.max(0, rawCandidateCount - verifiedCount);
+  const missingVerificationCount = allClassified.length >= rawCandidateCount
+    ? 0
+    : rawCandidateCount - allClassified.length;
   const ads = ranked.map((entry) => ({
     ...entry.ad,
     domainMatch: {
@@ -108,10 +142,10 @@ export async function applySearchV2PostFilter(
     searchIntent: context.queryIntent.intent,
     searchScope: context.scope,
     displayDomain: context.displayDomain,
-    verifiedCount: ranked.filter((entry) => entry.match.confidenceCategory === "verified").length,
-    broaderCandidateCount: includeUnverified
-      ? ranked.filter((entry) => entry.match.level === "unverified_text_candidate").length
-      : rejectedKeywordOnlyCount,
+    verifiedCount,
+    rawCandidateCount,
+    broaderCandidateCount,
+    missingVerificationCount,
     rejectedKeywordOnlyCount,
     discoveryEmptyReason: ads.length === 0 ? "no_results" : result.discoveryEmptyReason,
   };

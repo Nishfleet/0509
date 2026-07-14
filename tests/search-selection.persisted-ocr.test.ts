@@ -107,6 +107,7 @@ describe("search selection persisted OCR reuse", () => {
 
     vi.doMock("~/lib/data.server", () => ({
       hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([hydratedAd]),
+      listAdsByIds: vi.fn().mockResolvedValue([hydratedAd]),
       upsertAd: vi.fn().mockResolvedValue(undefined),
     }));
     vi.doMock("~/lib/creative-text.server", async (importOriginal) => {

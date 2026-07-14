@@ -451,6 +451,31 @@ export default function MarketingRoute() {
               Your sales team would&rsquo;ve walked in blind. Five to Nine catches the change,
               saves the screenshots, and files the brief — <b>before your alarm goes off.</b>
             </p>
+
+            <Form className="ld-command" method="get" action="/search" aria-label="Free live search">
+              <input
+                aria-label="Competitor website"
+                name="website"
+                placeholder="paste-their-website.com…"
+                type="text"
+                inputMode="url"
+                autoComplete="url"
+                spellCheck={false}
+              />
+              <button type="submit">
+                See their live ads <span aria-hidden="true">→</span>
+              </button>
+            </Form>
+
+            <div className="f9-hero-proof-actions" aria-label="Sample brief before signup">
+              <Link to={publicSearchTrialPath}>Try with Nykaa</Link>
+              <a href="#demo">Review sample brief</a>
+            </div>
+
+            <p className="ld-honest" role="note">
+              <strong>No account needed.</strong> Search one competitor now. We label verified,
+              related, cached, and sample evidence separately.
+            </p>
           </div>
 
           <div className="ld-hero-side">
@@ -527,31 +552,6 @@ export default function MarketingRoute() {
           </div>
         </div>
 
-        <Form className="ld-command" method="get" action="/search" aria-label="Free live search">
-          <input
-            aria-label="Competitor website"
-            name="website"
-            placeholder="paste-their-website.com…"
-            type="text"
-            inputMode="url"
-            autoComplete="url"
-            spellCheck={false}
-          />
-          <button type="submit">
-            Catch them in the act <span aria-hidden="true">→</span>
-          </button>
-        </Form>
-
-        <div className="f9-hero-proof-actions" aria-label="Sample brief before signup">
-          <Link to={publicSearchTrialPath}>Try live search</Link>
-          <a href="#demo">Review sample brief</a>
-        </div>
-
-        <p className="ld-honest" role="note">
-          <strong>Built for the morning meeting.</strong> Try a live search now, then wake up to the
-          brief your team can act on. If something is fresh, recent, or only a sample, we say so
-          plainly. Why &ldquo;0509&rdquo;? Five to Nine — we work while you sleep.
-        </p>
       </section>
 
       <section className="ld-proof" id="demo">
