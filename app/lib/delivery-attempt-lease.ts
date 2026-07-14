@@ -7,20 +7,20 @@ import type { DeliveryAttemptRecord } from "~/lib/types";
 export const DELIVERY_PRE_DISPATCH_LEASE_MS = 60_000;
 
 export function deliveryPreDispatchStaleBefore(referenceTimeMs = Date.now()) {
-  return new Date(referenceTimeMs - DELIVERY_PRE_DISPATCH_LEASE_MS).toISOString();
+	return new Date(referenceTimeMs - DELIVERY_PRE_DISPATCH_LEASE_MS).toISOString();
 }
 
 export function isStalePreDispatchAttempt(
-  attempt: Pick<DeliveryAttemptRecord, "status" | "webhookStatus" | "updatedAt">,
-  referenceTimeMs = Date.now(),
+	attempt: Pick<DeliveryAttemptRecord, "status" | "webhookStatus" | "updatedAt">,
+	referenceTimeMs = Date.now(),
 ) {
-  if (attempt.status !== "pending" || attempt.webhookStatus !== "pending") {
-    return false;
-  }
+	if (attempt.status !== "pending" || attempt.webhookStatus !== "pending") {
+		return false;
+	}
 
-  const updatedAtMs = Date.parse(attempt.updatedAt);
-  return (
-    Number.isFinite(updatedAtMs) &&
-    updatedAtMs <= referenceTimeMs - DELIVERY_PRE_DISPATCH_LEASE_MS
-  );
+	const updatedAtMs = Date.parse(attempt.updatedAt);
+	return (
+		Number.isFinite(updatedAtMs) &&
+		updatedAtMs <= referenceTimeMs - DELIVERY_PRE_DISPATCH_LEASE_MS
+	);
 }

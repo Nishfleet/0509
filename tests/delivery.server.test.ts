@@ -2529,7 +2529,7 @@ describe("billing lifecycle emails", () => {
     }, attemptOverrides);
   }
 
-  function mutationRecoveryAttempt(id: string, templateName: string, status: string, subscriptionId: string | undefined = "subscription-current", stateUpdatedAt: string | undefined = scheduledWatermark) {
+  function mutationRecoveryAttempt(id: string, templateName: string, status: string, subscriptionId: string | null | undefined = "subscription-current", stateUpdatedAt: string | undefined = scheduledWatermark) {
     return recoveryAttempt(id, templateName, {
       billingMutationStatus: status,
       billingMutationSubscriptionId: subscriptionId,
@@ -2537,6 +2537,12 @@ describe("billing lifecycle emails", () => {
       billingStateFingerprint: null,
       outboxPendingDispatch: true,
     });
+  }
+
+  function paymentRecoveryAttempt(id: string, paymentId = "payment-current", stateUpdatedAt = scheduledWatermark) {
+    const attempt = mutationRecoveryAttempt(id, "billing_payment_issue", "payment.failed", null, stateUpdatedAt);
+    attempt.payloadSnapshot.billingMutationPaymentId = paymentId;
+    return attempt;
   }
 
   function useRecoveryClock(at = "2026-07-13T09:05:00.000Z") {
@@ -2961,6 +2967,20 @@ describe("billing lifecycle emails", () => {
 
     expect(sendMock).not.toHaveBeenCalled();
     expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["exact payment", "payment-current", scheduledWatermark, true],
+    ["newer payment", "payment-new", scheduledWatermark, false],
+    ["newer watermark", "payment-current", "2026-07-14T09:00:00.000Z", false],
+  ])("matches direct no-subscription payment.failed by %s", async (_label, currentPayment, currentAt, expected) => {
+    const sendMock = mockEmailSend("msg_payment_identity");
+    const mocks = mockBillingDataServer({ getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+      ...paymentIssueBillingInfo, dodoSubscriptionId: null, dodoPaymentId: currentPayment, planUpdatedAt: currentAt,
+    }) });
+    await expect(sendPaymentIssue({ subscriptionId: null, paymentId: "payment-current" })).resolves.toBe(expected);
+    expect(sendMock).toHaveBeenCalledTimes(expected ? 1 : 0);
+    expect(mocks.createDeliveryAttempt).toHaveBeenCalledTimes(expected ? 1 : 0);
   });
 
   it.each([
@@ -3417,6 +3437,22 @@ describe("billing lifecycle emails", () => {
 
     await expect(recoverBilling()).resolves.toMatchObject({ sent: 0, superseded: 1 });
     expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["exact payment", "payment-current", scheduledWatermark, 1],
+    ["newer payment", "payment-new", scheduledWatermark, 0],
+    ["newer watermark", "payment-current", "2026-07-14T09:00:00.000Z", 0],
+  ])("matches recovered no-subscription payment.failed by %s", async (_label, currentPayment, currentAt, sent) => {
+    useRecoveryClock();
+    const sendMock = mockEmailSend("msg_recovered_payment_identity");
+    mockRecoveryAttempt(paymentRecoveryAttempt("attempt-payment-a"), {
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...paymentIssueBillingInfo, dodoSubscriptionId: null, dodoPaymentId: currentPayment, planUpdatedAt: currentAt,
+      }),
+    });
+    await expect(recoverBilling()).resolves.toMatchObject({ sent, superseded: sent ? 0 : 1 });
+    expect(sendMock).toHaveBeenCalledTimes(sent);
   });
 
   it("recovers a scheduled-cancellation outbox only for its matching future state", async () => {

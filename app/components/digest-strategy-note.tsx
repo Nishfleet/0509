@@ -7,30 +7,30 @@ import { readDigestStrategyNote } from "~/lib/digest-strategy";
  * nothing at all when no paragraph was persisted — absence is silent.
  */
 export function DigestStrategyNote({
-  summary,
+	summary,
 }: {
-  summary?: Record<string, unknown> | null;
+	summary?: Record<string, unknown> | null;
 }) {
-  const note = readDigestStrategyNote(summary);
-  if (!note) {
-    return null;
-  }
+	const note = readDigestStrategyNote(summary);
+	if (!note) {
+		return null;
+	}
 
-  return (
-    <section aria-label="AI summary of the week" className="f9-proof-packet">
-      <div>
-        <span className="f9-app-kicker">AI summary of the week</span>
-        <h3>What competitors did this week</h3>
-        <p className="f9-muted-copy">
-          Written by AI from the changes logged in this digest. Check the items below before acting.
-          {note.generatedAt ? (
-            <>
-              {" "}Generated <LocalTime iso={note.generatedAt} />.
-            </>
-          ) : null}
-        </p>
-      </div>
-      <p>{note.paragraph}</p>
-    </section>
-  );
+	return (
+		<section aria-label="AI summary of the week" className="f9-proof-packet">
+			<div>
+				<span className="f9-app-kicker">AI summary of the week</span>
+				<h3>What competitors did this week</h3>
+				<p className="f9-muted-copy">
+					Written by AI from the changes logged in this digest. Check the items below before acting.
+					{note.generatedAt ? (
+						<>
+							{" "}Generated <LocalTime iso={note.generatedAt} />.
+						</>
+					) : null}
+				</p>
+			</div>
+			<p>{note.paragraph}</p>
+		</section>
+	);
 }
