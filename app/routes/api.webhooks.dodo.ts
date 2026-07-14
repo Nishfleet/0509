@@ -573,18 +573,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
       const matchesRefundRetry =
         lifecycleEmailRetry?.kind === "refund" &&
         lifecycleEmailRetry.userId === refundedUserId;
+      const expectedRefundStateUpdatedAt = refundApplied?.stateUpdatedAt ?? null;
       const currentRefundState =
-        matchesRefundRetry && refundedUserId && refundApplied?.changed !== true
+        refundedUserId &&
+        expectedRefundStateUpdatedAt &&
+        (refundApplied?.changed === true || matchesRefundRetry)
           ? await getUserPlanBillingInfo(env, refundedUserId)
           : null;
-      const shouldRetryRefundEmail =
+      const refundStateMatches =
         currentRefundState?.plan === "free" &&
         currentRefundState.dodoStatus === "refunded" &&
         currentRefundState.dodoPaymentId === refund.paymentId &&
-        sameBillingInstant(currentRefundState.planUpdatedAt, refund.refundedAt);
+        sameBillingInstant(currentRefundState.planUpdatedAt, expectedRefundStateUpdatedAt);
       if (
         refundedUserId &&
-        (refundApplied?.changed === true || shouldRetryRefundEmail)
+        refundStateMatches &&
+        (refundApplied?.changed === true || matchesRefundRetry)
       ) {
         await sendBillingLifecycleEmailSafely("refund", refundedUserId, (delivery, profile) =>
           delivery.sendBillingRefundEmail(env, {
@@ -592,6 +596,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
             email: profile.email,
             name: profile.name,
             eventId,
+            paymentId: refund.paymentId,
+            stateUpdatedAt: expectedRefundStateUpdatedAt,
             retryWebhookOnExplicitFailure: true,
           }),
         );
@@ -644,13 +650,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
-  // Freeze the lifecycle email BEFORE the mutation batch so its pending
-  // outbox row rides the same D1 transaction as the plan mutation + ledger
-  // finalize — a worker crash after the batch can no longer lose the email
-  // (the recovery sweep replays pending outbox rows; Dodo redelivery is
-  // already deduped by the finalized ledger). Best-effort: a failure here
-  // must never block the billing mutation itself — the post-batch send path
-  // simply falls back to creating its own attempt row.
   async function prepareLifecycleEmailOutbox(
     lifecycleUserId: string,
     build: (profile: { email: string; name: string | null }) => BillingLifecycleEmailOutboxInput,
@@ -661,7 +660,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         return undefined;
       }
       const delivery = await import("~/lib/delivery.server");
-      return delivery.prepareBillingLifecycleEmailOutbox(
+      return await delivery.prepareBillingLifecycleEmailOutbox(
         env,
         build({ email: profile.email, name: profile.name }),
       );
