@@ -1,6 +1,8 @@
 import { normalizeWorkspaceBrandLogo } from "~/lib/data/workspace-branding.server";
 
 export const WORKSPACE_BRAND_LOGO_MAX_BYTES = 48_000;
+export const WORKSPACE_BRAND_LOGO_MAX_MULTIPART_BYTES =
+  WORKSPACE_BRAND_LOGO_MAX_BYTES + 16_384;
 
 const MAX_LOGO_DIMENSION = 8_192;
 const MAX_LOGO_PIXELS = 16_777_216;

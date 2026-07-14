@@ -100,15 +100,21 @@ function mockBrandingAction(plan: "starter" | "agency" = "agency") {
   return upsertWorkspaceBranding;
 }
 
-async function submitBranding(formData: FormData) {
+async function submitAccountRequest(request: Request) {
   const { action } = await import("~/routes/app.account");
   return action({
     context: createContext(),
-    request: new Request("http://localhost/app/account", {
+    request,
+  } as never);
+}
+
+async function submitBranding(formData: FormData) {
+  return submitAccountRequest(
+    new Request("http://localhost/app/account", {
       method: "POST",
       body: formData,
     }),
-  } as never);
+  );
 }
 
 function brandingForm() {
@@ -132,6 +138,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/e2e-auth.server");
   vi.doUnmock("~/lib/email-verification.server");
+  vi.doUnmock("~/lib/plan-feature-gate.server");
   vi.doUnmock("~/lib/plan.server");
 });
 
@@ -180,6 +187,66 @@ describe("account agency logo action", () => {
       brandLogo: expectedDataUrl("image/png", PNG_WITH_ZERO_LENGTH_IDAT_BYTES),
     });
     expect(result).toMatchObject({ ok: true, intent: "save-report-branding" });
+  });
+
+  it("rejects metadata-declared oversized multipart before parsing or checking the plan", async () => {
+    const upsertWorkspaceBranding = mockBrandingAction();
+    const requireWorkspacePlanFeature = vi.fn();
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({ requireWorkspacePlanFeature }));
+    const request = new Request("http://localhost/app/account", {
+      method: "POST",
+      headers: {
+        "content-type": "multipart/form-data; boundary=oversized",
+        "content-length": "1000000",
+      },
+      body: "not parsed",
+    });
+    const parseFormData = vi
+      .spyOn(request, "formData")
+      .mockRejectedValue(new Error("oversized request must not reach formData"));
+
+    const result = await submitAccountRequest(request);
+
+    expect(result).toEqual({
+      ok: false,
+      intent: "save-report-branding",
+      error: "invalid_brand_logo",
+      message: "Logo must be 48 KB or smaller.",
+    });
+    expect(parseFormData).not.toHaveBeenCalled();
+    expect(requireWorkspacePlanFeature).not.toHaveBeenCalled();
+    expect(upsertWorkspaceBranding).not.toHaveBeenCalled();
+  });
+
+  it("streams and rejects oversized multipart when content-length is absent", async () => {
+    const upsertWorkspaceBranding = mockBrandingAction();
+    const requireWorkspacePlanFeature = vi.fn();
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({ requireWorkspacePlanFeature }));
+    const formData = brandingForm();
+    formData.set(
+      "brandLogo",
+      new File([new Uint8Array(100_000)], "oversized.png", { type: "image/png" }),
+    );
+    const request = new Request("http://localhost/app/account", {
+      method: "POST",
+      body: formData,
+    });
+    expect(request.headers.get("content-length")).toBeNull();
+    const parseFormData = vi
+      .spyOn(request, "formData")
+      .mockRejectedValue(new Error("unbounded request must not reach formData"));
+
+    const result = await submitAccountRequest(request);
+
+    expect(result).toEqual({
+      ok: false,
+      intent: "save-report-branding",
+      error: "invalid_brand_logo",
+      message: "Logo must be 48 KB or smaller.",
+    });
+    expect(parseFormData).not.toHaveBeenCalled();
+    expect(requireWorkspacePlanFeature).not.toHaveBeenCalled();
+    expect(upsertWorkspaceBranding).not.toHaveBeenCalled();
   });
 
   it.each([
