@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { updateDeliveryAttemptResult } from "~/lib/data.server";
+import {
+  claimInstantDeliveryAttempt,
+  markInstantDeliveryDispatchStarted,
+  updateDeliveryAttemptResult,
+} from "~/lib/data.server";
 import {
   DELIVERY_PRE_DISPATCH_LEASE_MS,
   isStalePreDispatchAttempt,
@@ -14,6 +18,216 @@ describe("delivery attempt retry claim (sqlite)", () => {
     while (fixtures.length > 0) {
       fixtures.pop()?.close();
     }
+  });
+
+  it("lets only one concurrent instant dispatch claim the same key", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    harness.sqlite.exec(`
+      CREATE TABLE delivery_attempt (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        watchlist_id TEXT,
+        digest_run_id TEXT,
+        delivery_target_id TEXT,
+        lane TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        status TEXT NOT NULL,
+        webhook_status TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        provider_message_id TEXT,
+        provider_status_last_seen_at TEXT,
+        template_name TEXT,
+        event_ids_json TEXT NOT NULL DEFAULT '[]',
+        payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+        idempotency_key TEXT UNIQUE,
+        error_message TEXT,
+        sent_at TEXT,
+        failed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    const input = {
+      userId: "user-1",
+      watchlistId: "watch-1",
+      deliveryTargetId: "target-1",
+      lane: "customer" as const,
+      channel: "email" as const,
+      provider: "cloudflare_email",
+      targetValue: "owner@example.com",
+      eventIds: ["event-1"],
+      payloadSnapshot: { kind: "instant_alert" },
+      idempotencyKey:
+        "instant:watch-1:customer:email:owner@example.com:batch-1:send",
+    };
+
+    const claims = await Promise.all([
+      claimInstantDeliveryAttempt({ DB: harness.db } as never, input),
+      claimInstantDeliveryAttempt({ DB: harness.db } as never, input),
+    ]);
+
+    expect(claims.filter((claim) => claim.attemptId !== null)).toHaveLength(1);
+    expect(
+      harness.sqlite
+        .prepare(
+          "SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?",
+        )
+        .get(input.idempotencyKey),
+    ).toMatchObject({ count: 1 });
+  });
+
+  it("marks one claim as dispatch-started and never reclaims that ambiguous state", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    harness.sqlite.exec(`
+      CREATE TABLE delivery_attempt (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        watchlist_id TEXT,
+        digest_run_id TEXT,
+        delivery_target_id TEXT,
+        lane TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        status TEXT NOT NULL,
+        webhook_status TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        provider_message_id TEXT,
+        provider_status_last_seen_at TEXT,
+        template_name TEXT,
+        event_ids_json TEXT NOT NULL DEFAULT '[]',
+        payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+        idempotency_key TEXT UNIQUE,
+        error_message TEXT,
+        sent_at TEXT,
+        failed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    const env = { DB: harness.db } as never;
+    const input = {
+      userId: "user-1",
+      watchlistId: "watch-1",
+      deliveryTargetId: "target-1",
+      lane: "customer" as const,
+      channel: "email" as const,
+      provider: "cloudflare_email",
+      targetValue: "owner@example.com",
+      eventIds: ["event-1"],
+      payloadSnapshot: { kind: "instant_alert" },
+      idempotencyKey: "instant:watch-1:customer:email:owner@example.com:batch-2:send",
+    };
+    const claim = await claimInstantDeliveryAttempt(env, input);
+
+    const starts = await Promise.all([
+      markInstantDeliveryDispatchStarted(env, claim.attemptId!, claim.claimUpdatedAt!),
+      markInstantDeliveryDispatchStarted(env, claim.attemptId!, claim.claimUpdatedAt!),
+    ]);
+
+    expect(starts.filter(Boolean)).toHaveLength(1);
+    expect(
+      harness.sqlite.prepare("SELECT status, webhook_status FROM delivery_attempt").get(),
+    ).toMatchObject({ status: "pending", webhook_status: "provider_unknown" });
+
+    harness.sqlite
+      .prepare("UPDATE delivery_attempt SET updated_at = ? WHERE id = ?")
+      .run("2020-01-01T00:00:00.000Z", claim.attemptId);
+    const retry = await claimInstantDeliveryAttempt(env, input);
+    expect(retry.attemptId).toBeNull();
+    expect(retry.duplicate?.webhookStatus).toBe("provider_unknown");
+  });
+
+  it("claims one failed retry, reclaims stale pending, and skips active pending", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    harness.sqlite.exec(`
+      CREATE TABLE delivery_attempt (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        watchlist_id TEXT,
+        digest_run_id TEXT,
+        delivery_target_id TEXT,
+        lane TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        status TEXT NOT NULL,
+        webhook_status TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        provider_message_id TEXT,
+        provider_status_last_seen_at TEXT,
+        template_name TEXT,
+        event_ids_json TEXT NOT NULL DEFAULT '[]',
+        payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+        idempotency_key TEXT UNIQUE,
+        error_message TEXT,
+        sent_at TEXT,
+        failed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    const claimInput = (idempotencyKey: string) => ({
+      userId: "user-1",
+      watchlistId: "watch-1",
+      deliveryTargetId: "target-1",
+      lane: "customer" as const,
+      channel: "email" as const,
+      provider: "cloudflare_email",
+      targetValue: "owner@example.com",
+      eventIds: ["event-1"],
+      payloadSnapshot: { kind: "instant_alert" },
+      idempotencyKey,
+    });
+    const now = new Date().toISOString();
+    harness.sqlite.exec(`
+      INSERT INTO delivery_attempt (
+        id, user_id, watchlist_id, delivery_target_id, lane, channel, provider,
+        status, webhook_status, target_value, idempotency_key, error_message,
+        failed_at, created_at, updated_at
+      ) VALUES
+        ('failed', 'user-1', 'watch-1', 'target-1', 'customer', 'email',
+         'cloudflare_email', 'failed', 'failed', 'owner@example.com',
+         'failed-key', 'smtp down', '${now}', '${now}', '${now}'),
+        ('stale', 'user-1', 'watch-1', 'target-1', 'customer', 'email',
+         'cloudflare_email', 'pending', 'pending', 'owner@example.com',
+         'stale-key', NULL, NULL, '2020-01-01T00:00:00.000Z', '2020-01-01T00:00:00.000Z'),
+        ('active', 'user-1', 'watch-1', 'target-1', 'customer', 'email',
+         'cloudflare_email', 'pending', 'pending', 'owner@example.com',
+         'active-key', NULL, NULL, '${now}', '${now}')
+    `);
+
+    const failedClaims = await Promise.all([
+      claimInstantDeliveryAttempt(
+        { DB: harness.db } as never,
+        claimInput("failed-key"),
+      ),
+      claimInstantDeliveryAttempt(
+        { DB: harness.db } as never,
+        claimInput("failed-key"),
+      ),
+    ]);
+    expect(
+      failedClaims.filter((claim) => claim.attemptId !== null),
+    ).toHaveLength(1);
+
+    const staleClaim = await claimInstantDeliveryAttempt(
+      { DB: harness.db } as never,
+      claimInput("stale-key"),
+    );
+    expect(staleClaim.attemptId).toBe("stale");
+    expect(staleClaim.reclaimed).toBe(true);
+
+    const activeClaim = await claimInstantDeliveryAttempt(
+      { DB: harness.db } as never,
+      claimInput("active-key"),
+    );
+    expect(activeClaim.attemptId).toBeNull();
+    expect(activeClaim.duplicate?.id).toBe("active");
   });
 
   it("allows only one failed-to-pending retry claim", async () => {
@@ -57,15 +271,25 @@ describe("delivery attempt retry claim (sqlite)", () => {
     };
 
     await expect(
-      updateDeliveryAttemptResult({ DB: harness.db } as never, "attempt-1", claim),
+      updateDeliveryAttemptResult(
+        { DB: harness.db } as never,
+        "attempt-1",
+        claim,
+      ),
     ).resolves.toBe(true);
     await expect(
-      updateDeliveryAttemptResult({ DB: harness.db } as never, "attempt-1", claim),
+      updateDeliveryAttemptResult(
+        { DB: harness.db } as never,
+        "attempt-1",
+        claim,
+      ),
     ).resolves.toBe(false);
 
     expect(
       harness.sqlite
-        .prepare("SELECT status, webhook_status, failed_at FROM delivery_attempt WHERE id = ?")
+        .prepare(
+          "SELECT status, webhook_status, failed_at FROM delivery_attempt WHERE id = ?",
+        )
         .get("attempt-1"),
     ).toMatchObject({
       status: "pending",
@@ -118,15 +342,25 @@ describe("delivery attempt retry claim (sqlite)", () => {
     };
 
     await expect(
-      updateDeliveryAttemptResult({ DB: harness.db } as never, "attempt-stale", claim),
+      updateDeliveryAttemptResult(
+        { DB: harness.db } as never,
+        "attempt-stale",
+        claim,
+      ),
     ).resolves.toBe(true);
     await expect(
-      updateDeliveryAttemptResult({ DB: harness.db } as never, "attempt-stale", claim),
+      updateDeliveryAttemptResult(
+        { DB: harness.db } as never,
+        "attempt-stale",
+        claim,
+      ),
     ).resolves.toBe(false);
 
     expect(
       harness.sqlite
-        .prepare("SELECT status, webhook_status, updated_at FROM delivery_attempt WHERE id = ?")
+        .prepare(
+          "SELECT status, webhook_status, updated_at FROM delivery_attempt WHERE id = ?",
+        )
         .get("attempt-stale"),
     ).toMatchObject({
       status: "pending",
@@ -151,14 +385,26 @@ describe("delivery pre-dispatch lease", () => {
   it("does not reclaim fresh, provider-unknown, terminal, or malformed attempts", () => {
     expect(
       isStalePreDispatchAttempt(
-        { ...attempt, updatedAt: new Date(now - DELIVERY_PRE_DISPATCH_LEASE_MS + 1).toISOString() },
+        {
+          ...attempt,
+          updatedAt: new Date(
+            now - DELIVERY_PRE_DISPATCH_LEASE_MS + 1,
+          ).toISOString(),
+        },
         now,
       ),
     ).toBe(false);
     expect(
-      isStalePreDispatchAttempt({ ...attempt, webhookStatus: "provider_unknown" }, now),
+      isStalePreDispatchAttempt(
+        { ...attempt, webhookStatus: "provider_unknown" },
+        now,
+      ),
     ).toBe(false);
-    expect(isStalePreDispatchAttempt({ ...attempt, status: "sent" }, now)).toBe(false);
-    expect(isStalePreDispatchAttempt({ ...attempt, updatedAt: "not-a-date" }, now)).toBe(false);
+    expect(isStalePreDispatchAttempt({ ...attempt, status: "sent" }, now)).toBe(
+      false,
+    );
+    expect(
+      isStalePreDispatchAttempt({ ...attempt, updatedAt: "not-a-date" }, now),
+    ).toBe(false);
   });
 });

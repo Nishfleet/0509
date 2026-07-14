@@ -199,6 +199,47 @@ describe("Slack delivery helpers", () => {
 });
 
 describe("sendSlackWebhookMessage", () => {
+  it("keeps transport-ambiguous Slack failures pending instead of retrying them", async () => {
+    const { sendSlackWebhookUrl } = await import("~/lib/slack-webhook.server");
+    const result = await sendSlackWebhookUrl(
+      fakeSlackWebhookUrl(),
+      { text: "Five to Nine alert" },
+      { fetchImpl: vi.fn().mockRejectedValue(new Error("connection reset after write")) },
+    );
+
+    expect(result).toMatchObject({
+      status: "pending",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+    });
+  });
+
+  it("keeps a successful Slack response pending when its body cannot be read", async () => {
+    const { sendSlackWebhookUrl } = await import("~/lib/slack-webhook.server");
+    const result = await sendSlackWebhookUrl(
+      fakeSlackWebhookUrl(),
+      { text: "Five to Nine alert" },
+      {
+        fetchImpl: vi.fn().mockResolvedValue(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new Error("response stream reset"));
+              },
+            }),
+            { status: 200 },
+          ),
+        ),
+      },
+    );
+
+    expect(result).toMatchObject({
+      status: "pending",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+    });
+  });
+
   it("posts JSON to the decrypted webhook URL and marks the send delivered", async () => {
     const { encryptCredential } = await import("~/lib/credential-crypto.server");
     const { sendSlackWebhookMessage } = await import("~/lib/slack-webhook.server");

@@ -26,10 +26,13 @@ export {
   listStaleBillingLifecycleEmailAttempts,
   listDeliveryAttempts,
   getDeliveryAttemptByIdempotencyKey,
+  claimInstantDeliveryAttempt,
+  markInstantDeliveryDispatchStarted,
   reconcileDeliveryAttemptByProviderMessageId,
   createDeliveryAttempt,
   updateDeliveryAttemptResult,
   buildBillingLifecycleOutboxStatement,
   type BillingLifecycleEmailOutboxSpec,
   type BillingLifecycleOutboxGate,
+  type InstantDeliveryAttemptClaimInput,
 } from "~/lib/data/delivery-records-attempts.server";

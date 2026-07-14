@@ -12,7 +12,7 @@ type FetchImpl = typeof fetch;
 
 export interface SlackWebhookSendResult {
   provider: typeof SLACK_PROVIDER;
-  status: "sent" | "failed";
+  status: "sent" | "failed" | "pending";
   webhookStatus: WebhookReconciliationStatus;
   providerMessageId: string | null;
   providerStatusLastSeenAt: string | null;
@@ -67,14 +67,25 @@ export async function sendSlackWebhookUrl(
       { fetcher: options.fetchImpl, timeoutMs: SLACK_WEBHOOK_TIMEOUT_MS },
     );
   } catch (error) {
-    return slackFailure(
+    return slackAmbiguousFailure(
       statusSeenAt,
       `Slack send failed: ${error instanceof Error ? error.message : "network error"}.`,
     );
   }
 
-  const responseText = await readResponseTextWithinLimit(response, SLACK_WEBHOOK_RESPONSE_MAX_BYTES)
-    .catch(() => null) ?? "";
+  let responseText: string;
+  try {
+    responseText =
+      (await readResponseTextWithinLimit(response, SLACK_WEBHOOK_RESPONSE_MAX_BYTES)) ?? "";
+  } catch {
+    if (response.ok) {
+      return slackAmbiguousFailure(
+        statusSeenAt,
+        "Slack accepted the request, but its response body could not be verified.",
+      );
+    }
+    responseText = "";
+  }
   if (!response.ok || responseText.trim().toLowerCase() !== "ok") {
     const error = (responseText.trim() || `Slack returned HTTP ${response.status}`).replace(/\.+$/, "");
     return slackFailure(statusSeenAt, `Slack send failed: ${error}.`);
@@ -88,6 +99,21 @@ export async function sendSlackWebhookUrl(
     providerStatusLastSeenAt: statusSeenAt,
     errorMessage: null,
     deliveredAt: statusSeenAt,
+  };
+}
+
+function slackAmbiguousFailure(
+  statusSeenAt: string,
+  errorMessage: string,
+): SlackWebhookSendResult {
+  return {
+    provider: SLACK_PROVIDER,
+    status: "pending",
+    webhookStatus: "provider_unknown",
+    providerMessageId: null,
+    providerStatusLastSeenAt: statusSeenAt,
+    errorMessage,
+    deliveredAt: null,
   };
 }
 
