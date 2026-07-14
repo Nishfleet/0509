@@ -7,756 +7,756 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const GOOD_PARAGRAPH =
-	"boAt refreshed the offer on its landing page, which was the only logged movement this week. " +
-	"Pricing and offer positioning is where the competitive pressure is concentrated right now.";
+"boAt refreshed the offer on its landing page, which was the only logged movement this week. " +
+"Pricing and offer positioning is where the competitive pressure is concentrated right now.";
 
 const STORED_PARAGRAPH =
-	"Stored paragraph from the original generation: boAt moved its landing page offer and nothing else changed across the watched competitors this week.";
+"Stored paragraph from the original generation: boAt moved its landing page offer and nothing else changed across the watched competitors this week.";
 
 function weeklyEvent() {
-	return {
-		id: "event-1",
-		eventType: "landing_page_offer_changed",
-		status: "confirmed",
-		importanceScore: 79,
-		proofCaptureId: "proof-1",
-		title: "Landing page offer changed",
-		summary: "Offer changed on the landing page.",
-		confirmedAt: "2026-07-12T05:00:00.000Z",
-		createdAt: "2026-07-12T05:00:00.000Z",
-		metadata: {},
-	};
+return {
+id: "event-1",
+eventType: "landing_page_offer_changed",
+status: "confirmed",
+importanceScore: 79,
+proofCaptureId: "proof-1",
+title: "Landing page offer changed",
+summary: "Offer changed on the landing page.",
+confirmedAt: "2026-07-12T05:00:00.000Z",
+createdAt: "2026-07-12T05:00:00.000Z",
+metadata: {},
+};
 }
 
 function provisionalEvent() {
-	return {
-		id: "event-provisional",
-		eventType: "landing_page_cta_changed",
-		status: "proof_pending",
-		importanceScore: 95,
-		proofCaptureId: null,
-		title: "Possible CTA change",
-		summary: "A high-priority CTA change is still waiting on proof.",
-		confirmedAt: null,
-		createdAt: "2026-07-12T06:00:00.000Z",
-		metadata: {},
-	};
+return {
+id: "event-provisional",
+eventType: "landing_page_cta_changed",
+status: "proof_pending",
+importanceScore: 95,
+proofCaptureId: null,
+title: "Possible CTA change",
+summary: "A high-priority CTA change is still waiting on proof.",
+confirmedAt: null,
+createdAt: "2026-07-12T06:00:00.000Z",
+metadata: {},
+};
 }
 
 function dataServerMock(overrides: Record<string, unknown> = {}) {
-	return {
-		addDigestItem: vi.fn(),
-		claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
-		clearDigestItems: vi.fn(),
-		completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
-		createAdObservation: vi.fn(),
-		createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
-		createEventCandidate: vi.fn(),
-		createLandingPageSnapshot: vi.fn(),
-		createProofCapture: vi.fn(),
-		createWatchEvent: vi.fn(),
-		createWatchlistRun: vi.fn(),
-		countProofCapturesForWatchlistSince: vi.fn(),
-		countProofCapturesForWorkspaceSince: vi.fn(),
-		finishWatchlistRun: vi.fn(),
-		getDigestByPeriod: vi.fn().mockResolvedValue(null),
-		getDigest: vi.fn().mockResolvedValue(null),
-		getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
-			runs: 0,
-			watchlistsChecked: 0,
-			adsSeen: 0,
-		}),
-		listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
-		getUserDeliveryProfile: vi.fn(),
-		hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
-		getRecentSuccessfulRuns: vi.fn(),
-		getSavedQuery: vi.fn(),
-		getWatchlist: vi.fn(),
-		hydrateAdsWithPersistedCreatives: vi.fn(),
-		listActiveWatchlists: vi.fn(),
-		listProofCapturesForTarget: vi.fn(),
-		listProofCapturesForTargets: vi.fn().mockResolvedValue(new Map()),
-		listLastSuccessfulProofCapturesForAds: vi.fn().mockResolvedValue(new Map()),
-		listRecentWorkspaceProofCaptures: vi.fn(),
-		listSuccessfulProofCapturesForAd: vi.fn(),
-		listObservationsForRun: vi.fn(),
-		listWatchEvents: vi.fn(),
-		listAdsByIds: vi.fn().mockResolvedValue([]),
-		listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent()]),
-		listWatchlists: vi.fn().mockResolvedValue([{ id: "watch-1", name: "boAt watch" }]),
-		logMetaIntegrationStatus: vi.fn(),
-		touchWatchlistScanned: vi.fn(),
-		updateDigestRunSummary: vi.fn(),
-		upsertProofTarget: vi.fn(),
-		upsertAd: vi.fn(),
-		upsertDigestDelivery: vi.fn(),
-		...overrides,
-	};
+return {
+addDigestItem: vi.fn(),
+claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
+clearDigestItems: vi.fn(),
+completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
+createAdObservation: vi.fn(),
+createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+createEventCandidate: vi.fn(),
+createLandingPageSnapshot: vi.fn(),
+createProofCapture: vi.fn(),
+createWatchEvent: vi.fn(),
+createWatchlistRun: vi.fn(),
+countProofCapturesForWatchlistSince: vi.fn(),
+countProofCapturesForWorkspaceSince: vi.fn(),
+finishWatchlistRun: vi.fn(),
+getDigestByPeriod: vi.fn().mockResolvedValue(null),
+getDigest: vi.fn().mockResolvedValue(null),
+getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+runs: 0,
+watchlistsChecked: 0,
+adsSeen: 0,
+}),
+listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+getUserDeliveryProfile: vi.fn(),
+hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
+getRecentSuccessfulRuns: vi.fn(),
+getSavedQuery: vi.fn(),
+getWatchlist: vi.fn(),
+hydrateAdsWithPersistedCreatives: vi.fn(),
+listActiveWatchlists: vi.fn(),
+listProofCapturesForTarget: vi.fn(),
+listProofCapturesForTargets: vi.fn().mockResolvedValue(new Map()),
+listLastSuccessfulProofCapturesForAds: vi.fn().mockResolvedValue(new Map()),
+listRecentWorkspaceProofCaptures: vi.fn(),
+listSuccessfulProofCapturesForAd: vi.fn(),
+listObservationsForRun: vi.fn(),
+listWatchEvents: vi.fn(),
+listAdsByIds: vi.fn().mockResolvedValue([]),
+listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent()]),
+listWatchlists: vi.fn().mockResolvedValue([{ id: "watch-1", name: "boAt watch" }]),
+logMetaIntegrationStatus: vi.fn(),
+touchWatchlistScanned: vi.fn(),
+updateDigestRunSummary: vi.fn(),
+upsertProofTarget: vi.fn(),
+upsertAd: vi.fn(),
+upsertDigestDelivery: vi.fn(),
+...overrides,
+};
 }
 
 function planServerMock(plan: string) {
-	return {
-		getUserPlan: vi.fn().mockResolvedValue(plan),
-		PLAN_LIMITS: {
-			free: { digests: false, digestCadence: "none" },
-			scout: { digests: true, digestCadence: "weekly" },
-			starter: { digests: true, digestCadence: "weekly" },
-			agency: { digests: true, digestCadence: "daily_and_weekly" },
-		},
-	};
+return {
+getUserPlan: vi.fn().mockResolvedValue(plan),
+PLAN_LIMITS: {
+free: { digests: false, digestCadence: "none" },
+scout: { digests: true, digestCadence: "weekly" },
+starter: { digests: true, digestCadence: "weekly" },
+agency: { digests: true, digestCadence: "daily_and_weekly" },
+},
+};
 }
 
 function envWith(aiRun: ReturnType<typeof vi.fn> | null, users: unknown[] = [
-	{ id: "user-1", email: "owner@example.com", name: "Owner" },
+{ id: "user-1", email: "owner@example.com", name: "Owner" },
 ]) {
-	return {
-		...(aiRun ? { AI: { run: aiRun } } : {}),
-		DB: {
-			prepare() {
-				return {
-					async all<T>() {
-						return { results: users as T[] };
-					},
-					bind() {
-						return {
-							async all<T>() {
-								return { results: users as T[] };
-							},
-						};
-					},
-				};
-			},
-		},
-	} as never;
+return {
+...(aiRun ? { AI: { run: aiRun } } : {}),
+DB: {
+prepare() {
+return {
+async all<T>() {
+return { results: users as T[] };
+},
+bind() {
+return {
+async all<T>() {
+return { results: users as T[] };
+},
+};
+},
+};
+},
+},
+} as never;
 }
 
 beforeEach(() => {
-	vi.resetModules();
+vi.resetModules();
 });
 
 afterEach(() => {
-	vi.restoreAllMocks();
-	vi.resetModules();
+vi.restoreAllMocks();
+vi.resetModules();
 });
 
 describe("weekly digest strategy paragraph flow", () => {
-	it("claims the atomic snapshot before AI, persists strategy, then delivers", async () => {
-		const data = dataServerMock();
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+it("claims the atomic snapshot before AI, persists strategy, then delivers", async () => {
+const data = dataServerMock();
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		const result = await runWeeklyDigests(envWith(aiRun));
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+const result = await runWeeklyDigests(envWith(aiRun));
 
-		expect(result).toBe(1);
-		expect(aiRun).toHaveBeenCalledTimes(1);
-		expect(data.createDigestRun).toHaveBeenCalledWith(
-			expect.anything(),
-			"user-1",
-			expect.any(String),
-			expect.any(String),
-			expect.objectContaining({
-				totalEvents: 1,
-				watchlists: 1,
-			}),
-			expect.objectContaining({
-				returnClaim: true,
-				items: [
-					expect.objectContaining({
-						watchlistId: "watch-1",
-						eventType: "landing_page_offer_changed",
-					}),
-				],
-			}),
-		);
-		expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
-		expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
-			expect.anything(),
-			"digest-1",
-			expect.objectContaining({
-				leaseId: expect.any(String),
-				summary: expect.objectContaining({
-					totalEvents: 1,
-					strategyGenerationStatus: "ready",
-					strategyParagraph: GOOD_PARAGRAPH,
-					strategyModel: "@cf/meta/llama-3.2-3b-instruct",
-					strategyGeneratedAt: expect.any(String),
-					strategyWatchlistIds: ["watch-1"],
-				}),
-			}),
-		);
-		expect(data.createDigestRun.mock.invocationCallOrder[0]).toBeLessThan(
-			aiRun.mock.invocationCallOrder[0]!,
-		);
-		expect(aiRun.mock.invocationCallOrder[0]).toBeLessThan(
-			data.completeDigestStrategyGeneration.mock.invocationCallOrder[0]!,
-		);
-		expect(data.completeDigestStrategyGeneration.mock.invocationCallOrder[0]).toBeLessThan(
-			deliverWeeklyDigest.mock.invocationCallOrder[0]!,
-		);
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				digestRunId: "digest-1",
-				strategyParagraph: GOOD_PARAGRAPH,
-			}),
-		);
-	});
+expect(result).toBe(1);
+expect(aiRun).toHaveBeenCalledTimes(1);
+expect(data.createDigestRun).toHaveBeenCalledWith(
+expect.anything(),
+"user-1",
+expect.any(String),
+expect.any(String),
+expect.objectContaining({
+totalEvents: 1,
+watchlists: 1,
+}),
+expect.objectContaining({
+returnClaim: true,
+items: [
+expect.objectContaining({
+watchlistId: "watch-1",
+eventType: "landing_page_offer_changed",
+}),
+],
+}),
+);
+expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
+expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
+expect.anything(),
+"digest-1",
+expect.objectContaining({
+leaseId: expect.any(String),
+summary: expect.objectContaining({
+totalEvents: 1,
+strategyGenerationStatus: "ready",
+strategyParagraph: GOOD_PARAGRAPH,
+strategyModel: "@cf/meta/llama-3.2-3b-instruct",
+strategyGeneratedAt: expect.any(String),
+strategyWatchlistIds: ["watch-1"],
+}),
+}),
+);
+expect(data.createDigestRun.mock.invocationCallOrder[0]).toBeLessThan(
+aiRun.mock.invocationCallOrder[0]!,
+);
+expect(aiRun.mock.invocationCallOrder[0]).toBeLessThan(
+data.completeDigestStrategyGeneration.mock.invocationCallOrder[0]!,
+);
+expect(data.completeDigestStrategyGeneration.mock.invocationCallOrder[0]).toBeLessThan(
+deliverWeeklyDigest.mock.invocationCallOrder[0]!,
+);
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({
+digestRunId: "digest-1",
+strategyParagraph: GOOD_PARAGRAPH,
+}),
+);
+});
 
-	it("keeps provisional items in the digest but excludes them from mixed AI strategy input", async () => {
-		const data = dataServerMock({
-			listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent(), provisionalEvent()]),
-		});
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+it("keeps provisional items in the digest but excludes them from mixed AI strategy input", async () => {
+const data = dataServerMock({
+listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent(), provisionalEvent()]),
+});
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
 
-		const request = aiRun.mock.calls[0]?.[1] as {
-			messages: Array<{ role: string; content: string }>;
-		};
-		const userPrompt = request.messages.find((message) => message.role === "user")?.content ?? "";
-		expect(userPrompt).toContain("Landing page offer changed");
-		expect(userPrompt).not.toContain("Possible CTA change");
+const request = aiRun.mock.calls[0]?.[1] as {
+messages: Array<{ role: string; content: string }>;
+};
+const userPrompt = request.messages.find((message) => message.role === "user")?.content ?? "";
+expect(userPrompt).toContain("Landing page offer changed");
+expect(userPrompt).not.toContain("Possible CTA change");
 
-		expect(data.createDigestRun).toHaveBeenCalledWith(
-			expect.anything(),
-			"user-1",
-			expect.any(String),
-			expect.any(String),
-			expect.objectContaining({
-				totalEvents: 2,
-			}),
-			expect.objectContaining({
-				items: [
-					expect.objectContaining({
-						title: "Landing page offer changed",
-						metadata: expect.objectContaining({ eventStatus: "confirmed" }),
-					}),
-					expect.objectContaining({
-						title: "Possible CTA change",
-						metadata: expect.objectContaining({ eventStatus: "proof_pending" }),
-					}),
-				],
-			}),
-		);
-		expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
-		expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
-			expect.anything(),
-			"digest-1",
-			expect.objectContaining({
-				summary: expect.objectContaining({
-					totalEvents: 2,
-					strategyParagraph: GOOD_PARAGRAPH,
-					strategyWatchlistIds: ["watch-1"],
-				}),
-			}),
-		);
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				strategyParagraph: GOOD_PARAGRAPH,
-				items: [
-					expect.objectContaining({ title: "Landing page offer changed" }),
-					expect.objectContaining({ title: "Possible CTA change" }),
-				],
-			}),
-		);
-	});
+expect(data.createDigestRun).toHaveBeenCalledWith(
+expect.anything(),
+"user-1",
+expect.any(String),
+expect.any(String),
+expect.objectContaining({
+totalEvents: 2,
+}),
+expect.objectContaining({
+items: [
+expect.objectContaining({
+title: "Landing page offer changed",
+metadata: expect.objectContaining({ eventStatus: "confirmed" }),
+}),
+expect.objectContaining({
+title: "Possible CTA change",
+metadata: expect.objectContaining({ eventStatus: "proof_pending" }),
+}),
+],
+}),
+);
+expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
+expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
+expect.anything(),
+"digest-1",
+expect.objectContaining({
+summary: expect.objectContaining({
+totalEvents: 2,
+strategyParagraph: GOOD_PARAGRAPH,
+strategyWatchlistIds: ["watch-1"],
+}),
+}),
+);
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({
+strategyParagraph: GOOD_PARAGRAPH,
+items: [
+expect.objectContaining({ title: "Landing page offer changed" }),
+expect.objectContaining({ title: "Possible CTA change" }),
+],
+}),
+);
+});
 
-	it("persists and delivers provisional-only digest items without an AI strategy summary", async () => {
-		const data = dataServerMock({
-			listWatchEventsBetween: vi.fn().mockResolvedValue([provisionalEvent()]),
-		});
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+it("persists and delivers provisional-only digest items without an AI strategy summary", async () => {
+const data = dataServerMock({
+listWatchEventsBetween: vi.fn().mockResolvedValue([provisionalEvent()]),
+});
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
 
-		expect(aiRun).not.toHaveBeenCalled();
-		expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
-			expect.anything(),
-			"digest-1",
-			expect.objectContaining({
-				summary: expect.objectContaining({ strategyGenerationStatus: "ready" }),
-			}),
-		);
-		expect(data.createDigestRun).toHaveBeenCalledWith(
-			expect.anything(),
-			"user-1",
-			expect.any(String),
-			expect.any(String),
-			expect.not.objectContaining({ strategyParagraph: expect.anything() }),
-			expect.objectContaining({
-				items: [
-					expect.objectContaining({
-						title: "Possible CTA change",
-						metadata: expect.objectContaining({ eventStatus: "proof_pending" }),
-					}),
-				],
-			}),
-		);
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				strategyParagraph: null,
-				items: [expect.objectContaining({ title: "Possible CTA change" })],
-			}),
-		);
-	});
+expect(aiRun).not.toHaveBeenCalled();
+expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
+expect.anything(),
+"digest-1",
+expect.objectContaining({
+summary: expect.objectContaining({ strategyGenerationStatus: "ready" }),
+}),
+);
+expect(data.createDigestRun).toHaveBeenCalledWith(
+expect.anything(),
+"user-1",
+expect.any(String),
+expect.any(String),
+expect.not.objectContaining({ strategyParagraph: expect.anything() }),
+expect.objectContaining({
+items: [
+expect.objectContaining({
+title: "Possible CTA change",
+metadata: expect.objectContaining({ eventStatus: "proof_pending" }),
+}),
+],
+}),
+);
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({
+strategyParagraph: null,
+items: [expect.objectContaining({ title: "Possible CTA change" })],
+}),
+);
+});
 
-	it("skips generation for scout weekly digests without changing delivery", async () => {
-		const data = dataServerMock();
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+it("skips generation for scout weekly digests without changing delivery", async () => {
+const data = dataServerMock();
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("scout"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("scout"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		const result = await runWeeklyDigests(envWith(aiRun));
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+const result = await runWeeklyDigests(envWith(aiRun));
 
-		expect(result).toBe(1);
-		expect(aiRun).not.toHaveBeenCalled();
-		expect(data.completeDigestStrategyGeneration).not.toHaveBeenCalled();
-		expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
-		expect(data.createDigestRun).toHaveBeenCalledWith(
-			expect.anything(),
-			"user-1",
-			expect.any(String),
-			expect.any(String),
-			expect.not.objectContaining({ strategyParagraph: expect.anything() }),
-			expect.objectContaining({
-				returnClaim: true,
-				items: [expect.objectContaining({ watchlistId: "watch-1" })],
-			}),
-		);
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({ strategyParagraph: null }),
-		);
-	});
+expect(result).toBe(1);
+expect(aiRun).not.toHaveBeenCalled();
+expect(data.completeDigestStrategyGeneration).not.toHaveBeenCalled();
+expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
+expect(data.createDigestRun).toHaveBeenCalledWith(
+expect.anything(),
+"user-1",
+expect.any(String),
+expect.any(String),
+expect.not.objectContaining({ strategyParagraph: expect.anything() }),
+expect.objectContaining({
+returnClaim: true,
+items: [expect.objectContaining({ watchlistId: "watch-1" })],
+}),
+);
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({ strategyParagraph: null }),
+);
+});
 
-	it("skips free-plan users entirely — no digest, no AI call", async () => {
-		const data = dataServerMock();
-		const deliverWeeklyDigest = vi.fn();
-		const aiRun = vi.fn();
+it("skips free-plan users entirely — no digest, no AI call", async () => {
+const data = dataServerMock();
+const deliverWeeklyDigest = vi.fn();
+const aiRun = vi.fn();
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("free"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("free"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		const result = await runWeeklyDigests(envWith(aiRun));
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+const result = await runWeeklyDigests(envWith(aiRun));
 
-		expect(result).toBe(0);
-		expect(aiRun).not.toHaveBeenCalled();
-		expect(deliverWeeklyDigest).not.toHaveBeenCalled();
-		expect(data.createDigestRun).not.toHaveBeenCalled();
-	});
+expect(result).toBe(0);
+expect(aiRun).not.toHaveBeenCalled();
+expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+expect(data.createDigestRun).not.toHaveBeenCalled();
+});
 
-	it("skips generation for agency daily digests — weekly only", async () => {
-		const data = dataServerMock();
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+it("skips generation for agency daily digests — weekly only", async () => {
+const data = dataServerMock();
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("agency"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("agency"));
 
-		const { runDailyDigests } = await import("~/lib/monitoring.server");
-		const result = await runDailyDigests(envWith(aiRun));
+const { runDailyDigests } = await import("~/lib/monitoring.server");
+const result = await runDailyDigests(envWith(aiRun));
 
-		expect(result).toBe(1);
-		expect(aiRun).not.toHaveBeenCalled();
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({ strategyParagraph: null }),
-		);
-	});
+expect(result).toBe(1);
+expect(aiRun).not.toHaveBeenCalled();
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({ strategyParagraph: null }),
+);
+});
 
-	it("never blocks delivery when generation fails — the digest ships without a paragraph", async () => {
-		const data = dataServerMock();
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockRejectedValue(new Error("Workers AI capacity"));
+it("never blocks delivery when generation fails — the digest ships without a paragraph", async () => {
+const data = dataServerMock();
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockRejectedValue(new Error("Workers AI capacity"));
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		const result = await runWeeklyDigests(envWith(aiRun));
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+const result = await runWeeklyDigests(envWith(aiRun));
 
-		expect(result).toBe(1);
-		expect(aiRun).toHaveBeenCalledTimes(1);
-		expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
-		expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
-			expect.anything(),
-			"digest-1",
-			expect.objectContaining({
-				summary: expect.not.objectContaining({ strategyParagraph: expect.anything() }),
-			}),
-		);
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({ strategyParagraph: null }),
-		);
-	});
+expect(result).toBe(1);
+expect(aiRun).toHaveBeenCalledTimes(1);
+expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
+expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
+expect.anything(),
+"digest-1",
+expect.objectContaining({
+summary: expect.not.objectContaining({ strategyParagraph: expect.anything() }),
+}),
+);
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({ strategyParagraph: null }),
+);
+});
 
-	it("reuses the stored paragraph for an existing run instead of regenerating", async () => {
-		const existingDigest = {
-			id: "digest-existing",
-			userId: "user-1",
-			periodStart: "2026-04-13T05:00:00.000Z",
-			periodEnd: "2026-04-20T05:00:00.000Z",
-			summary: {
-				totalEvents: 1,
-				watchlists: 1,
-				digestItemSetProvenance: "atomic-v1",
-				strategyParagraph: STORED_PARAGRAPH,
-				strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
-			},
-			createdAt: "2026-04-20T05:01:00.000Z",
-			items: [
-				{
-					id: "digest-item-1",
-					digestRunId: "digest-existing",
-					watchlistId: "watch-1",
-					watchlistName: "boAt watch",
-					eventType: "landing_page_offer_changed",
-					title: "Stored offer change",
-					summary: "The original digest item.",
-					metadata: {},
-					createdAt: "2026-04-20T05:01:00.000Z",
-				},
-			],
-			delivery: {
-				id: "delivery-1",
-				digestRunId: "digest-existing",
-				provider: "cloudflare_email",
-				status: "failed",
-				recipientEmail: "owner@example.com",
-				externalMessageId: null,
-				errorMessage: "timeout",
-				deliveredAt: null,
-			},
-		};
-		const data = dataServerMock({
-			getDigestByPeriod: vi.fn().mockResolvedValue(existingDigest),
-		});
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+it("reuses the stored paragraph for an existing run instead of regenerating", async () => {
+const existingDigest = {
+id: "digest-existing",
+userId: "user-1",
+periodStart: "2026-04-13T05:00:00.000Z",
+periodEnd: "2026-04-20T05:00:00.000Z",
+summary: {
+totalEvents: 1,
+watchlists: 1,
+digestItemSetProvenance: "atomic-v1",
+strategyParagraph: STORED_PARAGRAPH,
+strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
+},
+createdAt: "2026-04-20T05:01:00.000Z",
+items: [
+{
+id: "digest-item-1",
+digestRunId: "digest-existing",
+watchlistId: "watch-1",
+watchlistName: "boAt watch",
+eventType: "landing_page_offer_changed",
+title: "Stored offer change",
+summary: "The original digest item.",
+metadata: {},
+createdAt: "2026-04-20T05:01:00.000Z",
+},
+],
+delivery: {
+id: "delivery-1",
+digestRunId: "digest-existing",
+provider: "cloudflare_email",
+status: "failed",
+recipientEmail: "owner@example.com",
+externalMessageId: null,
+errorMessage: "timeout",
+deliveredAt: null,
+},
+};
+const data = dataServerMock({
+getDigestByPeriod: vi.fn().mockResolvedValue(existingDigest),
+});
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		await runWeeklyDigests(envWith(aiRun));
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await runWeeklyDigests(envWith(aiRun));
 
-		expect(aiRun).not.toHaveBeenCalled();
-		expect(data.createDigestRun).not.toHaveBeenCalled();
-		expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				digestRunId: "digest-existing",
-				strategyParagraph: STORED_PARAGRAPH,
-			}),
-		);
-	});
+expect(aiRun).not.toHaveBeenCalled();
+expect(data.createDigestRun).not.toHaveBeenCalled();
+expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({
+digestRunId: "digest-existing",
+strategyParagraph: STORED_PARAGRAPH,
+}),
+);
+});
 
-	it("fails closed on a partial legacy run even when today's candidate count matches", async () => {
-		const secondEvent = {
-			...weeklyEvent(),
-			id: "event-2",
-			eventType: "landing_page_cta_changed",
-			title: "Landing page CTA changed",
-			summary: "CTA changed on the landing page.",
-		};
-		const partialDigest = {
-			id: "digest-partial",
-			userId: "user-1",
-			periodStart: "2026-07-06T05:00:00.000Z",
-			periodEnd: "2026-07-13T05:00:00.000Z",
-			summary: {
-				totalEvents: 2,
-				watchlists: 1,
-				strategyParagraph: STORED_PARAGRAPH,
-				strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
-			},
-			createdAt: "2026-07-13T05:01:00.000Z",
-			items: [
-				{
-					id: "digest-item-1",
-					digestRunId: "digest-partial",
-					watchlistId: "watch-1",
-					watchlistName: "boAt watch",
-					eventType: "landing_page_offer_changed",
-					title: "Only the first item survived",
-					summary: "The legacy worker stopped before item two.",
-					metadata: {},
-					createdAt: "2026-07-13T05:01:00.000Z",
-				},
-			],
-			delivery: null,
-		};
-		const data = dataServerMock({
-			getDigestByPeriod: vi.fn().mockResolvedValue(partialDigest),
-			listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent(), secondEvent]),
-		});
-		const deliverWeeklyDigest = vi.fn();
-		const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
+it("fails closed on a partial legacy run even when today's candidate count matches", async () => {
+const secondEvent = {
+...weeklyEvent(),
+id: "event-2",
+eventType: "landing_page_cta_changed",
+title: "Landing page CTA changed",
+summary: "CTA changed on the landing page.",
+};
+const partialDigest = {
+id: "digest-partial",
+userId: "user-1",
+periodStart: "2026-07-06T05:00:00.000Z",
+periodEnd: "2026-07-13T05:00:00.000Z",
+summary: {
+totalEvents: 2,
+watchlists: 1,
+strategyParagraph: STORED_PARAGRAPH,
+strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
+},
+createdAt: "2026-07-13T05:01:00.000Z",
+items: [
+{
+id: "digest-item-1",
+digestRunId: "digest-partial",
+watchlistId: "watch-1",
+watchlistName: "boAt watch",
+eventType: "landing_page_offer_changed",
+title: "Only the first item survived",
+summary: "The legacy worker stopped before item two.",
+metadata: {},
+createdAt: "2026-07-13T05:01:00.000Z",
+},
+],
+delivery: null,
+};
+const data = dataServerMock({
+getDigestByPeriod: vi.fn().mockResolvedValue(partialDigest),
+listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent(), secondEvent]),
+});
+const deliverWeeklyDigest = vi.fn();
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(0);
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(0);
 
-		expect(aiRun).not.toHaveBeenCalled();
-		expect(data.createDigestRun).not.toHaveBeenCalled();
-		expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
-		expect(deliverWeeklyDigest).not.toHaveBeenCalled();
-	});
+expect(aiRun).not.toHaveBeenCalled();
+expect(data.createDigestRun).not.toHaveBeenCalled();
+expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
+expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+});
 
-	it("fails closed on an unmarked legacy run even when its stored item count matches", async () => {
-		const data = dataServerMock({
-			getDigestByPeriod: vi.fn().mockResolvedValue({
-				id: "digest-unmarked-same-count",
-				userId: "user-1",
-				periodStart: "2026-07-06T05:00:00.000Z",
-				periodEnd: "2026-07-13T05:00:00.000Z",
-				summary: { totalEvents: 1, watchlists: 1 },
-				createdAt: "2026-07-13T05:01:00.000Z",
-				items: [{
-					id: "item-unmarked",
-					digestRunId: "digest-unmarked-same-count",
-					watchlistId: "watch-1",
-					watchlistName: "boAt watch",
-					eventType: "landing_page_offer_changed",
-					title: "Unproven legacy item",
-					summary: "A matching count does not prove snapshot identity.",
-					metadata: {},
-					createdAt: "2026-07-13T05:01:00.000Z",
-				}],
-				delivery: null,
-			}),
-		});
-		const deliverWeeklyDigest = vi.fn();
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
+it("fails closed on an unmarked legacy run even when its stored item count matches", async () => {
+const data = dataServerMock({
+getDigestByPeriod: vi.fn().mockResolvedValue({
+id: "digest-unmarked-same-count",
+userId: "user-1",
+periodStart: "2026-07-06T05:00:00.000Z",
+periodEnd: "2026-07-13T05:00:00.000Z",
+summary: { totalEvents: 1, watchlists: 1 },
+createdAt: "2026-07-13T05:01:00.000Z",
+items: [{
+id: "item-unmarked",
+digestRunId: "digest-unmarked-same-count",
+watchlistId: "watch-1",
+watchlistName: "boAt watch",
+eventType: "landing_page_offer_changed",
+title: "Unproven legacy item",
+summary: "A matching count does not prove snapshot identity.",
+metadata: {},
+createdAt: "2026-07-13T05:01:00.000Z",
+}],
+delivery: null,
+}),
+});
+const deliverWeeklyDigest = vi.fn();
+vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		await expect(runWeeklyDigests(envWith(null))).resolves.toBe(0);
-		expect(deliverWeeklyDigest).not.toHaveBeenCalled();
-	});
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await expect(runWeeklyDigests(envWith(null))).resolves.toBe(0);
+expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+});
 
-	it("delivers a marked zero-item heartbeat snapshot", async () => {
-		const data = dataServerMock({
-			getDigestByPeriod: vi.fn().mockResolvedValue({
-				id: "digest-marked-heartbeat",
-				userId: "user-1",
-				periodStart: "2026-07-06T05:00:00.000Z",
-				periodEnd: "2026-07-13T05:00:00.000Z",
-				summary: {
-					totalEvents: 0,
-					watchlists: 1,
-					digestItemSetProvenance: "atomic-v1",
-				},
-				createdAt: "2026-07-13T05:01:00.000Z",
-				items: [],
-				delivery: null,
-			}),
-			getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
-				runs: 2,
-				watchlistsChecked: 1,
-				adsSeen: 14,
-			}),
-		});
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+it("delivers a marked zero-item heartbeat snapshot", async () => {
+const data = dataServerMock({
+getDigestByPeriod: vi.fn().mockResolvedValue({
+id: "digest-marked-heartbeat",
+userId: "user-1",
+periodStart: "2026-07-06T05:00:00.000Z",
+periodEnd: "2026-07-13T05:00:00.000Z",
+summary: {
+totalEvents: 0,
+watchlists: 1,
+digestItemSetProvenance: "atomic-v1",
+},
+createdAt: "2026-07-13T05:01:00.000Z",
+items: [],
+delivery: null,
+}),
+getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+runs: 2,
+watchlistsChecked: 1,
+adsSeen: 14,
+}),
+});
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		await expect(runWeeklyDigests(envWith(null))).resolves.toBe(1);
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				digestRunId: "digest-marked-heartbeat",
-				items: [],
-				heartbeat: { runs: 2, watchlistsChecked: 1, adsSeen: 14 },
-			}),
-		);
-	});
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await expect(runWeeklyDigests(envWith(null))).resolves.toBe(1);
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({
+digestRunId: "digest-marked-heartbeat",
+items: [],
+heartbeat: { runs: 2, watchlistsChecked: 1, adsSeen: 14 },
+}),
+);
+});
 
-	it("fails closed when an incomplete legacy run has a different current candidate count", async () => {
-		const data = dataServerMock({
-			getDigestByPeriod: vi.fn().mockResolvedValue({
-				id: "digest-unreconstructable",
-				userId: "user-1",
-				periodStart: "2026-07-06T05:00:00.000Z",
-				periodEnd: "2026-07-13T05:00:00.000Z",
-				summary: { totalEvents: 2, watchlists: 1 },
-				createdAt: "2026-07-13T05:01:00.000Z",
-				items: [],
-				delivery: null,
-			}),
-		});
-		const deliverWeeklyDigest = vi.fn();
-		const aiRun = vi.fn();
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
+it("fails closed when an incomplete legacy run has a different current candidate count", async () => {
+const data = dataServerMock({
+getDigestByPeriod: vi.fn().mockResolvedValue({
+id: "digest-unreconstructable",
+userId: "user-1",
+periodStart: "2026-07-06T05:00:00.000Z",
+periodEnd: "2026-07-13T05:00:00.000Z",
+summary: { totalEvents: 2, watchlists: 1 },
+createdAt: "2026-07-13T05:01:00.000Z",
+items: [],
+delivery: null,
+}),
+});
+const deliverWeeklyDigest = vi.fn();
+const aiRun = vi.fn();
+vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(0);
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(0);
 
-		expect(deliverWeeklyDigest).not.toHaveBeenCalled();
-	});
+expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+});
 
-	it("replays the persisted paragraph in the retry sweep without a second AI call", async () => {
-		const data = dataServerMock({
-			listRetryableDigestRuns: vi.fn().mockResolvedValue([
-				{
-					id: "digest-retry",
-					userId: "user-1",
-					userEmail: "owner@example.com",
-					userName: "Owner",
-					periodStart: "2026-04-13T05:00:00.000Z",
-					periodEnd: "2026-04-20T05:00:00.000Z",
-				},
-			]),
-			getDigest: vi.fn().mockResolvedValue({
-				id: "digest-retry",
-				userId: "user-1",
-				periodStart: "2026-04-13T05:00:00.000Z",
-				periodEnd: "2026-04-20T05:00:00.000Z",
-				summary: {
-					totalEvents: 1,
-					watchlists: 1,
-					digestItemSetProvenance: "atomic-v1",
-					strategyParagraph: STORED_PARAGRAPH,
-					strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
-				},
-				createdAt: "2026-04-20T05:01:00.000Z",
-				items: [
-					{
-						id: "item-1",
-						digestRunId: "digest-retry",
-						watchlistId: "watch-1",
-						watchlistName: "boAt watch",
-						eventType: "landing_page_offer_changed",
-						title: "Landing page offer changed",
-						summary: "Offer changed on the landing page.",
-						metadata: { priorityScore: 79, sourceStatus: "proof_backed" },
-						createdAt: "2026-04-19T00:00:00.000Z",
-					},
-				],
-				delivery: null,
-			}),
-		});
-		const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+it("replays the persisted paragraph in the retry sweep without a second AI call", async () => {
+const data = dataServerMock({
+listRetryableDigestRuns: vi.fn().mockResolvedValue([
+{
+id: "digest-retry",
+userId: "user-1",
+userEmail: "owner@example.com",
+userName: "Owner",
+periodStart: "2026-04-13T05:00:00.000Z",
+periodEnd: "2026-04-20T05:00:00.000Z",
+},
+]),
+getDigest: vi.fn().mockResolvedValue({
+id: "digest-retry",
+userId: "user-1",
+periodStart: "2026-04-13T05:00:00.000Z",
+periodEnd: "2026-04-20T05:00:00.000Z",
+summary: {
+totalEvents: 1,
+watchlists: 1,
+digestItemSetProvenance: "atomic-v1",
+strategyParagraph: STORED_PARAGRAPH,
+strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
+},
+createdAt: "2026-04-20T05:01:00.000Z",
+items: [
+{
+id: "item-1",
+digestRunId: "digest-retry",
+watchlistId: "watch-1",
+watchlistName: "boAt watch",
+eventType: "landing_page_offer_changed",
+title: "Landing page offer changed",
+summary: "Offer changed on the landing page.",
+metadata: { priorityScore: 79, sourceStatus: "proof_backed" },
+createdAt: "2026-04-19T00:00:00.000Z",
+},
+],
+delivery: null,
+}),
+});
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		// No users with active watchlists this tick — only the retry sweep runs.
-		const result = await runWeeklyDigests(envWith(aiRun, []));
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+// No users with active watchlists this tick — only the retry sweep runs.
+const result = await runWeeklyDigests(envWith(aiRun, []));
 
-		expect(result).toBe(1);
-		expect(aiRun).not.toHaveBeenCalled();
-		expect(deliverWeeklyDigest).toHaveBeenCalledTimes(1);
-		expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				digestRunId: "digest-retry",
-				strategyParagraph: STORED_PARAGRAPH,
-			}),
-		);
-	});
+expect(result).toBe(1);
+expect(aiRun).not.toHaveBeenCalled();
+expect(deliverWeeklyDigest).toHaveBeenCalledTimes(1);
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({
+digestRunId: "digest-retry",
+strategyParagraph: STORED_PARAGRAPH,
+}),
+);
+});
 
-	it("skips an unmarked same-count legacy row in the retry sweep", async () => {
-		const data = dataServerMock({
-			listRetryableDigestRuns: vi.fn().mockResolvedValue([{
-				id: "digest-retry-unmarked",
-				userId: "user-1",
-				userEmail: "owner@example.com",
-				userName: "Owner",
-				periodStart: "2026-04-13T05:00:00.000Z",
-				periodEnd: "2026-04-20T05:00:00.000Z",
-			}]),
-			getDigest: vi.fn().mockResolvedValue({
-				id: "digest-retry-unmarked",
-				userId: "user-1",
-				periodStart: "2026-04-13T05:00:00.000Z",
-				periodEnd: "2026-04-20T05:00:00.000Z",
-				summary: { totalEvents: 1, watchlists: 1 },
-				createdAt: "2026-04-20T05:01:00.000Z",
-				items: [{
-					id: "item-unmarked",
-					digestRunId: "digest-retry-unmarked",
-					watchlistId: "watch-1",
-					watchlistName: "boAt watch",
-					eventType: "landing_page_offer_changed",
-					title: "Unmarked retry item",
-					summary: "Count matches, identity remains unproven.",
-					metadata: {},
-					createdAt: "2026-04-19T00:00:00.000Z",
-				}],
-				delivery: null,
-			}),
-		});
-		const deliverWeeklyDigest = vi.fn();
+it("skips an unmarked same-count legacy row in the retry sweep", async () => {
+const data = dataServerMock({
+listRetryableDigestRuns: vi.fn().mockResolvedValue([{
+id: "digest-retry-unmarked",
+userId: "user-1",
+userEmail: "owner@example.com",
+userName: "Owner",
+periodStart: "2026-04-13T05:00:00.000Z",
+periodEnd: "2026-04-20T05:00:00.000Z",
+}]),
+getDigest: vi.fn().mockResolvedValue({
+id: "digest-retry-unmarked",
+userId: "user-1",
+periodStart: "2026-04-13T05:00:00.000Z",
+periodEnd: "2026-04-20T05:00:00.000Z",
+summary: { totalEvents: 1, watchlists: 1 },
+createdAt: "2026-04-20T05:01:00.000Z",
+items: [{
+id: "item-unmarked",
+digestRunId: "digest-retry-unmarked",
+watchlistId: "watch-1",
+watchlistName: "boAt watch",
+eventType: "landing_page_offer_changed",
+title: "Unmarked retry item",
+summary: "Count matches, identity remains unproven.",
+metadata: {},
+createdAt: "2026-04-19T00:00:00.000Z",
+}],
+delivery: null,
+}),
+});
+const deliverWeeklyDigest = vi.fn();
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
-		const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-		await expect(runWeeklyDigests(envWith(null, []))).resolves.toBe(0);
-		expect(deliverWeeklyDigest).not.toHaveBeenCalled();
-	});
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await expect(runWeeklyDigests(envWith(null, []))).resolves.toBe(0);
+expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+});
 
 });

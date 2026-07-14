@@ -19,17 +19,18 @@ export {
   upsertDeliveryTarget,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
+reconcileWhatsAppSetupTargetByProviderMessageId,
 } from "~/lib/data/delivery-records-targets.server";
 
 export {
   listRetryableInstantAttempts,
-	listStaleBillingLifecycleEmailAttempts,
+listStaleBillingLifecycleEmailAttempts,
   listDeliveryAttempts,
   getDeliveryAttemptByIdempotencyKey,
   reconcileDeliveryAttemptByProviderMessageId,
   createDeliveryAttempt,
   updateDeliveryAttemptResult,
-	buildBillingLifecycleOutboxStatement,
-	type BillingLifecycleEmailOutboxSpec,
-	type BillingLifecycleOutboxGate,
+buildBillingLifecycleOutboxStatement,
+type BillingLifecycleEmailOutboxSpec,
+type BillingLifecycleOutboxGate,
 } from "~/lib/data/delivery-records-attempts.server";
