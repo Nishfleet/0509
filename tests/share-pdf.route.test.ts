@@ -173,6 +173,27 @@ describe("GET /share/:token/pdf", () => {
       },
     ],
     [
+      "missing resource type",
+      {
+        kind: "report",
+        reportId: "collection:collection-1",
+        resourceId: "collection-1",
+        title: "Missing resource type",
+        rows: [],
+      },
+    ],
+    [
+      "unknown resource type",
+      {
+        kind: "report",
+        reportId: "collection:collection-1",
+        resourceType: "workspace",
+        resourceId: "collection-1",
+        title: "Unknown resource type",
+        rows: [],
+      },
+    ],
+    [
       "unrenderable watchlist",
       {
         kind: "report",
