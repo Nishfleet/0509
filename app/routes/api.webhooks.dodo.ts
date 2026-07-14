@@ -683,7 +683,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     let delivery: typeof import("~/lib/delivery.server") | null = null;
     try {
       const profile = await getUserDeliveryProfile(env, lifecycleUserId);
-      if (!profile?.email) {
+      if (!profile?.email || profile.emailVerified !== true) {
         return;
       }
       delivery = await import("~/lib/delivery.server");

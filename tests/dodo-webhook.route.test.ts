@@ -32,7 +32,7 @@ function mockWebhookDependencies(overrides: {
     finalizeDodoWebhookLedgerOnly: vi.fn().mockResolvedValue(undefined),
     getUserDeliveryProfile: vi
       .fn()
-      .mockResolvedValue({ id: "user-1", email: "owner@example.com", name: "Owner" }),
+      .mockResolvedValue({ id: "user-1", email: "owner@example.com", emailVerified: true, name: "Owner" }),
     getUserPlanBillingInfo: vi.fn().mockResolvedValue({
       plan: "starter",
       dodoStatus: "subscription.on_hold",
@@ -138,6 +138,11 @@ function claimedLifecycleEmailRetry(
     status: "claimed",
     lifecycleEmailRetry: { kind, userId, idempotencyKey },
   };
+}
+
+const unverified = { email: "u@example.com", emailVerified: false, name: null };
+function expectOutbox(mock: ReturnType<typeof vi.fn>) {
+  expect(mock.mock.calls.at(-1)?.at(-1)).toEqual({ lifecycleEmailOutbox: expect.anything() });
 }
 
 describe("Dodo webhook route", () => {
@@ -1273,7 +1278,7 @@ describe("customer lifecycle billing emails", () => {
   });
 
   it("skips the dunning email silently when the user has no delivery profile", async () => {
-    const { delivery } = mockWebhookDependencies({
+    const { data, delivery } = mockWebhookDependencies({
       billing: { extractDodoPlanRevocation: paymentIssueRevocation() },
       data: {
         getUserDeliveryProfile: vi.fn().mockResolvedValue(null),
@@ -1283,7 +1288,11 @@ describe("customer lifecycle billing emails", () => {
     const response = await deliverDodoWebhook("evt-on-hold-no-profile", { type: "subscription.on_hold" });
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
+    expect(delivery.prepareBillingLifecycleEmailOutbox).not.toHaveBeenCalled();
+    data.getUserDeliveryProfile.mockResolvedValue(unverified);
+    await deliverDodoWebhook("evt-u-pay", { type: "subscription.on_hold" });
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
+    expectOutbox(data.applyDodoPlanPaymentIssueWithLedger);
   });
 
   it("never fails the webhook when the lifecycle email send throws", async () => {
@@ -1542,7 +1551,10 @@ describe("customer lifecycle billing emails", () => {
         stateUpdatedAt: "2026-07-13T08:00:00.000Z",
       }),
     );
+    data.getUserDeliveryProfile.mockResolvedValue(unverified);
+    await deliverDodoWebhook("evt-u-scheduled", { type: "subscription.plan_changed" });
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
+    expectOutbox(data.applyDodoPlanGrantWithWatchlistReconcile);
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledWith(
       expect.anything(),
       {
@@ -1757,7 +1769,7 @@ describe("customer lifecycle billing emails", () => {
   });
 
   it("sends the access-ended email when a revoke lands", async () => {
-    const { delivery } = mockWebhookDependencies({
+    const { data, delivery } = mockWebhookDependencies({
       billing: {
         extractDodoPlanRevocation: vi.fn(() => ({
           eventType: "subscription.expired",
@@ -1775,7 +1787,10 @@ describe("customer lifecycle billing emails", () => {
     const response = await deliverDodoWebhook("evt-expired-email", { type: "subscription.expired" });
 
     expect(await response.json()).toMatchObject({ ok: true, revoked: true });
+    data.getUserDeliveryProfile.mockResolvedValue(unverified);
+    await deliverDodoWebhook("evt-u-revoke", { type: "subscription.expired" });
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
+    expectOutbox(data.applyDodoPlanRevokeWithWatchlistReconcile);
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledWith(
       expect.anything(),
       {
@@ -1853,7 +1868,7 @@ describe("customer lifecycle billing emails", () => {
   });
 
   it("sends the refund email to the matched user", async () => {
-    const { delivery } = mockWebhookDependencies({
+    const { data, delivery } = mockWebhookDependencies({
       billing: {
         extractDodoRefund: vi.fn(() => ({
           eventType: "refund.succeeded",
@@ -1867,14 +1882,17 @@ describe("customer lifecycle billing emails", () => {
         getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
         getUserDeliveryProfile: vi
           .fn()
-          .mockResolvedValue({ id: "user-refund", email: "refunded@example.com", name: null }),
+          .mockResolvedValue({ id: "user-refund", email: "refunded@example.com", emailVerified: true, name: null }),
       },
     });
 
     const response = await deliverDodoWebhook("evt-refund-email", { type: "refund.succeeded" });
 
     expect(await response.json()).toMatchObject({ ok: true, refunded: true });
+    data.getUserDeliveryProfile.mockResolvedValue(unverified);
+    await deliverDodoWebhook("evt-u-refund", { type: "refund.succeeded" });
     expect(delivery.sendBillingRefundEmail).toHaveBeenCalledTimes(1);
+    expectOutbox(data.applyDodoRefundWithWatchlistReconcile);
     expect(delivery.sendBillingRefundEmail).toHaveBeenCalledWith(
       expect.anything(),
       {
