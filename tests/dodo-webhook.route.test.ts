@@ -1590,6 +1590,8 @@ describe("customer lifecycle billing emails", () => {
         kind: "scheduled",
         effectiveAt: futureIso,
         eventId: "evt-cancel-scheduled-email",
+        subscriptionId: "sub_123",
+        stateUpdatedAt: "2026-07-13T08:00:00.000Z",
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -1657,7 +1659,12 @@ describe("customer lifecycle billing emails", () => {
     );
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ kind: "scheduled", effectiveAt: futureIso }),
+      expect.objectContaining({
+        kind: "scheduled",
+        effectiveAt: futureIso,
+        subscriptionId: "sub_123",
+        stateUpdatedAt: expect.any(String),
+      }),
     );
   });
 
