@@ -148,13 +148,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: true,
       intent,
-      message: removeBrandLogo
-        ? "Logo removed. Shared reports still use your saved agency name when present."
-        : brandingInput.brandLogo
+      message:
+        result.brandName && result.brandLogo
           ? "Agency name and logo saved for shared reports."
           : result.brandName
             ? `Saved. Shared reports now open with "Prepared by ${result.brandName}".`
-            : "Branding cleared. Shared reports show Five to Nine only.",
+            : result.brandLogo
+              ? "Saved. Shared reports use your agency logo."
+              : "Branding cleared. Shared reports show Five to Nine only.",
     };
   }
 
