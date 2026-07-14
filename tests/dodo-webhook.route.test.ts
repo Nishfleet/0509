@@ -727,15 +727,16 @@ describe("Dodo webhook route", () => {
     );
   });
 
-  it("records Dodo plan-change payment.failed events as payment issues", async () => {
-    const { data } = mockWebhookDependencies({
+  it("uses payment identity for payment.failed without a subscription", async () => {
+    const { data, delivery } = mockWebhookDependencies({
       billing: {
         extractDodoPlanRevocation: vi.fn(() => ({
           eventType: "payment.failed",
           action: "payment_issue",
           userId: "user-1",
           customerEmail: "owner@example.com",
-          subscriptionId: "sub_123",
+          subscriptionId: "payment.failed",
+          paymentId: "pay_failed",
           status: "failed",
           revokedAt: "2026-07-01T08:00:00.000Z",
           metadata: {},
@@ -757,6 +758,8 @@ describe("Dodo webhook route", () => {
         userId: "user-1",
         status: "payment.failed",
         occurredAt: "2026-07-01T08:00:00.000Z",
+        providerSubscriptionId: null,
+        providerPaymentId: "pay_failed",
       }),
       expect.objectContaining({
         eventId: "evt-plan-change-payment-failed",
@@ -764,6 +767,10 @@ describe("Dodo webhook route", () => {
       }),
       expect.anything(),
     );
+    expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      status: "payment.failed", subscriptionId: null, paymentId: "pay_failed",
+      stateUpdatedAt: "2026-07-01T08:00:00.000Z",
+    }));
   });
 
   it("deactivates over-limit watchlists when a plan switch is a downgrade", async () => {

@@ -1454,6 +1454,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       .get("billing-payment-issue:user-1:2026-07-01") as { payload_snapshot_json: string };
     expect(JSON.parse(dunningOutbox.payload_snapshot_json)).toMatchObject({
       billingMutationStatus: "payment.failed",
+      billingMutationSubscriptionId: null,
       billingMutationPaymentId: "pay-1",
       billingMutationStateUpdatedAt: "2026-07-01T00:00:00.000Z",
     });

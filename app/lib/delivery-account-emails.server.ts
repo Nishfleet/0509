@@ -16,9 +16,17 @@ import {
 import type { AppEnv } from "~/lib/env.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
+// Operator + account transactional emails: operator at-risk alerts, delivery
+// test sends, account security notices, team invites, password reset, and
+// email verification. Product code imports these via the ~/lib/delivery.server
+// facade.
+
 const SUPPORT_CASE_IDEMPOTENCY_PREFIX = "support-case:";
 const SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX = "support-case-reopen:";
 
+// One daily "customer-at-risk" email to the operator when monitoring or
+// delivery is degrading for paying customers — the ops dashboard is
+// pull-only and nobody is paged to it. Day-keyed idempotency: max one/day.
 export async function sendOperatorAlertEmail(
   env: AppEnv,
   input: {
@@ -72,9 +80,16 @@ export async function sendOperatorAlertEmail(
     return providerResult.status === "sent";
   }
 
+  // delivery_attempt.user_id carries a foreign key to user(id), so the
+  // attempt must be attributed to a REAL user row: the operator's own account
+  // when it exists, else the oldest account (the founder's). Without this the
+  // operator-alert insert violated the FK — the email sent but the dedupe row never
+  // persisted and the logs claimed failure.
   const attemptUserId =
     (await getUserIdByEmail(env, recipient)) ?? (await getOldestUserId(env));
   if (!attemptUserId) {
+    // Empty user table (fresh environment): nothing to attribute to — the
+    // email went out, skip the ledger row.
     return providerResult.status === "sent";
   }
 
@@ -135,6 +150,9 @@ export async function sendDeliveryTestEmail(
     return false;
   }
 
+  // Cloudflare Email has no bounce webhooks, so a typo'd address shows
+  // "sent" forever while the customer receives nothing. This send gives
+  // them a way to prove the address works end-to-end.
   const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
   const providerResult = await sendCloudflareEmail(env, {
     to: input.email,
@@ -180,6 +198,9 @@ export async function sendDeliveryTestEmail(
   return providerResult.status === "sent";
 }
 
+// Account-action verification emails (change email, delete account).
+// Transactional: no unsubscribe header, still recorded as delivery attempts;
+// action URLs carry secrets and are never persisted in payload snapshots.
 export async function sendAccountActionEmail(
   env: AppEnv,
   input: {
@@ -317,6 +338,11 @@ export async function sendPasswordResetEmail(
     resetUrl: string;
   },
 ) {
+  // Transactional and user-initiated: this must reach unsubscribed addresses
+  // too, so it carries no List-Unsubscribe header — but it still goes through
+  // the shared Cloudflare Email path and records a delivery_attempt like
+  // every other send. The reset URL contains a secret token and is therefore
+  // never written to the payload snapshot.
   const providerResult = await sendCloudflareEmail(env, {
     to: input.email,
     subject: "Reset your Five to Nine password",
@@ -352,6 +378,12 @@ export async function sendPasswordResetEmail(
   }
 }
 
+/**
+ * Better Auth email-verification link delivery.
+ * Transactional (no List-Unsubscribe): the verify URL carries a secret token
+ * and must reach the inbox even if the address later unsubscribes from digests.
+ * Token URLs are never persisted in delivery_attempt payloads.
+ */
 export async function sendEmailVerificationEmail(
   env: AppEnv,
   input: {
