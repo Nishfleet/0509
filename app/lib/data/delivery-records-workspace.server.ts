@@ -150,10 +150,15 @@ export async function upsertWorkspaceDeliveryConfig(
 }
 
 export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
-  const row = await one<{ id: string; email: string | null; name: string | null }>(
+  const row = await one<{
+    id: string;
+    email: string | null;
+    emailVerified: number | boolean | null;
+    name: string | null;
+  }>(
     env,
     `
-      SELECT id, email, name
+      SELECT id, email, emailVerified, name
       FROM user
       WHERE id = ?
       LIMIT 1
@@ -168,6 +173,7 @@ export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
   return {
     id: row.id,
     email: row.email,
+    emailVerified: row.emailVerified === 1 || row.emailVerified === true,
     name: row.name ?? "",
   };
 }

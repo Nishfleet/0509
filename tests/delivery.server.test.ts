@@ -2588,6 +2588,7 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         email: "owner@example.com",
+        emailVerified: true,
         name: "Owner",
       }),
       getUserPlanBillingInfo: vi.fn().mockResolvedValue(currentBillingInfo),
@@ -3269,6 +3270,7 @@ describe("billing lifecycle emails", () => {
     const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt, {
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         email: "new@example.com",
+        emailVerified: true,
         name: "Owner",
       }),
     });
@@ -3289,6 +3291,59 @@ describe("billing lifecycle emails", () => {
         expectedUpdatedAt: staleAttempt.updatedAt,
       }),
     );
+  });
+
+  it("defers recovery until the current account email exists and is verified", async () => {
+    useRecoveryClock();
+    const sendMock = mockEmailSend("msg_recovery_verified_target");
+    const attempt = recoveryAttempt(
+      "attempt-recovery-unverified-target",
+      "billing_refund_revoked",
+      {},
+      { targetValue: "old@example.com" },
+    );
+    const updateDeliveryAttemptResult = trackAttemptUpdates(attempt);
+    const verifiedProfile = {
+      email: "new@example.com",
+      emailVerified: true,
+      name: "Owner",
+    };
+    const getUserDeliveryProfile = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ...verifiedProfile, emailVerified: false })
+      .mockResolvedValue(verifiedProfile);
+    mockBillingDataServer({
+      getUserDeliveryProfile,
+      listStaleBillingLifecycleEmailAttempts: vi.fn(
+        async (_env, input: { staleBefore: string }) =>
+          attempt.updatedAt <= input.staleBefore ? [attempt] : [],
+      ),
+      updateDeliveryAttemptResult,
+    });
+
+    async function expectDeferred(errorMessage: string) {
+      await expect(recoverBilling()).resolves.toMatchObject({
+        scanned: 1, claimed: 1, sent: 0, failed: 0,
+      });
+      expect(sendMock).not.toHaveBeenCalled();
+      expect(attempt).toMatchObject({
+        status: "pending", webhookStatus: "pending", targetValue: "old@example.com", errorMessage,
+      });
+      expect(attempt.payloadSnapshot).not.toHaveProperty("recoveryAttemptCount");
+    }
+
+    await expectDeferred("Billing lifecycle recovery recipient is unavailable.");
+
+    vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z"));
+    await expectDeferred("Billing lifecycle recovery recipient is not verified.");
+
+    vi.setSystemTime(new Date("2026-07-13T09:09:00.000Z"));
+    await expect(recoverBilling()).resolves.toMatchObject({
+      scanned: 1, claimed: 1, sent: 1, failed: 0,
+    });
+    expect(emailSendPayload(sendMock).to).toBe("new@example.com");
+    expect(attempt).toMatchObject({ targetValue: "new@example.com", status: "sent" });
+    expect(attempt.payloadSnapshot).toHaveProperty("recoveryAttemptCount", 1);
   });
 
   it("recovers a marker outbox row when the billing state still matches its kind", async () => {
