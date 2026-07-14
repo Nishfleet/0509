@@ -113,6 +113,15 @@ function deliverWebhook(
   } as never);
 }
 
+async function deliverDodoWebhook(
+  eventId: string,
+  body: Record<string, unknown>,
+  timestampSeconds?: number,
+) {
+  const { action } = await import("~/routes/api.webhooks.dodo");
+  return deliverWebhook(action, eventId, body, timestampSeconds);
+}
+
 function explicitBillingEmailFailure(idempotencyKey: string) {
   return Object.assign(new Error("Cloudflare Email explicitly rejected the lifecycle email."), {
     code: "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE",
@@ -1231,8 +1240,7 @@ describe("customer lifecycle billing emails", () => {
       billing: { extractDodoPlanRevocation: paymentIssueRevocation() },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-on-hold", { type: "subscription.on_hold" });
+    const response = await deliverDodoWebhook("evt-on-hold", { type: "subscription.on_hold" });
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(1);
@@ -1258,8 +1266,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-on-hold-stale", { type: "subscription.on_hold" });
+    const response = await deliverDodoWebhook("evt-on-hold-stale", { type: "subscription.on_hold" });
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
@@ -1273,8 +1280,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-on-hold-no-profile", { type: "subscription.on_hold" });
+    const response = await deliverDodoWebhook("evt-on-hold-no-profile", { type: "subscription.on_hold" });
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
@@ -1288,8 +1294,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-on-hold-email-down", { type: "subscription.on_hold" });
+    const response = await deliverDodoWebhook("evt-on-hold-email-down", { type: "subscription.on_hold" });
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(1);
@@ -1327,9 +1332,8 @@ describe("customer lifecycle billing emails", () => {
       delivery: { sendBillingPaymentIssueEmail },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
     await expect(
-      deliverWebhook(action, "evt-on-hold-email-retry", { type: "subscription.on_hold" }),
+      deliverDodoWebhook("evt-on-hold-email-retry", { type: "subscription.on_hold" }),
     ).rejects.toBe(explicitFailure);
 
     expect(data.failDodoWebhookEventForLifecycleEmailRetry).toHaveBeenCalledWith(
@@ -1342,7 +1346,7 @@ describe("customer lifecycle billing emails", () => {
       }),
     );
 
-    const redelivery = await deliverWebhook(action, "evt-on-hold-email-retry", { type: "subscription.on_hold" });
+    const redelivery = await deliverDodoWebhook("evt-on-hold-email-retry", { type: "subscription.on_hold" });
 
     expect(await redelivery.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(2);
@@ -1368,8 +1372,7 @@ describe("customer lifecycle billing emails", () => {
       delivery: { sendBillingPaymentIssueEmail: vi.fn().mockResolvedValue(false) },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-on-hold-email-suppressed", { type: "subscription.on_hold" });
+    const response = await deliverDodoWebhook("evt-on-hold-email-suppressed", { type: "subscription.on_hold" });
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(1);
@@ -1397,8 +1400,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-on-hold-after-recovery", { type: "subscription.on_hold" });
+    const response = await deliverDodoWebhook("evt-on-hold-after-recovery", { type: "subscription.on_hold" });
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
@@ -1419,8 +1421,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    await deliverWebhook(action, "evt-wrong-retry-kind", { type: "subscription.on_hold" });
+    await deliverDodoWebhook("evt-wrong-retry-kind", { type: "subscription.on_hold" });
 
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
     expect(data.getUserPlanBillingInfo).not.toHaveBeenCalled();
@@ -1440,8 +1441,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-on-hold-retry-not-armed", { type: "subscription.on_hold" });
+    const response = await deliverDodoWebhook("evt-on-hold-retry-not-armed", { type: "subscription.on_hold" });
 
     expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(data.failDodoWebhookEventForLifecycleEmailRetry).toHaveBeenCalledTimes(1);
@@ -1497,12 +1497,11 @@ describe("customer lifecycle billing emails", () => {
       delivery: { sendBillingCancellationEmail },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
     await expect(
-      deliverWebhook(action, "evt-linked-revoke-retry", { type: "subscription.expired" }),
+      deliverDodoWebhook("evt-linked-revoke-retry", { type: "subscription.expired" }),
     ).rejects.toBe(explicitFailure);
 
-    const redelivery = await deliverWebhook(action, "evt-linked-revoke-retry", { type: "subscription.expired" });
+    const redelivery = await deliverDodoWebhook("evt-linked-revoke-retry", { type: "subscription.expired" });
 
     expect(await redelivery.json()).toMatchObject({ ok: true, revoked: true });
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(2);
@@ -1517,8 +1516,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-cancel-scheduled-email", { type: "subscription.plan_changed" });
+    const response = await deliverDodoWebhook("evt-cancel-scheduled-email", { type: "subscription.plan_changed" });
 
     expect(await response.json()).toMatchObject({ ok: true, cancellationScheduled: true });
     expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
@@ -1570,8 +1568,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-cancel-scheduled-no-ts", { type: "subscription.plan_changed" });
+    const response = await deliverDodoWebhook("evt-cancel-scheduled-no-ts", { type: "subscription.plan_changed" });
 
     expect(await response.json()).toMatchObject({ ok: true, cancellationScheduled: true });
     expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
@@ -1647,12 +1644,10 @@ describe("customer lifecycle billing emails", () => {
       },
       delivery: { sendBillingCancellationEmail: sendCancellation },
     });
-    const { action } = await import("~/routes/api.webhooks.dodo");
-
     await expect(
-      deliverWebhook(action, eventId, { type: "subscription.plan_changed" }, firstTimestamp),
+      deliverDodoWebhook(eventId, { type: "subscription.plan_changed" }, firstTimestamp),
     ).rejects.toBe(explicitFailure);
-    const redelivery = await deliverWebhook(action, eventId, { type: "subscription.plan_changed" }, secondTimestamp);
+    const redelivery = await deliverDodoWebhook(eventId, { type: "subscription.plan_changed" }, secondTimestamp);
 
     expect(await redelivery.json()).toMatchObject({ ok: true, cancellationScheduled: true });
     expect(applyGrant).toHaveBeenCalledTimes(1);
@@ -1671,8 +1666,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-normal-plan-change", { type: "subscription.plan_changed" });
+    const response = await deliverDodoWebhook("evt-normal-plan-change", { type: "subscription.plan_changed" });
 
     expect(await response.json()).toMatchObject({ ok: true });
     expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
@@ -1695,8 +1689,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    await deliverWebhook(action, "evt-stale-scheduled-cancel", { type: "subscription.plan_changed" });
+    await deliverDodoWebhook("evt-stale-scheduled-cancel", { type: "subscription.plan_changed" });
 
     expect(delivery.sendBillingCancellationEmail).not.toHaveBeenCalled();
   });
@@ -1724,8 +1717,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    await deliverWebhook(action, "evt-reversed-scheduled-cancel", {
+    await deliverDodoWebhook("evt-reversed-scheduled-cancel", {
       type: "subscription.plan_changed",
     });
 
@@ -1756,8 +1748,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    await deliverWebhook(action, "evt-scheduled-cancel-retry", {
+    await deliverDodoWebhook("evt-scheduled-cancel-retry", {
       type: "subscription.plan_changed",
     });
 
@@ -1781,8 +1772,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-expired-email", { type: "subscription.expired" });
+    const response = await deliverDodoWebhook("evt-expired-email", { type: "subscription.expired" });
 
     expect(await response.json()).toMatchObject({ ok: true, revoked: true });
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(1);
@@ -1818,8 +1808,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    await deliverWebhook(action, "evt-expired-stale", { type: "subscription.expired" });
+    await deliverDodoWebhook("evt-expired-stale", { type: "subscription.expired" });
 
     expect(delivery.sendBillingCancellationEmail).not.toHaveBeenCalled();
   });
@@ -1856,8 +1845,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    await deliverWebhook(action, "evt-expired-after-reactivation", {
+    await deliverDodoWebhook("evt-expired-after-reactivation", {
       type: "subscription.expired",
     });
 
@@ -1883,8 +1871,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-refund-email", { type: "refund.succeeded" });
+    const response = await deliverDodoWebhook("evt-refund-email", { type: "refund.succeeded" });
 
     expect(await response.json()).toMatchObject({ ok: true, refunded: true });
     expect(delivery.sendBillingRefundEmail).toHaveBeenCalledTimes(1);
@@ -1913,8 +1900,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-refund-unmatched", { type: "refund.succeeded" });
+    const response = await deliverDodoWebhook("evt-refund-unmatched", { type: "refund.succeeded" });
 
     expect(await response.json()).toMatchObject({ ok: true, refunded: true });
     expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
@@ -1937,8 +1923,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-refund-noop", { type: "refund.succeeded" });
+    const response = await deliverDodoWebhook("evt-refund-noop", { type: "refund.succeeded" });
 
     expect(await response.json()).toMatchObject({ ok: true, refunded: true });
     expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
@@ -1974,8 +1959,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    await deliverWebhook(action, "evt-refund-after-repurchase", { type: "refund.succeeded" });
+    await deliverDodoWebhook("evt-refund-after-repurchase", { type: "refund.succeeded" });
 
     expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
   });
@@ -2024,12 +2008,11 @@ describe("customer lifecycle billing emails", () => {
       delivery: { sendBillingRefundEmail },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
     await expect(
-      deliverWebhook(action, "evt-linked-refund-retry", { type: "refund.succeeded" }),
+      deliverDodoWebhook("evt-linked-refund-retry", { type: "refund.succeeded" }),
     ).rejects.toBe(explicitFailure);
 
-    const redelivery = await deliverWebhook(action, "evt-linked-refund-retry", { type: "refund.succeeded" });
+    const redelivery = await deliverDodoWebhook("evt-linked-refund-retry", { type: "refund.succeeded" });
 
     expect(await redelivery.json()).toMatchObject({ ok: true, refunded: true });
     expect(delivery.sendBillingRefundEmail).toHaveBeenCalledTimes(2);
@@ -2053,8 +2036,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-mor-payment", { type: "payment.succeeded" });
+    const response = await deliverDodoWebhook("evt-mor-payment", { type: "payment.succeeded" });
 
     expect(await response.json()).toMatchObject({ ok: true });
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
@@ -2077,8 +2059,7 @@ describe("customer lifecycle billing emails", () => {
       },
     });
 
-    const { action } = await import("~/routes/api.webhooks.dodo");
-    const response = await deliverWebhook(action, "evt-checkout-fail-no-email", { type: "payment.cancelled" });
+    const response = await deliverDodoWebhook("evt-checkout-fail-no-email", { type: "payment.cancelled" });
 
     expect(await response.json()).toMatchObject({ ok: true, checkoutFailure: true });
     expect(delivery.sendBillingPaymentIssueEmail).not.toHaveBeenCalled();
