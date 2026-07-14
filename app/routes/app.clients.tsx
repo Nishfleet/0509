@@ -309,10 +309,10 @@ export default function ClientsRoute() {
               />
             ))}
             {activeRooms.length === 0 ? (
-              <EmptyState
-                description="Use rooms to keep watchlists, collections, reports, and client context together for agency delivery."
-                title="Create the first client room"
-              />
+							<EmptyState
+								description="Use rooms to keep watchlists, collections, reports, and client context together for agency delivery."
+								title="Create the first client room"
+							/>
             ) : null}
           </div>
         </article>

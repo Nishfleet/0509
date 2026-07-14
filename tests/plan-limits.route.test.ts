@@ -181,7 +181,7 @@ describe("collection limit", () => {
     expect(result).toEqual({
       current: 3,
       error: "plan_limit_exceeded",
-      intent: "create-collection",
+			intent: "create-collection",
       limit: 3,
       message: "You have reached your collection limit.",
       ok: false,
@@ -271,7 +271,7 @@ describe("collection limit", () => {
     );
     expect(result).toEqual({
       ok: true,
-      intent: "add-external-proof",
+			intent: "add-external-proof",
       message: "Saved LinkedIn evidence for Mamaearth.",
     });
   });
@@ -444,7 +444,7 @@ describe("dashboard watchlist limit", () => {
     expect(result).toEqual({
       current: 3,
       error: "plan_limit_exceeded",
-      intent: "track-saved-query",
+			intent: "track-saved-query",
       limit: 3,
       message: "You have reached your competitor tracking limit.",
       ok: false,

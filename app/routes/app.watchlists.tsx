@@ -100,8 +100,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchlists,
   } = await import("~/lib/data.server");
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
-  const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
-  const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
+	const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
+	const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -140,8 +140,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       plan,
       whatsappAvailable,
       showPresenceNav,
-      creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
-      trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
+			creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
+			trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
     };
   }
 
@@ -157,8 +157,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceDeliveryTargetsByChannel,
     recentDeliveryAttemptsByChannel,
     recentProofCaptures,
-    creativeWall,
-    trendDailyActivity,
+		creativeWall,
+		trendDailyActivity,
   ] = await Promise.all([
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
@@ -188,8 +188,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       }),
     )),
     listRecentProofCapturesForWatchlist(env, selectedWatchlist.id, 12),
-    listCreativeWallAds(env, selectedWatchlist.id),
-    listWatchlistDailyActivity(env, selectedWatchlist.id),
+		listCreativeWallAds(env, selectedWatchlist.id),
+		listWatchlistDailyActivity(env, selectedWatchlist.id),
   ]);
 
   const workspaceDeliveryConfig =
@@ -232,8 +232,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     plan,
     whatsappAvailable,
     showPresenceNav,
-    creativeWall,
-    trendDailyActivity,
+		creativeWall,
+		trendDailyActivity,
   };
 }
 
@@ -773,12 +773,12 @@ export default function WatchlistsRoute() {
               );
             })}
             {data.watchlists.length === 0 ? (
-              <EmptyState
-                action={{ label: "Add competitor", to: "/search" }}
-                description="Paste your website or a competitor website to start tracking visible changes."
-                headingLevel="h3"
-                title="Add your first competitor"
-              />
+							<EmptyState
+								action={{ label: "Add competitor", to: "/search" }}
+								description="Paste your website or a competitor website to start tracking visible changes."
+								headingLevel="h3"
+								title="Add your first competitor"
+							/>
             ) : null}
           </div>
         </article>
@@ -874,12 +874,12 @@ export default function WatchlistsRoute() {
       {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
               <div className="f9-work-list">
-                <CreativeWall items={data.creativeWall} plan={data.plan} />
-                <WatchlistTrends
-                  dailyActivity={data.trendDailyActivity}
-                  items={data.creativeWall}
-                  plan={data.plan}
-                />
+								<CreativeWall items={data.creativeWall} plan={data.plan} />
+								<WatchlistTrends
+									dailyActivity={data.trendDailyActivity}
+									items={data.creativeWall}
+									plan={data.plan}
+								/>
                 <div className="f9-detail-split">
                 <section className="f9-detail-cell">
                   <p className="f9-app-kicker">Watchlist setup</p>
@@ -947,8 +947,8 @@ export default function WatchlistsRoute() {
                   <p className="f9-app-kicker">Tracking status</p>
                   <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
                   <p className="f9-muted-copy">
-                    {customerDiscoverySummary(data.discoveryStatus.summary) ??
-                      "Tracking status will appear after the first check."}
+										{customerDiscoverySummary(data.discoveryStatus.summary) ??
+											"Tracking status will appear after the first check."}
                   </p>
                   {data.discoveryStatus.lastErrorCode ? (
                     <p className="f9-muted-copy">
@@ -1362,11 +1362,11 @@ export default function WatchlistsRoute() {
               </div>
             </>
           ) : (
-            <EmptyState
-              action={{ label: "Add competitor", to: "/search" }}
-              description="Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes."
-              title="Add your first competitor"
-            />
+						<EmptyState
+							action={{ label: "Add competitor", to: "/search" }}
+							description="Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes."
+							title="Add your first competitor"
+						/>
           )}
         </article>
       </div>
@@ -1606,7 +1606,7 @@ function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
   if (status.status === "disabled") {
     return "Competitor tracking is unavailable";
   }
-  return "Live ad checks are temporarily delayed";
+	return "Live ad checks are temporarily delayed";
 }
 
 function formatDiscoveryProviderLabel(
@@ -1647,7 +1647,7 @@ function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status"]) {
 function formatDiscoveryIssue(issue: string) {
   const labels: Record<string, string> = {
     browser_unavailable: "The visual ad check is temporarily unavailable.",
-    browser_launch_failed: "The visual ad check is temporarily delayed. We'll retry automatically.",
+		browser_launch_failed: "The visual ad check is temporarily delayed. We'll retry automatically.",
     timeout: "The ad check took too long.",
     login_wall: "Meta asked for login before showing ads.",
     rate_limited: "Meta is rate limiting checks right now.",

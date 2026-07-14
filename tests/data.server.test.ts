@@ -58,7 +58,7 @@ import {
   listCollectionItems,
   listDigests,
   listRetryableDigestRuns,
-  listStaleBillingLifecycleEmailAttempts,
+	listStaleBillingLifecycleEmailAttempts,
   upsertDigestDelivery,
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
@@ -214,7 +214,7 @@ describe("createLandingPageSnapshot", () => {
     expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v1"))).toBe(true);
   });
 
-  it("keeps an accepted digest immutable when a stale retry result arrives", async () => {
+	it("keeps an accepted digest immutable when a stale retry result arrives", async () => {
     const mock = createMockDb();
 
     await upsertDigestDelivery({ DB: mock.db } as never, "digest-1", {
@@ -227,9 +227,9 @@ describe("createLandingPageSnapshot", () => {
     });
 
     const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
-    expect(statement?.sql).toContain("WHEN digest_delivery.status = 'sent'");
-    expect(statement?.sql).toContain("THEN digest_delivery.provider");
-    expect(statement?.sql).toContain("THEN 'sent'");
+		expect(statement?.sql).toContain("WHEN digest_delivery.status = 'sent'");
+		expect(statement?.sql).toContain("THEN digest_delivery.provider");
+		expect(statement?.sql).toContain("THEN 'sent'");
   });
 });
 
@@ -1716,7 +1716,7 @@ describe("Dodo billing persistence", () => {
           {
             plan: "starter",
             dodo_status: "subscription.active",
-            dodo_payment_id: "payment-current",
+						dodo_payment_id: "payment-current",
             dodo_product_id: "prod_starter_annual",
             dodo_subscription_id: "sub_123",
             dodo_customer_id: "cus_123",
@@ -1737,7 +1737,7 @@ describe("Dodo billing persistence", () => {
       ),
     ).resolves.toMatchObject({
       plan: "starter",
-      dodoPaymentId: "payment-current",
+			dodoPaymentId: "payment-current",
       dodoProductId: "prod_starter_annual",
       billingInterval: "annual",
     });
@@ -1889,14 +1889,16 @@ describe("Dodo billing persistence", () => {
       },
     );
 
-    const statement = findStatement(mock.statements, "INSERT INTO user_plan", "'free'");
+		const statement = findStatement(mock.statements, "UPDATE user_plan", "plan = 'free'");
 
-    expect(statement?.sql).toContain("julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)");
-    expect(statement?.sql).not.toContain("dodo_payment_id = excluded.dodo_payment_id");
+		expect(statement?.sql).toContain("dodo_subscription_id = ?");
+		expect(statement?.sql).toContain("julianday(?) >= julianday(plan_updated_at)");
     expect(statement?.bindings).toEqual([
-      "user-1",
       "subscription.cancelled",
       "2026-07-01T00:00:00.000Z",
+			"user-1",
+			"sub_123",
+			"2026-07-01T00:00:00.000Z",
     ]);
   });
 
@@ -1909,6 +1911,7 @@ describe("Dodo billing persistence", () => {
         userId: "user-1",
         status: "subscription.on_hold",
         occurredAt: "2026-07-01T00:00:00.000Z",
+				providerSubscriptionId: "sub_123",
       },
     );
 
@@ -1923,6 +1926,11 @@ describe("Dodo billing persistence", () => {
       null,
       "2026-07-01T00:00:00.000Z",
       "user-1",
+			"sub_123",
+			"sub_123",
+			"sub_123",
+			null,
+			null,
       "2026-07-01T00:00:00.000Z",
     ]);
   });
@@ -1961,9 +1969,8 @@ describe("Dodo billing persistence", () => {
     expect(statements[0]?.bindings).toEqual(["sub_123"]);
   });
 
-  it("falls back to stored Dodo customer id for lifecycle events", async () => {
+	it("fails closed instead of falling back when a supplied Dodo subscription is unknown", async () => {
     const statements: Array<{ sql: string; bindings: unknown[] }> = [];
-    const results = [[], [{ user_id: "user-customer" }]];
     const mock = {
       db: {
         prepare(sql: string) {
@@ -1972,7 +1979,7 @@ describe("Dodo billing persistence", () => {
               statements.push({ sql, bindings });
               return {
                 async all<T>() {
-                  return { results: (results.shift() ?? []) as T[] };
+									return { results: [] as T[] };
                 },
               };
             },
@@ -1987,18 +1994,18 @@ describe("Dodo billing persistence", () => {
         {
           subscriptionId: "sub_missing",
           customerId: "cus_123",
+					customerEmail: "owner@example.com",
         },
       ),
-    ).resolves.toBe("user-customer");
+		).resolves.toBeNull();
 
+		expect(statements).toHaveLength(1);
     expect(statements[0]?.sql).toContain("dodo_subscription_id = ?");
-    expect(statements[1]?.sql).toContain("dodo_customer_id = ?");
-    expect(statements[1]?.bindings).toEqual(["cus_123"]);
-  });
+	});
 
   it("falls back to email only for existing paid Dodo-linked lifecycle rows", async () => {
     const statements: Array<{ sql: string; bindings: unknown[] }> = [];
-    const results = [[], [], [{ user_id: "user-paid-dodo" }]];
+		const results = [[], [{ user_id: "user-paid-dodo" }]];
     const mock = {
       db: {
         prepare(sql: string) {
@@ -2020,17 +2027,16 @@ describe("Dodo billing persistence", () => {
       getUserIdForDodoLifecycle(
         { DB: mock.db } as never,
         {
-          subscriptionId: "sub_missing",
           customerId: "cus_missing",
           customerEmail: "Owner@Example.com",
         },
       ),
     ).resolves.toBe("user-paid-dodo");
 
-    expect(statements[2]?.sql).toContain("user.email = ? COLLATE NOCASE");
-    expect(statements[2]?.sql).toContain("user_plan.plan != 'free'");
-    expect(statements[2]?.sql).toContain("user_plan.dodo_payment_id IS NOT NULL");
-    expect(statements[2]?.bindings).toEqual(["Owner@Example.com"]);
+		expect(statements[1]?.sql).toContain("user.email = ? COLLATE NOCASE");
+		expect(statements[1]?.sql).toContain("user_plan.plan != 'free'");
+		expect(statements[1]?.sql).toContain("user_plan.dodo_payment_id IS NOT NULL");
+		expect(statements[1]?.bindings).toEqual(["Owner@Example.com"]);
   });
 
   it("revokes plan access and expires usage credits for a refunded payment", async () => {
@@ -2155,11 +2161,11 @@ describe("Dodo billing persistence", () => {
     );
 
     expect(claimed).toBe(true);
-    expect(statements).toHaveLength(3);
+		expect(statements).toHaveLength(3);
     expect(statements[0]?.sql).toContain("payload_timestamp");
     expect(statements[1]?.sql).not.toContain("payload_timestamp");
     expect(statements[1]?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
-    expect(statements[2]?.sql).toContain("SELECT metadata_json");
+		expect(statements[2]?.sql).toContain("SELECT metadata_json");
   });
 
   it("rejects blank Dodo webhook event ids", async () => {
@@ -3234,7 +3240,7 @@ describe("listRetryableDigestRuns", () => {
       { DB: mock.db } as never,
       {
         since: "2026-06-01T00:00:00.000Z",
-        stalePreDispatchBefore: "2026-07-13T08:59:00.000Z",
+				stalePreDispatchBefore: "2026-07-13T08:59:00.000Z",
         limit: 25,
       },
     );
@@ -3242,128 +3248,128 @@ describe("listRetryableDigestRuns", () => {
     const query = findStatement(mock.statements, "FROM digest_run");
     expect(query?.sql).toContain("digest_delivery.status = 'failed'");
     expect(query?.sql).toContain("digest_delivery.id IS NULL");
-    expect(query?.sql).toContain("delivery_attempt.status = 'pending'");
-    expect(query?.sql).toContain("delivery_attempt.webhook_status = 'pending'");
-    expect(query?.sql).toContain("delivery_attempt.updated_at <= ?");
-    expect(query?.sql).toContain("digestItemSetProvenance");
+		expect(query?.sql).toContain("delivery_attempt.status = 'pending'");
+		expect(query?.sql).toContain("delivery_attempt.webhook_status = 'pending'");
+		expect(query?.sql).toContain("delivery_attempt.updated_at <= ?");
+		expect(query?.sql).toContain("digestItemSetProvenance");
     expect(query?.bindings).toEqual([
       "2026-06-01T00:00:00.000Z",
-      "2026-07-13T08:59:00.000Z",
-      "atomic-v1",
+			"2026-07-13T08:59:00.000Z",
+			"atomic-v1",
       25,
     ]);
   });
 
-  it("does not let an older legacy backlog starve retryable atomic digests", async () => {
-    const sqlite = createSqliteD1();
-    try {
-      sqlite.sqlite.exec(`
-        CREATE TABLE user (
-          id TEXT PRIMARY KEY NOT NULL,
-          email TEXT NOT NULL,
-          name TEXT NOT NULL
-        );
-        CREATE TABLE digest_run (
-          id TEXT PRIMARY KEY NOT NULL,
-          user_id TEXT NOT NULL,
-          period_start TEXT NOT NULL,
-          period_end TEXT NOT NULL,
-          summary_json TEXT NOT NULL,
-          created_at TEXT NOT NULL
-        );
-        CREATE TABLE digest_delivery (
-          id TEXT PRIMARY KEY NOT NULL,
-          digest_run_id TEXT NOT NULL,
-          status TEXT NOT NULL
-        );
-        CREATE TABLE delivery_attempt (
-          id TEXT PRIMARY KEY NOT NULL,
-          digest_run_id TEXT,
-          status TEXT NOT NULL,
-          webhook_status TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        );
-        INSERT INTO user (id, email, name)
-        VALUES ('user-1', 'owner@example.com', 'Owner');
-      `);
-      const insertRun = sqlite.sqlite.prepare(`
-        INSERT INTO digest_run (
-          id, user_id, period_start, period_end, summary_json, created_at
-        ) VALUES (?, 'user-1', ?, ?, ?, ?)
-      `);
-      for (let index = 0; index < 30; index += 1) {
-        const day = String(index + 1).padStart(2, "0");
-        const periodEnd = `2026-06-${day}T00:00:00.000Z`;
-        insertRun.run(
-          `legacy-${index}`,
-          "2026-06-01T00:00:00.000Z",
-          periodEnd,
-          JSON.stringify({ totalEvents: 1 }),
-          periodEnd,
-        );
-      }
-      insertRun.run(
-        "atomic-valid",
-        "2026-06-01T00:00:00.000Z",
-        "2026-07-01T00:00:00.000Z",
-        JSON.stringify({
-          digestItemSetProvenance: "atomic-v1",
-          digestItemCount: 0,
-        }),
-        "2026-07-01T00:00:00.000Z",
-      );
+	it("does not let an older legacy backlog starve retryable atomic digests", async () => {
+		const sqlite = createSqliteD1();
+		try {
+			sqlite.sqlite.exec(`
+				CREATE TABLE user (
+					id TEXT PRIMARY KEY NOT NULL,
+					email TEXT NOT NULL,
+					name TEXT NOT NULL
+				);
+				CREATE TABLE digest_run (
+					id TEXT PRIMARY KEY NOT NULL,
+					user_id TEXT NOT NULL,
+					period_start TEXT NOT NULL,
+					period_end TEXT NOT NULL,
+					summary_json TEXT NOT NULL,
+					created_at TEXT NOT NULL
+				);
+				CREATE TABLE digest_delivery (
+					id TEXT PRIMARY KEY NOT NULL,
+					digest_run_id TEXT NOT NULL,
+					status TEXT NOT NULL
+				);
+				CREATE TABLE delivery_attempt (
+					id TEXT PRIMARY KEY NOT NULL,
+					digest_run_id TEXT,
+					status TEXT NOT NULL,
+					webhook_status TEXT NOT NULL,
+					updated_at TEXT NOT NULL
+				);
+				INSERT INTO user (id, email, name)
+				VALUES ('user-1', 'owner@example.com', 'Owner');
+			`);
+			const insertRun = sqlite.sqlite.prepare(`
+				INSERT INTO digest_run (
+					id, user_id, period_start, period_end, summary_json, created_at
+				) VALUES (?, 'user-1', ?, ?, ?, ?)
+			`);
+			for (let index = 0; index < 30; index += 1) {
+				const day = String(index + 1).padStart(2, "0");
+				const periodEnd = `2026-06-${day}T00:00:00.000Z`;
+				insertRun.run(
+					`legacy-${index}`,
+					"2026-06-01T00:00:00.000Z",
+					periodEnd,
+					JSON.stringify({ totalEvents: 1 }),
+					periodEnd,
+				);
+			}
+			insertRun.run(
+				"atomic-valid",
+				"2026-06-01T00:00:00.000Z",
+				"2026-07-01T00:00:00.000Z",
+				JSON.stringify({
+					digestItemSetProvenance: "atomic-v1",
+					digestItemCount: 0,
+				}),
+				"2026-07-01T00:00:00.000Z",
+			);
 
-      const rows = await listRetryableDigestRuns(
-        { DB: sqlite.db } as never,
-        {
-          since: "2026-06-01T00:00:00.000Z",
-          stalePreDispatchBefore: "2026-07-13T08:59:00.000Z",
-          limit: 1,
-        },
-      );
+			const rows = await listRetryableDigestRuns(
+				{ DB: sqlite.db } as never,
+				{
+					since: "2026-06-01T00:00:00.000Z",
+					stalePreDispatchBefore: "2026-07-13T08:59:00.000Z",
+					limit: 1,
+				},
+			);
 
-      expect(rows).toEqual([
-        expect.objectContaining({ id: "atomic-valid", userId: "user-1" }),
-      ]);
-    } finally {
-      sqlite.close();
-    }
-  });
+			expect(rows).toEqual([
+				expect.objectContaining({ id: "atomic-valid", userId: "user-1" }),
+			]);
+		} finally {
+			sqlite.close();
+		}
+	});
 });
 
 describe("listStaleBillingLifecycleEmailAttempts", () => {
-  it("only selects bounded stale pre-dispatch billing email claims", async () => {
-    const mock = createMockDb();
+	it("only selects bounded stale pre-dispatch billing email claims", async () => {
+		const mock = createMockDb();
 
-    await listStaleBillingLifecycleEmailAttempts(
-      { DB: mock.db } as never,
-      {
-        staleBefore: "2026-07-13T08:59:00.000Z",
-        limit: 10,
-        maxRecoveryAttempts: 3,
-      },
-    );
+		await listStaleBillingLifecycleEmailAttempts(
+			{ DB: mock.db } as never,
+			{
+				staleBefore: "2026-07-13T08:59:00.000Z",
+				limit: 10,
+				maxRecoveryAttempts: 3,
+			},
+		);
 
-    const query = findStatement(mock.statements, "FROM delivery_attempt");
-    expect(query?.sql).toContain("lane = 'customer'");
-    expect(query?.sql).toContain("channel = 'email'");
-    expect(query?.sql).toContain("watchlist_id IS NULL");
-    expect(query?.sql).toContain("digest_run_id IS NULL");
-    expect(query?.sql).toContain("delivery_target_id IS NULL");
-    expect(query?.sql).toContain("idempotency_key LIKE 'billing-payment-issue:%'");
-    expect(query?.sql).toContain("idempotency_key LIKE 'billing-cancellation:%'");
-    expect(query?.sql).toContain("idempotency_key LIKE 'billing-refund:%'");
-    expect(query?.sql).toContain("status = 'pending'");
-    expect(query?.sql).toContain("webhook_status = 'pending'");
-    expect(query?.sql).toContain("status = 'failed'");
-    expect(query?.sql).toContain("webhook_status = 'failed'");
-    expect(query?.sql).toContain("provider_status_last_seen_at IS NOT NULL");
-    expect(query?.sql).toContain("recoveryAttemptCount");
-    expect(query?.sql).toContain("< ?");
-    expect(query?.sql).toContain("updated_at <= ?");
-    expect(query?.sql).toContain("ORDER BY updated_at ASC");
-    expect(query?.bindings).toEqual(["2026-07-13T08:59:00.000Z", 3, 10]);
-  });
+		const query = findStatement(mock.statements, "FROM delivery_attempt");
+		expect(query?.sql).toContain("lane = 'customer'");
+		expect(query?.sql).toContain("channel = 'email'");
+		expect(query?.sql).toContain("watchlist_id IS NULL");
+		expect(query?.sql).toContain("digest_run_id IS NULL");
+		expect(query?.sql).toContain("delivery_target_id IS NULL");
+		expect(query?.sql).toContain("idempotency_key LIKE 'billing-payment-issue:%'");
+		expect(query?.sql).toContain("idempotency_key LIKE 'billing-cancellation:%'");
+		expect(query?.sql).toContain("idempotency_key LIKE 'billing-refund:%'");
+		expect(query?.sql).toContain("status = 'pending'");
+		expect(query?.sql).toContain("webhook_status = 'pending'");
+		expect(query?.sql).toContain("status = 'failed'");
+		expect(query?.sql).toContain("webhook_status = 'failed'");
+		expect(query?.sql).toContain("provider_status_last_seen_at IS NOT NULL");
+		expect(query?.sql).toContain("recoveryAttemptCount");
+		expect(query?.sql).toContain("< ?");
+		expect(query?.sql).toContain("updated_at <= ?");
+		expect(query?.sql).toContain("ORDER BY updated_at ASC");
+		expect(query?.bindings).toEqual(["2026-07-13T08:59:00.000Z", 3, 10]);
+	});
 });
 
 describe("upsertProofTarget", () => {

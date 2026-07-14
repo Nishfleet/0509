@@ -54,9 +54,9 @@ export function buildSearchAnswer(input: {
         { label: "Fresh ads", value: "Delayed", detail: sourceLabel },
         landingFact,
       ],
-      note:
-        customerDiscoverySummary(result.discoverySummary) ??
-        "Try again shortly or track this competitor so the next sweep keeps checking.",
+			note:
+				customerDiscoverySummary(result.discoverySummary) ??
+				"Try again shortly or track this competitor so the next sweep keeps checking.",
     };
   }
 
@@ -83,7 +83,7 @@ export function buildSearchAnswer(input: {
       facts: [
         { label: "Ads found", value: "0", detail: sourceLabel },
       ],
-      note: customerDiscoverySummary(result.discoverySummary),
+			note: customerDiscoverySummary(result.discoverySummary),
     };
   }
 

@@ -74,8 +74,8 @@ interface ExtractedAdCard {
   landingPageUrl: string | null;
   platforms: string[];
   active: boolean;
-  /** Raw "Started running on <date>" card line; parsed server-side into firstSeenAt. */
-  startedRunning?: string | null;
+	/** Raw "Started running on <date>" card line; parsed server-side into firstSeenAt. */
+	startedRunning?: string | null;
 }
 
 interface BrowserRunSession {
@@ -240,11 +240,11 @@ async function searchMetaLibraryViaSessions(
             "Threads",
           ];
           const platforms = platformTokens.filter((token) => text.includes(token));
-          const startedRunning =
-            text
-              .split("\n")
-              .map((line) => line.trim())
-              .find((line) => /^started running on\b/i.test(line)) ?? null;
+					const startedRunning =
+						text
+							.split("\n")
+							.map((line) => line.trim())
+							.find((line) => /^started running on\b/i.test(line)) ?? null;
 
           return {
             libraryId,
@@ -259,7 +259,7 @@ async function searchMetaLibraryViaSessions(
             // Status is a standalone "Inactive" line on the card; matching the
             // word anywhere flags ads whose creative copy merely contains it.
             active: !text.split("\n").some((line) => /^inactive$/i.test(line.trim())),
-            startedRunning,
+						startedRunning,
           };
         })
         .filter(Boolean);
@@ -1025,7 +1025,7 @@ function extractQuickActionPayloadFromScrape(
 
     const html = element.html ?? "";
     const text = stripHtml(html) || element.text?.trim() || "Meta Ad Library result";
-    const lineText = stripHtmlPreservingLines(html);
+		const lineText = stripHtmlPreservingLines(html);
 
     cards.push({
       libraryId,
@@ -1037,8 +1037,8 @@ function extractQuickActionPayloadFromScrape(
       adSnapshotUrl: absolutizeMetaAdUrl(href),
       landingPageUrl: extractExternalLink(html),
       platforms: inferPlatforms(text),
-      active: !hasStandaloneInactiveLine(lineText),
-      startedRunning: findStartedRunningLine(lineText),
+			active: !hasStandaloneInactiveLine(lineText),
+			startedRunning: findStartedRunningLine(lineText),
     });
   }
 
@@ -1068,15 +1068,15 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
   const seen = new Set<string>();
   const anchorRegex = /<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
 
-  const adAnchorMatches = Array.from(content.matchAll(anchorRegex)).filter((match) => {
+	const adAnchorMatches = Array.from(content.matchAll(anchorRegex)).filter((match) => {
     const href = decodeHtmlEntity(match[2] ?? "");
-    return /\/ads\/library\/\?/.test(href) || /facebook\.com\/ads\/library\/\?/.test(href);
-  });
-  const cardBlockStarts = buildRenderedCardBlockStarts(content, adAnchorMatches);
-  const renderedCardBoundaries = buildRenderedCardBoundaries(content);
+		return /\/ads\/library\/\?/.test(href) || /facebook\.com\/ads\/library\/\?/.test(href);
+	});
+	const cardBlockStarts = buildRenderedCardBlockStarts(content, adAnchorMatches);
+	const renderedCardBoundaries = buildRenderedCardBoundaries(content);
 
-  for (const match of adAnchorMatches) {
-    const href = decodeHtmlEntity(match[2] ?? "");
+	for (const match of adAnchorMatches) {
+		const href = decodeHtmlEntity(match[2] ?? "");
     const idMatch = href.match(/[?&](?:amp;)?id=(\d+)/);
     const libraryId = idMatch?.[1];
     if (!libraryId || seen.has(libraryId)) {
@@ -1084,13 +1084,13 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
     }
     seen.add(libraryId);
 
-    const anchorStart = match.index ?? 0;
-    const renderedCardBoundary = findRenderedCardBoundary(renderedCardBoundaries, anchorStart);
-    const contextHtml =
-      renderedCardBoundary
-        ? content.slice(renderedCardBoundary.start, renderedCardBoundary.end)
-        : sliceRenderedCardBlock(content, anchorStart, libraryId, cardBlockStarts);
-    const contextLineText = stripHtmlPreservingLines(contextHtml);
+		const anchorStart = match.index ?? 0;
+		const renderedCardBoundary = findRenderedCardBoundary(renderedCardBoundaries, anchorStart);
+		const contextHtml =
+			renderedCardBoundary
+				? content.slice(renderedCardBoundary.start, renderedCardBoundary.end)
+				: sliceRenderedCardBlock(content, anchorStart, libraryId, cardBlockStarts);
+		const contextLineText = stripHtmlPreservingLines(contextHtml);
     const body = stripHtml(contextHtml) || stripHtml(match[3] ?? "");
     const landingPageUrl = extractExternalLink(contextHtml);
 
@@ -1104,8 +1104,8 @@ function extractQuickActionPayloadFromRenderedHtml(content: string): QuickAction
       adSnapshotUrl: absolutizeMetaAdUrl(href),
       landingPageUrl,
       platforms: inferPlatforms(body),
-      active: !hasStandaloneInactiveLine(contextLineText),
-      startedRunning: findStartedRunningLine(contextLineText),
+			active: !hasStandaloneInactiveLine(contextLineText),
+			startedRunning: findStartedRunningLine(contextLineText),
     });
   }
 
@@ -1125,194 +1125,194 @@ type RenderedCardBlockStart = { libraryId: string; start: number };
 
 /** Keep rendered-HTML fallback extraction inside one deterministic Library ID block. */
 function buildRenderedCardBlockStarts(
-  content: string,
-  adAnchorMatches: RegExpMatchArray[],
+	content: string,
+	adAnchorMatches: RegExpMatchArray[],
 ): RenderedCardBlockStart[] {
-  const starts = new Map<string, number>();
+	const starts = new Map<string, number>();
 
-  for (const match of adAnchorMatches) {
-    const href = decodeHtmlEntity(match[2] ?? "");
-    const libraryId = href.match(/[?&](?:amp;)?id=(\d+)/)?.[1];
-    if (!libraryId || starts.has(libraryId)) {
-      continue;
-    }
-    starts.set(libraryId, match.index ?? 0);
-  }
+	for (const match of adAnchorMatches) {
+		const href = decodeHtmlEntity(match[2] ?? "");
+		const libraryId = href.match(/[?&](?:amp;)?id=(\d+)/)?.[1];
+		if (!libraryId || starts.has(libraryId)) {
+			continue;
+		}
+		starts.set(libraryId, match.index ?? 0);
+	}
 
-  const libraryIdLineRegex = /Library\s+ID:\s*(\d+)/gi;
-  for (const match of content.matchAll(libraryIdLineRegex)) {
-    const libraryId = match[1];
-    if (!libraryId) {
-      continue;
-    }
-    const libraryIdStart = match.index ?? 0;
-    // Meta can place the card status on its own line immediately before the
-    // Library ID. Keep that status with this card so the preceding card does
-    // not inherit it when slicing at the next Library ID.
-    const start =
-      findStandaloneStatusImmediatelyBefore(content, libraryIdStart) ?? libraryIdStart;
-    const current = starts.get(libraryId);
-    starts.set(libraryId, current === undefined ? start : Math.min(current, start));
-  }
+	const libraryIdLineRegex = /Library\s+ID:\s*(\d+)/gi;
+	for (const match of content.matchAll(libraryIdLineRegex)) {
+		const libraryId = match[1];
+		if (!libraryId) {
+			continue;
+		}
+		const libraryIdStart = match.index ?? 0;
+		// Meta can place the card status on its own line immediately before the
+		// Library ID. Keep that status with this card so the preceding card does
+		// not inherit it when slicing at the next Library ID.
+		const start =
+			findStandaloneStatusImmediatelyBefore(content, libraryIdStart) ?? libraryIdStart;
+		const current = starts.get(libraryId);
+		starts.set(libraryId, current === undefined ? start : Math.min(current, start));
+	}
 
-  return [...starts]
-    .map(([libraryId, start]) => ({ libraryId, start }))
-    .sort((a, b) => a.start - b.start);
+	return [...starts]
+		.map(([libraryId, start]) => ({ libraryId, start }))
+		.sort((a, b) => a.start - b.start);
 }
 
 function findStandaloneStatusImmediatelyBefore(content: string, beforeIndex: number) {
-  const prefix = content.slice(0, beforeIndex);
-  const statusRegex =
-    /(?:^|>|\r?\n)(?:\s|&nbsp;)*(Active|Inactive)(?:\s|&nbsp;)*(?=<|$|\r?\n)/gi;
-  let statusStart: number | null = null;
+	const prefix = content.slice(0, beforeIndex);
+	const statusRegex =
+		/(?:^|>|\r?\n)(?:\s|&nbsp;)*(Active|Inactive)(?:\s|&nbsp;)*(?=<|$|\r?\n)/gi;
+	let statusStart: number | null = null;
 
-  for (const match of prefix.matchAll(statusRegex)) {
-    const matched = match[0];
-    const status = match[1];
-    if (!status) {
-      continue;
-    }
+	for (const match of prefix.matchAll(statusRegex)) {
+		const matched = match[0];
+		const status = match[1];
+		if (!status) {
+			continue;
+		}
 
-    const statusOffset = matched.toLowerCase().lastIndexOf(status.toLowerCase());
-    if (statusOffset < 0) {
-      continue;
-    }
-    const candidateStart = (match.index ?? 0) + statusOffset;
-    const candidateEnd = candidateStart + status.length;
-    const gap = prefix.slice(candidateEnd);
-    if (stripHtmlPreservingLines(gap).trim()) {
-      continue;
-    }
-    statusStart = candidateStart;
-  }
+		const statusOffset = matched.toLowerCase().lastIndexOf(status.toLowerCase());
+		if (statusOffset < 0) {
+			continue;
+		}
+		const candidateStart = (match.index ?? 0) + statusOffset;
+		const candidateEnd = candidateStart + status.length;
+		const gap = prefix.slice(candidateEnd);
+		if (stripHtmlPreservingLines(gap).trim()) {
+			continue;
+		}
+		statusStart = candidateStart;
+	}
 
-  return statusStart;
+	return statusStart;
 }
 
 function sliceRenderedCardBlock(
-  content: string,
-  anchorStart: number,
-  libraryId: string,
-  cardBlockStarts: RenderedCardBlockStart[],
+	content: string,
+	anchorStart: number,
+	libraryId: string,
+	cardBlockStarts: RenderedCardBlockStart[],
 ) {
-  const current = cardBlockStarts.find((entry) => entry.libraryId === libraryId);
-  const blockStart = current?.start ?? anchorStart;
-  const next = cardBlockStarts.find((entry) => entry.start > blockStart);
-  const blockEnd = next?.start ?? content.length;
-  return content.slice(blockStart, Math.max(blockStart, blockEnd));
+	const current = cardBlockStarts.find((entry) => entry.libraryId === libraryId);
+	const blockStart = current?.start ?? anchorStart;
+	const next = cardBlockStarts.find((entry) => entry.start > blockStart);
+	const blockEnd = next?.start ?? content.length;
+	return content.slice(blockStart, Math.max(blockStart, blockEnd));
 }
 
 type RenderedCardBoundary = { start: number; end: number; libraryIds: Set<string> };
 type RenderedCardStackEntry = {
-  name: string;
-  start: number;
-  boundary: boolean;
-  libraryIds: Set<string>;
+	name: string;
+	start: number;
+	boundary: boolean;
+	libraryIds: Set<string>;
 };
 
 /** Scan semantic card boundaries once; selection for each ad is then local. */
 function buildRenderedCardBoundaries(content: string): RenderedCardBoundary[] {
-  const tagRegex = /<!--[\s\S]*?-->|<\/?([a-z][\w:-]*)(?:\s[^>]*?)?>/gi;
-  const stack: RenderedCardStackEntry[] = [];
-  const voidTags = new Set([
-    "area",
-    "base",
-    "br",
-    "col",
-    "embed",
-    "hr",
-    "img",
-    "input",
-    "link",
-    "meta",
-    "param",
-    "source",
-    "track",
-    "wbr",
-  ]);
-  let match: RegExpExecArray | null;
-  const boundaries: RenderedCardBoundary[] = [];
+	const tagRegex = /<!--[\s\S]*?-->|<\/?([a-z][\w:-]*)(?:\s[^>]*?)?>/gi;
+	const stack: RenderedCardStackEntry[] = [];
+	const voidTags = new Set([
+		"area",
+		"base",
+		"br",
+		"col",
+		"embed",
+		"hr",
+		"img",
+		"input",
+		"link",
+		"meta",
+		"param",
+		"source",
+		"track",
+		"wbr",
+	]);
+	let match: RegExpExecArray | null;
+	const boundaries: RenderedCardBoundary[] = [];
 
-  while ((match = tagRegex.exec(content))) {
-    const rawTag = match[0];
-    const name = match[1]?.toLowerCase();
-    if (!name || rawTag.startsWith("<!--")) {
-      continue;
-    }
-    if (rawTag.startsWith("</")) {
-      const popped = popRenderedTag(stack, name);
-      if (popped?.boundary) {
-        boundaries.push({
-          start: popped.start,
-          end: (match.index ?? 0) + rawTag.length,
-          libraryIds: popped.libraryIds,
-        });
-      }
-      continue;
-    }
-    if (voidTags.has(name) || /\/\s*>$/.test(rawTag)) {
-      continue;
-    }
-    const entry: RenderedCardStackEntry = {
-      name,
-      start: match.index ?? 0,
-      boundary: isRenderedCardBoundary(rawTag, name),
-      libraryIds: new Set<string>(),
-    };
-    const libraryId = name === "a" ? extractLibraryIdFromAnchorTag(rawTag) : null;
-    if (libraryId) {
-      for (const ancestor of stack) {
-        if (ancestor.boundary) {
-          ancestor.libraryIds.add(libraryId);
-        }
-      }
-    }
-    stack.push(entry);
-  }
+	while ((match = tagRegex.exec(content))) {
+		const rawTag = match[0];
+		const name = match[1]?.toLowerCase();
+		if (!name || rawTag.startsWith("<!--")) {
+			continue;
+		}
+		if (rawTag.startsWith("</")) {
+			const popped = popRenderedTag(stack, name);
+			if (popped?.boundary) {
+				boundaries.push({
+					start: popped.start,
+					end: (match.index ?? 0) + rawTag.length,
+					libraryIds: popped.libraryIds,
+				});
+			}
+			continue;
+		}
+		if (voidTags.has(name) || /\/\s*>$/.test(rawTag)) {
+			continue;
+		}
+		const entry: RenderedCardStackEntry = {
+			name,
+			start: match.index ?? 0,
+			boundary: isRenderedCardBoundary(rawTag, name),
+			libraryIds: new Set<string>(),
+		};
+		const libraryId = name === "a" ? extractLibraryIdFromAnchorTag(rawTag) : null;
+		if (libraryId) {
+			for (const ancestor of stack) {
+				if (ancestor.boundary) {
+					ancestor.libraryIds.add(libraryId);
+				}
+			}
+		}
+		stack.push(entry);
+	}
 
-  return boundaries;
+	return boundaries;
 }
 
 function extractLibraryIdFromAnchorTag(rawTag: string) {
-  const href = rawTag.match(/\bhref=(['"])(.*?)\1/i)?.[2];
-  return decodeHtmlEntity(href ?? "").match(/[?&](?:amp;)?id=(\d+)/)?.[1] ?? null;
+	const href = rawTag.match(/\bhref=(['"])(.*?)\1/i)?.[2];
+	return decodeHtmlEntity(href ?? "").match(/[?&](?:amp;)?id=(\d+)/)?.[1] ?? null;
 }
 
 /** Prefer the smallest real card boundary with exactly one Library ID. */
 function findRenderedCardBoundary(boundaries: RenderedCardBoundary[], anchorStart: number) {
-  const boundary = boundaries
-    .filter(
-      (candidate) =>
-        candidate.start <= anchorStart && anchorStart < candidate.end && candidate.libraryIds.size === 1,
-    )
-    .sort((left, right) => left.end - left.start - (right.end - right.start))[0];
-  if (!boundary) {
-    return null;
-  }
+	const boundary = boundaries
+		.filter(
+			(candidate) =>
+				candidate.start <= anchorStart && anchorStart < candidate.end && candidate.libraryIds.size === 1,
+		)
+		.sort((left, right) => left.end - left.start - (right.end - right.start))[0];
+	if (!boundary) {
+		return null;
+	}
 
-  return boundary;
+	return boundary;
 }
 
 function popRenderedTag(
-  stack: RenderedCardStackEntry[],
-  name: string,
+	stack: RenderedCardStackEntry[],
+	name: string,
 ) {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    if (stack[index].name !== name) {
-      continue;
-    }
-    const [popped] = stack.splice(index, 1);
-    return popped;
-  }
-  return null;
+	for (let index = stack.length - 1; index >= 0; index -= 1) {
+		if (stack[index].name !== name) {
+			continue;
+		}
+		const [popped] = stack.splice(index, 1);
+		return popped;
+	}
+	return null;
 }
 
 function isRenderedCardBoundary(rawTag: string, name: string) {
-  return (
-    name === "article" ||
-    /\brole\s*=\s*["']article["']/i.test(rawTag) ||
-    /\bdata-ad-preview(?:\s*=|\s|>)/i.test(rawTag)
-  );
+	return (
+		name === "article" ||
+		/\brole\s*=\s*["']article["']/i.test(rawTag) ||
+		/\bdata-ad-preview(?:\s*=|\s|>)/i.test(rawTag)
+	);
 }
 
 function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[] {
@@ -1365,9 +1365,9 @@ function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[] {
       landingPageUrl: inferLandingPageFromTextBlock(block),
       platforms: inferPlatforms(blockText),
       active: !block.some((line) => /^Inactive$/i.test(line)),
-      // isTextCardUiLine keeps this line out of the ad body; the block still
-      // carries it, so capture Meta's published start date before it drops.
-      startedRunning: findStartedRunningLine(blockText),
+			// isTextCardUiLine keeps this line out of the ad body; the block still
+			// carries it, so capture Meta's published start date before it drops.
+			startedRunning: findStartedRunningLine(blockText),
     });
   }
 
@@ -1611,10 +1611,10 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
       card.adSnapshotUrl || `https://www.facebook.com/ads/library/?id=${card.libraryId}`,
     countries: [query.filters.country || "all"],
     platforms: card.platforms,
-    // Meta publishes the ad's start date on every Ad Library card ("Started
-    // running on <date>"). Treat it as firstSeenAt exactly like the Meta API
-    // path treats ad_delivery_start_time; unparseable stays an honest null.
-    firstSeenAt: parseStartedRunningDate(card.startedRunning ?? null),
+		// Meta publishes the ad's start date on every Ad Library card ("Started
+		// running on <date>"). Treat it as firstSeenAt exactly like the Meta API
+		// path treats ad_delivery_start_time; unparseable stays an honest null.
+		firstSeenAt: parseStartedRunningDate(card.startedRunning ?? null),
     lastSeenAt: null,
     active: card.active,
     researchSummary:

@@ -1,7 +1,7 @@
 import {
   Form,
   Link,
-  redirect,
+	redirect,
   useActionData,
   useLoaderData,
 } from "react-router";
@@ -33,13 +33,13 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
     resolveWorkspacePreparedBy,
   } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
-  const { workspaceUserId } = await requireWorkspaceSession(env, request);
+	const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const reportGate = await requireWorkspacePlanFeature(env, workspaceUserId, "client_reports");
   if (!reportGate.ok) {
     throw reportGate.response;
   }
   const preparedBy = await resolveWorkspacePreparedBy(env, workspaceUserId);
-  const pdfGate = await requireWorkspacePlanFeature(env, workspaceUserId, "pdf_reports");
+	const pdfGate = await requireWorkspacePlanFeature(env, workspaceUserId, "pdf_reports");
 
   return {
     report: await loadReport({
@@ -48,7 +48,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
       reportId: params.id,
     }),
     preparedBy,
-    pdfAvailable: pdfGate.ok,
+		pdfAvailable: pdfGate.ok,
   };
 }
 
@@ -67,7 +67,7 @@ const PDF_RENDER_SHARE_PURPOSE = "pdf-render";
 export async function action({ context, params, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { createShareLink, listActiveShareLinks } = await import("~/lib/data.server");
+	const { createShareLink, listActiveShareLinks } = await import("~/lib/data.server");
   const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
@@ -96,61 +96,61 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      intent,
-      message: "Snapshot link created.",
+			intent,
+			message: "Snapshot link created.",
       shareUrl: new URL(`/share/${share.token}`, request.url).toString(),
+		};
+	}
+
+	if (intent === "download-pdf") {
+		const pdfGate = await requireWorkspacePlanFeature(env, workspaceUserId, "pdf_reports");
+		if (!pdfGate.ok) {
+			throw pdfGate.response;
+		}
+		const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
+		if (!shareGate.ok) {
+			throw shareGate.response;
+		}
+
+		const snapshotPayload = sanitizeReportShareSnapshot(report);
+		const pdfSnapshotPayload = {
+			...snapshotPayload,
+			sharePurpose: PDF_RENDER_SHARE_PURPOSE,
     };
-  }
+		const currentSnapshotFingerprint = reportSnapshotContentFingerprint(pdfSnapshotPayload);
+		const now = Date.now();
+		const recentSnapshot = (await listActiveShareLinks(env, workspaceUserId, 50)).find(
+			(link) =>
+				link.isSnapshot &&
+				link.resourceType === "report" &&
+				link.resourceId === report.reportId &&
+				now - new Date(link.createdAt).getTime() < PDF_SNAPSHOT_REUSE_WINDOW_MS &&
+				link.snapshotPayload?.sharePurpose === PDF_RENDER_SHARE_PURPOSE &&
+				link.expiresAt !== null &&
+				Date.parse(link.expiresAt) > now &&
+				Date.parse(link.expiresAt) <= now + PDF_RENDER_SHARE_TTL_MS &&
+				Date.parse(link.expiresAt) >= now + PDF_RENDER_SHARE_MIN_REMAINING_TTL_MS &&
+				currentSnapshotFingerprint !== null &&
+				reportSnapshotContentFingerprint(link.snapshotPayload) === currentSnapshotFingerprint,
+		);
+		const token =
+			recentSnapshot?.token ??
+			(
+				await createShareLink(
+					env,
+					{ ...session, user: { ...session.user, id: workspaceUserId } },
+					{
+						resourceType: "report",
+						resourceId: report.reportId,
+						isSnapshot: true,
+						snapshotPayload: pdfSnapshotPayload as unknown as Record<string, unknown>,
+						expiresAt: new Date(now + PDF_RENDER_SHARE_TTL_MS).toISOString(),
+					},
+				)
+			).token;
 
-  if (intent === "download-pdf") {
-    const pdfGate = await requireWorkspacePlanFeature(env, workspaceUserId, "pdf_reports");
-    if (!pdfGate.ok) {
-      throw pdfGate.response;
-    }
-    const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
-    if (!shareGate.ok) {
-      throw shareGate.response;
-    }
-
-    const snapshotPayload = sanitizeReportShareSnapshot(report);
-    const pdfSnapshotPayload = {
-      ...snapshotPayload,
-      sharePurpose: PDF_RENDER_SHARE_PURPOSE,
-    };
-    const currentSnapshotFingerprint = reportSnapshotContentFingerprint(pdfSnapshotPayload);
-    const now = Date.now();
-    const recentSnapshot = (await listActiveShareLinks(env, workspaceUserId, 50)).find(
-      (link) =>
-        link.isSnapshot &&
-        link.resourceType === "report" &&
-        link.resourceId === report.reportId &&
-        now - new Date(link.createdAt).getTime() < PDF_SNAPSHOT_REUSE_WINDOW_MS &&
-        link.snapshotPayload?.sharePurpose === PDF_RENDER_SHARE_PURPOSE &&
-        link.expiresAt !== null &&
-        Date.parse(link.expiresAt) > now &&
-        Date.parse(link.expiresAt) <= now + PDF_RENDER_SHARE_TTL_MS &&
-        Date.parse(link.expiresAt) >= now + PDF_RENDER_SHARE_MIN_REMAINING_TTL_MS &&
-        currentSnapshotFingerprint !== null &&
-        reportSnapshotContentFingerprint(link.snapshotPayload) === currentSnapshotFingerprint,
-    );
-    const token =
-      recentSnapshot?.token ??
-      (
-        await createShareLink(
-          env,
-          { ...session, user: { ...session.user, id: workspaceUserId } },
-          {
-            resourceType: "report",
-            resourceId: report.reportId,
-            isSnapshot: true,
-            snapshotPayload: pdfSnapshotPayload as unknown as Record<string, unknown>,
-            expiresAt: new Date(now + PDF_RENDER_SHARE_TTL_MS).toISOString(),
-          },
-        )
-      ).token;
-
-    // 303 forces a GET; with a full-document form post the browser follows
-    // it into the attachment download and stays on the report page.
+		// 303 forces a GET; with a full-document form post the browser follows
+		// it into the attachment download and stays on the report page.
     throw redirect(`/share/${token}/pdf`, 303);
   }
 
@@ -169,48 +169,48 @@ function sanitizeReportShareSnapshot<T extends { reportId: string; resourceId: s
 }
 
 function reportSnapshotContentFingerprint(value: unknown) {
-  try {
-    const serialized = JSON.stringify(value);
-    if (!serialized) return null;
+	try {
+		const serialized = JSON.stringify(value);
+		if (!serialized) return null;
 
-    const payload = JSON.parse(serialized) as unknown;
-    if (!isReportDocument(payload) || !isValidSnapshotGeneratedAt(payload.generatedAt)) {
-      return null;
-    }
+		const payload = JSON.parse(serialized) as unknown;
+		if (!isReportDocument(payload) || !isValidSnapshotGeneratedAt(payload.generatedAt)) {
+			return null;
+		}
 
-    const { generatedAt: _generatedAt, ...content } = payload;
-    return JSON.stringify(sortJsonValue(content));
-  } catch {
-    return null;
-  }
+		const { generatedAt: _generatedAt, ...content } = payload;
+		return JSON.stringify(sortJsonValue(content));
+	} catch {
+		return null;
+	}
 }
 
 function sortJsonValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortJsonValue);
-  }
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return Object.fromEntries(
-      Object.keys(record)
-        .sort()
-        .map((key) => [key, sortJsonValue(record[key])]),
-    );
-  }
-  return value;
+	if (Array.isArray(value)) {
+		return value.map(sortJsonValue);
+	}
+	if (value && typeof value === "object") {
+		const record = value as Record<string, unknown>;
+		return Object.fromEntries(
+			Object.keys(record)
+				.sort()
+				.map((key) => [key, sortJsonValue(record[key])]),
+		);
+	}
+	return value;
 }
 
 function isValidSnapshotGeneratedAt(value: unknown) {
-  return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value));
+	return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value));
 }
 
 export default function ReportsRoute() {
-  const { report, preparedBy, pdfAvailable } = useLoaderData<typeof loader>();
+	const { report, preparedBy, pdfAvailable } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const shareUrl =
-    actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
-      ? actionData.shareUrl
-      : null;
+	const shareUrl =
+		actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
+			? actionData.shareUrl
+			: null;
   const backHref =
     report.resourceType === "collection"
       ? `/app/collections?collection=${report.resourceId}`
@@ -219,24 +219,24 @@ export default function ReportsRoute() {
   return (
     <DashboardPage>
       <section className="f9-app-stack">
-      <ActionFeedback data={actionData} fallback />
-      <ActionFeedback data={actionData} intent="share-report">
-        {shareUrl ? (
-          <>
-            {" "}
-            <a href={shareUrl} rel="noreferrer" target="_blank">
-              {shareUrl}
-            </a>{" "}
-            <CopyButton value={shareUrl} />
-          </>
-        ) : null}
-      </ActionFeedback>
+			<ActionFeedback data={actionData} fallback />
+			<ActionFeedback data={actionData} intent="share-report">
+				{shareUrl ? (
+					<>
+						{" "}
+						<a href={shareUrl} rel="noreferrer" target="_blank">
+							{shareUrl}
+						</a>{" "}
+						<CopyButton value={shareUrl} />
+					</>
+				) : null}
+			</ActionFeedback>
 
       <article className="f9-app-panel f9-report-page">
         <div className="f9-panel-toolbar f9-report-toolbar">
           <div>
             <p className="f9-app-kicker">Evidence report</p>
-            <p className="f9-panel-toolbar-heading">Client-ready report</p>
+						<p className="f9-panel-toolbar-heading">Client-ready report</p>
           </div>
 
           <div className="f9-action-row">
@@ -249,25 +249,25 @@ export default function ReportsRoute() {
                 Share snapshot
               </SubmitButton>
             </Form>
-            {pdfAvailable ? (
-              // reloadDocument: a browser-native POST follows the 303 into
-              // the attachment download without routing PDF bytes through
-              // the SPA navigation.
-              <Form method="post" reloadDocument>
-                <input name="intent" type="hidden" value="download-pdf" />
-                <SubmitButton className="f9-primary-button" intent="download-pdf" pendingLabel="Preparing…">
-                  Download PDF
-                </SubmitButton>
-              </Form>
-            ) : (
-              <button
-                className="f9-primary-button"
-                onClick={() => window.print()}
-                type="button"
-              >
-                Print report
-              </button>
-            )}
+						{pdfAvailable ? (
+							// reloadDocument: a browser-native POST follows the 303 into
+							// the attachment download without routing PDF bytes through
+							// the SPA navigation.
+							<Form method="post" reloadDocument>
+								<input name="intent" type="hidden" value="download-pdf" />
+								<SubmitButton className="f9-primary-button" intent="download-pdf" pendingLabel="Preparing…">
+									Download PDF
+								</SubmitButton>
+							</Form>
+						) : (
+							<button
+								className="f9-primary-button"
+								onClick={() => window.print()}
+								type="button"
+							>
+								Print report
+							</button>
+						)}
           </div>
         </div>
 
@@ -293,7 +293,7 @@ async function loadReport(input: {
   const { getEnv } = await import("~/lib/context.server");
   const {
     getCollection,
-    getLatestDigestRunSummaryForWatchlist,
+		getLatestDigestRunSummaryForWatchlist,
     getWatchlist,
     listAdsByIds,
     listCollectionItems,
@@ -332,21 +332,21 @@ async function loadReport(input: {
   }
 
   const events = await listWatchEvents(env, watchlist.id, 60);
-  const [ads, aiWeeklySummary] = await Promise.all([
-    listAdsByIds(
-      env,
-      events
-        .map((event) => event.adId)
-        .filter((adId): adId is string => Boolean(adId)),
-    ),
-    // Latest stored digest paragraph; never a fresh AI call at report time.
-    getLatestDigestRunSummaryForWatchlist(env, workspaceUserId, watchlist.id),
-  ]);
+	const [ads, aiWeeklySummary] = await Promise.all([
+		listAdsByIds(
+			env,
+			events
+				.map((event) => event.adId)
+				.filter((adId): adId is string => Boolean(adId)),
+		),
+		// Latest stored digest paragraph; never a fresh AI call at report time.
+		getLatestDigestRunSummaryForWatchlist(env, workspaceUserId, watchlist.id),
+	]);
 
   return buildWatchlistReport({
     watchlist,
     events,
     adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
-    aiWeeklySummary,
+		aiWeeklySummary,
   });
 }

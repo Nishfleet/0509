@@ -16,9 +16,9 @@ export interface ReportField {
 }
 
 export interface ReportLandingPage {
-  url: string | null;
-  headline: string | null;
-  captureLabel: string | null;
+	url: string | null;
+	headline: string | null;
+	captureLabel: string | null;
   capturedAt: string | null;
   signals: ReportField[];
 }
@@ -59,15 +59,15 @@ export interface ReportSourceCoverage {
 // omits absent fields entirely — a sparse report shows only what is known.
 export interface ReportRow {
   id: string;
-  advertiser: string | null;
-  previewHeadline: string | null;
-  offer: string | null;
-  cta: string | null;
+	advertiser: string | null;
+	previewHeadline: string | null;
+	offer: string | null;
+	cta: string | null;
   formatLabel: string;
-  languageLabel: string | null;
+	languageLabel: string | null;
   previewImageUrl: string | null;
-  creativeText: string | null;
-  translatedText: string | null;
+	creativeText: string | null;
+	translatedText: string | null;
   landingPage: ReportLandingPage;
   analysisFields: ReportField[];
   tags: string[];
@@ -76,9 +76,9 @@ export interface ReportRow {
 }
 
 export interface ReportAiWeeklySummary {
-  paragraph: string;
-  generatedAt: string | null;
-  periodEnd: string;
+	paragraph: string;
+	generatedAt: string | null;
+	periodEnd: string;
 }
 
 export interface ReportDocument {
@@ -93,9 +93,9 @@ export interface ReportDocument {
   stats: ReportStat[];
   insightDepth: InsightDepthSummary;
   sourceCoverage?: ReportSourceCoverage;
-  // AI weekly summary sourced from the latest stored digest run — never a
-  // fresh AI call at report time. Absent renders nothing.
-  aiWeeklySummary?: ReportAiWeeklySummary;
+	// AI weekly summary sourced from the latest stored digest run — never a
+	// fresh AI call at report time. Absent renders nothing.
+	aiWeeklySummary?: ReportAiWeeklySummary;
   rows: ReportRow[];
 }
 
@@ -143,48 +143,48 @@ export function isReportDocument(value: unknown): value is ReportDocument {
  * public share view promises before any row can be rendered.
  */
 export function isRenderableReportSnapshot(value: unknown): value is ReportDocument {
-  if (!isReportDocument(value)) {
-    return false;
-  }
+	if (!isReportDocument(value)) {
+		return false;
+	}
 
-  const candidate = value as unknown as Record<string, unknown>;
-  if (
-    candidate.resourceType !== "collection" &&
-    candidate.resourceType !== "watchlist"
-  ) {
-    return false;
-  }
+	const candidate = value as unknown as Record<string, unknown>;
+	if (
+		candidate.resourceType !== "collection" &&
+		candidate.resourceType !== "watchlist"
+	) {
+		return false;
+	}
 
-  if (candidate.resourceType === "collection") {
-    return true;
-  }
+	if (candidate.resourceType === "collection") {
+		return true;
+	}
 
-  if (!isPlainRecord(candidate.sourceCoverage)) {
-    return false;
-  }
+	if (!isPlainRecord(candidate.sourceCoverage)) {
+		return false;
+	}
 
-  return (candidate.rows as unknown[])
-    .filter(isPlainRecord)
-    .every(hasVerifiedReportRowProof);
+	return (candidate.rows as unknown[])
+		.filter(isPlainRecord)
+		.every(hasVerifiedReportRowProof);
 }
 
 function hasVerifiedReportRowProof(row: Record<string, unknown>) {
-  if (!isPlainRecord(row.event)) {
-    return false;
-  }
+	if (!isPlainRecord(row.event)) {
+		return false;
+	}
 
-  const proofStatusLabel = readTrimmedString(row.event.proofStatusLabel)?.toLowerCase();
-  const sourceTypeLabel = readTrimmedString(row.event.sourceTypeLabel)?.toLowerCase();
-  return (
-    (proofStatusLabel === "verified evidence" || proofStatusLabel === "verified proof") &&
-    (sourceTypeLabel === "saved evidence" || sourceTypeLabel === "proof snapshot")
-  );
+	const proofStatusLabel = readTrimmedString(row.event.proofStatusLabel)?.toLowerCase();
+	const sourceTypeLabel = readTrimmedString(row.event.sourceTypeLabel)?.toLowerCase();
+	return (
+		(proofStatusLabel === "verified evidence" || proofStatusLabel === "verified proof") &&
+		(sourceTypeLabel === "saved evidence" || sourceTypeLabel === "proof snapshot")
+	);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+	return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function readTrimmedString(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+	return typeof value === "string" && value.trim() ? value.trim() : null;
 }

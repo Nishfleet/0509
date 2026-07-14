@@ -206,7 +206,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     pendingCheckout:
       checkoutNotice === "already-started" ||
       (billing.dodoStatus === "checkout_pending" && checkoutNotice !== "dodo"),
-    invalidCheckoutTarget: checkoutNotice === "invalid-target",
+		invalidCheckoutTarget: checkoutNotice === "invalid-target",
     cancelledCheckout: checkoutNotice === "cancelled",
     agencyCheckoutHeld: checkoutNotice === "agency-held",
     planCheckoutUnavailable: checkoutNotice === "plan-unavailable",
@@ -247,8 +247,8 @@ export default function BillingRoute() {
   const plans = data.plans ?? pricingPlans();
   const bundles = data.usageBundles ?? usageBundles();
   const pricingPreview = data.pricingPreview as AppPricingPreview | null | undefined;
-  const pricingPreviewResolved = pricingPreview != null;
-  const pricingUnavailable = pricingPreview?.available === false;
+	const pricingPreviewResolved = pricingPreview != null;
+	const pricingUnavailable = pricingPreview?.available === false;
   const commercialLaunch = data.commercialLaunch ?? {
     scoutSaleOpen: true,
     starterSaleOpen: true,
@@ -269,19 +269,19 @@ export default function BillingRoute() {
         title="Billing & usage"
       />
     <section className="f9-app-stack">
-      {data.invalidCheckoutTarget ? (
-        <div
-          aria-atomic="true"
-          aria-live="assertive"
-          className="f9-message is-error"
-          role="alert"
-        >
-          <p>
-            That checkout option is invalid or no longer available. Choose a current plan or check
-            pack below; no billing change was made.
-          </p>
-        </div>
-      ) : null}
+			{data.invalidCheckoutTarget ? (
+				<div
+					aria-atomic="true"
+					aria-live="assertive"
+					className="f9-message is-error"
+					role="alert"
+				>
+					<p>
+						That checkout option is invalid or no longer available. Choose a current plan or check
+						pack below; no billing change was made.
+					</p>
+				</div>
+			) : null}
 
       {data.blockedCheckout ? (
         <div className="f9-message is-error">
@@ -434,7 +434,7 @@ export default function BillingRoute() {
             <span className="f9-app-kicker">Choose inside the app</span>
             <h2>Pick a plan and billing cycle</h2>
             <p className="f9-muted-copy">
-              Prices are shown in your local currency automatically. Pay annually and get{" "}
+							Prices are shown in your local currency automatically. Pay annually and get{" "}
               {DODO_ANNUAL_SAVINGS_LABEL}.
             </p>
           </div>
@@ -456,11 +456,11 @@ export default function BillingRoute() {
           </div>
         </div>
 
-        {pricingUnavailable ? (
-          <div className="f9-message is-error" role="status">
-            <p>Prices are temporarily unavailable — try again shortly</p>
-          </div>
-        ) : null}
+				{pricingUnavailable ? (
+					<div className="f9-message is-error" role="status">
+						<p>Prices are temporarily unavailable — try again shortly</p>
+					</div>
+				) : null}
 
         <div className="f9-app-plan-grid">
           {plans.map((plan) => {
@@ -469,7 +469,7 @@ export default function BillingRoute() {
             const annualIsValid = dodoAnnualSavingsIsValid(annualValidation);
             const annualBlocked = selectedCycle === "yearly" && !annualIsValid;
             const priceReady = Boolean(planCyclePrice);
-            const planPriceUnavailable = pricingPreviewResolved && !priceReady;
+						const planPriceUnavailable = pricingPreviewResolved && !priceReady;
             const planSaleOpen = planSaleIsOpen(commercialLaunch, plan.slug);
             const planCanUseInAppChange = plan.slug === "scout" || plan.slug === "starter";
             const isCurrentPlan = billing.plan === plan.slug;
@@ -509,13 +509,13 @@ export default function BillingRoute() {
                 <div className="f9-app-plan-card-head">
                   <div>
                     <span className="f9-app-kicker">{plan.name}</span>
-                    {planCyclePrice ? (
-                      <strong>{planCyclePrice}</strong>
-                    ) : planPriceUnavailable ? (
-                      <strong>Price unavailable</strong>
-                    ) : (
-                      <PriceLoadingSkeleton />
-                    )}
+										{planCyclePrice ? (
+											<strong>{planCyclePrice}</strong>
+										) : planPriceUnavailable ? (
+											<strong>Price unavailable</strong>
+										) : (
+											<PriceLoadingSkeleton />
+										)}
                   </div>
                   {isCurrentBillingChoice ? (
                     <span className="f9-status-pill is-healthy">Current plan</span>
@@ -554,10 +554,10 @@ export default function BillingRoute() {
                     <button className="f9-secondary-button" disabled type="button">
                       Current plan
                     </button>
-                  ) : planPriceUnavailable && planCanUseInAppChange ? (
-                    <button className="f9-secondary-button" disabled type="button">
-                      Price unavailable
-                    </button>
+									) : planPriceUnavailable && planCanUseInAppChange ? (
+										<button className="f9-secondary-button" disabled type="button">
+											Price unavailable
+										</button>
                   ) : canStartCheckout && checkoutSku ? (
                     <Form action="/api/billing/dodo/checkout" method="post">
                       <input name="sku" type="hidden" value={checkoutSku} />
@@ -596,27 +596,27 @@ export default function BillingRoute() {
                       Request billing help
                     </Link>
                   ) : billing.plan !== "free" ? (
-                    hasPaymentIssue || hasCancellationScheduled || hasPlanChangePending || annualBlocked || !checkoutSku ? (
-                      <button className="f9-secondary-button" disabled type="button">
-                        {hasPaymentIssue
-                          ? "Resolve payment first"
-                          : hasCancellationScheduled
-                            ? "Cancellation scheduled"
-                          : hasPlanChangePending
-                            ? "Change pending"
-                          : annualBlocked
-                            ? "Annual unavailable"
+										hasPaymentIssue || hasCancellationScheduled || hasPlanChangePending || annualBlocked || !checkoutSku ? (
+											<button className="f9-secondary-button" disabled type="button">
+												{hasPaymentIssue
+													? "Resolve payment first"
+													: hasCancellationScheduled
+														? "Cancellation scheduled"
+													: hasPlanChangePending
+														? "Change pending"
+													: annualBlocked
+														? "Annual unavailable"
                             : "Change unavailable"}
-                      </button>
-                    ) : (
-                      <PriceLoadingButton />
-                    )
-                  ) : annualBlocked || !checkoutSku ? (
+											</button>
+										) : (
+											<PriceLoadingButton />
+										)
+									) : annualBlocked || !checkoutSku ? (
                     <button className="f9-secondary-button" disabled type="button">
-                      {annualBlocked ? "Annual unavailable" : "Checkout unavailable"}
+											{annualBlocked ? "Annual unavailable" : "Checkout unavailable"}
                     </button>
-                  ) : (
-                    <PriceLoadingButton />
+									) : (
+										<PriceLoadingButton />
                   )}
                   {!selected ? (
                     <Link
@@ -765,27 +765,27 @@ export default function BillingRoute() {
             const previewPrice = bundlePrice(pricingPreview, bundle.slug);
             const sku = bundle.sku ?? "";
             const ready = Boolean(previewPrice && sku);
-            const bundlePriceUnavailable = pricingPreviewResolved && !previewPrice;
+						const bundlePriceUnavailable = pricingPreviewResolved && !previewPrice;
             return (
               <section className="f9-topup-card" key={bundle.slug}>
                 <span className="f9-app-kicker">{bundle.creditLabel}</span>
                 <h3>{bundle.name}</h3>
-                {previewPrice ? (
-                  <strong>{previewPrice}</strong>
-                ) : bundlePriceUnavailable ? (
-                  <strong>Price unavailable</strong>
-                ) : (
-                  <PriceLoadingSkeleton />
-                )}
+								{previewPrice ? (
+									<strong>{previewPrice}</strong>
+								) : bundlePriceUnavailable ? (
+									<strong>Price unavailable</strong>
+								) : (
+									<PriceLoadingSkeleton />
+								)}
                 <p>{bundle.detail}</p>
                 {!canManageBilling ? (
                   <button className="f9-secondary-button" disabled type="button">
                     Owner managed
                   </button>
-                ) : bundlePriceUnavailable && isPaid ? (
-                  <button className="f9-secondary-button" disabled type="button">
-                    Price unavailable
-                  </button>
+								) : bundlePriceUnavailable && isPaid ? (
+									<button className="f9-secondary-button" disabled type="button">
+										Price unavailable
+									</button>
                 ) : isPaid && ready ? (
                   <Form action="/api/billing/dodo/checkout" method="post">
                     <input name="sku" type="hidden" value={sku} />
@@ -798,11 +798,11 @@ export default function BillingRoute() {
                       Buy pack
                     </SubmitButton>
                   </Form>
-                ) : isPaid && sku ? (
-                  <PriceLoadingButton />
+								) : isPaid && sku ? (
+									<PriceLoadingButton />
                 ) : isPaid ? (
                   <button className="f9-secondary-button" disabled type="button">
-                    Pack unavailable
+										Pack unavailable
                   </button>
                 ) : (
                   <Link className="f9-secondary-button" to="/app/billing?source=top-up#plans">
@@ -832,9 +832,9 @@ export default function BillingRoute() {
             <div className="f9-work-row">
               <strong>Manage subscription</strong>
               <span>
-                  Cancel anytime — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
-                  confirm your cancellation request. Open the billing portal for card and invoice
-                  tasks. Use the plan cards above to switch plans or billing cycles.{" "}
+									Cancel anytime — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
+									confirm your cancellation request. Open the billing portal for card and invoice
+									tasks. Use the plan cards above to switch plans or billing cycles.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
                   <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
                     Open billing portal
@@ -878,25 +878,25 @@ export default function BillingRoute() {
 }
 
 function PriceLoadingSkeleton() {
-  return (
-    <strong
-      aria-atomic="true"
-      aria-live="polite"
-      className="f9-skeleton-line f9-skeleton-price"
-      role="status"
-    >
-      <span className="f9-sr-only">Loading price</span>
-    </strong>
-  );
+	return (
+		<strong
+			aria-atomic="true"
+			aria-live="polite"
+			className="f9-skeleton-line f9-skeleton-price"
+			role="status"
+		>
+			<span className="f9-sr-only">Loading price</span>
+		</strong>
+	);
 }
 
 function PriceLoadingButton() {
-  return (
-    <button aria-busy="true" className="f9-secondary-button" disabled type="button">
-      <span aria-hidden="true" className="f9-button-spinner" />
-      Loading price…
-    </button>
-  );
+	return (
+		<button aria-busy="true" className="f9-secondary-button" disabled type="button">
+			<span aria-hidden="true" className="f9-button-spinner" />
+			Loading price…
+		</button>
+	);
 }
 
 function PlanChangeNotice({

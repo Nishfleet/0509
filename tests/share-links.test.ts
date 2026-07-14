@@ -185,7 +185,7 @@ describe("/share/:token route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
+			resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),
@@ -277,7 +277,7 @@ describe("/share/:token route", () => {
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
+			resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),
@@ -298,13 +298,13 @@ describe("/share/:token route", () => {
           subtitle: "Latest verified moves",
           summary: "One move included.",
           generatedAt: "2026-06-08T01:00:00.000Z",
-          aiWeeklySummary: {
-            paragraph: "Competitors concentrated this week's movement on promotional offers.",
-            generatedAt: "2026-06-08T01:05:00.000Z",
-            periodEnd: "2026-06-08T01:00:00.000Z",
-            strategyWatchlistIds: ["watch-internal-1"],
-            ownerId: "owner-secret",
-          },
+					aiWeeklySummary: {
+						paragraph: "Competitors concentrated this week's movement on promotional offers.",
+						generatedAt: "2026-06-08T01:05:00.000Z",
+						periodEnd: "2026-06-08T01:00:00.000Z",
+						strategyWatchlistIds: ["watch-internal-1"],
+						ownerId: "owner-secret",
+					},
           ownerId: "owner-secret",
           recipientEmail: "owner@example.com",
           externalMessageId: "provider-msg-1",
@@ -405,14 +405,14 @@ describe("/share/:token route", () => {
       kind: "report",
       reportId: "shared-report",
       resourceId: "shared",
-      aiWeeklySummary: {
-        paragraph: "Competitors concentrated this week's movement on promotional offers.",
-        generatedAt: "2026-06-08T01:05:00.000Z",
-        periodEnd: "2026-06-08T01:00:00.000Z",
-      },
+			aiWeeklySummary: {
+				paragraph: "Competitors concentrated this week's movement on promotional offers.",
+				generatedAt: "2026-06-08T01:05:00.000Z",
+				periodEnd: "2026-06-08T01:00:00.000Z",
+			},
       rows: [expect.objectContaining({ id: "row-1" })],
     });
-    expect(serialized).toContain("Competitors concentrated this week's movement");
+		expect(serialized).toContain("Competitors concentrated this week's movement");
     expect(serialized).not.toContain("watch-internal-1");
     expect(serialized).not.toContain("watch-event-internal-1");
     expect(serialized).not.toContain("owner-secret");
@@ -426,59 +426,59 @@ describe("/share/:token route", () => {
     expect(serialized).not.toContain("javascript:alert");
   });
 
-  it.each([
-    ["missing", undefined],
-    ["unknown", "workspace"],
-  ])("rejects report snapshots with %s resourceType", async (_label, resourceType) => {
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({})),
-    }));
-    vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
-    }));
-    vi.doMock("~/lib/data.server", () => ({
-      getCollection: vi.fn(),
-      getDigest: vi.fn(),
-      getShareLink: vi.fn().mockResolvedValue({
-        id: "share-1",
-        token: "token-1",
-        userId: "user-1",
-        resourceType: "report",
-        resourceId: "collection-internal-1",
-        isSnapshot: true,
-        snapshotPayload: {
-          kind: "report",
-          reportId: "collection:collection-internal-1",
-          ...(resourceType ? { resourceType } : {}),
-          resourceId: "collection-internal-1",
-          title: "Invalid report",
-          rows: [],
-        },
-        createdAt: "2026-06-08T01:00:00.000Z",
-        expiresAt: null,
-        revokedAt: null,
-      }),
-      getWatchlist: vi.fn(),
-      listCollectionItems: vi.fn(),
-      listWatchEvents: vi.fn(),
-    }));
+	it.each([
+		["missing", undefined],
+		["unknown", "workspace"],
+	])("rejects report snapshots with %s resourceType", async (_label, resourceType) => {
+		vi.doMock("~/lib/context.server", () => ({
+			getEnv: vi.fn(() => ({})),
+		}));
+		vi.doMock("~/lib/plan-feature-gate.server", () => ({
+			resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
+		}));
+		vi.doMock("~/lib/data.server", () => ({
+			getCollection: vi.fn(),
+			getDigest: vi.fn(),
+			getShareLink: vi.fn().mockResolvedValue({
+				id: "share-1",
+				token: "token-1",
+				userId: "user-1",
+				resourceType: "report",
+				resourceId: "collection-internal-1",
+				isSnapshot: true,
+				snapshotPayload: {
+					kind: "report",
+					reportId: "collection:collection-internal-1",
+					...(resourceType ? { resourceType } : {}),
+					resourceId: "collection-internal-1",
+					title: "Invalid report",
+					rows: [],
+				},
+				createdAt: "2026-06-08T01:00:00.000Z",
+				expiresAt: null,
+				revokedAt: null,
+			}),
+			getWatchlist: vi.fn(),
+			listCollectionItems: vi.fn(),
+			listWatchEvents: vi.fn(),
+		}));
 
-    const { loader } = await import("~/routes/share.$token");
-    const result = await loader({
-      context: {},
-      params: { token: "token-1" },
-      request: new Request("https://0509.io/share/token-1"),
-    } as never);
+		const { loader } = await import("~/routes/share.$token");
+		const result = await loader({
+			context: {},
+			params: { token: "token-1" },
+			request: new Request("https://0509.io/share/token-1"),
+		} as never);
 
-    expect((result as unknown as { payload: unknown }).payload).toBeNull();
-  });
+		expect((result as unknown as { payload: unknown }).payload).toBeNull();
+	});
 
   it("rejects legacy watchlist report snapshots that lack proof eligibility metadata", async () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
+			resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getCollection: vi.fn(),

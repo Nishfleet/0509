@@ -84,14 +84,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const description = String(formData.get("description") ?? "").trim();
 
     if (!name) {
-      return { ok: false, intent, message: "Collection name is required." };
+			return { ok: false, intent, message: "Collection name is required." };
     }
 
     const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "collections", {
       limitMessage: "You have reached your collection limit.",
     });
     if (!limitGate.ok) {
-      return { ...limitGate.result, intent };
+			return { ...limitGate.result, intent };
     }
 
     const collection = await createCollection(env, workspaceUserId, {
@@ -101,7 +101,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      intent,
+			intent,
       message: `Created ${collection?.name ?? name}.`,
     };
   }
@@ -121,8 +121,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      intent,
-      itemId,
+			intent,
+			itemId,
       message: "Collection note updated.",
     };
   }
@@ -145,43 +145,43 @@ export async function action({ context, request }: ActionFunctionArgs) {
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    // Invalid URLs or dates throw 4xx Responses out of buildExternalProofAd;
-    // return them as inline form feedback instead of nuking the page into
-    // the route ErrorBoundary (same pattern as app.notifications.ts).
-    let ad;
-    try {
-      ad = await addExternalProofToCollection(env, workspaceUserId, collectionId, {
-        advertiser,
-        proofUrl,
-        channel,
-        hook,
-        offer,
-        cta,
-        note,
-        observedAt,
-        spend,
-        impressions,
-        reach,
-        tags,
-      });
-    } catch (error) {
-      if (error instanceof Response && error.status >= 400 && error.status < 500) {
-        const { sanitizeCustomerFacingMessage } = await import("~/lib/customer-route-error");
-        return {
-          ok: false,
-          intent,
-          message: sanitizeCustomerFacingMessage(
-            (await error.text()) || "That evidence link could not be saved. Check the URL and date.",
-          ),
-        };
-      }
+		// Invalid URLs or dates throw 4xx Responses out of buildExternalProofAd;
+		// return them as inline form feedback instead of nuking the page into
+		// the route ErrorBoundary (same pattern as app.notifications.ts).
+		let ad;
+		try {
+			ad = await addExternalProofToCollection(env, workspaceUserId, collectionId, {
+				advertiser,
+				proofUrl,
+				channel,
+				hook,
+				offer,
+				cta,
+				note,
+				observedAt,
+				spend,
+				impressions,
+				reach,
+				tags,
+			});
+		} catch (error) {
+			if (error instanceof Response && error.status >= 400 && error.status < 500) {
+				const { sanitizeCustomerFacingMessage } = await import("~/lib/customer-route-error");
+				return {
+					ok: false,
+					intent,
+					message: sanitizeCustomerFacingMessage(
+						(await error.text()) || "That evidence link could not be saved. Check the URL and date.",
+					),
+				};
+			}
 
-      throw error;
-    }
+			throw error;
+		}
 
     return {
       ok: true,
-      intent,
+			intent,
       message: `Saved ${ad.platforms[0] ?? "external"} evidence for ${ad.advertiser}.`,
     };
   }
@@ -192,8 +192,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const deleted = await deleteCollection(env, workspaceUserId, collectionId);
 
     return deleted
-      ? { ok: true, intent, message: "Collection deleted. The plan slot is free again." }
-      : { ok: false, intent, message: "Collection not found." };
+			? { ok: true, intent, message: "Collection deleted. The plan slot is free again." }
+			: { ok: false, intent, message: "Collection not found." };
   }
 
   if (intent === "remove-item") {
@@ -202,20 +202,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const removed = await deleteCollectionItem(env, workspaceUserId, itemId);
 
     return removed
-      ? { ok: true, intent, itemId, message: "Removed from the collection." }
-      : { ok: false, intent, itemId, message: "Collection item not found." };
+			? { ok: true, intent, itemId, message: "Removed from the collection." }
+			: { ok: false, intent, itemId, message: "Collection item not found." };
   }
 
   if (intent === "share-collection") {
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
     if (!shareGate.ok) {
-      return { ok: false, intent, message: "Share links are included in the Agency plan." };
+			return { ok: false, intent, message: "Share links are included in the Agency plan." };
     }
     const collectionId = String(formData.get("collectionId") ?? "");
     const collection = await getCollection(env, collectionId, workspaceUserId);
     if (!collection) {
-      return { ok: false, intent, message: "Collection not found." };
+			return { ok: false, intent, message: "Collection not found." };
     }
     const share = await createShareLink(
       env,
@@ -228,8 +228,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      intent,
-      message: "Share link created.",
+			intent,
+			message: "Share link created.",
       shareUrl: new URL(`/share/${share.token}`, request.url).toString(),
     };
   }
@@ -245,10 +245,10 @@ export default function CollectionsRoute() {
   const actionData = useActionData<typeof action>();
   const [searchParams] = useSearchParams();
   const insightDepth = data.selectedCollection ? buildCollectionInsightDepth(data.items) : null;
-  const shareUrl =
-    actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
-      ? actionData.shareUrl
-      : null;
+	const shareUrl =
+		actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
+			? actionData.shareUrl
+			: null;
 
   return (
     <DashboardPage>
@@ -258,12 +258,12 @@ export default function CollectionsRoute() {
           title="Collections"
         />
 
-      <ActionFeedback
-        data={actionData}
-        fallback
-        planLimitTo="/app/billing?source=collections#plans"
-      />
-      <ActionFeedback data={actionData} intent="delete-collection" />
+			<ActionFeedback
+				data={actionData}
+				fallback
+				planLimitTo="/app/billing?source=collections#plans"
+			/>
+			<ActionFeedback data={actionData} intent="delete-collection" />
 
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel f9-side-panel">
@@ -274,11 +274,11 @@ export default function CollectionsRoute() {
             </div>
           </div>
 
-          <ActionFeedback
-            data={actionData}
-            intent="create-collection"
-            planLimitTo="/app/billing?source=collections#plans"
-          />
+					<ActionFeedback
+						data={actionData}
+						intent="create-collection"
+						planLimitTo="/app/billing?source=collections#plans"
+					/>
           <Form className="f9-auth-form" method="post">
             <input name="intent" type="hidden" value="create-collection" />
             <label className="f9-field">
@@ -308,11 +308,11 @@ export default function CollectionsRoute() {
               </Link>
             ))}
             {data.collections.length === 0 ? (
-              <EmptyState
-                description="Collections you create with the form above appear here."
-                title="Nothing saved yet"
-                variant="inline"
-              />
+							<EmptyState
+								description="Collections you create with the form above appear here."
+								title="Nothing saved yet"
+								variant="inline"
+							/>
             ) : null}
           </div>
         </article>
@@ -351,32 +351,32 @@ export default function CollectionsRoute() {
                       Create share link
                     </SubmitButton>
                   </Form>
-                  <Form method="post">
+									<Form method="post">
                     <input name="intent" type="hidden" value="delete-collection" />
                     <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
-                    <ConfirmSubmitButton
-                      className="f9-secondary-button"
-                      confirmLabel="Confirm — delete collection?"
-                      intent="delete-collection"
-                      pendingLabel="Deleting…"
-                    >
+										<ConfirmSubmitButton
+											className="f9-secondary-button"
+											confirmLabel="Confirm — delete collection?"
+											intent="delete-collection"
+											pendingLabel="Deleting…"
+										>
                       Delete collection
-                    </ConfirmSubmitButton>
+										</ConfirmSubmitButton>
                   </Form>
                 </div>
               </div>
 
-              <ActionFeedback data={actionData} intent="share-collection">
-                {shareUrl ? (
-                  <>
-                    {" "}
-                    <a href={shareUrl} rel="noreferrer" target="_blank">
-                      {shareUrl}
-                    </a>{" "}
-                    <CopyButton value={shareUrl} />
-                  </>
-                ) : null}
-              </ActionFeedback>
+							<ActionFeedback data={actionData} intent="share-collection">
+								{shareUrl ? (
+									<>
+										{" "}
+										<a href={shareUrl} rel="noreferrer" target="_blank">
+											{shareUrl}
+										</a>{" "}
+										<CopyButton value={shareUrl} />
+									</>
+								) : null}
+							</ActionFeedback>
 
               {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
 
@@ -451,20 +451,20 @@ export default function CollectionsRoute() {
                   <span>Note</span>
                   <textarea name="note" placeholder="Optional team context" rows={2} />
                 </label>
-                <ActionFeedback data={actionData} intent="add-external-proof" />
+								<ActionFeedback data={actionData} intent="add-external-proof" />
                 <SubmitButton className="f9-secondary-button" intent="add-external-proof" pendingLabel="Saving…">
                   Save evidence link
                 </SubmitButton>
               </Form>
 
-              <ActionFeedback data={actionData} intent="remove-item" />
+							<ActionFeedback data={actionData} intent="remove-item" />
 
               {data.items.length === 0 ? (
-                <EmptyState
-                  action={{ label: "Open search", to: "/search" }}
-                  description="Save an evidence link here, or run a competitor search and save the examples your team needs to reuse."
-                  title="Add evidence or save from search"
-                />
+								<EmptyState
+									action={{ label: "Open search", to: "/search" }}
+									description="Save an evidence link here, or run a competitor search and save the examples your team needs to reuse."
+									title="Add evidence or save from search"
+								/>
               ) : (
                 <div className="f9-work-list">
                   {data.items.map((item) => (
@@ -502,11 +502,11 @@ export default function CollectionsRoute() {
                           <span>Tags</span>
                           <input defaultValue={item.tags.join(", ")} name="tags" />
                         </label>
-                        <ActionFeedback
-                          data={actionData}
-                          intent="update-item"
-                          match={{ itemId: item.id }}
-                        />
+												<ActionFeedback
+													data={actionData}
+													intent="update-item"
+													match={{ itemId: item.id }}
+												/>
                         <SubmitButton
                           className="f9-secondary-button"
                           intent="update-item"
@@ -519,16 +519,16 @@ export default function CollectionsRoute() {
                       <Form method="post">
                         <input name="intent" type="hidden" value="remove-item" />
                         <input name="itemId" type="hidden" value={item.id} />
-                        <ConfirmSubmitButton
+												<ConfirmSubmitButton
                           className="f9-secondary-button"
-                          confirmLabel="Confirm — remove?"
+													confirmLabel="Confirm — remove?"
                           intent="remove-item"
                           match={{ itemId: item.id }}
                           pendingLabel="Removing…"
-                          variant="light"
+													variant="light"
                         >
                           Remove from collection
-                        </ConfirmSubmitButton>
+												</ConfirmSubmitButton>
                       </Form>
                     </article>
                   ))}
@@ -536,10 +536,10 @@ export default function CollectionsRoute() {
               )}
             </>
           ) : (
-            <EmptyState
-              description="Collections keep competitor examples, notes, tags, and share links ready for your team. Group competitor ads, offers, and landing-page evidence with the create form."
-              title="Create your first evidence collection"
-            />
+						<EmptyState
+							description="Collections keep competitor examples, notes, tags, and share links ready for your team. Group competitor ads, offers, and landing-page evidence with the create form."
+							title="Create your first evidence collection"
+						/>
           )}
         </article>
       </div>

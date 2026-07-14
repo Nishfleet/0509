@@ -418,7 +418,7 @@ export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppW
         };
         const existing = deduped.get(status.id);
 
-        if (!existing || statusPriority(candidate) >= statusPriority(existing)) {
+				if (!existing || shouldReplaceWhatsAppStatus(existing, candidate)) {
           deduped.set(status.id, candidate);
         }
       }
@@ -430,7 +430,6 @@ export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppW
 
 function mapWhatsAppStatus(rawStatus: string | undefined, providerError: string | null) {
   switch ((rawStatus ?? "").toLowerCase()) {
-    case "sent":
     case "delivered":
     case "read":
       return {
@@ -438,6 +437,12 @@ function mapWhatsAppStatus(rawStatus: string | undefined, providerError: string 
         status: "sent" as const,
         errorMessage: null,
       };
+		case "sent":
+			return {
+				webhookStatus: "pending" as const,
+				status: "sent" as const,
+				errorMessage: null,
+			};
     case "failed":
     case "undelivered":
       return {
@@ -578,21 +583,22 @@ function constantTimeHexEqual(left: string, right: string) {
   return mismatch === 0;
 }
 
-function statusPriority(candidate: WhatsAppWebhookStatusUpdate) {
-  if (candidate.webhookStatus === "failed") {
-    return 4;
+function shouldReplaceWhatsAppStatus(
+	existing: WhatsAppWebhookStatusUpdate,
+	candidate: WhatsAppWebhookStatusUpdate,
+) {
+	const existingTerminal =
+		existing.webhookStatus === "delivered" || existing.webhookStatus === "failed";
+	const candidateSeenAt = Date.parse(candidate.providerStatusLastSeenAt);
+	const existingSeenAt = Date.parse(existing.providerStatusLastSeenAt);
+
+	if (candidateSeenAt < existingSeenAt) {
+		return false;
   }
-  const rawStatus = candidate.rawProviderStatus?.toLowerCase() ?? null;
-  if (rawStatus === "read") {
-    return 3;
+	if (existingTerminal) {
+		return candidate.webhookStatus === existing.webhookStatus;
   }
-  if (rawStatus === "delivered") {
-    return 2;
-  }
-  if (rawStatus === "sent" || candidate.webhookStatus === "delivered") {
-    return 1;
-  }
-  return 0;
+	return true;
 }
 
 function normalizeWhatsAppDestinationName(value: string | null | undefined) {

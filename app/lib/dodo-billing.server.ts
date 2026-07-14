@@ -711,9 +711,9 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
     plan,
     cycle,
     status: "active",
-    cancellationScheduled:
-      eventType === "subscription.plan_changed" &&
-      readDodoBoolean(root, "cancel_at_next_billing_date") === true,
+		cancellationScheduled:
+			eventType === "subscription.plan_changed" &&
+			readDodoBoolean(root, "cancel_at_next_billing_date") === true,
     grantedAt: providerGrantedAt || null,
     hasProviderGrantTimestamp: Boolean(providerGrantedAt),
     nextBillingAt: readString(root, "next_billing_date") || null,
@@ -821,14 +821,14 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
   if (!userId && !rawSubscriptionId && !customerId && !hasPlanProof) return null;
 
   const subscriptionId = rawSubscriptionId || eventType;
-  const paymentId = eventType === "payment.failed"
-    ? readString(root, "payment_id") || readString(root, "id") || null
-    : null;
+	const paymentId = eventType === "payment.failed"
+		? readString(root, "payment_id") || readString(root, "id") || null
+		: null;
   const revokedAt =
     readString(root, "updated_at") ||
-    readString(root, "cancelled_at") ||
+		readString(root, "cancelled_at") ||
     readString(root, "created_at") ||
-    readString(envelope, "timestamp") ||
+		readString(envelope, "timestamp") ||
     new Date().toISOString();
 
   return {
@@ -838,10 +838,10 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
     customerId,
     customerEmail: hasPlanProof ? customerEmail : null,
     subscriptionId,
-    paymentId,
+		paymentId,
     status: action === "payment_issue" ? eventType : readString(root, "status") || eventType,
     revokedAt,
-    effectiveAt: revokedAt,
+		effectiveAt: revokedAt,
     metadata: root,
   };
 }

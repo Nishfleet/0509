@@ -150,12 +150,12 @@ export async function upsertWorkspaceDeliveryConfig(
 }
 
 export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
-  const row = await one<{
-    id: string;
-    email: string | null;
-    emailVerified: number | boolean | null;
-    name: string | null;
-  }>(
+	const row = await one<{
+		id: string;
+		email: string | null;
+		emailVerified: number | boolean | null;
+		name: string | null;
+	}>(
     env,
     `
       SELECT id, email, emailVerified, name
@@ -173,7 +173,7 @@ export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
   return {
     id: row.id,
     email: row.email,
-    emailVerified: row.emailVerified === 1 || row.emailVerified === true,
+		emailVerified: row.emailVerified === 1 || row.emailVerified === true,
     name: row.name ?? "",
   };
 }

@@ -8,7 +8,7 @@ import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
   getOldestUserId,
-  getUserDeliveryProfile,
+	getUserDeliveryProfile,
   getUserIdByEmail,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
@@ -23,20 +23,20 @@ import {
   upsertDigestDelivery,
 } from "~/lib/data.server";
 import {
-  isStalePreDispatchAttempt,
-  markDeliveryAttemptProviderDispatch,
+	isStalePreDispatchAttempt,
+	markDeliveryAttemptProviderDispatch,
 } from "~/lib/delivery-attempt-lease";
 import {
-  EMAIL_PROVIDER,
-  type EmailProviderResult,
-  appBaseUrl,
-  escapeHtml,
-  escapeSlackText,
-  formatDate,
-  providerAcceptedAt,
-  readString,
-  sendCloudflareEmail,
-  stripHtml,
+	EMAIL_PROVIDER,
+	type EmailProviderResult,
+	appBaseUrl,
+	escapeHtml,
+	escapeSlackText,
+	formatDate,
+	providerAcceptedAt,
+	readString,
+	sendCloudflareEmail,
+	stripHtml,
 } from "~/lib/delivery-email-core.server";
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -66,24 +66,24 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 // Facade re-exports: product code and tests import every delivery sender
 // from this module; the billing lifecycle domain lives in its own file.
 export {
-  BILLING_LIFECYCLE_RECOVERY_MAX_ATTEMPTS,
-  BillingLifecycleEmailExplicitFailure,
-  isBillingLifecycleEmailExplicitFailure,
-  prepareBillingLifecycleEmailOutbox,
-  reconcileBillingLifecycleEmailDelivery,
-  recoverAbandonedBillingLifecycleEmails,
-  sendBillingCancellationEmail,
-  sendBillingPaymentIssueEmail,
-  sendBillingRefundEmail,
-  type BillingLifecycleEmailOutboxInput,
+	BILLING_LIFECYCLE_RECOVERY_MAX_ATTEMPTS,
+	BillingLifecycleEmailExplicitFailure,
+	isBillingLifecycleEmailExplicitFailure,
+	prepareBillingLifecycleEmailOutbox,
+	reconcileBillingLifecycleEmailDelivery,
+	recoverAbandonedBillingLifecycleEmails,
+	sendBillingCancellationEmail,
+	sendBillingPaymentIssueEmail,
+	sendBillingRefundEmail,
+	type BillingLifecycleEmailOutboxInput,
 } from "~/lib/delivery-billing-lifecycle.server";
 export {
-  sendAccountActionEmail,
-  sendDeliveryTestEmail,
-  sendEmailVerificationEmail,
-  sendOperatorAlertEmail,
-  sendPasswordResetEmail,
-  sendTeamInviteEmail,
+	sendAccountActionEmail,
+	sendDeliveryTestEmail,
+	sendEmailVerificationEmail,
+	sendOperatorAlertEmail,
+	sendPasswordResetEmail,
+	sendTeamInviteEmail,
 } from "~/lib/delivery-account-emails.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
@@ -95,11 +95,11 @@ interface DigestAttemptSummary {
   providerMessageId: string | null;
   errorMessage: string | null;
   deliveredAt: string | null;
-  // True only when THIS execution won the delivery-attempt claim and owns
-  // the outcome; mirrors of another writer's in-flight attempt leave it
-  // unset. Gates the failed→pending aggregate overwrite in
-  // upsertDigestDelivery.
-  claimedByThisRun?: boolean;
+	// True only when THIS execution won the delivery-attempt claim and owns
+	// the outcome; mirrors of another writer's in-flight attempt leave it
+	// unset. Gates the failed→pending aggregate overwrite in
+	// upsertDigestDelivery.
+	claimedByThisRun?: boolean;
 }
 
 
@@ -131,9 +131,9 @@ export interface DeliverWeeklyDigestInput {
   // Present when the period had zero changes but successful scans: the
   // digest becomes an "all quiet" heartbeat (email only).
   heartbeat?: DigestHeartbeat | null;
-  // Optional AI weekly strategy paragraph persisted on the digest run.
-  // Null/absent renders nothing — never an apology string.
-  strategyParagraph?: string | null;
+	// Optional AI weekly strategy paragraph persisted on the digest run.
+	// Null/absent renders nothing — never an apology string.
+	strategyParagraph?: string | null;
   cadence?: DigestCadence;
   lane?: DeliveryLane;
 }
@@ -221,7 +221,7 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
       externalMessageId: digestStatusAttempt.providerMessageId,
       errorMessage: digestStatusAttempt.errorMessage,
       deliveredAt: digestStatusAttempt.deliveredAt,
-      allowPendingOverwriteOfFailed: digestStatusAttempt.claimedByThisRun === true,
+			allowPendingOverwriteOfFailed: digestStatusAttempt.claimedByThisRun === true,
     });
   }
 
@@ -529,153 +529,153 @@ function digestStatusProvider(attempt: DigestAttemptSummary) {
 }
 
 async function claimDigestDeliveryAttempt(
-  env: AppEnv,
-  input: {
-    userId: string;
-    digestRunId: string;
-    deliveryTargetId: string;
-    lane: DeliveryLane;
-    channel: DeliveryChannel;
-    provider: string;
-    targetValue: string;
-    templateName?: string | null;
-    eventIds: string[];
-    payloadSnapshot: Record<string, unknown>;
-    idempotencyKey: string;
-  },
+	env: AppEnv,
+	input: {
+		userId: string;
+		digestRunId: string;
+		deliveryTargetId: string;
+		lane: DeliveryLane;
+		channel: DeliveryChannel;
+		provider: string;
+		targetValue: string;
+		templateName?: string | null;
+		eventIds: string[];
+		payloadSnapshot: Record<string, unknown>;
+		idempotencyKey: string;
+	},
 ): Promise<{
-  attemptId: string | null;
-  claimUpdatedAt: string | null;
-  duplicate: DeliveryAttemptRecord | null;
+	attemptId: string | null;
+	claimUpdatedAt: string | null;
+	duplicate: DeliveryAttemptRecord | null;
 }> {
-  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
-  if (duplicate) {
-    const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
-    if (duplicate.status !== "failed" && !stalePreDispatch) {
-      return { attemptId: null, claimUpdatedAt: null, duplicate };
-    }
+	const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+	if (duplicate) {
+		const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
+		if (duplicate.status !== "failed" && !stalePreDispatch) {
+			return { attemptId: null, claimUpdatedAt: null, duplicate };
+		}
 
-    const claimUpdatedAt = new Date().toISOString();
-    const retryClaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
-      provider: input.provider,
-      status: "pending",
-      webhookStatus: "pending",
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      templateName: input.templateName ?? null,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-      payloadSnapshot: input.payloadSnapshot,
-      updatedAt: claimUpdatedAt,
-      expectedStatus: stalePreDispatch ? "pending" : "failed",
-      expectedWebhookStatus: stalePreDispatch ? "pending" : undefined,
-      expectedUpdatedAt: stalePreDispatch ? duplicate.updatedAt : undefined,
-    });
-    // Some unit-test adapters predate the boolean return. Only an explicit
-    // false is a lost durable claim.
-    if (retryClaimed !== false) {
-      return { attemptId: duplicate.id, claimUpdatedAt, duplicate: null };
-    }
+		const claimUpdatedAt = new Date().toISOString();
+		const retryClaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
+			provider: input.provider,
+			status: "pending",
+			webhookStatus: "pending",
+			providerMessageId: null,
+			providerStatusLastSeenAt: null,
+			templateName: input.templateName ?? null,
+			errorMessage: null,
+			sentAt: null,
+			failedAt: null,
+			payloadSnapshot: input.payloadSnapshot,
+			updatedAt: claimUpdatedAt,
+			expectedStatus: stalePreDispatch ? "pending" : "failed",
+			expectedWebhookStatus: stalePreDispatch ? "pending" : undefined,
+			expectedUpdatedAt: stalePreDispatch ? duplicate.updatedAt : undefined,
+		});
+		// Some unit-test adapters predate the boolean return. Only an explicit
+		// false is a lost durable claim.
+		if (retryClaimed !== false) {
+			return { attemptId: duplicate.id, claimUpdatedAt, duplicate: null };
+		}
 
-    const concurrentRetry = await getDeliveryAttemptByIdempotencyKey(
-      env,
-      input.idempotencyKey,
-    );
-    if (!concurrentRetry) {
-      throw new Error("Digest delivery retry claim disappeared.");
-    }
-    return { attemptId: null, claimUpdatedAt: null, duplicate: concurrentRetry };
-  }
+		const concurrentRetry = await getDeliveryAttemptByIdempotencyKey(
+			env,
+			input.idempotencyKey,
+		);
+		if (!concurrentRetry) {
+			throw new Error("Digest delivery retry claim disappeared.");
+		}
+		return { attemptId: null, claimUpdatedAt: null, duplicate: concurrentRetry };
+	}
 
-  const claimUpdatedAt = new Date().toISOString();
-  try {
-    const attemptId = await createDeliveryAttempt(env, {
-      userId: input.userId,
-      watchlistId: null,
-      digestRunId: input.digestRunId,
-      deliveryTargetId: input.deliveryTargetId,
-      lane: input.lane,
-      channel: input.channel,
-      provider: input.provider,
-      status: "pending",
-      webhookStatus: "pending",
-      targetValue: input.targetValue,
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      templateName: input.templateName ?? null,
-      eventIds: input.eventIds,
-      payloadSnapshot: input.payloadSnapshot,
-      idempotencyKey: input.idempotencyKey,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-      timestamp: claimUpdatedAt,
-    });
-    return { attemptId, claimUpdatedAt, duplicate: null };
-  } catch (error) {
-    // The unique idempotency index is the arbiter. If another execution
-    // inserted the claim after our read, return its durable state without
-    // calling the provider. Non-uniqueness failures still propagate.
-    const concurrentClaim = await getDeliveryAttemptByIdempotencyKey(
-      env,
-      input.idempotencyKey,
-    );
-    if (concurrentClaim) {
-      return { attemptId: null, claimUpdatedAt: null, duplicate: concurrentClaim };
-    }
-    throw error;
-  }
+	const claimUpdatedAt = new Date().toISOString();
+	try {
+		const attemptId = await createDeliveryAttempt(env, {
+			userId: input.userId,
+			watchlistId: null,
+			digestRunId: input.digestRunId,
+			deliveryTargetId: input.deliveryTargetId,
+			lane: input.lane,
+			channel: input.channel,
+			provider: input.provider,
+			status: "pending",
+			webhookStatus: "pending",
+			targetValue: input.targetValue,
+			providerMessageId: null,
+			providerStatusLastSeenAt: null,
+			templateName: input.templateName ?? null,
+			eventIds: input.eventIds,
+			payloadSnapshot: input.payloadSnapshot,
+			idempotencyKey: input.idempotencyKey,
+			errorMessage: null,
+			sentAt: null,
+			failedAt: null,
+			timestamp: claimUpdatedAt,
+		});
+		return { attemptId, claimUpdatedAt, duplicate: null };
+	} catch (error) {
+		// The unique idempotency index is the arbiter. If another execution
+		// inserted the claim after our read, return its durable state without
+		// calling the provider. Non-uniqueness failures still propagate.
+		const concurrentClaim = await getDeliveryAttemptByIdempotencyKey(
+			env,
+			input.idempotencyKey,
+		);
+		if (concurrentClaim) {
+			return { attemptId: null, claimUpdatedAt: null, duplicate: concurrentClaim };
+		}
+		throw error;
+	}
 }
 
 function markProviderDispatch(
-  env: AppEnv,
-  attemptId: string,
-  provider: string,
-  claimUpdatedAt: string,
+	env: AppEnv,
+	attemptId: string,
+	provider: string,
+	claimUpdatedAt: string,
 ) {
-  return markDeliveryAttemptProviderDispatch({
-    attemptId,
-    provider,
-    claimUpdatedAt,
-    update: (id, update) => updateDeliveryAttemptResult(env, id, update),
-  });
+	return markDeliveryAttemptProviderDispatch({
+		attemptId,
+		provider,
+		claimUpdatedAt,
+		update: (id, update) => updateDeliveryAttemptResult(env, id, update),
+	});
 }
 
 async function readLostDigestDispatchClaim(
-  env: AppEnv,
-  channel: DeliveryChannel,
-  idempotencyKey: string,
+	env: AppEnv,
+	channel: DeliveryChannel,
+	idempotencyKey: string,
 ) {
-  const durable = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-  if (!durable) throw new Error("Digest delivery dispatch claim disappeared.");
-  return summarizeDigestDeliveryAttempt(channel, durable);
+	const durable = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+	if (!durable) throw new Error("Digest delivery dispatch claim disappeared.");
+	return summarizeDigestDeliveryAttempt(channel, durable);
 }
 
 function summarizeDigestDeliveryAttempt(
-  channel: DeliveryChannel,
-  attempt: DeliveryAttemptRecord,
+	channel: DeliveryChannel,
+	attempt: DeliveryAttemptRecord,
 ): DigestAttemptSummary {
-  return {
-    channel,
-    status: deliveryAttemptSummaryStatus(attempt.status),
-    targetValue: attempt.targetValue,
-    providerMessageId: attempt.providerMessageId,
-    errorMessage: attempt.errorMessage,
-    deliveredAt: attempt.sentAt,
-  };
+	return {
+		channel,
+		status: deliveryAttemptSummaryStatus(attempt.status),
+		targetValue: attempt.targetValue,
+		providerMessageId: attempt.providerMessageId,
+		errorMessage: attempt.errorMessage,
+		deliveredAt: attempt.sentAt,
+	};
 }
 
 async function readFinalizedDigestAttempt(
-  env: AppEnv,
-  input: {
-    channel: DeliveryChannel;
-    idempotencyKey: string;
-    fallback: DigestAttemptSummary;
-  },
+	env: AppEnv,
+	input: {
+		channel: DeliveryChannel;
+		idempotencyKey: string;
+		fallback: DigestAttemptSummary;
+	},
 ) {
-  const durable = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
-  return durable ? summarizeDigestDeliveryAttempt(input.channel, durable) : input.fallback;
+	const durable = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+	return durable ? summarizeDigestDeliveryAttempt(input.channel, durable) : input.fallback;
 }
 
 async function deliverDigestToEmailTarget(
@@ -702,49 +702,49 @@ async function deliverDigestToEmailTarget(
     periodEnd: input.periodEnd,
     items: input.items,
     heartbeat: input.heartbeat ?? null,
-    strategyParagraph: input.strategyParagraph ?? null,
+		strategyParagraph: input.strategyParagraph ?? null,
     cadence: input.cadence,
     timeZone,
     unsubscribeUrl,
   });
-  const attemptClaim = await claimDigestDeliveryAttempt(env, {
-    userId: input.userId,
-    digestRunId: input.digestRunId,
-    deliveryTargetId: target.id,
-    lane,
-    channel: "email",
-    provider: EMAIL_PROVIDER,
-    targetValue: target.targetValue,
-    eventIds: input.items.map((item) => item.eventId),
-    payloadSnapshot: {
-      kind: "weekly_digest",
+	const attemptClaim = await claimDigestDeliveryAttempt(env, {
+		userId: input.userId,
+		digestRunId: input.digestRunId,
+		deliveryTargetId: target.id,
+		lane,
+		channel: "email",
+		provider: EMAIL_PROVIDER,
+		targetValue: target.targetValue,
+		eventIds: input.items.map((item) => item.eventId),
+		payloadSnapshot: {
+			kind: "weekly_digest",
       channel: "email",
-      subject: email.subject,
-      cadence: input.cadence ?? "weekly",
-      periodStart: input.periodStart,
-      periodEnd: input.periodEnd,
-      itemCount: input.items.length,
-    },
-    idempotencyKey,
-  });
-  if (attemptClaim.duplicate) {
-    return summarizeDigestDeliveryAttempt("email", attemptClaim.duplicate);
+			subject: email.subject,
+			cadence: input.cadence ?? "weekly",
+			periodStart: input.periodStart,
+			periodEnd: input.periodEnd,
+			itemCount: input.items.length,
+		},
+		idempotencyKey,
+	});
+	if (attemptClaim.duplicate) {
+		return summarizeDigestDeliveryAttempt("email", attemptClaim.duplicate);
   }
-  const attemptId = attemptClaim.attemptId;
-  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
-  if (!attemptId || !claimUpdatedAt) {
-    throw new Error("Digest email delivery claim did not return an owned attempt.");
-  }
+	const attemptId = attemptClaim.attemptId;
+	const claimUpdatedAt = attemptClaim.claimUpdatedAt;
+	if (!attemptId || !claimUpdatedAt) {
+		throw new Error("Digest email delivery claim did not return an owned attempt.");
+	}
 
-  const dispatchStartedAt = await markProviderDispatch(env, attemptId, EMAIL_PROVIDER, claimUpdatedAt);
-  if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "email", idempotencyKey);
+	const dispatchStartedAt = await markProviderDispatch(env, attemptId, EMAIL_PROVIDER, claimUpdatedAt);
+	if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "email", idempotencyKey);
 
   const providerResult = await sendRenderedDigestEmail(env, {
     to: target.targetValue,
     email,
     unsubscribeUrl,
   });
-  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+	const finalized = await updateDeliveryAttemptResult(env, attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
     webhookStatus: providerResult.webhookStatus,
@@ -753,31 +753,31 @@ async function deliverDigestToEmailTarget(
     errorMessage: providerResult.errorMessage,
     sentAt: providerResult.status === "sent" ? providerResult.providerStatusLastSeenAt : null,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    expectedStatus: "pending",
-    expectedWebhookStatus: "provider_unknown",
-    expectedUpdatedAt: dispatchStartedAt,
+		expectedStatus: "pending",
+		expectedWebhookStatus: "provider_unknown",
+		expectedUpdatedAt: dispatchStartedAt,
   });
-  const providerSummary: DigestAttemptSummary = {
-    channel: "email",
+	const providerSummary: DigestAttemptSummary = {
+		channel: "email",
     status: providerResult.status,
     targetValue: target.targetValue,
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: null,
-    claimedByThisRun: true,
+		claimedByThisRun: true,
   };
-  if (finalized === false) {
-    return readFinalizedDigestAttempt(env, {
-      channel: "email",
-      idempotencyKey,
-      fallback: providerSummary,
-    });
-  }
-  if (providerResult.status === "sent") {
-    await persistDeliveryTargetSuccess(env, target, attemptId, providerAcceptedAt(providerResult));
-  }
+	if (finalized === false) {
+		return readFinalizedDigestAttempt(env, {
+			channel: "email",
+			idempotencyKey,
+			fallback: providerSummary,
+		});
+	}
+	if (providerResult.status === "sent") {
+		await persistDeliveryTargetSuccess(env, target, attemptId, providerAcceptedAt(providerResult));
+	}
 
-  return providerSummary;
+	return providerSummary;
 }
 
 async function deliverInstantEmailBatch(
@@ -1179,35 +1179,35 @@ async function deliverDigestToWhatsAppTarget(
     channel: "whatsapp",
     targetValue: target.targetValue,
   });
-  const attemptClaim = await claimDigestDeliveryAttempt(env, {
-    userId: input.userId,
-    digestRunId: input.digestRunId,
-    deliveryTargetId: target.id,
-    lane,
-    channel: "whatsapp",
-    provider: "whatsapp_cloud_api",
-    targetValue: target.targetValue,
-    eventIds: input.items.map((item) => item.eventId),
-    payloadSnapshot: {
-      kind: "weekly_digest",
-      channel: "whatsapp",
-      periodStart: input.periodStart,
-      periodEnd: input.periodEnd,
-      itemCount: input.items.length,
-    },
-    idempotencyKey,
-  });
-  if (attemptClaim.duplicate) {
-    return summarizeDigestDeliveryAttempt("whatsapp", attemptClaim.duplicate);
+	const attemptClaim = await claimDigestDeliveryAttempt(env, {
+		userId: input.userId,
+		digestRunId: input.digestRunId,
+		deliveryTargetId: target.id,
+		lane,
+		channel: "whatsapp",
+		provider: "whatsapp_cloud_api",
+		targetValue: target.targetValue,
+		eventIds: input.items.map((item) => item.eventId),
+		payloadSnapshot: {
+			kind: "weekly_digest",
+			channel: "whatsapp",
+			periodStart: input.periodStart,
+			periodEnd: input.periodEnd,
+			itemCount: input.items.length,
+		},
+		idempotencyKey,
+	});
+	if (attemptClaim.duplicate) {
+		return summarizeDigestDeliveryAttempt("whatsapp", attemptClaim.duplicate);
   }
-  const attemptId = attemptClaim.attemptId;
-  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
-  if (!attemptId || !claimUpdatedAt) {
-    throw new Error("Digest WhatsApp claim did not return an owned attempt.");
-  }
+	const attemptId = attemptClaim.attemptId;
+	const claimUpdatedAt = attemptClaim.claimUpdatedAt;
+	if (!attemptId || !claimUpdatedAt) {
+		throw new Error("Digest WhatsApp claim did not return an owned attempt.");
+	}
 
-  const dispatchStartedAt = await markProviderDispatch(env, attemptId, "whatsapp_cloud_api", claimUpdatedAt);
-  if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "whatsapp", idempotencyKey);
+	const dispatchStartedAt = await markProviderDispatch(env, attemptId, "whatsapp_cloud_api", claimUpdatedAt);
+	if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "whatsapp", idempotencyKey);
 
   const providerResult = await sendDigestWhatsApp(env, {
     lane,
@@ -1217,43 +1217,43 @@ async function deliverDigestToWhatsAppTarget(
     periodEnd: input.periodEnd,
     timeZone,
   });
-  const deliveredAt = providerResult.status === "sent" ? new Date().toISOString() : null;
-  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
-    provider: providerResult.provider,
-    status: providerResult.status,
-    webhookStatus: providerResult.webhookStatus,
-    providerMessageId: providerResult.providerMessageId,
-    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    templateName: providerResult.templateName,
-    errorMessage: providerResult.errorMessage,
-    sentAt: deliveredAt,
-    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    expectedStatus: "pending",
-    expectedWebhookStatus: "provider_unknown",
-    expectedUpdatedAt: dispatchStartedAt,
-  });
-  const providerSummary: DigestAttemptSummary = {
-    channel: "whatsapp",
-    status: providerResult.status,
-    targetValue: target.targetValue,
-    providerMessageId: providerResult.providerMessageId,
-    errorMessage: providerResult.errorMessage,
-    deliveredAt,
-    claimedByThisRun: true,
-  };
-  if (finalized === false) {
-    return readFinalizedDigestAttempt(env, {
+	const deliveredAt = providerResult.status === "sent" ? new Date().toISOString() : null;
+	const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+		provider: providerResult.provider,
+		status: providerResult.status,
+		webhookStatus: providerResult.webhookStatus,
+		providerMessageId: providerResult.providerMessageId,
+		providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+		templateName: providerResult.templateName,
+		errorMessage: providerResult.errorMessage,
+		sentAt: deliveredAt,
+		failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+		expectedStatus: "pending",
+		expectedWebhookStatus: "provider_unknown",
+		expectedUpdatedAt: dispatchStartedAt,
+	});
+	const providerSummary: DigestAttemptSummary = {
+		channel: "whatsapp",
+		status: providerResult.status,
+		targetValue: target.targetValue,
+		providerMessageId: providerResult.providerMessageId,
+		errorMessage: providerResult.errorMessage,
+		deliveredAt,
+		claimedByThisRun: true,
+	};
+	if (finalized === false) {
+		return readFinalizedDigestAttempt(env, {
       channel: "whatsapp",
       idempotencyKey,
-      fallback: providerSummary,
+			fallback: providerSummary,
     });
   }
 
   if (providerResult.status === "sent") {
-    await persistDeliveryTargetSuccess(env, target, attemptId, deliveredAt);
+		await persistDeliveryTargetSuccess(env, target, attemptId, deliveredAt);
   }
 
-  return providerSummary;
+	return providerSummary;
 }
 
 async function deliverDigestToSlackTarget(
@@ -1270,82 +1270,82 @@ async function deliverDigestToSlackTarget(
     targetValue: target.targetValue,
   });
   const cadenceLabel = digestCadenceLabel(input.cadence);
-  const slackText = renderDigestSlackText({
-    cadenceLabel,
-    periodStart: input.periodStart,
-    periodEnd: input.periodEnd,
-    items: input.items,
-    timeZone,
-  });
-  const attemptClaim = await claimDigestDeliveryAttempt(env, {
-    userId: input.userId,
-    digestRunId: input.digestRunId,
-    deliveryTargetId: target.id,
-    lane,
-    channel: "slack",
-    provider: SLACK_PROVIDER,
-    targetValue: target.targetValue,
-    eventIds: input.items.map((item) => item.eventId),
-    payloadSnapshot: {
-      kind: "weekly_digest",
-      channel: "slack",
-      cadence: input.cadence ?? "weekly",
+	const slackText = renderDigestSlackText({
+		cadenceLabel,
+		periodStart: input.periodStart,
+		periodEnd: input.periodEnd,
+		items: input.items,
+		timeZone,
+	});
+	const attemptClaim = await claimDigestDeliveryAttempt(env, {
+		userId: input.userId,
+		digestRunId: input.digestRunId,
+		deliveryTargetId: target.id,
+		lane,
+		channel: "slack",
+		provider: SLACK_PROVIDER,
+		targetValue: target.targetValue,
+		eventIds: input.items.map((item) => item.eventId),
+		payloadSnapshot: {
+			kind: "weekly_digest",
+			channel: "slack",
+			cadence: input.cadence ?? "weekly",
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
-      itemCount: input.items.length,
-    },
-    idempotencyKey,
+			itemCount: input.items.length,
+		},
+		idempotencyKey,
   });
-  if (attemptClaim.duplicate) {
-    return summarizeDigestDeliveryAttempt("slack", attemptClaim.duplicate);
+	if (attemptClaim.duplicate) {
+		return summarizeDigestDeliveryAttempt("slack", attemptClaim.duplicate);
   }
-  const attemptId = attemptClaim.attemptId;
-  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
-  if (!attemptId || !claimUpdatedAt) {
-    throw new Error("Digest Slack claim did not return an owned attempt.");
+	const attemptId = attemptClaim.attemptId;
+	const claimUpdatedAt = attemptClaim.claimUpdatedAt;
+	if (!attemptId || !claimUpdatedAt) {
+		throw new Error("Digest Slack claim did not return an owned attempt.");
   }
 
-  const dispatchStartedAt = await markProviderDispatch(env, attemptId, SLACK_PROVIDER, claimUpdatedAt);
-  if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "slack", idempotencyKey);
+	const dispatchStartedAt = await markProviderDispatch(env, attemptId, SLACK_PROVIDER, claimUpdatedAt);
+	if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "slack", idempotencyKey);
 
-  const providerResult = await sendSlackWebhookMessage(env, target, {
-    text: slackText,
-  });
-  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
-    provider: providerResult.provider,
-    status: providerResult.status,
-    webhookStatus: providerResult.webhookStatus,
-    providerMessageId: providerResult.providerMessageId,
-    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
-    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    expectedStatus: "pending",
-    expectedWebhookStatus: "provider_unknown",
-    expectedUpdatedAt: dispatchStartedAt,
-  });
-  const providerSummary: DigestAttemptSummary = {
-    channel: "slack",
+	const providerResult = await sendSlackWebhookMessage(env, target, {
+		text: slackText,
+	});
+	const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+		provider: providerResult.provider,
+		status: providerResult.status,
+		webhookStatus: providerResult.webhookStatus,
+		providerMessageId: providerResult.providerMessageId,
+		providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+		errorMessage: providerResult.errorMessage,
+		sentAt: providerResult.deliveredAt,
+		failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+		expectedStatus: "pending",
+		expectedWebhookStatus: "provider_unknown",
+		expectedUpdatedAt: dispatchStartedAt,
+	});
+	const providerSummary: DigestAttemptSummary = {
+		channel: "slack",
     status: providerResult.status,
     targetValue: target.targetValue,
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: providerResult.deliveredAt,
-    claimedByThisRun: true,
+		claimedByThisRun: true,
   };
-  if (finalized === false) {
-    return readFinalizedDigestAttempt(env, {
-      channel: "slack",
-      idempotencyKey,
-      fallback: providerSummary,
-    });
-  }
+	if (finalized === false) {
+		return readFinalizedDigestAttempt(env, {
+			channel: "slack",
+			idempotencyKey,
+			fallback: providerSummary,
+		});
+	}
 
-  if (providerResult.status === "sent") {
-    await persistDeliveryTargetSuccess(env, target, attemptId, providerResult.deliveredAt);
-  }
+	if (providerResult.status === "sent") {
+		await persistDeliveryTargetSuccess(env, target, attemptId, providerResult.deliveredAt);
+	}
 
-  return providerSummary;
+	return providerSummary;
 }
 
 async function resolveDigestEmailTargets(
@@ -1526,7 +1526,7 @@ function renderDigestEmail(
     periodEnd: string;
     items: DigestDeliveryItem[];
     heartbeat?: DigestHeartbeat | null;
-    strategyParagraph?: string | null;
+		strategyParagraph?: string | null;
     cadence?: DigestCadence;
     timeZone?: string | null;
     unsubscribeUrl: string | null;
@@ -1539,7 +1539,7 @@ function renderDigestEmail(
     periodEnd: input.periodEnd,
     items: input.items,
     heartbeat: input.heartbeat ?? null,
-    strategyParagraph: input.strategyParagraph ?? null,
+		strategyParagraph: input.strategyParagraph ?? null,
     cadence: input.cadence,
     timeZone: input.timeZone ?? null,
     fullDigestUrl: `${baseUrl}/app/digests?digest=${encodeURIComponent(input.digestRunId)}`,

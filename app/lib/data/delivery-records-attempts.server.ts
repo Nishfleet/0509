@@ -1,5 +1,5 @@
 import {
-  ensureDb,
+	ensureDb,
   execute as run,
   queryAll as many,
   queryOne as one,
@@ -48,53 +48,53 @@ export async function listRetryableInstantAttempts(
 }
 
 export async function listStaleBillingLifecycleEmailAttempts(
-  env: AppEnv,
-  input: {
-    staleBefore: string;
-    limit: number;
-    maxRecoveryAttempts: number;
-  },
+	env: AppEnv,
+	input: {
+		staleBefore: string;
+		limit: number;
+		maxRecoveryAttempts: number;
+	},
 ) {
-  const rows = await many<DeliveryAttemptRow>(
-    env,
-    `
-      SELECT *
-      FROM delivery_attempt
-      WHERE lane = 'customer'
-        AND channel = 'email'
-        AND watchlist_id IS NULL
-        AND digest_run_id IS NULL
-        AND delivery_target_id IS NULL
-        AND (
-          idempotency_key LIKE 'billing-payment-issue:%'
-          OR idempotency_key LIKE 'billing-cancellation:%'
-          OR idempotency_key LIKE 'billing-refund:%'
-        )
-        AND (
-          (
-            status = 'pending'
-            AND webhook_status = 'pending'
-            AND updated_at <= ?
-          )
-          OR (
-            status = 'failed'
-            AND webhook_status = 'failed'
-            AND provider_status_last_seen_at IS NOT NULL
-            AND COALESCE(
-              CAST(json_extract(payload_snapshot_json, '$.recoveryAttemptCount') AS INTEGER),
-              0
-            ) < ?
-          )
-        )
-      ORDER BY updated_at ASC
-      LIMIT ?
-    `,
-    input.staleBefore,
-    input.maxRecoveryAttempts,
-    input.limit,
-  );
+	const rows = await many<DeliveryAttemptRow>(
+		env,
+		`
+			SELECT *
+			FROM delivery_attempt
+			WHERE lane = 'customer'
+				AND channel = 'email'
+				AND watchlist_id IS NULL
+				AND digest_run_id IS NULL
+				AND delivery_target_id IS NULL
+				AND (
+					idempotency_key LIKE 'billing-payment-issue:%'
+					OR idempotency_key LIKE 'billing-cancellation:%'
+					OR idempotency_key LIKE 'billing-refund:%'
+				)
+				AND (
+					(
+						status = 'pending'
+						AND webhook_status = 'pending'
+						AND updated_at <= ?
+					)
+					OR (
+						status = 'failed'
+						AND webhook_status = 'failed'
+						AND provider_status_last_seen_at IS NOT NULL
+						AND COALESCE(
+							CAST(json_extract(payload_snapshot_json, '$.recoveryAttemptCount') AS INTEGER),
+							0
+						) < ?
+					)
+				)
+			ORDER BY updated_at ASC
+			LIMIT ?
+		`,
+		input.staleBefore,
+		input.maxRecoveryAttempts,
+		input.limit,
+	);
 
-  return rows.map(toDeliveryAttemptRecord);
+	return rows.map(toDeliveryAttemptRecord);
 }
 
 export async function listDeliveryAttempts(
@@ -182,6 +182,21 @@ export async function reconcileDeliveryAttemptByProviderMessageId(
     return null;
   }
 
+	const incomingSeenAt = Date.parse(input.providerStatusLastSeenAt);
+	const existingSeenAt = existing.provider_status_last_seen_at
+		? Date.parse(existing.provider_status_last_seen_at)
+		: Number.NEGATIVE_INFINITY;
+	const existingTerminal =
+		existing.webhook_status === "delivered" || existing.webhook_status === "failed";
+
+	if (
+		!Number.isFinite(incomingSeenAt)
+		|| incomingSeenAt < existingSeenAt
+		|| (existingTerminal && input.webhookStatus !== existing.webhook_status)
+	) {
+		return toDeliveryAttemptRecord(existing);
+	}
+
   const nextStatus = input.status ?? existing.status;
   const nextFailedAt =
     nextStatus === "failed" && !existing.failed_at
@@ -204,6 +219,13 @@ export async function reconcileDeliveryAttemptByProviderMessageId(
           failed_at = ?,
           updated_at = ?
       WHERE id = ?
+				AND status = ?
+				AND webhook_status = ?
+				AND (
+					(provider_status_last_seen_at IS NULL AND ? IS NULL)
+					OR provider_status_last_seen_at = ?
+				)
+				AND updated_at = ?
     `,
     nextStatus,
     input.webhookStatus,
@@ -213,6 +235,11 @@ export async function reconcileDeliveryAttemptByProviderMessageId(
     nextFailedAt,
     nowIso(),
     existing.id,
+		existing.status,
+		existing.webhook_status,
+		existing.provider_status_last_seen_at,
+		existing.provider_status_last_seen_at,
+		existing.updated_at,
   );
 
   const updated = await one<DeliveryAttemptRow>(
@@ -246,11 +273,11 @@ export async function createDeliveryAttempt(
     errorMessage?: string | null;
     sentAt?: string | null;
     failedAt?: string | null;
-    timestamp?: string;
+		timestamp?: string;
   },
 ) {
   const id = createId();
-  const timestamp = input.timestamp ?? nowIso();
+	const timestamp = input.timestamp ?? nowIso();
   await run(
     env,
     `
@@ -314,86 +341,86 @@ export async function createDeliveryAttempt(
  * recovery paths that this row was created pre-dispatch inside the batch.
  */
 export interface BillingLifecycleEmailOutboxSpec {
-  userId: string;
-  email: string;
-  idempotencyKey: string;
-  templateName: string;
-  payloadSnapshot: JsonRecord;
+	userId: string;
+	email: string;
+	idempotencyKey: string;
+	templateName: string;
+	payloadSnapshot: JsonRecord;
 }
 
 export type BillingLifecycleOutboxGate =
-  /**
-   * Insert only when the immediately preceding statement in the batch changed
-   * rows (SQLite changes()). Place DIRECTLY after the business mutation.
-   */
-  | { kind: "prior-statement-changed" }
-  /**
-   * Insert only when THIS batch finalized the ledger row as processed
-   * (matched by the batch's own processedAt). Safe anywhere after the
-   * conditional finalize statement.
-   */
-  | { kind: "ledger-processed"; eventId: string; processedAt: string };
+	/**
+	 * Insert only when the immediately preceding statement in the batch changed
+	 * rows (SQLite changes()). Place DIRECTLY after the business mutation.
+	 */
+	| { kind: "prior-statement-changed" }
+	/**
+	 * Insert only when THIS batch finalized the ledger row as processed
+	 * (matched by the batch's own processedAt). Safe anywhere after the
+	 * conditional finalize statement.
+	 */
+	| { kind: "ledger-processed"; eventId: string; processedAt: string };
 
 export function buildBillingLifecycleOutboxStatement(
-  db: ReturnType<typeof ensureDb>,
-  spec: BillingLifecycleEmailOutboxSpec,
-  gate: BillingLifecycleOutboxGate,
-  timestamp: string,
+	db: ReturnType<typeof ensureDb>,
+	spec: BillingLifecycleEmailOutboxSpec,
+	gate: BillingLifecycleOutboxGate,
+	timestamp: string,
 ) {
-  const gateSql =
-    gate.kind === "prior-statement-changed"
-      ? "changes() > 0"
-      : `EXISTS (
-          SELECT 1 FROM dodo_webhook_event
-          WHERE event_id = ? AND outcome = 'processed' AND processed_at = ?
-        )`;
-  const gateBindings =
-    gate.kind === "prior-statement-changed" ? [] : [gate.eventId, gate.processedAt];
+	const gateSql =
+		gate.kind === "prior-statement-changed"
+			? "changes() > 0"
+			: `EXISTS (
+					SELECT 1 FROM dodo_webhook_event
+					WHERE event_id = ? AND outcome = 'processed' AND processed_at = ?
+				)`;
+	const gateBindings =
+		gate.kind === "prior-statement-changed" ? [] : [gate.eventId, gate.processedAt];
 
-  // INSERT OR IGNORE: the unique idempotency index arbitrates duplicates
-  // (redeliveries, racing sibling events, an existing failed/sent row). A
-  // plain INSERT conflict would abort the whole batch and roll back the plan
-  // mutation itself.
-  return db.prepare(`
-      INSERT OR IGNORE INTO delivery_attempt (
-        id,
-        user_id,
-        watchlist_id,
-        digest_run_id,
-        delivery_target_id,
-        lane,
-        channel,
-        provider,
-        status,
-        webhook_status,
-        target_value,
-        provider_message_id,
-        provider_status_last_seen_at,
-        template_name,
-        event_ids_json,
-        payload_snapshot_json,
-        idempotency_key,
-        error_message,
-        sent_at,
-        failed_at,
-        created_at,
-        updated_at
-      )
-      SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
-             NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
-      WHERE ${gateSql}
-    `).bind(
-    createId(),
-    spec.userId,
-    "cloudflare_email",
-    spec.email,
-    spec.templateName,
-    jsonValue(spec.payloadSnapshot),
-    spec.idempotencyKey,
-    timestamp,
-    timestamp,
-    ...gateBindings,
-  );
+	// INSERT OR IGNORE: the unique idempotency index arbitrates duplicates
+	// (redeliveries, racing sibling events, an existing failed/sent row). A
+	// plain INSERT conflict would abort the whole batch and roll back the plan
+	// mutation itself.
+	return db.prepare(`
+			INSERT OR IGNORE INTO delivery_attempt (
+				id,
+				user_id,
+				watchlist_id,
+				digest_run_id,
+				delivery_target_id,
+				lane,
+				channel,
+				provider,
+				status,
+				webhook_status,
+				target_value,
+				provider_message_id,
+				provider_status_last_seen_at,
+				template_name,
+				event_ids_json,
+				payload_snapshot_json,
+				idempotency_key,
+				error_message,
+				sent_at,
+				failed_at,
+				created_at,
+				updated_at
+			)
+			SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
+						 NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
+			WHERE ${gateSql}
+		`).bind(
+		createId(),
+		spec.userId,
+		"cloudflare_email",
+		spec.email,
+		spec.templateName,
+		jsonValue(spec.payloadSnapshot),
+		spec.idempotencyKey,
+		timestamp,
+		timestamp,
+		...gateBindings,
+	);
 }
 
 export async function updateDeliveryAttemptResult(
@@ -405,22 +432,22 @@ export async function updateDeliveryAttemptResult(
     webhookStatus: WebhookReconciliationStatus;
     providerMessageId?: string | null;
     providerStatusLastSeenAt?: string | null;
-    templateName?: string | null;
+		templateName?: string | null;
     errorMessage?: string | null;
     sentAt?: string | null;
     failedAt?: string | null;
-    expectedStatus?: DeliveryAttemptStatus;
-    expectedWebhookStatus?: WebhookReconciliationStatus;
-    expectedUpdatedAt?: string;
-    payloadSnapshot?: JsonRecord;
-    targetValue?: string;
-    updatedAt?: string;
+		expectedStatus?: DeliveryAttemptStatus;
+		expectedWebhookStatus?: WebhookReconciliationStatus;
+		expectedUpdatedAt?: string;
+		payloadSnapshot?: JsonRecord;
+		targetValue?: string;
+		updatedAt?: string;
   },
 ) {
-  const payloadSnapshot = input.payloadSnapshot
-    ? jsonValue(input.payloadSnapshot)
-    : null;
-  const result = await run(
+	const payloadSnapshot = input.payloadSnapshot
+		? jsonValue(input.payloadSnapshot)
+		: null;
+	const result = await run(
     env,
     `
       UPDATE delivery_attempt
@@ -429,38 +456,38 @@ export async function updateDeliveryAttemptResult(
           webhook_status = ?,
           provider_message_id = ?,
           provider_status_last_seen_at = ?,
-          template_name = COALESCE(?, template_name),
+					template_name = COALESCE(?, template_name),
           error_message = ?,
           sent_at = ?,
           failed_at = ?,
-          payload_snapshot_json = COALESCE(?, payload_snapshot_json),
-          target_value = COALESCE(?, target_value),
+					payload_snapshot_json = COALESCE(?, payload_snapshot_json),
+					target_value = COALESCE(?, target_value),
           updated_at = ?
       WHERE id = ?
-        AND (? IS NULL OR status = ?)
-        AND (? IS NULL OR webhook_status = ?)
-        AND (? IS NULL OR updated_at = ?)
+				AND (? IS NULL OR status = ?)
+				AND (? IS NULL OR webhook_status = ?)
+				AND (? IS NULL OR updated_at = ?)
     `,
     input.provider,
     input.status,
     input.webhookStatus,
     input.providerMessageId ?? null,
     input.providerStatusLastSeenAt ?? null,
-    input.templateName ?? null,
+		input.templateName ?? null,
     input.errorMessage ?? null,
     input.sentAt ?? null,
     input.failedAt ?? null,
-    payloadSnapshot,
-    input.targetValue ?? null,
-    input.updatedAt ?? nowIso(),
+		payloadSnapshot,
+		input.targetValue ?? null,
+		input.updatedAt ?? nowIso(),
     attemptId,
-    input.expectedStatus ?? null,
-    input.expectedStatus ?? null,
-    input.expectedWebhookStatus ?? null,
-    input.expectedWebhookStatus ?? null,
-    input.expectedUpdatedAt ?? null,
-    input.expectedUpdatedAt ?? null,
+		input.expectedStatus ?? null,
+		input.expectedStatus ?? null,
+		input.expectedWebhookStatus ?? null,
+		input.expectedWebhookStatus ?? null,
+		input.expectedUpdatedAt ?? null,
+		input.expectedUpdatedAt ?? null,
   );
 
-  return Number(result.meta?.changes ?? 0) > 0;
+	return Number(result.meta?.changes ?? 0) > 0;
 }

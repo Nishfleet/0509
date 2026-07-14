@@ -79,7 +79,7 @@ export function SourceAccessRoute() {
                   )}
                 </p>
               ) : (
-                <EmptyState title="No backup Meta access is connected yet." variant="inline" />
+								<EmptyState title="No backup Meta access is connected yet." variant="inline" />
               )}
             </div>
             <div>
@@ -152,15 +152,15 @@ export function SourceAccessRoute() {
                   </Form>
                   <Form method="post">
                     <input name="intent" type="hidden" value="disconnect-meta-token" />
-                    <ConfirmSubmitButton
-                      className="f9-secondary-button"
-                      confirmLabel="Confirm — disconnect?"
-                      intent="disconnect-meta-token"
-                      pendingLabel="Removing…"
-                      variant="light"
-                    >
+										<ConfirmSubmitButton
+											className="f9-secondary-button"
+											confirmLabel="Confirm — disconnect?"
+											intent="disconnect-meta-token"
+											pendingLabel="Removing…"
+											variant="light"
+										>
                       Disconnect
-                    </ConfirmSubmitButton>
+										</ConfirmSubmitButton>
                   </Form>
                 </div>
               ) : null}
@@ -202,8 +202,8 @@ function formatDiscoveryStatus(status: string) {
 }
 
 function formatTrackingStatusSummary(summary: string | null | undefined) {
-  return (
-    customerDiscoverySummary(summary) ??
-    "Tracking status will appear after the first check."
-  );
+	return (
+		customerDiscoverySummary(summary) ??
+		"Tracking status will appear after the first check."
+	);
 }

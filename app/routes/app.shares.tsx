@@ -62,8 +62,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const revoked = await revokeShareLink(env, workspaceUserId, shareLinkId);
 
     return revoked
-      ? { ok: true, intent, shareLinkId, message: "Share link revoked. The URL stops working immediately." }
-      : { ok: false, intent, shareLinkId, message: "Share link not found — it may already be revoked." };
+			? { ok: true, intent, shareLinkId, message: "Share link revoked. The URL stops working immediately." }
+			: { ok: false, intent, shareLinkId, message: "Share link not found — it may already be revoked." };
   }
 
   return { ok: false, message: "Unknown share action." };
@@ -81,15 +81,15 @@ export default function SharesRoute() {
           title="Reports"
         />
 
-      <ActionFeedback data={actionData} fallback />
+			<ActionFeedback data={actionData} fallback />
 
       <article className="f9-app-panel">
-        <ActionFeedback data={actionData} intent="revoke-share" />
+				<ActionFeedback data={actionData} intent="revoke-share" />
         {data.shares.length === 0 ? (
-          <EmptyState
-            description="Share a watchlist, collection, digest, or report and it will appear here so you can revoke it any time."
-            title="No active share links"
-          />
+					<EmptyState
+						description="Share a watchlist, collection, digest, or report and it will appear here so you can revoke it any time."
+						title="No active share links"
+					/>
         ) : (
           <div className="f9-work-list is-compact">
             {data.shares.map((share) => (
@@ -116,16 +116,16 @@ export default function SharesRoute() {
                   <CopyButton value={share.url} />
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-share" />
-                    <input name="shareLinkId" type="hidden" value={share.id} />
-                    <ConfirmSubmitButton
-                      className="f9-secondary-button"
-                      confirmLabel="Confirm — revoke link?"
-                      intent="revoke-share"
-                      match={{ shareLinkId: share.id }}
-                      pendingLabel="Removing…"
-                    >
-                      Revoke
-                    </ConfirmSubmitButton>
+										<input name="shareLinkId" type="hidden" value={share.id} />
+										<ConfirmSubmitButton
+											className="f9-secondary-button"
+											confirmLabel="Confirm — revoke link?"
+											intent="revoke-share"
+											match={{ shareLinkId: share.id }}
+											pendingLabel="Removing…"
+										>
+											Revoke
+										</ConfirmSubmitButton>
                   </Form>
                 </div>
               </div>

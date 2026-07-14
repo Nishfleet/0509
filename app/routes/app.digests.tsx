@@ -264,11 +264,11 @@ export default function DigestsRoute() {
                 );
               })}
               {data.digests.length === 0 ? (
-                <EmptyState
-                  description="Start a competitor watchlist and digest history will show both movement and all-quiet periods."
-                  headingLevel="h3"
-                  title="Your first digest appears after monitoring runs"
-                />
+								<EmptyState
+									description="Start a competitor watchlist and digest history will show both movement and all-quiet periods."
+									headingLevel="h3"
+									title="Your first digest appears after monitoring runs"
+								/>
               ) : null}
             </div>
           </article>
@@ -307,7 +307,7 @@ export default function DigestsRoute() {
                   </div>
                 </div>
 
-                <DigestStrategyNote summary={data.selectedDigest.summary ?? null} />
+								<DigestStrategyNote summary={data.selectedDigest.summary ?? null} />
 
                 <div className="f9-detail-split">
                   <DigestDecisionSummary items={data.selectedDigest.items} />
@@ -411,15 +411,15 @@ export default function DigestsRoute() {
                   })}
                 </ul>
                 {visibleItems.length === 0 ? (
-                  <EmptyState
-                    description={
-                      allItems.length === 0
+									<EmptyState
+										description={
+											allItems.length === 0
                         ? "This digest was generated after monitoring completed without action-worthy competitor movement."
-                        : "Adjust the filters to see more digest items."
-                    }
-                    headingLevel="h3"
-                    title={allItems.length === 0 ? "All quiet for this period" : "No changes match these filters"}
-                  />
+												: "Adjust the filters to see more digest items."
+										}
+										headingLevel="h3"
+										title={allItems.length === 0 ? "All quiet for this period" : "No changes match these filters"}
+									/>
                 ) : null}
 
                 <div className="f9-detail-split">
@@ -462,11 +462,11 @@ export default function DigestsRoute() {
                 </div>
               </>
             ) : (
-              <EmptyState
-                action={{ label: "Open watchlists", to: "/app/watchlists" }}
-                description="Digest history will show both competitor movement and all-quiet periods."
-                title="Your first digest appears after monitoring runs"
-              />
+							<EmptyState
+								action={{ label: "Open watchlists", to: "/app/watchlists" }}
+								description="Digest history will show both competitor movement and all-quiet periods."
+								title="Your first digest appears after monitoring runs"
+							/>
             )}
           </article>
         </div>

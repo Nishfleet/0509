@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { updateDeliveryAttemptResult } from "~/lib/data.server";
+import {
+	reconcileDeliveryAttemptByProviderMessageId,
+	updateDeliveryAttemptResult,
+} from "~/lib/data.server";
 import {
 	DELIVERY_PRE_DISPATCH_LEASE_MS,
 	isStalePreDispatchAttempt,
@@ -20,29 +23,29 @@ describe("delivery attempt retry claim (sqlite)", () => {
 		const harness = createSqliteD1();
 		fixtures.push(harness);
 		harness.sqlite.exec(`
-      CREATE TABLE delivery_attempt (
-        id TEXT PRIMARY KEY NOT NULL,
-        provider TEXT NOT NULL,
-        status TEXT NOT NULL,
-        webhook_status TEXT NOT NULL,
-        provider_message_id TEXT,
-        provider_status_last_seen_at TEXT,
-        template_name TEXT,
-        payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
-        target_value TEXT NOT NULL DEFAULT 'owner@example.com',
-        error_message TEXT,
-        sent_at TEXT,
-        failed_at TEXT,
-        updated_at TEXT NOT NULL
-      );
+			CREATE TABLE delivery_attempt (
+				id TEXT PRIMARY KEY NOT NULL,
+				provider TEXT NOT NULL,
+				status TEXT NOT NULL,
+				webhook_status TEXT NOT NULL,
+				provider_message_id TEXT,
+				provider_status_last_seen_at TEXT,
+				template_name TEXT,
+				payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+				target_value TEXT NOT NULL DEFAULT 'owner@example.com',
+				error_message TEXT,
+				sent_at TEXT,
+				failed_at TEXT,
+				updated_at TEXT NOT NULL
+			);
 
-      INSERT INTO delivery_attempt (
-        id, provider, status, webhook_status, failed_at, updated_at
-      ) VALUES (
-        'attempt-1', 'cloudflare_email', 'failed', 'failed',
-        '2026-07-13T09:00:00.000Z', '2026-07-13T09:00:00.000Z'
-      );
-    `);
+			INSERT INTO delivery_attempt (
+				id, provider, status, webhook_status, failed_at, updated_at
+			) VALUES (
+				'attempt-1', 'cloudflare_email', 'failed', 'failed',
+				'2026-07-13T09:00:00.000Z', '2026-07-13T09:00:00.000Z'
+			);
+		`);
 
 		const claim = {
 			provider: "cloudflare_email",
@@ -78,29 +81,29 @@ describe("delivery attempt retry claim (sqlite)", () => {
 		const harness = createSqliteD1();
 		fixtures.push(harness);
 		harness.sqlite.exec(`
-      CREATE TABLE delivery_attempt (
-        id TEXT PRIMARY KEY NOT NULL,
-        provider TEXT NOT NULL,
-        status TEXT NOT NULL,
-        webhook_status TEXT NOT NULL,
-        provider_message_id TEXT,
-        provider_status_last_seen_at TEXT,
-        template_name TEXT,
-        payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
-        target_value TEXT NOT NULL DEFAULT 'owner@example.com',
-        error_message TEXT,
-        sent_at TEXT,
-        failed_at TEXT,
-        updated_at TEXT NOT NULL
-      );
+			CREATE TABLE delivery_attempt (
+				id TEXT PRIMARY KEY NOT NULL,
+				provider TEXT NOT NULL,
+				status TEXT NOT NULL,
+				webhook_status TEXT NOT NULL,
+				provider_message_id TEXT,
+				provider_status_last_seen_at TEXT,
+				template_name TEXT,
+				payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+				target_value TEXT NOT NULL DEFAULT 'owner@example.com',
+				error_message TEXT,
+				sent_at TEXT,
+				failed_at TEXT,
+				updated_at TEXT NOT NULL
+			);
 
-      INSERT INTO delivery_attempt (
-        id, provider, status, webhook_status, updated_at
-      ) VALUES (
-        'attempt-stale', 'cloudflare_email', 'pending', 'pending',
-        '2026-07-13T09:00:00.000Z'
-      );
-    `);
+			INSERT INTO delivery_attempt (
+				id, provider, status, webhook_status, updated_at
+			) VALUES (
+				'attempt-stale', 'cloudflare_email', 'pending', 'pending',
+				'2026-07-13T09:00:00.000Z'
+			);
+		`);
 
 		const claim = {
 			provider: "cloudflare_email",
@@ -132,6 +135,70 @@ describe("delivery attempt retry claim (sqlite)", () => {
 			status: "pending",
 			webhook_status: "pending",
 			updated_at: "2026-07-13T09:02:00.000Z",
+		});
+	});
+});
+
+describe("delivery webhook reconciliation (sqlite)", () => {
+	const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
+	afterEach(() => { while (fixtures.length > 0) fixtures.pop()?.close(); });
+
+	function openAttempt(status = "pending", webhookStatus = "provider_unknown") {
+		const harness = createSqliteD1();
+		fixtures.push(harness);
+		harness.sqlite.exec(`
+			CREATE TABLE delivery_attempt (
+				id TEXT PRIMARY KEY, provider TEXT, provider_message_id TEXT, status TEXT,
+				webhook_status TEXT, provider_status_last_seen_at TEXT, error_message TEXT,
+				sent_at TEXT, failed_at TEXT, updated_at TEXT
+			);
+			INSERT INTO delivery_attempt VALUES ('attempt-1', 'whatsapp_cloud_api', 'wamid-1',
+				'${status}', '${webhookStatus}', '2026-07-13T09:00:00.000Z', NULL, NULL, NULL,
+				'2026-07-13T09:00:00.000Z');
+		`);
+		return harness;
+	}
+
+	function reconcile(
+		harness: ReturnType<typeof createSqliteD1>,
+		webhookStatus: "pending" | "delivered" | "failed",
+		status: "pending" | "sent" | "failed",
+		time: string,
+	) {
+		return reconcileDeliveryAttemptByProviderMessageId({ DB: harness.db } as never, {
+			provider: "whatsapp_cloud_api", providerMessageId: "wamid-1", webhookStatus, status,
+			providerStatusLastSeenAt: `2026-07-13T09:${time}.000Z`,
+		});
+	}
+
+	it("applies only timestamp-monotonic, terminal-compatible provider progressions", async () => {
+		let harness = openAttempt();
+		await reconcile(harness, "delivered", "sent", "02:00");
+		await reconcile(harness, "failed", "failed", "01:00");
+		expect(await reconcile(harness, "pending", "pending", "01:30"))
+			.toMatchObject({ status: "sent", webhookStatus: "delivered", providerStatusLastSeenAt: "2026-07-13T09:02:00.000Z" });
+
+		harness = openAttempt();
+		await reconcile(harness, "failed", "failed", "02:00");
+		expect(await reconcile(harness, "pending", "sent", "01:00"))
+			.toMatchObject({ status: "failed", webhookStatus: "failed" });
+
+		harness = openAttempt("sent", "pending");
+		await reconcile(harness, "delivered", "sent", "00:00");
+		expect(await reconcile(harness, "failed", "failed", "00:00"))
+			.toMatchObject({ status: "sent", webhookStatus: "delivered" });
+	});
+
+	it("returns a concurrent durable winner instead of overwriting it", async () => {
+		const harness = openAttempt();
+		const reconciliation = reconcile(harness, "delivered", "sent", "02:00");
+		harness.sqlite.prepare(`
+			UPDATE delivery_attempt SET status = 'failed', webhook_status = 'failed',
+			provider_status_last_seen_at = '2026-07-13T09:03:00.000Z', updated_at = '2026-07-13T09:03:00.000Z'
+			WHERE id = 'attempt-1'
+		`).run();
+		await expect(reconciliation).resolves.toMatchObject({
+			status: "failed", webhookStatus: "failed", providerStatusLastSeenAt: "2026-07-13T09:03:00.000Z",
 		});
 	});
 });

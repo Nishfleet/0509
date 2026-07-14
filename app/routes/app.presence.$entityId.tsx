@@ -133,7 +133,7 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
         targetUrl: String(form.get("targetUrl") ?? "").trim() || null,
         targetHandle: String(form.get("targetHandle") ?? "").trim() || null,
       });
-      return { ok: true, intent, message: "Source added." };
+			return { ok: true, intent, message: "Source added." };
     }
     if (intent === "poll-source") {
       const targetId = String(form.get("targetId") ?? "");
@@ -141,25 +141,25 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
       if (!result.pollResult.ok) {
         return {
           ok: false,
-          intent,
-          targetId,
+					intent,
+					targetId,
           message: sanitizeCustomerFacingMessage(result.pollResult.errorMessage ?? "Source check failed."),
         };
       }
       return {
         ok: true,
-        intent,
-        targetId,
+				intent,
+				targetId,
         message: `Polled: ${result.upsertStats.inserted} new, ${result.upsertStats.updated} updated, ${result.reconcileStats.tombstoned} removed.`,
       };
     }
     if (intent === "delete-entity") {
       await deletePresenceEntity(env, workspaceUserId, entityId);
-      return redirect("/app/presence?notice=entity-deleted");
+			return redirect("/app/presence?notice=entity-deleted");
     }
   } catch (error) {
     if (error instanceof PresenceServiceError) {
-      return { ok: false, intent, message: sanitizeCustomerFacingMessage(error.message) };
+			return { ok: false, intent, message: sanitizeCustomerFacingMessage(error.message) };
     }
     throw error;
   }
@@ -187,7 +187,7 @@ export default function PresenceEntityRoute() {
           </p>
         ) : null}
 
-        <ActionFeedback data={actionData} fallback />
+				<ActionFeedback data={actionData} fallback />
 
         <article className="f9-app-panel">
           <span className="f9-app-kicker">Entity brief</span>
@@ -244,11 +244,11 @@ export default function PresenceEntityRoute() {
             <h2>Connected targets</h2>
             <div className="f9-work-list is-compact">
               {pollableSources.length === 0 ? (
-                <EmptyState
-                  description="Add a website source to run proof-backed checks."
-                  title="No checkable website targets yet"
-                  variant="row"
-                />
+								<EmptyState
+									description="Add a website source to run proof-backed checks."
+									title="No checkable website targets yet"
+									variant="row"
+								/>
               ) : null}
               {pollableSources.map((source) => (
                 <div className="f9-work-row" key={source.id}>
@@ -257,28 +257,28 @@ export default function PresenceEntityRoute() {
                     <p className="f9-muted-copy">{formatCoverageLabel(source.coverageLabel)}</p>
                     {source.targetUrl ? <p className="f9-muted-copy">{source.targetUrl}</p> : null}
                     {source.targetHandle ? <p className="f9-muted-copy">@{source.targetHandle}</p> : null}
-                    <ActionFeedback
-                      data={actionData}
-                      intent="poll-source"
-                      match={{ targetId: source.id }}
-                    />
+										<ActionFeedback
+											data={actionData}
+											intent="poll-source"
+											match={{ targetId: source.id }}
+										/>
                   </div>
                   <Form method="post">
                     <input name="intent" type="hidden" value="poll-source" />
                     <input name="targetId" type="hidden" value={source.id} />
-                    <SubmitButton
-                      className="f9-secondary-button"
-                      intent="poll-source"
-                      match={{ targetId: source.id }}
-                      pendingLabel="Checking…"
-                    >
+										<SubmitButton
+											className="f9-secondary-button"
+											intent="poll-source"
+											match={{ targetId: source.id }}
+											pendingLabel="Checking…"
+										>
                       Check now
                     </SubmitButton>
                   </Form>
                 </div>
               ))}
             </div>
-            <ActionFeedback data={actionData} intent="add-source" />
+						<ActionFeedback data={actionData} intent="add-source" />
             <Form className="f9-auth-form" method="post">
               <input name="connectorId" type="hidden" value="website" />
               <input name="intent" type="hidden" value="add-source" />
@@ -286,7 +286,7 @@ export default function PresenceEntityRoute() {
                 <span>Add website source</span>
                 <input name="targetUrl" placeholder="https://brand.com/blog" />
               </label>
-              <SubmitButton className="f9-secondary-button" intent="add-source" pendingLabel="Adding…">
+							<SubmitButton className="f9-secondary-button" intent="add-source" pendingLabel="Adding…">
                 Add website
               </SubmitButton>
             </Form>
@@ -315,10 +315,10 @@ export default function PresenceEntityRoute() {
             <span className="f9-app-kicker">Compare</span>
             <h2>Related entities</h2>
             {compareEntities.length === 0 ? (
-              <EmptyState
-                title="Add another entity type to compare coverage side by side."
-                variant="inline"
-              />
+							<EmptyState
+								title="Add another entity type to compare coverage side by side."
+								variant="inline"
+							/>
             ) : (
               <div className="f9-work-list is-compact">
                 {compareEntities.map((other) => (
@@ -336,11 +336,11 @@ export default function PresenceEntityRoute() {
           <span className="f9-app-kicker">Feed</span>
           <h2>Latest public content</h2>
           {items.length === 0 ? (
-            <EmptyState
-              description="Check a source to fetch the latest public content."
-              title="No items yet."
-              variant="inline"
-            />
+						<EmptyState
+							description="Check a source to fetch the latest public content."
+							title="No items yet."
+							variant="inline"
+						/>
           ) : (
             <div className="f9-work-list is-compact">
               {items.map((item) => (
@@ -364,20 +364,20 @@ export default function PresenceEntityRoute() {
 
         <article className="f9-app-panel">
           <span className="f9-app-kicker">Danger zone</span>
-          <h2>Delete this entity</h2>
-          <p className="f9-muted-copy">
-            Removes {entity.label}, its sources, and its collected feed items. This cannot be undone.
-          </p>
+					<h2>Delete this entity</h2>
+					<p className="f9-muted-copy">
+						Removes {entity.label}, its sources, and its collected feed items. This cannot be undone.
+					</p>
           <Form method="post">
             <input name="intent" type="hidden" value="delete-entity" />
-            <ConfirmSubmitButton
-              className="f9-secondary-button"
-              confirmLabel="Confirm — delete entity?"
-              intent="delete-entity"
-              pendingLabel="Deleting…"
-            >
+						<ConfirmSubmitButton
+							className="f9-secondary-button"
+							confirmLabel="Confirm — delete entity?"
+							intent="delete-entity"
+							pendingLabel="Deleting…"
+						>
               Delete entity
-            </ConfirmSubmitButton>
+						</ConfirmSubmitButton>
           </Form>
         </article>
       </section>
