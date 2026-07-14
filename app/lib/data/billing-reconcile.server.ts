@@ -368,7 +368,7 @@ export async function applyDodoCancellationReversalWithLedger(
         END,
         plan_updated_at = ?
     WHERE user_id = ?
-      AND dodo_status IN ('cancellation_scheduled', 'active')
+      AND dodo_status IN ('cancellation_scheduled', 'active', 'succeeded', 'payment.succeeded')
       AND dodo_product_id = ?
       AND dodo_subscription_id = ?
       AND dodo_customer_id = ?
