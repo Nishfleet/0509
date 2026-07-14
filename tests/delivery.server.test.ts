@@ -3717,6 +3717,156 @@ describe("billing lifecycle emails", () => {
   });
 
   it.each([
+    { startingCount: 2, expectedCronScans: [1, 0], expectedProviderCalls: 2 },
+    { startingCount: 3, expectedCronScans: [0, 0], expectedProviderCalls: 1 },
+  ])(
+    "keeps recovery count $startingCount across live redelivery without reopening cron budget",
+    async ({ startingCount, expectedCronScans, expectedProviderCalls }) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-14T09:00:00.000Z"));
+      emailSend = vi.fn().mockRejectedValue(new Error("provider explicitly rejected"));
+
+      const attempt = {
+        id: "attempt-live-redelivery-budget",
+        userId: "user-1",
+        provider: "cloudflare_email",
+        status: "failed" as "pending" | "failed" | "sent",
+        webhookStatus: "failed" as "pending" | "failed" | "provider_unknown",
+        providerMessageId: null as string | null,
+        providerStatusLastSeenAt: "2026-07-14T08:55:00.000Z" as string | null,
+        targetValue: "owner@example.com",
+        templateName: "billing_refund_revoked",
+        payloadSnapshot: {
+          kind: "billing_refund_revoked",
+          subject: "Your refund has been processed",
+          bodyHtml: "<p>Your refund is complete.</p>",
+          tag: "billing-refund",
+          billingStateFingerprint: currentBillingStateFingerprint,
+          recoveryAttemptCount: startingCount,
+        } as Record<string, unknown>,
+        errorMessage: "Earlier explicit rejection." as string | null,
+        sentAt: null as string | null,
+        failedAt: "2026-07-14T08:55:00.000Z" as string | null,
+        updatedAt: "2026-07-14T08:55:00.000Z",
+      };
+      const listStaleBillingLifecycleEmailAttempts = vi.fn(async () => {
+        const count = attempt.payloadSnapshot.recoveryAttemptCount;
+        return attempt.status === "failed" &&
+          attempt.webhookStatus === "failed" &&
+          attempt.providerStatusLastSeenAt !== null &&
+          Number.isSafeInteger(count) &&
+          Number(count) < 3
+          ? [attempt]
+          : [];
+      });
+      const updateDeliveryAttemptResult = vi.fn(async (
+        _env: unknown,
+        _attemptId: string,
+        input: Record<string, unknown>,
+      ) => {
+        if (input.expectedStatus && attempt.status !== input.expectedStatus) return false;
+        if (input.expectedWebhookStatus && attempt.webhookStatus !== input.expectedWebhookStatus) {
+          return false;
+        }
+        if (input.expectedUpdatedAt && attempt.updatedAt !== input.expectedUpdatedAt) return false;
+        attempt.provider = String(input.provider);
+        attempt.status = String(input.status) as typeof attempt.status;
+        attempt.webhookStatus = String(input.webhookStatus) as typeof attempt.webhookStatus;
+        attempt.providerMessageId = (input.providerMessageId as string | null) ?? null;
+        attempt.providerStatusLastSeenAt =
+          (input.providerStatusLastSeenAt as string | null) ?? null;
+        attempt.errorMessage = (input.errorMessage as string | null) ?? null;
+        attempt.sentAt = (input.sentAt as string | null) ?? null;
+        attempt.failedAt = (input.failedAt as string | null) ?? null;
+        if (input.payloadSnapshot) {
+          attempt.payloadSnapshot = input.payloadSnapshot as Record<string, unknown>;
+        }
+        attempt.targetValue = String(input.targetValue ?? attempt.targetValue);
+        attempt.updatedAt = String(input.updatedAt ?? new Date().toISOString());
+        return true;
+      });
+      mockBillingDataServer({
+        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(attempt),
+        listStaleBillingLifecycleEmailAttempts,
+        updateDeliveryAttemptResult,
+      });
+
+      const {
+        recoverAbandonedBillingLifecycleEmails,
+        sendBillingRefundEmail,
+      } = await import("~/lib/delivery.server");
+      await expect(
+        sendBillingRefundEmail(emailEnv as never, {
+          userId: "user-1",
+          email: "owner@example.com",
+          name: null,
+          eventId: "evt-live-redelivery-budget",
+          retryWebhookOnExplicitFailure: true,
+        }),
+      ).rejects.toMatchObject({ code: "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE" });
+
+      const firstCron = await recoverAbandonedBillingLifecycleEmails({
+        ...emailEnv,
+        DB: {},
+      } as never);
+      const secondCron = await recoverAbandonedBillingLifecycleEmails({
+        ...emailEnv,
+        DB: {},
+      } as never);
+
+      expect([firstCron.scanned, secondCron.scanned]).toEqual(expectedCronScans);
+      expect(emailSend).toHaveBeenCalledTimes(expectedProviderCalls);
+      expect(attempt.payloadSnapshot.recoveryAttemptCount).toBe(3);
+      const persistedCounts = updateDeliveryAttemptResult.mock.calls
+        .map((call) => call[2].payloadSnapshot as Record<string, unknown> | undefined)
+        .filter((payload): payload is Record<string, unknown> => Boolean(payload))
+        .map((payload) => payload.recoveryAttemptCount);
+      expect(persistedCounts).toEqual(startingCount === 2 ? [2, 3] : [3]);
+    },
+  );
+
+  it.each(["2", -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+    "normalizes invalid live-redelivery recovery count %s to zero",
+    async (invalidCount) => {
+      const sendMock = mockEmailSend("msg_invalid_count_reclaim");
+      const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+      mockBillingDataServer({
+        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+          id: "attempt-invalid-recovery-count",
+          provider: "cloudflare_email",
+          status: "failed",
+          webhookStatus: "failed",
+          providerMessageId: null,
+          providerStatusLastSeenAt: "2026-07-14T08:55:00.000Z",
+          targetValue: "owner@example.com",
+          payloadSnapshot: { recoveryAttemptCount: invalidCount },
+        }),
+        updateDeliveryAttemptResult,
+      });
+
+      const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
+      await expect(
+        sendBillingRefundEmail(emailEnv as never, {
+          userId: "user-1",
+          email: "owner@example.com",
+          name: null,
+          eventId: "evt-invalid-recovery-count",
+        }),
+      ).resolves.toBe(true);
+
+      expect(sendMock).toHaveBeenCalledTimes(1);
+      expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+        1,
+        expect.anything(),
+        "attempt-invalid-recovery-count",
+        expect.objectContaining({
+          payloadSnapshot: expect.objectContaining({ recoveryAttemptCount: 0 }),
+        }),
+      );
+    },
+  );
+
+  it.each([
     ["sent", "delivered"],
     ["pending", "provider_unknown"],
   ] as const)(

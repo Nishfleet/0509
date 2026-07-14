@@ -160,6 +160,9 @@ async function sendBillingLifecycleEmail(
     bodyHtml: input.bodyHtml,
     tag: input.tag,
     billingStateFingerprint,
+    ...(duplicate
+      ? { recoveryAttemptCount: billingLifecycleRecoveryAttemptCount(duplicate) }
+      : {}),
   };
   let attemptId = duplicate?.id ?? null;
   let claimUpdatedAt: string | null = null;
@@ -330,7 +333,7 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
 }
 
 function billingLifecycleRecoveryAttemptCount(attempt: DeliveryAttemptRecord) {
-  const value = attempt.payloadSnapshot.recoveryAttemptCount;
+  const value = attempt.payloadSnapshot?.recoveryAttemptCount;
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
 }
 
