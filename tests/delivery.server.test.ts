@@ -2467,7 +2467,9 @@ describe("billing lifecycle emails", () => {
     planUpdatedAt: scheduledWatermark,
   };
   const refundBillingInfo = { ...currentBillingInfo, plan: "free" as const, dodoStatus: "refunded" };
-  let defaultBillingInfo: typeof currentBillingInfo | typeof refundBillingInfo = currentBillingInfo;
+  const paymentIssueBillingInfo = { ...currentBillingInfo, dodoStatus: "payment.failed" };
+  const accessEndedBillingInfo = { ...currentBillingInfo, plan: "free" as const, dodoStatus: "subscription.expired" };
+  let defaultBillingInfo: typeof currentBillingInfo | typeof refundBillingInfo | typeof accessEndedBillingInfo = currentBillingInfo;
   const currentBillingStateFingerprint = JSON.stringify(currentBillingInfo);
 
   function billingPayload<T extends Record<string, unknown>>(templateName: string, overrides: T) {
@@ -2527,6 +2529,16 @@ describe("billing lifecycle emails", () => {
     }, attemptOverrides);
   }
 
+  function mutationRecoveryAttempt(id: string, templateName: string, status: string, subscriptionId: string | undefined = "subscription-current", stateUpdatedAt: string | undefined = scheduledWatermark) {
+    return recoveryAttempt(id, templateName, {
+      billingMutationStatus: status,
+      billingMutationSubscriptionId: subscriptionId,
+      billingMutationStateUpdatedAt: stateUpdatedAt,
+      billingStateFingerprint: null,
+      outboxPendingDispatch: true,
+    });
+  }
+
   function useRecoveryClock(at = "2026-07-13T09:05:00.000Z") {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(at));
@@ -2539,9 +2551,11 @@ describe("billing lifecycle emails", () => {
   const recipient = { userId: "user-1", email: "owner@example.com", name: "Owner" };
 
   async function sendPaymentIssue(overrides: Partial<PaymentInput> = {}) {
+    defaultBillingInfo = paymentIssueBillingInfo;
     const delivery = await import("~/lib/delivery.server");
     return delivery.sendBillingPaymentIssueEmail(emailEnv as never, {
-      ...recipient,
+      ...recipient, status: "payment.failed", subscriptionId: "subscription-current",
+      stateUpdatedAt: scheduledWatermark,
       ...overrides,
     });
   }
@@ -2555,8 +2569,16 @@ describe("billing lifecycle emails", () => {
   }
 
   async function sendCancellation(input: Omit<CancellationInput, "userId" | "email" | "name"> & Partial<Pick<CancellationInput, "userId" | "email" | "name">>) {
+    if (input.kind === "ended") defaultBillingInfo = accessEndedBillingInfo;
     const delivery = await import("~/lib/delivery.server");
-    return delivery.sendBillingCancellationEmail(emailEnv as never, { ...recipient, ...input });
+    return delivery.sendBillingCancellationEmail(emailEnv as never, {
+      ...recipient,
+      ...(input.kind === "ended" ? {
+        status: "subscription.expired", subscriptionId: "subscription-current",
+        stateUpdatedAt: scheduledWatermark,
+      } : {}),
+      ...input,
+    });
   }
 
   function sendScheduledCancellation(eventId: string, overrides: Partial<CancellationInput> = {}) {
@@ -2682,7 +2704,7 @@ describe("billing lifecycle emails", () => {
         subject: "Action needed: a Five to Nine payment didn't go through",
         bodyHtml: expect.stringContaining("your plan stays active"),
         tag: "billing-payment-issue",
-        billingStateFingerprint: currentBillingStateFingerprint,
+        billingStateFingerprint: JSON.stringify(paymentIssueBillingInfo),
       }),
     );
   });
@@ -2937,6 +2959,38 @@ describe("billing lifecycle emails", () => {
 
     await expect(sendRefund({ eventId: "evt-refund-a", paymentId, stateUpdatedAt })).resolves.toBe(false);
 
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["payment issue", "billing_payment_issue", "payment.failed", "starter", false, null],
+    ["failed payment issue", "billing_payment_issue", "payment.failed", "starter", true, null],
+    ["access ended", "billing_access_ended", "subscription.expired", "free", false, null],
+    ["failed access ended", "billing_access_ended", "subscription.expired", "free", true, null],
+    ["payment issue missing identity", "billing_payment_issue", "payment.failed", "starter", false, "identity"],
+    ["failed access ended missing watermark", "billing_access_ended", "subscription.expired", "free", true, "watermark"],
+  ] as const)("blocks stale direct %s A after state B", async (_label, templateName, status, plan, failed, missing) => {
+    const sendMock = mockEmailSend("msg_stale_mutation_must_not_send");
+    const duplicate = failed
+      ? missing ? recoveryAttempt("attempt-failed-a", templateName, {})
+        : mutationRecoveryAttempt("attempt-failed-a", templateName, status, "subscription-a", scheduledWatermark)
+      : null;
+    if (duplicate) Object.assign(duplicate, { status: "failed", webhookStatus: "failed" });
+    const currentSubscription = missing ? "subscription-a" : "subscription-b";
+    const currentAt = missing ? scheduledWatermark : "2026-07-14T09:00:00.000Z";
+    const mocks = mockBillingDataServer({
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(duplicate),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo, plan, dodoStatus: status,
+        dodoSubscriptionId: currentSubscription, planUpdatedAt: currentAt,
+      }),
+    });
+    const sent = templateName === "billing_payment_issue"
+      ? sendPaymentIssue({ status, subscriptionId: missing === "identity" ? null : "subscription-a", stateUpdatedAt: scheduledWatermark })
+      : sendCancellation({ kind: "ended", eventId: "evt-ended-a", status, subscriptionId: "subscription-a", stateUpdatedAt: missing === "watermark" ? null : scheduledWatermark });
+
+    await expect(sent).resolves.toBe(false);
     expect(sendMock).not.toHaveBeenCalled();
     expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
   });
@@ -3320,17 +3374,16 @@ describe("billing lifecycle emails", () => {
     );
   });
 
-  it("recovers a marker outbox row when the billing state still matches its kind", async () => {
+  it.each([
+    ["payment issue", "billing_payment_issue", "payment.failed", "starter"],
+    ["access ended", "billing_access_ended", "subscription.expired", "free"],
+  ] as const)("recovers an exact %s outbox identity", async (_label, templateName, status, plan) => {
     useRecoveryClock();
     const sendMock = mockEmailSend("msg_marker_recovered");
-    const markerAttempt = recoveryAttempt("attempt-marker", "billing_payment_issue", {
-        billingStateFingerprint: null,
-        outboxPendingDispatch: true,
-    });
+    const markerAttempt = mutationRecoveryAttempt("attempt-marker", templateName, status);
     const updateDeliveryAttemptResult = mockRecoveryAttempt(markerAttempt, {
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-        ...currentBillingInfo,
-        dodoStatus: "payment.failed",
+        ...currentBillingInfo, plan, dodoStatus: status,
       }),
     });
 
@@ -3344,6 +3397,26 @@ describe("billing lifecycle emails", () => {
     expect(claimCall[2].payloadSnapshot).toBeDefined();
     expect(claimCall[2].payloadSnapshot.outboxPendingDispatch).toBeUndefined();
     expect(typeof claimCall[2].payloadSnapshot.billingStateFingerprint).toBe("string");
+  });
+
+  it.each([
+    ["payment issue A after recovery and issue B", "billing_payment_issue", "payment.failed", "starter", "subscription-a", scheduledWatermark],
+    ["access ended A after paid and revoke B", "billing_access_ended", "subscription.expired", "free", "subscription-a", scheduledWatermark],
+    ["payment issue missing identity", "billing_payment_issue", "payment.failed", "starter", undefined, scheduledWatermark],
+    ["access ended missing watermark", "billing_access_ended", "subscription.expired", "free", "subscription-b", undefined],
+  ] as const)("supersedes %s", async (_label, templateName, status, plan, expectedSubscription, expectedAt) => {
+    useRecoveryClock();
+    const sendMock = mockEmailSend("msg_old_state_must_not_send");
+    const attempt = mutationRecoveryAttempt("attempt-old-state", templateName, status, expectedSubscription, expectedAt);
+    mockRecoveryAttempt(attempt, {
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo, plan, dodoStatus: status,
+        dodoSubscriptionId: "subscription-b", planUpdatedAt: "2026-07-14T09:00:00.000Z",
+      }),
+    });
+
+    await expect(recoverBilling()).resolves.toMatchObject({ sent: 0, superseded: 1 });
+    expect(sendMock).not.toHaveBeenCalled();
   });
 
   it("recovers a scheduled-cancellation outbox only for its matching future state", async () => {

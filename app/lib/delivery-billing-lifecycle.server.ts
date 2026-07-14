@@ -37,6 +37,12 @@ interface ScheduledCancellationStateExpectation {
 }
 
 type RefundStateExpectation = { paymentId: string; stateUpdatedAt: string };
+type BillingMutationStateExpectation = {
+  status: string;
+  subscriptionId: string | null;
+  paymentId: string | null;
+  stateUpdatedAt: string;
+};
 
 export class BillingLifecycleEmailExplicitFailure extends Error {
   readonly code = BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE;
@@ -115,6 +121,7 @@ async function sendBillingLifecycleEmail(
     templateName: string;
     stateExpectation?: ScheduledCancellationStateExpectation | null;
     refundExpectation?: RefundStateExpectation | null;
+    mutationExpectation?: BillingMutationStateExpectation | null;
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
@@ -148,44 +155,46 @@ async function sendBillingLifecycleEmail(
         ? input.refundExpectation ?? null
         : null)
     : input.refundExpectation ?? null;
-  if (
-    pendingOutboxDispatch ||
-    supersededOutbox ||
-    input.templateName === "billing_cancellation_scheduled" ||
-    input.templateName === "billing_refund_revoked"
-  ) {
-    const durableKind = pendingOutboxDispatch
-      ? readString(duplicate?.payloadSnapshot?.kind)
-      : input.templateName;
-    const stateStillCurrent =
-      (!pendingOutboxDispatch ||
-        (durableKind === duplicate.templateName && durableKind === input.templateName)) &&
-      billingLifecycleOutboxStateStillApplies(
-        durableKind,
-        currentBillingInfo,
-        scheduledCancellationExpectation,
-        refundExpectation,
-      );
-    if (!stateStillCurrent) {
-      if (duplicate && !supersededOutbox) {
-        await updateDeliveryAttemptResult(env, duplicate.id, {
-          provider: EMAIL_PROVIDER,
-          status: "skipped_due_to_dedupe",
-          webhookStatus: "provider_unknown",
-          providerMessageId: null,
-          providerStatusLastSeenAt: null,
-          templateName: duplicate.templateName,
-          errorMessage:
-            "Billing lifecycle outbox was superseded by newer account state.",
-          sentAt: null,
-          failedAt: null,
-          expectedStatus: duplicate.status,
-          expectedWebhookStatus: duplicate.webhookStatus,
-          expectedUpdatedAt: duplicate.updatedAt,
-        });
-      }
-      return false;
+  const mutationExpectation = duplicate
+    ? readBillingMutationStateExpectation(duplicate.payloadSnapshot) ??
+      (duplicate.status === "failed" ||
+      (stalePreDispatch && !pendingOutboxDispatch) ||
+      (supersededOutbox && duplicate.payloadSnapshot?.outboxPendingDispatch !== true)
+        ? input.mutationExpectation ?? null
+        : null)
+    : input.mutationExpectation ?? null;
+  const durableKind = pendingOutboxDispatch
+    ? readString(duplicate?.payloadSnapshot?.kind)
+    : input.templateName;
+  const stateStillCurrent =
+    (!pendingOutboxDispatch ||
+      (durableKind === duplicate.templateName && durableKind === input.templateName)) &&
+    billingLifecycleOutboxStateStillApplies(
+      durableKind,
+      currentBillingInfo,
+      scheduledCancellationExpectation,
+      refundExpectation,
+      mutationExpectation,
+    );
+  if (!stateStillCurrent) {
+    if (duplicate && !supersededOutbox) {
+      await updateDeliveryAttemptResult(env, duplicate.id, {
+        provider: EMAIL_PROVIDER,
+        status: "skipped_due_to_dedupe",
+        webhookStatus: "provider_unknown",
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: duplicate.templateName,
+        errorMessage:
+          "Billing lifecycle outbox was superseded by newer account state.",
+        sentAt: null,
+        failedAt: null,
+        expectedStatus: duplicate.status,
+        expectedWebhookStatus: duplicate.webhookStatus,
+        expectedUpdatedAt: duplicate.updatedAt,
+      });
     }
+    return false;
   }
 
   const billingStateFingerprint = billingLifecycleStateFingerprint(currentBillingInfo);
@@ -197,6 +206,7 @@ async function sendBillingLifecycleEmail(
     billingStateFingerprint,
     ...scheduledCancellationStateExpectationPayload(scheduledCancellationExpectation),
     ...refundStateExpectationPayload(refundExpectation),
+    ...billingMutationStateExpectationPayload(mutationExpectation),
     ...(duplicate
       ? { recoveryAttemptCount: billingLifecycleRecoveryAttemptCount(duplicate) }
       : {}),
@@ -331,6 +341,7 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
     attempt.payloadSnapshot,
   );
   const refundExpectation = readRefundStateExpectation(attempt.payloadSnapshot);
+  const mutationExpectation = readBillingMutationStateExpectation(attempt.payloadSnapshot);
   const targetValue = readString(attempt.targetValue);
 
   if (
@@ -355,6 +366,7 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
     pendingDispatch,
     stateExpectation,
     refundExpectation,
+    mutationExpectation,
   };
 }
 
@@ -363,16 +375,16 @@ function billingLifecycleRecoveryAttemptCount(attempt: DeliveryAttemptRecord) {
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
 }
 
-/** Checks whether a pre-mutation outbox still describes current billing state. */
 function billingLifecycleOutboxStateStillApplies(
   templateName: string | null,
   info: UserPlanBillingInfo,
   scheduledCancellation: ScheduledCancellationStateExpectation | null = null,
   refund: RefundStateExpectation | null = null,
+  mutation: BillingMutationStateExpectation | null = null,
 ) {
   switch (templateName) {
     case "billing_payment_issue":
-      return (
+      return billingMutationStateStillApplies(info, mutation) && (
         info.dodoStatus === "payment.failed" ||
         info.dodoStatus === "subscription.failed" ||
         info.dodoStatus === "subscription.on_hold"
@@ -388,7 +400,7 @@ function billingLifecycleOutboxStateStillApplies(
         sameBillingTimestamp(info.planUpdatedAt, scheduledCancellation.stateUpdatedAt)
       );
     case "billing_access_ended":
-      return (
+      return billingMutationStateStillApplies(info, mutation) && (
         info.plan === "free" &&
         (info.dodoStatus === "subscription.cancelled" ||
           info.dodoStatus === "subscription.expired")
@@ -406,7 +418,6 @@ function billingLifecycleOutboxStateStillApplies(
   }
 }
 
-/** Replays bounded pre-dispatch rows; provider-unknown timeouts never auto-retry. */
 export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
   const emptyResult = {
     scanned: 0,
@@ -452,6 +463,7 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
             currentBillingInfo,
             payload.stateExpectation,
             payload.refundExpectation,
+            payload.mutationExpectation,
           )
         : billingLifecycleStateFingerprint(currentBillingInfo) ===
           payload.billingStateFingerprint);
@@ -536,6 +548,7 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
                 payload.stateExpectation,
               ),
               ...refundStateExpectationPayload(payload.refundExpectation),
+              ...billingMutationStateExpectationPayload(payload.mutationExpectation),
               recoveryAttemptCount,
             }
           : undefined,
@@ -612,7 +625,6 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
   return result;
 }
 
-/** Resolves provider-unknown claims from external evidence before any retry. */
 export async function reconcileBillingLifecycleEmailDelivery(
   env: AppEnv,
   input: {
@@ -777,6 +789,10 @@ export async function sendBillingPaymentIssueEmail(
     email: string;
     name: string | null;
     occurredAt?: string | null;
+    status: string;
+    subscriptionId?: string | null;
+    paymentId?: string | null;
+    stateUpdatedAt: string;
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
@@ -784,6 +800,7 @@ export async function sendBillingPaymentIssueEmail(
     userId: input.userId,
     email: input.email,
     retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
+    mutationExpectation: createBillingMutationStateExpectation(input),
     ...billingPaymentIssueEmailContent(env, input),
   });
 }
@@ -799,6 +816,8 @@ export async function sendBillingCancellationEmail(
     eventId: string;
     subscriptionId?: string | null;
     stateUpdatedAt?: string | null;
+    status?: string | null;
+    paymentId?: string | null;
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
@@ -806,6 +825,8 @@ export async function sendBillingCancellationEmail(
     userId: input.userId,
     email: input.email,
     retryWebhookOnExplicitFailure: input.retryWebhookOnExplicitFailure,
+    mutationExpectation:
+      input.kind === "ended" ? createBillingMutationStateExpectation(input) : null,
     ...billingCancellationEmailContent(env, input),
   });
 }
@@ -849,10 +870,6 @@ export type BillingLifecycleEmailOutboxInput =
   | { kind: "revoke"; userId: string; email: string; name: string | null; eventId: string }
   | { kind: "refund"; userId: string; email: string; name: string | null; eventId: string };
 
-/**
- * Freezes an email for atomic insertion with the plan mutation and ledger.
- * The pending marker lets live send or recovery validate and claim it.
- */
 export function prepareBillingLifecycleEmailOutbox(
   env: AppEnv,
   input: BillingLifecycleEmailOutboxInput,
@@ -921,6 +938,32 @@ function readRefundStateExpectation(
   return paymentId && stateUpdatedAt ? { paymentId, stateUpdatedAt } : null;
 }
 
+function createBillingMutationStateExpectation(input: {
+  status?: string | null;
+  subscriptionId?: string | null;
+  paymentId?: string | null;
+  stateUpdatedAt?: string | null;
+}): BillingMutationStateExpectation | null {
+  const status = readString(input.status);
+  const subscriptionId = readString(input.subscriptionId);
+  const paymentId = subscriptionId ? null : readString(input.paymentId);
+  const stateUpdatedAt = normalizedBillingTimestamp(input.stateUpdatedAt);
+  return status && (subscriptionId || paymentId) && stateUpdatedAt
+    ? { status, subscriptionId, paymentId, stateUpdatedAt }
+    : null;
+}
+
+function readBillingMutationStateExpectation(
+  payload: Record<string, unknown> | null | undefined,
+) {
+  return createBillingMutationStateExpectation({
+    status: readString(payload?.billingMutationStatus),
+    subscriptionId: readString(payload?.billingMutationSubscriptionId),
+    paymentId: readString(payload?.billingMutationPaymentId),
+    stateUpdatedAt: readString(payload?.billingMutationStateUpdatedAt),
+  });
+}
+
 function scheduledCancellationStateExpectationPayload(
   expectation: ScheduledCancellationStateExpectation | null,
 ) {
@@ -939,6 +982,28 @@ function refundStateExpectationPayload(expectation: RefundStateExpectation | nul
     refundPaymentId: expectation.paymentId,
     refundStateUpdatedAt: expectation.stateUpdatedAt,
   } : {};
+}
+
+function billingMutationStateExpectationPayload(
+  expectation: BillingMutationStateExpectation | null,
+) {
+  return expectation ? {
+    billingMutationStatus: expectation.status,
+    billingMutationSubscriptionId: expectation.subscriptionId,
+    billingMutationPaymentId: expectation.paymentId,
+    billingMutationStateUpdatedAt: expectation.stateUpdatedAt,
+  } : {};
+}
+
+function billingMutationStateStillApplies(
+  info: UserPlanBillingInfo,
+  expectation: BillingMutationStateExpectation | null,
+) {
+  if (!expectation || info.dodoStatus !== expectation.status ||
+      !sameBillingTimestamp(info.planUpdatedAt, expectation.stateUpdatedAt)) return false;
+  return expectation.subscriptionId
+    ? info.dodoSubscriptionId === expectation.subscriptionId
+    : info.dodoPaymentId === expectation.paymentId;
 }
 
 function normalizedBillingTimestamp(value: string | null | undefined) {

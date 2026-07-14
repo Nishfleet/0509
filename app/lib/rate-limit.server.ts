@@ -9,19 +9,11 @@ type RateLimitPolicy = {
   // When set, the rate-limit key is derived from this value instead of
   // IP/user-agent — e.g. a user id, so rotating IPs can't reset the bucket.
   keySeed?: string;
-  // When set, stored instead of the request pathname. Use for routes whose
-  // pathname embeds a bearer credential (e.g. share tokens) so the token
-  // never lands in the rate_limit_events table.
   routeOverride?: string;
-  // Cost-bearing routes must reserve capacity synchronously in one SQL
-  // statement. This prevents concurrent requests from all observing the same
-  // stale COUNT before any event is recorded.
   atomicClaim?: boolean;
 };
 
 const CLEANUP_WINDOW_SECONDS = 2 * 60 * 60;
-// Scopes whose counting window exceeds the short cleanup horizon. Their
-// events must survive a full day plus slack or the daily caps silently reset.
 const LONG_WINDOW_SCOPE = "share-pdf-daily";
 const LONG_WINDOW_CLEANUP_SECONDS = 25 * 60 * 60;
 
@@ -99,10 +91,6 @@ export async function enforceSearchSelectionRateLimit(
   );
 }
 
-// Public share-report PDF renders launch usage-billed Browser Rendering
-// sessions from an unauthenticated route, so both gates fail closed — they
-// are the only spend gates on that path (mirrors search-selection). Per-IP
-// stops burst abuse from one viewer.
 export async function enforceSharePdfRateLimit(
   request: Request,
   env: AppEnv,
@@ -124,9 +112,6 @@ export async function enforceSharePdfRateLimit(
   );
 }
 
-// Per-sharer daily ceiling: a forwarded link can reach any number of viewer
-// IPs, so the sharer's account is the budget that actually bounds Browser
-// Rendering spend. Keyed by the sharer's user id, not the viewer.
 export async function enforceSharePdfDailyCap(
   request: Request,
   env: AppEnv,
@@ -168,10 +153,6 @@ async function enforceRateLimitPolicy(
     const keyHash = await requestKeyHash(request, policy);
 
     if (policy.atomicClaim) {
-      // A single conditional INSERT is the reservation and the limit check.
-      // D1/SQLite serializes the statement atomically, so concurrent callers
-      // cannot all pass on a stale pre-insert count. The claim is synchronous;
-      // only opportunistic cleanup may be deferred through waitUntil.
       const eventId = crypto.randomUUID();
       const createdAt = now.toISOString();
       const claim = await env.DB.prepare(

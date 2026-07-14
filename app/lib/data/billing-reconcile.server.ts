@@ -20,12 +20,6 @@ import type { AppEnv } from "~/lib/env.server";
 type GrantDodoPlanAccessInput = Parameters<
   typeof import("~/lib/data/billing-plan.server").grantDodoPlanAccess
 >[1] & {
-  /**
-   * Apply only when the existing product, subscription, and customer all
-   * match the incoming provider identity. This intentionally uses UPDATE
-   * rather than UPSERT so an identity-bound lifecycle event cannot create a
-   * new entitlement when there is no current subscription to compare.
-   */
   requireProviderIdentityMatch?: boolean;
 };
 type RevokeDodoPlanAccessInput = Parameters<
@@ -33,16 +27,8 @@ type RevokeDodoPlanAccessInput = Parameters<
 >[1];
 type MarkDodoPlanPaymentIssueInput = Parameters<
   typeof import("~/lib/data/billing-plan.server").markDodoPlanPaymentIssue
->[1];
+>[1] & { providerSubscriptionId?: string | null; providerPaymentId?: string | null };
 
-/**
- * Optional lifecycle-email outbox rider. When present, the pending
- * delivery_attempt row is inserted in the SAME D1 batch that applies the
- * plan mutation and finalizes the webhook ledger — a worker crash after the
- * batch can no longer lose the customer email, because the recovery sweep
- * replays pending outbox rows and Dodo redelivery is already deduped by the
- * finalized ledger.
- */
 export interface ApplyDodoPlanOptions {
   lifecycleEmailOutbox?: BillingLifecycleEmailOutboxSpec;
 }
@@ -360,14 +346,6 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   return { changed: grantChanged };
 }
 
-/**
- * Reverses a scheduled cancellation after Dodo emits plan_changed with
- * cancel_at_next_billing_date=false. Live payloads may omit updated_at, so
- * callers pass the signature-verified webhook timestamp as grantedAt. The
- * update is a CAS against the cancellation state and provider identities; a
- * normal plan change cannot use this path unless that exact cancellation row
- * still exists.
- */
 export async function applyDodoCancellationReversalWithLedger(
   env: AppEnv,
   input: GrantDodoPlanAccessInput,
@@ -426,6 +404,16 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
   const planUpdatedAt = validIsoTimestamp(input.revokedAt) ?? nowIso();
   const timestamp = nowIso();
   const processedAt = nowIso();
+  const revokeOutbox = options.lifecycleEmailOutbox && {
+    ...options.lifecycleEmailOutbox,
+    payloadSnapshot: {
+      ...options.lifecycleEmailOutbox.payloadSnapshot,
+      billingMutationStatus: input.status,
+      billingMutationSubscriptionId:
+        input.providerSubscriptionId !== input.status ? input.providerSubscriptionId : null,
+      billingMutationStateUpdatedAt: planUpdatedAt,
+    },
+  };
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
 
   const statements = [
@@ -446,11 +434,11 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
         AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
     `).bind(input.userId, input.status, planUpdatedAt),
   ];
-  if (options.lifecycleEmailOutbox) {
+  if (revokeOutbox) {
     statements.push(
       buildBillingLifecycleOutboxStatement(
         db,
-        options.lifecycleEmailOutbox,
+        revokeOutbox,
         { kind: "prior-statement-changed" },
         timestamp,
       ),
@@ -469,7 +457,10 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
 
   await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [watchlistIndex]);
 
-  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
+  return {
+    changed: Number(results[0]?.meta?.changes ?? 0) > 0,
+    stateUpdatedAt: planUpdatedAt,
+  };
 }
 
 
@@ -569,6 +560,18 @@ export async function applyDodoPlanPaymentIssueWithLedger(
   const cancellationEffectiveAt = validIsoTimestamp(input.cancellationEffectiveAt ?? undefined);
   const timestamp = nowIso();
   const processedAt = nowIso();
+  const paymentIssueSubscriptionId = input.providerSubscriptionId?.trim() || null;
+  const paymentIssueOutbox = options.lifecycleEmailOutbox && {
+    ...options.lifecycleEmailOutbox,
+    payloadSnapshot: {
+      ...options.lifecycleEmailOutbox.payloadSnapshot,
+      billingMutationStatus: input.status,
+      billingMutationSubscriptionId: paymentIssueSubscriptionId,
+      billingMutationPaymentId:
+        paymentIssueSubscriptionId ? null : input.providerPaymentId?.trim() || null,
+      billingMutationStateUpdatedAt: planUpdatedAt,
+    },
+  };
 
   const statements = [
     db.prepare(`
@@ -591,11 +594,11 @@ export async function applyDodoPlanPaymentIssueWithLedger(
       planUpdatedAt,
     ),
   ];
-  if (options.lifecycleEmailOutbox) {
+  if (paymentIssueOutbox) {
     statements.push(
       buildBillingLifecycleOutboxStatement(
         db,
-        options.lifecycleEmailOutbox,
+        paymentIssueOutbox,
         { kind: "prior-statement-changed" },
         timestamp,
       ),
@@ -604,5 +607,8 @@ export async function applyDodoPlanPaymentIssueWithLedger(
   statements.push(buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt));
   const results = await db.batch(statements);
 
-  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
+  return {
+    changed: Number(results[0]?.meta?.changes ?? 0) > 0,
+    stateUpdatedAt: planUpdatedAt,
+  };
 }
