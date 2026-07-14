@@ -19,6 +19,47 @@ afterEach(() => {
 });
 
 describe("WhatsApp delivery helpers", () => {
+  it("keeps transport-ambiguous WhatsApp failures pending instead of retrying them", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection reset after write")));
+    const { sendInstantWhatsApp } = await import("~/lib/whatsapp.server");
+    const result = await sendInstantWhatsApp(readyEnv as never, {
+      lane: "customer",
+      target: {
+        id: "whatsapp-target-1",
+        userId: "user-1",
+        watchlistId: null,
+        channel: "whatsapp",
+        targetValue: "919876543210",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "manual_whatsapp_setup",
+        optedInAt: "2026-07-14T00:00:00.000Z",
+        isPaused: false,
+        pausedAt: null,
+        optedOutAt: null,
+        templateEligible: true,
+        lastSuccessfulDeliveryAt: null,
+        lastSuccessfulAttemptId: null,
+        providerIdentifier: "wamid.setup-1",
+        metadata: {},
+        createdAt: "2026-07-14T00:00:00.000Z",
+        updatedAt: "2026-07-14T00:00:00.000Z",
+      },
+      competitor: "Nykaa",
+      shortChange: "New offer",
+      watchlistUrl: "https://0509.io/app/watchlists/watch-1",
+      provisional: false,
+    });
+
+    expect(result).toMatchObject({
+      status: "pending",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+      templateName: "confirmed_instant_customer_v1",
+    });
+  });
+
   it("normalizes WhatsApp recipients to international digits", async () => {
     const { normalizeWhatsAppRecipient } = await import("~/lib/whatsapp.server");
 

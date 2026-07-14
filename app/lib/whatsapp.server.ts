@@ -41,7 +41,7 @@ const WHATSAPP_OPT_IN_SOURCE = "manual_whatsapp_setup";
 
 interface WhatsAppSendResult {
   provider: "whatsapp_cloud_api";
-  status: "sent" | "failed";
+  status: "sent" | "failed" | "pending";
   webhookStatus: WebhookReconciliationStatus;
   providerMessageId: string | null;
   providerStatusLastSeenAt: string | null;
@@ -502,8 +502,8 @@ async function sendWhatsAppTemplate(
   } catch (error) {
     return {
       provider: "whatsapp_cloud_api",
-      status: "failed",
-      webhookStatus: "failed",
+      status: "pending",
+      webhookStatus: "provider_unknown",
       providerMessageId: null,
       providerStatusLastSeenAt: new Date().toISOString(),
       templateName: input.templateName,

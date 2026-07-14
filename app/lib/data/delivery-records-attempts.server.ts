@@ -9,8 +9,10 @@ import {
   type DeliveryAttemptRow,
 } from "~/lib/data/delivery-records-rows.server";
 import { createId, jsonValue, nowIso, type JsonRecord } from "~/lib/data/helpers.server";
+import { isStalePreDispatchAttempt } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import type {
+  DeliveryAttemptRecord,
   DeliveryAttemptStatus,
   DeliveryChannel,
   DeliveryLane,
@@ -138,6 +140,182 @@ export async function getDeliveryAttemptByIdempotencyKey(
   );
 
   return row ? toDeliveryAttemptRecord(row) : null;
+}
+
+export interface InstantDeliveryAttemptClaimInput {
+  userId: string;
+  watchlistId: string;
+  deliveryTargetId: string;
+  lane: DeliveryLane;
+  channel: DeliveryChannel;
+  provider: string;
+  targetValue: string;
+  eventIds: string[];
+  payloadSnapshot: JsonRecord;
+  idempotencyKey: string;
+  templateName?: string | null;
+  deferredByQuietHours?: boolean;
+}
+
+/**
+ * Atomically claims an instant delivery attempt before provider I/O. The
+ * idempotency unique index arbitrates initial races; failed and stale pending
+ * rows are re-armed with an exact-version CAS so only one retry owner wins.
+ */
+export async function claimInstantDeliveryAttempt(
+  env: AppEnv,
+  input: InstantDeliveryAttemptClaimInput,
+): Promise<{
+  attemptId: string | null;
+  claimUpdatedAt: string | null;
+  duplicate: DeliveryAttemptRecord | null;
+  reclaimed: boolean;
+}> {
+  const existing = await getDeliveryAttemptByIdempotencyKey(
+    env,
+    input.idempotencyKey,
+  );
+  const quietHours = input.deferredByQuietHours === true;
+  if (existing) {
+    if (quietHours) {
+      return {
+        attemptId: null,
+        claimUpdatedAt: null,
+        duplicate: existing,
+        reclaimed: false,
+      };
+    }
+
+    const stalePreDispatch = isStalePreDispatchAttempt(existing);
+    if (existing.status !== "failed" && !stalePreDispatch) {
+      return {
+        attemptId: null,
+        claimUpdatedAt: null,
+        duplicate: existing,
+        reclaimed: false,
+      };
+    }
+
+    const claimUpdatedAt = nowIso();
+    const expectedStatus = stalePreDispatch ? "pending" : "failed";
+    const expectedWebhookStatus = stalePreDispatch
+      ? "pending"
+      : existing.webhookStatus;
+    const reclaimed = await updateDeliveryAttemptResult(env, existing.id, {
+      provider: input.provider,
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: input.templateName ?? null,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      payloadSnapshot: input.payloadSnapshot,
+      targetValue: input.targetValue,
+      updatedAt: claimUpdatedAt,
+      expectedStatus,
+      expectedWebhookStatus,
+      expectedUpdatedAt: existing.updatedAt,
+    });
+    if (reclaimed !== false) {
+      return {
+        attemptId: existing.id,
+        claimUpdatedAt,
+        duplicate: null,
+        reclaimed: true,
+      };
+    }
+
+    const concurrent = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      input.idempotencyKey,
+    );
+    return {
+      attemptId: null,
+      claimUpdatedAt: null,
+      duplicate: concurrent ?? existing,
+      reclaimed: false,
+    };
+  }
+
+  const claimUpdatedAt = nowIso();
+  try {
+    const attemptId = await createDeliveryAttempt(env, {
+      userId: input.userId,
+      watchlistId: input.watchlistId,
+      digestRunId: null,
+      deliveryTargetId: input.deliveryTargetId,
+      lane: input.lane,
+      channel: input.channel,
+      provider: input.provider,
+      status: quietHours ? "skipped_due_to_quiet_hours" : "pending",
+      webhookStatus: quietHours ? "provider_unknown" : "pending",
+      targetValue: input.targetValue,
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: input.templateName ?? null,
+      eventIds: input.eventIds,
+      payloadSnapshot: input.payloadSnapshot,
+      idempotencyKey: input.idempotencyKey,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      timestamp: claimUpdatedAt,
+    });
+    return {
+      attemptId,
+      claimUpdatedAt: quietHours ? null : claimUpdatedAt,
+      duplicate: null,
+      reclaimed: false,
+    };
+  } catch (error) {
+    // A concurrent INSERT may win between the initial read and our INSERT.
+    // Return its durable row and never let this execution call a provider.
+    const concurrent = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      input.idempotencyKey,
+    );
+    if (concurrent) {
+      return {
+        attemptId: null,
+        claimUpdatedAt: null,
+        duplicate: concurrent,
+        reclaimed: false,
+      };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Moves an owned pre-dispatch claim into an at-most-once state immediately
+ * before provider I/O. A crash after this point leaves provider outcome
+ * unknown and must never be reclaimed automatically.
+ */
+export async function markInstantDeliveryDispatchStarted(
+  env: AppEnv,
+  attemptId: string,
+  expectedUpdatedAt: string,
+) {
+  const dispatchStartedAt = nowIso();
+  const result = await run(
+    env,
+    `
+      UPDATE delivery_attempt
+      SET webhook_status = 'provider_unknown',
+          updated_at = ?
+      WHERE id = ?
+        AND status = 'pending'
+        AND webhook_status = 'pending'
+        AND updated_at = ?
+    `,
+    dispatchStartedAt,
+    attemptId,
+    expectedUpdatedAt,
+  );
+
+  return Number(result.meta?.changes ?? 0) > 0 ? dispatchStartedAt : null;
 }
 
 export async function reconcileDeliveryAttemptByProviderMessageId(

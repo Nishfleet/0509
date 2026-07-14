@@ -22,6 +22,10 @@ import {
   upsertDeliveryTarget,
   upsertDigestDelivery,
 } from "~/lib/data.server";
+import {
+  claimInstantDeliveryAttempt,
+  markInstantDeliveryDispatchStarted,
+} from "~/lib/data/delivery-records-attempts.server";
 import { isStalePreDispatchAttempt } from "~/lib/delivery-attempt-lease";
 import {
   EMAIL_PROVIDER,
@@ -761,10 +765,21 @@ async function deliverInstantEmailBatch(
   },
 ): Promise<DigestAttemptSummary> {
   const attemptDedupe = await resolveInstantAttemptDedupe(env, {
+    userId: input.userId,
     watchlistId: input.watchlistId,
+    deliveryTargetId: input.deliveryTarget.id,
     lane: input.lane,
     channel: "email",
     targetValue: input.deliveryTarget.targetValue,
+    eventIds: input.batch.events.map((event) => event.id),
+    payloadSnapshot: {
+      kind: "instant_alert",
+      channel: "email",
+      batchKey: input.batch.batchKey,
+      subject: input.content.subject,
+      provisional: input.batch.provisional,
+      watchlistUrl: input.content.watchlistUrl,
+    },
     batchKey: input.batch.batchKey,
     deferredByQuietHours: input.batch.deferredByQuietHours,
   });
@@ -773,33 +788,35 @@ async function deliverInstantEmailBatch(
   }
 
   if (input.batch.deferredByQuietHours) {
-    await createDeliveryAttempt(env, {
-      userId: input.userId,
-      watchlistId: input.watchlistId,
-      digestRunId: null,
-      deliveryTargetId: input.deliveryTarget.id,
-      lane: input.lane,
-      channel: "email",
-      provider: EMAIL_PROVIDER,
-      status: "skipped_due_to_quiet_hours",
-      webhookStatus: "provider_unknown",
-      targetValue: input.deliveryTarget.targetValue,
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      templateName: null,
-      eventIds: input.batch.events.map((event) => event.id),
-      payloadSnapshot: {
-        kind: "instant_alert",
+    if (!attemptDedupe.attemptId) {
+      await createDeliveryAttempt(env, {
+        userId: input.userId,
+        watchlistId: input.watchlistId,
+        digestRunId: null,
+        deliveryTargetId: input.deliveryTarget.id,
+        lane: input.lane,
         channel: "email",
-        batchKey: input.batch.batchKey,
-        subject: input.content.subject,
-        provisional: input.batch.provisional,
-      },
-      idempotencyKey: attemptDedupe.idempotencyKey,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-    });
+        provider: EMAIL_PROVIDER,
+        status: "skipped_due_to_quiet_hours",
+        webhookStatus: "provider_unknown",
+        targetValue: input.deliveryTarget.targetValue,
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: null,
+        eventIds: input.batch.events.map((event) => event.id),
+        payloadSnapshot: {
+          kind: "instant_alert",
+          channel: "email",
+          batchKey: input.batch.batchKey,
+          subject: input.content.subject,
+          provisional: input.batch.provisional,
+        },
+        idempotencyKey: attemptDedupe.idempotencyKey,
+        errorMessage: null,
+        sentAt: null,
+        failedAt: null,
+      });
+    }
 
     return {
       channel: "email",
@@ -811,18 +828,42 @@ async function deliverInstantEmailBatch(
     };
   }
 
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, {
+    userId: input.deliveryTarget.userId,
+    targetId: input.deliveryTarget.id,
+  });
+  const dispatchClaim = await beginInstantDeliveryDispatch(env, attemptDedupe);
+  if (dispatchClaim.duplicate) {
+    return summarizeDeliveryAttempt(dispatchClaim.duplicate);
+  }
+
   const providerResult = await sendInstantEmail(env, {
     email: input.deliveryTarget.targetValue,
     subject: input.content.subject,
     html: input.content.html,
-    unsubscribeUrl: await buildUnsubscribeUrl(env, {
-      userId: input.deliveryTarget.userId,
-      targetId: input.deliveryTarget.id,
-    }),
+    unsubscribeUrl,
   });
 
   let attemptId: string;
-  if (attemptDedupe.retryAttempt) {
+  if (attemptDedupe.attemptId) {
+    const finalized = await finalizeInstantDeliveryAttempt(env, {
+      attemptId: attemptDedupe.attemptId,
+      idempotencyKey: attemptDedupe.idempotencyKey,
+      dispatchStartedAt: dispatchClaim.dispatchStartedAt,
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      errorMessage: providerResult.errorMessage,
+      sentAt: providerAcceptedAt(providerResult),
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    });
+    if (!finalized.won && finalized.attempt) {
+      return summarizeDeliveryAttempt(finalized.attempt);
+    }
+    attemptId = attemptDedupe.attemptId;
+  } else if (attemptDedupe.retryAttempt) {
     await updateDeliveryAttemptResult(env, attemptDedupe.retryAttempt.id, {
       provider: providerResult.provider,
       status: providerResult.status,
@@ -895,10 +936,21 @@ async function deliverInstantWhatsAppBatch(
   },
 ): Promise<DigestAttemptSummary> {
   const attemptDedupe = await resolveInstantAttemptDedupe(env, {
+    userId: input.userId,
     watchlistId: input.watchlistId,
+    deliveryTargetId: input.deliveryTarget.id,
     lane: input.lane,
     channel: "whatsapp",
     targetValue: input.deliveryTarget.targetValue,
+    eventIds: input.batch.events.map((event) => event.id),
+    payloadSnapshot: {
+      kind: "instant_alert",
+      channel: "whatsapp",
+      batchKey: input.batch.batchKey,
+      provisional: input.batch.provisional,
+      shortChange: input.content.shortChange,
+      watchlistUrl: input.content.watchlistUrl,
+    },
     batchKey: input.batch.batchKey,
     deferredByQuietHours: input.batch.deferredByQuietHours,
   });
@@ -907,32 +959,34 @@ async function deliverInstantWhatsAppBatch(
   }
 
   if (input.batch.deferredByQuietHours) {
-    await createDeliveryAttempt(env, {
-      userId: input.userId,
-      watchlistId: input.watchlistId,
-      digestRunId: null,
-      deliveryTargetId: input.deliveryTarget.id,
-      lane: input.lane,
-      channel: "whatsapp",
-      provider: "whatsapp_cloud_api",
-      status: "skipped_due_to_quiet_hours",
-      webhookStatus: "provider_unknown",
-      targetValue: input.deliveryTarget.targetValue,
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      templateName: null,
-      eventIds: input.batch.events.map((event) => event.id),
-      payloadSnapshot: {
-        kind: "instant_alert",
+    if (!attemptDedupe.attemptId) {
+      await createDeliveryAttempt(env, {
+        userId: input.userId,
+        watchlistId: input.watchlistId,
+        digestRunId: null,
+        deliveryTargetId: input.deliveryTarget.id,
+        lane: input.lane,
         channel: "whatsapp",
-        batchKey: input.batch.batchKey,
-        provisional: input.batch.provisional,
-      },
-      idempotencyKey: attemptDedupe.idempotencyKey,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-    });
+        provider: "whatsapp_cloud_api",
+        status: "skipped_due_to_quiet_hours",
+        webhookStatus: "provider_unknown",
+        targetValue: input.deliveryTarget.targetValue,
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: null,
+        eventIds: input.batch.events.map((event) => event.id),
+        payloadSnapshot: {
+          kind: "instant_alert",
+          channel: "whatsapp",
+          batchKey: input.batch.batchKey,
+          provisional: input.batch.provisional,
+        },
+        idempotencyKey: attemptDedupe.idempotencyKey,
+        errorMessage: null,
+        sentAt: null,
+        failedAt: null,
+      });
+    }
 
     return {
       channel: "whatsapp",
@@ -942,6 +996,11 @@ async function deliverInstantWhatsAppBatch(
       errorMessage: null,
       deliveredAt: null,
     };
+  }
+
+  const dispatchClaim = await beginInstantDeliveryDispatch(env, attemptDedupe);
+  if (dispatchClaim.duplicate) {
+    return summarizeDeliveryAttempt(dispatchClaim.duplicate);
   }
 
   const providerResult = await sendInstantWhatsApp(env, {
@@ -955,7 +1014,26 @@ async function deliverInstantWhatsAppBatch(
 
   const deliveredAt = providerResult.status === "sent" ? new Date().toISOString() : null;
   let attemptId: string;
-  if (attemptDedupe.retryAttempt) {
+  if (attemptDedupe.attemptId) {
+    const finalized = await finalizeInstantDeliveryAttempt(env, {
+      attemptId: attemptDedupe.attemptId,
+      idempotencyKey: attemptDedupe.idempotencyKey,
+      dispatchStartedAt: dispatchClaim.dispatchStartedAt,
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      templateName: providerResult.templateName,
+      errorMessage: providerResult.errorMessage,
+      sentAt: deliveredAt,
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    });
+    if (!finalized.won && finalized.attempt) {
+      return summarizeDeliveryAttempt(finalized.attempt);
+    }
+    attemptId = attemptDedupe.attemptId;
+  } else if (attemptDedupe.retryAttempt) {
     await updateDeliveryAttemptResult(env, attemptDedupe.retryAttempt.id, {
       provider: providerResult.provider,
       status: providerResult.status,
@@ -1024,10 +1102,21 @@ async function deliverInstantSlackBatch(
   },
 ): Promise<DigestAttemptSummary> {
   const attemptDedupe = await resolveInstantAttemptDedupe(env, {
+    userId: input.userId,
     watchlistId: input.watchlistId,
+    deliveryTargetId: input.deliveryTarget.id,
     lane: input.lane,
     channel: "slack",
     targetValue: input.deliveryTarget.targetValue,
+    eventIds: input.batch.events.map((event) => event.id),
+    payloadSnapshot: {
+      kind: "instant_alert",
+      channel: "slack",
+      batchKey: input.batch.batchKey,
+      provisional: input.batch.provisional,
+      subject: input.content.subject,
+      watchlistUrl: input.content.watchlistUrl,
+    },
     batchKey: input.batch.batchKey,
     deferredByQuietHours: input.batch.deferredByQuietHours,
   });
@@ -1036,32 +1125,34 @@ async function deliverInstantSlackBatch(
   }
 
   if (input.batch.deferredByQuietHours) {
-    await createDeliveryAttempt(env, {
-      userId: input.userId,
-      watchlistId: input.watchlistId,
-      digestRunId: null,
-      deliveryTargetId: input.deliveryTarget.id,
-      lane: input.lane,
-      channel: "slack",
-      provider: SLACK_PROVIDER,
-      status: "skipped_due_to_quiet_hours",
-      webhookStatus: "provider_unknown",
-      targetValue: input.deliveryTarget.targetValue,
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      templateName: null,
-      eventIds: input.batch.events.map((event) => event.id),
-      payloadSnapshot: {
-        kind: "instant_alert",
+    if (!attemptDedupe.attemptId) {
+      await createDeliveryAttempt(env, {
+        userId: input.userId,
+        watchlistId: input.watchlistId,
+        digestRunId: null,
+        deliveryTargetId: input.deliveryTarget.id,
+        lane: input.lane,
         channel: "slack",
-        batchKey: input.batch.batchKey,
-        provisional: input.batch.provisional,
-      },
-      idempotencyKey: attemptDedupe.idempotencyKey,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-    });
+        provider: SLACK_PROVIDER,
+        status: "skipped_due_to_quiet_hours",
+        webhookStatus: "provider_unknown",
+        targetValue: input.deliveryTarget.targetValue,
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: null,
+        eventIds: input.batch.events.map((event) => event.id),
+        payloadSnapshot: {
+          kind: "instant_alert",
+          channel: "slack",
+          batchKey: input.batch.batchKey,
+          provisional: input.batch.provisional,
+        },
+        idempotencyKey: attemptDedupe.idempotencyKey,
+        errorMessage: null,
+        sentAt: null,
+        failedAt: null,
+      });
+    }
 
     return {
       channel: "slack",
@@ -1073,12 +1164,35 @@ async function deliverInstantSlackBatch(
     };
   }
 
+  const dispatchClaim = await beginInstantDeliveryDispatch(env, attemptDedupe);
+  if (dispatchClaim.duplicate) {
+    return summarizeDeliveryAttempt(dispatchClaim.duplicate);
+  }
+
   const providerResult = await sendSlackWebhookMessage(env, input.deliveryTarget, {
     text: renderInstantSlackText(input.content, input.batch.events),
   });
 
   let attemptId: string;
-  if (attemptDedupe.retryAttempt) {
+  if (attemptDedupe.attemptId) {
+    const finalized = await finalizeInstantDeliveryAttempt(env, {
+      attemptId: attemptDedupe.attemptId,
+      idempotencyKey: attemptDedupe.idempotencyKey,
+      dispatchStartedAt: dispatchClaim.dispatchStartedAt,
+      provider: providerResult.provider,
+      status: providerResult.status,
+      webhookStatus: providerResult.webhookStatus,
+      providerMessageId: providerResult.providerMessageId,
+      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+      errorMessage: providerResult.errorMessage,
+      sentAt: providerResult.deliveredAt,
+      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    });
+    if (!finalized.won && finalized.attempt) {
+      return summarizeDeliveryAttempt(finalized.attempt);
+    }
+    attemptId = attemptDedupe.attemptId;
+  } else if (attemptDedupe.retryAttempt) {
     await updateDeliveryAttemptResult(env, attemptDedupe.retryAttempt.id, {
       provider: providerResult.provider,
       status: providerResult.status,
@@ -1660,10 +1774,14 @@ function buildInstantDeliveryAttemptIdempotencyKey(input: {
 async function resolveInstantAttemptDedupe(
   env: AppEnv,
   input: {
+    userId: string;
     watchlistId: string;
+    deliveryTargetId: string;
     lane: DeliveryLane;
     channel: DeliveryChannel;
     targetValue: string;
+    eventIds: string[];
+    payloadSnapshot: Record<string, unknown>;
     batchKey: string;
     deferredByQuietHours: boolean;
   },
@@ -1671,6 +1789,8 @@ async function resolveInstantAttemptDedupe(
   idempotencyKey: string;
   duplicate: DeliveryAttemptRecord | null;
   retryAttempt: DeliveryAttemptRecord | null;
+  attemptId: string | null;
+  claimUpdatedAt: string | null;
 }> {
   const attemptKind = input.deferredByQuietHours ? "quiet-hours" : "send";
   const idempotencyKey = buildInstantDeliveryAttemptIdempotencyKey({
@@ -1678,32 +1798,107 @@ async function resolveInstantAttemptDedupe(
     attemptKind,
   });
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+
+  const legacyIdempotencyKey = buildLegacyInstantDeliveryAttemptIdempotencyKey(input);
+  const legacyDuplicate = duplicate
+    ? null
+    : await getDeliveryAttemptByIdempotencyKey(env, legacyIdempotencyKey);
+
+  if (
+    legacyDuplicate &&
+    (input.deferredByQuietHours ||
+      (legacyDuplicate.status !== "skipped_due_to_quiet_hours" &&
+        legacyDuplicate.status !== "failed"))
+  ) {
+    return {
+      idempotencyKey,
+      duplicate: legacyDuplicate,
+      retryAttempt: null,
+      attemptId: null,
+      claimUpdatedAt: null,
+    };
+  }
+
+  // The durable claim must happen before provider I/O. Keep the fallback for
+  // isolated unit-test adapters that predate this data export; production D1
+  // always has the helper and therefore never uses the read-then-send path.
+  if (env.DB) {
+    const claim = await claimInstantDeliveryAttempt(env, {
+      userId: input.userId,
+      watchlistId: input.watchlistId,
+      deliveryTargetId: input.deliveryTargetId,
+      lane: input.lane,
+      channel: input.channel,
+      provider:
+        input.channel === "email"
+          ? EMAIL_PROVIDER
+          : input.channel === "slack"
+            ? SLACK_PROVIDER
+            : "whatsapp_cloud_api",
+      targetValue: input.targetValue,
+      eventIds: input.eventIds,
+      payloadSnapshot: input.payloadSnapshot,
+      idempotencyKey,
+      deferredByQuietHours: input.deferredByQuietHours,
+    });
+    if (claim.duplicate) {
+      return {
+        idempotencyKey,
+        duplicate: claim.duplicate,
+        retryAttempt: null,
+        attemptId: null,
+        claimUpdatedAt: null,
+      };
+    }
+    return {
+      idempotencyKey,
+      duplicate: null,
+      retryAttempt: claim.reclaimed ? duplicate : null,
+      attemptId: claim.attemptId,
+      claimUpdatedAt: claim.claimUpdatedAt,
+    };
+  }
+
   if (duplicate) {
     // Same semantics as digests: a failed prior send is retryable in place;
     // anything else is a true duplicate. Without this, one transient provider
     // error lost the instant alert forever.
     if (!input.deferredByQuietHours && duplicate.status === "failed") {
-      return { idempotencyKey, duplicate: null, retryAttempt: duplicate };
+      return {
+        idempotencyKey,
+        duplicate: null,
+        retryAttempt: duplicate,
+        attemptId: null,
+        claimUpdatedAt: null,
+      };
     }
 
-    return { idempotencyKey, duplicate, retryAttempt: null };
+    return {
+      idempotencyKey,
+      duplicate,
+      retryAttempt: null,
+      attemptId: null,
+      claimUpdatedAt: null,
+    };
   }
 
-  const legacyIdempotencyKey = buildLegacyInstantDeliveryAttemptIdempotencyKey(input);
-  const legacyDuplicate = await getDeliveryAttemptByIdempotencyKey(env, legacyIdempotencyKey);
   if (!legacyDuplicate) {
-    return { idempotencyKey, duplicate: null, retryAttempt: null };
+    return {
+      idempotencyKey,
+      duplicate: null,
+      retryAttempt: null,
+      attemptId: null,
+      claimUpdatedAt: null,
+    };
   }
 
-  if (
-    !input.deferredByQuietHours &&
-    (legacyDuplicate.status === "skipped_due_to_quiet_hours" ||
-      legacyDuplicate.status === "failed")
-  ) {
-    return { idempotencyKey, duplicate: null, retryAttempt: null };
-  }
-
-  return { idempotencyKey, duplicate: legacyDuplicate, retryAttempt: null };
+  return {
+    idempotencyKey,
+    duplicate: legacyDuplicate,
+    retryAttempt: null,
+    attemptId: null,
+    claimUpdatedAt: null,
+  };
 }
 
 function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttemptSummary {
@@ -1715,6 +1910,82 @@ function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttempt
     errorMessage: attempt.errorMessage,
     deliveredAt: attempt.sentAt,
   };
+}
+
+async function beginInstantDeliveryDispatch(
+  env: AppEnv,
+  attempt: {
+    attemptId: string | null;
+    claimUpdatedAt: string | null;
+    idempotencyKey: string;
+  },
+): Promise<{
+  dispatchStartedAt: string | null;
+  duplicate: DeliveryAttemptRecord | null;
+}> {
+  if (!attempt.attemptId || !attempt.claimUpdatedAt) {
+    return { dispatchStartedAt: null, duplicate: null };
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    attempt.attemptId,
+    attempt.claimUpdatedAt,
+  );
+  if (dispatchStartedAt) {
+    return { dispatchStartedAt, duplicate: null };
+  }
+
+  const current = await getDeliveryAttemptByIdempotencyKey(env, attempt.idempotencyKey);
+  if (!current) {
+    throw new Error("Instant delivery dispatch claim disappeared.");
+  }
+  return { dispatchStartedAt: null, duplicate: current };
+}
+
+async function finalizeInstantDeliveryAttempt(
+  env: AppEnv,
+  input: {
+    attemptId: string;
+    idempotencyKey: string;
+    dispatchStartedAt: string | null;
+    provider: string;
+    status: "pending" | "sent" | "failed";
+    webhookStatus:
+      | "pending"
+      | "delivered"
+      | "failed"
+      | "legacy_unknown"
+      | "provider_unknown";
+    providerMessageId: string | null;
+    providerStatusLastSeenAt: string | null;
+    templateName?: string | null;
+    errorMessage: string | null;
+    sentAt: string | null;
+    failedAt: string | null;
+  },
+) {
+  const finalized = await updateDeliveryAttemptResult(env, input.attemptId, {
+    provider: input.provider,
+    status: input.status,
+    webhookStatus: input.webhookStatus,
+    providerMessageId: input.providerMessageId,
+    providerStatusLastSeenAt: input.providerStatusLastSeenAt,
+    templateName: input.templateName ?? null,
+    errorMessage: input.errorMessage,
+    sentAt: input.sentAt,
+    failedAt: input.failedAt,
+    expectedStatus: input.dispatchStartedAt ? "pending" : undefined,
+    expectedWebhookStatus: input.dispatchStartedAt ? "provider_unknown" : undefined,
+    expectedUpdatedAt: input.dispatchStartedAt ?? undefined,
+  });
+  if (finalized !== false) return { won: true, attempt: null };
+
+  const current = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+  if (!current) {
+    throw new Error("Instant delivery attempt disappeared during finalization.");
+  }
+  return { won: false, attempt: current };
 }
 
 function deliveryAttemptSummaryStatus(status: DeliveryAttemptRecord["status"]) {
