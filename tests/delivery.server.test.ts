@@ -2517,6 +2517,14 @@ describe("billing lifecycle emails", () => {
     }, attemptOverrides);
   }
 
+  function refundRecoveryAttempt(id: string, payloadOverrides: Record<string, unknown> = {}, attemptOverrides: Record<string, unknown> = {}) {
+    return recoveryAttempt(id, "billing_refund_revoked", {
+      refundPaymentId: currentBillingInfo.dodoPaymentId,
+      refundStateUpdatedAt: currentBillingInfo.planUpdatedAt,
+      ...payloadOverrides,
+    }, attemptOverrides);
+  }
+
   function useRecoveryClock(at = "2026-07-13T09:05:00.000Z") {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(at));
@@ -2859,9 +2867,8 @@ describe("billing lifecycle emails", () => {
   it("claims a freshly-enqueued outbox row and dispatches it immediately", async () => {
     useRecoveryClock();
     const sendMock = mockEmailSend("msg_outbox_dispatch");
-    const outboxAttempt = recoveryAttempt(
+    const outboxAttempt = refundRecoveryAttempt(
       "attempt-outbox",
-      "billing_refund_revoked",
       {
         bodyHtml: "<p>Your workspace moved to Free.</p>",
         billingStateFingerprint: null,
@@ -2903,6 +2910,33 @@ describe("billing lifecycle emails", () => {
         }),
       }),
     );
+  });
+
+  it("recovers only the exact refund identity and watermark", async () => {
+    useRecoveryClock();
+    const sendMock = mockEmailSend("msg_refund_identity");
+    const refundBAt = "2026-07-14T09:00:00.000Z";
+    const attempts = [
+      ["exact-b", "payment-new", refundBAt],
+      ["stale-a", "payment-current", scheduledWatermark],
+      ["missing-payment", undefined, refundBAt],
+      ["missing-watermark", "payment-new", undefined],
+    ].map(([id, refundPaymentId, refundStateUpdatedAt]) => refundRecoveryAttempt(`attempt-${id}`, {
+      billingStateFingerprint: null, outboxPendingDispatch: true, refundPaymentId, refundStateUpdatedAt,
+    }));
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue(attempts),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        ...currentBillingInfo, plan: "free", dodoStatus: "refunded",
+        dodoPaymentId: "payment-new", planUpdatedAt: refundBAt,
+      }),
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
+    });
+
+    const result = await recoverBilling();
+
+    expect(result).toMatchObject({ scanned: 4, claimed: 4, sent: 1, superseded: 3 });
+    expect(sendMock).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -3347,18 +3381,15 @@ describe("billing lifecycle emails", () => {
     );
   });
 
-  it("cannot bypass stale outbox-kind validation after a crash during recovery", async () => {
+  it("does not replay refund A when recovery crashes before purchase and refund B", async () => {
     useRecoveryClock();
     const sendMock = mockEmailSend("msg_crash_bypass_must_not_send");
-    const markerAttempt = scheduledRecoveryAttempt(
-      "attempt-marker-crash",
-      "evt-marker-crash",
-      {
-        bodyHtml: "<p>Your plan will end.</p>",
-        billingStateFingerprint: null,
-        outboxPendingDispatch: true,
-      },
-    );
+    const markerAttempt = refundRecoveryAttempt("attempt-refund-crash", {
+      bodyHtml: "<p>Your workspace moved to Free.</p>",
+      billingStateFingerprint: null,
+      outboxPendingDispatch: true,
+    });
+    let billingInfo = { ...currentBillingInfo, plan: "free" as const, dodoStatus: "refunded" };
     const listStaleBillingLifecycleEmailAttempts = vi.fn(
       async (_env: unknown, input: { staleBefore: string }) =>
         markerAttempt.status === "pending" &&
@@ -3385,12 +3416,7 @@ describe("billing lifecycle emails", () => {
     );
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts,
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-        ...currentBillingInfo,
-        dodoStatus: "cancellation_scheduled",
-        dodoNextBillingAt: "2026-09-13T09:00:00.000Z",
-        planUpdatedAt: "2026-07-14T09:00:00.000Z",
-      }),
+      getUserPlanBillingInfo: vi.fn(async () => billingInfo),
       updateDeliveryAttemptResult,
     });
 
@@ -3400,17 +3426,15 @@ describe("billing lifecycle emails", () => {
       "worker crashed after the durable update",
     );
 
+    billingInfo = { ...billingInfo, dodoPaymentId: "payment-new", planUpdatedAt: "2026-07-14T09:00:00.000Z" };
     vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z"));
     const secondSweep = await recoverBilling(env);
 
-    expect(secondSweep).toMatchObject({ scanned: 0, sent: 0 });
+    expect(secondSweep).toMatchObject({ scanned: 1, claimed: 1, sent: 0, superseded: 1 });
     expect(sendMock).not.toHaveBeenCalled();
-    expect(markerAttempt).toMatchObject({
-      status: "skipped_due_to_dedupe",
-      webhookStatus: "provider_unknown",
-      payloadSnapshot: expect.objectContaining({ outboxPendingDispatch: true }),
-    });
-    expect(markerAttempt.payloadSnapshot.billingStateFingerprint).toBeNull();
+    expect(markerAttempt).toMatchObject({ status: "skipped_due_to_dedupe", webhookStatus: "provider_unknown" });
+    expect(markerAttempt.payloadSnapshot).toMatchObject({ refundPaymentId: "payment-current", refundStateUpdatedAt: scheduledWatermark });
+    expect(markerAttempt.payloadSnapshot).not.toHaveProperty("outboxPendingDispatch");
   });
 
   it("recovers a stale billing outbox row from its durable payload", async () => {

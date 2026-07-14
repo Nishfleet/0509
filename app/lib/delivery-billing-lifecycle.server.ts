@@ -38,6 +38,8 @@ interface ScheduledCancellationStateExpectation {
   stateUpdatedAt: string;
 }
 
+type RefundStateExpectation = { paymentId: string; stateUpdatedAt: string };
+
 export class BillingLifecycleEmailExplicitFailure extends Error {
   readonly code = BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE;
 
@@ -63,16 +65,9 @@ export function isBillingLifecycleEmailExplicitFailure(
 }
 
 // --- Customer lifecycle billing emails (Dodo webhook driven) -----------------
-// Transactional: they must reach the customer regardless of digest
-// unsubscribe state, so they carry no List-Unsubscribe header — but every
-// send still records a delivery_attempt. Webhook handlers can legitimately
-// re-run (the dodo_webhook_event ledger reclaims failed events and expired
-// processing leases, and Dodo re-emits dunning events across payment
-// retries), so these sends use DETERMINISTIC idempotency keys and claim the
-// key (a 'pending' delivery_attempt row) BEFORE calling the provider — the
-// UNIQUE index arbitrates concurrent handlers, and only a recorded 'failed'
-// attempt is retried in place. Not the crypto.randomUUID pattern used by
-// user-initiated account emails.
+// Transactional and independent of digest opt-out. Deterministic keys claim a
+// pending attempt before provider dispatch; the UNIQUE index arbitrates
+// concurrent webhooks and only durable failures retry in place.
 
 function billingDateLabel(iso: string | null | undefined) {
   const ms = Date.parse(iso ?? "");
@@ -131,26 +126,17 @@ async function sendBillingLifecycleEmail(
 ) {
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
   const stalePreDispatch = duplicate ? isStalePreDispatchAttempt(duplicate) : false;
-  // A row the webhook batch just enqueued atomically with the plan mutation:
-  // pending, never dispatched, still carrying the outbox marker. The live
-  // send path claims it here (clearing the marker via the payload rewrite);
-  // a concurrent recovery sweep loses the compare-and-set on updatedAt.
+  // Atomically enqueued rows retain this marker until live send or recovery
+  // wins the compare-and-set claim.
   const pendingOutboxDispatch =
     duplicate?.status === "pending" &&
     duplicate.webhookStatus === "pending" &&
     duplicate.payloadSnapshot?.["outboxPendingDispatch"] === true;
-  // A row the recovery sweep refused to replay because the account state had
-  // moved past it. The skip is intentional for the sweep's stale content, but
-  // the idempotency slot must stay claimable: for day-keyed dunning a
-  // terminal skip would suppress every later same-day payment event, and this
-  // status (unlike 'failed') is excluded from operator failure counts.
+  // Superseded rows stay claimable so fresh same-key content is not suppressed.
   const supersededOutbox =
     duplicate?.status === "skipped_due_to_dedupe" &&
     duplicate.webhookStatus === "provider_unknown";
-  // Sent rows and provider-unknown timeouts are terminal for automatic
-  // retries. Only an explicit failure, an abandoned pre-dispatch lease, a
-  // freshly-enqueued outbox row, or a recovery-superseded slot can call the
-  // provider (always with content rebuilt from the CURRENT event).
+  // Sent/provider-unknown outcomes are terminal; only safely claimable states retry.
   if (
     duplicate &&
     duplicate.status !== "failed" &&
@@ -163,14 +149,17 @@ async function sendBillingLifecycleEmail(
   const claimFromPending = stalePreDispatch || pendingOutboxDispatch;
 
   const currentBillingInfo = await getUserPlanBillingInfo(env, input.userId);
+  const scheduledCancellationExpectation = duplicate
+    ? readScheduledCancellationStateExpectation(duplicate.payloadSnapshot)
+    : input.stateExpectation ?? null;
+  const refundExpectation = duplicate
+    ? readRefundStateExpectation(duplicate.payloadSnapshot)
+    : null;
   if (
     pendingOutboxDispatch ||
     supersededOutbox ||
     input.templateName === "billing_cancellation_scheduled"
   ) {
-    const stateExpectation = duplicate
-      ? readScheduledCancellationStateExpectation(duplicate.payloadSnapshot)
-      : input.stateExpectation ?? null;
     const durableKind = pendingOutboxDispatch
       ? readString(duplicate?.payloadSnapshot?.kind)
       : input.templateName;
@@ -180,7 +169,8 @@ async function sendBillingLifecycleEmail(
       billingLifecycleOutboxStateStillApplies(
         durableKind,
         currentBillingInfo,
-        stateExpectation,
+        scheduledCancellationExpectation,
+        refundExpectation,
       );
     if (!stateStillCurrent) {
       if (duplicate && !supersededOutbox) {
@@ -205,16 +195,14 @@ async function sendBillingLifecycleEmail(
   }
 
   const billingStateFingerprint = billingLifecycleStateFingerprint(currentBillingInfo);
-  const stateExpectation = duplicate
-    ? readScheduledCancellationStateExpectation(duplicate.payloadSnapshot)
-    : input.stateExpectation ?? null;
   const payloadSnapshot = {
     kind: input.templateName,
     subject: input.subject,
     bodyHtml: input.bodyHtml,
     tag: input.tag,
     billingStateFingerprint,
-    ...scheduledCancellationStateExpectationPayload(stateExpectation),
+    ...scheduledCancellationStateExpectationPayload(scheduledCancellationExpectation),
+    ...refundStateExpectationPayload(refundExpectation),
     ...(duplicate
       ? { recoveryAttemptCount: billingLifecycleRecoveryAttemptCount(duplicate) }
       : {}),
@@ -234,9 +222,7 @@ async function sendBillingLifecycleEmail(
       sentAt: null,
       failedAt: null,
       payloadSnapshot,
-      // The retry sends to the CURRENT account email; the durable row must
-      // record that recipient too, or the ledger and any later recovery
-      // replay would keep pointing at the address the failed attempt used.
+      // Persist the current retry recipient for ledger and recovery parity.
       targetValue: input.email,
       updatedAt: claimUpdatedAt,
       expectedStatus: claimFromPending
@@ -259,11 +245,8 @@ async function sendBillingLifecycleEmail(
   }
 
   if (!attemptId) {
-    // Claim the idempotency key BEFORE sending so two webhook events that
-    // race past the duplicate pre-check (e.g. payment.failed +
-    // subscription.failed for one failed renewal) can't both email: the
-    // UNIQUE index on delivery_attempt.idempotency_key lets exactly one
-    // claim win; the loser sees the row and backs off.
+    // Claim before sending; the UNIQUE idempotency index makes concurrent
+    // webhook handlers converge on one provider dispatch.
     claimUpdatedAt = new Date().toISOString();
     try {
       attemptId = await createDeliveryAttempt(env, {
@@ -304,10 +287,7 @@ async function sendBillingLifecycleEmail(
     unsubscribeUrl: null,
   });
 
-  // First terminal transition wins. A reconciler may have resolved the
-  // provider-unknown row while this provider call was in flight; in that
-  // case this stale response must neither overwrite the durable outcome nor
-  // report success to its caller.
+  // First terminal transition wins; stale in-flight responses cannot overwrite it.
   const finalized = await updateDeliveryAttemptResult(env, attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
@@ -358,13 +338,12 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
   const billingStateFingerprint = readString(
     attempt.payloadSnapshot.billingStateFingerprint,
   );
-  // Rows enqueued atomically with the webhook batch are written BEFORE the
-  // plan mutation commits, so they carry no fingerprint — the marker tells
-  // recovery to validate against the current billing state by kind instead.
+  // Pre-mutation outbox rows have no fingerprint; validate their marker by kind.
   const pendingDispatch = attempt.payloadSnapshot.outboxPendingDispatch === true;
   const stateExpectation = readScheduledCancellationStateExpectation(
     attempt.payloadSnapshot,
   );
+  const refundExpectation = readRefundStateExpectation(attempt.payloadSnapshot);
   const targetValue = readString(attempt.targetValue);
 
   if (
@@ -388,6 +367,7 @@ function readBillingLifecycleRecoveryPayload(attempt: DeliveryAttemptRecord) {
     billingStateFingerprint: billingStateFingerprint ?? null,
     pendingDispatch,
     stateExpectation,
+    refundExpectation,
   };
 }
 
@@ -396,15 +376,12 @@ function billingLifecycleRecoveryAttemptCount(attempt: DeliveryAttemptRecord) {
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
 }
 
-/**
- * Kind-aware "does this email still describe reality?" check for outbox rows
- * that never got a post-mutation fingerprint. dodo_status values mirror what
- * the webhook route writes for each event family.
- */
+/** Checks whether a pre-mutation outbox still describes current billing state. */
 function billingLifecycleOutboxStateStillApplies(
   templateName: string | null,
   info: UserPlanBillingInfo,
   scheduledCancellation: ScheduledCancellationStateExpectation | null = null,
+  refund: RefundStateExpectation | null = null,
 ) {
   switch (templateName) {
     case "billing_payment_issue":
@@ -414,9 +391,7 @@ function billingLifecycleOutboxStateStillApplies(
         info.dodoStatus === "subscription.on_hold"
       );
     case "billing_cancellation_scheduled":
-      // dodo_status can remain cancellation_scheduled after this particular
-      // email became stale. Match the effective entitlement, cutoff,
-      // subscription, and grant watermark that the outbox was created for.
+      // Bind to the exact entitlement, cutoff, subscription, and grant watermark.
       return (
         info.dodoStatus === "cancellation_scheduled" &&
         isPaidPlanFamily(info.plan) &&
@@ -433,17 +408,19 @@ function billingLifecycleOutboxStateStillApplies(
           info.dodoStatus === "subscription.expired")
       );
     case "billing_refund_revoked":
-      return info.plan === "free" && info.dodoStatus === "refunded";
+      return (
+        info.plan === "free" &&
+        info.dodoStatus === "refunded" &&
+        refund !== null &&
+        info.dodoPaymentId === refund.paymentId &&
+        sameBillingTimestamp(info.planUpdatedAt, refund.stateUpdatedAt)
+      );
     default:
       return false;
   }
 }
 
-/**
- * Replays bounded billing-email outbox rows whose worker stopped before the
- * provider call. This is intentionally at-least-once crash recovery: caught
- * provider timeouts are persisted as provider_unknown and never auto-retried.
- */
+/** Replays bounded pre-dispatch rows; provider-unknown timeouts never auto-retry. */
 export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
   const emptyResult = {
     scanned: 0,
@@ -488,6 +465,7 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
             attempt.templateName,
             currentBillingInfo,
             payload.stateExpectation,
+            payload.refundExpectation,
           )
         : billingLifecycleStateFingerprint(currentBillingInfo) ===
           payload.billingStateFingerprint);
@@ -518,11 +496,8 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
     }
 
     if (payload && !currentEmail) {
-      // Keep the row in its existing retryable state and only refresh its
-      // lease. In particular, do not bind an unverified replacement address,
-      // consume a recovery attempt, or erase explicit-provider-failure
-      // provenance while the account's atomic email/verification pair is
-      // unavailable.
+      // Refresh the lease without binding an unverified address, consuming an
+      // attempt, or erasing explicit-provider-failure evidence.
       const deferred = await updateDeliveryAttemptResult(env, attempt.id, {
         provider: attempt.provider,
         status: attempt.status,
@@ -562,11 +537,8 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
       errorMessage: null,
       sentAt: null,
       failedAt: null,
-      // Kind validation happens before this claim. A validated outbox marker
-      // can now become a fingerprint without letting a crash make stale copy
-      // look current on the next sweep. Existing fingerprint provenance is
-      // retained verbatim. Incomplete payloads keep their snapshot (COALESCE)
-      // and finalize as failed right below.
+      // Validated markers become fingerprints; existing provenance remains
+      // verbatim and incomplete payloads finalize failed below.
       payloadSnapshot:
         payload && currentBillingInfo
           ? {
@@ -581,12 +553,11 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
               ...scheduledCancellationStateExpectationPayload(
                 payload.stateExpectation,
               ),
+              ...refundStateExpectationPayload(payload.refundExpectation),
               recoveryAttemptCount,
             }
           : undefined,
-      // Recovery follows the same recipient rule as an explicit failed-send
-      // retry: billing state determines whether the message is still valid,
-      // while the verified current profile determines where it is delivered.
+      // Billing state validates content; the verified current profile sets delivery.
       targetValue: currentEmail ?? undefined,
       updatedAt: claimUpdatedAt,
       expectedStatus: retryingExplicitFailure ? "failed" : "pending",
@@ -660,12 +631,7 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
   return result;
 }
 
-/**
- * Resolve a provider-unknown lifecycle-email claim from external evidence.
- * Unknown outcomes are never re-sent automatically: an operator/provider
- * reconciliation must first mark the durable attempt sent (terminal) or
- * failed (safe for the existing in-place retry path).
- */
+/** Resolves provider-unknown claims from external evidence before any retry. */
 export async function reconcileBillingLifecycleEmailDelivery(
   env: AppEnv,
   input: {
@@ -688,10 +654,7 @@ export async function reconcileBillingLifecycleEmailDelivery(
     return false;
   }
 
-  // Reconciliation is also a compare-and-set: conflicting external evidence
-  // cannot overwrite whichever terminal outcome claimed the pending row
-  // first. Older test adapters returned void, so only explicit false means
-  // the durable claim was lost.
+  // Compare-and-set preserves the first terminal outcome; only explicit false loses.
   const reconciled = await updateDeliveryAttemptResult(env, attempt.id, {
     provider: attempt.provider || EMAIL_PROVIDER,
     status: input.outcome,
@@ -718,10 +681,7 @@ interface BillingLifecycleEmailContent {
   stateExpectation?: ScheduledCancellationStateExpectation | null;
 }
 
-// Dunning: a subscription payment failed and Dodo is retrying. Dodo emits
-// these events repeatedly across its retry schedule, each with a fresh
-// webhook id, so the key is day-coarse: at most one dunning email per
-// customer per day no matter how the retries land.
+// Dunning repeats across Dodo retries, so its key permits at most one email/day.
 function billingPaymentIssueEmailContent(
   env: AppEnv,
   input: { userId: string; name: string | null; occurredAt?: string | null },
@@ -749,10 +709,7 @@ function billingPaymentIssueEmailContent(
   };
 }
 
-// Cancellation, both shapes: "scheduled" (cancelled but paid through a
-// future date) and "ended" (access revoked now — immediate cancellation or
-// expiry). Keyed on the webhook event id: exactly one email per event even
-// when the ledger re-runs the handler.
+// Scheduled/ended cancellation is event-keyed so ledger retries emit once.
 function billingCancellationEmailContent(
   env: AppEnv,
   input: {
@@ -911,13 +868,8 @@ export type BillingLifecycleEmailOutboxInput =
   | { kind: "refund"; userId: string; email: string; name: string | null; eventId: string };
 
 /**
- * Freeze a lifecycle email into an outbox row spec the webhook route hands to
- * the reconcile batch. The row is inserted atomically with the plan mutation
- * and ledger finalize; `outboxPendingDispatch` marks it un-dispatched so the
- * live send path (sendBilling*Email right after the batch) claims it, and the
- * recovery sweep validates it against the CURRENT billing state by kind
- * (there is no meaningful fingerprint yet — the row is written before the
- * mutation commits).
+ * Freezes an email for atomic insertion with the plan mutation and ledger.
+ * The pending marker lets live send or recovery validate and claim it.
  */
 export function prepareBillingLifecycleEmailOutbox(
   env: AppEnv,
@@ -978,6 +930,15 @@ function readScheduledCancellationStateExpectation(
   });
 }
 
+function readRefundStateExpectation(
+  payload: Record<string, unknown> | null | undefined,
+): RefundStateExpectation | null {
+  if (!payload) return null;
+  const paymentId = readString(payload.refundPaymentId);
+  const stateUpdatedAt = normalizedBillingTimestamp(readString(payload.refundStateUpdatedAt));
+  return paymentId && stateUpdatedAt ? { paymentId, stateUpdatedAt } : null;
+}
+
 function scheduledCancellationStateExpectationPayload(
   expectation: ScheduledCancellationStateExpectation | null,
 ) {
@@ -989,6 +950,13 @@ function scheduledCancellationStateExpectationPayload(
         scheduledCancellationStateUpdatedAt: expectation.stateUpdatedAt,
       }
     : {};
+}
+
+function refundStateExpectationPayload(expectation: RefundStateExpectation | null) {
+  return expectation ? {
+    refundPaymentId: expectation.paymentId,
+    refundStateUpdatedAt: expectation.stateUpdatedAt,
+  } : {};
 }
 
 function normalizedBillingTimestamp(value: string | null | undefined) {

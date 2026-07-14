@@ -1638,11 +1638,11 @@ describe("Dodo billing atomicity (sqlite)", () => {
         .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
         .get("user-1"),
     ).toMatchObject({ plan: "free", dodo_status: "refunded" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT status FROM delivery_attempt WHERE idempotency_key = ?")
-        .get("billing-refund:user-1:evt-refund-outbox"),
-    ).toMatchObject({ status: "pending" });
+    expect(fixtures[0]!.sqlite.prepare(`SELECT status,
+      json_extract(payload_snapshot_json, '$.refundPaymentId') AS payment_id,
+      json_extract(payload_snapshot_json, '$.refundStateUpdatedAt') AS state_updated_at
+      FROM delivery_attempt WHERE idempotency_key = ?`).get("billing-refund:user-1:evt-refund-outbox"))
+      .toMatchObject({ status: "pending", payment_id: "pay-refund", state_updated_at: "2026-07-01T00:00:00.000Z" });
   });
 });
 

@@ -504,6 +504,11 @@ export async function applyDodoRefundWithWatchlistReconcile(
   const timestamp = nowIso();
   const processedAt = nowIso();
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
+  const refundOutbox = options.lifecycleEmailOutbox && {
+    ...options.lifecycleEmailOutbox,
+    payloadSnapshot: { ...options.lifecycleEmailOutbox.payloadSnapshot,
+      refundPaymentId: input.paymentId, refundStateUpdatedAt: refundedAt },
+  };
 
   const statements = [
     db.prepare(`
@@ -516,14 +521,14 @@ export async function applyDodoRefundWithWatchlistReconcile(
         AND julianday(?) >= julianday(plan_updated_at)
     `).bind(refundedAt, input.paymentId, refundedAt),
   ];
-  if (options.lifecycleEmailOutbox) {
+  if (refundOutbox) {
     // Gate on the plan transition's changes() (results[0] is the caller's
     // `changed` signal too): the refund email asserts the workspace moved to
     // Free, so it must only be enqueued when that transition applied.
     statements.push(
       buildBillingLifecycleOutboxStatement(
         db,
-        options.lifecycleEmailOutbox,
+        refundOutbox,
         { kind: "prior-statement-changed" },
         timestamp,
       ),
