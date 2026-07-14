@@ -357,12 +357,18 @@ export async function applyDodoCancellationReversalWithLedger(
   const processedAt = nowIso();
   const reversal = db.prepare(`
     UPDATE user_plan
-    SET dodo_status = ?,
-        dodo_next_billing_at = ?,
-        dodo_plan_change_product_id = NULL,
+    SET dodo_status = CASE
+          WHEN dodo_status = 'cancellation_scheduled' THEN ?
+          ELSE dodo_status
+        END,
+        dodo_next_billing_at = COALESCE(?, dodo_next_billing_at),
+        dodo_plan_change_product_id = CASE
+          WHEN dodo_status = 'cancellation_scheduled' THEN NULL
+          ELSE dodo_plan_change_product_id
+        END,
         plan_updated_at = ?
     WHERE user_id = ?
-      AND dodo_status = 'cancellation_scheduled'
+      AND dodo_status IN ('cancellation_scheduled', 'active')
       AND dodo_product_id = ?
       AND dodo_subscription_id = ?
       AND dodo_customer_id = ?
