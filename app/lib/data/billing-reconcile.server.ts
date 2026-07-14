@@ -11,6 +11,10 @@ import {
   buildWatchlistRevokeReconcileStatement,
   syncWatchlistMentionTargetsIfChanged,
 } from "~/lib/data/watchlist-plan-reconcile.server";
+import {
+  buildBillingLifecycleOutboxStatement,
+  type BillingLifecycleEmailOutboxSpec,
+} from "~/lib/data/delivery-records-attempts.server";
 import type { AppEnv } from "~/lib/env.server";
 
 type GrantDodoPlanAccessInput = Parameters<
@@ -23,11 +27,24 @@ type MarkDodoPlanPaymentIssueInput = Parameters<
   typeof import("~/lib/data/billing-plan.server").markDodoPlanPaymentIssue
 >[1];
 
+/**
+ * Optional lifecycle-email outbox rider. When present, the pending
+ * delivery_attempt row is inserted in the SAME D1 batch that applies the
+ * plan mutation and finalizes the webhook ledger — a worker crash after the
+ * batch can no longer lose the customer email, because the recovery sweep
+ * replays pending outbox rows and Dodo redelivery is already deduped by the
+ * finalized ledger.
+ */
+export interface ApplyDodoPlanOptions {
+  lifecycleEmailOutbox?: BillingLifecycleEmailOutboxSpec;
+}
+
 export async function applyDodoPlanGrantWithWatchlistReconcile(
   env: AppEnv,
   input: GrantDodoPlanAccessInput,
   watchlistLimit: number,
   ledger: DodoWebhookLedgerFinalize,
+  options: ApplyDodoPlanOptions = {},
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
@@ -223,7 +240,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
       planUpdatedAt,
       processedLedgerEventId: ledger.eventId,
     };
-    const results = await db.batch([
+    const guardedStatements = [
       guardedGrantStatement,
       buildDodoWebhookLedgerFinalizeAfterChangedStatement(db, ledger, processedAt),
       ...buildWatchlistGrantReconcileStatements(db, input.userId, keepActive, timestamp, acceptedPlan),
@@ -239,7 +256,20 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
         },
         processedAt,
       ),
-    ]);
+    ];
+    if (options.lifecycleEmailOutbox) {
+      // The guarded finalize is conditional on the grant having changed rows,
+      // so "this batch marked the ledger processed" is the correct gate here.
+      guardedStatements.push(
+        buildBillingLifecycleOutboxStatement(
+          db,
+          options.lifecycleEmailOutbox,
+          { kind: "ledger-processed", eventId: ledger.eventId, processedAt },
+          timestamp,
+        ),
+      );
+    }
+    const results = await db.batch(guardedStatements);
 
     const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
     await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [2, 3]);
@@ -255,17 +285,46 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     return { changed: true };
   }
 
-  const results = await db.batch([
-    grantStatement,
-    ...buildWatchlistGrantReconcileStatements(db, input.userId, keepActive, timestamp, {
+  // The outbox rider must sit DIRECTLY after the grant so its changes() gate
+  // reads the grant's row count (the ledger finalize below is unconditional,
+  // so it cannot serve as the gate). The watchlist statements don't read
+  // changes().
+  const statements = [grantStatement];
+  if (options.lifecycleEmailOutbox) {
+    statements.push(
+      buildBillingLifecycleOutboxStatement(
+        db,
+        options.lifecycleEmailOutbox,
+        { kind: "prior-statement-changed" },
+        timestamp,
+      ),
+    );
+  }
+  const watchlistStart = statements.length;
+  const watchlistStatements = buildWatchlistGrantReconcileStatements(
+    db,
+    input.userId,
+    keepActive,
+    timestamp,
+    {
       plan: input.plan,
       status: input.status,
       planUpdatedAt,
-    }),
+    },
+  );
+  statements.push(
+    ...watchlistStatements,
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
-  ]);
+  );
+  const results = await db.batch(statements);
 
-  await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1, 2]);
+  await syncWatchlistMentionTargetsIfChanged(
+    env,
+    input.userId,
+    timestamp,
+    results,
+    watchlistStatements.map((_, index) => watchlistStart + index),
+  );
   const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
 
   try {
@@ -283,6 +342,7 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
   input: RevokeDodoPlanAccessInput,
   watchlistLimit: number,
   ledger: DodoWebhookLedgerFinalize,
+  options: ApplyDodoPlanOptions = {},
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.revokedAt) ?? nowIso();
@@ -290,7 +350,7 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
   const processedAt = nowIso();
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
 
-  const results = await db.batch([
+  const statements = [
     db.prepare(`
       INSERT INTO user_plan (
         user_id,
@@ -307,15 +367,32 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
       WHERE user_plan.plan != 'free'
         AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
     `).bind(input.userId, input.status, planUpdatedAt),
+  ];
+  if (options.lifecycleEmailOutbox) {
+    // Gate on the revoke's changes(): the ledger finalize below is
+    // unconditional, and the "plan has ended" email must only exist when
+    // access really transitioned.
+    statements.push(
+      buildBillingLifecycleOutboxStatement(
+        db,
+        options.lifecycleEmailOutbox,
+        { kind: "prior-statement-changed" },
+        timestamp,
+      ),
+    );
+  }
+  const watchlistIndex = statements.length;
+  statements.push(
     buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
       plan: "free",
       status: input.status,
       planUpdatedAt,
     }),
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
-  ]);
+  );
+  const results = await db.batch(statements);
 
-  await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [1]);
+  await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [watchlistIndex]);
 
   // Lets callers skip side effects (e.g. lifecycle emails) when the
   // monotonic-timestamp guard rejected a stale/out-of-order event, or when
@@ -336,6 +413,7 @@ export async function applyDodoRefundWithWatchlistReconcile(
   },
   watchlistLimit: number,
   ledger: DodoWebhookLedgerFinalize,
+  options: ApplyDodoPlanOptions = {},
 ) {
   const db = ensureDb(env);
   const refundedAt = validIsoTimestamp(input.refundedAt) ?? nowIso();
@@ -353,6 +431,21 @@ export async function applyDodoRefundWithWatchlistReconcile(
         AND plan != 'free'
         AND julianday(?) >= julianday(plan_updated_at)
     `).bind(refundedAt, input.paymentId, refundedAt),
+  ];
+  if (options.lifecycleEmailOutbox) {
+    // Gate on the plan transition's changes() (results[0] is the caller's
+    // `changed` signal too): the refund email asserts the workspace moved to
+    // Free, so it must only be enqueued when that transition applied.
+    statements.push(
+      buildBillingLifecycleOutboxStatement(
+        db,
+        options.lifecycleEmailOutbox,
+        { kind: "prior-statement-changed" },
+        timestamp,
+      ),
+    );
+  }
+  statements.push(
     // Preserve the provider audit state when an earlier terminal event
     // already moved the workspace to Free. This statement follows the plan
     // transition in the same D1 batch; results[0] remains the only signal for
@@ -372,9 +465,11 @@ export async function applyDodoRefundWithWatchlistReconcile(
       WHERE provider_payment_id = ?
         AND julianday(expires_at) > julianday(?)
     `).bind(refundedAt, input.paymentId, refundedAt),
-  ];
+  );
 
+  let watchlistIndex: number | null = null;
   if (input.userId) {
+    watchlistIndex = statements.length;
     statements.push(buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
       plan: "free",
       status: "refunded",
@@ -385,8 +480,7 @@ export async function applyDodoRefundWithWatchlistReconcile(
   statements.push(buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt));
 
   const results = await db.batch(statements);
-  if (input.userId) {
-    const watchlistIndex = statements.length - 2;
+  if (input.userId && watchlistIndex !== null) {
     await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [watchlistIndex]);
   }
 
@@ -402,13 +496,15 @@ export async function applyDodoPlanPaymentIssueWithLedger(
   env: AppEnv,
   input: MarkDodoPlanPaymentIssueInput,
   ledger: DodoWebhookLedgerFinalize,
+  options: ApplyDodoPlanOptions = {},
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.occurredAt) ?? nowIso();
   const cancellationEffectiveAt = validIsoTimestamp(input.cancellationEffectiveAt ?? undefined);
+  const timestamp = nowIso();
   const processedAt = nowIso();
 
-  const results = await db.batch([
+  const statements = [
     db.prepare(`
       UPDATE user_plan
       SET dodo_status = ?,
@@ -428,8 +524,21 @@ export async function applyDodoPlanPaymentIssueWithLedger(
       input.userId,
       planUpdatedAt,
     ),
-    buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
-  ]);
+  ];
+  if (options.lifecycleEmailOutbox) {
+    // Gate on the status update's changes(): the ledger finalize below is
+    // unconditional, and a monotonic-guard no-op must not enqueue dunning.
+    statements.push(
+      buildBillingLifecycleOutboxStatement(
+        db,
+        options.lifecycleEmailOutbox,
+        { kind: "prior-statement-changed" },
+        timestamp,
+      ),
+    );
+  }
+  statements.push(buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt));
+  const results = await db.batch(statements);
 
   // Lets callers skip side effects (e.g. lifecycle emails) when the
   // monotonic-timestamp guard or the plan != 'free' filter made this a no-op.
