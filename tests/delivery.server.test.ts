@@ -2468,10 +2468,7 @@ describe("billing lifecycle emails", () => {
   };
   const currentBillingStateFingerprint = JSON.stringify(currentBillingInfo);
 
-  function billingPayload<T extends Record<string, unknown>>(
-    templateName: string,
-    overrides: T,
-  ) {
+  function billingPayload<T extends Record<string, unknown>>(templateName: string, overrides: T) {
     return {
       kind: templateName,
       subject: "Billing lifecycle update",
@@ -2501,28 +2498,16 @@ describe("billing lifecycle emails", () => {
     };
   }
 
-  function recoveryAttempt(
-    id: string,
-    templateName = "billing_refund_revoked",
-    payloadOverrides: Record<string, unknown> = {},
-    attemptOverrides: Record<string, unknown> = {},
-  ) {
+  function recoveryAttempt(id: string, templateName = "billing_refund_revoked", payloadOverrides: Record<string, unknown> = {}, attemptOverrides: Record<string, unknown> = {}) {
     return billingAttempt({
       id,
       templateName,
-      payloadSnapshot: billingPayload(templateName, {
-        ...payloadOverrides,
-      }) as Record<string, unknown>,
+      payloadSnapshot: billingPayload(templateName, payloadOverrides) as Record<string, unknown>,
       ...attemptOverrides,
     });
   }
 
-  function scheduledRecoveryAttempt(
-    id: string,
-    eventId: string,
-    payloadOverrides: Record<string, unknown> = {},
-    attemptOverrides: Record<string, unknown> = {},
-  ) {
+  function scheduledRecoveryAttempt(id: string, eventId: string, payloadOverrides: Record<string, unknown> = {}, attemptOverrides: Record<string, unknown> = {}) {
     return recoveryAttempt(id, "billing_cancellation_scheduled", {
       scheduledCancellationCutoff: scheduledCutoff,
       scheduledCancellationEventId: eventId,
@@ -2556,18 +2541,12 @@ describe("billing lifecycle emails", () => {
     return delivery.sendBillingRefundEmail(emailEnv as never, { ...recipient, ...overrides });
   }
 
-  async function sendCancellation(
-    input: Omit<CancellationInput, "userId" | "email" | "name"> &
-      Partial<Pick<CancellationInput, "userId" | "email" | "name">>,
-  ) {
+  async function sendCancellation(input: Omit<CancellationInput, "userId" | "email" | "name"> & Partial<Pick<CancellationInput, "userId" | "email" | "name">>) {
     const delivery = await import("~/lib/delivery.server");
     return delivery.sendBillingCancellationEmail(emailEnv as never, { ...recipient, ...input });
   }
 
-  function sendScheduledCancellation(
-    eventId: string,
-    overrides: Partial<CancellationInput> = {},
-  ) {
+  function sendScheduledCancellation(eventId: string, overrides: Partial<CancellationInput> = {}) {
     return sendCancellation({ name: "Owner", kind: "scheduled", effectiveAt: scheduledCutoff, eventId, ...overrides });
   }
 
@@ -2586,24 +2565,8 @@ describe("billing lifecycle emails", () => {
       getDeliveryAttemptByIdempotencyKey,
       listStaleBillingLifecycleEmailAttempts,
       updateDeliveryAttemptResult,
-      getUserDeliveryProfile: vi.fn().mockResolvedValue({
-        email: "owner@example.com",
-        emailVerified: true,
-        name: "Owner",
-      }),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({ email: "owner@example.com", emailVerified: true, name: "Owner" }),
       getUserPlanBillingInfo: vi.fn().mockResolvedValue(currentBillingInfo),
-      getDeliveryTargetById: vi.fn(),
-      getDeliveryTargetByProviderIdentifier: vi.fn(),
-      getOldestUserId: vi.fn(),
-      getUserIdByEmail: vi.fn(),
-      getWatchlistDeliveryConfig: vi.fn(),
-      getWorkspaceDeliveryConfig: vi.fn(),
-      legacyWorkspaceDeliveryDefaults: vi.fn(),
-      listAdsByIds: vi.fn().mockResolvedValue([]),
-      listDeliveryTargets: vi.fn().mockResolvedValue([]),
-      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
-      upsertDeliveryTarget: vi.fn(),
-      upsertDigestDelivery: vi.fn(),
       ...overrides,
     }));
     return {
@@ -2614,10 +2577,7 @@ describe("billing lifecycle emails", () => {
     };
   }
 
-  function mockRecoveryAttempt(
-    attempt: unknown,
-    overrides: Record<string, unknown> = {},
-  ) {
+  function mockRecoveryAttempt(attempt: unknown, overrides: Record<string, unknown> = {}) {
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([attempt]),
@@ -2630,9 +2590,7 @@ describe("billing lifecycle emails", () => {
   function trackAttemptUpdates(attempt: ReturnType<typeof recoveryAttempt>) {
     return vi.fn(async (_env: unknown, _attemptId: string, input: Record<string, unknown>) => {
       if (input.expectedStatus && attempt.status !== input.expectedStatus) return false;
-      if (input.expectedWebhookStatus && attempt.webhookStatus !== input.expectedWebhookStatus) {
-        return false;
-      }
+      if (input.expectedWebhookStatus && attempt.webhookStatus !== input.expectedWebhookStatus) return false;
       if (input.expectedUpdatedAt && attempt.updatedAt !== input.expectedUpdatedAt) return false;
       attempt.provider = String(input.provider);
       attempt.status = String(input.status);
@@ -2642,9 +2600,7 @@ describe("billing lifecycle emails", () => {
       attempt.errorMessage = (input.errorMessage as string | null) ?? null;
       attempt.sentAt = (input.sentAt as string | null) ?? null;
       attempt.failedAt = (input.failedAt as string | null) ?? null;
-      if (input.payloadSnapshot) {
-        attempt.payloadSnapshot = input.payloadSnapshot as Record<string, unknown>;
-      }
+      if (input.payloadSnapshot) attempt.payloadSnapshot = input.payloadSnapshot as Record<string, unknown>;
       attempt.targetValue = String(input.targetValue ?? attempt.targetValue);
       attempt.updatedAt = String(input.updatedAt ?? new Date().toISOString());
       return true;
@@ -3256,75 +3212,25 @@ describe("billing lifecycle emails", () => {
     );
   });
 
-  it("retargets a recovered billing email after the verified account email changes", async () => {
-    useRecoveryClock();
-    const sendMock = mockEmailSend("msg_recovery_new_target");
-    const staleAttempt = recoveryAttempt(
-      "attempt-recovery-old-target",
-      "billing_refund_revoked",
-      {
-        billingStateFingerprint: currentBillingStateFingerprint,
-      },
-      { targetValue: "old@example.com" },
-    );
-    const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt, {
-      getUserDeliveryProfile: vi.fn().mockResolvedValue({
-        email: "new@example.com",
-        emailVerified: true,
-        name: "Owner",
-      }),
-    });
-
-    const result = await recoverBilling();
-
-    expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 1, superseded: 0 });
-    expect(emailSendPayload(sendMock).to).toBe("new@example.com");
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      staleAttempt.id,
-      expect.objectContaining({
-        status: "pending",
-        targetValue: "new@example.com",
-        expectedStatus: "pending",
-        expectedWebhookStatus: "pending",
-        expectedUpdatedAt: staleAttempt.updatedAt,
-      }),
-    );
-  });
-
   it("defers recovery until the current account email exists and is verified", async () => {
     useRecoveryClock();
     const sendMock = mockEmailSend("msg_recovery_verified_target");
-    const attempt = recoveryAttempt(
-      "attempt-recovery-unverified-target",
-      "billing_refund_revoked",
-      {},
-      { targetValue: "old@example.com" },
-    );
-    const updateDeliveryAttemptResult = trackAttemptUpdates(attempt);
-    const verifiedProfile = {
-      email: "new@example.com",
-      emailVerified: true,
-      name: "Owner",
-    };
+    const attempt = recoveryAttempt("attempt-recovery-unverified-target", "billing_refund_revoked", {}, { targetValue: "old@example.com" });
+    const verifiedProfile = { email: "new@example.com", emailVerified: true, name: "Owner" };
     const getUserDeliveryProfile = vi.fn()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ ...verifiedProfile, emailVerified: false })
       .mockResolvedValue(verifiedProfile);
+    const updateDeliveryAttemptResult = trackAttemptUpdates(attempt);
     mockBillingDataServer({
       getUserDeliveryProfile,
-      listStaleBillingLifecycleEmailAttempts: vi.fn(
-        async (_env, input: { staleBefore: string }) =>
-          attempt.updatedAt <= input.staleBefore ? [attempt] : [],
-      ),
+      listStaleBillingLifecycleEmailAttempts: vi.fn(async (_env, input: { staleBefore: string }) =>
+        attempt.updatedAt <= input.staleBefore ? [attempt] : []),
       updateDeliveryAttemptResult,
     });
 
     async function expectDeferred(errorMessage: string) {
-      await expect(recoverBilling()).resolves.toMatchObject({
-        scanned: 1, claimed: 1, sent: 0, failed: 0,
-      });
+      await expect(recoverBilling()).resolves.toMatchObject({ scanned: 1, claimed: 1, sent: 0, failed: 0 });
       expect(sendMock).not.toHaveBeenCalled();
       expect(attempt).toMatchObject({
         status: "pending", webhookStatus: "pending", targetValue: "old@example.com", errorMessage,
@@ -3338,12 +3244,13 @@ describe("billing lifecycle emails", () => {
     await expectDeferred("Billing lifecycle recovery recipient is not verified.");
 
     vi.setSystemTime(new Date("2026-07-13T09:09:00.000Z"));
-    await expect(recoverBilling()).resolves.toMatchObject({
-      scanned: 1, claimed: 1, sent: 1, failed: 0,
-    });
+    await expect(recoverBilling()).resolves.toMatchObject({ scanned: 1, claimed: 1, sent: 1, failed: 0 });
     expect(emailSendPayload(sendMock).to).toBe("new@example.com");
     expect(attempt).toMatchObject({ targetValue: "new@example.com", status: "sent" });
     expect(attempt.payloadSnapshot).toHaveProperty("recoveryAttemptCount", 1);
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(), attempt.id, expect.objectContaining({ targetValue: "new@example.com", expectedStatus: "pending", expectedWebhookStatus: "pending" }),
+    );
   });
 
   it("recovers a marker outbox row when the billing state still matches its kind", async () => {

@@ -408,8 +408,7 @@ describe("digest_run summary persistence", () => {
         strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
         strategyWatchlistIds: ["watch-1"],
       });
-      // More than the old scan cap of later heartbeats/other-watchlist notes
-      // must not hide watch-1's retained weekly strategy.
+      // 24 later unrelated/invalid runs must not hide watch-1's retained strategy.
       for (let offset = 0; offset < 24; offset += 1) {
         const periodStart = new Date(Date.UTC(2026, 6, 13 + offset, 5)).toISOString();
         const periodEnd = new Date(Date.UTC(2026, 6, 14 + offset, 5)).toISOString();
