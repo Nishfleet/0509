@@ -48,6 +48,7 @@ export {
 } from "~/lib/data/billing-checkout.server";
 
 export {
+  applyDodoCancellationReversalWithLedger,
   applyDodoPlanGrantWithWatchlistReconcile,
   applyDodoPlanRevokeWithWatchlistReconcile,
   applyDodoRefundWithWatchlistReconcile,

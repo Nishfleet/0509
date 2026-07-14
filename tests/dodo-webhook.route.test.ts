@@ -19,6 +19,7 @@ function mockWebhookDependencies(overrides: {
   delivery?: Record<string, unknown>;
 } = {}) {
   const data = {
+    applyDodoCancellationReversalWithLedger: vi.fn().mockResolvedValue({ changed: false }),
     applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockResolvedValue(undefined),
     applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({ changed: true }),
     applyDodoPlanRevokeWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: true }),
@@ -362,6 +363,57 @@ describe("Dodo webhook route", () => {
     );
   });
 
+  it("reverses a scheduled cancellation before the pending plan-change guard", async () => {
+    const { data, delivery } = mockWebhookDependencies({
+      data: {
+        applyDodoCancellationReversalWithLedger: vi.fn().mockResolvedValue({ changed: true }),
+      },
+      billing: {
+        extractDodoSubscriptionGrant: vi.fn(() => ({
+          eventType: "subscription.plan_changed",
+          userId: "user-1",
+          subscriptionId: "sub_123",
+          customerId: "cus_123",
+          productId: "pdt_starter_annual",
+          plan: "starter",
+          cycle: "yearly",
+          status: "active",
+          grantedAt: null,
+          hasProviderGrantTimestamp: false,
+          nextBillingAt: "2027-07-02T00:00:00.000Z",
+          cancellationScheduled: false,
+          metadata: {},
+        })),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-cancel-reversal", { type: "subscription.plan_changed" }),
+      params: {},
+    } as never);
+
+    expect(await response.json()).toEqual({ ok: true });
+    expect(data.applyDodoCancellationReversalWithLedger).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        providerProductId: "pdt_starter_annual",
+        providerSubscriptionId: "sub_123",
+        providerCustomerId: "cus_123",
+        status: "active",
+        grantedAt: expect.any(String),
+      }),
+      expect.objectContaining({
+        eventId: "evt-cancel-reversal",
+        metadata: expect.objectContaining({ action: "cancellation_reversal" }),
+      }),
+    );
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).not.toHaveBeenCalled();
+    expect(delivery.sendBillingCancellationEmail).not.toHaveBeenCalled();
+  });
+
   it("falls back to the pending-target guard when a no-timestamp plan-changed webhook lacks a timestamp header", async () => {
     const { data } = mockWebhookDependencies({
       billing: {
@@ -409,6 +461,7 @@ describe("Dodo webhook route", () => {
       expect.objectContaining({ eventId: "evt-plan-changed-no-header-timestamp" }),
       expect.anything(),
     );
+    expect(data.applyDodoCancellationReversalWithLedger).not.toHaveBeenCalled();
   });
 
   it("clears the pending plan checkout lock when a signed terminal checkout failure arrives", async () => {

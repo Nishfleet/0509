@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  applyDodoCancellationReversalWithLedger,
   applyDodoPlanGrantWithWatchlistReconcile,
   applyDodoPlanPaymentIssueWithLedger,
   applyDodoPlanRevokeWithWatchlistReconcile,
@@ -12,6 +13,7 @@ import {
   finalizeDodoWebhookLedgerOnly,
   recordWatchlistCapacitySkip,
 } from "~/lib/data.server";
+import { effectivePlanFromRow } from "~/lib/plan-effective.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
 
 function seedBillingSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) {
@@ -327,6 +329,168 @@ describe("Dodo billing atomicity (sqlite)", () => {
       dodo_plan_change_product_id: null,
     });
     expect(ledger.outcome).toBe("processed");
+  });
+
+  it("reverses a scheduled cancellation with a CAS timestamp path and keeps unrelated plan changes guarded", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-cancel-scheduled",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-10T00:00:00.000Z",
+    });
+    await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-06-20T00:00:00.000Z",
+        status: "cancellation_scheduled",
+        grantedAt: "2026-06-10T00:00:00.000Z",
+      },
+      10,
+      {
+        eventId: "evt-cancel-scheduled",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-cancel-reversed",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-11T00:00:00.000Z",
+    });
+    const reversed = await applyDodoCancellationReversalWithLedger(
+      env,
+      {
+        userId: "user-1",
+        plan: "starter",
+        providerPaymentId: null,
+        providerProductId: "prod_starter",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-07-20T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-11T00:00:00.000Z",
+      },
+      {
+        eventId: "evt-cancel-reversed",
+        outcome: "processed",
+        metadata: { action: "cancellation_reversal" },
+      },
+    );
+
+    expect(reversed.changed).toBe(true);
+    const row = harness.sqlite
+      .prepare(
+        `SELECT plan, dodo_status, dodo_next_billing_at, dodo_plan_change_product_id,
+                dodo_product_id, dodo_subscription_id, dodo_customer_id, plan_updated_at
+         FROM user_plan WHERE user_id = ?`,
+      )
+      .get("user-1") as {
+      plan: string;
+      dodo_status: string;
+      dodo_next_billing_at: string;
+      dodo_plan_change_product_id: string | null;
+      dodo_product_id: string;
+      dodo_subscription_id: string;
+      dodo_customer_id: string;
+      plan_updated_at: string;
+    };
+    expect(row).toMatchObject({
+      plan: "starter",
+      dodo_status: "active",
+      dodo_next_billing_at: "2026-07-20T00:00:00.000Z",
+      dodo_plan_change_product_id: null,
+      dodo_product_id: "prod_starter",
+      dodo_subscription_id: "sub-1",
+      dodo_customer_id: "cus-1",
+      plan_updated_at: "2026-06-11T00:00:00.000Z",
+    });
+    expect(effectivePlanFromRow(row)).toBe("starter");
+    expect(
+      harness.sqlite
+        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-cancel-reversed"),
+    ).toEqual({ outcome: "processed" });
+
+    await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-unrelated-plan-change",
+      eventType: "subscription.plan_changed",
+      userId: "user-1",
+      payloadTimestamp: "2026-06-12T00:00:00.000Z",
+    });
+    const unrelated = await applyDodoPlanGrantWithWatchlistReconcile(
+      env,
+      {
+        userId: "user-1",
+        plan: "agency",
+        providerPaymentId: null,
+        providerProductId: "prod_agency",
+        providerSubscriptionId: "sub-1",
+        providerCustomerId: "cus-1",
+        nextBillingAt: "2026-08-20T00:00:00.000Z",
+        status: "active",
+        grantedAt: "2026-06-12T00:00:00.000Z",
+        requirePlanChangePending: true,
+        forcePlanChangePending: true,
+      },
+      75,
+      {
+        eventId: "evt-unrelated-plan-change",
+        outcome: "processed",
+        metadata: { action: "subscription_grant" },
+      },
+    );
+    expect(unrelated.changed).toBe(false);
+    expect(
+      harness.sqlite
+        .prepare("SELECT plan, dodo_status, dodo_plan_change_product_id FROM user_plan WHERE user_id = ?")
+        .get("user-1"),
+    ).toEqual({
+      plan: "starter",
+      dodo_status: "active",
+      dodo_plan_change_product_id: null,
+    });
+    expect(
+      harness.sqlite
+        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-unrelated-plan-change"),
+    ).toEqual({ outcome: "ignored" });
+  });
+
+  it("rejects a cancellation reversal without a verified webhook timestamp", async () => {
+    const env = openEnv();
+
+    await expect(
+      applyDodoCancellationReversalWithLedger(
+        env,
+        {
+          userId: "user-1",
+          plan: "starter",
+          providerPaymentId: null,
+          providerProductId: "prod_starter",
+          providerSubscriptionId: "sub-1",
+          providerCustomerId: "cus-1",
+          nextBillingAt: "2026-07-20T00:00:00.000Z",
+          status: "active",
+          grantedAt: undefined,
+        },
+        {
+          eventId: "evt-cancel-reversal-no-ts",
+          outcome: "processed",
+          metadata: { action: "cancellation_reversal" },
+        },
+      ),
+    ).rejects.toThrow("verified webhook timestamp");
   });
 
   it("applies matching plan-change confirmations older than the local claim time", async () => {
