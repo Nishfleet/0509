@@ -35,6 +35,11 @@ const PNG_WITH_UNKNOWN_CRITICAL_CHUNK_BYTES = Array.from(
     "base64",
   ),
 );
+const APNG_CHUNK_BYTES = [
+  ["acTL", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACGFjVEwAAAACAAAAAPONk3AAAAANSURBVHicY/jPwPAfAAUAAf+JmT0dAAAAAElFTkSuQmCC"],
+  ["fcTL", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAGmZjVEwAAAAAAAAAAQAAAAEAAAAAAAAAAAABAAoAAFp/MNAAAAANSURBVHicY/jPwPAfAAUAAf+JmT0dAAAAAElFTkSuQmCC"],
+  ["fdAT", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAABWZkQVQAAAAAAOiydu0AAAANSURBVHicY/jPwPAfAAUAAf+JmT0dAAAAAElFTkSuQmCC"],
+].map(([chunk, encoded]) => [chunk, Array.from(Buffer.from(encoded, "base64"))] as const);
 const JPEG_BYTES = Array.from(
   Buffer.from(
     "/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYyLjI4LjEwMgD/2wBDAAgEBAQEBAUFBQUFBQYGBgYGBgYGBgYGBgYHBwcICAgHBwcGBgcHCAgICAkJCQgICAgJCQoKCgwMCwsODg4RERT/xABMAAEBAAAAAAAAAAAAAAAAAAAABgEBAQAAAAAAAAAAAAAAAAAABgcQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCAABAAEDASIAAhEAAxEA/9oADAMBAAIRAxEAPwCLAE1/f//Z",
@@ -259,6 +264,7 @@ describe("account agency logo action", () => {
     ["zero-dimension WebP", logoFile(ZERO_DIMENSION_WEBP, "zero-dimension.webp", "image/webp")],
     ["malformed PNG chunk", logoFile(PNG_BYTES.slice(0, -4), "malformed.png", "image/png")],
     ["unknown critical PNG chunk", logoFile(PNG_WITH_UNKNOWN_CRITICAL_CHUNK_BYTES, "unknown-critical.png", "image/png")],
+    ...APNG_CHUNK_BYTES.map(([chunk, bytes]) => [`APNG ${chunk} chunk`, logoFile(bytes, `animated-${chunk}.png`, "image/png")]),
     ["animated WebP", logoFile(ANIMATED_WEBP_BYTES, "animated.webp", "image/webp")],
     ["reserved-flag WebP", logoFile(RESERVED_FLAG_WEBP_BYTES, "reserved.webp", "image/webp")],
     ["empty named image", new File([], "empty.png", { type: "image/png" })],

@@ -821,6 +821,9 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
   if (!userId && !rawSubscriptionId && !customerId && !hasPlanProof) return null;
 
   const subscriptionId = rawSubscriptionId || eventType;
+  const paymentId = eventType === "payment.failed"
+    ? readString(root, "payment_id") || readString(root, "id") || null
+    : null;
   const revokedAt =
     readString(root, "updated_at") ||
     readString(root, "cancelled_at") ||
@@ -835,11 +838,9 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
     customerId,
     customerEmail: hasPlanProof ? customerEmail : null,
     subscriptionId,
+    paymentId,
     status: action === "payment_issue" ? eventType : readString(root, "status") || eventType,
     revokedAt,
-    // Dodo reports scheduled cancellation earlier as subscription.plan_changed
-    // with cancel_at_next_billing_date=true. subscription.cancelled is the
-    // terminal state, so its effective time is the event update itself.
     effectiveAt: revokedAt,
     metadata: root,
   };

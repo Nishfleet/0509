@@ -965,7 +965,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       },
     );
 
-    expect(result).toEqual({ changed: false });
+    expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
@@ -1174,11 +1174,6 @@ describe("Dodo billing atomicity (sqlite)", () => {
   });
 
   it("re-arms a lifecycle email retry when the retry run finalized the ledger as ignored", async () => {
-    // A redelivered cancellation event whose guarded grant no-ops finalizes
-    // the ledger 'ignored' (plan_change_guard_mismatch) while state
-    // revalidation still retries the email. A second explicit provider
-    // failure must re-arm from 'ignored' too — otherwise the retry is
-    // silently dropped and Dodo stops redelivering.
     const env = openEnv();
     await beginDodoWebhookEventProcessing(env, {
       eventId: "evt-retry-from-ignored",
@@ -1219,9 +1214,6 @@ describe("Dodo billing atomicity (sqlite)", () => {
   });
 
   it("keeps an armed lifecycle email retry across a crashed redelivery lease", async () => {
-    // Arm the retry, let a redelivery claim it (failed → processing with the
-    // claim preserved), then crash that worker. The next lease-expiry reclaim
-    // must still surface the retry claim instead of wiping metadata_json.
     const env = openEnv();
     await beginDodoWebhookEventProcessing(env, {
       eventId: "evt-retry-crash",
@@ -1249,7 +1241,6 @@ describe("Dodo billing atomicity (sqlite)", () => {
     });
     expect(redelivery.status).toBe("claimed");
 
-    // Crash: the redelivery never finalizes; age its lease past expiry.
     const staleStartedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     fixtures[0]!.sqlite
       .prepare(
@@ -1318,10 +1309,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-outbox") },
     );
 
-    expect(result).toEqual({ changed: true });
-    // The pending outbox row committed in the SAME batch as the plan
-    // mutation and ledger finalize — a crash after this point can no longer
-    // lose the email (recovery replays pending rows).
+    expect(result).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
     const outboxRow = fixtures[0]!.sqlite
       .prepare(
         "SELECT status, webhook_status, target_value, template_name, lane, channel, payload_snapshot_json FROM delivery_attempt WHERE idempotency_key = ?",
@@ -1337,13 +1325,15 @@ describe("Dodo billing atomicity (sqlite)", () => {
     });
     expect(JSON.parse(outboxRow.payload_snapshot_json)).toMatchObject({
       outboxPendingDispatch: true,
+      billingMutationStatus: "subscription.expired",
+      billingMutationSubscriptionId: "sub-1",
+      billingMutationStateUpdatedAt: "2026-07-01T00:00:00.000Z",
     });
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
         .get("evt-revoke-outbox"),
     ).toMatchObject({ outcome: "processed" });
-    // Watchlists still reconciled despite the extra statement in the batch.
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")
@@ -1378,7 +1368,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-noop") },
     );
 
-    expect(result).toEqual({ changed: false });
+    expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT COUNT(*) AS count FROM delivery_attempt")
@@ -1421,9 +1411,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-dup") },
     );
 
-    // INSERT OR IGNORE: the plan mutation must still land and the existing
-    // (failed, in-place-retryable) row must remain untouched.
-    expect(result).toEqual({ changed: true });
+    expect(result).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT plan FROM user_plan WHERE user_id = ?")
@@ -1451,7 +1439,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
     });
     const applied = await applyDodoPlanPaymentIssueWithLedger(
       env,
-      { userId: "user-1", status: "payment.failed", occurredAt: "2026-07-01T00:00:00.000Z" },
+      { userId: "user-1", status: "payment.failed", occurredAt: "2026-07-01T00:00:00.000Z", providerPaymentId: "pay-1" },
       { eventId: "evt-dunning-1", outcome: "processed", metadata: { action: "payment_issue" } },
       {
         lifecycleEmailOutbox: lifecycleOutboxSpec(
@@ -1460,14 +1448,16 @@ describe("Dodo billing atomicity (sqlite)", () => {
         ),
       },
     );
-    expect(applied).toEqual({ changed: true });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
-        .get("billing-payment-issue:user-1:2026-07-01"),
-    ).toMatchObject({ count: 1 });
+    expect(applied).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
+    const dunningOutbox = fixtures[0]!.sqlite
+      .prepare("SELECT payload_snapshot_json FROM delivery_attempt WHERE idempotency_key = ?")
+      .get("billing-payment-issue:user-1:2026-07-01") as { payload_snapshot_json: string };
+    expect(JSON.parse(dunningOutbox.payload_snapshot_json)).toMatchObject({
+      billingMutationStatus: "payment.failed",
+      billingMutationPaymentId: "pay-1",
+      billingMutationStateUpdatedAt: "2026-07-01T00:00:00.000Z",
+    });
 
-    // A stale, out-of-order event must not enqueue dunning.
     await beginDodoWebhookEventProcessing(env, {
       eventId: "evt-dunning-stale",
       eventType: "payment.failed",
@@ -1485,7 +1475,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
         ),
       },
     );
-    expect(stale).toEqual({ changed: false });
+    expect(stale).toEqual({ changed: false, stateUpdatedAt: "2026-06-15T00:00:00.000Z" });
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
@@ -1534,8 +1524,6 @@ describe("Dodo billing atomicity (sqlite)", () => {
         .prepare("SELECT status FROM delivery_attempt WHERE idempotency_key = ?")
         .get("billing-cancellation:user-1:evt-cancel-sched-outbox"),
     ).toMatchObject({ status: "pending" });
-    // The plan keeps its watchlist entitlement: the grant reconcile even
-    // reactivates the plan-limit-paused watchlist up to the limit of 3.
     expect(
       fixtures[0]!.sqlite
         .prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")

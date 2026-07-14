@@ -1,17 +1,3 @@
-/**
- * Server-rendered PDF export of shared report snapshots (P2, 2026-07-13).
- *
- * GET /share/:token/pdf resolves the share token, gates on the SHARER's
- * `pdf_reports` entitlement, applies fail-closed spend caps (per-IP burst +
- * per-sharer daily), preflights Browser Rendering capacity, then prints the
- * public `?pdf=1` variant of the share page via CDP.
- *
- * Cost posture: Browser Rendering is usage-billed and shares capacity with
- * monitoring scans, so every gate here is a launch requirement, not polish.
- * The render URL is built ONLY from server-configured origin vars plus the
- * D1-validated token — never from request input (SSRF).
- */
-
 import puppeteer from "@cloudflare/puppeteer";
 
 import type { AppEnv } from "~/lib/env.server";
@@ -45,7 +31,6 @@ export async function renderShareReportPdfResponse(
     "~/lib/rate-limit.server"
   );
 
-  // Per-IP burst gate first so invalid-token spam is also throttled.
   const ipLimited = await enforceSharePdfRateLimit(request, env, ctx);
   if (ipLimited) {
     return ipLimited;
@@ -61,8 +46,6 @@ export async function renderShareReportPdfResponse(
     return pdfErrorResponse(404, "not_found", "This share link does not exist.");
   }
 
-  // Snapshots are immutable, so the PDF is truthful. Live shares re-query on
-  // every view and could drift between render and read — refuse honestly.
   if (!share.isSnapshot || share.resourceType !== "report") {
     return pdfErrorResponse(
       404,
@@ -120,10 +103,6 @@ export async function renderShareReportPdfResponse(
     );
   }
 
-  // Reserve the sharer's daily render budget only after configuration and
-  // provider capacity preflight pass. The reservation is intentionally not
-  // refunded after this point: a launch/render failure may already consume
-  // usage-billed Browser Run capacity, so every attempted render counts.
   const dailyLimited = await enforceSharePdfDailyCap(request, env, share.userId, ctx);
   if (dailyLimited) {
     return dailyLimited;
@@ -163,8 +142,6 @@ export async function renderShareReportPdfResponse(
       },
     });
   } catch (error) {
-    // The share token is a bearer credential and the failing URL contains
-    // it, so scrub before logging.
     console.error(
       "[share-pdf] render failed:",
       redactShareToken(error instanceof Error ? error.message : String(error ?? ""), share.token),
@@ -205,8 +182,6 @@ async function renderReportPdf(browser: PdfBrowser, renderUrl: string) {
   });
 }
 
-// Only server-configured vars may shape the render target; forwarded headers
-// and the request URL are client-controlled and must never reach page.goto.
 function resolveConfiguredOrigin(env: AppEnv) {
   const configured = (env.APP_ORIGIN ?? env.BETTER_AUTH_URL ?? "").trim();
   if (!configured) {
@@ -283,8 +258,6 @@ function redactShareToken(message: string, token: string) {
   return token ? message.split(token).join("<share-token>") : message;
 }
 
-// Name-based so it also matches PromiseTimeoutError instances constructed in
-// a different module-registry epoch (vitest resetModules).
 function isPromiseTimeoutError(error: unknown) {
   return error instanceof Error && error.name === "PromiseTimeoutError";
 }

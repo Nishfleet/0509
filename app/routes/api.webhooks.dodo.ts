@@ -272,14 +272,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
           body: { ok: true, cancellationScheduled: true },
         };
       }
-      // Live Dodo subscription payloads carry no updated_at (verified against
-      // the live subscriptions API, 2026-07-13), so real plan_changed events
-      // arrive without a provider grant timestamp. A pure scheduled
-      // cancellation has no pending plan-change row — routing it through the
-      // plan-change-pending guard would match zero rows, finalize the ledger
-      // as ignored, and silently drop the cancellation status + email. Let it
-      // take the normal grant path instead; the signature-verified webhook
-      // envelope timestamp (fallbackGrantAt) preserves monotonic ordering.
       const requiresPendingPlanChange =
         planChangedWithoutProviderTimestamp && !cancellationScheduled;
       const allowsPendingPlanChangeTarget =
@@ -399,6 +391,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
           body: { ok: true, ignored: true, reason: "no_user_match" },
         };
       }
+      const lifecycleSubscriptionId =
+        revocation.subscriptionId !== revocation.eventType ? revocation.subscriptionId : null;
+      const lifecyclePaymentId = lifecycleSubscriptionId ? null : revocation.paymentId;
 
       if (revocation.action === "payment_issue") {
         if (
@@ -448,6 +443,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
             userId,
             status: revocation.eventType,
             occurredAt: revocation.revokedAt,
+            providerSubscriptionId: lifecycleSubscriptionId,
+            providerPaymentId: lifecyclePaymentId,
           },
           {
             ...ledgerBase,
@@ -456,26 +453,38 @@ export async function action({ context, request }: ActionFunctionArgs) {
           },
           { lifecycleEmailOutbox: paymentIssueOutbox },
         );
-        // Skip the email when the monotonic guard rejected a stale event —
-        // the plan already moved past this state (e.g. payment recovered).
         const matchesPaymentIssueRetry =
           lifecycleEmailRetry?.kind === "payment_issue" &&
           lifecycleEmailRetry.userId === userId;
+        const expectedPaymentIssueStateUpdatedAt = paymentIssueApplied?.stateUpdatedAt ?? null;
         const currentPaymentIssueState =
-          matchesPaymentIssueRetry && paymentIssueApplied?.changed === false
+          matchesPaymentIssueRetry && expectedPaymentIssueStateUpdatedAt
             ? await getUserPlanBillingInfo(env, userId)
             : null;
         const shouldRetryPaymentIssueEmail =
+          currentPaymentIssueState?.plan !== "free" &&
           currentPaymentIssueState?.dodoStatus === revocation.eventType &&
-          (revocation.subscriptionId === revocation.eventType ||
-            currentPaymentIssueState.dodoSubscriptionId === revocation.subscriptionId);
-        if (paymentIssueApplied?.changed !== false || shouldRetryPaymentIssueEmail) {
+          sameBillingInstant(
+            currentPaymentIssueState.planUpdatedAt,
+            expectedPaymentIssueStateUpdatedAt,
+          ) &&
+          (lifecycleSubscriptionId
+            ? currentPaymentIssueState.dodoSubscriptionId === lifecycleSubscriptionId
+            : Boolean(lifecyclePaymentId) && currentPaymentIssueState.dodoPaymentId === lifecyclePaymentId);
+        if (
+          expectedPaymentIssueStateUpdatedAt &&
+          (paymentIssueApplied?.changed === true || shouldRetryPaymentIssueEmail)
+        ) {
           await sendBillingLifecycleEmailSafely("payment_issue", userId, (delivery, profile) =>
             delivery.sendBillingPaymentIssueEmail(env, {
               userId,
               email: profile.email,
               name: profile.name,
               occurredAt: revocation.revokedAt,
+              status: revocation.eventType,
+              subscriptionId: lifecycleSubscriptionId,
+              paymentId: lifecyclePaymentId,
+              stateUpdatedAt: expectedPaymentIssueStateUpdatedAt,
               retryWebhookOnExplicitFailure: true,
             }),
           );
@@ -512,16 +521,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
       );
       const matchesRevokeRetry =
         lifecycleEmailRetry?.kind === "revoke" && lifecycleEmailRetry.userId === userId;
+      const expectedRevokeStateUpdatedAt = revokeApplied?.stateUpdatedAt ?? null;
       const currentRevokeState =
-        matchesRevokeRetry && revokeApplied?.changed === false
+        matchesRevokeRetry && expectedRevokeStateUpdatedAt
           ? await getUserPlanBillingInfo(env, userId)
           : null;
       const shouldRetryRevokeEmail =
         currentRevokeState?.plan === "free" &&
         currentRevokeState.dodoStatus === revocation.eventType &&
-        (revocation.subscriptionId === revocation.eventType ||
-          currentRevokeState.dodoSubscriptionId === revocation.subscriptionId);
-      if (revokeApplied?.changed !== false || shouldRetryRevokeEmail) {
+        lifecycleSubscriptionId !== null &&
+        currentRevokeState.dodoSubscriptionId === lifecycleSubscriptionId &&
+        sameBillingInstant(currentRevokeState.planUpdatedAt, expectedRevokeStateUpdatedAt);
+      if (
+        expectedRevokeStateUpdatedAt &&
+        (revokeApplied?.changed === true || shouldRetryRevokeEmail)
+      ) {
         await sendBillingLifecycleEmailSafely("revoke", userId, (delivery, profile) =>
           delivery.sendBillingCancellationEmail(env, {
             userId,
@@ -529,6 +543,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
             name: profile.name,
             kind: "ended",
             eventId,
+            status: revocation.eventType,
+            subscriptionId: lifecycleSubscriptionId,
+            stateUpdatedAt: expectedRevokeStateUpdatedAt,
             retryWebhookOnExplicitFailure: true,
           }),
         );
@@ -669,11 +686,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
   }
 
-  // Lifecycle emails remain best-effort for unexpected application errors.
-  // An explicit provider rejection is different: the delivery attempt is
-  // durably `failed`, so reopen this processed webhook and return non-2xx.
-  // Dodo redelivery may then retry that failed attempt only. Sent and
-  // provider-unknown attempts remain terminal/suppressed in delivery.server.
   async function sendBillingLifecycleEmailSafely(
     kind: BillingLifecycleEmailKind,
     lifecycleUserId: string,

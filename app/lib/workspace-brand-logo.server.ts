@@ -66,8 +66,6 @@ function hasValidRasterStructure(
   bytes: Uint8Array,
   mimeType: "image/png" | "image/jpeg" | "image/webp",
 ) {
-  // Workers has no built-in raster decoder. These bounded container checks reject
-  // incomplete or malformed files without decompressing attacker-controlled data.
   switch (mimeType) {
     case "image/png":
       return hasValidPngStructure(bytes);
@@ -108,6 +106,7 @@ function hasValidPngStructure(bytes: Uint8Array) {
     }
 
     if (!isKnownPngChunk(type) && (bytes[offset + 4] & 0x20) === 0) return false;
+    if (type === "acTL" || type === "fcTL" || type === "fdAT") return false;
 
     if (!sawHeader && type !== "IHDR") return false;
     if (type === "IHDR") {
@@ -269,8 +268,6 @@ function hasValidWebpStructure(bytes: Uint8Array) {
       if (!hasSaneDimensions(width, height)) return false;
       dimensions = [width, height];
     } else if (type === "ANIM" || type === "ANMF") {
-      // Animated WebP frame subchunks require a full nested container parser;
-      // reject them rather than accepting a malformed frame as a still image.
       return false;
     }
 

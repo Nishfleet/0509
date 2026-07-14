@@ -21,8 +21,12 @@ function mockWebhookDependencies(overrides: {
   const data = {
     applyDodoCancellationReversalWithLedger: vi.fn().mockResolvedValue({ changed: false }),
     applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockResolvedValue(undefined),
-    applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({ changed: true }),
-    applyDodoPlanRevokeWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: true }),
+    applyDodoPlanPaymentIssueWithLedger: vi.fn(async (_env, input: { occurredAt: string }) => ({
+      changed: true, stateUpdatedAt: input.occurredAt,
+    })),
+    applyDodoPlanRevokeWithWatchlistReconcile: vi.fn(async (_env, input: { revokedAt: string }) => ({
+      changed: true, stateUpdatedAt: input.revokedAt,
+    })),
     applyDodoProofCreditGrantWithLedger: vi.fn().mockResolvedValue(undefined),
     applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({
       changed: true, stateUpdatedAt: "2026-07-05T00:00:00.000Z",
@@ -39,6 +43,7 @@ function mockWebhookDependencies(overrides: {
       plan: "starter",
       dodoStatus: "subscription.on_hold",
       dodoSubscriptionId: "sub_123",
+      planUpdatedAt: "2026-07-01T08:00:00.000Z",
     }),
     getUserIdForDodoPayment: vi.fn().mockResolvedValue(null),
     getUserIdForDodoLifecycle: vi.fn().mockResolvedValue(null),
@@ -244,8 +249,6 @@ describe("Dodo webhook route", () => {
       }),
       1,
       expect.objectContaining({ eventId: "evt-cancel", outcome: "processed" }),
-      // The frozen lifecycle-email outbox spec must ride the reconcile batch
-      // so the pending row commits atomically with the ledger finalize.
       expect.objectContaining({
         lifecycleEmailOutbox: expect.objectContaining({
           userId: "user-1",
@@ -1258,6 +1261,10 @@ describe("customer lifecycle billing emails", () => {
         email: "owner@example.com",
         name: "Owner",
         occurredAt: "2026-07-01T08:00:00.000Z",
+        status: "subscription.on_hold",
+        subscriptionId: "sub_123",
+        paymentId: null,
+        stateUpdatedAt: "2026-07-01T08:00:00.000Z",
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -1328,8 +1335,8 @@ describe("customer lifecycle billing emails", () => {
       );
     const applyDodoPlanPaymentIssueWithLedger = vi
       .fn()
-      .mockResolvedValueOnce({ changed: true })
-      .mockResolvedValueOnce({ changed: false });
+      .mockResolvedValueOnce({ changed: true, stateUpdatedAt: "2026-07-01T08:00:00.000Z" })
+      .mockResolvedValueOnce({ changed: false, stateUpdatedAt: "2026-07-01T08:00:00.000Z" });
     const sendBillingPaymentIssueEmail = vi
       .fn()
       .mockRejectedValueOnce(explicitFailure)
@@ -1361,6 +1368,13 @@ describe("customer lifecycle billing emails", () => {
 
     expect(await redelivery.json()).toMatchObject({ ok: true, paymentIssue: true });
     expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(2);
+    expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "subscription.on_hold", subscriptionId: "sub_123", paymentId: null,
+        stateUpdatedAt: "2026-07-01T08:00:00.000Z",
+      }),
+    );
     expect(applyDodoPlanPaymentIssueWithLedger).toHaveBeenCalledTimes(2);
     expect(data.failDodoWebhookEventForLifecycleEmailRetry).toHaveBeenCalledTimes(1);
   });
@@ -1378,7 +1392,9 @@ describe("customer lifecycle billing emails", () => {
               "billing-payment-issue:user-1:2026-07-01",
             ),
           ),
-        applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({ changed: false }),
+        applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({
+          changed: false, stateUpdatedAt: "2026-07-01T08:00:00.000Z",
+        }),
       },
       delivery: { sendBillingPaymentIssueEmail: vi.fn().mockResolvedValue(false) },
     });
@@ -1497,12 +1513,13 @@ describe("customer lifecycle billing emails", () => {
         getUserIdForDodoLifecycle,
         applyDodoPlanRevokeWithWatchlistReconcile: vi
           .fn()
-          .mockResolvedValueOnce({ changed: true })
-          .mockResolvedValueOnce({ changed: false }),
+          .mockResolvedValueOnce({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" })
+          .mockResolvedValueOnce({ changed: false, stateUpdatedAt: "2026-07-01T00:00:00.000Z" }),
         getUserPlanBillingInfo: vi.fn().mockResolvedValue({
           plan: "free",
           dodoStatus: "subscription.expired",
           dodoSubscriptionId: "sub_linked",
+          planUpdatedAt: "2026-07-01T00:00:00.000Z",
         }),
       },
       delivery: { sendBillingCancellationEmail },
@@ -1516,6 +1533,13 @@ describe("customer lifecycle billing emails", () => {
 
     expect(await redelivery.json()).toMatchObject({ ok: true, revoked: true });
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(2);
+    expect(delivery.sendBillingCancellationEmail).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "subscription.expired", subscriptionId: "sub_linked",
+        stateUpdatedAt: "2026-07-01T00:00:00.000Z",
+      }),
+    );
     expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledTimes(1);
   });
 
@@ -1801,6 +1825,9 @@ describe("customer lifecycle billing emails", () => {
         name: "Owner",
         kind: "ended",
         eventId: "evt-expired-email",
+        status: "subscription.expired",
+        subscriptionId: "sub_123",
+        stateUpdatedAt: "2026-07-01T00:00:00.000Z",
         retryWebhookOnExplicitFailure: true,
       },
     );

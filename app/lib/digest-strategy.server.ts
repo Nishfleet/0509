@@ -1,12 +1,3 @@
-/**
- * AI weekly strategy paragraph for weekly digests.
- *
- * Strictly additive: this module NEVER throws and returns null on any doubt.
- * The paragraph is generated once per digest run, persisted in
- * `digest_run.summary_json` before delivery, and reused verbatim on retries —
- * never regenerated (nondeterministic customer-visible content).
- */
-
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
@@ -35,7 +26,6 @@ export interface GeneratedDigestStrategy {
   watchlistIds: string[];
 }
 
-// Mirrors MAX_TRANSLATION_INPUT_LENGTH in translation.server.ts.
 const MAX_STRATEGY_INPUT_LENGTH = 1600;
 const MAX_STRATEGY_ITEMS = 6;
 const MAX_LINE_LENGTH = 300;
@@ -54,8 +44,6 @@ const SYSTEM_PROMPT =
 const MARKDOWN_LIKE_OUTPUT =
   /(^|\n)\s*(?:[-*+•]\s|#{1,6}\s|\d+[.)]\s|>\s)|[`|]|\*\*/;
 
-// Fragments of the instructions above; a compliant summary has no reason to
-// contain any of them, so their presence means the model echoed the prompt.
 const PROMPT_ECHO_FRAGMENTS = [
   "restate only",
   "provided change lines",
@@ -113,12 +101,6 @@ export async function buildWeeklyStrategyParagraph(
   }
 }
 
-/**
- * Restricts factual AI input to the same verified-proof classification used
- * for client report rows. Provisional items remain labeled digest items but
- * never become model claims. The verified set is then ranked with the same
- * priority signals the digest email uses and capped to a small input budget.
- */
 export function buildStrategyInputLines(items: DigestStrategyItemInput[]) {
   return buildStrategyInput(items).lines;
 }
@@ -177,10 +159,6 @@ function sanitizePromptData(value: string | null | undefined) {
   return collapseWhitespace(value).replaceAll("<", "‹").replaceAll(">", "›");
 }
 
-/**
- * Accepts only output that looks like a short plain-prose paragraph honestly
- * derived from the provided lines. Any doubt returns null; absence is silent.
- */
 export function validateStrategyParagraph(
   raw: string,
   inputLines: string[],
@@ -194,14 +172,10 @@ export function validateStrategyParagraph(
     return null;
   }
 
-  // Bullet lists, headings, tables, or code fences mean the model ignored
-  // the plain-prose instruction — reject rather than repair.
   if (MARKDOWN_LIKE_OUTPUT.test(trimmed)) {
     return null;
   }
 
-  // A paragraph is at most a couple of soft wraps; more newlines than that
-  // reads as list-shaped output even without markers.
   if ((trimmed.match(/\n/g) ?? []).length > 2) {
     return null;
   }
@@ -218,8 +192,6 @@ export function validateStrategyParagraph(
   if (PROMPT_ECHO_FRAGMENTS.some((fragment) => lowered.includes(fragment))) {
     return null;
   }
-  // Echoing an input line verbatim (with its "- " marker stripped by the
-  // whitespace collapse) is not synthesis either.
   if (inputLines.some((line) => {
     const bare = collapseWhitespace(line.replace(/^-\s*/, ""));
     return bare.length >= 40 && lowered.includes(bare.toLowerCase());
