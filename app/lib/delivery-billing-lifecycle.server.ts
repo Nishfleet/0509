@@ -10,6 +10,7 @@ import {
 import {
 	deliveryPreDispatchStaleBefore,
 	isStalePreDispatchAttempt,
+	markDeliveryAttemptProviderDispatch,
 } from "~/lib/delivery-attempt-lease";
 import {
 	EMAIL_PROVIDER,
@@ -277,6 +278,13 @@ async function sendBillingLifecycleEmail(
 	if (!claimUpdatedAt) {
 		throw new Error("Billing lifecycle delivery claim did not return an owner token.");
 	}
+	const dispatchStartedAt = await markDeliveryAttemptProviderDispatch({
+		attemptId,
+		provider: EMAIL_PROVIDER,
+		claimUpdatedAt,
+		update: (id, update) => updateDeliveryAttemptResult(env, id, update),
+	});
+	if (!dispatchStartedAt) return false;
 
 	const providerResult = await sendCloudflareEmail(env, {
 		to: input.email,
@@ -296,8 +304,8 @@ async function sendBillingLifecycleEmail(
 		sentAt: providerAcceptedAt(providerResult),
 		failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
 		expectedStatus: "pending",
-		expectedWebhookStatus: "pending",
-		expectedUpdatedAt: claimUpdatedAt,
+		expectedWebhookStatus: "provider_unknown",
+		expectedUpdatedAt: dispatchStartedAt,
 	});
 	if (finalized === false) {
 		return false;
@@ -589,6 +597,16 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
 			}
 			continue;
 		}
+		const dispatchStartedAt = await markDeliveryAttemptProviderDispatch({
+			attemptId: attempt.id,
+			provider: EMAIL_PROVIDER,
+			claimUpdatedAt,
+			update: (id, update) => updateDeliveryAttemptResult(env, id, update),
+		});
+		if (!dispatchStartedAt) {
+			result.conflicts += 1;
+			continue;
+		}
 
 		const providerResult = await sendCloudflareEmail(env, {
 			to: currentEmail,
@@ -608,8 +626,8 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
 			sentAt: providerAcceptedAt(providerResult),
 			failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
 			expectedStatus: "pending",
-			expectedWebhookStatus: "pending",
-			expectedUpdatedAt: claimUpdatedAt,
+			expectedWebhookStatus: "provider_unknown",
+			expectedUpdatedAt: dispatchStartedAt,
 		});
 		if (finalized === false) {
 			result.conflicts += 1;

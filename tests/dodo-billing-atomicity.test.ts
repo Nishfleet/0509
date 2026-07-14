@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  applyDodoCancellationReversalWithLedger,
+	applyDodoCancellationReversalWithLedger,
   applyDodoPlanGrantWithWatchlistReconcile,
-  applyDodoPlanPaymentIssueWithLedger,
+	applyDodoPlanPaymentIssueWithLedger,
   applyDodoPlanRevokeWithWatchlistReconcile,
   applyDodoRefundWithWatchlistReconcile,
   beginDodoWebhookEventProcessing,
   buildCapacitySkipIdempotencyKey,
   failDodoWebhookEventProcessing,
-  failDodoWebhookEventForLifecycleEmailRetry,
-  finalizeDodoWebhookLedgerOnly,
+	failDodoWebhookEventForLifecycleEmailRetry,
+	finalizeDodoWebhookLedgerOnly,
   recordWatchlistCapacitySkip,
 } from "~/lib/data.server";
 import { effectivePlanFromRow } from "~/lib/plan-effective.server";
@@ -159,58 +159,58 @@ describe("Dodo billing atomicity (sqlite)", () => {
     return { DB: harness.db } as never;
   }
 
-  type AtomicEnv = Parameters<typeof beginDodoWebhookEventProcessing>[0];
-  type GrantInput = Parameters<typeof applyDodoPlanGrantWithWatchlistReconcile>[1];
-  type GrantOverrides = Partial<GrantInput>;
-  type Ledger = Parameters<typeof applyDodoPlanGrantWithWatchlistReconcile>[3];
+	type AtomicEnv = Parameters<typeof beginDodoWebhookEventProcessing>[0];
+	type GrantInput = Parameters<typeof applyDodoPlanGrantWithWatchlistReconcile>[1];
+	type GrantOverrides = Partial<GrantInput>;
+	type Ledger = Parameters<typeof applyDodoPlanGrantWithWatchlistReconcile>[3];
 
-  function starterGrant(overrides: GrantOverrides = {}): GrantInput {
-    return {
-      userId: "user-1", plan: "starter", providerPaymentId: null,
-      providerProductId: "prod_starter", providerSubscriptionId: "sub-1",
-      providerCustomerId: "cus-1", nextBillingAt: "2026-07-20T00:00:00.000Z",
-      status: "active", grantedAt: "2026-06-10T00:00:00.000Z",
-      ...overrides,
-    };
-  }
+	function starterGrant(overrides: GrantOverrides = {}): GrantInput {
+		return {
+			userId: "user-1", plan: "starter", providerPaymentId: null,
+			providerProductId: "prod_starter", providerSubscriptionId: "sub-1",
+			providerCustomerId: "cus-1", nextBillingAt: "2026-07-20T00:00:00.000Z",
+			status: "active", grantedAt: "2026-06-10T00:00:00.000Z",
+			...overrides,
+		};
+	}
 
-  function processedLedger(
-    eventId: string,
-    action: "subscription_grant" | "cancellation_reversal" = "subscription_grant",
-  ): Ledger {
-    return { eventId, outcome: "processed", metadata: { action } };
-  }
+	function processedLedger(
+		eventId: string,
+		action: "subscription_grant" | "cancellation_reversal" = "subscription_grant",
+	): Ledger {
+		return { eventId, outcome: "processed", metadata: { action } };
+	}
 
-  function beginSubEvent(
-    env: AtomicEnv,
-    eventId: string,
-    payloadTimestamp: string | null,
-    eventType = "subscription.plan_changed",
-  ) {
-    return beginDodoWebhookEventProcessing(env, { eventId, eventType, userId: "user-1", payloadTimestamp });
-  }
+	function beginSubEvent(
+		env: AtomicEnv,
+		eventId: string,
+		payloadTimestamp: string | null,
+		eventType = "subscription.plan_changed",
+	) {
+		return beginDodoWebhookEventProcessing(env, { eventId, eventType, userId: "user-1", payloadTimestamp });
+	}
 
-  function applyStarterGrant(
-    env: AtomicEnv,
-    eventId: string,
-    overrides: GrantOverrides = {},
-    watchlistLimit = 10,
-    options: Parameters<typeof applyDodoPlanGrantWithWatchlistReconcile>[4] = {},
-  ) {
-    return applyDodoPlanGrantWithWatchlistReconcile(
-      env, starterGrant(overrides), watchlistLimit, processedLedger(eventId), options,
-    );
-  }
+	function applyStarterGrant(
+		env: AtomicEnv,
+		eventId: string,
+		overrides: GrantOverrides = {},
+		watchlistLimit = 10,
+		options: Parameters<typeof applyDodoPlanGrantWithWatchlistReconcile>[4] = {},
+	) {
+		return applyDodoPlanGrantWithWatchlistReconcile(
+			env, starterGrant(overrides), watchlistLimit, processedLedger(eventId), options,
+		);
+	}
 
-  function reverseStarter(
-    env: AtomicEnv,
-    eventId: string,
-    overrides: GrantOverrides = {},
-  ) {
-    return applyDodoCancellationReversalWithLedger(
-      env, starterGrant(overrides), processedLedger(eventId, "cancellation_reversal"),
-    );
-  }
+	function reverseStarter(
+		env: AtomicEnv,
+		eventId: string,
+		overrides: GrantOverrides = {},
+	) {
+		return applyDodoCancellationReversalWithLedger(
+			env, starterGrant(overrides), processedLedger(eventId, "cancellation_reversal"),
+		);
+	}
 
   it("commits grant, watchlist reconcile, and processed ledger in one batch", async () => {
     const env = openEnv();
@@ -384,217 +384,217 @@ describe("Dodo billing atomicity (sqlite)", () => {
     expect(ledger.outcome).toBe("processed");
   });
 
-  it("reverses a scheduled cancellation with a CAS timestamp path and keeps unrelated plan changes guarded", async () => {
-    const env = openEnv();
-    const harness = fixtures[0]!;
+	it("reverses a scheduled cancellation with a CAS timestamp path and keeps unrelated plan changes guarded", async () => {
+		const env = openEnv();
+		const harness = fixtures[0]!;
 
-    await beginSubEvent(env, "evt-cancel-scheduled", "2026-06-10T00:00:00.000Z");
-    await applyStarterGrant(env, "evt-cancel-scheduled", {
-      nextBillingAt: "2026-06-20T00:00:00.000Z",
-      status: "cancellation_scheduled",
-    });
-    await beginSubEvent(env, "evt-cancel-reversed", "2026-06-11T00:00:00.000Z");
-    const reversed = await reverseStarter(env, "evt-cancel-reversed", {
-      grantedAt: "2026-06-11T00:00:00.000Z",
-    });
+		await beginSubEvent(env, "evt-cancel-scheduled", "2026-06-10T00:00:00.000Z");
+		await applyStarterGrant(env, "evt-cancel-scheduled", {
+			nextBillingAt: "2026-06-20T00:00:00.000Z",
+			status: "cancellation_scheduled",
+		});
+		await beginSubEvent(env, "evt-cancel-reversed", "2026-06-11T00:00:00.000Z");
+		const reversed = await reverseStarter(env, "evt-cancel-reversed", {
+			grantedAt: "2026-06-11T00:00:00.000Z",
+		});
 
-    expect(reversed.changed).toBe(true);
-    const row = harness.sqlite
-      .prepare(
-        `SELECT plan, dodo_status, dodo_next_billing_at, dodo_plan_change_product_id,
+		expect(reversed.changed).toBe(true);
+		const row = harness.sqlite
+			.prepare(
+				`SELECT plan, dodo_status, dodo_next_billing_at, dodo_plan_change_product_id,
                 dodo_product_id, dodo_subscription_id, dodo_customer_id, plan_updated_at
          FROM user_plan WHERE user_id = ?`,
-      )
-      .get("user-1") as {
-      plan: string;
-      dodo_status: string;
-      dodo_next_billing_at: string;
-      dodo_plan_change_product_id: string | null;
-      dodo_product_id: string;
-      dodo_subscription_id: string;
-      dodo_customer_id: string;
-      plan_updated_at: string;
-    };
-    expect(row).toMatchObject({
-      plan: "starter",
-      dodo_status: "active",
-      dodo_next_billing_at: "2026-07-20T00:00:00.000Z",
-      dodo_plan_change_product_id: null,
-      dodo_product_id: "prod_starter",
-      dodo_subscription_id: "sub-1",
-      dodo_customer_id: "cus-1",
-      plan_updated_at: "2026-06-11T00:00:00.000Z",
-    });
-    expect(effectivePlanFromRow(row)).toBe("starter");
-    expect(
-      harness.sqlite
-        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
-        .get("evt-cancel-reversed"),
-    ).toEqual({ outcome: "processed" });
+			)
+			.get("user-1") as {
+			plan: string;
+			dodo_status: string;
+			dodo_next_billing_at: string;
+			dodo_plan_change_product_id: string | null;
+			dodo_product_id: string;
+			dodo_subscription_id: string;
+			dodo_customer_id: string;
+			plan_updated_at: string;
+		};
+		expect(row).toMatchObject({
+			plan: "starter",
+			dodo_status: "active",
+			dodo_next_billing_at: "2026-07-20T00:00:00.000Z",
+			dodo_plan_change_product_id: null,
+			dodo_product_id: "prod_starter",
+			dodo_subscription_id: "sub-1",
+			dodo_customer_id: "cus-1",
+			plan_updated_at: "2026-06-11T00:00:00.000Z",
+		});
+		expect(effectivePlanFromRow(row)).toBe("starter");
+		expect(
+			harness.sqlite
+				.prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+				.get("evt-cancel-reversed"),
+		).toEqual({ outcome: "processed" });
 
-    await beginSubEvent(env, "evt-unrelated-plan-change", "2026-06-12T00:00:00.000Z");
-    const unrelated = await applyStarterGrant(env, "evt-unrelated-plan-change", {
-      plan: "agency",
-      providerProductId: "prod_agency",
-      nextBillingAt: "2026-08-20T00:00:00.000Z",
-      grantedAt: "2026-06-12T00:00:00.000Z",
-      requirePlanChangePending: true,
-      forcePlanChangePending: true,
-    }, 75);
-    expect(unrelated.changed).toBe(false);
-    expect(
-      harness.sqlite
-        .prepare("SELECT plan, dodo_status, dodo_plan_change_product_id FROM user_plan WHERE user_id = ?")
-        .get("user-1"),
-    ).toEqual({
-      plan: "starter",
-      dodo_status: "active",
-      dodo_plan_change_product_id: null,
-    });
-    expect(
-      harness.sqlite
-        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
-        .get("evt-unrelated-plan-change"),
-    ).toEqual({ outcome: "ignored" });
-  });
+		await beginSubEvent(env, "evt-unrelated-plan-change", "2026-06-12T00:00:00.000Z");
+		const unrelated = await applyStarterGrant(env, "evt-unrelated-plan-change", {
+			plan: "agency",
+			providerProductId: "prod_agency",
+			nextBillingAt: "2026-08-20T00:00:00.000Z",
+			grantedAt: "2026-06-12T00:00:00.000Z",
+			requirePlanChangePending: true,
+			forcePlanChangePending: true,
+		}, 75);
+		expect(unrelated.changed).toBe(false);
+		expect(
+			harness.sqlite
+				.prepare("SELECT plan, dodo_status, dodo_plan_change_product_id FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toEqual({
+			plan: "starter",
+			dodo_status: "active",
+			dodo_plan_change_product_id: null,
+		});
+		expect(
+			harness.sqlite
+				.prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+				.get("evt-unrelated-plan-change"),
+		).toEqual({ outcome: "ignored" });
+	});
 
-  it("rejects a cancellation reversal without a verified webhook timestamp", async () => {
-    const env = openEnv();
+	it("rejects a cancellation reversal without a verified webhook timestamp", async () => {
+		const env = openEnv();
 
-    await expect(
-      reverseStarter(env, "evt-cancel-reversal-no-ts", { grantedAt: undefined }),
-    ).rejects.toThrow("verified webhook timestamp");
-  });
+		await expect(
+			reverseStarter(env, "evt-cancel-reversal-no-ts", { grantedAt: undefined }),
+		).rejects.toThrow("verified webhook timestamp");
+	});
 
-  it("watermarks a newer reversal before an older cancellation arrives", async () => {
-    const env = openEnv();
-    const harness = fixtures[0]!;
+	it("watermarks a newer reversal before an older cancellation arrives", async () => {
+		const env = openEnv();
+		const harness = fixtures[0]!;
 
-    await beginSubEvent(
-      env,
-      "evt-active-t1",
-      "2026-06-10T00:00:00.000Z",
-      "subscription.active",
-    );
-    await applyStarterGrant(env, "evt-active-t1");
-    await beginSubEvent(env, "evt-reversal-t3", "2026-06-12T00:00:00.000Z");
-    const reversal = await reverseStarter(env, "evt-reversal-t3", {
-      grantedAt: "2026-06-12T00:00:00.000Z",
-    });
-    expect(reversal.changed).toBe(true);
+		await beginSubEvent(
+			env,
+			"evt-active-t1",
+			"2026-06-10T00:00:00.000Z",
+			"subscription.active",
+		);
+		await applyStarterGrant(env, "evt-active-t1");
+		await beginSubEvent(env, "evt-reversal-t3", "2026-06-12T00:00:00.000Z");
+		const reversal = await reverseStarter(env, "evt-reversal-t3", {
+			grantedAt: "2026-06-12T00:00:00.000Z",
+		});
+		expect(reversal.changed).toBe(true);
 
-    await beginSubEvent(env, "evt-cancellation-t2", "2026-06-11T00:00:00.000Z");
-    const olderCancellation = await applyStarterGrant(env, "evt-cancellation-t2", {
-      nextBillingAt: "2026-06-20T00:00:00.000Z",
-      status: "cancellation_scheduled",
-      grantedAt: "2026-06-11T00:00:00.000Z",
-    });
+		await beginSubEvent(env, "evt-cancellation-t2", "2026-06-11T00:00:00.000Z");
+		const olderCancellation = await applyStarterGrant(env, "evt-cancellation-t2", {
+			nextBillingAt: "2026-06-20T00:00:00.000Z",
+			status: "cancellation_scheduled",
+			grantedAt: "2026-06-11T00:00:00.000Z",
+		});
 
-    expect(olderCancellation.changed).toBe(false);
-    const row = harness.sqlite
-      .prepare(
-        `SELECT plan, dodo_status, dodo_next_billing_at, plan_updated_at
+		expect(olderCancellation.changed).toBe(false);
+		const row = harness.sqlite
+			.prepare(
+				`SELECT plan, dodo_status, dodo_next_billing_at, plan_updated_at
          FROM user_plan WHERE user_id = ?`,
-      )
-      .get("user-1") as {
-      plan: string;
-      dodo_status: string;
-      dodo_next_billing_at: string;
-      plan_updated_at: string;
-    };
-    expect(row).toEqual({
-      plan: "starter",
-      dodo_status: "active",
-      dodo_next_billing_at: "2026-07-20T00:00:00.000Z",
-      plan_updated_at: "2026-06-12T00:00:00.000Z",
-    });
-    expect(effectivePlanFromRow(row)).toBe("starter");
-  });
+			)
+			.get("user-1") as {
+			plan: string;
+			dodo_status: string;
+			dodo_next_billing_at: string;
+			plan_updated_at: string;
+		};
+		expect(row).toEqual({
+			plan: "starter",
+			dodo_status: "active",
+			dodo_next_billing_at: "2026-07-20T00:00:00.000Z",
+			plan_updated_at: "2026-06-12T00:00:00.000Z",
+		});
+		expect(effectivePlanFromRow(row)).toBe("starter");
+	});
 
-  it("does not watermark an active row when reversal provider identity mismatches", async () => {
-    const env = openEnv();
-    const harness = fixtures[0]!;
+	it("does not watermark an active row when reversal provider identity mismatches", async () => {
+		const env = openEnv();
+		const harness = fixtures[0]!;
 
-    await applyStarterGrant(env, "evt-active-mismatch-base");
-    await beginSubEvent(env, "evt-reversal-mismatch", "2026-06-12T00:00:00.000Z");
-    const reversal = await reverseStarter(env, "evt-reversal-mismatch", {
-      providerProductId: "prod_other",
-      grantedAt: "2026-06-12T00:00:00.000Z",
-    });
+		await applyStarterGrant(env, "evt-active-mismatch-base");
+		await beginSubEvent(env, "evt-reversal-mismatch", "2026-06-12T00:00:00.000Z");
+		const reversal = await reverseStarter(env, "evt-reversal-mismatch", {
+			providerProductId: "prod_other",
+			grantedAt: "2026-06-12T00:00:00.000Z",
+		});
 
-    expect(reversal.changed).toBe(false);
-    expect(
-      harness.sqlite.prepare("SELECT dodo_status, plan_updated_at FROM user_plan WHERE user_id = ?").get("user-1"),
-    ).toEqual({ dodo_status: "active", plan_updated_at: "2026-06-10T00:00:00.000Z" });
-  });
+		expect(reversal.changed).toBe(false);
+		expect(
+			harness.sqlite.prepare("SELECT dodo_status, plan_updated_at FROM user_plan WHERE user_id = ?").get("user-1"),
+		).toEqual({ dodo_status: "active", plan_updated_at: "2026-06-10T00:00:00.000Z" });
+	});
 
-  it("preserves an unrelated pending plan target while watermarking an active reversal", async () => {
-    const env = openEnv();
-    const harness = fixtures[0]!;
+	it("preserves an unrelated pending plan target while watermarking an active reversal", async () => {
+		const env = openEnv();
+		const harness = fixtures[0]!;
 
-    await applyStarterGrant(env, "evt-active-pending-target-base");
-    harness.sqlite.exec(
-      "UPDATE user_plan SET dodo_plan_change_product_id = 'prod_agency' WHERE user_id = 'user-1'",
-    );
-    await beginSubEvent(env, "evt-reversal-pending-target", "2026-06-12T00:00:00.000Z");
-    const reversal = await reverseStarter(env, "evt-reversal-pending-target", {
-      grantedAt: "2026-06-12T00:00:00.000Z",
-    });
+		await applyStarterGrant(env, "evt-active-pending-target-base");
+		harness.sqlite.exec(
+			"UPDATE user_plan SET dodo_plan_change_product_id = 'prod_agency' WHERE user_id = 'user-1'",
+		);
+		await beginSubEvent(env, "evt-reversal-pending-target", "2026-06-12T00:00:00.000Z");
+		const reversal = await reverseStarter(env, "evt-reversal-pending-target", {
+			grantedAt: "2026-06-12T00:00:00.000Z",
+		});
 
-    expect(reversal.changed).toBe(true);
-    expect(
-      harness.sqlite
-        .prepare("SELECT dodo_status, dodo_plan_change_product_id, plan_updated_at FROM user_plan WHERE user_id = ?")
-        .get("user-1"),
-    ).toEqual({
-      dodo_status: "active",
-      dodo_plan_change_product_id: "prod_agency",
-      plan_updated_at: "2026-06-12T00:00:00.000Z",
-    });
-  });
+		expect(reversal.changed).toBe(true);
+		expect(
+			harness.sqlite
+				.prepare("SELECT dodo_status, dodo_plan_change_product_id, plan_updated_at FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toEqual({
+			dodo_status: "active",
+			dodo_plan_change_product_id: "prod_agency",
+			plan_updated_at: "2026-06-12T00:00:00.000Z",
+		});
+	});
 
-  it.each(["succeeded", "payment.succeeded"] as const)(
-    "watermarks a newer reversal for paid status %s before an older cancellation",
-    async (paidStatus) => {
-      const env = openEnv();
-      const harness = fixtures[fixtures.length - 1]!;
-      const statusKey = paidStatus.replace(".", "-");
+	it.each(["succeeded", "payment.succeeded"] as const)(
+		"watermarks a newer reversal for paid status %s before an older cancellation",
+		async (paidStatus) => {
+			const env = openEnv();
+			const harness = fixtures[fixtures.length - 1]!;
+			const statusKey = paidStatus.replace(".", "-");
 
-      await applyStarterGrant(env, `evt-${statusKey}-t1`, { status: paidStatus });
-      await beginSubEvent(
-        env,
-        `evt-${statusKey}-t3`,
-        "2026-06-12T00:00:00.000Z",
-      );
-      const reversal = await reverseStarter(env, `evt-${statusKey}-t3`, {
-        grantedAt: "2026-06-12T00:00:00.000Z",
-      });
-      expect(reversal.changed).toBe(true);
+			await applyStarterGrant(env, `evt-${statusKey}-t1`, { status: paidStatus });
+			await beginSubEvent(
+				env,
+				`evt-${statusKey}-t3`,
+				"2026-06-12T00:00:00.000Z",
+			);
+			const reversal = await reverseStarter(env, `evt-${statusKey}-t3`, {
+				grantedAt: "2026-06-12T00:00:00.000Z",
+			});
+			expect(reversal.changed).toBe(true);
 
-      const olderCancellation = await applyStarterGrant(env, `evt-${statusKey}-t2`, {
-        nextBillingAt: "2026-06-20T00:00:00.000Z",
-        status: "cancellation_scheduled",
-        grantedAt: "2026-06-11T00:00:00.000Z",
-      });
-      expect(olderCancellation.changed).toBe(false);
+			const olderCancellation = await applyStarterGrant(env, `evt-${statusKey}-t2`, {
+				nextBillingAt: "2026-06-20T00:00:00.000Z",
+				status: "cancellation_scheduled",
+				grantedAt: "2026-06-11T00:00:00.000Z",
+			});
+			expect(olderCancellation.changed).toBe(false);
 
-      const row = harness.sqlite
-        .prepare("SELECT plan, dodo_status, dodo_next_billing_at, plan_updated_at FROM user_plan WHERE user_id = ?")
-        .get("user-1") as {
-        plan: string;
-        dodo_status: string;
-        dodo_next_billing_at: string;
-        plan_updated_at: string;
-      };
-      expect(row).toEqual({
-        plan: "starter",
-        dodo_status: paidStatus,
-        dodo_next_billing_at: "2026-07-20T00:00:00.000Z",
-        plan_updated_at: "2026-06-12T00:00:00.000Z",
-      });
-      expect(effectivePlanFromRow(row)).toBe("starter");
-    },
-  );
+			const row = harness.sqlite
+				.prepare("SELECT plan, dodo_status, dodo_next_billing_at, plan_updated_at FROM user_plan WHERE user_id = ?")
+				.get("user-1") as {
+				plan: string;
+				dodo_status: string;
+				dodo_next_billing_at: string;
+				plan_updated_at: string;
+			};
+			expect(row).toEqual({
+				plan: "starter",
+				dodo_status: paidStatus,
+				dodo_next_billing_at: "2026-07-20T00:00:00.000Z",
+				plan_updated_at: "2026-06-12T00:00:00.000Z",
+			});
+			expect(effectivePlanFromRow(row)).toBe("starter");
+		},
+	);
 
   it("applies matching plan-change confirmations older than the local claim time", async () => {
     const env = openEnv();
@@ -935,48 +935,83 @@ describe("Dodo billing atomicity (sqlite)", () => {
     expect(ledger.outcome).toBe("processed");
   });
 
-  it("reports a second terminal lifecycle event as unchanged once the workspace is already free", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("reports a second terminal lifecycle event as unchanged once the workspace is already free", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
       ) VALUES ('user-1', 'free', 'pay-1', 'refunded', '2026-07-01T00:00:00.000Z');
     `);
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-terminal-after-refund",
-      eventType: "subscription.cancelled",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-terminal-after-refund",
+			eventType: "subscription.cancelled",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
 
-    const result = await applyDodoPlanRevokeWithWatchlistReconcile(
-      env,
-      {
-        userId: "user-1",
-        providerSubscriptionId: "sub-1",
-        status: "subscription.cancelled",
-        revokedAt: "2026-07-02T00:00:00.000Z",
-      },
-      0,
-      {
-        eventId: "evt-terminal-after-refund",
-        outcome: "processed",
-        metadata: { action: "revoke" },
-      },
-    );
+		const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+			env,
+			{
+				userId: "user-1",
+				providerSubscriptionId: "sub-1",
+				status: "subscription.cancelled",
+				revokedAt: "2026-07-02T00:00:00.000Z",
+			},
+			0,
+			{
+				eventId: "evt-terminal-after-refund",
+				outcome: "processed",
+				metadata: { action: "revoke" },
+			},
+		);
 
-    expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
-        .get("user-1"),
-    ).toMatchObject({ plan: "free", dodo_status: "refunded" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
-        .get("evt-terminal-after-refund"),
-    ).toMatchObject({ outcome: "processed" });
-  });
+		expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT plan, dodo_status, plan_updated_at FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toMatchObject({ plan: "free", dodo_status: "refunded", plan_updated_at: "2026-07-02T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+				.get("evt-terminal-after-refund"),
+		).toMatchObject({ outcome: "processed" });
+	});
+
+	it("advances a sticky terminal watermark so only a genuinely newer grant can reactivate", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
+      INSERT INTO user_plan (user_id, plan, dodo_payment_id, dodo_status, plan_updated_at)
+      VALUES ('user-1', 'starter', 'pay-1', 'active', '2026-06-01T00:00:00.000Z');
+    `);
+		const revoke = async (eventId: string, status: string, at: string, withOutbox = false) => {
+			await beginDodoWebhookEventProcessing(env, { eventId, eventType: status, userId: "user-1", payloadTimestamp: null });
+			return applyDodoPlanRevokeWithWatchlistReconcile(
+				env, { userId: "user-1", providerSubscriptionId: "sub-1", status, revokedAt: at }, 0,
+				{ eventId, outcome: "processed", metadata: { action: "revoke" } },
+				withOutbox ? { lifecycleEmailOutbox: lifecycleOutboxSpec(`billing-cancellation:user-1:${eventId}`) } : {},
+			);
+		};
+		const grant = async (eventId: string, at: string) => {
+			await beginDodoWebhookEventProcessing(env, { eventId, eventType: "subscription.renewed", userId: "user-1", payloadTimestamp: null });
+			return applyDodoPlanGrantWithWatchlistReconcile(env, starterGrant({ grantedAt: at }), 2, processedLedger(eventId));
+		};
+
+		expect(await revoke("evt-terminal-t1", "subscription.cancelled", "2026-07-01T00:00:00.000Z")).toMatchObject({ changed: true });
+		expect(await revoke("evt-terminal-t3", "subscription.expired", "2026-07-03T00:00:00.000Z", true)).toMatchObject({ changed: false });
+		expect(await grant("evt-delayed-t2", "2026-07-02T00:00:00.000Z")).toEqual({ changed: false });
+		expect(fixtures[0]!.sqlite.prepare("SELECT plan, dodo_status, plan_updated_at FROM user_plan WHERE user_id = 'user-1'").get()).toEqual({
+			plan: "free", dodo_status: "subscription.cancelled", plan_updated_at: "2026-07-03T00:00:00.000Z",
+		});
+		expect(fixtures[0]!.sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist WHERE is_active = 1").get()).toEqual({ count: 0 });
+		expect(fixtures[0]!.sqlite.prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = 'billing-cancellation:user-1:evt-terminal-t3'").get()).toEqual({ count: 0 });
+
+		expect(await grant("evt-new-t4", "2026-07-04T00:00:00.000Z")).toEqual({ changed: true });
+		expect(fixtures[0]!.sqlite.prepare("SELECT plan, dodo_status, plan_updated_at FROM user_plan WHERE user_id = 'user-1'").get()).toEqual({
+			plan: "starter", dodo_status: "active", plan_updated_at: "2026-07-04T00:00:00.000Z",
+		});
+		expect(fixtures[0]!.sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist WHERE is_active = 1").get()).toEqual({ count: 2 });
+	});
 
   it("refunds payment access and reconciles watchlists atomically", async () => {
     const env = openEnv();
@@ -1020,47 +1055,47 @@ describe("Dodo billing atomicity (sqlite)", () => {
     expect(activeCount.count).toBe(0);
   });
 
-  it("reports refund reconciliation unchanged when an earlier terminal event already made the plan free", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("reports refund reconciliation unchanged when an earlier terminal event already made the plan free", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
       ) VALUES ('user-1', 'free', 'pay-refund', 'subscription.cancelled', '2026-07-01T00:00:00.000Z');
     `);
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-refund-after-cancel",
-      eventType: "refund.succeeded",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-refund-after-cancel",
+			eventType: "refund.succeeded",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
 
-    const result = await applyDodoRefundWithWatchlistReconcile(
-      env,
-      {
-        paymentId: "pay-refund",
-        refundedAt: "2026-07-02T00:00:00.000Z",
-        userId: "user-1",
-      },
-      0,
-      {
-        eventId: "evt-refund-after-cancel",
-        outcome: "processed",
-        metadata: { action: "refund" },
-      },
-    );
+		const result = await applyDodoRefundWithWatchlistReconcile(
+			env,
+			{
+				paymentId: "pay-refund",
+				refundedAt: "2026-07-02T00:00:00.000Z",
+				userId: "user-1",
+			},
+			0,
+			{
+				eventId: "evt-refund-after-cancel",
+				outcome: "processed",
+				metadata: { action: "refund" },
+			},
+		);
 
-    expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
-        .get("user-1"),
-    ).toMatchObject({ plan: "free", dodo_status: "refunded" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
-        .get("evt-refund-after-cancel"),
-    ).toMatchObject({ outcome: "processed" });
-  });
+		expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT plan, dodo_status, plan_updated_at FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toMatchObject({ plan: "free", dodo_status: "refunded", plan_updated_at: "2026-07-02T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+				.get("evt-refund-after-cancel"),
+		).toMatchObject({ outcome: "processed" });
+	});
 
   it("reclaims a stale processing lease after a crash", async () => {
     const env = openEnv();
@@ -1123,262 +1158,262 @@ describe("Dodo billing atomicity (sqlite)", () => {
     expect(second).toEqual({ status: "claimed" });
   });
 
-  it("reclaims a processed webhook specifically for a failed lifecycle email retry", async () => {
-    const env = openEnv();
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-lifecycle-email-retry",
-      eventType: "subscription.on_hold",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
-    await finalizeDodoWebhookLedgerOnly(env, {
-      eventId: "evt-lifecycle-email-retry",
-      outcome: "processed",
-      metadata: { action: "payment_issue" },
-    });
+	it("reclaims a processed webhook specifically for a failed lifecycle email retry", async () => {
+		const env = openEnv();
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-lifecycle-email-retry",
+			eventType: "subscription.on_hold",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+		await finalizeDodoWebhookLedgerOnly(env, {
+			eventId: "evt-lifecycle-email-retry",
+			outcome: "processed",
+			metadata: { action: "payment_issue" },
+		});
 
-    await expect(
-      failDodoWebhookEventForLifecycleEmailRetry(env, "evt-lifecycle-email-retry", {
-        kind: "payment_issue",
-        userId: "user-1",
-        idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
-        error: "Cloudflare Email send failed: rejected.",
-      }),
-    ).resolves.toBe(true);
+		await expect(
+			failDodoWebhookEventForLifecycleEmailRetry(env, "evt-lifecycle-email-retry", {
+				kind: "payment_issue",
+				userId: "user-1",
+				idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
+				error: "Cloudflare Email send failed: rejected.",
+			}),
+		).resolves.toBe(true);
 
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT outcome, processed_at, metadata_json FROM dodo_webhook_event WHERE event_id = ?")
-        .get("evt-lifecycle-email-retry"),
-    ).toMatchObject({
-      outcome: "failed",
-      processed_at: null,
-      metadata_json: expect.stringContaining('"action":"lifecycle_email_retry"'),
-    });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT outcome, processed_at, metadata_json FROM dodo_webhook_event WHERE event_id = ?")
+				.get("evt-lifecycle-email-retry"),
+		).toMatchObject({
+			outcome: "failed",
+			processed_at: null,
+			metadata_json: expect.stringContaining('"action":"lifecycle_email_retry"'),
+		});
 
-    await expect(
-      beginDodoWebhookEventProcessing(env, {
-        eventId: "evt-lifecycle-email-retry",
-        eventType: "subscription.on_hold",
-        userId: "user-1",
-        payloadTimestamp: null,
-      }),
-    ).resolves.toEqual({
-      status: "claimed",
-      lifecycleEmailRetry: {
-        kind: "payment_issue",
-        userId: "user-1",
-        idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
-      },
-    });
-  });
+		await expect(
+			beginDodoWebhookEventProcessing(env, {
+				eventId: "evt-lifecycle-email-retry",
+				eventType: "subscription.on_hold",
+				userId: "user-1",
+				payloadTimestamp: null,
+			}),
+		).resolves.toEqual({
+			status: "claimed",
+			lifecycleEmailRetry: {
+				kind: "payment_issue",
+				userId: "user-1",
+				idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
+			},
+		});
+	});
 
-  it("re-arms a lifecycle email retry when the retry run finalized the ledger as ignored", async () => {
-    const env = openEnv();
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-retry-from-ignored",
-      eventType: "subscription.plan_changed",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
-    await finalizeDodoWebhookLedgerOnly(env, {
-      eventId: "evt-retry-from-ignored",
-      outcome: "ignored",
-      metadata: { ignoredReason: "plan_change_guard_mismatch" },
-    });
+	it("re-arms a lifecycle email retry when the retry run finalized the ledger as ignored", async () => {
+		const env = openEnv();
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-retry-from-ignored",
+			eventType: "subscription.plan_changed",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+		await finalizeDodoWebhookLedgerOnly(env, {
+			eventId: "evt-retry-from-ignored",
+			outcome: "ignored",
+			metadata: { ignoredReason: "plan_change_guard_mismatch" },
+		});
 
-    await expect(
-      failDodoWebhookEventForLifecycleEmailRetry(env, "evt-retry-from-ignored", {
-        kind: "cancellation_scheduled",
-        userId: "user-1",
-        idempotencyKey: "billing-cancellation:user-1:evt-retry-from-ignored",
-        error: "Cloudflare Email send failed: rejected.",
-      }),
-    ).resolves.toBe(true);
+		await expect(
+			failDodoWebhookEventForLifecycleEmailRetry(env, "evt-retry-from-ignored", {
+				kind: "cancellation_scheduled",
+				userId: "user-1",
+				idempotencyKey: "billing-cancellation:user-1:evt-retry-from-ignored",
+				error: "Cloudflare Email send failed: rejected.",
+			}),
+		).resolves.toBe(true);
 
-    await expect(
-      beginDodoWebhookEventProcessing(env, {
-        eventId: "evt-retry-from-ignored",
-        eventType: "subscription.plan_changed",
-        userId: "user-1",
-        payloadTimestamp: null,
-      }),
-    ).resolves.toEqual({
-      status: "claimed",
-      lifecycleEmailRetry: {
-        kind: "cancellation_scheduled",
-        userId: "user-1",
-        idempotencyKey: "billing-cancellation:user-1:evt-retry-from-ignored",
-      },
-    });
-  });
+		await expect(
+			beginDodoWebhookEventProcessing(env, {
+				eventId: "evt-retry-from-ignored",
+				eventType: "subscription.plan_changed",
+				userId: "user-1",
+				payloadTimestamp: null,
+			}),
+		).resolves.toEqual({
+			status: "claimed",
+			lifecycleEmailRetry: {
+				kind: "cancellation_scheduled",
+				userId: "user-1",
+				idempotencyKey: "billing-cancellation:user-1:evt-retry-from-ignored",
+			},
+		});
+	});
 
-  it("keeps an armed lifecycle email retry across a crashed redelivery lease", async () => {
-    const env = openEnv();
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-retry-crash",
-      eventType: "subscription.on_hold",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
-    await finalizeDodoWebhookLedgerOnly(env, {
-      eventId: "evt-retry-crash",
-      outcome: "processed",
-      metadata: { action: "payment_issue" },
-    });
-    await failDodoWebhookEventForLifecycleEmailRetry(env, "evt-retry-crash", {
-      kind: "payment_issue",
-      userId: "user-1",
-      idempotencyKey: "billing-payment-issue:user-1:2026-07-13",
-      error: "Cloudflare Email send failed: rejected.",
-    });
+	it("keeps an armed lifecycle email retry across a crashed redelivery lease", async () => {
+		const env = openEnv();
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-retry-crash",
+			eventType: "subscription.on_hold",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+		await finalizeDodoWebhookLedgerOnly(env, {
+			eventId: "evt-retry-crash",
+			outcome: "processed",
+			metadata: { action: "payment_issue" },
+		});
+		await failDodoWebhookEventForLifecycleEmailRetry(env, "evt-retry-crash", {
+			kind: "payment_issue",
+			userId: "user-1",
+			idempotencyKey: "billing-payment-issue:user-1:2026-07-13",
+			error: "Cloudflare Email send failed: rejected.",
+		});
 
-    const redelivery = await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-retry-crash",
-      eventType: "subscription.on_hold",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
-    expect(redelivery.status).toBe("claimed");
+		const redelivery = await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-retry-crash",
+			eventType: "subscription.on_hold",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+		expect(redelivery.status).toBe("claimed");
 
-    const staleStartedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    fixtures[0]!.sqlite
-      .prepare(
-        "UPDATE dodo_webhook_event SET processing_started_at = ? WHERE event_id = ?",
-      )
-      .run(staleStartedAt, "evt-retry-crash");
+		const staleStartedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+		fixtures[0]!.sqlite
+			.prepare(
+				"UPDATE dodo_webhook_event SET processing_started_at = ? WHERE event_id = ?",
+			)
+			.run(staleStartedAt, "evt-retry-crash");
 
-    await expect(
-      beginDodoWebhookEventProcessing(env, {
-        eventId: "evt-retry-crash",
-        eventType: "subscription.on_hold",
-        userId: "user-1",
-        payloadTimestamp: null,
-      }),
-    ).resolves.toEqual({
-      status: "claimed",
-      lifecycleEmailRetry: {
-        kind: "payment_issue",
-        userId: "user-1",
-        idempotencyKey: "billing-payment-issue:user-1:2026-07-13",
-      },
-    });
-  });
+		await expect(
+			beginDodoWebhookEventProcessing(env, {
+				eventId: "evt-retry-crash",
+				eventType: "subscription.on_hold",
+				userId: "user-1",
+				payloadTimestamp: null,
+			}),
+		).resolves.toEqual({
+			status: "claimed",
+			lifecycleEmailRetry: {
+				kind: "payment_issue",
+				userId: "user-1",
+				idempotencyKey: "billing-payment-issue:user-1:2026-07-13",
+			},
+		});
+	});
 
-  function lifecycleOutboxSpec(idempotencyKey: string, templateName = "billing_access_ended") {
-    return {
-      userId: "user-1",
-      email: "owner@example.com",
-      idempotencyKey,
-      templateName,
-      payloadSnapshot: {
-        kind: templateName,
-        subject: "Your Five to Nine plan has ended",
-        bodyHtml: "<p>ended</p>",
-        tag: "billing-cancellation",
-        billingStateFingerprint: null,
-        outboxPendingDispatch: true,
-      },
-    };
-  }
+	function lifecycleOutboxSpec(idempotencyKey: string, templateName = "billing_access_ended") {
+		return {
+			userId: "user-1",
+			email: "owner@example.com",
+			idempotencyKey,
+			templateName,
+			payloadSnapshot: {
+				kind: templateName,
+				subject: "Your Five to Nine plan has ended",
+				bodyHtml: "<p>ended</p>",
+				tag: "billing-cancellation",
+				billingStateFingerprint: null,
+				outboxPendingDispatch: true,
+			},
+		};
+	}
 
-  it("enqueues the lifecycle email outbox row atomically with a revoke", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("enqueues the lifecycle email outbox row atomically with a revoke", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
       ) VALUES ('user-1', 'starter', 'pay-1', 'active', '2026-06-01T00:00:00.000Z');
     `);
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-revoke-outbox",
-      eventType: "subscription.expired",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-revoke-outbox",
+			eventType: "subscription.expired",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
 
-    const result = await applyDodoPlanRevokeWithWatchlistReconcile(
-      env,
-      {
-        userId: "user-1",
-        providerSubscriptionId: "sub-1",
-        status: "subscription.expired",
-        revokedAt: "2026-07-01T00:00:00.000Z",
-      },
-      0,
-      { eventId: "evt-revoke-outbox", outcome: "processed", metadata: { action: "revoke" } },
-      { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-outbox") },
-    );
+		const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+			env,
+			{
+				userId: "user-1",
+				providerSubscriptionId: "sub-1",
+				status: "subscription.expired",
+				revokedAt: "2026-07-01T00:00:00.000Z",
+			},
+			0,
+			{ eventId: "evt-revoke-outbox", outcome: "processed", metadata: { action: "revoke" } },
+			{ lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-outbox") },
+		);
 
-    expect(result).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
-    const outboxRow = fixtures[0]!.sqlite
-      .prepare(
-        "SELECT status, webhook_status, target_value, template_name, lane, channel, payload_snapshot_json FROM delivery_attempt WHERE idempotency_key = ?",
-      )
-      .get("billing-cancellation:user-1:evt-revoke-outbox") as Record<string, string>;
-    expect(outboxRow).toMatchObject({
-      status: "pending",
-      webhook_status: "pending",
-      target_value: "owner@example.com",
-      template_name: "billing_access_ended",
-      lane: "customer",
-      channel: "email",
-    });
-    expect(JSON.parse(outboxRow.payload_snapshot_json)).toMatchObject({
-      outboxPendingDispatch: true,
-      billingMutationStatus: "subscription.expired",
-      billingMutationSubscriptionId: "sub-1",
-      billingMutationStateUpdatedAt: "2026-07-01T00:00:00.000Z",
-    });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
-        .get("evt-revoke-outbox"),
-    ).toMatchObject({ outcome: "processed" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")
-        .get("user-1"),
-    ).toMatchObject({ count: 0 });
-  });
+		expect(result).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
+		const outboxRow = fixtures[0]!.sqlite
+			.prepare(
+				"SELECT status, webhook_status, target_value, template_name, lane, channel, payload_snapshot_json FROM delivery_attempt WHERE idempotency_key = ?",
+			)
+			.get("billing-cancellation:user-1:evt-revoke-outbox") as Record<string, string>;
+		expect(outboxRow).toMatchObject({
+			status: "pending",
+			webhook_status: "pending",
+			target_value: "owner@example.com",
+			template_name: "billing_access_ended",
+			lane: "customer",
+			channel: "email",
+		});
+		expect(JSON.parse(outboxRow.payload_snapshot_json)).toMatchObject({
+			outboxPendingDispatch: true,
+			billingMutationStatus: "subscription.expired",
+			billingMutationSubscriptionId: "sub-1",
+			billingMutationStateUpdatedAt: "2026-07-01T00:00:00.000Z",
+		});
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT outcome FROM dodo_webhook_event WHERE event_id = ?")
+				.get("evt-revoke-outbox"),
+		).toMatchObject({ outcome: "processed" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")
+				.get("user-1"),
+		).toMatchObject({ count: 0 });
+	});
 
-  it("does not enqueue the outbox row when the revoke no-ops", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("does not enqueue the outbox row when the revoke no-ops", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
       ) VALUES ('user-1', 'free', 'pay-1', 'refunded', '2026-07-01T00:00:00.000Z');
     `);
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-revoke-noop",
-      eventType: "subscription.cancelled",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-revoke-noop",
+			eventType: "subscription.cancelled",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
 
-    const result = await applyDodoPlanRevokeWithWatchlistReconcile(
-      env,
-      {
-        userId: "user-1",
-        providerSubscriptionId: "sub-1",
-        status: "subscription.cancelled",
-        revokedAt: "2026-07-02T00:00:00.000Z",
-      },
-      0,
-      { eventId: "evt-revoke-noop", outcome: "processed", metadata: { action: "revoke" } },
-      { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-noop") },
-    );
+		const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+			env,
+			{
+				userId: "user-1",
+				providerSubscriptionId: "sub-1",
+				status: "subscription.cancelled",
+				revokedAt: "2026-07-02T00:00:00.000Z",
+			},
+			0,
+			{ eventId: "evt-revoke-noop", outcome: "processed", metadata: { action: "revoke" } },
+			{ lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-noop") },
+		);
 
-    expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT COUNT(*) AS count FROM delivery_attempt")
-        .get(),
-    ).toMatchObject({ count: 0 });
-  });
+		expect(result).toEqual({ changed: false, stateUpdatedAt: "2026-07-02T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT COUNT(*) AS count FROM delivery_attempt")
+				.get(),
+		).toMatchObject({ count: 0 });
+	});
 
-  it("never aborts the batch when the outbox idempotency key already exists", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("never aborts the batch when the outbox idempotency key already exists", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
       ) VALUES ('user-1', 'starter', 'pay-1', 'active', '2026-06-01T00:00:00.000Z');
@@ -1391,102 +1426,102 @@ describe("Dodo billing atomicity (sqlite)", () => {
         'billing-cancellation:user-1:evt-revoke-dup', '2026-06-30T00:00:00.000Z', '2026-06-30T00:00:00.000Z'
       );
     `);
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-revoke-dup",
-      eventType: "subscription.expired",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-revoke-dup",
+			eventType: "subscription.expired",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
 
-    const result = await applyDodoPlanRevokeWithWatchlistReconcile(
-      env,
-      {
-        userId: "user-1",
-        providerSubscriptionId: "sub-1",
-        status: "subscription.expired",
-        revokedAt: "2026-07-01T00:00:00.000Z",
-      },
-      0,
-      { eventId: "evt-revoke-dup", outcome: "processed", metadata: { action: "revoke" } },
-      { lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-dup") },
-    );
+		const result = await applyDodoPlanRevokeWithWatchlistReconcile(
+			env,
+			{
+				userId: "user-1",
+				providerSubscriptionId: "sub-1",
+				status: "subscription.expired",
+				revokedAt: "2026-07-01T00:00:00.000Z",
+			},
+			0,
+			{ eventId: "evt-revoke-dup", outcome: "processed", metadata: { action: "revoke" } },
+			{ lifecycleEmailOutbox: lifecycleOutboxSpec("billing-cancellation:user-1:evt-revoke-dup") },
+		);
 
-    expect(result).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT plan FROM user_plan WHERE user_id = ?")
-        .get("user-1"),
-    ).toMatchObject({ plan: "free" });
-    const rows = fixtures[0]!.sqlite
-      .prepare("SELECT id, status FROM delivery_attempt WHERE idempotency_key = ?")
-      .all("billing-cancellation:user-1:evt-revoke-dup") as Array<Record<string, string>>;
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ id: "attempt-existing", status: "failed" });
-  });
+		expect(result).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT plan FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toMatchObject({ plan: "free" });
+		const rows = fixtures[0]!.sqlite
+			.prepare("SELECT id, status FROM delivery_attempt WHERE idempotency_key = ?")
+			.all("billing-cancellation:user-1:evt-revoke-dup") as Array<Record<string, string>>;
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ id: "attempt-existing", status: "failed" });
+	});
 
-  it("enqueues the outbox row for a payment issue only when the status update applies", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("enqueues the outbox row for a payment issue only when the status update applies", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
       ) VALUES ('user-1', 'starter', 'pay-1', 'active', '2026-06-01T00:00:00.000Z');
     `);
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-dunning-1",
-      eventType: "payment.failed",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
-    const applied = await applyDodoPlanPaymentIssueWithLedger(
-      env,
-      { userId: "user-1", status: "payment.failed", occurredAt: "2026-07-01T00:00:00.000Z", providerPaymentId: "pay-1" },
-      { eventId: "evt-dunning-1", outcome: "processed", metadata: { action: "payment_issue" } },
-      {
-        lifecycleEmailOutbox: lifecycleOutboxSpec(
-          "billing-payment-issue:user-1:2026-07-01",
-          "billing_payment_issue",
-        ),
-      },
-    );
-    expect(applied).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
-    const dunningOutbox = fixtures[0]!.sqlite
-      .prepare("SELECT payload_snapshot_json FROM delivery_attempt WHERE idempotency_key = ?")
-      .get("billing-payment-issue:user-1:2026-07-01") as { payload_snapshot_json: string };
-    expect(JSON.parse(dunningOutbox.payload_snapshot_json)).toMatchObject({
-      billingMutationStatus: "payment.failed",
-      billingMutationSubscriptionId: null,
-      billingMutationPaymentId: "pay-1",
-      billingMutationStateUpdatedAt: "2026-07-01T00:00:00.000Z",
-    });
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-dunning-1",
+			eventType: "payment.failed",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+		const applied = await applyDodoPlanPaymentIssueWithLedger(
+			env,
+			{ userId: "user-1", status: "payment.failed", occurredAt: "2026-07-01T00:00:00.000Z", providerPaymentId: "pay-1" },
+			{ eventId: "evt-dunning-1", outcome: "processed", metadata: { action: "payment_issue" } },
+			{
+				lifecycleEmailOutbox: lifecycleOutboxSpec(
+					"billing-payment-issue:user-1:2026-07-01",
+					"billing_payment_issue",
+				),
+			},
+		);
+		expect(applied).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
+		const dunningOutbox = fixtures[0]!.sqlite
+			.prepare("SELECT payload_snapshot_json FROM delivery_attempt WHERE idempotency_key = ?")
+			.get("billing-payment-issue:user-1:2026-07-01") as { payload_snapshot_json: string };
+		expect(JSON.parse(dunningOutbox.payload_snapshot_json)).toMatchObject({
+			billingMutationStatus: "payment.failed",
+			billingMutationSubscriptionId: null,
+			billingMutationPaymentId: "pay-1",
+			billingMutationStateUpdatedAt: "2026-07-01T00:00:00.000Z",
+		});
 
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-dunning-stale",
-      eventType: "payment.failed",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
-    const stale = await applyDodoPlanPaymentIssueWithLedger(
-      env,
-      { userId: "user-1", status: "payment.failed", occurredAt: "2026-06-15T00:00:00.000Z" },
-      { eventId: "evt-dunning-stale", outcome: "processed", metadata: { action: "payment_issue" } },
-      {
-        lifecycleEmailOutbox: lifecycleOutboxSpec(
-          "billing-payment-issue:user-1:2026-06-15",
-          "billing_payment_issue",
-        ),
-      },
-    );
-    expect(stale).toEqual({ changed: false, stateUpdatedAt: "2026-06-15T00:00:00.000Z" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
-        .get("billing-payment-issue:user-1:2026-06-15"),
-    ).toMatchObject({ count: 0 });
-  });
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-dunning-stale",
+			eventType: "payment.failed",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+		const stale = await applyDodoPlanPaymentIssueWithLedger(
+			env,
+			{ userId: "user-1", status: "payment.failed", occurredAt: "2026-06-15T00:00:00.000Z" },
+			{ eventId: "evt-dunning-stale", outcome: "processed", metadata: { action: "payment_issue" } },
+			{
+				lifecycleEmailOutbox: lifecycleOutboxSpec(
+					"billing-payment-issue:user-1:2026-06-15",
+					"billing_payment_issue",
+				),
+			},
+		);
+		expect(stale).toEqual({ changed: false, stateUpdatedAt: "2026-06-15T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
+				.get("billing-payment-issue:user-1:2026-06-15"),
+		).toMatchObject({ count: 0 });
+	});
 
-  it("enqueues the outbox row when the scheduled cancellation matches the stored provider identity", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("enqueues the outbox row when the scheduled cancellation matches the stored provider identity", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_product_id, dodo_subscription_id, dodo_customer_id,
         dodo_status, plan_updated_at
@@ -1495,46 +1530,46 @@ describe("Dodo billing atomicity (sqlite)", () => {
         'active', '2026-06-01T00:00:00.000Z'
       );
     `);
-    await beginSubEvent(env, "evt-cancel-sched-outbox", null);
-    const applied = await applyStarterGrant(
-      env,
-      "evt-cancel-sched-outbox",
-      {
-        providerProductId: "prod-starter",
-        status: "cancellation_scheduled",
-        grantedAt: "2026-07-13T00:00:00.000Z",
-        requireProviderIdentityMatch: true,
-      },
-      3,
-      {
-        lifecycleEmailOutbox: lifecycleOutboxSpec(
-          "billing-cancellation:user-1:evt-cancel-sched-outbox",
-          "billing_cancellation_scheduled",
-        ),
-      },
-    );
+		await beginSubEvent(env, "evt-cancel-sched-outbox", null);
+		const applied = await applyStarterGrant(
+			env,
+			"evt-cancel-sched-outbox",
+			{
+				providerProductId: "prod-starter",
+				status: "cancellation_scheduled",
+				grantedAt: "2026-07-13T00:00:00.000Z",
+				requireProviderIdentityMatch: true,
+			},
+			3,
+			{
+				lifecycleEmailOutbox: lifecycleOutboxSpec(
+					"billing-cancellation:user-1:evt-cancel-sched-outbox",
+					"billing_cancellation_scheduled",
+				),
+			},
+		);
 
-    expect(applied).toEqual({ changed: true });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT dodo_status FROM user_plan WHERE user_id = ?")
-        .get("user-1"),
-    ).toMatchObject({ dodo_status: "cancellation_scheduled" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT status FROM delivery_attempt WHERE idempotency_key = ?")
-        .get("billing-cancellation:user-1:evt-cancel-sched-outbox"),
-    ).toMatchObject({ status: "pending" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")
-        .get("user-1"),
-    ).toMatchObject({ count: 3 });
-  });
+		expect(applied).toEqual({ changed: true });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT dodo_status FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toMatchObject({ dodo_status: "cancellation_scheduled" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT status FROM delivery_attempt WHERE idempotency_key = ?")
+				.get("billing-cancellation:user-1:evt-cancel-sched-outbox"),
+		).toMatchObject({ status: "pending" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT COUNT(*) AS count FROM watchlist WHERE user_id = ? AND is_active = 1")
+				.get("user-1"),
+		).toMatchObject({ count: 3 });
+	});
 
-  it("rejects a newer scheduled cancellation from a replaced subscription without enqueueing email", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("rejects a newer scheduled cancellation from a replaced subscription without enqueueing email", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_product_id, dodo_subscription_id, dodo_customer_id,
         dodo_next_billing_at, dodo_status, plan_updated_at
@@ -1543,96 +1578,96 @@ describe("Dodo billing atomicity (sqlite)", () => {
         '2026-08-20T00:00:00.000Z', 'active', '2026-07-10T00:00:00.000Z'
       );
     `);
-    await beginSubEvent(
-      env,
-      "evt-stale-subscription-cancel",
-      "2026-07-14T00:00:00.000Z",
-    );
-    const applied = await applyStarterGrant(
-      env,
-      "evt-stale-subscription-cancel",
-      {
-        providerProductId: "prod-starter",
-        providerSubscriptionId: "sub-replaced",
-        providerCustomerId: "cus-replaced",
-        nextBillingAt: "2026-08-01T00:00:00.000Z",
-        status: "cancellation_scheduled",
-        grantedAt: "2026-07-14T00:00:00.000Z",
-        requireProviderIdentityMatch: true,
-      },
-      3,
-      {
-        lifecycleEmailOutbox: lifecycleOutboxSpec(
-          "billing-cancellation:user-1:evt-stale-subscription-cancel",
-          "billing_cancellation_scheduled",
-        ),
-      },
-    );
+		await beginSubEvent(
+			env,
+			"evt-stale-subscription-cancel",
+			"2026-07-14T00:00:00.000Z",
+		);
+		const applied = await applyStarterGrant(
+			env,
+			"evt-stale-subscription-cancel",
+			{
+				providerProductId: "prod-starter",
+				providerSubscriptionId: "sub-replaced",
+				providerCustomerId: "cus-replaced",
+				nextBillingAt: "2026-08-01T00:00:00.000Z",
+				status: "cancellation_scheduled",
+				grantedAt: "2026-07-14T00:00:00.000Z",
+				requireProviderIdentityMatch: true,
+			},
+			3,
+			{
+				lifecycleEmailOutbox: lifecycleOutboxSpec(
+					"billing-cancellation:user-1:evt-stale-subscription-cancel",
+					"billing_cancellation_scheduled",
+				),
+			},
+		);
 
-    expect(applied).toEqual({ changed: false });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare(`
+		expect(applied).toEqual({ changed: false });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare(`
           SELECT plan, dodo_product_id, dodo_subscription_id, dodo_customer_id,
                  dodo_next_billing_at, dodo_status, plan_updated_at
           FROM user_plan WHERE user_id = ?
         `)
-        .get("user-1"),
-    ).toEqual({
-      plan: "agency",
-      dodo_product_id: "prod-agency",
-      dodo_subscription_id: "sub-replacement",
-      dodo_customer_id: "cus-replacement",
-      dodo_next_billing_at: "2026-08-20T00:00:00.000Z",
-      dodo_status: "active",
-      plan_updated_at: "2026-07-10T00:00:00.000Z",
-    });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
-        .get("billing-cancellation:user-1:evt-stale-subscription-cancel"),
-    ).toMatchObject({ count: 0 });
-  });
+				.get("user-1"),
+		).toEqual({
+			plan: "agency",
+			dodo_product_id: "prod-agency",
+			dodo_subscription_id: "sub-replacement",
+			dodo_customer_id: "cus-replacement",
+			dodo_next_billing_at: "2026-08-20T00:00:00.000Z",
+			dodo_status: "active",
+			plan_updated_at: "2026-07-10T00:00:00.000Z",
+		});
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT COUNT(*) AS count FROM delivery_attempt WHERE idempotency_key = ?")
+				.get("billing-cancellation:user-1:evt-stale-subscription-cancel"),
+		).toMatchObject({ count: 0 });
+	});
 
-  it("enqueues the outbox row atomically with a refund revoke", async () => {
-    const env = openEnv();
-    fixtures[0]!.sqlite.exec(`
+	it("enqueues the outbox row atomically with a refund revoke", async () => {
+		const env = openEnv();
+		fixtures[0]!.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_payment_id, dodo_status, plan_updated_at
       ) VALUES ('user-1', 'starter', 'pay-refund', 'active', '2026-06-01T00:00:00.000Z');
     `);
-    await beginDodoWebhookEventProcessing(env, {
-      eventId: "evt-refund-outbox",
-      eventType: "refund.succeeded",
-      userId: "user-1",
-      payloadTimestamp: null,
-    });
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-refund-outbox",
+			eventType: "refund.succeeded",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
 
-    const applied = await applyDodoRefundWithWatchlistReconcile(
-      env,
-      { paymentId: "pay-refund", refundedAt: "2026-07-01T00:00:00.000Z", userId: "user-1" },
-      0,
-      { eventId: "evt-refund-outbox", outcome: "processed", metadata: { action: "refund" } },
-      {
-        lifecycleEmailOutbox: lifecycleOutboxSpec(
-          "billing-refund:user-1:evt-refund-outbox",
-          "billing_refund_revoked",
-        ),
-      },
-    );
+		const applied = await applyDodoRefundWithWatchlistReconcile(
+			env,
+			{ paymentId: "pay-refund", refundedAt: "2026-07-01T00:00:00.000Z", userId: "user-1" },
+			0,
+			{ eventId: "evt-refund-outbox", outcome: "processed", metadata: { action: "refund" } },
+			{
+				lifecycleEmailOutbox: lifecycleOutboxSpec(
+					"billing-refund:user-1:evt-refund-outbox",
+					"billing_refund_revoked",
+				),
+			},
+		);
 
-    expect(applied).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
-    expect(
-      fixtures[0]!.sqlite
-        .prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
-        .get("user-1"),
-    ).toMatchObject({ plan: "free", dodo_status: "refunded" });
-    expect(fixtures[0]!.sqlite.prepare(`SELECT status,
+		expect(applied).toEqual({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
+		expect(
+			fixtures[0]!.sqlite
+				.prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?")
+				.get("user-1"),
+		).toMatchObject({ plan: "free", dodo_status: "refunded" });
+		expect(fixtures[0]!.sqlite.prepare(`SELECT status,
       json_extract(payload_snapshot_json, '$.refundPaymentId') AS payment_id,
       json_extract(payload_snapshot_json, '$.refundStateUpdatedAt') AS state_updated_at
       FROM delivery_attempt WHERE idempotency_key = ?`).get("billing-refund:user-1:evt-refund-outbox"))
-      .toMatchObject({ status: "pending", payment_id: "pay-refund", state_updated_at: "2026-07-01T00:00:00.000Z" });
-  });
+			.toMatchObject({ status: "pending", payment_id: "pay-refund", state_updated_at: "2026-07-01T00:00:00.000Z" });
+	});
 });
 
 describe("capacity skip idempotency (sqlite)", () => {
