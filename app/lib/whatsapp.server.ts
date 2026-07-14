@@ -386,7 +386,7 @@ export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppW
             statuses?: Array<{
               id?: string;
               status?: string;
-              timestamp?: string;
+timestamp?: unknown;
               errors?: Array<{ message?: string }>;
             }>;
           };
@@ -403,10 +403,9 @@ export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppW
           continue;
         }
 
-        const mapped = mapWhatsAppStatus(status.status, status.errors?.[0]?.message ?? null);
-        const providerStatusLastSeenAt = status.timestamp
-          ? new Date(Number(status.timestamp) * 1000).toISOString()
-          : new Date().toISOString();
+const providerStatusLastSeenAt = validWhatsAppStatusTimestamp(status.timestamp);
+if (!providerStatusLastSeenAt) continue;
+const mapped = mapWhatsAppStatus(status.status, status.errors?.[0]?.message ?? null);
         const candidate: WhatsAppWebhookStatusUpdate = {
           provider: "whatsapp_cloud_api",
           providerMessageId: status.id,
@@ -418,7 +417,7 @@ export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppW
         };
         const existing = deduped.get(status.id);
 
-				if (!existing || shouldReplaceWhatsAppStatus(existing, candidate)) {
+if (!existing || shouldReplaceWhatsAppStatus(existing, candidate)) {
           deduped.set(status.id, candidate);
         }
       }
@@ -428,6 +427,13 @@ export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppW
   return [...deduped.values()];
 }
 
+function validWhatsAppStatusTimestamp(value: unknown) {
+if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+const seconds = Number(value);
+if (!Number.isSafeInteger(seconds) || seconds < 0) return null;
+const timestamp = new Date(seconds * 1000);
+return Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : null;
+}
 function mapWhatsAppStatus(rawStatus: string | undefined, providerError: string | null) {
   switch ((rawStatus ?? "").toLowerCase()) {
     case "delivered":
@@ -437,12 +443,12 @@ function mapWhatsAppStatus(rawStatus: string | undefined, providerError: string 
         status: "sent" as const,
         errorMessage: null,
       };
-		case "sent":
-			return {
-				webhookStatus: "pending" as const,
-				status: "sent" as const,
-				errorMessage: null,
-			};
+case "sent":
+return {
+webhookStatus: "pending" as const,
+status: "sent" as const,
+errorMessage: null,
+};
     case "failed":
     case "undelivered":
       return {
@@ -584,21 +590,20 @@ function constantTimeHexEqual(left: string, right: string) {
 }
 
 function shouldReplaceWhatsAppStatus(
-	existing: WhatsAppWebhookStatusUpdate,
-	candidate: WhatsAppWebhookStatusUpdate,
+existing: WhatsAppWebhookStatusUpdate,
+candidate: WhatsAppWebhookStatusUpdate,
 ) {
-	const existingTerminal =
-		existing.webhookStatus === "delivered" || existing.webhookStatus === "failed";
-	const candidateSeenAt = Date.parse(candidate.providerStatusLastSeenAt);
-	const existingSeenAt = Date.parse(existing.providerStatusLastSeenAt);
-
-	if (candidateSeenAt < existingSeenAt) {
-		return false;
+const existingTerminal =
+existing.webhookStatus === "delivered" || existing.webhookStatus === "failed";
+const candidateSeenAt = Date.parse(candidate.providerStatusLastSeenAt);
+const existingSeenAt = Date.parse(existing.providerStatusLastSeenAt);
+if (candidateSeenAt < existingSeenAt) {
+return false;
   }
-	if (existingTerminal) {
-		return candidate.webhookStatus === existing.webhookStatus;
+if (existingTerminal) {
+return candidate.webhookStatus === existing.webhookStatus;
   }
-	return true;
+return true;
 }
 
 function normalizeWhatsAppDestinationName(value: string | null | undefined) {

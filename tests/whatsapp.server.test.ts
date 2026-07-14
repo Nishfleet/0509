@@ -8,6 +8,9 @@ const readyEnv = {
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify-token",
 };
 
+function statusPayload(statuses: Array<{ id: string; status: string; timestamp: unknown }>) {
+return { entry: [{ changes: [{ value: { statuses } }] }] };
+}
 beforeEach(() => {
   vi.resetModules();
 });
@@ -27,33 +30,12 @@ describe("WhatsApp delivery helpers", () => {
     expect(() => normalizeWhatsAppRecipient("555")).toThrow(Response);
   });
 
-	it("keeps newer delivered WhatsApp proof over an older failed update in the same payload", async () => {
-    const { extractWhatsAppWebhookStatusUpdates } = await import("~/lib/whatsapp.server");
-
-    const updates = extractWhatsAppWebhookStatusUpdates({
-      entry: [
-        {
-          changes: [
-            {
-              value: {
-                statuses: [
-					{
-					id: "wamid.setup-1",
-					status: "delivered",
-					timestamp: "1780000001",
-					},
-					{
-					id: "wamid.setup-1",
-					status: "failed",
-					timestamp: "1780000000",
-                  },
-                ],
-              },
-            },
-          ],
-        },
-      ],
-    });
+it("keeps newer delivered WhatsApp proof over an older failed update in the same payload", async () => {
+const { extractWhatsAppWebhookStatusUpdates } = await import("~/lib/whatsapp.server");
+const updates = extractWhatsAppWebhookStatusUpdates(statusPayload([
+{ id: "wamid.setup-1", status: "delivered", timestamp: "1780000001" },
+{ id: "wamid.setup-1", status: "failed", timestamp: "1780000000" },
+]));
 
     expect(updates).toHaveLength(1);
     expect(updates[0]).toMatchObject({
@@ -61,8 +43,32 @@ describe("WhatsApp delivery helpers", () => {
       rawProviderStatus: "delivered",
       webhookStatus: "delivered",
       status: "sent",
-    });
-  });
+});
+});
+it.each([
+["missing", undefined], ["nonnumeric", "not-a-time"], ["empty", ""], ["negative", "-1"],
+["unsafe", "9007199254740992"], ["invalid date", "8640000000001"],
+["coerced number", 1713490000],
+])("drops an explicit %s provider timestamp", async (_label, timestamp) => {
+const { extractWhatsAppWebhookStatusUpdates } = await import("~/lib/whatsapp.server");
+expect(extractWhatsAppWebhookStatusUpdates(statusPayload([
+{ id: "wamid.invalid", status: "failed", timestamp },
+]))).toEqual([]);
+});
+it("keeps valid duplicate proof while dropping malformed statuses in the same payload", async () => {
+const { extractWhatsAppWebhookStatusUpdates } = await import("~/lib/whatsapp.server");
+const updates = extractWhatsAppWebhookStatusUpdates(statusPayload([
+{ id: "wamid.same", status: "failed", timestamp: "invalid" },
+{ id: "wamid.same", status: "delivered", timestamp: "1780000001" },
+{ id: "wamid.other", status: "read", timestamp: "1780000002" },
+{ id: "wamid.drop", status: "failed", timestamp: "-1" },
+]));
+expect(updates.map(({ providerMessageId, rawProviderStatus }) =>
+[providerMessageId, rawProviderStatus])).toEqual([
+["wamid.same", "delivered"], ["wamid.other", "read"],
+]);
+expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
+});
 
   it("saves a pending WhatsApp target and records the setup validation attempt", async () => {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
