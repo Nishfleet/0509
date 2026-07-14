@@ -317,6 +317,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
             kind: "scheduled",
             effectiveAt: subscriptionGrant.nextBillingAt,
             eventId,
+            subscriptionId: subscriptionGrant.subscriptionId,
+            stateUpdatedAt: acceptedGrantAt ?? null,
             retryWebhookOnExplicitFailure: true,
           }),
         );

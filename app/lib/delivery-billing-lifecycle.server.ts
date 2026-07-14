@@ -125,6 +125,7 @@ async function sendBillingLifecycleEmail(
     bodyHtml: string;
     tag: string;
     templateName: string;
+    stateExpectation?: ScheduledCancellationStateExpectation | null;
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
@@ -165,11 +166,11 @@ async function sendBillingLifecycleEmail(
   if (
     pendingOutboxDispatch ||
     supersededOutbox ||
-    (duplicate && input.templateName === "billing_cancellation_scheduled")
+    input.templateName === "billing_cancellation_scheduled"
   ) {
-    const stateExpectation = readScheduledCancellationStateExpectation(
-      duplicate?.payloadSnapshot,
-    );
+    const stateExpectation = duplicate
+      ? readScheduledCancellationStateExpectation(duplicate.payloadSnapshot)
+      : input.stateExpectation ?? null;
     const durableKind = pendingOutboxDispatch
       ? readString(duplicate?.payloadSnapshot?.kind)
       : input.templateName;
@@ -206,7 +207,7 @@ async function sendBillingLifecycleEmail(
   const billingStateFingerprint = billingLifecycleStateFingerprint(currentBillingInfo);
   const stateExpectation = duplicate
     ? readScheduledCancellationStateExpectation(duplicate.payloadSnapshot)
-    : null;
+    : input.stateExpectation ?? null;
   const payloadSnapshot = {
     kind: input.templateName,
     subject: input.subject,
@@ -674,6 +675,7 @@ interface BillingLifecycleEmailContent {
   bodyHtml: string;
   tag: string;
   templateName: string;
+  stateExpectation?: ScheduledCancellationStateExpectation | null;
 }
 
 // Dunning: a subscription payment failed and Dodo is retrying. Dodo emits
@@ -719,6 +721,8 @@ function billingCancellationEmailContent(
     kind: "scheduled" | "ended";
     effectiveAt?: string | null;
     eventId: string;
+    subscriptionId?: string | null;
+    stateUpdatedAt?: string | null;
   },
 ): BillingLifecycleEmailContent {
   const billingUrl = `${appBaseUrl(env)}/app/billing`;
@@ -734,6 +738,7 @@ function billingCancellationEmailContent(
       tag: "billing-cancellation",
       subject: "Your Five to Nine cancellation is confirmed",
       templateName: "billing_cancellation_scheduled",
+      stateExpectation: createScheduledCancellationStateExpectation(input),
       bodyHtml: renderBillingEmailHtml({
         name: input.name,
         paragraphs: [
@@ -819,6 +824,8 @@ export async function sendBillingCancellationEmail(
     kind: "scheduled" | "ended";
     effectiveAt?: string | null;
     eventId: string;
+    subscriptionId?: string | null;
+    stateUpdatedAt?: string | null;
     retryWebhookOnExplicitFailure?: boolean;
   },
 ) {
@@ -884,10 +891,7 @@ export function prepareBillingLifecycleEmailOutbox(
         : input.kind === "revoke"
           ? billingCancellationEmailContent(env, { ...input, kind: "ended" })
           : billingRefundEmailContent(env, input);
-  const stateExpectation =
-    input.kind === "cancellation_scheduled"
-      ? createScheduledCancellationStateExpectation(input)
-      : null;
+  const stateExpectation = content.stateExpectation ?? null;
   return {
     userId: input.userId,
     email: input.email,
