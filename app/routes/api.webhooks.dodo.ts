@@ -578,7 +578,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
           ? await getUserPlanBillingInfo(env, refundedUserId)
           : null;
       const shouldRetryRefundEmail =
-        currentRefundState?.plan === "free" && currentRefundState.dodoStatus === "refunded";
+        currentRefundState?.plan === "free" &&
+        currentRefundState.dodoStatus === "refunded" &&
+        currentRefundState.dodoPaymentId === refund.paymentId &&
+        sameBillingInstant(currentRefundState.planUpdatedAt, refund.refundedAt);
       if (
         refundedUserId &&
         (refundApplied?.changed === true || shouldRetryRefundEmail)

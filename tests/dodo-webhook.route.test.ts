@@ -1947,7 +1947,7 @@ describe("customer lifecycle billing emails", () => {
     expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
   });
 
-  it("does not retry a refund email with stale Free-plan copy after a newer purchase", async () => {
+  it("does not retry refund A after a newer purchase and refund B", async () => {
     const { delivery } = mockWebhookDependencies({
       billing: {
         extractDodoRefund: vi.fn(() => ({
@@ -1971,8 +1971,10 @@ describe("customer lifecycle billing emails", () => {
         getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
         applyDodoRefundWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: false }),
         getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-          plan: "starter",
-          dodoStatus: "active",
+          plan: "free",
+          dodoStatus: "refunded",
+          dodoPaymentId: "pay-refund-b",
+          planUpdatedAt: "2026-07-10T00:00:00.000Z",
         }),
       },
     });
@@ -2021,6 +2023,8 @@ describe("customer lifecycle billing emails", () => {
         getUserPlanBillingInfo: vi.fn().mockResolvedValue({
           plan: "free",
           dodoStatus: "refunded",
+          dodoPaymentId: "pay_linked",
+          planUpdatedAt: "2026-07-05T00:00:00.000Z",
         }),
       },
       delivery: { sendBillingRefundEmail },
