@@ -82,6 +82,7 @@ export {
   grantProofUsageCredit,
   grantDodoPlanAccess,
   DODO_WEBHOOK_PROCESSING_LEASE_MS,
+  applyDodoCancellationReversalWithLedger,
   applyDodoPlanGrantWithWatchlistReconcile,
   applyDodoPlanRevokeWithWatchlistReconcile,
   applyDodoRefundWithWatchlistReconcile,

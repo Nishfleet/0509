@@ -336,6 +336,54 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   return { changed: grantChanged };
 }
 
+/**
+ * Reverses a scheduled cancellation after Dodo emits plan_changed with
+ * cancel_at_next_billing_date=false. Live payloads may omit updated_at, so
+ * callers pass the signature-verified webhook timestamp as grantedAt. The
+ * update is a CAS against the cancellation state and provider identities; a
+ * normal plan change cannot use this path unless that exact cancellation row
+ * still exists.
+ */
+export async function applyDodoCancellationReversalWithLedger(
+  env: AppEnv,
+  input: GrantDodoPlanAccessInput,
+  ledger: DodoWebhookLedgerFinalize,
+) {
+  const db = ensureDb(env);
+  const planUpdatedAt = validIsoTimestamp(input.grantedAt);
+  if (!planUpdatedAt) {
+    throw new Error("Cancellation reversal requires a verified webhook timestamp.");
+  }
+  const processedAt = nowIso();
+  const reversal = db.prepare(`
+    UPDATE user_plan
+    SET dodo_status = ?,
+        dodo_next_billing_at = ?,
+        dodo_plan_change_product_id = NULL,
+        plan_updated_at = ?
+    WHERE user_id = ?
+      AND dodo_status = 'cancellation_scheduled'
+      AND dodo_product_id = ?
+      AND dodo_subscription_id = ?
+      AND dodo_customer_id = ?
+      AND julianday(?) >= julianday(plan_updated_at)
+  `).bind(
+    input.status,
+    input.nextBillingAt ?? null,
+    planUpdatedAt,
+    input.userId,
+    input.providerProductId ?? null,
+    input.providerSubscriptionId ?? null,
+    input.providerCustomerId ?? null,
+    planUpdatedAt,
+  );
+  const results = await db.batch([
+    reversal,
+    buildDodoWebhookLedgerFinalizeAfterChangedStatement(db, ledger, processedAt),
+  ]);
+  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
+}
+
 
 export async function applyDodoPlanRevokeWithWatchlistReconcile(
   env: AppEnv,

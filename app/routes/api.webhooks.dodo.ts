@@ -35,6 +35,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     verifyDodoWebhookRequest,
   } = await import("~/lib/dodo-billing.server");
   const {
+    applyDodoCancellationReversalWithLedger,
     applyDodoPlanGrantWithWatchlistReconcile,
     applyDodoPlanPaymentIssueWithLedger,
     applyDodoPlanRevokeWithWatchlistReconcile,
@@ -210,6 +211,45 @@ export async function action({ context, request }: ActionFunctionArgs) {
         planChangedWithoutProviderTimestamp && !cancellationScheduled;
       const allowsPendingPlanChangeTarget =
         planChangedWithoutProviderTimestamp && !cancellationScheduled;
+      if (planChangedWithoutProviderTimestamp && !cancellationScheduled && fallbackGrantAt) {
+        const cancellationReversal = await applyDodoCancellationReversalWithLedger(
+          env,
+          {
+            userId: subscriptionGrant.userId,
+            plan: subscriptionGrant.plan,
+            providerPaymentId: null,
+            providerProductId: subscriptionGrant.productId,
+            providerSubscriptionId: subscriptionGrant.subscriptionId,
+            providerCustomerId: subscriptionGrant.customerId,
+            nextBillingAt: subscriptionGrant.nextBillingAt,
+            status: subscriptionGrant.status,
+            grantedAt: fallbackGrantAt,
+            metadata: subscriptionGrant.metadata,
+          },
+          {
+            ...ledgerBase,
+            outcome: "processed",
+            metadata: {
+              action: "cancellation_reversal",
+              userId: subscriptionGrant.userId,
+              plan: subscriptionGrant.plan,
+              eventType: subscriptionGrant.eventType,
+            },
+          },
+        );
+        if (cancellationReversal?.changed) {
+          return {
+            outcome: "processed",
+            metadata: {
+              action: "cancellation_reversal",
+              userId: subscriptionGrant.userId,
+              plan: subscriptionGrant.plan,
+              eventType: subscriptionGrant.eventType,
+            },
+            body: { ok: true },
+          };
+        }
+      }
       const cancellationOutbox = cancellationScheduled
         ? await prepareLifecycleEmailOutbox(subscriptionGrant.userId, (profile) => ({
             kind: "cancellation_scheduled",
