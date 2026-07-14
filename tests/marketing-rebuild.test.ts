@@ -56,7 +56,7 @@ describe("marketing rebuild", () => {
   it("labels live search and keeps preview read-only before account", () => {
     expect(marketingRoute).toContain("Live search");
     expect(marketingRoute).not.toContain("Early access");
-    expect(marketingRoute).toContain("Built for the morning meeting.");
+    expect(marketingRoute).toContain("No account needed.");
     expect(marketingRoute).not.toContain("provider canaries");
     expect(marketingRoute).not.toContain("Readiness-gated");
     expect(marketingRoute).toContain("See what changed before you sign up");
@@ -250,7 +250,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Sample proof-backed brief");
     expect(marketingRoute).toContain("A rival page changed while your team was offline");
     expect(marketingRoute).toContain('action="/search"');
-    expect(marketingRoute).toContain("Catch them in the act");
+    expect(marketingRoute).toContain("See their live ads");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');
     expect(appCss).toContain("@keyframes ld-roll");
     expect(appCss).toContain("@keyframes ld-blink");

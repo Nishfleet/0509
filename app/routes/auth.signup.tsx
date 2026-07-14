@@ -1,4 +1,4 @@
-import { Link, redirect, useLoaderData } from "react-router";
+import { Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AuthForm } from "~/components/auth-form";
@@ -60,28 +60,34 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
-  const organizationName = String(formData.get("organizationName") ?? "").trim();
   const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app/onboard");
 
+  if (!name) {
+    return signupActionError("name_required", { email, name, redirectTo });
+  }
+  if (!isPlausibleEmail(email)) {
+    return signupActionError("email_invalid", { email, name, redirectTo });
+  }
+
   if (!isBetterAuthConfigured(env)) {
-    throw redirect("/auth/signup?error=better_auth_not_configured");
+    return signupActionError("better_auth_not_configured", { email, name, redirectTo });
   }
   if (!isSameOriginAuthFormPost(env, request)) {
-    throw redirect("/auth/signup?error=request_invalid");
+    return signupActionError("request_invalid", { email, name, redirectTo });
   }
 
   try {
     await sendBetterAuthMagicLink(env, request, {
       email,
       mode: "signup",
-      name: name || organizationName,
+      name,
       redirectTo,
     });
   } catch (error) {
     console.warn("failed to send Better Auth signup email", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
-    throw redirect("/auth/signup?error=send_failed");
+    return signupActionError("send_failed", { email, name, redirectTo });
   }
 
   const next = new URL("/auth/signup", request.url);
@@ -93,6 +99,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
 export default function SignupRoute() {
   const loaderData = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
 
   return (
     <main className="f9-auth-page">
@@ -129,12 +136,13 @@ export default function SignupRoute() {
         </section>
 
         <AuthForm
-          error={loaderData.error}
-          initialEmail={loaderData.prefillEmail}
+          error={actionData?.error ?? loaderData.error}
+          initialEmail={actionData?.email ?? loaderData.prefillEmail}
+          initialName={actionData?.name ?? ""}
           message={loaderData.message}
           mode="signup"
           oauthProviders={loaderData.oauthProviders}
-          redirectTo={loaderData.redirectTo}
+          redirectTo={actionData?.redirectTo ?? loaderData.redirectTo}
         />
       </div>
     </main>
@@ -154,6 +162,12 @@ function signupErrorMessage(code: string | null) {
   if (code === "send_failed") {
     return "We could not send that setup link. Try again in a minute.";
   }
+  if (code === "name_required") {
+    return "Enter your name to create the account.";
+  }
+  if (code === "email_invalid") {
+    return "Enter a valid email address.";
+  }
   if (code === "oauth_not_configured") {
     return "That sign-in option is not configured yet. Use the email link for now.";
   }
@@ -164,4 +178,19 @@ function signupErrorMessage(code: string | null) {
     return "That setup request could not be completed. Request a fresh link and try again.";
   }
   return null;
+}
+
+function signupActionError(
+  code: string,
+  values: { email: string; name: string; redirectTo: string },
+) {
+  return {
+    ok: false as const,
+    error: signupErrorMessage(code) ?? "That setup request could not be completed.",
+    ...values,
+  };
+}
+
+function isPlausibleEmail(value: string) {
+  return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }

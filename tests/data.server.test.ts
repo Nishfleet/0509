@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
+import type { AdRecord } from "~/lib/types";
 import {
   claimDodoPlanCheckout,
   claimDodoSubscriptionPlanChange,
@@ -65,6 +66,7 @@ import {
   upsertAgentMemory,
   legacyWatchEventImportanceScore,
   legacyWorkspaceDeliveryDefaults,
+  hydrateAdsWithPersistedCreatives,
   listAdsByIds,
   upsertAd,
   upsertCustomerMetaConnection,
@@ -2504,6 +2506,76 @@ describe("listAdsByIds", () => {
     for (const statement of adQueries) {
       expect(statement.bindings.length).toBeLessThanOrEqual(90);
     }
+  });
+
+  it("hydrates landing-only evidence and preserves its provenance fields", async () => {
+    const incoming: AdRecord = {
+      metaAdId: "meta-landing-only-1",
+      advertiser: "boAt",
+      body: "Current provider copy",
+      previewHeadline: "Current provider headline",
+      previewSubhead: "Current provider subhead",
+      hook: "Current hook",
+      offer: "Current offer",
+      cta: "Shop now",
+      format: "image" as const,
+      languageLabel: "English",
+      destinationType: "website",
+      landingPageUrl: null,
+      adSnapshotUrl: null,
+      countries: ["India"],
+      platforms: ["Instagram"],
+      firstSeenAt: null,
+      lastSeenAt: null,
+      active: true,
+      researchSummary: "Current provider summary",
+      source: "meta" as const,
+      analysisFields: [],
+    };
+    const stored = {
+      ...incoming,
+      landingPageUrl: "https://boat-lifestyle.com/sale",
+      landingPage: {
+        rawUrl: "https://boat-lifestyle.com/sale",
+        canonicalUrl: "https://boat-lifestyle.com/sale",
+        rawHeadline: "Stored sale",
+        normalizedHeadline: "stored sale",
+        normalizedHeadlineHash: "stored-hash",
+        captureMethod: "browser_render" as const,
+        artifactKey: "proof/stored.png",
+        ctaText: "Buy now",
+        priceText: "₹999",
+        formPresent: false,
+        capturedAt: "2026-07-01T00:00:00.000Z",
+      },
+      analysisFields: [{
+        scopeType: "landing_page" as const,
+        fieldKey: "landing_page_headline_summary",
+        fieldValue: "Stored sale",
+        provenanceSource: "browser_render" as const,
+        extractorVersion: "landing-page-v1",
+        confidence: 0.9,
+        metadata: { artifactKey: "proof/stored.png" },
+      }],
+    };
+    const mock = createMockDb([{
+      sqlIncludes: "FROM ad",
+      results: [{ id: stored.metaAdId, raw_json: JSON.stringify(stored) }],
+    }]);
+
+    const [hydrated] = await hydrateAdsWithPersistedCreatives(
+      { DB: mock.db } as never,
+      [incoming],
+    );
+
+    expect(hydrated.landingPageUrl).toBe(stored.landingPageUrl);
+    expect(hydrated.landingPage).toEqual(stored.landingPage);
+    expect(hydrated.analysisFields).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        fieldKey: "landing_page_headline_summary",
+        provenanceSource: "browser_render",
+      }),
+    ]));
   });
 });
 

@@ -5,6 +5,7 @@ interface AuthFormProps {
   mode: "login" | "signup";
   redirectTo: string;
   initialEmail?: string;
+  initialName?: string;
   message?: string | null;
   error?: string | null;
   oauthProviders?: AuthOAuthProvider[];
@@ -22,6 +23,7 @@ export function AuthForm({
   mode,
   redirectTo,
   initialEmail,
+  initialName,
   message,
   error,
   oauthProviders = [],
@@ -58,21 +60,10 @@ export function AuthForm({
         <input name="mode" type="hidden" value={mode} />
         <input name="redirectTo" type="hidden" value={redirectTo} />
         {isSignup ? (
-          <>
-            <label className="f9-field">
-              <span>Name</span>
-              <input autoComplete="name" name="name" placeholder="Your name" required />
-            </label>
-            <label className="f9-field">
-              <span>Company or agency</span>
-              <input
-                autoComplete="organization"
-                name="organizationName"
-                placeholder="Company name"
-                required
-              />
-            </label>
-          </>
+          <label className="f9-field">
+            <span>Name</span>
+            <input autoComplete="name" defaultValue={initialName ?? ""} name="name" placeholder="Your name" required />
+          </label>
         ) : null}
 
         <label className="f9-field">
@@ -87,9 +78,9 @@ export function AuthForm({
           />
         </label>
 
-        {message ? <p className="f9-message is-success">{message}</p> : null}
-        {error ? <p className="f9-message is-error">{error}</p> : null}
-        {passkeyError ? <p className="f9-message is-error">{passkeyError}</p> : null}
+        {message ? <p aria-live="polite" className="f9-message is-success" role="status">{message}</p> : null}
+        {error ? <p aria-live="assertive" className="f9-message is-error" role="alert">{error}</p> : null}
+        {passkeyError ? <p aria-live="assertive" className="f9-message is-error" role="alert">{passkeyError}</p> : null}
 
         <button className="f9-primary-button" disabled={pending} type="submit">
           {emailPending

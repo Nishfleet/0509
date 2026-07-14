@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AdRecord } from "~/lib/types";
+import type { AdRecord, SearchResponse } from "~/lib/types";
 
 const baseAd: AdRecord = {
   metaAdId: "meta-boat-1",
@@ -1024,6 +1024,81 @@ describe("search loader", () => {
     });
   });
 
+  it("runs domain relevance in shadow mode while preserving the legacy response", async () => {
+    const env = { DB: {}, SEARCH_ROLLOUT_MODE: "shadow" };
+    const legacyResult: SearchResponse = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const executeSearchWithRelevance = vi.fn().mockResolvedValue({
+      result: legacyResult,
+      query: { mode: "advertiser", filters: { query: "nykaa" } },
+      searchScope: "exact",
+      displayDomain: "nykaa.com",
+      relevanceApplied: false,
+    });
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: legacyResult,
+      selectedAd: baseAd,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn(),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance,
+      hasWarmSearchCacheEntry: vi.fn().mockResolvedValue(false),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { formatResultsPanelTitle, loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?website=https://www.nykaa.com"),
+    } as never);
+
+    expect(executeSearchWithRelevance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env,
+        scope: "exact",
+        competitorWebsite: expect.objectContaining({ host: "nykaa.com" }),
+      }),
+    );
+    expect(prepareSearchResultSelection).toHaveBeenCalledWith(
+      env,
+      legacyResult,
+      null,
+      { enrichSelected: false, hydratePersisted: false },
+    );
+    expect(result.result).toBe(legacyResult);
+    expect(result.relevanceApplied).toBe(false);
+    expect(formatResultsPanelTitle(legacyResult, {
+      displayDomain: "nykaa.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+      relevanceApplied: false,
+    })).toBe("1 ads found");
+  });
+
   it("allows only tokened canary probes to force fresh live discovery", async () => {
     const env = { DB: {}, CANARY_BYPASS_TOKEN: "secret-token" };
     const sourceResult = {
@@ -1220,6 +1295,7 @@ describe("search actions", () => {
       current: 1,
       limit: 10,
     });
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
 
     vi.doMock("~/lib/auth.server", () => mockWorkspaceAuth());
     vi.doMock("~/lib/workspace.server", () => ({
@@ -1238,6 +1314,7 @@ describe("search actions", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       addAdToCollection: vi.fn(),
+      completeUserOnboarding,
       createSavedQuery,
       createWatchlistWithinLimit,
     }));
@@ -1270,6 +1347,7 @@ describe("search actions", () => {
     expect(response?.headers.get("Location")).toBe("/app/watchlists?watchlist=watch-1");
     expect(checkPlanLimit).toHaveBeenCalledWith(env, "user-1", "watchlists");
     expect(createSavedQuery).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).toHaveBeenCalledWith(env, "user-1");
       expect(createWatchlistWithinLimit).toHaveBeenCalledWith(
         env,
         "user-1",
@@ -1354,6 +1432,7 @@ describe("search actions", () => {
       current: 1,
       limit: 10,
     });
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
 
     vi.doMock("~/lib/auth.server", () => mockWorkspaceAuth(appSession));
     vi.doMock("~/lib/workspace.server", () => ({
@@ -1372,6 +1451,7 @@ describe("search actions", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       addAdToCollection: vi.fn(),
+      completeUserOnboarding,
       createSavedQuery: vi.fn(),
       createWatchlistWithinLimit,
     }));
@@ -1441,6 +1521,7 @@ describe("search loader OCR reuse", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       hydrateAdsWithPersistedCreatives,
+      listAdsByIds: vi.fn().mockResolvedValue([hydratedAd]),
       upsertAd: vi.fn().mockResolvedValue(undefined),
     }));
     vi.doMock("~/lib/creative-text.server", () => ({
@@ -1502,6 +1583,7 @@ describe("search loader OCR reuse", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       hydrateAdsWithPersistedCreatives,
+      listAdsByIds: vi.fn().mockResolvedValue([hydratedAd]),
       upsertAd,
     }));
     vi.doMock("~/lib/creative-text.server", () => ({
@@ -1548,6 +1630,19 @@ describe("search loader OCR reuse", () => {
 });
 
 describe("search status copy", () => {
+  it("preserves broader scope for result selection and pagination links", async () => {
+    const { withSearchScope } = await import("~/routes/search");
+    const base = new URLSearchParams("website=nykaa.com&query=nykaa");
+
+    const broader = withSearchScope(base, "broader");
+    expect(broader.get("broader")).toBe("1");
+    broader.set("selected", "related-ad-2");
+    broader.set("after", "cursor-2");
+    expect(broader.toString()).toContain("broader=1");
+
+    expect(withSearchScope(broader, "exact").has("broader")).toBe(false);
+  });
+
   it("does not claim alternate Meta results when API fallback failed without ads", async () => {
     const { formatDiscoverySummary } = await import("~/routes/search");
 

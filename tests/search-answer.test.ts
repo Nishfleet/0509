@@ -79,6 +79,28 @@ describe("buildSearchAnswer", () => {
     });
   });
 
+  it.each(["hit", "stale"] as const)(
+    "keeps the Meta source label neutral for %s cache results",
+    (cacheStatus) => {
+      const answer = buildSearchAnswer({
+        result: response({
+          ads: [ad()],
+          verifiedCount: 1,
+          cacheStatus,
+        }),
+        displayDomain: "boat-lifestyle.com",
+        isDomainSearch: true,
+        isBroaderScope: false,
+      });
+
+      expect(answer.facts).toContainEqual(expect.objectContaining({
+        label: "Source",
+        value: "Meta Ad Library visual source",
+        detail: cacheStatus === "hit" ? "Showing recent cached results" : "Showing older cached results",
+      }));
+    },
+  );
+
   it("does not present broader matches as verified proof", () => {
     const answer = buildSearchAnswer({
       result: response({
@@ -97,9 +119,9 @@ describe("buildSearchAnswer", () => {
       note: "Landing-page signals are not captured on these matches yet.",
     });
     expect(answer.facts).toContainEqual({
-      label: "Broader matches",
+      label: "Related matches",
       value: "1",
-      detail: "Related advertiser/text candidates",
+      detail: "Unverified advertiser/text candidates",
     });
   });
 

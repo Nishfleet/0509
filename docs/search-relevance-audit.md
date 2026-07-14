@@ -1,12 +1,13 @@
-# Search Relevance Audit (2026-06-24)
+# Search Relevance Audit (updated 2026-07-14)
 
-## Current pipeline (pre-v2)
+## Current candidate pipeline
 
 1. `/search` loader reads `website` query param.
-2. `normalizeCompetitorWebsiteInput` parses the URL and derives `searchTerm` via `inferSearchTermFromHost` (first label only).
-3. `applyWebsiteSearchFallback` copies `searchTerm` into `filters.query` when no explicit query is present.
-4. `searchAdsViaSourceResolver` calls Meta Ad Library browser scraping with `keyword_exact_phrase` and `q=<searchTerm>`.
-5. Results are hydrated in `prepareSearchResultSelection` and rendered without destination verification.
+2. Search V2 parses a domain intent and derives a brand-sized discovery query (`nykaa.com` → `nykaa`) because Meta Ad Library does not provide native domain search.
+3. Exact scope independently verifies candidates from landing-page, advertiser-domain, or resolved entity evidence before rendering them as connected to the website.
+4. Broader scope can include unverified provider/text candidates, but verified and related counts and reasons remain separate.
+5. Selected proof renders before the result list with source, cache freshness, capture status, match reason, and deterministic focus behavior.
+6. Authenticated selections persist only server-canonical public Meta evidence; external proof cannot be recovered through the global ad lookup.
 
 ## Reproduced failure (`okara.ai`)
 
@@ -26,19 +27,19 @@ Key files:
 - `app/lib/meta-library-browser.server.ts` — `buildSearchUrl` uses keyword search
 - `app/routes/search.tsx` — no verified-domain empty state or broader opt-in
 
-## Planned correction (search v2)
+## Implemented correction (search v2 candidate)
 
 1. **Query intent** — PSL-aware parser distinguishes `domain` vs `text` (`app/lib/search-query.ts`).
-2. **Provider query** — domain intent uses registrable domain (`okara.ai`), not stem (`okara`).
+2. **Provider query** — domain intent uses the brand label for discovery (`okara.ai` → `okara`), then verifies the registrable domain after retrieval.
 3. **Verified matching** — post-filter levels 1–5 only for exact results (`app/lib/search-domain-match.server.ts`).
 4. **Broader opt-in** — stem/keyword candidates (level 6) only when `?broader=1`.
 5. **Cache isolation** — `search-v2:domain:<domain>:<scope>:...` keys (`app/lib/search-v2.server.ts`).
 6. **Identity resolution** — optional SSRF-safe homepage fetch (`app/lib/website-identity.server.ts`).
-7. **Rollout** — `SEARCH_ROLLOUT_MODE=legacy|shadow|v2` (default `legacy`).
+7. **Rollout** — the committed Worker configuration is `shadow`: legacy remains customer-visible while a separate V2 query emits aggregate comparison telemetry. Plaintext competitor domains are not logged.
 
 ## Rollout and rollback
 
-- **Deploy order:** apply migration `0054_search_domain_identity_cache.sql`, deploy Worker with `SEARCH_ROLLOUT_MODE=shadow`, validate `okara.ai`, then set `v2`.
+- **Deploy order:** apply migration `0054_search_domain_identity_cache.sql`, deploy Worker with `SEARCH_ROLLOUT_MODE=shadow`, run the authorized live comparison canary, then promote to `v2` in a separate configuration change.
 - **Rollback:** set `SEARCH_ROLLOUT_MODE=legacy` (immediate revert to unfiltered provider results + stem fallback behavior).
 
 ## Provider limitations

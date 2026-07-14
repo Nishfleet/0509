@@ -224,6 +224,8 @@ export interface AdRecord {
   creativeTextCaptureMethod?: CreativeTextCaptureMethod | null;
   creativeTextMetadata?: Record<string, unknown> | null;
   landingPage?: LandingPageSnapshotData | null;
+  evidenceCapturedAt?: string | null;
+  canonicalRevision?: string;
   tags?: string[];
   domainMatch?: {
     level: string;
@@ -261,7 +263,9 @@ export interface SearchResponse {
   searchScope?: "exact" | "broader";
   displayDomain?: string | null;
   verifiedCount?: number;
+  rawCandidateCount?: number;
   broaderCandidateCount?: number;
+  missingVerificationCount?: number;
   rejectedKeywordOnlyCount?: number;
 }
 

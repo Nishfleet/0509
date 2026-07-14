@@ -8,7 +8,8 @@ export type DomainMatchLevel =
   | "verified_advertiser_domain"
   | "verified_alias"
   | "verified_entity"
-  | "unverified_text_candidate";
+  | "unverified_text_candidate"
+  | "unverified_provider_candidate";
 
 export interface DomainMatchExplanation {
   level: DomainMatchLevel;
@@ -203,6 +204,8 @@ function domainMatchLevelRank(level: DomainMatchLevel) {
       return 4;
     case "unverified_text_candidate":
       return 5;
+    case "unverified_provider_candidate":
+      return 6;
     default:
       return 99;
   }

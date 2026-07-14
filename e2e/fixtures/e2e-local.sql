@@ -31,6 +31,7 @@ DELETE FROM agent_action_audit WHERE user_id LIKE 'e2e-%';
 DELETE FROM workspace_member WHERE owner_user_id LIKE 'e2e-%' OR member_user_id LIKE 'e2e-%';
 DELETE FROM user_plan WHERE user_id LIKE 'e2e-%';
 DELETE FROM user WHERE id LIKE 'e2e-%';
+DELETE FROM discovery_cache_entry WHERE cache_key LIKE 'search-v2:domain:nykaa.com:%';
 
 DROP TABLE IF EXISTS e2e_test_mode;
 CREATE TABLE e2e_test_mode (
@@ -46,6 +47,7 @@ PRAGMA foreign_keys = ON;
 INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, onboardedAt) VALUES
   ('e2e-free', 'E2E Free', 'e2e-free@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', NULL),
   ('e2e-free-onboarded', 'E2E Free Onboarded', 'e2e-free-onboarded@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
+  ('e2e-activation', 'E2E Activation', 'e2e-activation@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', NULL),
   ('e2e-scout', 'E2E Scout', 'e2e-scout@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
   ('e2e-starter', 'E2E Starter', 'e2e-starter@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
   ('e2e-agency', 'E2E Agency', 'e2e-agency@example.invalid', 1, NULL, '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z'),
@@ -55,6 +57,7 @@ INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, o
 INSERT INTO user_plan (user_id, plan, plan_updated_at, dodo_status, dodo_customer_id, dodo_next_billing_at, evidence_entitlement_anchor, evidence_entitlement_anchor_source) VALUES
   ('e2e-free', 'free', '2026-06-01T00:00:00.000Z', NULL, NULL, NULL, NULL, NULL),
   ('e2e-free-onboarded', 'free', '2026-06-01T00:00:00.000Z', NULL, NULL, NULL, NULL, NULL),
+  ('e2e-activation', 'starter', '2026-06-01T00:00:00.000Z', 'subscription.active', 'cus_e2e_activation', '2026-07-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', 'e2e'),
   ('e2e-scout', 'scout', '2026-06-01T00:00:00.000Z', 'subscription.active', 'cus_e2e_scout', '2026-07-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', 'e2e'),
   ('e2e-starter', 'starter', '2026-06-01T00:00:00.000Z', 'subscription.active', 'cus_e2e_starter', '2026-07-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', 'e2e'),
   ('e2e-agency', 'agency', '2026-06-01T00:00:00.000Z', 'subscription.active', 'cus_e2e_agency', '2026-07-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', 'e2e'),
@@ -78,6 +81,10 @@ INSERT INTO watchlist (id, user_id, name, target_type, target_id, target_fingerp
 
 INSERT INTO ad (id, advertiser, body, body_secondary, preview_headline, preview_subhead, hook, offer_text, cta, creative_format, language_label, destination_type, landing_page_url, ad_snapshot_url, countries_json, platforms_json, first_seen_at, last_seen_at, is_active, source, research_summary, raw_json, created_at, updated_at, creative_text, creative_text_capture_method, creative_text_metadata_json) VALUES
   ('e2e-ad-1', 'Okara', 'Fixture ad body for competitor monitoring.', NULL, 'New AI workflow launch', 'Proof-backed competitor move', 'Launch proof', 'Free trial', 'Learn more', 'image', 'English', 'website', 'https://okara.example.invalid/launch', 'https://facebook.com/ads/library/?id=e2e-ad-1', '["IN"]', '["facebook","instagram"]', '2026-06-20T00:00:00.000Z', '2026-06-26T00:00:00.000Z', 1, 'meta_library_browser', 'E2E fixture ad for non-customer QA.', '{"id":"e2e-ad-1"}', '2026-06-20T00:00:00.000Z', '2026-06-26T00:00:00.000Z', 'Fixture creative text', 'manual', '{}');
+
+INSERT INTO discovery_cache_entry (cache_key, provider, route_context, query_fingerprint, country, cursor, payload_json, fetched_at, expires_at, browser_ms_used, created_at, updated_at) VALUES
+  ('search-v2:domain:nykaa.com:exact:meta_library_browser:all:page-1', 'meta_library_browser', 'public_search', 'e2e-nykaa-exact', 'all', NULL, '{"ads":[{"metaAdId":"e2e-nykaa-live-1","advertiser":"Nykaa","body":"Fixture live-search ad for journey verification.","previewHeadline":"Nykaa summer beauty event","previewSubhead":"Fixture source evidence","hook":"Summer beauty event","offer":"Up to 40% off selected beauty","cta":"Shop now","format":"image","languageLabel":"English","destinationType":"website","landingPageUrl":"https://nykaa.com/summer-event","adSnapshotUrl":"https://facebook.com/ads/library/?id=e2e-nykaa-live-1","countries":["India"],"platforms":["Instagram"],"firstSeenAt":"2026-07-10T00:00:00.000Z","lastSeenAt":"2026-07-14T00:00:00.000Z","active":true,"researchSummary":"Fixture evidence for non-customer browser QA.","source":"meta_library_browser","analysisFields":[]}],"nextCursor":null,"source":"meta_library_browser","provider":"meta_library_browser","cacheStatus":"miss","discoveryStatus":"healthy","discoverySummary":null,"discoveryFailureClass":null}', '2026-07-14T00:00:00.000Z', '2099-01-01T00:00:00.000Z', 5, '2026-07-14T00:00:00.000Z', '2026-07-14T00:00:00.000Z'),
+  ('search-v2:domain:nykaa.com:broader:meta_library_browser:all:page-1', 'meta_library_browser', 'public_search', 'e2e-nykaa-broader', 'all', NULL, '{"ads":[{"metaAdId":"e2e-nykaa-live-1","advertiser":"Nykaa","body":"Fixture live-search ad for journey verification.","previewHeadline":"Nykaa summer beauty event","previewSubhead":"Fixture source evidence","hook":"Summer beauty event","offer":"Up to 40% off selected beauty","cta":"Shop now","format":"image","languageLabel":"English","destinationType":"website","landingPageUrl":"https://nykaa.com/summer-event","adSnapshotUrl":"https://facebook.com/ads/library/?id=e2e-nykaa-live-1","countries":["India"],"platforms":["Instagram"],"firstSeenAt":"2026-07-10T00:00:00.000Z","lastSeenAt":"2026-07-14T00:00:00.000Z","active":true,"researchSummary":"Fixture evidence for non-customer browser QA.","source":"meta_library_browser","analysisFields":[]}],"nextCursor":null,"source":"meta_library_browser","provider":"meta_library_browser","cacheStatus":"miss","discoveryStatus":"healthy","discoverySummary":null,"discoveryFailureClass":null}', '2026-07-14T00:00:00.000Z', '2099-01-01T00:00:00.000Z', 5, '2026-07-14T00:00:00.000Z', '2026-07-14T00:00:00.000Z');
 
 INSERT INTO collection (id, user_id, name, description, created_at, updated_at) VALUES
   ('e2e-collection-starter-1', 'e2e-starter', 'Launch moves', 'Non-customer E2E report fixture.', '2026-06-01T00:00:00.000Z', '2026-06-26T00:00:00.000Z');

@@ -231,10 +231,30 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page).toHaveURL(/\/app\/onboard/);
     await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
     await expect(
-      page.getByText("Paste your competitors. Five to Nine validates them, creates watchlists, and queues the first Market Desk scan."),
+      page.getByText("Start with one competitor. We will validate the website, create its watchlist, and queue the first evidence scan."),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Choose a plan to start monitoring" })).toBeVisible();
+    await expect(page.getByText("The first scan starts immediately. Evidence appears as soon as the source check finishes.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start tracking this competitor" })).toBeDisabled();
     await expectNoHorizontalOverflow(page);
+  });
+
+  test("new starter completes one-competitor onboarding and reaches the queued watchlist", async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await signInAs(context, baseURL!, "e2e-activation");
+    await page.goto("/app/onboard?website=nykaa.com");
+
+    await expect(page.getByLabel("Competitor website")).toHaveValue("nykaa.com");
+    await expectNoHorizontalOverflow(page);
+    await page.getByRole("button", { name: "Start tracking Nykaa" }).focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=/);
+    await expect(page.getByRole("heading", { name: "Watchlists" })).toBeVisible();
+    await expect(page.getByText("Nykaa watch").first()).toBeVisible();
   });
 
   test("starter customer journey covers dashboard, search, watchlists, presence, digests, billing, developer, support, and account", async ({
@@ -351,7 +371,7 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app/reports/watchlist:e2e-watchlist-agency-1");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Client-ready report" })).toBeVisible();
+    await expect(page.getByText("Client-ready report", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
   });
 

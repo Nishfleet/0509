@@ -3,6 +3,7 @@ import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import {
   hydrateAdsWithPersistedCreatives,
+  listAdsByIds,
   upsertAd,
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -28,14 +29,21 @@ export async function prepareSearchResultSelection(
 
   let selectedAd: AdRecord | null = selectedAdBase;
   if (selectedAdBase && options.enrichSelected !== false) {
-    const [snapshot, creativeText] = await Promise.all([
+    const creativeCapturePromise =
+      isAdLibraryBackedAd(selectedAdBase) && selectedAdBase.adSnapshotUrl && !selectedAdBase.creativeText
+        ? captureCreativeText(env, selectedAdBase.adSnapshotUrl, selectedAdBase).then((value) => ({
+            value,
+            capturedAt: value ? new Date().toISOString() : null,
+          }))
+        : Promise.resolve({ value: null, capturedAt: null });
+    const [snapshot, creativeCapture] = await Promise.all([
       selectedAdBase.landingPageUrl
         ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl)
         : Promise.resolve(null),
-      isAdLibraryBackedAd(selectedAdBase) && selectedAdBase.adSnapshotUrl && !selectedAdBase.creativeText
-        ? captureCreativeText(env, selectedAdBase.adSnapshotUrl, selectedAdBase)
-        : Promise.resolve(null),
+      creativeCapturePromise,
     ]);
+    const creativeText = creativeCapture.value;
+    const creativeCapturedAt = creativeCapture.capturedAt;
 
     const nextSelectedAdBase = {
       ...selectedAdBase,
@@ -62,10 +70,6 @@ export async function prepareSearchResultSelection(
       ],
     };
 
-    if (creativeText && isAdLibraryBackedAd(selectedAd)) {
-      await upsertAd(env, selectedAd);
-    }
-
     const translationResult = await translateAdText(env, selectedAd);
     if (translationResult) {
       const translatedField = buildTranslatedAnalysisField(translationResult);
@@ -73,7 +77,21 @@ export async function prepareSearchResultSelection(
         ...selectedAd,
         analysisFields: withTranslatedAnalysisField(selectedAd.analysisFields, translatedField),
       };
-      await upsertAd(env, selectedAd);
+    }
+
+    // The collection action accepts only this server-persisted canonical ad
+    // id. Query-scoped matching metadata must never become shared canonical
+    // state, and a cached/capture-failed selection must not erase richer
+    // evidence written by an earlier selection.
+    if (env.DB) {
+      const selectedForPersistence = creativeCapturedAt
+        ? withCreativeCaptureTimestamp(selectedAd, creativeCapturedAt)
+        : selectedAd;
+      const [storedAd] = await listAdsByIds(env, [selectedAd.metaAdId]);
+      await upsertAd(
+        env,
+        canonicalSelectionAd(selectedForPersistence, storedAd ?? null, result.cacheStatus === "miss"),
+      );
     }
   }
 
@@ -84,4 +102,120 @@ export async function prepareSearchResultSelection(
     },
     selectedAd,
   };
+}
+
+function canonicalSelectionAd(
+  selectedAd: AdRecord,
+  storedAd: AdRecord | null,
+  providerResultIsFresh: boolean,
+): AdRecord {
+  const { domainMatch: _queryScopedDomainMatch, ...withoutQueryScope } = selectedAd;
+  if (!storedAd) {
+    return withoutQueryScope;
+  }
+  const { domainMatch: _storedQueryScope, ...storedCanonical } = storedAd;
+
+  const analysisFields = new Map(
+    storedCanonical.analysisFields.map((field) => [`${field.scopeType}:${field.fieldKey}`, field]),
+  );
+  for (const field of withoutQueryScope.analysisFields) {
+    const key = `${field.scopeType}:${field.fieldKey}`;
+    const storedField = analysisFields.get(key);
+    if (!storedField || providerResultIsFresh || shouldPreferCapturedEvidence(
+      analysisFieldCapturedAt(field),
+      analysisFieldCapturedAt(storedField),
+    )) {
+      analysisFields.set(key, field);
+    }
+  }
+
+  const useIncomingLandingPage = shouldPreferCapturedEvidence(
+    withoutQueryScope.landingPage?.capturedAt ?? null,
+    storedCanonical.landingPage?.capturedAt ?? null,
+  );
+  const landingPage = useIncomingLandingPage
+    ? withoutQueryScope.landingPage
+    : storedCanonical.landingPage ?? withoutQueryScope.landingPage ?? null;
+  const useIncomingCreative = shouldPreferCapturedEvidence(
+    metadataCapturedAt(withoutQueryScope.creativeTextMetadata),
+    metadataCapturedAt(storedCanonical.creativeTextMetadata),
+  );
+  const creativeSource = useIncomingCreative ? withoutQueryScope : storedCanonical;
+
+  return {
+    ...storedCanonical,
+    ...(providerResultIsFresh ? withoutQueryScope : {}),
+    landingPageUrl: withoutQueryScope.landingPageUrl ?? storedCanonical.landingPageUrl ?? null,
+    adSnapshotUrl: withoutQueryScope.adSnapshotUrl ?? storedCanonical.adSnapshotUrl ?? null,
+    landingPage,
+    creativeText: creativeSource.creativeText ?? withoutQueryScope.creativeText ?? storedCanonical.creativeText ?? null,
+    creativeImageUrl:
+      creativeSource.creativeImageUrl ?? withoutQueryScope.creativeImageUrl ?? storedCanonical.creativeImageUrl ?? null,
+    creativeTextCaptureMethod:
+      creativeSource.creativeTextCaptureMethod
+      ?? withoutQueryScope.creativeTextCaptureMethod
+      ?? storedCanonical.creativeTextCaptureMethod
+      ?? null,
+    creativeTextMetadata:
+      creativeSource.creativeTextMetadata
+      ?? withoutQueryScope.creativeTextMetadata
+      ?? storedCanonical.creativeTextMetadata
+      ?? null,
+    firstSeenAt: earliestSeenAt(storedCanonical.firstSeenAt, withoutQueryScope.firstSeenAt),
+    lastSeenAt: latestSeenAt(storedCanonical.lastSeenAt, withoutQueryScope.lastSeenAt),
+    analysisFields: [...analysisFields.values()],
+    evidenceCapturedAt: latestCapturedAt(
+      landingPage?.capturedAt ?? null,
+      metadataCapturedAt(creativeSource.creativeTextMetadata),
+    ),
+  };
+}
+
+function withCreativeCaptureTimestamp(ad: AdRecord, capturedAt: string): AdRecord {
+  return {
+    ...ad,
+    creativeTextMetadata: {
+      ...(ad.creativeTextMetadata ?? {}),
+      capturedAt,
+    },
+    analysisFields: ad.analysisFields.map((field) => (
+      field.fieldKey === "ocr_text" || field.fieldKey === "translated_text"
+    )
+      ? { ...field, metadata: { ...(field.metadata ?? {}), capturedAt } }
+      : field),
+  };
+}
+
+function analysisFieldCapturedAt(field: AdRecord["analysisFields"][number]) {
+  return metadataCapturedAt(field.metadata);
+}
+
+function metadataCapturedAt(metadata: Record<string, unknown> | null | undefined) {
+  return typeof metadata?.capturedAt === "string" ? metadata.capturedAt : null;
+}
+
+function shouldPreferCapturedEvidence(incoming: string | null, stored: string | null) {
+  const incomingTime = incoming ? Date.parse(incoming) : Number.NaN;
+  const storedTime = stored ? Date.parse(stored) : Number.NaN;
+  if (Number.isNaN(incomingTime)) return false;
+  if (Number.isNaN(storedTime)) return true;
+  return incomingTime >= storedTime;
+}
+
+function latestCapturedAt(left: string | null, right: string | null) {
+  if (!left) return right;
+  if (!right) return left;
+  return Date.parse(left) >= Date.parse(right) ? left : right;
+}
+
+function earliestSeenAt(left: string | null, right: string | null) {
+  if (!left) return right;
+  if (!right) return left;
+  return Date.parse(left) <= Date.parse(right) ? left : right;
+}
+
+function latestSeenAt(left: string | null, right: string | null) {
+  if (!left) return right;
+  if (!right) return left;
+  return Date.parse(left) >= Date.parse(right) ? left : right;
 }

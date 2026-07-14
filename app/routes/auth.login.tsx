@@ -71,11 +71,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app");
 
+  if (!isPlausibleEmail(email)) {
+    const next = new URLSearchParams({ error: "email_invalid", redirectTo });
+    if (email) next.set("email", email);
+    throw redirect(`/auth/login?${next.toString()}`);
+  }
+
   if (!isBetterAuthConfigured(env)) {
-    throw redirect("/auth/login?error=better_auth_not_configured");
+    throw redirect(loginRetryPath({ error: "better_auth_not_configured", email, redirectTo }));
   }
   if (!isSameOriginAuthFormPost(env, request)) {
-    throw redirect("/auth/login?error=request_invalid");
+    throw redirect(loginRetryPath({ error: "request_invalid", email, redirectTo }));
   }
 
   try {
@@ -89,7 +95,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       console.warn("failed to send Better Auth login email", {
         errorName: error instanceof Error ? error.name : typeof error,
       });
-      throw redirect("/auth/login?error=send_failed");
+      throw redirect(loginRetryPath({ error: "send_failed", email, redirectTo }));
     }
   }
 
@@ -166,6 +172,9 @@ function authErrorMessage(code: string | null) {
   if (code === "send_failed") {
     return "We could not send that sign-in link. Try again in a minute.";
   }
+  if (code === "email_invalid") {
+    return "Enter a valid email address.";
+  }
   if (code === "oauth_not_configured") {
     return "That sign-in option is not configured yet. Use the email link for now.";
   }
@@ -176,4 +185,14 @@ function authErrorMessage(code: string | null) {
     return "That sign-in request could not be completed. Request a fresh link and try again.";
   }
   return null;
+}
+
+function isPlausibleEmail(value: string) {
+  return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function loginRetryPath(input: { error: string; email: string; redirectTo: string }) {
+  const next = new URLSearchParams({ error: input.error, redirectTo: input.redirectTo });
+  if (input.email) next.set("email", input.email);
+  return `/auth/login?${next.toString()}`;
 }

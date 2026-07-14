@@ -1635,7 +1635,9 @@ describe("Better Auth routes", () => {
     }
 
     expect(redirectResponse?.status).toBe(302);
-    expect(redirectResponse?.headers.get("Location")).toBe("/auth/login?error=send_failed");
+    expect(redirectResponse?.headers.get("Location")).toBe(
+      "/auth/login?error=send_failed&redirectTo=%2Fapp&email=owner%40example.com",
+    );
     expect(warn).toHaveBeenCalledWith("failed to send Better Auth login email", {
       errorName: "Error",
     });
@@ -1658,28 +1660,32 @@ describe("Better Auth routes", () => {
     });
 
     const { action } = await import("~/routes/auth.signup");
-    let redirectResponse: Response | null = null;
-    try {
-      await action({
-        context: context(env()),
-        params: {},
-        pattern: "/auth/signup",
-        request: new Request("https://0509.io/auth/signup", {
-          body: new URLSearchParams({ email: "owner@example.com", redirectTo: "/app/onboard" }),
-          headers: {
-            "content-type": "application/x-www-form-urlencoded",
-            origin: "https://0509.io",
-          },
-          method: "POST",
+    const result = await action({
+      context: context(env()),
+      params: {},
+      pattern: "/auth/signup",
+      request: new Request("https://0509.io/auth/signup", {
+        body: new URLSearchParams({
+          email: "owner@example.com",
+          name: "Owner",
+          redirectTo: "/app/onboard",
         }),
-        url: "https://0509.io/auth/signup",
-      } as never);
-    } catch (error) {
-      redirectResponse = error as Response;
-    }
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://0509.io",
+        },
+        method: "POST",
+      }),
+      url: "https://0509.io/auth/signup",
+    } as never);
 
-    expect(redirectResponse?.status).toBe(302);
-    expect(redirectResponse?.headers.get("Location")).toBe("/auth/signup?error=send_failed");
+    expect(result).toEqual({
+      ok: false,
+      error: "We could not send that setup link. Try again in a minute.",
+      email: "owner@example.com",
+      name: "Owner",
+      redirectTo: "/app/onboard",
+    });
     expect(warn).toHaveBeenCalledWith("failed to send Better Auth signup email", {
       errorName: "Error",
     });

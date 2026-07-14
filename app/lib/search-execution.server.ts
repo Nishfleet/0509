@@ -1,10 +1,11 @@
 import type { AppEnv } from "~/lib/env.server";
-import { fingerprintSavedQuery, normalizeSavedQuery } from "~/lib/normalize";
+import { normalizeSavedQuery } from "~/lib/normalize";
 import {
   hasFreshDiscoveryCacheEntry,
   resolveCommercialDiscoveryProvider,
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
+import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
 import {
   applySearchV2PostFilter,
@@ -37,6 +38,7 @@ export interface ExecuteSearchOptions {
   cursor?: string | null;
   forceLive?: boolean;
   customerMetaAdLibraryToken?: string | null;
+  executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
 }
 
 export interface ExecuteSearchResult {
@@ -44,28 +46,102 @@ export interface ExecuteSearchResult {
   query: NormalizedSavedQuery;
   searchScope: SearchScope;
   displayDomain: string | null;
+  relevanceApplied: boolean;
 }
 
 export async function executeSearchWithRelevance(options: ExecuteSearchOptions): Promise<ExecuteSearchResult> {
   const rolloutMode = resolveSearchRolloutMode(options.env);
-  const v2Context = options.competitorWebsite.raw
-    ? await buildSearchV2Context(options.competitorWebsite.raw, options.scope)
-    : null;
-
-  const useDomainV2 = Boolean(v2Context) && (shouldApplySearchV2(options.env) || shouldRunSearchV2Shadow(options.env));
-
-  const query = useDomainV2 && v2Context
-    ? buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters)
-    : normalizeSavedQuery(options.parsed.mode, options.parsed.filters);
-
-  const fingerprint = fingerprintSavedQuery(query);
+  const applyDomainV2 = Boolean(options.competitorWebsite.raw) && shouldApplySearchV2(options.env);
+  const shadowDomainV2 = Boolean(options.competitorWebsite.raw) && shouldRunSearchV2Shadow(options.env);
+  const legacyQuery = normalizeSavedQuery(options.parsed.mode, options.parsed.filters);
   const startedAt = Date.now();
   const provider = resolveCommercialDiscoveryProvider(options.env, {
     customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
   });
+  const resolverOptions = {
+    purpose: "public_search" as const,
+    forceLive: options.forceLive,
+    ...(options.customerMetaAdLibraryToken ? { customerMetaAdLibraryToken: options.customerMetaAdLibraryToken } : {}),
+  };
+
+  if (shadowDomainV2) {
+    const legacyPromise = searchAdsViaSourceResolver(
+      options.env,
+      legacyQuery,
+      options.cursor,
+      resolverOptions,
+    );
+    const comparisonPromise = (async () => {
+      const v2Context = await buildSearchV2Context(options.competitorWebsite.raw, options.scope);
+      if (!v2Context) return null;
+      const v2Query = buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters);
+      const v2CacheKey = buildSearchV2CacheKey({
+        provider,
+        intent: v2Context.queryIntent,
+        scope: options.scope,
+        country: v2Query.filters.country || "all",
+        cursor: options.cursor,
+      });
+      const v2RawResult = await searchAdsViaSourceResolver(options.env, v2Query, options.cursor, {
+        ...resolverOptions,
+        cacheKeyOverride: v2CacheKey,
+      });
+      const v2Result = await applySearchV2PostFilter(
+        options.env,
+        await hydrateSearchCandidates(options.env, v2RawResult),
+        v2Context,
+      );
+      recordSearchObservabilityEvent(
+        buildSearchObservabilityEvent({
+          result: v2Result,
+          durationMs: Date.now() - startedAt,
+          identityResolved: v2Context.identityAliases.length > 0,
+        }),
+      );
+      return v2Result;
+    })().catch((error) => {
+      console.warn("Search V2 shadow comparison failed; returning the legacy result.", {
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+      return null;
+    });
+    const legacyResult = await legacyPromise;
+    const comparisonTask = comparisonPromise.then((v2Result) => {
+      if (!v2Result) return;
+      console.info(JSON.stringify({
+        kind: "search_v2_shadow",
+        mode: rolloutMode,
+        legacyCount: legacyResult.ads.length,
+        v2VerifiedCount: v2Result.verifiedCount,
+        v2RejectedKeywordOnlyCount: v2Result.rejectedKeywordOnlyCount,
+        ts: new Date().toISOString(),
+      }));
+    });
+    if (options.executionContext) {
+      options.executionContext.waitUntil(comparisonTask);
+    } else {
+      void comparisonTask;
+    }
+
+    return {
+      result: legacyResult,
+      query: legacyQuery,
+      searchScope: options.scope,
+      displayDomain: options.competitorWebsite.host,
+      relevanceApplied: false,
+    };
+  }
+
+  const v2Context = applyDomainV2
+    ? await buildSearchV2Context(options.competitorWebsite.raw, options.scope)
+    : null;
+
+  const query = applyDomainV2 && v2Context
+    ? buildSearchV2SavedQuery(v2Context.queryIntent, options.scope, options.parsed.filters)
+    : legacyQuery;
 
   const cacheKeyOverride =
-    useDomainV2 && v2Context
+    applyDomainV2 && v2Context
       ? buildSearchV2CacheKey({
           provider,
           intent: v2Context.queryIntent,
@@ -76,22 +152,25 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
       : null;
 
   const rawResult = await searchAdsViaSourceResolver(options.env, query, options.cursor, {
-    purpose: "public_search",
-    forceLive: options.forceLive,
+    ...resolverOptions,
     cacheKeyOverride,
-    ...(options.customerMetaAdLibraryToken ? { customerMetaAdLibraryToken: options.customerMetaAdLibraryToken } : {}),
   });
 
-  if (!useDomainV2 || !v2Context) {
+  if (!applyDomainV2 || !v2Context) {
     return {
       result: rawResult,
       query,
       searchScope: options.scope,
       displayDomain: options.competitorWebsite.host,
+      relevanceApplied: false,
     };
   }
 
-  const v2Result = await applySearchV2PostFilter(options.env, rawResult, v2Context);
+  const v2Result = await applySearchV2PostFilter(
+    options.env,
+    await hydrateSearchCandidates(options.env, rawResult),
+    v2Context,
+  );
   recordSearchObservabilityEvent(
     buildSearchObservabilityEvent({
       result: v2Result,
@@ -100,32 +179,12 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
     }),
   );
 
-  if (shouldRunSearchV2Shadow(options.env) && !shouldApplySearchV2(options.env)) {
-    console.info(
-      JSON.stringify({
-        kind: "search_v2_shadow",
-        mode: rolloutMode,
-        legacyCount: rawResult.ads.length,
-        v2VerifiedCount: v2Result.verifiedCount,
-        v2RejectedKeywordOnlyCount: v2Result.rejectedKeywordOnlyCount,
-        domain: v2Context.displayDomain,
-        ts: new Date().toISOString(),
-      }),
-    );
-
-    return {
-      result: rawResult,
-      query,
-      searchScope: options.scope,
-      displayDomain: v2Context.displayDomain,
-    };
-  }
-
   return {
     result: v2Result,
     query,
     searchScope: options.scope,
     displayDomain: v2Context.displayDomain,
+    relevanceApplied: true,
   };
 }
 
@@ -140,18 +199,28 @@ export type SearchCacheProbeOptions = Omit<ExecuteSearchOptions, "forceLive">;
 // the parsed query intent, never on resolved aliases.
 export async function hasWarmSearchCacheEntry(options: SearchCacheProbeOptions): Promise<boolean> {
   try {
+    const isShadow = shouldRunSearchV2Shadow(options.env);
     const queryIntent =
-      shouldApplySearchV2(options.env) && options.competitorWebsite.raw
+      shouldApplySearchV2(options.env) &&
+      options.competitorWebsite.raw
         ? parseSearchInputFromWebsiteField(options.competitorWebsite.raw)
         : null;
     const useDomainV2 = Boolean(
       queryIntent && queryIntent.intent === "domain" && queryIntent.registrableDomain,
     );
 
-    const query =
+    const v2Query =
       useDomainV2 && queryIntent
         ? buildSearchV2SavedQuery(queryIntent, options.scope, options.parsed.filters)
         : normalizeSavedQuery(options.parsed.mode, options.parsed.filters);
+    const legacyQuery = normalizeSavedQuery(options.parsed.mode, options.parsed.filters);
+
+    if (isShadow) {
+      return await hasFreshDiscoveryCacheEntry(options.env, legacyQuery, options.cursor, {
+        cacheKeyOverride: null,
+        customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+      });
+    }
 
     const cacheKeyOverride =
       useDomainV2 && queryIntent
@@ -161,12 +230,12 @@ export async function hasWarmSearchCacheEntry(options: SearchCacheProbeOptions):
             }),
             intent: queryIntent,
             scope: options.scope,
-            country: query.filters.country || "all",
+            country: v2Query.filters.country || "all",
             cursor: options.cursor,
           })
         : null;
 
-    return await hasFreshDiscoveryCacheEntry(options.env, query, options.cursor, {
+    return await hasFreshDiscoveryCacheEntry(options.env, v2Query, options.cursor, {
       cacheKeyOverride,
       customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
     });
@@ -175,4 +244,12 @@ export async function hasWarmSearchCacheEntry(options: SearchCacheProbeOptions):
     console.warn("Search cache probe failed; charging the rate limit.", error);
     return false;
   }
+}
+
+async function hydrateSearchCandidates(env: AppEnv, result: SearchResponse) {
+  if (!env.DB || result.ads.length === 0) return result;
+  return {
+    ...result,
+    ads: await hydrateAdsWithPersistedCreatives(env, result.ads),
+  };
 }

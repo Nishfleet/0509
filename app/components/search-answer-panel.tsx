@@ -2,7 +2,12 @@ import type { SearchAnswer } from "~/lib/search-answer";
 
 export function SearchAnswerPanel({ answer }: { answer: SearchAnswer }) {
   return (
-    <section className={`f9-search-answer is-${answer.state}`} aria-label="Search answer">
+    <section
+      aria-label="Search answer"
+      aria-live="polite"
+      className={`f9-search-answer is-${answer.state}`}
+      role="status"
+    >
       <div>
         <span>Search answer</span>
         <h3>{answer.title}</h3>

@@ -35,6 +35,12 @@ describe("search selection persisted translation reuse", () => {
   it("reuses persisted translated_text before re-running Workers AI translation", async () => {
     const storedAd: AdRecord = {
       ...baseAd,
+      body: "Current canonical body",
+      domainMatch: {
+        level: "verified_alias",
+        reason: "Old workspace query context",
+        matchedDomain: "private-query.example",
+      },
       creativeText: "60 Hours Playback\nSirf ₹999",
       creativeTextCaptureMethod: "ad_snapshot_fetch",
       creativeTextMetadata: {
@@ -68,6 +74,9 @@ describe("search selection persisted translation reuse", () => {
         run: aiRun,
       },
       DB: {
+        async batch() {
+          return [];
+        },
         prepare(sql: string) {
           return {
             bind(...bindings: unknown[]) {
@@ -136,5 +145,78 @@ describe("search selection persisted translation reuse", () => {
         && bindings.includes("Fresh translation should not run"),
       ),
     ).toBe(false);
+  });
+
+  it("preserves richer canonical evidence when a later capture fails", async () => {
+    const storedAd: AdRecord = {
+      ...baseAd,
+      body: "Current canonical body",
+      domainMatch: {
+        level: "verified_alias",
+        reason: "Old workspace query context",
+        matchedDomain: "private-query.example",
+      },
+      landingPageUrl: "https://boat-lifestyle.com/sale",
+      landingPage: {
+        rawUrl: "https://boat-lifestyle.com/sale",
+        canonicalUrl: "https://boat-lifestyle.com/sale",
+        rawHeadline: "Stored sale",
+        normalizedHeadline: "stored sale",
+        normalizedHeadlineHash: "stored-hash",
+        captureMethod: "browser_render",
+        artifactKey: "proof/stored.png",
+        ctaText: "Buy now",
+        priceText: "₹999",
+        formPresent: false,
+        capturedAt: "2026-07-01T00:00:00.000Z",
+      },
+    };
+    const hydratedStaleAd: AdRecord = {
+      ...baseAd,
+      body: "Stale cache body",
+      domainMatch: {
+        level: "registrable_domain",
+        reason: "Landing page matches boat-lifestyle.com",
+        matchedDomain: "boat-lifestyle.com",
+      },
+      landingPageUrl: storedAd.landingPageUrl,
+      landingPage: storedAd.landingPage,
+    };
+    const upsertAd = vi.fn();
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([hydratedStaleAd]),
+      listAdsByIds: vi.fn().mockResolvedValue([storedAd]),
+      upsertAd,
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/translation.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/translation.server")>();
+      return { ...actual, translateAdText: vi.fn().mockResolvedValue(null) };
+    });
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    await prepareSearchResultSelection(
+      { DB: {} } as never,
+      {
+        ads: [hydratedStaleAd],
+        nextCursor: null,
+        source: "meta",
+        cacheStatus: "stale",
+      },
+      baseAd.metaAdId,
+    );
+
+    const persisted = upsertAd.mock.calls[0]?.[1] as AdRecord;
+    expect(persisted).toEqual(expect.objectContaining({
+      landingPage: storedAd.landingPage,
+      landingPageUrl: storedAd.landingPageUrl,
+      body: "Current canonical body",
+    }));
+    expect(persisted.domainMatch).toBeUndefined();
   });
 });
