@@ -2452,6 +2452,8 @@ describe("alert email content quality", () => {
 });
 
 describe("billing lifecycle emails", () => {
+  const scheduledCutoff = new Date(Date.UTC(2026, 7, 13, 9)).toISOString();
+  const scheduledWatermark = new Date(Date.UTC(2026, 6, 13, 9)).toISOString();
   const currentBillingInfo = {
     plan: "starter" as const,
     dodoStatus: "active",
@@ -2461,10 +2463,75 @@ describe("billing lifecycle emails", () => {
     billingInterval: "monthly" as const,
     dodoSubscriptionId: "subscription-current",
     dodoCustomerId: "customer-current",
-    dodoNextBillingAt: "2026-08-13T09:00:00.000Z",
-    planUpdatedAt: "2026-07-13T09:00:00.000Z",
+    dodoNextBillingAt: scheduledCutoff,
+    planUpdatedAt: scheduledWatermark,
   };
   const currentBillingStateFingerprint = JSON.stringify(currentBillingInfo);
+
+  function billingPayload<T extends Record<string, unknown>>(
+    templateName: string,
+    overrides: T,
+  ) {
+    return {
+      kind: templateName,
+      subject: "Billing lifecycle update",
+      bodyHtml: "<p>Billing lifecycle update.</p>",
+      tag: "billing-lifecycle",
+      billingStateFingerprint: currentBillingStateFingerprint,
+      ...overrides,
+    };
+  }
+
+  function billingAttempt<T extends Record<string, unknown>>(overrides: T) {
+    return {
+      id: "attempt-billing",
+      userId: "user-1",
+      provider: "cloudflare_email",
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null as string | null,
+      providerStatusLastSeenAt: null as string | null,
+      targetValue: "owner@example.com",
+      templateName: "billing_refund_revoked",
+      errorMessage: null as string | null,
+      sentAt: null as string | null,
+      failedAt: null as string | null,
+      updatedAt: "2026-07-13T09:03:00.000Z",
+      ...overrides,
+    };
+  }
+
+  type Delivery = typeof import("~/lib/delivery.server");
+  type PaymentInput = Parameters<Delivery["sendBillingPaymentIssueEmail"]>[1];
+  type RefundInput = Parameters<Delivery["sendBillingRefundEmail"]>[1];
+  type CancellationInput = Parameters<Delivery["sendBillingCancellationEmail"]>[1];
+  const recipient = { userId: "user-1", email: "owner@example.com", name: "Owner" };
+
+  async function sendPaymentIssue(overrides: Partial<PaymentInput> = {}) {
+    const delivery = await import("~/lib/delivery.server");
+    return delivery.sendBillingPaymentIssueEmail(emailEnv as never, {
+      ...recipient,
+      ...overrides,
+    });
+  }
+
+  async function sendRefund(overrides: Partial<RefundInput> & Pick<RefundInput, "eventId">) {
+    const delivery = await import("~/lib/delivery.server");
+    return delivery.sendBillingRefundEmail(emailEnv as never, { ...recipient, ...overrides });
+  }
+
+  async function sendCancellation(
+    input: Omit<CancellationInput, "userId" | "email" | "name"> &
+      Partial<Pick<CancellationInput, "userId" | "email" | "name">>,
+  ) {
+    const delivery = await import("~/lib/delivery.server");
+    return delivery.sendBillingCancellationEmail(emailEnv as never, { ...recipient, ...input });
+  }
+
+  async function recoverBilling(env = { ...emailEnv, DB: {} } as never) {
+    const delivery = await import("~/lib/delivery.server");
+    return delivery.recoverAbandonedBillingLifecycleEmails(env);
+  }
 
   function mockBillingDataServer(overrides: Record<string, unknown> = {}) {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
@@ -2516,32 +2583,28 @@ describe("billing lifecycle emails", () => {
       userId: "user-1",
       email: "owner@example.com",
       name: "Owner",
-      effectiveAt: "2026-08-13T09:00:00.000Z",
+      effectiveAt: scheduledCutoff,
       eventId: "evt-scheduled-identity",
       subscriptionId: "subscription-current",
-      stateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      stateUpdatedAt: scheduledWatermark,
     });
 
     expect(outbox.payloadSnapshot).toMatchObject({
-      scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+      scheduledCancellationCutoff: scheduledCutoff,
       scheduledCancellationEventId: "evt-scheduled-identity",
       scheduledCancellationSubscriptionId: "subscription-current",
-      scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      scheduledCancellationStateUpdatedAt: scheduledWatermark,
     });
   });
 
   it("sends the dunning email with a day-coarse deterministic idempotency key and no unsubscribe header", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
+    vi.setSystemTime(new Date(scheduledWatermark));
     const sendMock = mockEmailSend("msg_billing_1");
     const mocks = mockBillingDataServer();
 
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner <script>",
-    });
+
+    const sent = await sendPaymentIssue({ name: "Owner <script>", });
 
     expect(sent).toBe(true);
     const payload = emailSendPayload(sendMock);
@@ -2551,7 +2614,6 @@ describe("billing lifecycle emails", () => {
     expect(payload.html).toContain("https://0509.io/app/billing");
     expect(payload.html).toContain("Hi Owner &lt;script&gt;,");
     expect(payload.html).not.toContain("<script>");
-    // transactional: must reach unsubscribed addresses — no unsubscribe header
     expect(payload.headers["List-Unsubscribe"]).toBeUndefined();
     expect(payload.html).not.toContain("Unsubscribe");
 
@@ -2562,7 +2624,7 @@ describe("billing lifecycle emails", () => {
     expect(attempt.idempotencyKey).toBe("billing-payment-issue:user-1:2026-07-13");
     expect(attempt.status).toBe("pending");
     expect(attempt.webhookStatus).toBe("pending");
-    expect(attempt.timestamp).toBe("2026-07-13T09:00:00.000Z");
+    expect(attempt.timestamp).toBe(scheduledWatermark);
     expect(attempt.payloadSnapshot).toEqual(
       expect.objectContaining({
         kind: "billing_payment_issue",
@@ -2584,12 +2646,8 @@ describe("billing lifecycle emails", () => {
         .mockResolvedValue({ id: "attempt-existing", status: "sent" }),
     });
 
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-    });
+
+    const sent = await sendPaymentIssue({ name: "Owner", });
 
     expect(sent).toBe(false);
     expect(sendMock).not.toHaveBeenCalled();
@@ -2604,12 +2662,8 @@ describe("billing lifecycle emails", () => {
         .mockResolvedValue({ id: "attempt-failed", status: "failed" }),
     });
 
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-    });
+
+    const sent = await sendPaymentIssue({ name: null, });
 
     expect(sent).toBe(true);
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -2646,15 +2700,15 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
+
     const input = {
       userId: "user-1",
       email: "owner@example.com",
       name: null,
     };
     const results = await Promise.all([
-      sendBillingPaymentIssueEmail(emailEnv as never, input),
-      sendBillingPaymentIssueEmail(emailEnv as never, input),
+      sendPaymentIssue(input),
+      sendPaymentIssue(input),
     ]);
 
     expect(results.filter(Boolean)).toHaveLength(1);
@@ -2675,7 +2729,7 @@ describe("billing lifecycle emails", () => {
 
   it("claims the dunning idempotency key before sending so concurrent handlers emit once", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
+    vi.setSystemTime(new Date(scheduledWatermark));
     const sendMock = mockEmailSend("msg_concurrent_1");
     const getDeliveryAttemptByIdempotencyKey = vi
       .fn()
@@ -2688,18 +2742,10 @@ describe("billing lifecycle emails", () => {
       .mockRejectedValueOnce(new Error("UNIQUE constraint failed: delivery_attempt.idempotency_key"));
     mockBillingDataServer({ createDeliveryAttempt, getDeliveryAttemptByIdempotencyKey });
 
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
+
     const results = await Promise.all([
-      sendBillingPaymentIssueEmail(emailEnv as never, {
-        userId: "user-1",
-        email: "owner@example.com",
-        name: "Owner",
-      }),
-      sendBillingPaymentIssueEmail(emailEnv as never, {
-        userId: "user-1",
-        email: "owner@example.com",
-        name: "Owner",
-      }),
+      sendPaymentIssue({ name: "Owner", }),
+      sendPaymentIssue({ name: "Owner", }),
     ]);
 
     expect(results.filter(Boolean)).toHaveLength(1);
@@ -2718,13 +2764,9 @@ describe("billing lifecycle emails", () => {
       }),
     });
 
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-refund-pending",
-    });
+
+    const sent = await sendRefund({ name: null,
+    eventId: "evt-refund-pending", });
 
     expect(sent).toBe(false);
     expect(sendMock).not.toHaveBeenCalled();
@@ -2736,27 +2778,18 @@ describe("billing lifecycle emails", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_stale_billing");
-    const staleAttempt = {
+    const staleAttempt = billingAttempt({
       id: "attempt-stale",
-      provider: "cloudflare_email",
-      status: "pending",
-      webhookStatus: "pending",
-      providerMessageId: null,
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const mocks = mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(staleAttempt),
       updateDeliveryAttemptResult,
     });
 
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-stale-refund",
-    });
+
+    const sent = await sendRefund({ name: null,
+    eventId: "evt-stale-refund", });
 
     expect(sent).toBe(true);
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -2788,30 +2821,21 @@ describe("billing lifecycle emails", () => {
   });
 
   it("claims a freshly-enqueued outbox row and dispatches it immediately", async () => {
-    // The webhook batch inserted this pending row atomically with the ledger
-    // finalize moments ago (NOT stale). The live send path must claim it via
-    // compare-and-set instead of backing off — otherwise every lifecycle
-    // email would wait for the next recovery cron.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_outbox_dispatch");
-    const outboxAttempt = {
+    const outboxAttempt = billingAttempt({
       id: "attempt-outbox",
-      provider: "cloudflare_email",
-      status: "pending",
-      webhookStatus: "pending",
-      providerMessageId: null,
       templateName: "billing_refund_revoked",
-      payloadSnapshot: {
-        kind: "billing_refund_revoked",
+      payloadSnapshot: billingPayload("billing_refund_revoked", {
         subject: "Your refund has been processed",
         bodyHtml: "<p>Your workspace moved to Free.</p>",
         tag: "billing-refund",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-      },
+      }),
       updatedAt: "2026-07-13T09:04:59.000Z",
-    };
+    });
     const refundedBillingInfo = {
       ...currentBillingInfo,
       plan: "free" as const,
@@ -2824,13 +2848,9 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-outbox-refund",
-    });
+
+    const sent = await sendRefund({ name: null,
+    eventId: "evt-outbox-refund", });
 
     expect(sent).toBe(true);
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -2845,8 +2865,6 @@ describe("billing lifecycle emails", () => {
         expectedWebhookStatus: "pending",
         expectedUpdatedAt: outboxAttempt.updatedAt,
         targetValue: "owner@example.com",
-        // The claim rewrites the payload: marker cleared, post-mutation
-        // fingerprint recorded for any later fingerprint-based recovery.
         payloadSnapshot: expect.objectContaining({
           billingStateFingerprint: JSON.stringify(refundedBillingInfo),
         }),
@@ -2859,14 +2877,14 @@ describe("billing lifecycle emails", () => {
       label: "passed cutoff",
       currentPlan: "starter" as const,
       currentCutoff: "2026-07-13T09:04:00.000Z",
-      currentStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      currentStateUpdatedAt: scheduledWatermark,
       expectedSent: false,
     },
     {
       label: "non-paid effective plan",
       currentPlan: "free" as const,
-      currentCutoff: "2026-08-13T09:00:00.000Z",
-      currentStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      currentCutoff: scheduledCutoff,
+      currentStateUpdatedAt: scheduledWatermark,
       expectedSent: false,
     },
     {
@@ -2879,8 +2897,8 @@ describe("billing lifecycle emails", () => {
     {
       label: "matching future cancellation",
       currentPlan: "starter" as const,
-      currentCutoff: "2026-08-13T09:00:00.000Z",
-      currentStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      currentCutoff: scheduledCutoff,
+      currentStateUpdatedAt: scheduledWatermark,
       expectedSent: true,
     },
   ])(
@@ -2889,27 +2907,22 @@ describe("billing lifecycle emails", () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
       const sendMock = mockEmailSend("msg_scheduled_identity");
-      const outboxAttempt = {
+      const outboxAttempt = billingAttempt({
         id: "attempt-scheduled-identity",
-        provider: "cloudflare_email",
-        status: "pending",
-        webhookStatus: "pending",
-        providerMessageId: null,
         templateName: "billing_cancellation_scheduled",
-        payloadSnapshot: {
-          kind: "billing_cancellation_scheduled",
+        payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
           subject: "Your cancellation is confirmed",
           bodyHtml: "<p>Your paid plan remains active until the cutoff.</p>",
           tag: "billing-cancellation",
           billingStateFingerprint: null,
           outboxPendingDispatch: true,
-          scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+          scheduledCancellationCutoff: scheduledCutoff,
           scheduledCancellationEventId: "evt-scheduled-identity",
           scheduledCancellationSubscriptionId: "subscription-current",
-          scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
-        },
+          scheduledCancellationStateUpdatedAt: scheduledWatermark,
+        }),
         updatedAt: "2026-07-13T09:04:59.000Z",
-      };
+      });
       const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
       mockBillingDataServer({
         getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(outboxAttempt),
@@ -2923,15 +2936,11 @@ describe("billing lifecycle emails", () => {
         updateDeliveryAttemptResult,
       });
 
-      const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-      const sent = await sendBillingCancellationEmail(emailEnv as never, {
-        userId: "user-1",
-        email: "owner@example.com",
-        name: "Owner",
-        kind: "scheduled",
-        effectiveAt: "2026-08-13T09:00:00.000Z",
-        eventId: "evt-scheduled-identity",
-      });
+
+      const sent = await sendCancellation({ name: "Owner",
+      kind: "scheduled",
+      effectiveAt: scheduledCutoff,
+      eventId: "evt-scheduled-identity", });
 
       expect(sent).toBe(expectedSent);
       expect(sendMock).toHaveBeenCalledTimes(expectedSent ? 1 : 0);
@@ -2956,10 +2965,10 @@ describe("billing lifecycle emails", () => {
           outboxAttempt.id,
           expect.objectContaining({
             payloadSnapshot: expect.objectContaining({
-              scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+              scheduledCancellationCutoff: scheduledCutoff,
               scheduledCancellationEventId: "evt-scheduled-identity",
               scheduledCancellationSubscriptionId: "subscription-current",
-              scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+              scheduledCancellationStateUpdatedAt: scheduledWatermark,
             }),
           }),
         );
@@ -2971,26 +2980,23 @@ describe("billing lifecycle emails", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_old_scheduled_retry_must_not_send");
-    const failedAttempt = {
+    const failedAttempt = billingAttempt({
       id: "attempt-old-scheduled-failed",
-      provider: "cloudflare_email",
       status: "failed",
       webhookStatus: "failed",
-      providerMessageId: null,
       templateName: "billing_cancellation_scheduled",
-      payloadSnapshot: {
-        kind: "billing_cancellation_scheduled",
+      payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
         subject: "Your cancellation is confirmed",
         bodyHtml: "<p>Your plan remains active until August.</p>",
         tag: "billing-cancellation",
         billingStateFingerprint: currentBillingStateFingerprint,
-        scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+        scheduledCancellationCutoff: scheduledCutoff,
         scheduledCancellationEventId: "evt-old-scheduled",
         scheduledCancellationSubscriptionId: "subscription-current",
-        scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
-      },
+        scheduledCancellationStateUpdatedAt: scheduledWatermark,
+      }),
       updatedAt: "2026-07-13T09:04:00.000Z",
-    };
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedAttempt),
@@ -3003,15 +3009,11 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingCancellationEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-      kind: "scheduled",
-      effectiveAt: "2026-08-13T09:00:00.000Z",
-      eventId: "evt-old-scheduled",
-    });
+
+    const sent = await sendCancellation({ name: "Owner",
+    kind: "scheduled",
+    effectiveAt: scheduledCutoff,
+    eventId: "evt-old-scheduled", });
 
     expect(sent).toBe(false);
     expect(sendMock).not.toHaveBeenCalled();
@@ -3038,8 +3040,8 @@ describe("billing lifecycle emails", () => {
     },
     {
       label: "matching current state",
-      currentCutoff: "2026-08-13T09:00:00.000Z",
-      currentStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+      currentCutoff: scheduledCutoff,
+      currentStateUpdatedAt: scheduledWatermark,
       expectedSent: true,
     },
   ])(
@@ -3060,17 +3062,13 @@ describe("billing lifecycle emails", () => {
         }),
       });
 
-      const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-      const sent = await sendBillingCancellationEmail(emailEnv as never, {
-        userId: "user-1",
-        email: "owner@example.com",
-        name: "Owner",
-        kind: "scheduled",
-        effectiveAt: "2026-08-13T09:00:00.000Z",
-        eventId: "evt-no-outbox",
-        subscriptionId: "subscription-current",
-        stateUpdatedAt: "2026-07-13T09:00:00.000Z",
-      });
+
+      const sent = await sendCancellation({ name: "Owner",
+      kind: "scheduled",
+      effectiveAt: scheduledCutoff,
+      eventId: "evt-no-outbox",
+      subscriptionId: "subscription-current",
+      stateUpdatedAt: scheduledWatermark, });
 
       expect(sent).toBe(expectedSent);
       expect(sendMock).toHaveBeenCalledTimes(expectedSent ? 1 : 0);
@@ -3080,10 +3078,10 @@ describe("billing lifecycle emails", () => {
           expect.anything(),
           expect.objectContaining({
             payloadSnapshot: expect.objectContaining({
-              scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+              scheduledCancellationCutoff: scheduledCutoff,
               scheduledCancellationEventId: "evt-no-outbox",
               scheduledCancellationSubscriptionId: "subscription-current",
-              scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+              scheduledCancellationStateUpdatedAt: scheduledWatermark,
             }),
           }),
         );
@@ -3095,26 +3093,23 @@ describe("billing lifecycle emails", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_matching_scheduled_retry");
-    const failedAttempt = {
+    const failedAttempt = billingAttempt({
       id: "attempt-matching-scheduled-failed",
-      provider: "cloudflare_email",
       status: "failed",
       webhookStatus: "failed",
-      providerMessageId: null,
       templateName: "billing_cancellation_scheduled",
-      payloadSnapshot: {
-        kind: "billing_cancellation_scheduled",
+      payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
         subject: "Your cancellation is confirmed",
         bodyHtml: "<p>Your plan remains active until August.</p>",
         tag: "billing-cancellation",
         billingStateFingerprint: currentBillingStateFingerprint,
-        scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+        scheduledCancellationCutoff: scheduledCutoff,
         scheduledCancellationEventId: "evt-matching-scheduled-retry",
         scheduledCancellationSubscriptionId: "subscription-current",
-        scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
-      },
+        scheduledCancellationStateUpdatedAt: scheduledWatermark,
+      }),
       updatedAt: "2026-07-13T09:04:00.000Z",
-    };
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedAttempt),
@@ -3125,17 +3120,13 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingCancellationEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-      kind: "scheduled",
-      effectiveAt: "2026-08-13T09:00:00.000Z",
-      eventId: "evt-matching-scheduled-retry",
-      subscriptionId: "subscription-current",
-      stateUpdatedAt: "2026-07-13T09:00:00.000Z",
-    });
+
+    const sent = await sendCancellation({ name: "Owner",
+    kind: "scheduled",
+    effectiveAt: scheduledCutoff,
+    eventId: "evt-matching-scheduled-retry",
+    subscriptionId: "subscription-current",
+    stateUpdatedAt: scheduledWatermark, });
 
     expect(sent).toBe(true);
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -3146,10 +3137,10 @@ describe("billing lifecycle emails", () => {
       expect.objectContaining({
         expectedStatus: "failed",
         payloadSnapshot: expect.objectContaining({
-          scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+          scheduledCancellationCutoff: scheduledCutoff,
           scheduledCancellationEventId: "evt-matching-scheduled-retry",
           scheduledCancellationSubscriptionId: "subscription-current",
-          scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+          scheduledCancellationStateUpdatedAt: scheduledWatermark,
         }),
       }),
     );
@@ -3165,23 +3156,20 @@ describe("billing lifecycle emails", () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
       const sendMock = mockEmailSend("msg_stale_outbox_must_not_send");
-      const outboxAttempt = {
+      const outboxAttempt = billingAttempt({
         id: `attempt-${templateName}`,
-        provider: "cloudflare_email",
         status: "pending" as string,
         webhookStatus: "pending" as string,
-        providerMessageId: null,
         templateName,
-        payloadSnapshot: {
-          kind: templateName,
+        payloadSnapshot: billingPayload(templateName, {
           subject: "Stale billing state",
           bodyHtml: "<p>This message no longer describes the account.</p>",
           tag: "billing-lifecycle",
           billingStateFingerprint: null,
           outboxPendingDispatch: true,
-        },
+        }),
         updatedAt: "2026-07-13T09:04:59.000Z",
-      };
+      });
       const updateDeliveryAttemptResult = vi.fn(
         async (_env: unknown, _attemptId: string, input: Record<string, unknown>) => {
           outboxAttempt.status = String(input.status);
@@ -3194,25 +3182,14 @@ describe("billing lifecycle emails", () => {
         updateDeliveryAttemptResult,
       });
 
-      const { sendBillingCancellationEmail, sendBillingRefundEmail } = await import(
-        "~/lib/delivery.server"
-      );
       const dispatch = () =>
         templateName === "billing_refund_revoked"
-          ? sendBillingRefundEmail(emailEnv as never, {
-              userId: "user-1",
-              email: "owner@example.com",
-              name: "Owner",
-              eventId: "evt-stale-outbox",
-            })
-          : sendBillingCancellationEmail(emailEnv as never, {
-              userId: "user-1",
-              email: "owner@example.com",
-              name: "Owner",
-              kind:
-                templateName === "billing_cancellation_scheduled" ? "scheduled" : "ended",
-              eventId: "evt-stale-outbox",
-            });
+          ? sendRefund({ name: "Owner",
+          eventId: "evt-stale-outbox", })
+          : sendCancellation({ name: "Owner",
+          kind:
+            templateName === "billing_cancellation_scheduled" ? "scheduled" : "ended",
+          eventId: "evt-stale-outbox", });
 
       await expect(dispatch()).resolves.toBe(false);
       await expect(dispatch()).resolves.toBe(false);
@@ -3231,30 +3208,23 @@ describe("billing lifecycle emails", () => {
   );
 
   it("records the current recipient when retrying a failed attempt in place", async () => {
-    // The account email changed between the failed attempt and this retry.
-    // The claim must move target_value to the address actually being sent
-    // to, or the ledger and recovery payload keep the stale recipient.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     mockEmailSend("msg_retry_new_target");
-    const failedAttempt = {
+    const failedAttempt = billingAttempt({
       id: "attempt-failed-old-target",
-      provider: "cloudflare_email",
       status: "failed",
       webhookStatus: "failed",
-      providerMessageId: null,
       targetValue: "old@example.com",
       updatedAt: "2026-07-13T08:00:00.000Z",
-    };
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedAttempt),
       updateDeliveryAttemptResult,
     });
 
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
+    const sent = await sendRefund({
       email: "new@example.com",
       name: null,
       eventId: "evt-retry-new-target",
@@ -3274,27 +3244,20 @@ describe("billing lifecycle emails", () => {
   });
 
   it("recovers a marker outbox row when the billing state still matches its kind", async () => {
-    // Crash after the webhook batch, before dispatch: the row has no
-    // post-mutation fingerprint (marker instead). Recovery validates by kind
-    // against the CURRENT billing state and replays.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_marker_recovered");
-    const markerAttempt = {
+    const markerAttempt = billingAttempt({
       id: "attempt-marker",
-      userId: "user-1",
-      targetValue: "owner@example.com",
       templateName: "billing_payment_issue",
-      payloadSnapshot: {
-        kind: "billing_payment_issue",
+      payloadSnapshot: billingPayload("billing_payment_issue", {
         subject: "Action needed: payment failed",
         bodyHtml: "<p>Please update your payment method.</p>",
         tag: "billing-payment-issue",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+      }),
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
@@ -3305,18 +3268,11 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
+
+    const result = await recoverBilling();
 
     expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 1, superseded: 0 });
     expect(sendMock).toHaveBeenCalledTimes(1);
-    // The recovery claim must clear the outbox marker and record a current
-    // fingerprint — a recovery-claimed row that still looks never-dispatched
-    // could be seized by a live sibling webhook mid-provider-call (double
-    // send).
     const claimCall = updateDeliveryAttemptResult.mock.calls[0]!;
     expect(claimCall[1]).toBe(markerAttempt.id);
     expect(claimCall[2].payloadSnapshot).toBeDefined();
@@ -3328,25 +3284,21 @@ describe("billing lifecycle emails", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_scheduled_marker_recovered");
-    const markerAttempt = {
+    const markerAttempt = billingAttempt({
       id: "attempt-scheduled-marker",
-      userId: "user-1",
-      targetValue: "owner@example.com",
       templateName: "billing_cancellation_scheduled",
-      payloadSnapshot: {
-        kind: "billing_cancellation_scheduled",
+      payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
         subject: "Your cancellation is confirmed",
         bodyHtml: "<p>Your paid plan remains active until August.</p>",
         tag: "billing-cancellation",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-        scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+        scheduledCancellationCutoff: scheduledCutoff,
         scheduledCancellationEventId: "evt-scheduled-marker",
         scheduledCancellationSubscriptionId: "subscription-current",
-        scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+        scheduledCancellationStateUpdatedAt: scheduledWatermark,
+      }),
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
@@ -3357,11 +3309,8 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
+
+    const result = await recoverBilling();
 
     expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 1, superseded: 0 });
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -3371,37 +3320,30 @@ describe("billing lifecycle emails", () => {
       markerAttempt.id,
       expect.objectContaining({
         payloadSnapshot: expect.objectContaining({
-          scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+          scheduledCancellationCutoff: scheduledCutoff,
           scheduledCancellationEventId: "evt-scheduled-marker",
           scheduledCancellationSubscriptionId: "subscription-current",
-          scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
+          scheduledCancellationStateUpdatedAt: scheduledWatermark,
         }),
       }),
     );
   });
 
   it("supersedes a marker outbox row when the billing state moved past its kind", async () => {
-    // Same crash shape, but the customer's payment recovered before the
-    // sweep ran — dodoStatus is healthy again, so the dunning email must not
-    // send. It finalizes as retryable 'failed', keeping the day slot open.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_marker_superseded");
-    const markerAttempt = {
+    const markerAttempt = billingAttempt({
       id: "attempt-marker-superseded",
-      userId: "user-1",
-      targetValue: "owner@example.com",
       templateName: "billing_payment_issue",
-      payloadSnapshot: {
-        kind: "billing_payment_issue",
+      payloadSnapshot: billingPayload("billing_payment_issue", {
         subject: "Action needed: payment failed",
         bodyHtml: "<p>Please update your payment method.</p>",
         tag: "billing-payment-issue",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+      }),
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
@@ -3412,11 +3354,8 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
+
+    const result = await recoverBilling();
 
     expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 0, superseded: 1 });
     expect(sendMock).not.toHaveBeenCalled();
@@ -3434,33 +3373,21 @@ describe("billing lifecycle emails", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_crash_bypass_must_not_send");
-    const markerAttempt = {
+    const markerAttempt = billingAttempt({
       id: "attempt-marker-crash",
-      userId: "user-1",
-      provider: "cloudflare_email",
-      status: "pending",
-      webhookStatus: "pending",
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      targetValue: "owner@example.com",
       templateName: "billing_cancellation_scheduled",
-      payloadSnapshot: {
-        kind: "billing_cancellation_scheduled",
+      payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
         subject: "Your cancellation is confirmed",
         bodyHtml: "<p>Your plan will end.</p>",
         tag: "billing-cancellation",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-        scheduledCancellationCutoff: "2026-08-13T09:00:00.000Z",
+        scheduledCancellationCutoff: scheduledCutoff,
         scheduledCancellationEventId: "evt-marker-crash",
         scheduledCancellationSubscriptionId: "subscription-current",
-        scheduledCancellationStateUpdatedAt: "2026-07-13T09:00:00.000Z",
-      } as Record<string, unknown>,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+        scheduledCancellationStateUpdatedAt: scheduledWatermark,
+      }) as Record<string, unknown>,
+    });
     const listStaleBillingLifecycleEmailAttempts = vi.fn(
       async (_env: unknown, input: { staleBefore: string }) =>
         markerAttempt.status === "pending" &&
@@ -3496,14 +3423,14 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+
     const env = { ...emailEnv, DB: {} } as never;
-    await expect(recoverAbandonedBillingLifecycleEmails(env)).rejects.toThrow(
+    await expect(recoverBilling(env)).rejects.toThrow(
       "worker crashed after the durable update",
     );
 
     vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z"));
-    const secondSweep = await recoverAbandonedBillingLifecycleEmails(env);
+    const secondSweep = await recoverBilling(env);
 
     expect(secondSweep).toMatchObject({ scanned: 0, sent: 0 });
     expect(sendMock).not.toHaveBeenCalled();
@@ -3519,20 +3446,16 @@ describe("billing lifecycle emails", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_recovered_billing");
-    const staleAttempt = {
+    const staleAttempt = billingAttempt({
       id: "attempt-recovery",
-      userId: "user-1",
-      targetValue: "owner@example.com",
       templateName: "billing_refund",
-      payloadSnapshot: {
-        kind: "billing_refund",
+      payloadSnapshot: billingPayload("billing_refund", {
         subject: "Your refund has been processed",
         bodyHtml: "<p>Your refund is complete.</p>",
         tag: "billing-refund",
         billingStateFingerprint: currentBillingStateFingerprint,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+      }),
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const listStaleBillingLifecycleEmailAttempts = vi.fn().mockResolvedValue([staleAttempt]);
     mockBillingDataServer({
@@ -3540,11 +3463,8 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
+
+    const result = await recoverBilling();
 
     expect(result).toEqual({
       scanned: 1,
@@ -3600,28 +3520,21 @@ describe("billing lifecycle emails", () => {
       .mockRejectedValueOnce(new Error("provider explicitly rejected"))
       .mockResolvedValueOnce({ messageId: "msg_recovery_retry" });
 
-    const attempt = {
+    const attempt = billingAttempt({
       id: "attempt-recovery-two-sweep",
-      userId: "user-1",
-      provider: "cloudflare_email",
-      status: "pending",
-      webhookStatus: "pending",
       providerMessageId: null as string | null,
       providerStatusLastSeenAt: null as string | null,
-      targetValue: "owner@example.com",
       templateName: "billing_refund",
-      payloadSnapshot: {
-        kind: "billing_refund",
+      payloadSnapshot: billingPayload("billing_refund", {
         subject: "Your refund has been processed",
         bodyHtml: "<p>Your refund is complete.</p>",
         tag: "billing-refund",
         billingStateFingerprint: currentBillingStateFingerprint,
-      } as Record<string, unknown>,
+      }) as Record<string, unknown>,
       errorMessage: null as string | null,
       sentAt: null as string | null,
       failedAt: null as string | null,
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+    });
     const listStaleBillingLifecycleEmailAttempts = vi.fn(async () => {
       const attempts = Number(attempt.payloadSnapshot.recoveryAttemptCount ?? 0);
       const retryablePending =
@@ -3663,10 +3576,10 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
+
     const env = { ...emailEnv, DB: {} } as never;
-    const firstSweep = await recoverAbandonedBillingLifecycleEmails(env);
-    const secondSweep = await recoverAbandonedBillingLifecycleEmails(env);
+    const firstSweep = await recoverBilling(env);
+    const secondSweep = await recoverBilling(env);
 
     expect(firstSweep).toMatchObject({ scanned: 1, claimed: 1, failed: 1, sent: 0 });
     expect(secondSweep).toMatchObject({ scanned: 1, claimed: 1, failed: 0, sent: 1 });
@@ -3688,20 +3601,16 @@ describe("billing lifecycle emails", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_superseded_must_not_send");
-    const staleAttempt = {
+    const staleAttempt = billingAttempt({
       id: "attempt-superseded",
-      userId: "user-1",
-      targetValue: "owner@example.com",
       templateName: "billing_payment_issue",
-      payloadSnapshot: {
-        kind: "billing_payment_issue",
+      payloadSnapshot: billingPayload("billing_payment_issue", {
         subject: "Action needed: payment failed",
         bodyHtml: "<p>Please update your payment method.</p>",
         tag: "billing-payment-issue",
         billingStateFingerprint: currentBillingStateFingerprint,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+      }),
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
@@ -3713,11 +3622,8 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
+
+    const result = await recoverBilling();
 
     expect(result).toEqual({
       scanned: 1,
@@ -3729,10 +3635,6 @@ describe("billing lifecycle emails", () => {
       conflicts: 0,
     });
     expect(sendMock).not.toHaveBeenCalled();
-    // Superseded rows finalize as skipped (an intentional non-send that must
-    // not inflate operator failure counts) — but the slot stays claimable:
-    // sendBillingLifecycleEmail retries skipped+provider_unknown rows in
-    // place, so a later same-day payment.failed webhook can still send.
     expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
       expect.anything(),
       staleAttempt.id,
@@ -3746,21 +3648,15 @@ describe("billing lifecycle emails", () => {
   });
 
   it("claims a recovery-superseded slot in place and sends fresh content", async () => {
-    // The recovery sweep refused to replay stale content and skipped the
-    // row; a NEW same-day payment event must still be able to take the
-    // day-keyed slot and email content built from the current event.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     const sendMock = mockEmailSend("msg_superseded_reclaim");
-    const supersededAttempt = {
+    const supersededAttempt = billingAttempt({
       id: "attempt-superseded-slot",
-      provider: "cloudflare_email",
       status: "skipped_due_to_dedupe",
       webhookStatus: "provider_unknown",
-      providerMessageId: null,
-      targetValue: "owner@example.com",
       updatedAt: "2026-07-13T08:30:00.000Z",
-    };
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const mocks = mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(supersededAttempt),
@@ -3771,13 +3667,9 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      occurredAt: "2026-07-13T09:00:00.000Z",
-    });
+
+    const sent = await sendPaymentIssue({ name: null,
+    occurredAt: scheduledWatermark, });
 
     expect(sent).toBe(true);
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -3798,20 +3690,16 @@ describe("billing lifecycle emails", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
     emailSend = vi.fn(() => new Promise(() => undefined));
-    const staleAttempt = {
+    const staleAttempt = billingAttempt({
       id: "attempt-recovery-timeout",
-      userId: "user-1",
-      targetValue: "owner@example.com",
       templateName: "billing_refund",
-      payloadSnapshot: {
-        kind: "billing_refund",
+      payloadSnapshot: billingPayload("billing_refund", {
         subject: "Your refund has been processed",
         bodyHtml: "<p>Your refund is complete.</p>",
         tag: "billing-refund",
         billingStateFingerprint: currentBillingStateFingerprint,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
+      }),
+    });
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
@@ -3865,11 +3753,8 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
+
+    const result = await recoverBilling();
 
     expect(result).toEqual(
       expect.objectContaining({ scanned: 1, claimed: 1, sent: 0, failed: 1 }),
@@ -3902,9 +3787,7 @@ describe("billing lifecycle emails", () => {
     const updateDeliveryAttemptResult = vi.fn();
     mockBillingDataServer({ getDeliveryAttemptByIdempotencyKey, updateDeliveryAttemptResult });
 
-    const { reconcileBillingLifecycleEmailDelivery, sendBillingRefundEmail } = await import(
-      "~/lib/delivery.server"
-    );
+    const { reconcileBillingLifecycleEmailDelivery } = await import("~/lib/delivery.server");
     await expect(
       reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
         idempotencyKey: "billing-refund:user-1:evt-refund-retry",
@@ -3914,12 +3797,8 @@ describe("billing lifecycle emails", () => {
       }),
     ).resolves.toBe(true);
 
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-refund-retry",
-    });
+    const sent = await sendRefund({ name: null,
+    eventId: "evt-refund-retry", });
 
     expect(sent).toBe(true);
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -4068,15 +3947,9 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { reconcileBillingLifecycleEmailDelivery, sendBillingRefundEmail } = await import(
-      "~/lib/delivery.server"
-    );
-    const sendResult = sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-in-flight-reconcile",
-    });
+    const { reconcileBillingLifecycleEmailDelivery } = await import("~/lib/delivery.server");
+    const sendResult = sendRefund({ name: null,
+    eventId: "evt-in-flight-reconcile", });
     await providerStarted;
 
     await expect(
@@ -4114,17 +3987,13 @@ describe("billing lifecycle emails", () => {
       }),
     });
 
-    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingCancellationEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-      kind: "scheduled",
-      effectiveAt: "2026-08-01T00:00:00.000Z",
-      eventId: "evt-cancel-1",
-      subscriptionId: "subscription-current",
-      stateUpdatedAt: "2026-07-13T09:00:00.000Z",
-    });
+
+    const sent = await sendCancellation({ name: "Owner",
+    kind: "scheduled",
+    effectiveAt: "2026-08-01T00:00:00.000Z",
+    eventId: "evt-cancel-1",
+    subscriptionId: "subscription-current",
+    stateUpdatedAt: scheduledWatermark, });
 
     expect(sent).toBe(true);
     const payload = emailSendPayload(sendMock);
@@ -4148,17 +4017,13 @@ describe("billing lifecycle emails", () => {
       }),
     });
 
-    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingCancellationEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      kind: "scheduled",
-      effectiveAt: null,
-      eventId: "evt-cancel-2",
-      subscriptionId: "subscription-current",
-      stateUpdatedAt: "2026-07-13T09:00:00.000Z",
-    });
+
+    const sent = await sendCancellation({ name: null,
+    kind: "scheduled",
+    effectiveAt: null,
+    eventId: "evt-cancel-2",
+    subscriptionId: "subscription-current",
+    stateUpdatedAt: scheduledWatermark, });
 
     expect(sent).toBe(false);
     expect(sendMock).not.toHaveBeenCalled();
@@ -4169,14 +4034,10 @@ describe("billing lifecycle emails", () => {
     const sendMock = mockEmailSend();
     const mocks = mockBillingDataServer();
 
-    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingCancellationEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-      kind: "ended",
-      eventId: "evt-expired-1",
-    });
+
+    const sent = await sendCancellation({ name: "Owner",
+    kind: "ended",
+    eventId: "evt-expired-1", });
 
     expect(sent).toBe(true);
     const payload = emailSendPayload(sendMock);
@@ -4194,13 +4055,9 @@ describe("billing lifecycle emails", () => {
     const sendMock = mockEmailSend();
     const mocks = mockBillingDataServer();
 
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-      eventId: "evt-refund-1",
-    });
+
+    const sent = await sendRefund({ name: "Owner",
+    eventId: "evt-refund-1", });
 
     expect(sent).toBe(true);
     const payload = emailSendPayload(sendMock);
@@ -4217,7 +4074,7 @@ describe("billing lifecycle emails", () => {
 
   it("turns an explicit rejection into one durable retry without duplicate successful mail", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
+    vi.setSystemTime(new Date(scheduledWatermark));
     emailSend = vi
       .fn()
       .mockRejectedValueOnce(new Error("smtp down"))
@@ -4259,7 +4116,7 @@ describe("billing lifecycle emails", () => {
       updateDeliveryAttemptResult,
     });
 
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
+
     const input = {
       userId: "user-1",
       email: "owner@example.com",
@@ -4268,17 +4125,15 @@ describe("billing lifecycle emails", () => {
       retryWebhookOnExplicitFailure: true,
     };
 
-    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).rejects.toMatchObject({
+    await expect(sendPaymentIssue(input)).rejects.toMatchObject({
       code: "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE",
       idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
     });
     expect(attemptStatus).toBe("failed");
 
-    // Dodo can redeliver on a later date; the provider event time keeps the
-    // retry on the same durable attempt instead of creating a second key.
     vi.setSystemTime(new Date("2026-07-14T09:00:00.000Z"));
-    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).resolves.toBe(true);
-    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).resolves.toBe(false);
+    await expect(sendPaymentIssue(input)).resolves.toBe(true);
+    await expect(sendPaymentIssue(input)).resolves.toBe(false);
 
     expect(attemptStatus).toBe("sent");
     expect(emailSend).toHaveBeenCalledTimes(2);
@@ -4300,29 +4155,25 @@ describe("billing lifecycle emails", () => {
       vi.setSystemTime(new Date("2026-07-14T09:00:00.000Z"));
       emailSend = vi.fn().mockRejectedValue(new Error("provider explicitly rejected"));
 
-      const attempt = {
+      const attempt = billingAttempt({
         id: "attempt-live-redelivery-budget",
-        userId: "user-1",
-        provider: "cloudflare_email",
         status: "failed" as "pending" | "failed" | "sent",
         webhookStatus: "failed" as "pending" | "failed" | "provider_unknown",
         providerMessageId: null as string | null,
         providerStatusLastSeenAt: "2026-07-14T08:55:00.000Z" as string | null,
-        targetValue: "owner@example.com",
         templateName: "billing_refund_revoked",
-        payloadSnapshot: {
-          kind: "billing_refund_revoked",
+        payloadSnapshot: billingPayload("billing_refund_revoked", {
           subject: "Your refund has been processed",
           bodyHtml: "<p>Your refund is complete.</p>",
           tag: "billing-refund",
           billingStateFingerprint: currentBillingStateFingerprint,
           recoveryAttemptCount: startingCount,
-        } as Record<string, unknown>,
+        }) as Record<string, unknown>,
         errorMessage: "Earlier explicit rejection." as string | null,
         sentAt: null as string | null,
         failedAt: "2026-07-14T08:55:00.000Z" as string | null,
         updatedAt: "2026-07-14T08:55:00.000Z",
-      };
+      });
       const listStaleBillingLifecycleEmailAttempts = vi.fn(async () => {
         const count = attempt.payloadSnapshot.recoveryAttemptCount;
         return attempt.status === "failed" &&
@@ -4365,28 +4216,14 @@ describe("billing lifecycle emails", () => {
         updateDeliveryAttemptResult,
       });
 
-      const {
-        recoverAbandonedBillingLifecycleEmails,
-        sendBillingRefundEmail,
-      } = await import("~/lib/delivery.server");
       await expect(
-        sendBillingRefundEmail(emailEnv as never, {
-          userId: "user-1",
-          email: "owner@example.com",
-          name: null,
-          eventId: "evt-live-redelivery-budget",
-          retryWebhookOnExplicitFailure: true,
-        }),
+        sendRefund({ name: null,
+        eventId: "evt-live-redelivery-budget",
+        retryWebhookOnExplicitFailure: true, }),
       ).rejects.toMatchObject({ code: "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE" });
 
-      const firstCron = await recoverAbandonedBillingLifecycleEmails({
-        ...emailEnv,
-        DB: {},
-      } as never);
-      const secondCron = await recoverAbandonedBillingLifecycleEmails({
-        ...emailEnv,
-        DB: {},
-      } as never);
+      const firstCron = await recoverBilling();
+      const secondCron = await recoverBilling();
 
       expect([firstCron.scanned, secondCron.scanned]).toEqual(expectedCronScans);
       expect(emailSend).toHaveBeenCalledTimes(expectedProviderCalls);
@@ -4405,27 +4242,20 @@ describe("billing lifecycle emails", () => {
       const sendMock = mockEmailSend("msg_invalid_count_reclaim");
       const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
       mockBillingDataServer({
-        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(billingAttempt({
           id: "attempt-invalid-recovery-count",
-          provider: "cloudflare_email",
           status: "failed",
           webhookStatus: "failed",
-          providerMessageId: null,
           providerStatusLastSeenAt: "2026-07-14T08:55:00.000Z",
-          targetValue: "owner@example.com",
           payloadSnapshot: { recoveryAttemptCount: invalidCount },
-        }),
+        })),
         updateDeliveryAttemptResult,
       });
 
-      const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
+
       await expect(
-        sendBillingRefundEmail(emailEnv as never, {
-          userId: "user-1",
-          email: "owner@example.com",
-          name: null,
-          eventId: "evt-invalid-recovery-count",
-        }),
+        sendRefund({ name: null,
+        eventId: "evt-invalid-recovery-count", }),
       ).resolves.toBe(true);
 
       expect(sendMock).toHaveBeenCalledTimes(1);
@@ -4448,24 +4278,19 @@ describe("billing lifecycle emails", () => {
     async (status, webhookStatus) => {
       const sendMock = mockEmailSend("msg_must_not_send");
       const mocks = mockBillingDataServer({
-        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(billingAttempt({
           id: "attempt-terminal-or-unknown",
-          provider: "cloudflare_email",
           status,
           webhookStatus,
           providerMessageId: status === "sent" ? "msg_existing" : null,
-        }),
+        })),
       });
 
-      const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
+
       await expect(
-        sendBillingRefundEmail(emailEnv as never, {
-          userId: "user-1",
-          email: "owner@example.com",
-          name: null,
-          eventId: "evt-suppressed-redelivery",
-          retryWebhookOnExplicitFailure: true,
-        }),
+        sendRefund({ name: null,
+        eventId: "evt-suppressed-redelivery",
+        retryWebhookOnExplicitFailure: true, }),
       ).resolves.toBe(false);
 
       expect(sendMock).not.toHaveBeenCalled();
@@ -4478,13 +4303,9 @@ describe("billing lifecycle emails", () => {
     emailSend = vi.fn().mockRejectedValue(new Error("smtp down"));
     const mocks = mockBillingDataServer();
 
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-refund-2",
-    });
+
+    const sent = await sendRefund({ name: null,
+    eventId: "evt-refund-2", });
 
     expect(sent).toBe(false);
     const attempt = mocks.createDeliveryAttempt.mock.calls[0]?.[1];

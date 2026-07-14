@@ -22,6 +22,12 @@ function webhookTimestampIso(value: string | null) {
   return new Date(timestampSeconds * 1000).toISOString();
 }
 
+function sameBillingInstant(left: string | null | undefined, right: string | null | undefined) {
+  const leftMs = Date.parse(left ?? "");
+  const rightMs = Date.parse(right ?? "");
+  return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
+}
+
 export async function action({ context, request }: ActionFunctionArgs) {
   const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
   const { getEnv } = await import("~/lib/context.server");
@@ -200,6 +206,72 @@ export async function action({ context, request }: ActionFunctionArgs) {
         !subscriptionGrant.hasProviderGrantTimestamp;
       const fallbackGrantAt = planChangedWithoutProviderTimestamp ? verifiedWebhookTimestamp : undefined;
       const acceptedGrantAt = subscriptionGrant.grantedAt ?? fallbackGrantAt;
+      const grantLedger = {
+        ...ledgerBase,
+        outcome: "processed" as const,
+        metadata: {
+          action: "subscription_grant",
+          userId: subscriptionGrant.userId,
+          plan: subscriptionGrant.plan,
+          eventType: subscriptionGrant.eventType,
+        },
+      };
+      const sendScheduledCancellationEmail = (stateUpdatedAt: string | null) =>
+        sendBillingLifecycleEmailSafely(
+          "cancellation_scheduled",
+          subscriptionGrant.userId,
+          (delivery, profile) =>
+            delivery.sendBillingCancellationEmail(env, {
+              userId: subscriptionGrant.userId,
+              email: profile.email,
+              name: profile.name,
+              kind: "scheduled",
+              effectiveAt: subscriptionGrant.nextBillingAt,
+              eventId,
+              subscriptionId: subscriptionGrant.subscriptionId,
+              stateUpdatedAt,
+              retryWebhookOnExplicitFailure: true,
+            }),
+        );
+      if (lifecycleEmailRetry?.kind === "cancellation_scheduled") {
+        const retryEnvelopeMatches =
+          cancellationScheduled &&
+          lifecycleEmailRetry.userId === subscriptionGrant.userId &&
+          lifecycleEmailRetry.idempotencyKey ===
+            `billing-cancellation:${subscriptionGrant.userId}:${eventId}`;
+        const currentState = retryEnvelopeMatches
+          ? await getUserPlanBillingInfo(env, subscriptionGrant.userId)
+          : null;
+        const retryIdentityMatches =
+          currentState?.dodoStatus === "cancellation_scheduled" &&
+          currentState.dodoSubscriptionId === subscriptionGrant.subscriptionId &&
+          sameBillingInstant(currentState.dodoNextBillingAt, subscriptionGrant.nextBillingAt) &&
+          Number.isFinite(Date.parse(currentState.planUpdatedAt ?? ""));
+        await finalizeDodoWebhookLedgerOnly(
+          env,
+          retryIdentityMatches
+            ? grantLedger
+            : {
+                ...ledgerBase,
+                outcome: "ignored",
+                metadata: {
+                  action: "lifecycle_email_retry_identity_mismatch",
+                  userId: lifecycleEmailRetry.userId,
+                  eventType: subscriptionGrant.eventType,
+                },
+              },
+        );
+        if (retryIdentityMatches) {
+          await sendScheduledCancellationEmail(currentState.planUpdatedAt);
+        }
+        return {
+          outcome: retryIdentityMatches ? "processed" : "ignored",
+          metadata: retryIdentityMatches
+            ? grantLedger.metadata
+            : { action: "lifecycle_email_retry_identity_mismatch" },
+          body: { ok: true, cancellationScheduled: true },
+        };
+      }
       // Live Dodo subscription payloads carry no updated_at (verified against
       // the live subscriptions API, 2026-07-13), so real plan_changed events
       // arrive without a provider grant timestamp. A pure scheduled
@@ -280,48 +352,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
           requirePlanChangePending: requiresPendingPlanChange,
         },
         getPlanLimit(subscriptionGrant.plan, "watchlists"),
-        {
-          ...ledgerBase,
-          outcome: "processed",
-          metadata: {
-            action: "subscription_grant",
-            userId: subscriptionGrant.userId,
-            plan: subscriptionGrant.plan,
-            eventType: subscriptionGrant.eventType,
-          },
-        },
+        grantLedger,
         { lifecycleEmailOutbox: cancellationOutbox },
       );
-      const matchesScheduledCancellationRetry =
-        lifecycleEmailRetry?.kind === "cancellation_scheduled" &&
-        lifecycleEmailRetry.userId === subscriptionGrant.userId;
-      const currentScheduledCancellationState =
-        matchesScheduledCancellationRetry &&
-        cancellationScheduled &&
-        grantApplied?.changed === false
-          ? await getUserPlanBillingInfo(env, subscriptionGrant.userId)
-          : null;
-      const shouldRetryScheduledCancellationEmail =
-        currentScheduledCancellationState?.dodoStatus === "cancellation_scheduled" &&
-        currentScheduledCancellationState.dodoSubscriptionId ===
-          subscriptionGrant.subscriptionId;
-      if (
-        cancellationScheduled &&
-        (grantApplied?.changed !== false || shouldRetryScheduledCancellationEmail)
-      ) {
-        await sendBillingLifecycleEmailSafely("cancellation_scheduled", subscriptionGrant.userId, (delivery, profile) =>
-          delivery.sendBillingCancellationEmail(env, {
-            userId: subscriptionGrant.userId,
-            email: profile.email,
-            name: profile.name,
-            kind: "scheduled",
-            effectiveAt: subscriptionGrant.nextBillingAt,
-            eventId,
-            subscriptionId: subscriptionGrant.subscriptionId,
-            stateUpdatedAt: acceptedGrantAt ?? null,
-            retryWebhookOnExplicitFailure: true,
-          }),
-        );
+      if (cancellationScheduled && grantApplied?.changed !== false) {
+        await sendScheduledCancellationEmail(acceptedGrantAt ?? null);
       }
       return {
         outcome: "processed",
