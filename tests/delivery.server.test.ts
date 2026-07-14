@@ -2501,6 +2501,42 @@ describe("billing lifecycle emails", () => {
     };
   }
 
+  function recoveryAttempt(
+    id: string,
+    templateName = "billing_refund_revoked",
+    payloadOverrides: Record<string, unknown> = {},
+    attemptOverrides: Record<string, unknown> = {},
+  ) {
+    return billingAttempt({
+      id,
+      templateName,
+      payloadSnapshot: billingPayload(templateName, {
+        ...payloadOverrides,
+      }) as Record<string, unknown>,
+      ...attemptOverrides,
+    });
+  }
+
+  function scheduledRecoveryAttempt(
+    id: string,
+    eventId: string,
+    payloadOverrides: Record<string, unknown> = {},
+    attemptOverrides: Record<string, unknown> = {},
+  ) {
+    return recoveryAttempt(id, "billing_cancellation_scheduled", {
+      scheduledCancellationCutoff: scheduledCutoff,
+      scheduledCancellationEventId: eventId,
+      scheduledCancellationSubscriptionId: "subscription-current",
+      scheduledCancellationStateUpdatedAt: scheduledWatermark,
+      ...payloadOverrides,
+    }, attemptOverrides);
+  }
+
+  function useRecoveryClock(at = "2026-07-13T09:05:00.000Z") {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(at));
+  }
+
   type Delivery = typeof import("~/lib/delivery.server");
   type PaymentInput = Parameters<Delivery["sendBillingPaymentIssueEmail"]>[1];
   type RefundInput = Parameters<Delivery["sendBillingRefundEmail"]>[1];
@@ -2526,6 +2562,13 @@ describe("billing lifecycle emails", () => {
   ) {
     const delivery = await import("~/lib/delivery.server");
     return delivery.sendBillingCancellationEmail(emailEnv as never, { ...recipient, ...input });
+  }
+
+  function sendScheduledCancellation(
+    eventId: string,
+    overrides: Partial<CancellationInput> = {},
+  ) {
+    return sendCancellation({ name: "Owner", kind: "scheduled", effectiveAt: scheduledCutoff, eventId, ...overrides });
   }
 
   async function recoverBilling(env = { ...emailEnv, DB: {} } as never) {
@@ -2568,6 +2611,43 @@ describe("billing lifecycle emails", () => {
       listStaleBillingLifecycleEmailAttempts,
       updateDeliveryAttemptResult,
     };
+  }
+
+  function mockRecoveryAttempt(
+    attempt: unknown,
+    overrides: Record<string, unknown> = {},
+  ) {
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    mockBillingDataServer({
+      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([attempt]),
+      updateDeliveryAttemptResult,
+      ...overrides,
+    });
+    return updateDeliveryAttemptResult;
+  }
+
+  function trackAttemptUpdates(attempt: ReturnType<typeof recoveryAttempt>) {
+    return vi.fn(async (_env: unknown, _attemptId: string, input: Record<string, unknown>) => {
+      if (input.expectedStatus && attempt.status !== input.expectedStatus) return false;
+      if (input.expectedWebhookStatus && attempt.webhookStatus !== input.expectedWebhookStatus) {
+        return false;
+      }
+      if (input.expectedUpdatedAt && attempt.updatedAt !== input.expectedUpdatedAt) return false;
+      attempt.provider = String(input.provider);
+      attempt.status = String(input.status);
+      attempt.webhookStatus = String(input.webhookStatus);
+      attempt.providerMessageId = (input.providerMessageId as string | null) ?? null;
+      attempt.providerStatusLastSeenAt = (input.providerStatusLastSeenAt as string | null) ?? null;
+      attempt.errorMessage = (input.errorMessage as string | null) ?? null;
+      attempt.sentAt = (input.sentAt as string | null) ?? null;
+      attempt.failedAt = (input.failedAt as string | null) ?? null;
+      if (input.payloadSnapshot) {
+        attempt.payloadSnapshot = input.payloadSnapshot as Record<string, unknown>;
+      }
+      attempt.targetValue = String(input.targetValue ?? attempt.targetValue);
+      attempt.updatedAt = String(input.updatedAt ?? new Date().toISOString());
+      return true;
+    });
   }
 
   afterEach(() => {
@@ -2775,8 +2855,7 @@ describe("billing lifecycle emails", () => {
   });
 
   it("reclaims a stale billing pre-dispatch lease and sends once", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_stale_billing");
     const staleAttempt = billingAttempt({
       id: "attempt-stale",
@@ -2821,21 +2900,18 @@ describe("billing lifecycle emails", () => {
   });
 
   it("claims a freshly-enqueued outbox row and dispatches it immediately", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_outbox_dispatch");
-    const outboxAttempt = billingAttempt({
-      id: "attempt-outbox",
-      templateName: "billing_refund_revoked",
-      payloadSnapshot: billingPayload("billing_refund_revoked", {
-        subject: "Your refund has been processed",
+    const outboxAttempt = recoveryAttempt(
+      "attempt-outbox",
+      "billing_refund_revoked",
+      {
         bodyHtml: "<p>Your workspace moved to Free.</p>",
-        tag: "billing-refund",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-      }),
-      updatedAt: "2026-07-13T09:04:59.000Z",
-    });
+      },
+      { updatedAt: "2026-07-13T09:04:59.000Z" },
+    );
     const refundedBillingInfo = {
       ...currentBillingInfo,
       plan: "free" as const,
@@ -2873,56 +2949,25 @@ describe("billing lifecycle emails", () => {
   });
 
   it.each([
-    {
-      label: "passed cutoff",
-      currentPlan: "starter" as const,
-      currentCutoff: "2026-07-13T09:04:00.000Z",
-      currentStateUpdatedAt: scheduledWatermark,
-      expectedSent: false,
-    },
-    {
-      label: "non-paid effective plan",
-      currentPlan: "free" as const,
-      currentCutoff: scheduledCutoff,
-      currentStateUpdatedAt: scheduledWatermark,
-      expectedSent: false,
-    },
-    {
-      label: "later cancellation date",
-      currentPlan: "starter" as const,
-      currentCutoff: "2026-09-13T09:00:00.000Z",
-      currentStateUpdatedAt: "2026-07-14T09:00:00.000Z",
-      expectedSent: false,
-    },
-    {
-      label: "matching future cancellation",
-      currentPlan: "starter" as const,
-      currentCutoff: scheduledCutoff,
-      currentStateUpdatedAt: scheduledWatermark,
-      expectedSent: true,
-    },
+    { label: "passed cutoff", currentPlan: "starter" as const, currentCutoff: "2026-07-13T09:04:00.000Z", currentStateUpdatedAt: scheduledWatermark, expectedSent: false },
+    { label: "non-paid effective plan", currentPlan: "free" as const, currentCutoff: scheduledCutoff, currentStateUpdatedAt: scheduledWatermark, expectedSent: false },
+    { label: "later cancellation date", currentPlan: "starter" as const, currentCutoff: "2026-09-13T09:00:00.000Z", currentStateUpdatedAt: "2026-07-14T09:00:00.000Z", expectedSent: false },
+    { label: "matching future cancellation", currentPlan: "starter" as const, currentCutoff: scheduledCutoff, currentStateUpdatedAt: scheduledWatermark, expectedSent: true },
   ])(
     "validates a batch-enqueued scheduled cancellation with $label before live dispatch",
     async ({ currentPlan, currentCutoff, currentStateUpdatedAt, expectedSent }) => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+      useRecoveryClock();
       const sendMock = mockEmailSend("msg_scheduled_identity");
-      const outboxAttempt = billingAttempt({
-        id: "attempt-scheduled-identity",
-        templateName: "billing_cancellation_scheduled",
-        payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
-          subject: "Your cancellation is confirmed",
+      const outboxAttempt = scheduledRecoveryAttempt(
+        "attempt-scheduled-identity",
+        "evt-scheduled-identity",
+        {
           bodyHtml: "<p>Your paid plan remains active until the cutoff.</p>",
-          tag: "billing-cancellation",
           billingStateFingerprint: null,
           outboxPendingDispatch: true,
-          scheduledCancellationCutoff: scheduledCutoff,
-          scheduledCancellationEventId: "evt-scheduled-identity",
-          scheduledCancellationSubscriptionId: "subscription-current",
-          scheduledCancellationStateUpdatedAt: scheduledWatermark,
-        }),
-        updatedAt: "2026-07-13T09:04:59.000Z",
-      });
+        },
+        { updatedAt: "2026-07-13T09:04:59.000Z" },
+      );
       const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
       mockBillingDataServer({
         getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(outboxAttempt),
@@ -2937,10 +2982,7 @@ describe("billing lifecycle emails", () => {
       });
 
 
-      const sent = await sendCancellation({ name: "Owner",
-      kind: "scheduled",
-      effectiveAt: scheduledCutoff,
-      eventId: "evt-scheduled-identity", });
+      const sent = await sendScheduledCancellation("evt-scheduled-identity");
 
       expect(sent).toBe(expectedSent);
       expect(sendMock).toHaveBeenCalledTimes(expectedSent ? 1 : 0);
@@ -2977,26 +3019,20 @@ describe("billing lifecycle emails", () => {
   );
 
   it("does not revive a failed older scheduled cancellation after a later date wins", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_old_scheduled_retry_must_not_send");
-    const failedAttempt = billingAttempt({
-      id: "attempt-old-scheduled-failed",
-      status: "failed",
-      webhookStatus: "failed",
-      templateName: "billing_cancellation_scheduled",
-      payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
-        subject: "Your cancellation is confirmed",
-        bodyHtml: "<p>Your plan remains active until August.</p>",
-        tag: "billing-cancellation",
+    const failedAttempt = scheduledRecoveryAttempt(
+      "attempt-old-scheduled-failed",
+      "evt-old-scheduled",
+      {
         billingStateFingerprint: currentBillingStateFingerprint,
-        scheduledCancellationCutoff: scheduledCutoff,
-        scheduledCancellationEventId: "evt-old-scheduled",
-        scheduledCancellationSubscriptionId: "subscription-current",
-        scheduledCancellationStateUpdatedAt: scheduledWatermark,
-      }),
-      updatedAt: "2026-07-13T09:04:00.000Z",
-    });
+      },
+      {
+        status: "failed",
+        webhookStatus: "failed",
+        updatedAt: "2026-07-13T09:04:00.000Z",
+      },
+    );
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedAttempt),
@@ -3010,10 +3046,7 @@ describe("billing lifecycle emails", () => {
     });
 
 
-    const sent = await sendCancellation({ name: "Owner",
-    kind: "scheduled",
-    effectiveAt: scheduledCutoff,
-    eventId: "evt-old-scheduled", });
+    const sent = await sendScheduledCancellation("evt-old-scheduled");
 
     expect(sent).toBe(false);
     expect(sendMock).not.toHaveBeenCalled();
@@ -3032,23 +3065,12 @@ describe("billing lifecycle emails", () => {
   });
 
   it.each([
-    {
-      label: "replaced state",
-      currentCutoff: "2026-09-13T09:00:00.000Z",
-      currentStateUpdatedAt: "2026-07-14T09:00:00.000Z",
-      expectedSent: false,
-    },
-    {
-      label: "matching current state",
-      currentCutoff: scheduledCutoff,
-      currentStateUpdatedAt: scheduledWatermark,
-      expectedSent: true,
-    },
+    { label: "replaced state", currentCutoff: "2026-09-13T09:00:00.000Z", currentStateUpdatedAt: "2026-07-14T09:00:00.000Z", expectedSent: false },
+    { label: "matching current state", currentCutoff: scheduledCutoff, currentStateUpdatedAt: scheduledWatermark, expectedSent: true },
   ])(
     "validates a no-outbox scheduled-cancellation fallback against $label",
     async ({ currentCutoff, currentStateUpdatedAt, expectedSent }) => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+      useRecoveryClock();
       const sendMock = mockEmailSend("msg_no_outbox_scheduled");
       const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-no-outbox");
       mockBillingDataServer({
@@ -3063,12 +3085,10 @@ describe("billing lifecycle emails", () => {
       });
 
 
-      const sent = await sendCancellation({ name: "Owner",
-      kind: "scheduled",
-      effectiveAt: scheduledCutoff,
-      eventId: "evt-no-outbox",
-      subscriptionId: "subscription-current",
-      stateUpdatedAt: scheduledWatermark, });
+      const sent = await sendScheduledCancellation("evt-no-outbox", {
+        subscriptionId: "subscription-current",
+        stateUpdatedAt: scheduledWatermark,
+      });
 
       expect(sent).toBe(expectedSent);
       expect(sendMock).toHaveBeenCalledTimes(expectedSent ? 1 : 0);
@@ -3090,26 +3110,20 @@ describe("billing lifecycle emails", () => {
   );
 
   it("retains scheduled-cancellation identity while retrying an explicit failure", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_matching_scheduled_retry");
-    const failedAttempt = billingAttempt({
-      id: "attempt-matching-scheduled-failed",
-      status: "failed",
-      webhookStatus: "failed",
-      templateName: "billing_cancellation_scheduled",
-      payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
-        subject: "Your cancellation is confirmed",
-        bodyHtml: "<p>Your plan remains active until August.</p>",
-        tag: "billing-cancellation",
+    const failedAttempt = scheduledRecoveryAttempt(
+      "attempt-matching-scheduled-failed",
+      "evt-matching-scheduled-retry",
+      {
         billingStateFingerprint: currentBillingStateFingerprint,
-        scheduledCancellationCutoff: scheduledCutoff,
-        scheduledCancellationEventId: "evt-matching-scheduled-retry",
-        scheduledCancellationSubscriptionId: "subscription-current",
-        scheduledCancellationStateUpdatedAt: scheduledWatermark,
-      }),
-      updatedAt: "2026-07-13T09:04:00.000Z",
-    });
+      },
+      {
+        status: "failed",
+        webhookStatus: "failed",
+        updatedAt: "2026-07-13T09:04:00.000Z",
+      },
+    );
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     mockBillingDataServer({
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedAttempt),
@@ -3121,12 +3135,10 @@ describe("billing lifecycle emails", () => {
     });
 
 
-    const sent = await sendCancellation({ name: "Owner",
-    kind: "scheduled",
-    effectiveAt: scheduledCutoff,
-    eventId: "evt-matching-scheduled-retry",
-    subscriptionId: "subscription-current",
-    stateUpdatedAt: scheduledWatermark, });
+    const sent = await sendScheduledCancellation("evt-matching-scheduled-retry", {
+      subscriptionId: "subscription-current",
+      stateUpdatedAt: scheduledWatermark,
+    });
 
     expect(sent).toBe(true);
     expect(sendMock).toHaveBeenCalledTimes(1);
@@ -3153,23 +3165,24 @@ describe("billing lifecycle emails", () => {
   ] as const)(
     "supersedes a stale batch-enqueued %s email before provider dispatch",
     async (_label, templateName) => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+      useRecoveryClock();
       const sendMock = mockEmailSend("msg_stale_outbox_must_not_send");
-      const outboxAttempt = billingAttempt({
-        id: `attempt-${templateName}`,
-        status: "pending" as string,
-        webhookStatus: "pending" as string,
+      const outboxAttempt = recoveryAttempt(
+        `attempt-${templateName}`,
         templateName,
-        payloadSnapshot: billingPayload(templateName, {
+        {
           subject: "Stale billing state",
           bodyHtml: "<p>This message no longer describes the account.</p>",
           tag: "billing-lifecycle",
           billingStateFingerprint: null,
           outboxPendingDispatch: true,
-        }),
-        updatedAt: "2026-07-13T09:04:59.000Z",
-      });
+        },
+        {
+          status: "pending" as string,
+          webhookStatus: "pending" as string,
+          updatedAt: "2026-07-13T09:04:59.000Z",
+        },
+      );
       const updateDeliveryAttemptResult = vi.fn(
         async (_env: unknown, _attemptId: string, input: Record<string, unknown>) => {
           outboxAttempt.status = String(input.status);
@@ -3208,8 +3221,7 @@ describe("billing lifecycle emails", () => {
   );
 
   it("records the current recipient when retrying a failed attempt in place", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     mockEmailSend("msg_retry_new_target");
     const failedAttempt = billingAttempt({
       id: "attempt-failed-old-target",
@@ -3244,27 +3256,21 @@ describe("billing lifecycle emails", () => {
   });
 
   it("retargets a recovered billing email after the verified account email changes", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_recovery_new_target");
-    const staleAttempt = billingAttempt({
-      id: "attempt-recovery-old-target",
-      targetValue: "old@example.com",
-      payloadSnapshot: billingPayload("billing_refund_revoked", {
-        subject: "Your refund has been processed",
-        bodyHtml: "<p>Your refund is complete.</p>",
-        tag: "billing-refund",
+    const staleAttempt = recoveryAttempt(
+      "attempt-recovery-old-target",
+      "billing_refund_revoked",
+      {
         billingStateFingerprint: currentBillingStateFingerprint,
-      }),
-    });
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
+      },
+      { targetValue: "old@example.com" },
+    );
+    const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt, {
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         email: "new@example.com",
         name: "Owner",
       }),
-      updateDeliveryAttemptResult,
     });
 
     const result = await recoverBilling();
@@ -3286,28 +3292,17 @@ describe("billing lifecycle emails", () => {
   });
 
   it("recovers a marker outbox row when the billing state still matches its kind", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_marker_recovered");
-    const markerAttempt = billingAttempt({
-      id: "attempt-marker",
-      templateName: "billing_payment_issue",
-      payloadSnapshot: billingPayload("billing_payment_issue", {
-        subject: "Action needed: payment failed",
-        bodyHtml: "<p>Please update your payment method.</p>",
-        tag: "billing-payment-issue",
+    const markerAttempt = recoveryAttempt("attempt-marker", "billing_payment_issue", {
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-      }),
     });
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
+    const updateDeliveryAttemptResult = mockRecoveryAttempt(markerAttempt, {
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({
         ...currentBillingInfo,
         dodoStatus: "payment.failed",
       }),
-      updateDeliveryAttemptResult,
     });
 
 
@@ -3323,32 +3318,22 @@ describe("billing lifecycle emails", () => {
   });
 
   it("recovers a scheduled-cancellation outbox only for its matching future state", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_scheduled_marker_recovered");
-    const markerAttempt = billingAttempt({
-      id: "attempt-scheduled-marker",
-      templateName: "billing_cancellation_scheduled",
-      payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
-        subject: "Your cancellation is confirmed",
+    const markerAttempt = scheduledRecoveryAttempt(
+      "attempt-scheduled-marker",
+      "evt-scheduled-marker",
+      {
         bodyHtml: "<p>Your paid plan remains active until August.</p>",
-        tag: "billing-cancellation",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-        scheduledCancellationCutoff: scheduledCutoff,
-        scheduledCancellationEventId: "evt-scheduled-marker",
-        scheduledCancellationSubscriptionId: "subscription-current",
-        scheduledCancellationStateUpdatedAt: scheduledWatermark,
-      }),
-    });
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
+      },
+    );
+    const updateDeliveryAttemptResult = mockRecoveryAttempt(markerAttempt, {
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({
         ...currentBillingInfo,
         dodoStatus: "cancellation_scheduled",
       }),
-      updateDeliveryAttemptResult,
     });
 
 
@@ -3372,28 +3357,17 @@ describe("billing lifecycle emails", () => {
   });
 
   it("supersedes a marker outbox row when the billing state moved past its kind", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_marker_superseded");
-    const markerAttempt = billingAttempt({
-      id: "attempt-marker-superseded",
-      templateName: "billing_payment_issue",
-      payloadSnapshot: billingPayload("billing_payment_issue", {
-        subject: "Action needed: payment failed",
-        bodyHtml: "<p>Please update your payment method.</p>",
-        tag: "billing-payment-issue",
+    const markerAttempt = recoveryAttempt("attempt-marker-superseded", "billing_payment_issue", {
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-      }),
     });
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
+    const updateDeliveryAttemptResult = mockRecoveryAttempt(markerAttempt, {
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({
         ...currentBillingInfo,
         dodoStatus: "active",
       }),
-      updateDeliveryAttemptResult,
     });
 
 
@@ -3412,24 +3386,17 @@ describe("billing lifecycle emails", () => {
   });
 
   it("cannot bypass stale outbox-kind validation after a crash during recovery", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_crash_bypass_must_not_send");
-    const markerAttempt = billingAttempt({
-      id: "attempt-marker-crash",
-      templateName: "billing_cancellation_scheduled",
-      payloadSnapshot: billingPayload("billing_cancellation_scheduled", {
-        subject: "Your cancellation is confirmed",
+    const markerAttempt = scheduledRecoveryAttempt(
+      "attempt-marker-crash",
+      "evt-marker-crash",
+      {
         bodyHtml: "<p>Your plan will end.</p>",
-        tag: "billing-cancellation",
         billingStateFingerprint: null,
         outboxPendingDispatch: true,
-        scheduledCancellationCutoff: scheduledCutoff,
-        scheduledCancellationEventId: "evt-marker-crash",
-        scheduledCancellationSubscriptionId: "subscription-current",
-        scheduledCancellationStateUpdatedAt: scheduledWatermark,
-      }) as Record<string, unknown>,
-    });
+      },
+    );
     const listStaleBillingLifecycleEmailAttempts = vi.fn(
       async (_env: unknown, input: { staleBefore: string }) =>
         markerAttempt.status === "pending" &&
@@ -3485,24 +3452,15 @@ describe("billing lifecycle emails", () => {
   });
 
   it("recovers a stale billing outbox row from its durable payload", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_recovered_billing");
-    const staleAttempt = billingAttempt({
-      id: "attempt-recovery",
-      templateName: "billing_refund",
-      payloadSnapshot: billingPayload("billing_refund", {
+    const staleAttempt = recoveryAttempt("attempt-recovery", "billing_refund", {
         subject: "Your refund has been processed",
-        bodyHtml: "<p>Your refund is complete.</p>",
-        tag: "billing-refund",
         billingStateFingerprint: currentBillingStateFingerprint,
-      }),
     });
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const listStaleBillingLifecycleEmailAttempts = vi.fn().mockResolvedValue([staleAttempt]);
-    mockBillingDataServer({
+    const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt, {
       listStaleBillingLifecycleEmailAttempts,
-      updateDeliveryAttemptResult,
     });
 
 
@@ -3555,28 +3513,26 @@ describe("billing lifecycle emails", () => {
   });
 
   it("retries one provider-confirmed recovery failure on a later sweep and sends once", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     emailSend = vi
       .fn()
       .mockRejectedValueOnce(new Error("provider explicitly rejected"))
       .mockResolvedValueOnce({ messageId: "msg_recovery_retry" });
 
-    const attempt = billingAttempt({
-      id: "attempt-recovery-two-sweep",
-      providerMessageId: null as string | null,
-      providerStatusLastSeenAt: null as string | null,
-      templateName: "billing_refund",
-      payloadSnapshot: billingPayload("billing_refund", {
-        subject: "Your refund has been processed",
-        bodyHtml: "<p>Your refund is complete.</p>",
-        tag: "billing-refund",
+    const attempt = recoveryAttempt(
+      "attempt-recovery-two-sweep",
+      "billing_refund",
+      {
         billingStateFingerprint: currentBillingStateFingerprint,
-      }) as Record<string, unknown>,
-      errorMessage: null as string | null,
-      sentAt: null as string | null,
-      failedAt: null as string | null,
-    });
+      },
+      {
+        providerMessageId: null as string | null,
+        providerStatusLastSeenAt: null as string | null,
+        errorMessage: null as string | null,
+        sentAt: null as string | null,
+        failedAt: null as string | null,
+      },
+    );
     const listStaleBillingLifecycleEmailAttempts = vi.fn(async () => {
       const attempts = Number(attempt.payloadSnapshot.recoveryAttemptCount ?? 0);
       const retryablePending =
@@ -3588,31 +3544,7 @@ describe("billing lifecycle emails", () => {
         attempts < 3;
       return retryablePending || retryableExplicitFailure ? [attempt] : [];
     });
-    const updateDeliveryAttemptResult = vi.fn(async (
-      _env: unknown,
-      _attemptId: string,
-      input: Record<string, unknown>,
-    ) => {
-      if (input.expectedStatus && attempt.status !== input.expectedStatus) return false;
-      if (input.expectedWebhookStatus && attempt.webhookStatus !== input.expectedWebhookStatus) {
-        return false;
-      }
-      if (input.expectedUpdatedAt && attempt.updatedAt !== input.expectedUpdatedAt) return false;
-      attempt.provider = String(input.provider);
-      attempt.status = String(input.status);
-      attempt.webhookStatus = String(input.webhookStatus);
-      attempt.providerMessageId = (input.providerMessageId as string | null) ?? null;
-      attempt.providerStatusLastSeenAt =
-        (input.providerStatusLastSeenAt as string | null) ?? null;
-      attempt.errorMessage = (input.errorMessage as string | null) ?? null;
-      attempt.sentAt = (input.sentAt as string | null) ?? null;
-      attempt.failedAt = (input.failedAt as string | null) ?? null;
-      if (input.payloadSnapshot) {
-        attempt.payloadSnapshot = input.payloadSnapshot as Record<string, unknown>;
-      }
-      attempt.updatedAt = String(input.updatedAt ?? new Date().toISOString());
-      return true;
-    });
+    const updateDeliveryAttemptResult = trackAttemptUpdates(attempt);
     mockBillingDataServer({
       listStaleBillingLifecycleEmailAttempts,
       updateDeliveryAttemptResult,
@@ -3640,28 +3572,17 @@ describe("billing lifecycle emails", () => {
   });
 
   it("suppresses a recovered billing email after newer account state wins", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_superseded_must_not_send");
-    const staleAttempt = billingAttempt({
-      id: "attempt-superseded",
-      templateName: "billing_payment_issue",
-      payloadSnapshot: billingPayload("billing_payment_issue", {
-        subject: "Action needed: payment failed",
-        bodyHtml: "<p>Please update your payment method.</p>",
-        tag: "billing-payment-issue",
+    const staleAttempt = recoveryAttempt("attempt-superseded", "billing_payment_issue", {
         billingStateFingerprint: currentBillingStateFingerprint,
-      }),
     });
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
+    const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt, {
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({
         ...currentBillingInfo,
         dodoStatus: "active_after_recovery",
         planUpdatedAt: "2026-07-13T09:04:00.000Z",
       }),
-      updateDeliveryAttemptResult,
     });
 
 
@@ -3690,8 +3611,7 @@ describe("billing lifecycle emails", () => {
   });
 
   it("claims a recovery-superseded slot in place and sends fresh content", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_superseded_reclaim");
     const supersededAttempt = billingAttempt({
       id: "attempt-superseded-slot",
@@ -3729,24 +3649,12 @@ describe("billing lifecycle emails", () => {
   });
 
   it("persists a recovered provider timeout as unknown and does not retry it", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     emailSend = vi.fn(() => new Promise(() => undefined));
-    const staleAttempt = billingAttempt({
-      id: "attempt-recovery-timeout",
-      templateName: "billing_refund",
-      payloadSnapshot: billingPayload("billing_refund", {
-        subject: "Your refund has been processed",
-        bodyHtml: "<p>Your refund is complete.</p>",
-        tag: "billing-refund",
+    const staleAttempt = recoveryAttempt("attempt-recovery-timeout", "billing_refund", {
         billingStateFingerprint: currentBillingStateFingerprint,
-      }),
     });
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
-      updateDeliveryAttemptResult,
-    });
+    const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt);
 
     const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
     const resultPromise = recoverAbandonedBillingLifecycleEmails({
@@ -3778,8 +3686,7 @@ describe("billing lifecycle emails", () => {
   });
 
   it("fails a malformed billing outbox row without calling the provider", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
+    useRecoveryClock();
     const sendMock = mockEmailSend("msg_should_not_send");
     const staleAttempt = {
       id: "attempt-malformed",
@@ -3789,11 +3696,7 @@ describe("billing lifecycle emails", () => {
       payloadSnapshot: { kind: "billing_refund" },
       updatedAt: "2026-07-13T09:03:00.000Z",
     };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
-      updateDeliveryAttemptResult,
-    });
+    const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt);
 
 
     const result = await recoverBilling();
@@ -4030,12 +3933,11 @@ describe("billing lifecycle emails", () => {
     });
 
 
-    const sent = await sendCancellation({ name: "Owner",
-    kind: "scheduled",
-    effectiveAt: "2026-08-01T00:00:00.000Z",
-    eventId: "evt-cancel-1",
-    subscriptionId: "subscription-current",
-    stateUpdatedAt: scheduledWatermark, });
+    const sent = await sendScheduledCancellation("evt-cancel-1", {
+      effectiveAt: "2026-08-01T00:00:00.000Z",
+      subscriptionId: "subscription-current",
+      stateUpdatedAt: scheduledWatermark,
+    });
 
     expect(sent).toBe(true);
     const payload = emailSendPayload(sendMock);
@@ -4060,12 +3962,12 @@ describe("billing lifecycle emails", () => {
     });
 
 
-    const sent = await sendCancellation({ name: null,
-    kind: "scheduled",
-    effectiveAt: null,
-    eventId: "evt-cancel-2",
-    subscriptionId: "subscription-current",
-    stateUpdatedAt: scheduledWatermark, });
+    const sent = await sendScheduledCancellation("evt-cancel-2", {
+      name: null,
+      effectiveAt: null,
+      subscriptionId: "subscription-current",
+      stateUpdatedAt: scheduledWatermark,
+    });
 
     expect(sent).toBe(false);
     expect(sendMock).not.toHaveBeenCalled();
@@ -4226,32 +4128,7 @@ describe("billing lifecycle emails", () => {
           ? [attempt]
           : [];
       });
-      const updateDeliveryAttemptResult = vi.fn(async (
-        _env: unknown,
-        _attemptId: string,
-        input: Record<string, unknown>,
-      ) => {
-        if (input.expectedStatus && attempt.status !== input.expectedStatus) return false;
-        if (input.expectedWebhookStatus && attempt.webhookStatus !== input.expectedWebhookStatus) {
-          return false;
-        }
-        if (input.expectedUpdatedAt && attempt.updatedAt !== input.expectedUpdatedAt) return false;
-        attempt.provider = String(input.provider);
-        attempt.status = String(input.status) as typeof attempt.status;
-        attempt.webhookStatus = String(input.webhookStatus) as typeof attempt.webhookStatus;
-        attempt.providerMessageId = (input.providerMessageId as string | null) ?? null;
-        attempt.providerStatusLastSeenAt =
-          (input.providerStatusLastSeenAt as string | null) ?? null;
-        attempt.errorMessage = (input.errorMessage as string | null) ?? null;
-        attempt.sentAt = (input.sentAt as string | null) ?? null;
-        attempt.failedAt = (input.failedAt as string | null) ?? null;
-        if (input.payloadSnapshot) {
-          attempt.payloadSnapshot = input.payloadSnapshot as Record<string, unknown>;
-        }
-        attempt.targetValue = String(input.targetValue ?? attempt.targetValue);
-        attempt.updatedAt = String(input.updatedAt ?? new Date().toISOString());
-        return true;
-      });
+      const updateDeliveryAttemptResult = trackAttemptUpdates(attempt);
       mockBillingDataServer({
         getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(attempt),
         listStaleBillingLifecycleEmailAttempts,
