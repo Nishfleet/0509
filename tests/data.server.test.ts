@@ -3255,7 +3255,7 @@ describe("listRetryableDigestRuns", () => {
     expect(query?.bindings).toEqual([
       "2026-06-01T00:00:00.000Z",
 			"2026-07-13T08:59:00.000Z",
-			"atomic-v1",
+			"atomic-v2",
       25,
     ]);
   });
@@ -3313,7 +3313,7 @@ describe("listRetryableDigestRuns", () => {
 				"2026-06-01T00:00:00.000Z",
 				"2026-07-01T00:00:00.000Z",
 				JSON.stringify({
-					digestItemSetProvenance: "atomic-v1",
+					digestItemSetProvenance: "atomic-v2",
 					digestItemCount: 0,
 				}),
 				"2026-07-01T00:00:00.000Z",
