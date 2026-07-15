@@ -4,6 +4,7 @@ import { Link } from "react-router";
 export type ActionFeedbackData = {
 	ok: boolean;
 	message?: string;
+	displayMessage?: string;
 	intent?: string;
 } & Record<string, unknown>;
 
@@ -42,9 +43,11 @@ export function ActionFeedback({
 	planLimitTo,
 	children,
 }: ActionFeedbackProps) {
-	if (!data || typeof data.message !== "string" || data.message.length === 0) {
+	if (!data) {
 		return null;
 	}
+	const message = actionFeedbackMessage(data);
+	if (!message) return null;
 	if (fallback && data.intent !== undefined) {
 		return null;
 	}
@@ -72,7 +75,7 @@ export function ActionFeedback({
 			role={data.ok ? "status" : "alert"}
 		>
 			<p>
-				{data.message}
+				{message}
 				{showPlanLimitLink ? (
 					<>
 						{" "}
@@ -83,4 +86,16 @@ export function ActionFeedback({
 			</p>
 		</div>
 	);
+}
+
+function actionFeedbackMessage(data: ActionFeedbackData) {
+	if (typeof data.displayMessage === "string" && data.displayMessage.trim()) {
+		return data.displayMessage.trim();
+	}
+	if (typeof data.message !== "string" || !data.message.trim()) return null;
+	if (/^https?:\/\//i.test(data.message.trim())) {
+		if (data.intent === "share-collection") return "Share link created.";
+		if (data.intent === "share-report") return "Snapshot link created.";
+	}
+	return data.message;
 }

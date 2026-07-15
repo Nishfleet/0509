@@ -1311,18 +1311,26 @@ describe("customer lifecycle billing emails", () => {
 		expectOutbox(data.applyDodoPlanPaymentIssueWithLedger);
 	});
 
-	it("never fails the webhook when the lifecycle email send throws", async () => {
+	it("does not re-arm or resend when an untyped lifecycle email exception is replayed", async () => {
+		const beginDodoWebhookEventProcessing = vi
+			.fn()
+			.mockResolvedValueOnce({ status: "claimed" })
+			.mockResolvedValueOnce({ status: "duplicate", outcome: "processed" });
 		const { data, delivery } = mockWebhookDependencies({
 			billing: { extractDodoPlanRevocation: paymentIssueRevocation() },
+			data: { beginDodoWebhookEventProcessing },
 			delivery: {
 				sendBillingPaymentIssueEmail: vi.fn().mockRejectedValue(new Error("email down")),
 			},
 		});
 
 		const response = await deliverDodoWebhook("evt-on-hold-email-down", { type: "subscription.on_hold" });
+		const replay = await deliverDodoWebhook("evt-on-hold-email-down", { type: "subscription.on_hold" });
 
 		expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
+		expect(await replay.json()).toMatchObject({ ok: true, duplicate: true });
 		expect(delivery.sendBillingPaymentIssueEmail).toHaveBeenCalledTimes(1);
+		expect(data.failDodoWebhookEventForLifecycleEmailRetry).not.toHaveBeenCalled();
 		expect(data.failDodoWebhookEventProcessing).not.toHaveBeenCalled();
 	});
 

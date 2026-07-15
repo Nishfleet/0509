@@ -204,6 +204,9 @@ expect.anything(),
 expect.objectContaining({
 digestRunId: "digest-1",
 strategyParagraph: GOOD_PARAGRAPH,
+totalEligibleEvents: 1,
+includedEvents: 1,
+omittedEvents: 0,
 }),
 );
 });
@@ -239,7 +242,7 @@ expect.objectContaining({
 totalEvents: 2,
 }),
 expect.objectContaining({
-items: [
+items: expect.arrayContaining([
 expect.objectContaining({
 title: "Landing page offer changed",
 metadata: expect.objectContaining({ eventStatus: "confirmed" }),
@@ -248,7 +251,7 @@ expect.objectContaining({
 title: "Possible CTA change",
 metadata: expect.objectContaining({ eventStatus: "proof_pending" }),
 }),
-],
+]),
 }),
 );
 expect(data.createDigestRun.mock.calls[0]?.[4]).not.toHaveProperty("strategyParagraph");
@@ -267,10 +270,10 @@ expect(deliverWeeklyDigest).toHaveBeenCalledWith(
 expect.anything(),
 expect.objectContaining({
 strategyParagraph: GOOD_PARAGRAPH,
-items: [
+items: expect.arrayContaining([
 expect.objectContaining({ title: "Landing page offer changed" }),
 expect.objectContaining({ title: "Possible CTA change" }),
-],
+]),
 }),
 );
 });
@@ -433,8 +436,11 @@ periodStart: "2026-04-13T05:00:00.000Z",
 periodEnd: "2026-04-20T05:00:00.000Z",
 summary: {
 totalEvents: 1,
+totalEligibleEvents: 1,
+includedEvents: 1,
+omittedEvents: 0,
 watchlists: 1,
-digestItemSetProvenance: "atomic-v1",
+digestItemSetProvenance: "atomic-v2",
 strategyParagraph: STORED_PARAGRAPH,
 strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
 },
@@ -448,7 +454,7 @@ watchlistName: "boAt watch",
 eventType: "landing_page_offer_changed",
 title: "Stored offer change",
 summary: "The original digest item.",
-metadata: {},
+metadata: { eventId: "event-stored-1" },
 createdAt: "2026-04-20T05:01:00.000Z",
 },
 ],
@@ -591,8 +597,11 @@ periodStart: "2026-07-06T05:00:00.000Z",
 periodEnd: "2026-07-13T05:00:00.000Z",
 summary: {
 totalEvents: 0,
+totalEligibleEvents: 0,
+includedEvents: 0,
+omittedEvents: 0,
 watchlists: 1,
-digestItemSetProvenance: "atomic-v1",
+digestItemSetProvenance: "atomic-v2",
 },
 createdAt: "2026-07-13T05:01:00.000Z",
 items: [],
@@ -670,8 +679,11 @@ periodStart: "2026-04-13T05:00:00.000Z",
 periodEnd: "2026-04-20T05:00:00.000Z",
 summary: {
 totalEvents: 1,
+totalEligibleEvents: 1,
+includedEvents: 1,
+omittedEvents: 0,
 watchlists: 1,
-digestItemSetProvenance: "atomic-v1",
+digestItemSetProvenance: "atomic-v2",
 strategyParagraph: STORED_PARAGRAPH,
 strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
 },
@@ -685,7 +697,7 @@ watchlistName: "boAt watch",
 eventType: "landing_page_offer_changed",
 title: "Landing page offer changed",
 summary: "Offer changed on the landing page.",
-metadata: { priorityScore: 79, sourceStatus: "proof_backed" },
+metadata: { eventId: "event-retry-1", priorityScore: 79, sourceStatus: "proof_backed" },
 createdAt: "2026-04-19T00:00:00.000Z",
 },
 ],

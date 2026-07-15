@@ -57,7 +57,11 @@ import {
 	readDigestStrategyNote,
 	readPendingDigestStrategyGeneration,
 } from "~/lib/digest-strategy";
-import { DIGEST_ITEM_SET_PROVENANCE } from "~/lib/digest-provenance";
+import {
+  DIGEST_ITEM_SET_PROVENANCE,
+  readDigestSourceEventId,
+  selectDigestCohort,
+} from "~/lib/digest-provenance";
 import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
@@ -1437,10 +1441,16 @@ async function runDigests(
             eventType: event.eventType,
             title: event.title,
             summary: event.summary,
-            metadata: digestMetadataForEvent(event, undefined, ad),
+            metadata: {
+              ...digestMetadataForEvent(event, undefined, ad),
+              eventId: event.id,
+            },
           });
         }
       }
+
+      const digestCohort = selectDigestCohort(digestItems);
+      const selectedDigestItems = digestCohort.items;
 
 			const existingDigest = await getDigestByPeriod(
 				env,
@@ -1473,13 +1483,16 @@ async function runDigests(
 			let strategyParagraph: string | null = null;
 			const strategyGenerationRequired =
 				cadence === "weekly" &&
-				digestItems.length > 0 &&
+				selectedDigestItems.length > 0 &&
 				(plan === "starter" || plan === "agency");
 			const initialStrategyLease = strategyGenerationRequired
 				? createDigestStrategyGenerationLease()
 				: null;
 			const digestSummary: Record<string, unknown> = {
-				totalEvents: digestItems.length,
+				totalEvents: digestCohort.totalEligibleEvents,
+				totalEligibleEvents: digestCohort.totalEligibleEvents,
+				includedEvents: digestCohort.includedEvents,
+				omittedEvents: digestCohort.omittedEvents,
 				watchlists: watchlists.length,
 				...(initialStrategyLease
 					? {
@@ -1489,7 +1502,7 @@ async function runDigests(
 						}
 					: {}),
 			};
-			const candidateItems = digestItems.map((item) => ({
+			const candidateItems = selectedDigestItems.map((item) => ({
 				watchlistId: item.watchlistId,
 				watchlistName: item.watchlistName,
 				eventType: item.eventType,
@@ -1516,42 +1529,19 @@ async function runDigests(
 				);
 				if (pendingGeneration) {
 					handledDigestRunIds.add(digestRunId);
-					if (!digestStrategyGenerationLeaseExpired(pendingGeneration.leaseExpiresAt)) {
-						continue;
-					}
-
-					const recoveryLease = createDigestStrategyGenerationLease();
-					const recoveryClaimed = await claimDigestStrategyGenerationLease(
-						env,
-						digestRunId,
-						{
-							expectedLeaseId: pendingGeneration.leaseId,
-							expectedLeaseExpiresAt: pendingGeneration.leaseExpiresAt,
-							leaseId: recoveryLease.leaseId,
-							leaseExpiresAt: recoveryLease.leaseExpiresAt,
-						},
-					);
-					if (!recoveryClaimed) {
-						continue;
-					}
-
-					const settled = await settleDigestStrategyGeneration(env, {
-						digestRunId,
-						leaseId: recoveryLease.leaseId,
-						summary: existingDigest.summary,
-						items: existingDigest.items,
+					const recovery = await recoverDigestStrategyGeneration(env, {
+						digest: existingDigest,
 						periodStart: periodStartIso,
 						periodEnd: periodEndIso,
 						plan,
 					});
-					if (!settled) {
+					if (recovery.outcome === "active" || recovery.outcome === "claim_lost" || recovery.outcome === "settlement_lost") {
 						continue;
 					}
-					strategyParagraph = settled.strategyParagraph;
-					canonicalDigest = {
-						...existingDigest,
-						summary: settled.summary,
-					};
+					if (recovery.outcome === "settled") {
+						strategyParagraph = recovery.strategyParagraph;
+						canonicalDigest = recovery.digest;
+					}
 				}
 			} else {
 				const claim = await createDigestRun(
@@ -1584,7 +1574,7 @@ async function runDigests(
 						digestRunId,
 						leaseId: initialStrategyLease.leaseId,
 						summary: digestSummary,
-						items: digestItems,
+						items: selectedDigestItems,
 						periodStart: periodStartIso,
 						periodEnd: periodEndIso,
 						plan,
@@ -1603,7 +1593,7 @@ async function runDigests(
 			// clears, re-adds, or substitutes locally recomputed run-owned data.
 			const deliveryItems = canonicalDigest
 				? canonicalDigest.items.map((item) => ({
-						eventId: item.id,
+						eventId: requireDigestSourceEventId(item.metadata),
 						watchlistId: item.watchlistId,
 						watchlistName: item.watchlistName,
 						eventType: item.eventType,
@@ -1611,10 +1601,14 @@ async function runDigests(
 						summary: item.summary,
 						metadata: item.metadata,
 					}))
-				: digestItems;
+				: selectedDigestItems;
 			const deliveryStrategyParagraph = canonicalDigest
 				? readDigestStrategyNote(canonicalDigest.summary)?.paragraph ?? null
 				: strategyParagraph;
+			const deliveryCohortCounts = readDigestDeliveryCohortCounts(
+				canonicalDigest?.summary ?? digestSummary,
+				deliveryItems.length,
+			);
 
 			if (deliveryItems.length > 0) {
 				heartbeat = null;
@@ -1641,6 +1635,7 @@ async function runDigests(
         periodStart: periodStartIso,
         periodEnd: periodEndIso,
 				items: deliveryItems,
+				...deliveryCohortCounts,
 				strategyParagraph: deliveryStrategyParagraph,
         cadence,
         lane: "customer",
@@ -1683,6 +1678,45 @@ function createDigestStrategyGenerationLease(now = Date.now()) {
 function digestStrategyGenerationLeaseExpired(leaseExpiresAt: string, now = Date.now()) {
 	const expiresAt = Date.parse(leaseExpiresAt);
 	return !Number.isFinite(expiresAt) || expiresAt <= now;
+}
+
+async function recoverDigestStrategyGeneration(
+	env: AppEnv,
+	input: {
+		digest: NonNullable<Awaited<ReturnType<typeof getDigest>>>;
+		periodStart: string;
+		periodEnd: string;
+		plan: Awaited<ReturnType<typeof getUserPlan>>;
+	},
+) {
+	const pending = readPendingDigestStrategyGeneration(input.digest.summary);
+	if (!pending) return { outcome: "not_pending" as const, digest: input.digest };
+	if (!digestStrategyGenerationLeaseExpired(pending.leaseExpiresAt)) {
+		return { outcome: "active" as const };
+	}
+	const lease = createDigestStrategyGenerationLease();
+	const claimed = await claimDigestStrategyGenerationLease(env, input.digest.id, {
+		expectedLeaseId: pending.leaseId,
+		expectedLeaseExpiresAt: pending.leaseExpiresAt,
+		leaseId: lease.leaseId,
+		leaseExpiresAt: lease.leaseExpiresAt,
+	});
+	if (!claimed) return { outcome: "claim_lost" as const };
+	const settled = await settleDigestStrategyGeneration(env, {
+		digestRunId: input.digest.id,
+		leaseId: lease.leaseId,
+		summary: input.digest.summary,
+		items: input.digest.items,
+		periodStart: input.periodStart,
+		periodEnd: input.periodEnd,
+		plan: input.plan,
+	});
+	if (!settled) return { outcome: "settlement_lost" as const };
+	return {
+		outcome: "settled" as const,
+		digest: { ...input.digest, summary: settled.summary },
+		strategyParagraph: settled.strategyParagraph,
+	};
 }
 
 async function settleDigestStrategyGeneration(
@@ -1765,44 +1799,18 @@ async function retryFailedDigests(
 				continue;
 			}
 			let deliveryDigest = digest;
-			const pendingGeneration = readPendingDigestStrategyGeneration(digest.summary);
-			if (pendingGeneration) {
-				if (!digestStrategyGenerationLeaseExpired(pendingGeneration.leaseExpiresAt)) {
-					continue;
-				}
-
-				const recoveryLease = createDigestStrategyGenerationLease();
-				const recoveryClaimed = await claimDigestStrategyGenerationLease(
-					env,
-					candidate.id,
-					{
-						expectedLeaseId: pendingGeneration.leaseId,
-						expectedLeaseExpiresAt: pendingGeneration.leaseExpiresAt,
-						leaseId: recoveryLease.leaseId,
-						leaseExpiresAt: recoveryLease.leaseExpiresAt,
-					},
-				);
-				if (!recoveryClaimed) {
-					continue;
-				}
-
-				const settled = await settleDigestStrategyGeneration(env, {
-					digestRunId: candidate.id,
-					leaseId: recoveryLease.leaseId,
-					summary: digest.summary,
-					items: digest.items,
-					periodStart: candidate.periodStart,
-					periodEnd: candidate.periodEnd,
-					plan,
-				});
-				if (!settled) {
-					continue;
-				}
-				deliveryDigest = {
-					...digest,
-					summary: settled.summary,
-				};
+			const recovery = await recoverDigestStrategyGeneration(env, {
+				digest,
+				periodStart: candidate.periodStart,
+				periodEnd: candidate.periodEnd,
+				plan,
+			});
+			if (recovery.outcome === "active" || recovery.outcome === "claim_lost" || recovery.outcome === "settlement_lost") {
+				continue;
 			}
+			if (recovery.outcome === "settled") {
+				deliveryDigest = recovery.digest;
+				}
 			let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
 			if (deliveryDigest.items.length === 0) {
 				const runStats = await getSuccessfulRunStatsForUserBetween(
@@ -1818,6 +1826,10 @@ async function retryFailedDigests(
 			}
 
 			const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+			const deliveryCohortCounts = readDigestDeliveryCohortCounts(
+				deliveryDigest.summary,
+				deliveryDigest.items.length,
+			);
 			const delivery = await deliverWeeklyDigest(env, {
 				heartbeat,
 				userId: candidate.userId,
@@ -1827,7 +1839,7 @@ async function retryFailedDigests(
         periodStart: candidate.periodStart,
         periodEnd: candidate.periodEnd,
 				items: deliveryDigest.items.map((item) => ({
-          eventId: item.id,
+					eventId: requireDigestSourceEventId(item.metadata),
           watchlistId: item.watchlistId,
           watchlistName: item.watchlistName,
           eventType: item.eventType,
@@ -1835,6 +1847,7 @@ async function retryFailedDigests(
           summary: item.summary,
           metadata: item.metadata,
         })),
+				...deliveryCohortCounts,
 				// Retries only ever replay the persisted paragraph — never regenerate.
 				strategyParagraph: readDigestStrategyNote(deliveryDigest.summary)?.paragraph ?? null,
         cadence,
@@ -1851,7 +1864,40 @@ async function retryFailedDigests(
     }
   }
 
-  return retried;
+	return retried;
+}
+
+function readDigestDeliveryCohortCounts(
+	summary: Record<string, unknown> | undefined,
+	includedItemCount: number,
+) {
+	const total = readNonNegativeInteger(summary?.totalEligibleEvents);
+	const included = readNonNegativeInteger(summary?.includedEvents);
+	const omitted = readNonNegativeInteger(summary?.omittedEvents);
+	if (
+		total === null ||
+		included === null ||
+		omitted === null ||
+		included !== includedItemCount ||
+		total !== included + omitted
+	) {
+		return {
+			totalEligibleEvents: includedItemCount,
+			includedEvents: includedItemCount,
+			omittedEvents: 0,
+		};
+	}
+	return {
+		totalEligibleEvents: total,
+		includedEvents: included,
+		omittedEvents: omitted,
+	};
+}
+
+function readNonNegativeInteger(value: unknown) {
+	return typeof value === "number" && Number.isInteger(value) && value >= 0
+		? value
+		: null;
 }
 
 function digestCadenceForPeriod(periodStart: string, periodEnd: string): DigestCadence {
@@ -1861,7 +1907,7 @@ function digestCadenceForPeriod(periodStart: string, periodEnd: string): DigestC
 
 function hasCompleteDigestItemSet(digest: {
 	summary?: Record<string, unknown>;
-	items: readonly unknown[];
+	items: ReadonlyArray<{ metadata?: Record<string, unknown> }>;
 }) {
 	if (
 		digest.summary?.digestItemSetProvenance !== DIGEST_ITEM_SET_PROVENANCE
@@ -1869,7 +1915,17 @@ function hasCompleteDigestItemSet(digest: {
 		return false;
 	}
 	const expectedItemCount = readDigestExpectedItemCount(digest.summary);
-	return expectedItemCount !== null && digest.items.length === expectedItemCount;
+	return expectedItemCount !== null &&
+		digest.items.length === expectedItemCount &&
+		digest.items.every((item) => readDigestSourceEventId(item.metadata) !== null);
+}
+
+function requireDigestSourceEventId(metadata: Record<string, unknown> | undefined) {
+	const eventId = readDigestSourceEventId(metadata);
+	if (!eventId) {
+		throw new Error("Digest item is missing its original watch_event ID; retry is unsafe.");
+	}
+	return eventId;
 }
 
 function readDigestExpectedItemCount(summary?: Record<string, unknown>) {

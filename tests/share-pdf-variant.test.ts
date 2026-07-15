@@ -371,6 +371,30 @@ listWatchEvents: vi.fn(),
 return { createShareLink };
 }
 
+it("preserves the report share URL in the legacy message field", async () => {
+const { createShareLink } = mockReportsCollaborators({ pdfAllowed: true });
+const { action } = await import("~/routes/app.reports");
+
+const result = await action({
+context: {},
+params: { id: "collection:col-1" },
+request: new Request("https://0509.io/app/reports/collection:col-1", {
+method: "POST",
+headers: { "Content-Type": "application/x-www-form-urlencoded" },
+body: new URLSearchParams({ intent: "share-report" }).toString(),
+}),
+} as never);
+
+expect(result).toMatchObject({
+ok: true,
+intent: "share-report",
+message: "https://0509.io/share/fresh-token",
+displayMessage: "Snapshot link created.",
+shareUrl: "https://0509.io/share/fresh-token",
+});
+expect(createShareLink).toHaveBeenCalledTimes(1);
+});
+
 it("download-pdf mints a snapshot share and 303-redirects to its /pdf", async () => {
 const now = 1_783_000_000_000;
 vi.spyOn(Date, "now").mockReturnValue(now);

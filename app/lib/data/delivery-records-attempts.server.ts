@@ -80,6 +80,22 @@ export async function listStaleBillingLifecycleEmailAttempts(
 						status = 'failed'
 						AND webhook_status = 'failed'
 						AND provider_status_last_seen_at IS NOT NULL
+						AND json_extract(
+							payload_snapshot_json,
+							'$.billingLifecycleProviderEvidence.outcome'
+						) = 'failed'
+						AND NULLIF(TRIM(json_extract(
+							payload_snapshot_json,
+							'$.billingLifecycleProviderEvidence.reference'
+						)), '') IS NOT NULL
+						AND NULLIF(TRIM(json_extract(
+							payload_snapshot_json,
+							'$.billingLifecycleProviderEvidence.classification'
+						)), '') IS NOT NULL
+						AND NULLIF(TRIM(json_extract(
+							payload_snapshot_json,
+							'$.billingLifecycleProviderEvidence.observedAt'
+						)), '') IS NOT NULL
 						AND COALESCE(
 							CAST(json_extract(payload_snapshot_json, '$.recoveryAttemptCount') AS INTEGER),
 							0
@@ -94,6 +110,42 @@ export async function listStaleBillingLifecycleEmailAttempts(
 		input.limit,
 	);
 
+	return rows.map(toDeliveryAttemptRecord);
+}
+
+export async function listOutstandingBillingLifecycleProviderUnknownAttempts(
+	env: AppEnv,
+	options: { limit?: number } = {},
+) {
+	const limit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 100)));
+	const rows = await many<DeliveryAttemptRow>(
+		env,
+		`
+			SELECT *
+			FROM delivery_attempt
+			WHERE lane = 'customer'
+				AND channel = 'email'
+				AND watchlist_id IS NULL
+				AND digest_run_id IS NULL
+				AND delivery_target_id IS NULL
+				AND webhook_status = 'provider_unknown'
+				AND (
+					status = 'pending'
+					OR (
+						status = 'failed'
+						AND provider_status_last_seen_at IS NOT NULL
+					)
+				)
+				AND (
+					idempotency_key LIKE 'billing-payment-issue:%'
+					OR idempotency_key LIKE 'billing-cancellation:%'
+					OR idempotency_key LIKE 'billing-refund:%'
+				)
+			ORDER BY created_at ASC
+			LIMIT ?
+		`,
+		limit,
+	);
 	return rows.map(toDeliveryAttemptRecord);
 }
 

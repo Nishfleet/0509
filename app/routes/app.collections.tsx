@@ -226,11 +226,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
       isSnapshot: false,
     });
 
+    const shareUrl = new URL(`/share/${share.token}`, request.url).toString();
     return {
       ok: true,
 			intent,
-			message: "Share link created.",
-      shareUrl: new URL(`/share/${share.token}`, request.url).toString(),
+			message: shareUrl,
+			displayMessage: "Share link created.",
+			shareUrl,
     };
   }
 
@@ -248,7 +250,9 @@ export default function CollectionsRoute() {
 	const shareUrl =
 		actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
 			? actionData.shareUrl
-			: null;
+			: actionData && typeof actionData.message === "string" && /^https?:\/\//i.test(actionData.message)
+				? actionData.message
+				: null;
 
   return (
     <DashboardPage>

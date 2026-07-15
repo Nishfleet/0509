@@ -41,9 +41,11 @@ export async function renderShareReportPdfResponse(
 	token: string,
 	ctx?: ExecutionContext,
 ): Promise<Response> {
-	const { enforceSharePdfRateLimit, enforceSharePdfDailyCap } = await import(
-		"~/lib/rate-limit.server"
-	);
+	const {
+		enforceSharePdfRateLimit,
+		enforceSharePdfDailyCap,
+		claimSharePdfSingleFlight,
+	} = await import("~/lib/rate-limit.server");
 
 	// Per-IP burst gate first so invalid-token spam is also throttled.
 	const ipLimited = await enforceSharePdfRateLimit(request, env, ctx);
@@ -118,6 +120,15 @@ export async function renderShareReportPdfResponse(
 			"PDF rendering capacity is temporarily busy. Try again shortly.",
 			retryAfterSeconds,
 		);
+	}
+
+	const singleFlightLimited = await claimSharePdfSingleFlight(env, {
+		sharerUserId: share.userId,
+		resourceId: share.resourceId,
+		contentFingerprint: await reportPdfContentFingerprint(share.snapshotPayload),
+	});
+	if (singleFlightLimited) {
+		return singleFlightLimited;
 	}
 
 	// Reserve the sharer's daily render budget only after configuration and
@@ -277,6 +288,32 @@ export function reportPdfFilename(snapshotPayload: Record<string, unknown> | nul
 		.replace(/-+$/g, "");
 
   return `${slug || "shared-report"}.pdf`;
+}
+
+export async function reportPdfContentFingerprint(
+	snapshotPayload: Record<string, unknown> | null,
+) {
+	const content = snapshotPayload ? { ...snapshotPayload } : snapshotPayload;
+	if (content) {
+		delete content.generatedAt;
+		delete content.token;
+		delete content.shareToken;
+	}
+	const canonical = JSON.stringify(canonicalizePdfValue(content));
+	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+	return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function canonicalizePdfValue(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(canonicalizePdfValue);
+	if (value && typeof value === "object") {
+		return Object.fromEntries(
+			Object.entries(value as Record<string, unknown>)
+				.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+				.map(([key, nested]) => [key, canonicalizePdfValue(nested)]),
+		);
+	}
+	return value;
 }
 
 function redactShareToken(message: string, token: string) {

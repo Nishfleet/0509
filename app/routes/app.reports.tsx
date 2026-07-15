@@ -6,6 +6,7 @@ import {
   useLoaderData,
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useEffect, useState } from "react";
 
 import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
@@ -94,11 +95,13 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
       snapshotPayload: sanitizeReportShareSnapshot(report) as unknown as Record<string, unknown>,
     });
 
+    const shareUrl = new URL(`/share/${share.token}`, request.url).toString();
     return {
       ok: true,
 			intent,
-			message: "Snapshot link created.",
-      shareUrl: new URL(`/share/${share.token}`, request.url).toString(),
+			message: shareUrl,
+			displayMessage: "Snapshot link created.",
+      shareUrl,
 		};
 	}
 
@@ -206,11 +209,19 @@ function isValidSnapshotGeneratedAt(value: unknown) {
 
 export default function ReportsRoute() {
 	const { report, preparedBy, pdfAvailable } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
+	const actionData = useActionData<typeof action>();
+	const [pdfPreparing, setPdfPreparing] = useState(false);
+	useEffect(() => {
+		if (!pdfPreparing) return;
+		const timeout = setTimeout(() => setPdfPreparing(false), 75_000);
+		return () => clearTimeout(timeout);
+	}, [pdfPreparing]);
 	const shareUrl =
 		actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
 			? actionData.shareUrl
-			: null;
+			: actionData && typeof actionData.message === "string" && /^https?:\/\//i.test(actionData.message)
+				? actionData.message
+				: null;
   const backHref =
     report.resourceType === "collection"
       ? `/app/collections?collection=${report.resourceId}`
@@ -253,10 +264,22 @@ export default function ReportsRoute() {
 							// reloadDocument: a browser-native POST follows the 303 into
 							// the attachment download without routing PDF bytes through
 							// the SPA navigation.
-							<Form method="post" reloadDocument>
+							<Form
+								method="post"
+								onSubmit={(event) => {
+									if (pdfPreparing) {
+										event.preventDefault();
+										return;
+									}
+									setPdfPreparing(true);
+								}}
+								reloadDocument
+								aria-busy={pdfPreparing}
+								data-pdf-preparing={pdfPreparing ? "true" : "false"}
+							>
 								<input name="intent" type="hidden" value="download-pdf" />
-								<SubmitButton className="f9-primary-button" intent="download-pdf" pendingLabel="Preparing…">
-									Download PDF
+								<SubmitButton className="f9-primary-button" disabled={pdfPreparing} intent="download-pdf" pendingLabel="Preparing…">
+									{pdfPreparing ? "Preparing…" : "Download PDF"}
 								</SubmitButton>
 							</Form>
 						) : (

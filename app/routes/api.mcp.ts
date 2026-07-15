@@ -932,14 +932,16 @@ async function buildAgentActionToolResult(
   } = await import("~/lib/customer-agent-actions.server");
 
   try {
-    return structuredToolResult(await runCustomerAgentAction(env, {
+		const result = await runCustomerAgentAction(env, {
       userId: apiKey.userId,
       apiKeyId: apiKey.id,
       idempotencyKey: stringField(args, "idempotencyKey"),
       source: "mcp",
       origin,
       executionContext,
-    }, actionName, args as Record<string, unknown>));
+		}, actionName, args as Record<string, unknown>);
+		const { adaptLegacyReportTransportResult } = await import("~/lib/report");
+		return structuredToolResult(adaptLegacyReportTransportResult(result));
   } catch (error) {
     const payload = customerAgentActionErrorPayload(error).body;
     return errorToolResult(payload);

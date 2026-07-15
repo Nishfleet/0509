@@ -123,12 +123,35 @@ describe("ActionFeedback", () => {
 		const markup = renderToStaticMarkup(
 			React.createElement(
 				ActionFeedback,
-				{ data: { ok: true, intent: "share-collection", message: "Share link created." }, intent: "share-collection" },
+				{
+					data: {
+						ok: true,
+						intent: "share-collection",
+						message: "https://0509.io/share/tok",
+						displayMessage: "Share link created.",
+					},
+					intent: "share-collection",
+				},
 				React.createElement("a", { href: "https://0509.io/share/tok" }, "https://0509.io/share/tok"),
 			),
 		);
 
 		expect(markup).toContain("Share link created.");
 		expect(markup).toContain("https://0509.io/share/tok");
+	});
+
+	it("keeps legacy share responses readable when message still carries the URL", async () => {
+		await mockRouter();
+		const markup = await renderFeedback({
+			data: {
+				ok: true,
+				intent: "share-report",
+				message: "https://0509.io/share/legacy-token",
+			},
+			intent: "share-report",
+		});
+
+		expect(markup).toContain("Snapshot link created.");
+		expect(markup).not.toContain("https://0509.io/share/legacy-token");
 	});
 });

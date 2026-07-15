@@ -275,6 +275,55 @@ describe("collection limit", () => {
       message: "Saved LinkedIn evidence for Mamaearth.",
     });
   });
+
+  it("preserves the collection share URL in the legacy message field", async () => {
+    const createShareLink = vi.fn().mockResolvedValue({ token: "collection-share-token" });
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn().mockResolvedValue({
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({
+      requireWorkspacePlanFeature: vi.fn().mockResolvedValue({ ok: true }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addExternalProofToCollection: vi.fn(),
+      createCollection: vi.fn(),
+      createShareLink,
+      getCollection: vi.fn().mockResolvedValue({ id: "collection-1" }),
+      updateCollectionItem: vi.fn(),
+    }));
+
+    const { action } = await import("~/routes/app.collections");
+    const formData = new FormData();
+    formData.set("intent", "share-collection");
+    formData.set("collectionId", "collection-1");
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/collections", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      intent: "share-collection",
+      message: "https://0509.io/share/collection-share-token",
+      displayMessage: "Share link created.",
+      shareUrl: "https://0509.io/share/collection-share-token",
+    });
+  });
 });
 
 describe("digest access", () => {

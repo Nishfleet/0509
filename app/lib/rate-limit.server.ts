@@ -24,6 +24,9 @@ const CLEANUP_WINDOW_SECONDS = 2 * 60 * 60;
 // events must survive a full day plus slack or the daily caps silently reset.
 const LONG_WINDOW_SCOPE = "share-pdf-daily";
 const LONG_WINDOW_CLEANUP_SECONDS = 25 * 60 * 60;
+const PDF_SINGLE_FLIGHT_SCOPE = "share-pdf-single-flight";
+const PDF_SINGLE_FLIGHT_ROUTE = "/share/:token/pdf";
+const PDF_SINGLE_FLIGHT_LEASE_SECONDS = 75;
 
 export async function enforceRequestRateLimit(
   request: Request,
@@ -147,6 +150,40 @@ export async function enforceSharePdfDailyCap(
 		},
 		ctx,
 	);
+}
+
+/** Claim one short lease for an immutable PDF render. */
+export async function claimSharePdfSingleFlight(
+  env: AppEnv,
+  input: { sharerUserId: string; resourceId: string; contentFingerprint: string },
+): Promise<Response | null> {
+  if (!env.DB || !input.sharerUserId.trim() || !input.resourceId.trim() || !input.contentFingerprint.trim()) {
+    if (!env.DB) console.error("[rate-limit] D1 binding missing; request was not single-flight protected.");
+    return rateLimitUnavailableResponse();
+  }
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const since = new Date(now.getTime() - PDF_SINGLE_FLIGHT_LEASE_SECONDS * 1000).toISOString();
+  try {
+    const keyHash = await sha256Hex(`${PDF_SINGLE_FLIGHT_SCOPE}|${input.sharerUserId}|${input.resourceId}|${input.contentFingerprint}`);
+    const claim = await env.DB.prepare(
+      `INSERT INTO rate_limit_events (id, scope, key_hash, route, created_at)
+       SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (
+         SELECT 1 FROM rate_limit_events WHERE scope = ? AND key_hash = ? AND route = ? AND created_at >= ?
+       )`,
+    ).bind(crypto.randomUUID(), PDF_SINGLE_FLIGHT_SCOPE, keyHash, PDF_SINGLE_FLIGHT_ROUTE, createdAt,
+      PDF_SINGLE_FLIGHT_SCOPE, keyHash, PDF_SINGLE_FLIGHT_ROUTE, since).run();
+    if (Number(claim.meta?.changes ?? 0) > 0) return null;
+    const existing = await env.DB.prepare(
+      `SELECT created_at FROM rate_limit_events WHERE scope = ? AND key_hash = ? AND route = ? AND created_at >= ? ORDER BY created_at DESC LIMIT 1`,
+    ).bind(PDF_SINGLE_FLIGHT_SCOPE, keyHash, PDF_SINGLE_FLIGHT_ROUTE, since).first<{ created_at: string }>();
+    const parsedCreatedAt = existing?.created_at ? Date.parse(existing.created_at) : NaN;
+    const ageMs = Number.isFinite(parsedCreatedAt) ? Math.max(0, now.getTime() - parsedCreatedAt) : 0;
+    return pdfSingleFlightBusyResponse(Math.max(1, Math.ceil((PDF_SINGLE_FLIGHT_LEASE_SECONDS * 1000 - ageMs) / 1000)));
+  } catch (error) {
+    console.error("[rate-limit] single-flight claim failed", error);
+    return rateLimitUnavailableResponse();
+  }
 }
 
 async function enforceRateLimitPolicy(
@@ -328,7 +365,14 @@ async function requestKeyHash(request: Request, policy: RateLimitPolicy) {
         ? `${policy.scope}|${ip}`
         : `${policy.scope}|${ip}|${userAgent}`,
   );
-  const digest = await crypto.subtle.digest("SHA-256", input);
+  return sha256Hex(input);
+}
+
+async function sha256Hex(input: string | Uint8Array) {
+  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  const digestInput = new Uint8Array(bytes.byteLength);
+  digestInput.set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", digestInput);
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -369,6 +413,20 @@ function tooManyRequestsResponse(retryAfterSeconds: number) {
       },
     },
   );
+}
+
+function pdfSingleFlightBusyResponse(retryAfterSeconds: number) {
+  return new Response(JSON.stringify({
+    error: "pdf_single_flight",
+    message: "This PDF is already being prepared. Try again shortly.",
+  }), {
+    status: 429,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "retry-after": String(retryAfterSeconds),
+      "cache-control": "no-store",
+    },
+  });
 }
 
 function rateLimitUnavailableResponse() {

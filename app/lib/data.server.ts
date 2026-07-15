@@ -121,7 +121,8 @@ export {
   legacyWorkspaceDeliveryDefaults,
   migrateAutoProvisionedEmailTargets,
   listRetryableInstantAttempts,
-listStaleBillingLifecycleEmailAttempts,
+  listStaleBillingLifecycleEmailAttempts,
+  listOutstandingBillingLifecycleProviderUnknownAttempts,
   getWorkspaceDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
   listDeliveryTargets,
@@ -211,6 +212,13 @@ export {
   createSupportCaseEvent,
   listSupportCaseEvents,
 } from "~/lib/data/support.server";
+
+export {
+  BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
+  createBillingEmailReconciliationKey,
+  reconcileBillingEmailAttemptWithAudit,
+  type BillingEmailEvidenceClassification,
+} from "~/lib/data/operator-delivery-reconciliation.server";
 
 export {
   getOldestUserId,
