@@ -411,7 +411,7 @@ describe("digest retry sweep", () => {
 			summary: {
 				totalEvents: 1,
 				watchlists: 1,
-				digestItemSetProvenance: "atomic-v1",
+				digestItemSetProvenance: "atomic-v2",
 			},
       createdAt: "2026-06-10T04:00:00.000Z",
       items: [
@@ -423,7 +423,7 @@ describe("digest retry sweep", () => {
           eventType: "ad_new",
           title: "New ad detected",
           summary: "A new ad appeared.",
-          metadata: {},
+		  metadata: { eventId: "event-1" },
           createdAt: "2026-06-10T04:00:00.000Z",
         },
       ],
@@ -489,7 +489,7 @@ describe("digest retry sweep", () => {
 			summary: {
 				totalEvents: 0,
 				watchlists: 1,
-				digestItemSetProvenance: "atomic-v1",
+				digestItemSetProvenance: "atomic-v2",
 			},
       createdAt: "2026-06-10T04:00:00.000Z",
       items: [],

@@ -680,8 +680,26 @@ describe("runWeeklyDigests", () => {
 			expect.objectContaining({
 				returnClaim: true,
 				items: [
-					expect.objectContaining({ title: "Landing page offer changed" }),
-					expect.objectContaining({ title: "Possible CTA change" }),
+					expect.objectContaining({
+						title: "Possible CTA change",
+						metadata: expect.objectContaining({
+							eventId: "event-provisional-strong",
+							eventStatus: "proof_pending",
+							priorityBand: "High priority",
+							priorityScore: 90,
+							sourceStatus: "scan_backed",
+						}),
+					}),
+					expect.objectContaining({
+						title: "Landing page offer changed",
+						metadata: expect.objectContaining({
+							eventId: "event-confirmed",
+							eventStatus: "confirmed",
+							priorityBand: "Medium priority",
+							priorityScore: 72,
+							sourceStatus: "scan_backed",
+						}),
+					}),
 				],
 			}),
     );
@@ -690,8 +708,8 @@ describe("runWeeklyDigests", () => {
       expect.anything(),
       expect.objectContaining({
         items: [
-          expect.objectContaining({ eventId: "event-confirmed" }),
-          expect.objectContaining({ eventId: "event-provisional-strong" }),
+		  expect.objectContaining({ eventId: "event-provisional-strong" }),
+		  expect.objectContaining({ eventId: "event-confirmed" }),
         ],
       }),
     );
